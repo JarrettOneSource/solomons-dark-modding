@@ -88,3 +88,34 @@ int LuaDebugListWatches(lua_State* state) {
     return 1;
 }
 
+// The native-input recorder is a bounded, read-only RE seam. It observes the
+// already-installed window/input/player hooks and never queues or mutates an
+// input. JSON export keeps live goldens mechanical and byte-for-byte auditable.
+int LuaDebugStartNativeInputTrace(lua_State* state) {
+    const char* label = luaL_checkstring(state, 1);
+    std::string error_message;
+    if (!StartNativeInputTrace(
+            label == nullptr ? std::string_view{} :
+                               std::string_view(label),
+            &error_message)) {
+        return luaL_error(
+            state,
+            "sd.debug.start_native_input_trace failed: %s",
+            error_message.c_str());
+    }
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+int LuaDebugSnapshotNativeInputTrace(lua_State* state) {
+    const auto json = SnapshotNativeInputTraceJson();
+    lua_pushlstring(state, json.data(), json.size());
+    return 1;
+}
+
+int LuaDebugStopNativeInputTrace(lua_State* state) {
+    const auto json = StopNativeInputTraceJson();
+    lua_pushlstring(state, json.data(), json.size());
+    return 1;
+}
+

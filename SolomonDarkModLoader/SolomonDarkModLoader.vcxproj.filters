@@ -458,6 +458,9 @@
     <ClInclude Include="src\gameplay_seams.h">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\native_input_trace.h">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\gameplay_seams\address_storage.inl">
       <Filter>Header Files\Gameplay Seams</Filter>
     </ClInclude>
@@ -2081,6 +2084,9 @@
       <Filter>Source Files\Loader</Filter>
     </ClCompile>
     <ClCompile Include="src\mod_loader_gameplay.cpp">
+      <Filter>Source Files\Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="src\native_input_trace.cpp">
       <Filter>Source Files\Gameplay</Filter>
     </ClCompile>
     <ClCompile Include="src\mod_loader_run_lifecycle.cpp">

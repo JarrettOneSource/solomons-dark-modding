@@ -9,6 +9,7 @@
 #include "lua_ui_runtime.h"
 #include "mod_loader_internal.h"
 #include "multiplayer_join_flow.h"
+#include "native_input_trace.h"
 #include "x86_hook.h"
 
 #include <Windows.h>
@@ -433,10 +434,38 @@ LRESULT __stdcall DetourGameWindowProc(HWND hwnd, UINT message, WPARAM wparam, L
         return DefWindowProcA(hwnd, message, wparam, lparam);
     }
 
-    if (HandleLuaDeveloperConsoleWindowMessage(hwnd, message, wparam, lparam) ||
-        HandleLuaAuthoredUiWindowMessage(hwnd, message, wparam, lparam)) {
+    if (HandleLuaDeveloperConsoleWindowMessage(
+            hwnd,
+            message,
+            wparam,
+            lparam)) {
+        ObserveNativeInputWindowMessage(
+            hwnd,
+            message,
+            wparam,
+            lparam,
+            false,
+            "lua_developer_console");
         return 0;
     }
+    if (HandleLuaAuthoredUiWindowMessage(hwnd, message, wparam, lparam)) {
+        ObserveNativeInputWindowMessage(
+            hwnd,
+            message,
+            wparam,
+            lparam,
+            false,
+            "lua_authored_ui");
+        return 0;
+    }
+
+    ObserveNativeInputWindowMessage(
+        hwnd,
+        message,
+        wparam,
+        lparam,
+        true,
+        "stock");
 
     if (message == WM_ACTIVATEAPP && wparam == FALSE) {
         Log("Suppressed WM_ACTIVATEAPP deactivation so Solomon Dark keeps running in the background.");

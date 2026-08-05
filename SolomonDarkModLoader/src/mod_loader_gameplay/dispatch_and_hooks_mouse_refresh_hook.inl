@@ -138,12 +138,19 @@ void __fastcall HookGameplayMouseRefresh(void* self, void* unused_edx) {
         original(self, unused_edx);
     }
 
+    ObserveNativeInputRefresh(
+        self_address,
+        "post_native_refresh");
+
     if (self_address == 0) {
         return;
     }
     if (BlockingOverlayOwnsGameplayInput()) {
         DiscardQueuedGameplayInputForBlockingOverlay();
         SuppressGameplayMouseForBlockingOverlay(self_address);
+        ObserveNativeInputRefresh(
+            self_address,
+            "post_loader_input_gate");
         return;
     }
 

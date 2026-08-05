@@ -1112,6 +1112,34 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         original(self);
         ClampLocalMultiplayerDeathPresentationTimerForStockTick(
             actor_address);
+        BotCastProcessingContext input_trace_cast_context;
+        input_trace_cast_context.actor_address = actor_address;
+        input_trace_cast_context.memory = &memory;
+        const auto input_trace_active_spell =
+            ReadBotNativeActiveSpellObjectState(
+                input_trace_cast_context,
+                false);
+        NativeInputActiveSpellObservation input_trace_spell_observation;
+        input_trace_spell_observation.readable =
+            input_trace_active_spell.readable;
+        input_trace_spell_observation.object_address =
+            input_trace_active_spell.object;
+        input_trace_spell_observation.object_type =
+            input_trace_active_spell.object_type;
+        input_trace_spell_observation.phase =
+            input_trace_active_spell.phase;
+        input_trace_spell_observation.release_timer =
+            input_trace_active_spell.release_timer;
+        input_trace_spell_observation.charge =
+            input_trace_active_spell.charge;
+        input_trace_spell_observation.growth_rate =
+            input_trace_active_spell.growth_rate;
+        input_trace_spell_observation.max_charge =
+            input_trace_active_spell.max_charge;
+        ObserveNativeInputActorPostTick(
+            gameplay_address_for_pump,
+            actor_address,
+            input_trace_spell_observation);
         if (cast_intent_masked) {
             (void)memory.TryWriteField<std::uint8_t>(
                 gameplay_address_for_pump,

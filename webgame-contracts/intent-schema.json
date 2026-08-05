@@ -1,0 +1,266 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://solomondark.example/contracts/intent-schema.json",
+  "title": "Solomon Dark device intent record",
+  "description": "Device-independent browser-rebuild intent plus optional exact native-source provenance.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "sequence",
+    "tick",
+    "intent"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "tick": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "intent": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/moveIntent"
+        },
+        {
+          "$ref": "#/$defs/aimIntent"
+        },
+        {
+          "$ref": "#/$defs/castIntent"
+        },
+        {
+          "$ref": "#/$defs/interactIntent"
+        },
+        {
+          "$ref": "#/$defs/menuNavIntent"
+        }
+      ]
+    },
+    "native_source": {
+      "$ref": "#/$defs/nativeSource"
+    }
+  },
+  "$defs": {
+    "worldPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y"
+      ],
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
+      }
+    },
+    "unitVector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y"
+      ],
+      "properties": {
+        "x": {
+          "type": "number",
+          "minimum": -1,
+          "maximum": 1
+        },
+        "y": {
+          "type": "number",
+          "minimum": -1,
+          "maximum": 1
+        }
+      },
+      "$comment": "Consumers additionally require magnitude 1 within floating-point tolerance. JSON Schema cannot express x*x+y*y=1."
+    },
+    "moveIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "phase",
+        "move"
+      ],
+      "properties": {
+        "kind": {
+          "const": "move"
+        },
+        "phase": {
+          "enum": [
+            "start",
+            "update",
+            "stop"
+          ]
+        },
+        "move": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "point"
+              ],
+              "properties": {
+                "type": {
+                  "const": "world_target"
+                },
+                "point": {
+                  "$ref": "#/$defs/worldPoint"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "vector"
+              ],
+              "properties": {
+                "type": {
+                  "const": "unit_vector"
+                },
+                "vector": {
+                  "$ref": "#/$defs/unitVector"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "aimIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "point"
+      ],
+      "properties": {
+        "kind": {
+          "const": "aim"
+        },
+        "point": {
+          "$ref": "#/$defs/worldPoint"
+        }
+      }
+    },
+    "castIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "slot",
+        "phase"
+      ],
+      "properties": {
+        "kind": {
+          "const": "cast"
+        },
+        "slot": {
+          "enum": [
+            "primary",
+            "secondary"
+          ]
+        },
+        "phase": {
+          "enum": [
+            "press",
+            "hold",
+            "release"
+          ]
+        }
+      }
+    },
+    "interactIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "target",
+        "phase"
+      ],
+      "properties": {
+        "kind": {
+          "const": "interact"
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "phase": {
+          "enum": [
+            "press",
+            "release"
+          ]
+        }
+      }
+    },
+    "menuNavIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "command",
+        "phase"
+      ],
+      "properties": {
+        "kind": {
+          "const": "menu_nav"
+        },
+        "command": {
+          "enum": [
+            "up",
+            "down",
+            "left",
+            "right",
+            "confirm",
+            "back",
+            "next",
+            "previous"
+          ]
+        },
+        "phase": {
+          "enum": [
+            "press",
+            "release"
+          ]
+        }
+      }
+    },
+    "nativeSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "raw"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "win32",
+            "input_sample",
+            "actor_tick"
+          ]
+        },
+        "raw": {
+          "type": "object",
+          "description": "Exact immutable producer record. The native-mouse lossless profile retains every key and value and reconstructs raw traces from this member verbatim."
+        }
+      }
+    }
+  }
+}

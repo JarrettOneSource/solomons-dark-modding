@@ -7,6 +7,7 @@
 #include "multiplayer_local_transport.h"
 #include "native_audio_observability.h"
 #include "native_enemy_lifecycle.h"
+#include "native_input_trace.h"
 #include "native_spell_stats.h"
 #include "runtime_debug.h"
 
@@ -47,7 +48,7 @@ enum class LuaDebugFieldType {
 }  // namespace
 
 void RegisterLuaDebugBindings(lua_State* state) {
-    lua_createtable(state, 0, 80);
+    lua_createtable(state, 0, 83);
     RegisterFunction(state, &LuaDebugTraceFunction, "trace_function");
     RegisterFunction(state, &LuaDebugUntraceFunction, "untrace_function");
     RegisterFunction(state, &LuaDebugListTraces, "list_traces");
@@ -61,6 +62,18 @@ void RegisterLuaDebugBindings(lua_State* state) {
     RegisterFunction(state, &LuaDebugClearWriteHits, "clear_write_hits");
     RegisterFunction(state, &LuaDebugUnwatch, "unwatch");
     RegisterFunction(state, &LuaDebugListWatches, "list_watches");
+    RegisterFunction(
+        state,
+        &LuaDebugStartNativeInputTrace,
+        "start_native_input_trace");
+    RegisterFunction(
+        state,
+        &LuaDebugSnapshotNativeInputTrace,
+        "snapshot_native_input_trace");
+    RegisterFunction(
+        state,
+        &LuaDebugStopNativeInputTrace,
+        "stop_native_input_trace");
     RegisterFunction(state, &LuaDebugWatchPtrField, "watch_ptr_field");
     RegisterFunction(state, &LuaDebugSnapshot, "snapshot");
     RegisterFunction(state, &LuaDebugSnapshotPtrField, "snapshot_ptr_field");
