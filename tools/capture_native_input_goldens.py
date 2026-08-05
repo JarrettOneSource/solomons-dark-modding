@@ -260,17 +260,15 @@ end
         context: dict[str, float | int | bool],
     ) -> tuple[dict[str, float], dict[str, float]]:
         candidates = [
-            (0.02, 0.50),
-            (0.98, 0.50),
-            (0.18, 0.18),
             (0.50, 0.18),
-            (0.82, 0.18),
-            (0.18, 0.36),
-            (0.82, 0.36),
             (0.18, 0.56),
             (0.82, 0.56),
             (0.30, 0.70),
             (0.70, 0.70),
+            (0.18, 0.18),
+            (0.82, 0.18),
+            (0.18, 0.36),
+            (0.82, 0.36),
         ]
         origin_x = float(context["camera_origin_x"])
         origin_y = float(context["camera_origin_y"])
