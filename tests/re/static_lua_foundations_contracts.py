@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from static_multiplayer_contract_support import _read, _require_in_order
+from static_re_contract_support import assert_module_runs_in_ci
 
 
 def test_lua_run_seed_is_authority_owned_and_native_applied() -> str:
@@ -132,10 +133,7 @@ def test_lua_run_seed_is_authority_owned_and_native_applied() -> str:
         assert token in multiplayer_verifier_tests, (
             f"Lua RNG multiplayer verifier tests lack: {token}"
         )
-    assert (
-        "python -m unittest tests.test_lua_rng_multiplayer_verifier"
-        in workflow
-    )
+    assert_module_runs_in_ci("test_lua_rng_multiplayer_verifier")
 
     return (
         "sd.rng accepts exact pre-run seeds only from the simulation authority, "
@@ -259,10 +257,7 @@ def test_lua_nav_is_bounded_read_only_and_native_backed() -> str:
         assert token in multiplayer_verifier_tests, (
             f"Lua nav multiplayer verifier tests lack: {token}"
         )
-    assert (
-        "python -m unittest tests.test_lua_nav_multiplayer_verifier"
-        in workflow
-    )
+    assert_module_runs_in_ci("test_lua_nav_multiplayer_verifier")
 
     return (
         "sd.nav exposes bounded address-free snapshots and finite segment tests "

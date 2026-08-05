@@ -1634,9 +1634,16 @@ def test_ci_runs_every_contract_that_needs_no_local_artifact() -> str:
         raise StaticReTestFailure("the runner no longer defines --ci")
 
     workflow = read_text(CI_WORKFLOW)
-    if "python tests/re/run_static_re_tests.py --ci" not in workflow:
+    # Exact line: a substring check accepts trailing arguments, and the wrong
+    # trailing argument is how a step comes to run nothing at all.
+    if not re.search(
+        r"^\s*run: python tests/re/run_static_re_tests\.py --ci[ \t]*$",
+        workflow,
+        re.M,
+    ):
         raise StaticReTestFailure(
-            "the workflow does not run the static RE suite with --ci"
+            "the workflow does not run the static RE suite as a bare --ci "
+            "invocation"
         )
     if "--lua-only" in workflow:
         raise StaticReTestFailure("the workflow still uses the narrow selector")
@@ -1645,4 +1652,122 @@ def test_ci_runs_every_contract_that_needs_no_local_artifact() -> str:
         f"CI runs {len(eligible)} of {len(TESTS)} contracts; the "
         f"{len(LOCAL_ARTIFACT_TESTS)} exclusions each reach a real "
         "outside-the-repo or gitignored artifact"
+    )
+
+
+PYTHON_SUITE_RUNNER = ROOT / "tests/run_python_suite.py"
+
+# CI ran 30 of the 84 test modules before the runner discovered them.
+PYTHON_MODULE_FLOOR = 76
+
+# Image.get_flattened_data() landed in Pillow 12. Two verifiers call it
+# unguarded, so a pin below 12 is a broken CI, not a conservative one.
+PILLOW_MAJOR_FLOOR = 12
+
+
+def _load_python_suite_runner():
+    """Import tests/run_python_suite.py without putting tests/ on sys.path."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "_run_python_suite_probe", PYTHON_SUITE_RUNNER
+    )
+    if spec is None or spec.loader is None:
+        raise StaticReTestFailure(f"cannot import {PYTHON_SUITE_RUNNER}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_ci_runs_every_test_module_it_can() -> str:
+    """CI must discover test modules, not name them one workflow step at a time.
+
+    Naming them made coverage depend on whether somebody remembered to write
+    the step: 54 of 84 modules never ran, which is how two verifiers came to be
+    hard-broken on the exact Pillow version CI pinned.
+    """
+    runner = _load_python_suite_runner()
+    excluded = runner.MACHINE_DEPENDENT_TESTS
+
+    discovered = sorted(path.stem for path in (ROOT / "tests").glob("test_*.py"))
+    stale = sorted(set(excluded) - set(discovered))
+    if stale:
+        raise StaticReTestFailure(
+            "MACHINE_DEPENDENT_TESTS names modules that do not exist: "
+            + ", ".join(stale)
+        )
+    if len(excluded) > runner.MAX_MACHINE_DEPENDENT:
+        raise StaticReTestFailure(
+            f"{len(excluded)} modules are excluded from CI; the ceiling is "
+            f"{runner.MAX_MACHINE_DEPENDENT}"
+        )
+    missing_reason = sorted(name for name, why in excluded.items() if not why.strip())
+    if missing_reason:
+        raise StaticReTestFailure(
+            "excluded without a stated reason: " + ", ".join(missing_reason)
+        )
+
+    selected = [name for name in discovered if name not in excluded]
+    if len(selected) < PYTHON_MODULE_FLOOR:
+        raise StaticReTestFailure(
+            f"only {len(selected)} test modules are CI-eligible; floor is "
+            f"{PYTHON_MODULE_FLOOR}. Modules were removed or quietly excluded."
+        )
+
+    workflow = read_text(CI_WORKFLOW)
+    # Exact line, not a substring: `... run_python_suite.py --list` prints the
+    # module names and runs nothing, and a substring check calls that covered.
+    if not re.search(
+        r"^\s*run: python tests/run_python_suite\.py[ \t]*$", workflow, re.M
+    ):
+        raise StaticReTestFailure(
+            "the workflow does not run the discovered Python suite as a bare "
+            "invocation; any trailing argument can make the step vacuous"
+        )
+    if "python -m unittest tests." in workflow:
+        raise StaticReTestFailure(
+            "the workflow names test modules by hand again; that is how 54 of "
+            "84 modules came to never run"
+        )
+
+    # The pin and the pixel API have to move together. They drifted once: CI
+    # pinned Pillow 11 while the verifiers called a Pillow 12 method.
+    pins = re.findall(r"Pillow==(\d+)\.(\d+)\.(\d+)", workflow)
+    if not pins:
+        raise StaticReTestFailure("the workflow does not pin Pillow")
+    for major, minor, patch in pins:
+        if int(major) < PILLOW_MAJOR_FLOOR:
+            raise StaticReTestFailure(
+                f"CI pins Pillow {major}.{minor}.{patch}, which has no "
+                "Image.get_flattened_data(); the image verifiers call it "
+                "unguarded"
+            )
+
+    # One API on one version: no straddle, no deprecated spelling.
+    straddled: list[str] = []
+    deprecated: list[str] = []
+    this_file = Path(__file__).resolve()
+    for path in sorted((ROOT / "tools").rglob("*.py")) + sorted(
+        (ROOT / "tests").rglob("*.py")
+    ):
+        if path.resolve() == this_file:
+            continue  # this contract names both spellings in order to ban them
+        text = read_text(path)
+        if '"get_flattened_data"' in text or "'get_flattened_data'" in text:
+            straddled.append(path.relative_to(ROOT).as_posix())
+        if ".getdata()" in text:
+            deprecated.append(path.relative_to(ROOT).as_posix())
+    if straddled:
+        raise StaticReTestFailure(
+            "the Pillow version straddle is back in: " + ", ".join(straddled)
+        )
+    if deprecated:
+        raise StaticReTestFailure(
+            "deprecated Image.getdata() is back in: " + ", ".join(deprecated)
+        )
+
+    return (
+        f"CI discovers and runs {len(selected)} of {len(discovered)} test "
+        f"modules; the {len(excluded)} exclusions each state why they need a "
+        f"real machine, and the Pillow pin provides get_flattened_data()"
     )

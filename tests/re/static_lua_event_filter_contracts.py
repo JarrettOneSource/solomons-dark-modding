@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from static_multiplayer_contract_support import _read, _require_in_order
+from static_re_contract_support import assert_module_runs_in_ci
 
 
 def test_lua_damage_filters_are_ordered_owner_side_and_transactional() -> str:
@@ -195,10 +196,7 @@ def test_lua_damage_filters_are_ordered_owner_side_and_transactional() -> str:
         "test_run_proves_exact_registry_and_owner_local_isolation",
     ):
         assert token in pair_tests, f"filter-pair verifier tests lack: {token}"
-    assert (
-        "python -m unittest tests.test_lua_filters_multiplayer_verifier"
-        in workflow
-    )
+    assert_module_runs_in_ci("test_lua_filters_multiplayer_verifier")
     for source in (documentation, roadmap):
         for token in (
             "Exact two-peer",

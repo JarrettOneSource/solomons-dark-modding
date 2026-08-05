@@ -7,6 +7,7 @@ from static_multiplayer_contract_support import (
     _require_in_order,
     read_source_unit,
 )
+from static_re_contract_support import assert_module_runs_in_ci
 
 
 def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
@@ -337,11 +338,8 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         assert token in multiplayer_verifier_tests, (
             f"spell multiplayer verifier tests lack: {token}"
         )
-    assert "python -m unittest tests.test_lua_spells_verifier" in workflow
-    assert (
-        "python -m unittest tests.test_lua_spells_multiplayer_verifier"
-        in workflow
-    )
+    assert_module_runs_in_ci("test_lua_spells_verifier")
+    assert_module_runs_in_ci("test_lua_spells_multiplayer_verifier")
 
     return (
         "sd.spells owner-routes deterministic casts, runs bounded owner-side "

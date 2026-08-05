@@ -152,8 +152,7 @@ def _changed(pixel: tuple[int, int, int], threshold: int) -> bool:
 
 
 def _image_pixels(image: Image.Image) -> Any:
-    flattened = getattr(image, "get_flattened_data", None)
-    return flattened() if flattened is not None else image.getdata()
+    return image.get_flattened_data()
 
 
 def _count_changed(image: Image.Image, threshold: int) -> int:

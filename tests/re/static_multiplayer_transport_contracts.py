@@ -18,6 +18,7 @@ from static_multiplayer_contract_support import (
     read_source_unit,
     read_source_units,
 )
+from static_re_contract_support import assert_module_runs_in_ci
 
 def test_app_thread_transport_verifier_tracks_named_cadence_gap() -> str:
     service_loop = _read(
@@ -528,11 +529,11 @@ def test_snapshot_streams_are_compact_and_bandwidth_bounded() -> str:
     for token in (
         "tests/native/world_motion_fragment_merge_tests.cpp",
         "tests/native/steam_gameplay_queue_policy_tests.cpp",
-        "tests.test_multiplayer_organic_enemy_cast_timing_verifier",
     ):
         assert token in workflow, (
             f"protocol-82 regression is not wired into CI: {token}"
         )
+    assert_module_runs_in_ci("test_multiplayer_organic_enemy_cast_timing_verifier")
     cast_send = outgoing_cast[
         outgoing_cast.index("void SendCastPacketToEndpoints(") :
         outgoing_cast.index("bool SendLocalEnemyDamageClaim(")

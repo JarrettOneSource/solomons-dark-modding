@@ -22,7 +22,10 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install image test dependency
-        run: python -m pip install Pillow==11.3.0
+        # The image verifiers read pixels through Image.get_flattened_data(),
+        # which Pillow added in 12.  Pinning below that broke two verifiers
+        # outright, and it went unnoticed because neither ran in CI.
+        run: python -m pip install Pillow==12.2.0
       - name: Test repository identity contract
         # Push events only: a pull_request build checks out a synthetic
         # merge commit that GitHub itself authors, which is not a project
@@ -31,20 +34,13 @@ jobs:
         run: python tests/re/repository_identity_contract.py
       - name: Verify generated Lua editor API
         run: python tools/generate_lua_api_stubs.py --check
-      - name: Test Lua editor API generator
-        run: python -m unittest tests.test_lua_api_stub_generator
-      - name: Test Lua authoring live verifier
-        run: python -m unittest tests.test_lua_authoring_verifier
-      - name: Test Lua multiplayer authoring verifier
-        run: python -m unittest tests.test_lua_authoring_multiplayer_verifier
-      - name: Test Lua UI authoring verifier
-        run: python -m unittest tests.test_lua_ui_authoring_verifier
-      - name: Test Lua spell picker verifier
-        run: python -m unittest tests.test_lua_spells_verifier
-      - name: Test Lua multiplayer spell verifier
-        run: python -m unittest tests.test_lua_spells_multiplayer_verifier
-      - name: Test launcher/native protocol alignment
-        run: python -m unittest tests.test_protocol_version_alignment
+      - name: Run every Python test module CI can run
+        # Discovers tests/test_*.py rather than naming modules one step at a
+        # time.  Naming them meant a module was covered only if somebody
+        # remembered to add its step, and 54 of 84 never got one.  The
+        # exclusions are declared in MACHINE_DEPENDENT_TESTS with the measured
+        # reason each needs a real machine.
+        run: python tests/run_python_suite.py
       - name: Test Lua content identity registry
         run: >-
           g++ -std=c++17
@@ -67,8 +63,6 @@ jobs:
           -o /tmp/mod-settings-validation-tests
           && /tmp/mod-settings-validation-tests
           tests/fixtures/mod-settings-validation-vectors.json
-      - name: Test mod-settings lifecycle verifier
-        run: python -m unittest tests.test_mod_settings_lifecycle_verifier
       - name: Test multiplayer interpolation and packet sizing
         run: >-
           g++ -std=c++17 -pthread
@@ -100,56 +94,6 @@ jobs:
           tests/native/x86_hook_decoder_tests.cpp
           -o /tmp/x86-hook-decoder-tests
           && /tmp/x86-hook-decoder-tests
-      - name: Test multiplayer run-entry stability verifier
-        run: >-
-          python -m unittest
-          tests.test_multiplayer_run_entry_stability_verifier
-      - name: Test organic enemy and Air timing verifier
-        run: >-
-          python -m unittest
-          tests.test_multiplayer_organic_enemy_cast_timing_verifier
-      - name: Test enemy retarget acceptance verifier
-        run: >-
-          python -m unittest
-          tests.test_multiplayer_enemy_retarget_verifier
-      - name: Test isolated local multiplayer cleanup
-        run: python -m unittest tests.test_local_multiplayer_process_isolation
-      - name: Test Lua multiplayer net verifier
-        run: python -m unittest tests.test_lua_net_multiplayer_verifier
-      - name: Test Lua multiplayer time verifier
-        run: python -m unittest tests.test_lua_time_multiplayer_verifier
-      - name: Test Lua multiplayer UI verifier
-        run: python -m unittest tests.test_lua_ui_multiplayer_verifier
-      - name: Test Lua multiplayer item verifier
-        run: python -m unittest tests.test_lua_items_multiplayer_verifier
-      - name: Test Lua multiplayer enemy verifier
-        run: python -m unittest tests.test_lua_enemies_multiplayer_verifier
-      - name: Test Lua multiplayer AI verifier
-        run: python -m unittest tests.test_lua_ai_multiplayer_verifier
-      - name: Test Lua multiplayer waves verifier
-        run: python -m unittest tests.test_lua_waves_multiplayer_verifier
-      - name: Test Lua multiplayer RNG verifier
-        run: python -m unittest tests.test_lua_rng_multiplayer_verifier
-      - name: Test Lua multiplayer scene verifier
-        run: python -m unittest tests.test_lua_scene_multiplayer_verifier
-      - name: Test Lua multiplayer navigation verifier
-        run: python -m unittest tests.test_lua_nav_multiplayer_verifier
-      - name: Test Lua multiplayer camera verifier
-        run: python -m unittest tests.test_lua_camera_multiplayer_verifier
-      - name: Test Lua multiplayer sprite verifier
-        run: python -m unittest tests.test_lua_sprites_multiplayer_verifier
-      - name: Test Lua multiplayer storage verifier
-        run: python -m unittest tests.test_lua_storage_multiplayer_verifier
-      - name: Test Lua multiplayer timer verifier
-        run: python -m unittest tests.test_lua_timer_multiplayer_verifier
-      - name: Test Lua multiplayer audio verifier
-        run: python -m unittest tests.test_lua_audio_multiplayer_verifier
-      - name: Test Lua multiplayer bus verifier
-        run: python -m unittest tests.test_lua_bus_multiplayer_verifier
-      - name: Test Lua multiplayer draw verifier
-        run: python -m unittest tests.test_lua_draw_multiplayer_verifier
-      - name: Test Lua multiplayer filter verifier
-        run: python -m unittest tests.test_lua_filters_multiplayer_verifier
       - name: Verify every static contract CI can run
         # --ci runs the whole registry except the contracts that read the
         # retail binary or a gitignored runtime/ output; the exclusions are

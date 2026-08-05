@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from static_multiplayer_contract_support import _read, _require_in_order
+from static_re_contract_support import assert_module_runs_in_ci
 
 
 def test_lua_ui_authoring_is_native_bounded_and_authority_routed() -> str:
@@ -276,14 +277,8 @@ def test_lua_ui_authoring_is_native_bounded_and_authority_routed() -> str:
         assert token in normalized_documentation, (
             f"authored UI multiplayer docs lack: {token}"
         )
-    assert (
-        "python -m unittest tests.test_lua_ui_authoring_verifier"
-        in workflow
-    )
-    assert (
-        "python -m unittest tests.test_lua_ui_multiplayer_verifier"
-        in workflow
-    )
+    assert_module_runs_in_ci("test_lua_ui_authoring_verifier")
+    assert_module_runs_in_ci("test_lua_ui_multiplayer_verifier")
     assert '"get_authored_state",' in runtime_verifier
 
     return (

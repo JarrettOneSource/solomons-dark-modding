@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from static_multiplayer_contract_support import _read, _require_in_order
+from static_re_contract_support import assert_module_runs_in_ci
 
 
 def test_lua_scene_is_address_free_authority_owned_and_rooms_are_participant_local() -> str:
@@ -186,10 +187,7 @@ def test_lua_scene_is_address_free_authority_owned_and_rooms_are_participant_loc
         assert token in multiplayer_verifier_tests, (
             f"Lua scene multiplayer verifier tests lack: {token}"
         )
-    assert (
-        "python -m unittest tests.test_lua_scene_multiplayer_verifier"
-        in workflow
-    )
+    assert_module_runs_in_ci("test_lua_scene_multiplayer_verifier")
 
     return (
         "sd.scene exposes semantic state, routes switches through the simulation "

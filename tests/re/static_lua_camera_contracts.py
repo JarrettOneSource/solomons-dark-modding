@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from static_multiplayer_contract_support import _read, _require_in_order
+from static_re_contract_support import assert_module_runs_in_ci
 
 
 def test_lua_camera_is_native_bounded_owned_and_presentation_local() -> str:
@@ -221,10 +222,7 @@ def test_lua_camera_is_native_bounded_owned_and_presentation_local() -> str:
         assert token in multiplayer_verifier_tests, (
             f"Lua camera multiplayer verifier tests lack: {token}"
         )
-    assert (
-        "python -m unittest tests.test_lua_camera_multiplayer_verifier"
-        in workflow
-    )
+    assert_module_runs_in_ci("test_lua_camera_multiplayer_verifier")
     assert '"camera": ("get_state", "set_focus", "clear_focus", "shake")' in runtime_verifier
 
     return "Lua camera native/local ownership has exact two-peer acceptance"

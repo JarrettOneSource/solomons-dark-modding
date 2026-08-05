@@ -194,8 +194,7 @@ def _near(
 
 
 def _pixels(image: Image.Image) -> Any:
-    flattened = getattr(image, "get_flattened_data", None)
-    return flattened() if flattened is not None else image.getdata()
+    return image.get_flattened_data()
 
 
 def inspect_sprite_pixels(path: Path, origin_x: int, origin_y: int) -> dict[str, int]:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from static_multiplayer_contract_support import _read, _require_in_order
+from static_re_contract_support import assert_module_runs_in_ci
 
 
 def test_lua_sprites_are_owned_bounded_sandboxed_and_revisioned() -> str:
@@ -271,10 +272,7 @@ def test_lua_sprites_are_owned_bounded_sandboxed_and_revisioned() -> str:
         assert token in multiplayer_verifier_tests, (
             f"Lua sprite multiplayer verifier tests lack: {token}"
         )
-    assert (
-        "python -m unittest tests.test_lua_sprites_multiplayer_verifier"
-        in workflow
-    )
+    assert_module_runs_in_ci("test_lua_sprites_multiplayer_verifier")
 
     return (
         "Lua mods own bounded, sandboxed, revisioned PNG/bundle atlases; draw-cache "

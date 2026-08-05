@@ -487,6 +487,7 @@ from static_re_binary_tooling_contracts import (
     test_autonomous_probe_uses_bot_scoped_diagnostics_and_native_damage_evidence,
     test_binary_layout_matches_staged_layout_identity,
     test_ci_runs_every_contract_that_needs_no_local_artifact,
+    test_ci_runs_every_test_module_it_can,
     test_crash_reports_preserve_faulting_x86_frame_chain,
     test_investigation_register_has_static_coverage,
     test_lua_follow_preserves_timeout_teleport,
@@ -1608,6 +1609,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "CI runs every contract that needs no local artifact",
         test_ci_runs_every_contract_that_needs_no_local_artifact,
+    ),
+    (
+        "CI runs every test module it can",
+        test_ci_runs_every_test_module_it_can,
     ),
     ("staged binary matches analysis binary", test_staged_binary_matches_analysis_binary),
     (

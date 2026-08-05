@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from static_multiplayer_contract_support import _read, _require_in_order
+from static_re_contract_support import assert_module_runs_in_ci
 
 
 def test_lua_enemies_use_exact_stock_spawn_and_replicated_content_identity() -> str:
@@ -302,10 +303,7 @@ def test_lua_enemies_use_exact_stock_spawn_and_replicated_content_identity() -> 
         assert token in normalized_documentation, (
             f"enemy multiplayer docs lack: {token}"
         )
-    assert (
-        "python -m unittest tests.test_lua_enemies_multiplayer_verifier"
-        in workflow
-    )
+    assert_module_runs_in_ci("test_lua_enemies_multiplayer_verifier")
 
     return (
         "sd.enemies registers deterministic semantic stock archetypes and authority-routes "

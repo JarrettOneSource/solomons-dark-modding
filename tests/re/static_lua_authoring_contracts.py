@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from static_multiplayer_contract_support import _read, _require_in_order
+from static_re_contract_support import assert_module_runs_in_ci
 
 
 def test_lua_authoring_is_generated_reloadable_and_safe_thread_executed() -> str:
@@ -231,12 +232,9 @@ def test_lua_authoring_is_generated_reloadable_and_safe_thread_executed() -> str
         assert token in generator_tests, f"Lua API generator tests lack: {token}"
     assert '"workspace.library"' in luarc and '"api/lua"' in luarc
     assert "python tools/generate_lua_api_stubs.py --check" in workflow
-    assert "python -m unittest tests.test_lua_api_stub_generator" in workflow
-    assert "python -m unittest tests.test_lua_authoring_verifier" in workflow
-    assert (
-        "python -m unittest tests.test_lua_authoring_multiplayer_verifier"
-        in workflow
-    )
+    assert_module_runs_in_ci("test_lua_api_stub_generator")
+    assert_module_runs_in_ci("test_lua_authoring_verifier")
+    assert_module_runs_in_ci("test_lua_authoring_multiplayer_verifier")
 
     for token in (
         '"Lua hot reload bootstrap"',

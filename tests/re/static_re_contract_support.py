@@ -559,6 +559,38 @@ def read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
+def assert_module_runs_in_ci(module: str) -> None:
+    """Assert CI runs a test module.
+
+    Contracts used to assert this by looking for their own
+    `python -m unittest tests.<module>` step in the workflow, which made a
+    contract's idea of coverage a string in a YAML file.  CI now discovers
+    tests/test_*.py, so coverage means: the file exists and nothing declared it
+    machine-dependent.  One definition, checked against the runner that
+    actually selects the modules.
+    """
+    import importlib.util
+
+    path = ROOT / "tests" / f"{module}.py"
+    if not path.exists():
+        raise StaticReTestFailure(f"no such test module: tests/{module}.py")
+
+    spec = importlib.util.spec_from_file_location(
+        "_run_python_suite_support", ROOT / "tests" / "run_python_suite.py"
+    )
+    if spec is None or spec.loader is None:
+        raise StaticReTestFailure("cannot import tests/run_python_suite.py")
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+
+    excluded = runner.MACHINE_DEPENDENT_TESTS
+    if module in excluded:
+        raise StaticReTestFailure(
+            f"tests/{module}.py is excluded from CI as machine-dependent "
+            f"({excluded[module]}), but a contract requires it to run"
+        )
+
+
 def read_multiplayer_transport_source() -> str:
     """Read the transport coordinator and its behavior-domain includes."""
     domain_dir = MULTIPLAYER_LOCAL_TRANSPORT.parent / "multiplayer_local_transport"

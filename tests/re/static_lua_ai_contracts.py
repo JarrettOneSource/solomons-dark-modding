@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from static_multiplayer_contract_support import _read, _require_in_order
+from static_re_contract_support import assert_module_runs_in_ci
 
 
 def test_lua_enemy_ai_is_bounded_authority_owned_and_collision_preserving() -> str:
@@ -216,10 +217,7 @@ def test_lua_enemy_ai_is_bounded_authority_owned_and_collision_preserving() -> s
         assert token in multiplayer_verifier_tests, (
             f"Lua AI multiplayer verifier tests lack: {token}"
         )
-    assert (
-        "python -m unittest tests.test_lua_ai_multiplayer_verifier"
-        in workflow
-    )
+    assert_module_runs_in_ci("test_lua_ai_multiplayer_verifier")
 
     return (
         "sd.ai runs bounded per-enemy blackboards only on authority and "

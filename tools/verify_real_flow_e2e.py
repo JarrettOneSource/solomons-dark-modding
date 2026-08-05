@@ -1429,7 +1429,7 @@ def _indicator_region_assertion(capture_path: Path) -> dict[str, Any]:
         crop = rgb.crop((left, top, right, bottom))
         green_pixels = sum(
             1
-            for red, green, blue in crop.getdata()
+            for red, green, blue in crop.get_flattened_data()
             if green >= 145
             and green - red >= 35
             and green - blue >= 20

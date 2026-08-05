@@ -7,6 +7,7 @@ from static_re_contract_support import (
     PATHFINDING_RE_DOC,
     ROOT,
     StaticReTestFailure,
+    assert_module_runs_in_ci,
     read_text,
 )
 
@@ -299,14 +300,7 @@ def test_enemy_retarget_acceptance_gate_is_wired() -> str:
             "test_participant_reacquisition_requires_stable_host_and_client_match",
         ),
     )
-    _require_tokens(
-        "CI workflow",
-        workflow,
-        (
-            "Test enemy retarget acceptance verifier",
-            "tests.test_multiplayer_enemy_retarget_verifier",
-        ),
-    )
+    assert_module_runs_in_ci("test_multiplayer_enemy_retarget_verifier")
     _require_tokens(
         "netcode review",
         netcode_doc,

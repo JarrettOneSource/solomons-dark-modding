@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from static_multiplayer_contract_support import _read
+from static_re_contract_support import assert_module_runs_in_ci
 
 
 def test_lua_draw_is_bounded_local_and_backbuffer_verified() -> str:
@@ -233,10 +234,7 @@ def test_lua_draw_is_bounded_local_and_backbuffer_verified() -> str:
         assert token in multiplayer_verifier_tests, (
             f"Lua draw multiplayer verifier tests lack: {token}"
         )
-    assert (
-        "python -m unittest tests.test_lua_draw_multiplayer_verifier"
-        in workflow
-    )
+    assert_module_runs_in_ci("test_lua_draw_multiplayer_verifier")
     for token in (
         "verify_lua_draw_multiplayer.py --launch-pair",
         "remain local to each process",
