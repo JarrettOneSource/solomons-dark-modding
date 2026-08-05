@@ -23,6 +23,7 @@ namespace sdmod {
 namespace {
 
 constexpr std::size_t kNativeInputTraceCapacity = 768;
+constexpr std::uint64_t kUnchangedInputSampleIntervalTicks = 10;
 constexpr std::size_t kGameplayInputBufferStride = 0x203;
 constexpr std::size_t kGameplayInputBufferCount = 2;
 
@@ -104,9 +105,31 @@ struct NativeInputTraceState {
     std::uint64_t next_sequence = 1;
     std::atomic<std::uint64_t> simulation_tick{0};
     std::size_t dropped_events = 0;
+    bool have_last_input_sample = false;
+    std::uint64_t last_input_sample_tick = 0;
+    TraceEvent last_input_sample;
 };
 
 NativeInputTraceState g_native_input_trace;
+
+bool InputSampleStateChanged(
+    const TraceEvent& previous,
+    const TraceEvent& current) {
+    return previous.state_readable != current.state_readable ||
+           previous.raw_mouse_mask != current.raw_mouse_mask ||
+           previous.mouse_left != current.mouse_left ||
+           previous.mouse_right != current.mouse_right ||
+           previous.mouse_middle != current.mouse_middle ||
+           previous.movement_x != current.movement_x ||
+           previous.movement_y != current.movement_y ||
+           previous.aim_x != current.aim_x ||
+           previous.aim_y != current.aim_y ||
+           previous.cast_active != current.cast_active ||
+           previous.alternate_cast_active != current.alternate_cast_active ||
+           previous.movement_blocked != current.movement_blocked ||
+           previous.cast_blocked != current.cast_blocked ||
+           previous.gameplay_input_blocked != current.gameplay_input_blocked;
+}
 
 bool IsObservedWindowMessage(UINT message) {
     switch (message) {
@@ -185,6 +208,22 @@ void AppendEvent(TraceEvent event) {
     std::lock_guard<std::mutex> lock(state.mutex);
     if (!state.active.load(std::memory_order_relaxed)) {
         return;
+    }
+    if (event.kind == TraceEventKind::InputSample) {
+        const bool changed =
+            !state.have_last_input_sample ||
+            InputSampleStateChanged(state.last_input_sample, event);
+        const bool periodic =
+            !state.have_last_input_sample ||
+            event.simulation_tick >=
+                state.last_input_sample_tick +
+                    kUnchangedInputSampleIntervalTicks;
+        state.last_input_sample = event;
+        state.have_last_input_sample = true;
+        if (!changed && !periodic) {
+            return;
+        }
+        state.last_input_sample_tick = event.simulation_tick;
     }
     event.sequence = state.next_sequence++;
     if (state.events.size() >= kNativeInputTraceCapacity) {
@@ -414,6 +453,8 @@ std::string SerializeTraceLocked(
     output << ",\"active\":";
     AppendBool(output, active);
     output << ",\"capacity\":" << kNativeInputTraceCapacity
+           << ",\"unchanged_input_sample_interval_ticks\":"
+           << kUnchangedInputSampleIntervalTicks
            << ",\"dropped_events\":" << state.dropped_events
            << ",\"event_count\":" << state.events.size()
            << ",\"events\":[";
@@ -703,6 +744,8 @@ bool StartNativeInputTrace(
     state.events.reserve(kNativeInputTraceCapacity);
     state.next_sequence = 1;
     state.dropped_events = 0;
+    state.have_last_input_sample = false;
+    state.last_input_sample_tick = 0;
     state.simulation_tick.store(0, std::memory_order_release);
     state.active.store(true, std::memory_order_release);
     return true;

@@ -478,7 +478,7 @@ end
         self.start_trace(label)
         try:
             helper = self.click(fraction_x, fraction_y, hold_ms)
-            time.sleep(0.30)
+            time.sleep(0.10)
         finally:
             trace = self.stop_trace()
         return trace, helper
