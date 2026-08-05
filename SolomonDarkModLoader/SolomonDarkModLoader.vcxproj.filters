@@ -461,6 +461,9 @@
     <ClInclude Include="src\native_input_trace.h">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\native_input_trace\serialization.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\gameplay_seams\address_storage.inl">
       <Filter>Header Files\Gameplay Seams</Filter>
     </ClInclude>
