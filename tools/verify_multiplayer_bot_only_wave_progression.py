@@ -62,6 +62,7 @@ DEFAULT_WAVE_FIXTURE = (
 )
 PORT_MIN = 52261
 PORT_MAX = 52268
+CLIENT_AUTHORITY_LETHAL_HP_MAX = 5.0
 
 
 class BotOnlyWaveFailure(RuntimeError):
@@ -829,41 +830,86 @@ print("max_mp_ok=" .. tostring(
     }
 
 
+def client_lethal_authority_precondition(
+    values: Mapping[str, str],
+) -> bool:
+    client = participant(values, CLIENT_ID)
+    return (
+        0.0 < number(client, "life", math.inf)
+        <= CLIENT_AUTHORITY_LETHAL_HP_MAX
+        and integer(client, "anim_drive", 1) == 0
+    )
+
+
+def participant_is_terminally_dead(values: Mapping[str, str]) -> bool:
+    return (
+        number(values, "life", 1.0) <= 0.0
+        and integer(values, "anim_drive", 0) != 0
+    )
+
+
 def kill_humans(
     host_pipe: str,
     client_pipe: str,
     *,
     label: str,
+    skip_already_dead: bool = False,
 ) -> dict[str, Any]:
-    killed: dict[str, Any] = {"label": label, "startedAt": utc_now()}
-    killed["hostilesIsolated"] = isolate_human_death_edge(host_pipe)
-    killed["clientPrecondition"] = _establish_local_lethal_precondition(
-        client_pipe,
-        "client",
-    )
-    client_authority, client_authority_at = wait_for(
-        lambda: state(host_pipe),
-        lambda values: (
-            0.0 < number(participant(values, CLIENT_ID), "life", math.inf)
-            <= 1.01
-            and integer(participant(values, CLIENT_ID), "anim_drive", 1) == 0
-        ),
-        label=f"client lethal precondition at host authority ({label})",
-        timeout=8.0,
-    )
-    killed["clientAuthorityPrecondition"] = {
-        "state": client_authority,
-        "utc": client_authority_at,
+    killed: dict[str, Any] = {
+        "label": label,
+        "skipAlreadyDead": skip_already_dead,
+        "startedAt": utc_now(),
     }
-    killed["clientHit"] = _apply_authoritative_client_lethal_hit(host_pipe)
-    wait_for(
-        lambda: state(host_pipe),
-        lambda values: number(participant(values, CLIENT_ID), "life", 1.0) <= 0.0,
-        label=f"client terminal death ({label})",
-        timeout=8.0,
-    )
-    killed["hostPrecondition"] = _establish_host_lethal_precondition(host_pipe)
-    killed["hostHit"] = _apply_authoritative_host_lethal_hit(host_pipe)
+    killed["hostilesIsolated"] = isolate_human_death_edge(host_pipe)
+    before = state(host_pipe)
+    client_before = participant(before, CLIENT_ID)
+    if skip_already_dead and participant_is_terminally_dead(client_before):
+        killed["clientPrecondition"] = {
+            "alreadyDead": True,
+            "participant": client_before,
+        }
+        killed["clientAuthorityPrecondition"] = {
+            "alreadyDead": True,
+            "state": before,
+            "utc": utc_now(),
+        }
+        killed["clientHit"] = {"skipped": True, "reason": "already dead"}
+    else:
+        killed["clientPrecondition"] = _establish_local_lethal_precondition(
+            client_pipe,
+            "client",
+        )
+        client_authority, client_authority_at = wait_for(
+            lambda: state(host_pipe),
+            client_lethal_authority_precondition,
+            label=f"client lethal precondition at host authority ({label})",
+            timeout=8.0,
+        )
+        killed["clientAuthorityPrecondition"] = {
+            "state": client_authority,
+            "utc": client_authority_at,
+        }
+        killed["clientHit"] = _apply_authoritative_client_lethal_hit(host_pipe)
+        wait_for(
+            lambda: state(host_pipe),
+            lambda values: (
+                number(participant(values, CLIENT_ID), "life", 1.0) <= 0.0
+            ),
+            label=f"client terminal death ({label})",
+            timeout=8.0,
+        )
+
+    before_host = state(host_pipe)
+    host_before = local_human(before_host)
+    if skip_already_dead and participant_is_terminally_dead(host_before):
+        killed["hostPrecondition"] = {
+            "alreadyDead": True,
+            "participant": host_before,
+        }
+        killed["hostHit"] = {"skipped": True, "reason": "already dead"}
+    else:
+        killed["hostPrecondition"] = _establish_host_lethal_precondition(host_pipe)
+        killed["hostHit"] = _apply_authoritative_host_lethal_hit(host_pipe)
     terminal, killed_at = wait_for(
         lambda: state(host_pipe),
         lambda values: (
@@ -1403,6 +1449,12 @@ def await_stock_game_over(
     hp = number(current_bot, "hp", 0.0)
     if hp <= 0.0:
         raise BotOnlyWaveFailure(f"Bot was already dead before terminal proof: {current_bot}")
+    terminal_human_deaths = kill_humans(
+        host_pipe,
+        client_pipe,
+        label="terminal-client-then-host",
+        skip_already_dead=True,
+    )
     offense_disabled = set_bot_offense(
         settings_path,
         host_pipe,
@@ -1507,6 +1559,7 @@ print("held=" .. tostring(__botwaves_pressure_hold == true))
         timeout=8.0,
     )
     return {
+        "humanDeaths": terminal_human_deaths,
         "restoredBotVitals": restored_vitals,
         "botOffenseDisabled": offense_disabled,
         "botBrainHeld": held,

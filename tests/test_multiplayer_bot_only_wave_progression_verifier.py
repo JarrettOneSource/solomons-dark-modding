@@ -148,6 +148,26 @@ class BotOnlyWaveProgressionVerifierTests(unittest.TestCase):
         self.assertNotIn("SKELETONARCHER", fixture)
         self.assertEqual(fixture.count("SKELETON:FLAG_WEAK|FLAG_HPDOWN"), 1)
 
+    def test_client_lethal_precondition_allows_authority_regeneration(self) -> None:
+        values = {
+            "participant_count": "1",
+            "participant.1.id": str(verifier.CLIENT_ID),
+            "participant.1.life": "1.789",
+            "participant.1.anim_drive": "0",
+        }
+        self.assertTrue(verifier.client_lethal_authority_precondition(values))
+
+        values["participant.1.life"] = "5.001"
+        self.assertFalse(verifier.client_lethal_authority_precondition(values))
+        values["participant.1.life"] = "1.0"
+        values["participant.1.anim_drive"] = "1"
+        self.assertFalse(verifier.client_lethal_authority_precondition(values))
+
+    def test_terminal_proof_rekills_stock_boundary_respawns(self) -> None:
+        source = inspect.getsource(verifier.await_stock_game_over)
+        self.assertIn('label="terminal-client-then-host"', source)
+        self.assertIn("skip_already_dead=True", source)
+
     def test_effective_schedule_preserves_the_retail_next_graph(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
