@@ -100,11 +100,33 @@ A gamepad producer synthesizes `aim` from the right stick (`player_pos + stick_d
 directly. Both land in the same struct, so native traces stay replayable and the controller is
 not a translation layer bolted on afterwards.
 
-**Open design call (owner, before P3 — see §11):** twin-stick aim as the primary controller
-scheme vs. a stick-driven virtual cursor. Twin-stick is the recommendation — it is what the genre
-expects and what the Deck's ergonomics want — but it changes feel relative to click-to-move and
-is therefore the owner's call, not the agent's. The intent contract above expresses both, so the
-decision does not block P0–P2.
+**Decided (owner, 2026-08-04): twin-stick.** Not a virtual cursor. The intent contract above
+still expresses both, because it has to — native traces are cursor-shaped and must stay
+replayable — but twin-stick is what we build and what the phase gates test.
+
+### 4.2 The twin-stick mapping (decided; implement exactly this)
+
+| Control | Intent | Notes |
+| --- | --- | --- |
+| Left stick | `move.vector` | Radial deadzone, re-normalized between the inner and outer edge so slow walking is reachable. Mouse emits `move.target` instead; both are first-class |
+| Right stick | `aim` = `player_pos + normalize(stick) × reach` | `reach` is a measured constant, not a taste call — pick it so the aim point lands inside the visible play area at default zoom, and derive it from G14's screen→world transform. Record the number in the G14 doc |
+| Right stick released | aim **holds its last direction** | No auto-aim toward movement. Kiting — retreating while firing backwards — is core to the game, and snapping aim to the move vector makes it impossible |
+| Right trigger | `cast{slot: primary, phase: press → hold → release}` | Maps one-to-one onto native click-hold: holding charges earth, releasing fires. No new semantics needed |
+| Face buttons | `cast{slot: N, …}` | Slot binding follows the HUD's own slot order (G9) |
+| South button | `interact` | Talk to NPCs, use the shop, enter a portal |
+| D-pad / left stick | `menu-nav` | Both drive menu focus; the focus model is G11's |
+| East button | menu back / cancel | Same verb everywhere, including modals |
+| Start | pause | |
+
+**Aim assist is a producer-side transform, never a sim rule.** A stick cannot match pixel-precise
+mouse aim, so some magnetism is likely wanted — but it must be applied inside
+`webgame/input/` while computing `aim`, *before* the intent reaches the sim. Put it in the sim
+and it silently rewrites every golden and every replayed trace. Tune it as a client setting;
+conformance never sees it.
+
+Deck extras that cost us nothing: its trackpads can drive a mouse-shaped producer through Steam
+Input if a player prefers that, and gyro fine-aim is a plausible later addition — both are Steam
+Input configuration on top of the same two producers, not new code paths.
 
 ### 4.1 Steam Deck target (gates, measured — never assumed)
 
@@ -182,12 +204,12 @@ tier order.
 | G14 input contract | **inputre** | Census the native input model as a contract: what a click actually means at each surface (world move vs. cast vs. UI), hold/charge semantics and their thresholds, key bindings, modifier behavior, the input seal during loading (uigate), and how input routes between HUD, menus, and world. Deliver the abstract `Intent` schema of §4 plus a proof that it losslessly encodes a recorded native mouse session. Goldens: recorded native input traces and their intent-stream encodings, round-trip exact. | QUEUED — dispatch first |
 | G11 boot, splash, loading & menus | **menure** | The whole pre-gameplay shell: boot sequence and its ordering; splash/attract screens; loading screens (progress source, minimum display time, what is legal to do during them); title/main menu; every submenu reachable from it (options/settings, profile & save select, class/loadout, skill picker, map/boneyard picker, pause, game over); per-screen layout with exact art, fonts, and positions; transitions between screens; and the **focus/navigation model** §4 requires (focus order, default focus, wrap, back semantics) — the native game is mouse-driven, so where no focus order exists natively, define one and mark it designed-not-observed. Goldens: per-screen layout captures plus a navigation-graph fixture. | QUEUED — dispatch second |
 
-**Rule for G11 (trademark, not parity).** Reverse and document the splash screen fully, including
-the Raptisoft logo's placement and timing, and extract the asset. **Do not ship the logo** until
-the owner's written blessing (§11) explicitly covers trademark use — displaying a company's mark
-reads as endorsement and contradicts the "not affiliated with Raptisoft" disclaimer the site
-already carries. Until then the splash shows an attribution card ("Originally created by
-Raptisoft") in the same slot. This is a publication gate, not an RE gate.
+**Rule for G11 (splash).** The owner confirmed on 2026-08-04 that the original developers'
+blessing covers the Raptisoft logo, so the splash is reversed **and shipped** — placement,
+timing, and asset reproduced faithfully like any other screen. One consequence to carry through:
+the website footer's "not affiliated with Raptisoft" disclaimer and the shipped logo now say
+different things, so the site's wording gets revisited at launch (§11) rather than left to
+contradict the game.
 
 ### Tier B — hub and world presentation (second)
 
@@ -313,11 +335,12 @@ controller-driven shell before any sim exists, then a walkable hub, then the run
 
 ## 11. Open items / to-confirm
 
-- **Owner (blocks launch):** written re-confirmation of the original developers' blessing. It
-  must state explicitly whether it covers **trademark/logo use**, which is a separate question
-  from redistributing game content — see the G11 rule in §6.
-- **Owner (blocks P3):** controller aim scheme — twin-stick (recommended) vs. virtual cursor.
-  §4's intent contract expresses both, so this does not block P0–P2.
+- **Owner (blocks launch):** written re-confirmation of the original developers' blessing, on
+  file. Scope is already settled verbally (2026-08-04): it covers redistributing the content
+  **and** the Raptisoft logo. What remains is having it in writing before the public build ships.
+- **At launch:** reword the site's "not affiliated with Raptisoft" footer so it does not
+  contradict the shipped splash — see the G11 rule in §6.
+- ~~Controller aim scheme~~ — decided 2026-08-04: twin-stick, mapping pinned in §4.2.
 - Confirm the `api/` deployment mapping (repo → `solomon-dark-revived` on NFO) and where webgame
   static hosting slots in (same box; measure asset weight in P0).
 - Steam Deck: confirm a physical device is available for the on-device gates in P0/P5/P6, or
