@@ -177,6 +177,10 @@ void RegisterLuaDebugBindings(lua_State* state) {
     RegisterFunction(state, &LuaDebugGetGameNpcMotion, "get_gamenpc_motion");
     RegisterFunction(state, &LuaDebugGetWorldMovementGeometry, "get_world_movement_geometry");
     RegisterFunction(state, &LuaDebugCallCdeclU32RetU32, "call_cdecl_u32_ret_u32");
+    RegisterFunction(
+        state,
+        &LuaDebugCallStdcallU32U32RetU32,
+        "call_stdcall_u32_u32_ret_u32");
     RegisterFunction(state, &LuaDebugCallCdeclU32U32, "call_cdecl_u32_u32");
     RegisterFunction(state, &LuaDebugCopyBytes, "copy_bytes");
     RegisterFunction(state, &LuaDebugReadFieldU8, "read_field_u8");

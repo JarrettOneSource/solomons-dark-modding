@@ -458,6 +458,42 @@ int LuaDebugCallCdeclU32RetU32(lua_State* state) {
     return 1;
 }
 
+// sd.debug.call_stdcall_u32_u32_ret_u32(function_address, arg0, arg1) -> integer|nil
+// This exists for read-only probes of retail helpers whose RET imm16 proves
+// callee cleanup. It does not dispatch gameplay work on its own.
+int LuaDebugCallStdcallU32U32RetU32(lua_State* state) {
+    const auto requested_function_address = CheckLuaAddress(state, 1, "function_address");
+    const auto arg0 = CheckLuaUnsignedInteger<std::uint32_t>(state, 2, "arg0");
+    const auto arg1 = CheckLuaUnsignedInteger<std::uint32_t>(state, 3, "arg1");
+
+    auto& memory = ProcessMemory::Instance();
+    const auto function_address = ResolveExecutableLuaAddress(memory, requested_function_address);
+    if (function_address == 0) {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    using StdcallU32U32RetU32Fn =
+        std::uint32_t(__stdcall*)(std::uint32_t, std::uint32_t);
+    auto* fn = reinterpret_cast<StdcallU32U32RetU32Fn>(function_address);
+    std::uint32_t result = 0;
+    bool ok = false;
+    __try {
+        result = fn(arg0, arg1);
+        ok = true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        ok = false;
+    }
+
+    if (!ok) {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    lua_pushinteger(state, static_cast<lua_Integer>(result));
+    return 1;
+}
+
 // sd.debug.resolve_native_primary_spell_stats(progression_runtime, primary_entry, combo_entry) -> table
 int LuaDebugResolveNativePrimarySpellStats(lua_State* state) {
     const auto progression_runtime =

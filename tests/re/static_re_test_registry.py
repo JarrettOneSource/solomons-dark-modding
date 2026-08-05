@@ -45,6 +45,12 @@ from static_re_webgame_asset_contracts import (
     test_webgame_asset_manifest_schema_and_provenance_are_pinned,
     test_webgame_workspace_battery_is_strict_ratcheted_and_ci_wired,
 )
+from static_re_native_hub_economy_contracts import (
+    test_native_hub_dig_and_run_boundary_fields_are_pinned,
+    test_native_hub_entity_census_and_interactions_are_pinned,
+    test_native_hub_inventory_generation_and_rng_provenance_are_pinned,
+    test_native_hub_price_formulas_and_transaction_constants_are_pinned,
+)
 from static_re_native_menu_shell_contracts import (
     test_designed_menu_focus_model_consumes_g14_intents,
     test_native_menu_live_transition_graph_is_pinned,
@@ -847,6 +853,22 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Webgame workspace battery is strict, ratcheted, and CI-wired",
         test_webgame_workspace_battery_is_strict_ratcheted_and_ci_wired,
+    ),
+    (
+        "Native hub entity census and interactions are pinned",
+        test_native_hub_entity_census_and_interactions_are_pinned,
+    ),
+    (
+        "Native hub price formulas and transaction constants are pinned",
+        test_native_hub_price_formulas_and_transaction_constants_are_pinned,
+    ),
+    (
+        "Native hub inventory generation and RNG provenance are pinned",
+        test_native_hub_inventory_generation_and_rng_provenance_are_pinned,
+    ),
+    (
+        "Native hub Dig and run boundary fields are pinned",
+        test_native_hub_dig_and_run_boundary_fields_are_pinned,
     ),
     (
         "Native menu screen census and live layouts are pinned",

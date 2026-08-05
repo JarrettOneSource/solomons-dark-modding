@@ -110,6 +110,7 @@ Each write hit currently captures:
 - `sd.debug.call_thiscall_u32_ret_u32(function_address, this_ptr, arg0)`
 - `sd.debug.call_thiscall_out_f32x4_u32(function_address, this_ptr, arg0)`
 - `sd.debug.call_cdecl_u32_ret_u32(function_address, arg0)`
+- `sd.debug.call_stdcall_u32_u32_ret_u32(function_address, arg0, arg1)`
 - `sd.debug.call_cdecl_u32_u32(function_address, arg0, arg1)`
 
 ### Gameplay-specific typed helpers
