@@ -48,6 +48,26 @@ def test_semantic_air_damage_quantum_uses_authoritative_total() -> str:
     return "semantic Air damage estimation resolves bundled claims against authoritative HP loss"
 
 
+# Exactly what compact_spell() emits as a spell's semantic identity.
+MINDSTAR_PROJECTED_IDENTITY_FIELDS = (
+    "build_skill_id",
+    "builder_seh_code",
+    "current_spell_id",
+    "damage",
+    "error",
+    "mana_cost",
+    "mana_cost_available",
+    "mana_output_scale",
+    "mana_output_scaled",
+    "mana_spend_cost",
+    "mana_spend_cost_available",
+    "progression_level",
+    "resolved",
+    "secondary_damage",
+    "secondary_damage_available",
+)
+
+
 def test_mindstar_semantic_spell_projection_ignores_raw_storage_tail() -> str:
     from verify_multiplayer_mindstar_behavior_sync import (
         compact_native_output_buffer,
@@ -97,6 +117,21 @@ def test_mindstar_semantic_spell_projection_ignores_raw_storage_tail() -> str:
         )
 
     owner_projection = compact_spell(owner)
+    # The per-field sensitivity sweep below only covers fields the projection
+    # actually emits, so an empty or shrunken projection would make it prove
+    # nothing while still passing -- and so would the two equality checks above,
+    # since two empty dicts compare equal. Pin the emitted set.
+    #
+    # Note that `outputs` and `logical_output_count` are deliberately absent:
+    # compact_spell keeps the derived damage/mana scalars, not the output list.
+    # Whether that is the intended identity is a question for the Mindstar
+    # verifier, not something this pin decides -- but a change to it now has to
+    # be stated here rather than silently narrowing the sweep.
+    if sorted(owner_projection) != sorted(MINDSTAR_PROJECTED_IDENTITY_FIELDS):
+        raise StaticReTestFailure(
+            "the Mindstar semantic projection changed shape: "
+            f"{sorted(owner_projection)}"
+        )
     for field, value in owner_projection.items():
         changed = {**semantic_spell}
         if isinstance(value, bool):
