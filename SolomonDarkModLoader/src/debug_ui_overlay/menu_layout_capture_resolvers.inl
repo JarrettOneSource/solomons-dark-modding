@@ -446,4 +446,3 @@ void EndSettingsRowCapture() {
     }
     elements.push_back(std::move(element));
 }
-

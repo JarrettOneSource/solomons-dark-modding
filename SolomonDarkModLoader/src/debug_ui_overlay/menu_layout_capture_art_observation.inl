@@ -324,4 +324,3 @@ std::vector<CapturedMenuArtElement> TakeCapturedMenuArtFrame() {
     g_native_menu_art_draw_order = 0;
     return result;
 }
-
