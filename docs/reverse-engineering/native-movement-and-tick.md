@@ -103,6 +103,26 @@ The input divisor is the double `10.0` at `0x007DE810`; acceleration is thus
 `0.1` velocity unit per tick, or 10 velocity units/s. The cap's global double
 `1.25` is at `0x00784740`.
 
+**Precision order is load-bearing — a port must divide before it narrows.**
+`input / 10` is a *double* division on the incoming direction; only the sum
+`v_post_previous + input/10` is narrowed to the stored `float`. Rounding the
+direction to `float` first and then dividing shifts the result by roughly one
+ulp, which is normally invisible but decides the `> 0.01` move gate below on
+the first tick of a diagonal start: the correctly-ordered `|v_pre|^2` is
+`0.010000000219…` and passes, while the prematurely-narrowed value is
+`0.009999998814…` and fails. That single skipped step offsets the whole trace
+and never recovers, so a port that gets this wrong diverges from every diagonal
+golden while still matching all four cardinals.
+
+Reproducing this document's integrator against
+`../../tests/fixtures/webgame/movement-goldens.json` with the order above, the
+float `0.9f` damping, and float-width position stores yields bit-exact
+positions across all five open-ground scenarios (595 ticks) and bit-exact
+velocities on the four cardinals. Diagonal velocity lands within 2 ulps,
+because the native tick keeps the intermediate in an x87 register instead of
+narrowing between the add and the damp; that residual does not reach position
+at world-space magnitudes and can be ignored by a port that stores `float`.
+
 The stock baseline terms are:
 
 | Term | Stock baseline | Source and role |
