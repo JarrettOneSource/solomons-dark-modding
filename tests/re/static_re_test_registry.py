@@ -322,6 +322,15 @@ from static_re_native_actor_contracts import (
     test_player_gamenpc_movement_seed_layout_is_named_and_documented,
     test_synthetic_source_profile_blocker_is_documented,
 )
+from static_re_native_sim_core_contracts import (
+    test_movement_golden_provenance_and_schema_are_live_recorded,
+    test_movement_golden_traces_pin_normalization_slide_stop_and_knockback,
+    test_native_movement_integrators_and_collision_are_address_pinned,
+    test_native_rng_golden_replays_exact_retail_recurrence,
+    test_native_rng_stream_ownership_and_callsite_census_are_pinned,
+    test_native_sim_recorder_seam_is_bounded_isolated_and_registered,
+    test_native_tick_graph_reconciles_simulation_and_service_cadences,
+)
 from static_re_all_bot_match_contracts import (
     test_all_bot_match_uses_native_slots_real_trigger_and_hp_edges,
 )
@@ -1648,5 +1657,33 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "projectile presentation and Fire_Goodguy semantics are pinned",
         test_projectile_presentation_and_fire_goodguy_semantics_are_pinned,
+    ),
+    (
+        "Native movement integrators and collision are address-pinned",
+        test_native_movement_integrators_and_collision_are_address_pinned,
+    ),
+    (
+        "Native tick graph reconciles simulation and service cadences",
+        test_native_tick_graph_reconciles_simulation_and_service_cadences,
+    ),
+    (
+        "Movement goldens have clean live provenance and schema",
+        test_movement_golden_provenance_and_schema_are_live_recorded,
+    ),
+    (
+        "Movement goldens pin normalization, wall response, and Knockback",
+        test_movement_golden_traces_pin_normalization_slide_stop_and_knockback,
+    ),
+    (
+        "Native RNG goldens replay the exact retail recurrence",
+        test_native_rng_golden_replays_exact_retail_recurrence,
+    ),
+    (
+        "Native RNG ownership and gameplay call-site census are pinned",
+        test_native_rng_stream_ownership_and_callsite_census_are_pinned,
+    ),
+    (
+        "Native sim recorder seam is bounded, isolated, and registered",
+        test_native_sim_recorder_seam_is_bounded_isolated_and_registered,
     ),
 ]
