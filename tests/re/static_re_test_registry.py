@@ -33,6 +33,11 @@ from static_re_native_input_model_contracts import (
     test_native_input_ingress_sampling_and_tick_order_are_pinned,
     test_native_surface_priority_and_loading_input_seal_are_pinned,
 )
+from static_re_native_menu_shell_contracts import (
+    test_designed_menu_focus_model_consumes_g14_intents,
+    test_native_menu_live_transition_graph_is_pinned,
+    test_native_menu_screen_census_and_live_layouts_are_pinned,
+)
 from static_re_boneyard_lighting_contracts import (
     test_boneyard_tree_last_writer_render_path_is_registered,
 )
@@ -787,6 +792,18 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native action thresholds, absences, and Intent shape are pinned",
         test_native_action_thresholds_absences_and_intent_shape_are_pinned,
+    ),
+    (
+        "Native menu screen census and live layouts are pinned",
+        test_native_menu_screen_census_and_live_layouts_are_pinned,
+    ),
+    (
+        "Native menu live transition graph is pinned",
+        test_native_menu_live_transition_graph_is_pinned,
+    ),
+    (
+        "Designed menu focus model consumes G14 intents",
+        test_designed_menu_focus_model_consumes_g14_intents,
     ),
     (
         "Boneyard Tree last-writer render path is registered",

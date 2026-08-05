@@ -1,0 +1,365 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "contract": "solomon-dark-menu-focus-model-v1",
+  "provenance": "DESIGN_NOT_OBSERVED",
+  "intent_ref": "webgame-contracts/intent-schema.json#/$defs/menuNavIntent",
+  "coordinate_fixture": "tests/fixtures/webgame/menu-goldens.json",
+  "modal_policy": {
+    "provenance": "DESIGN_NOT_OBSERVED",
+    "trap_focus": true,
+    "restore_invoker_focus_on_close": true,
+    "block_underlay_navigation": true,
+    "back": "Invoke the modal cancel action when one exists; otherwise ignore back unless the modal explicitly declares a safe primary dismissal."
+  },
+  "screens": [
+    {
+      "layout_id": "native-loader",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "none",
+      "focus_order": [],
+      "default_focus": null,
+      "wrap": "none",
+      "back": "ignored"
+    },
+    {
+      "layout_id": "loading-screen",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "none",
+      "focus_order": [],
+      "default_focus": null,
+      "wrap": "none",
+      "back": "dropped by the loading input seal"
+    },
+    {
+      "layout_id": "beta-notice",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "single",
+      "focus_order": ["dialog.primary"],
+      "default_focus": "dialog.primary",
+      "wrap": "none",
+      "back": "activate dialog.primary"
+    },
+    {
+      "layout_id": "control-scheme-picker",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "horizontal",
+      "focus_order": [
+        "control_scheme_picker.select_arrows_mouse",
+        "control_scheme_picker.select_wasd"
+      ],
+      "default_focus": "control_scheme_picker.select_wasd",
+      "wrap": "left and right wrap between the two enabled choices",
+      "back": "ignored while this first-run prerequisite is active"
+    },
+    {
+      "layout_id": "main-menu-root",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "vertical_then_corner",
+      "focus_order": [
+        "main_menu.play",
+        "main_menu.explore_dark_cloud",
+        "main_menu.settings",
+        "main_menu.hall_of_fame",
+        "main_menu.quit"
+      ],
+      "default_focus": "main_menu.play",
+      "wrap": "up and down wrap across the ordered enabled controls",
+      "back": "ignored at the root; quitting requires main_menu.quit"
+    },
+    {
+      "layout_id": "profile-save-select",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "vertical",
+      "focus_order": [
+        "main_menu.resume_last_game",
+        "main_menu.new_game",
+        "main_menu.hall_of_fame",
+        "main_menu.back"
+      ],
+      "default_focus": "main_menu.resume_last_game when enabled, otherwise main_menu.new_game",
+      "wrap": "up and down wrap across enabled controls and skip a disabled resume",
+      "back": "activate main_menu.back"
+    },
+    {
+      "layout_id": "create-element",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "spatial_with_stable_linear_fallback",
+      "focus_order": [
+        "create.select_element_ether",
+        "create.select_element_earth",
+        "create.select_element_fire",
+        "create.select_element_water",
+        "create.select_element_air"
+      ],
+      "default_focus": "restore the saved element when valid, otherwise create.select_element_fire",
+      "wrap": "directional navigation wraps to the farthest eligible choice in the same direction; next and previous wrap in focus_order",
+      "back": "return to profile-save-select"
+    },
+    {
+      "layout_id": "create-discipline",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "horizontal",
+      "focus_order": [
+        "create.select_discipline_mind",
+        "create.select_discipline_body",
+        "create.select_discipline_arcane"
+      ],
+      "default_focus": "restore the saved discipline when valid, otherwise create.select_discipline_mind",
+      "wrap": "left and right wrap across the three choices",
+      "back": "return to create-element without committing a discipline"
+    },
+    {
+      "layout_id": "game-settings-title",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "vertical_rows",
+      "focus_order": [
+        "settings.sound_volume",
+        "settings.music_volume",
+        "settings.fullscreen",
+        "settings.resolution",
+        "settings.login_info",
+        "settings.customize_keyboard",
+        "settings.tweak_game",
+        "settings.done"
+      ],
+      "default_focus": "settings.sound_volume",
+      "wrap": "up and down wrap; left and right adjust the focused value",
+      "back": "activate settings.done"
+    },
+    {
+      "layout_id": "game-settings-gameplay",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "vertical_rows",
+      "focus_order": [
+        "settings.sound_volume",
+        "settings.music_volume",
+        "settings.fullscreen",
+        "settings.login_info",
+        "settings.customize_keyboard",
+        "settings.tweak_game",
+        "settings.done"
+      ],
+      "default_focus": "settings.sound_volume",
+      "wrap": "up and down wrap; the disabled resolution message is skipped; left and right adjust the focused value",
+      "back": "activate settings.done"
+    },
+    {
+      "layout_id": "game-settings-dark-cloud",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "vertical_rows",
+      "focus_order": [
+        "settings.sound_volume",
+        "settings.music_volume",
+        "settings.fullscreen",
+        "settings.login_info",
+        "settings.customize_keyboard",
+        "settings.tweak_game",
+        "settings.done"
+      ],
+      "default_focus": "settings.sound_volume",
+      "wrap": "up and down wrap; unavailable rows are skipped; left and right adjust the focused value",
+      "back": "activate settings.done"
+    },
+    {
+      "layout_id": "dark-cloud-settings",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "vertical_form",
+      "focus_order": [
+        "dark_account.dark_name",
+        "dark_account.password",
+        "dark_account.back"
+      ],
+      "default_focus": "dark_account.dark_name",
+      "wrap": "up and down wrap across enabled fields and actions",
+      "back": "activate dark_account.back"
+    },
+    {
+      "layout_id": "controls",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "vertical_rows",
+      "focus_order": [
+        "controls.move_up",
+        "controls.move_down",
+        "controls.move_left",
+        "controls.move_right",
+        "controls.open_menu",
+        "controls.open_inventory",
+        "controls.open_skills",
+        "controls.belt_slot_1",
+        "controls.belt_slot_2",
+        "controls.belt_slot_3",
+        "controls.belt_slot_4",
+        "controls.belt_slot_5",
+        "controls.belt_slot_6",
+        "controls.belt_slot_7",
+        "controls.belt_slot_8",
+        "controls.back"
+      ],
+      "default_focus": "controls.move_up",
+      "wrap": "up and down wrap across all binding rows and back",
+      "back": "cancel an active binding-listen modal; otherwise activate controls.back"
+    },
+    {
+      "layout_id": "performance",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "vertical_rows",
+      "focus_order": [
+        "performance.complex_lighting",
+        "performance.complex_shadows",
+        "performance.multiple_shadows",
+        "performance.light_quality",
+        "performance.secondary_spells_at_mouse",
+        "performance.kid_mode",
+        "performance.enhanced_effects",
+        "performance.save_memory",
+        "performance.zoom_effects",
+        "performance.back"
+      ],
+      "default_focus": "performance.complex_lighting",
+      "wrap": "up and down wrap and skip capability-gated light_quality; left, right, or confirm changes a value",
+      "back": "activate performance.back"
+    },
+    {
+      "layout_id": "dark-cloud-browser",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "spatial_regions",
+      "focus_order": [
+        "dark_cloud_browser.login",
+        "dark_cloud_browser.recent",
+        "dark_cloud_browser.online_levels",
+        "dark_cloud_browser.my_levels",
+        "dark_cloud_browser.level_rows",
+        "dark_cloud_browser.play",
+        "dark_cloud_browser.search",
+        "dark_cloud_browser.sort",
+        "dark_cloud_browser.options",
+        "dark_cloud_browser.menu"
+      ],
+      "default_focus": "the active tab",
+      "wrap": "left and right wrap within the tab and footer regions; up and down move between regions; next and previous cycle enabled tabs",
+      "back": "activate dark_cloud_browser.menu"
+    },
+    {
+      "layout_id": "dark-cloud-recent",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "inherit_dark_cloud_browser",
+      "focus_order": ["dark_cloud_browser.recent", "dark_cloud_browser.level_rows", "dark_cloud_browser.play", "dark_cloud_browser.search", "dark_cloud_browser.sort", "dark_cloud_browser.options", "dark_cloud_browser.menu", "dark_cloud_browser.login"],
+      "default_focus": "dark_cloud_browser.recent",
+      "wrap": "use the dark-cloud-browser regional wrap rules",
+      "back": "activate dark_cloud_browser.menu"
+    },
+    {
+      "layout_id": "dark-cloud-online-levels",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "inherit_dark_cloud_browser",
+      "focus_order": ["dark_cloud_browser.online_levels", "dark_cloud_browser.level_rows", "dark_cloud_browser.play", "dark_cloud_browser.search", "dark_cloud_browser.sort", "dark_cloud_browser.options", "dark_cloud_browser.menu", "dark_cloud_browser.login"],
+      "default_focus": "dark_cloud_browser.online_levels",
+      "wrap": "use the dark-cloud-browser regional wrap rules",
+      "back": "activate dark_cloud_browser.menu"
+    },
+    {
+      "layout_id": "dark-cloud-my-levels",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "inherit_dark_cloud_browser",
+      "focus_order": ["dark_cloud_browser.my_levels", "dark_cloud_browser.level_rows", "dark_cloud_browser.edit", "dark_cloud_browser.search", "dark_cloud_browser.sort", "dark_cloud_browser.options", "dark_cloud_browser.menu", "dark_cloud_browser.login"],
+      "default_focus": "dark_cloud_browser.my_levels",
+      "wrap": "use the dark-cloud-browser regional wrap rules",
+      "back": "activate dark_cloud_browser.menu"
+    },
+    {
+      "layout_id": "dark-cloud-search",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "modal_vertical",
+      "focus_order": ["dark_cloud_search.name", "dark_cloud_search.search_now"],
+      "default_focus": "dark_cloud_search.name",
+      "wrap": "up and down wrap between the field and action",
+      "back": "close without applying and restore the invoking footer control"
+    },
+    {
+      "layout_id": "dark-cloud-sort",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "modal_vertical",
+      "focus_order": [
+        "dark_cloud_sort.newest",
+        "dark_cloud_sort.oldest",
+        "dark_cloud_sort.updated_recently",
+        "dark_cloud_sort.best_rating"
+      ],
+      "default_focus": "the current sort, otherwise dark_cloud_sort.newest",
+      "wrap": "up and down wrap across the four sort choices",
+      "back": "close without changing the current sort"
+    },
+    {
+      "layout_id": "dark-cloud-options",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "modal_single",
+      "focus_order": ["dark_cloud_options.select_boneyard"],
+      "default_focus": "dark_cloud_options.select_boneyard when a row is selected, otherwise no focusable action",
+      "wrap": "none",
+      "back": "close without changing the selected Boneyard"
+    },
+    {
+      "layout_id": "dark-cloud-login-settings",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "modal_vertical_form",
+      "focus_order": ["dark_account.dark_name", "dark_account.password", "dark_account.sign_in", "dark_account.create_new", "dark_account.done"],
+      "default_focus": "dark_account.dark_name",
+      "wrap": "up and down wrap across enabled fields and actions",
+      "back": "activate dark_account.done"
+    },
+    {
+      "layout_id": "dark-cloud-menu",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "modal_vertical",
+      "focus_order": ["profile.resume", "profile.game_settings", "profile.sign_out", "profile.main_menu"],
+      "default_focus": "profile.resume",
+      "wrap": "up and down wrap across enabled actions",
+      "back": "activate profile.resume"
+    },
+    {
+      "layout_id": "pause-menu",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "modal_vertical",
+      "focus_order": ["pause_menu.resume_game", "pause_menu.game_settings", "pause_menu.leave_game"],
+      "default_focus": "pause_menu.resume_game",
+      "wrap": "up and down wrap across the three actions",
+      "back": "activate pause_menu.resume_game"
+    },
+    {
+      "layout_id": "skill-picker",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "dynamic_horizontal",
+      "focus_order": ["skill_picker.option[0..offered_count-1]"],
+      "default_focus": "skill_picker.option[0]",
+      "wrap": "left and right, next and previous wrap across the three or four offered choices",
+      "back": "ignored because the pending level-up choice is mandatory"
+    },
+    {
+      "layout_id": "map-picker",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "dynamic_spatial",
+      "focus_order": ["map_picker.story[index] in ascending unlocked story index"],
+      "default_focus": "the prior selection when still unlocked, otherwise the first unlocked story index",
+      "wrap": "directional navigation uses nearest spatial neighbor and wraps at an edge; next and previous wrap by story index",
+      "back": "invoke the stock picker close/cancel path and return to the Courtyard"
+    },
+    {
+      "layout_id": "game-over",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "single_when_armed",
+      "focus_order": ["game_over.continue"],
+      "default_focus": "game_over.continue only after the native-equivalent input-arm threshold",
+      "wrap": "none",
+      "back": "ignored; confirm is the only continuation input"
+    },
+    {
+      "layout_id": "hall-of-fame",
+      "provenance": "DESIGN_NOT_OBSERVED",
+      "strategy": "single",
+      "focus_order": ["hall_of_fame.continue"],
+      "default_focus": "hall_of_fame.continue",
+      "wrap": "none",
+      "back": "activate hall_of_fame.continue after the entry fade is idle"
+    }
+  ]
+}

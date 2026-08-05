@@ -110,7 +110,7 @@ int LuaDebugCallThiscallRetU32(lua_State* state) {
 
 // sd.debug.open_stock_map_picker_for_capture() -> boolean, string
 // This is an evidence-only seam. It calls the already-installed MapPicker
-// trampoline, not the loader's authority hook, and performs no fallback.
+// trampoline, not the loader's authority hook, and performs no alternate dispatch.
 int LuaDebugOpenStockMapPickerForCapture(lua_State* state) {
     std::string error_message;
     const bool opened = OpenStockMapPickerForDebugCapture(&error_message);

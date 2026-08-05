@@ -281,9 +281,7 @@ $golden = [ordered]@{
         edge_count = $edges.Count
         sessions = $uniqueSessions
     }
-    screen_census = @(
-        $layouts | ForEach-Object { [string]$_.layout.screen_id }
-    )
+    screen_census = @($expectedLayouts)
     layouts = $layouts
     navigation_graph = [ordered]@{
         capture_method = [string]$navigation.header.capture_method

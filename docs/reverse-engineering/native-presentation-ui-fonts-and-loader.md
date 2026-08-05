@@ -37,7 +37,7 @@ join in [`native-asset-object-map.json`](native-asset-object-map.json).
 | ControlPanel | `0x004E7EF0` | `0x00819988` | 116 | Ordinary records 0, 4..5, and 8..23 plus the 92-glyph wrapper are live; ordinary records 1..3 and 6..7 are stock-dormant |
 | Controls | `0x004E84E0` | `0x0081998C` | 4 | Control-scheme picker selects records 0, 2, or 1; record 3 is stock-dormant |
 | Create | `0x004E8680` | `0x00819990` | 24 | Create-wizard flow consumes every record except stock-dormant record 8 |
-| Loader | `0x004EC1F0` | `0x008199BC` | 5 | All five records are constructed and released but stock-dormant; the renderer uses primitives |
+| Loader | `0x004EC1F0` | `0x008199BC` | 5 | Startup renderer consumes records 0..3; record 4 is constructed and released but stock-dormant |
 | GameOver | `0x004EA650` | `0x008199A4` | 3 | Game-over renderer consumes records 0 and 1; record 2 is stock-dormant |
 
 "Stock-dormant" means the exhaustive singleton-xref, literal-destination, and
@@ -270,7 +270,7 @@ All 24 records except record 8 therefore have a compiled consumer. The binary
 proves the grouping and selection sites; it does not expose trustworthy names
 for each visual option, so the groups remain numeric here.
 
-## `Loader`: owned atlas, primitive renderer
+## `Loader`: owned atlas and live startup renderer
 
 The startup path at `0x005BAB60` allocates a `0x484`-byte `MyLoader` object and
 embeds `Bundle_Loader` at object `+0x78`. `_DAT_008199BC` points at that
@@ -283,22 +283,27 @@ application lifecycle.
 - destructor slot `+0x00`: `0x005AACF0`;
 - renderer slot `+0x0C`: `0x005BCA40`.
 
-The renderer draws fullscreen and progress presentation with primitive
-geometry and the progress globals `DAT_0081F6A8`, `DAT_0081F6AC`, and
-`DAT_0081F6B0`. It contains no reference to `_DAT_008199BC` or any of its five
-record destinations. The only compiled singleton reference is the bundle's
-construction/publication path. The destructor nevertheless calls the common
-bundle-release function `0x00413760`.
+The renderer clears the fullscreen background with primitive geometry, then
+selects four live bundle records: `Loader.2` is the centered Raptisoft logo,
+`Loader.3` is the centered URL, `Loader.1` is the progress frame, and
+`Loader.0` is the ratio-scaled progress fill. The fill uses progress globals
+`DAT_0081F6A8`, `DAT_0081F6AC`, and `DAT_0081F6B0`. Record `Loader.4` has no
+observed or compiled selection. The destructor calls the common bundle-release
+function `0x00413760`.
 
 Therefore, in this retail executable:
 
 - the Loader PNG and bundle are loaded;
 - the five sprite descriptors are constructed;
-- their owning bundle has a normal lifetime and release path;
-- the active loader renderer does not draw any of them.
+- records 0 through 3 are drawn by the active startup renderer;
+- record 4 is stock-dormant; and
+- the owning bundle has a normal lifetime and release path.
 
-This is a proved statically dormant art path, not evidence that loader asset
-loading failed.
+The live `1600 x 900` rectangles, asset roles, timing/skip result, and reference
+capture are pinned by
+[`native-menus-and-boot.md`](native-menus-and-boot.md#splash--attract) and the
+G11 `native-loader` golden. That live result corrects the earlier static-only
+classification of the whole atlas as dormant.
 
 ## `GameOver`
 
