@@ -16,6 +16,8 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 namespace sdmod::detail {
 namespace {
@@ -27,9 +29,20 @@ constexpr wchar_t kLuaPipeEnvironment[] =
 
 thread_local bool g_presenting_loading_frame = false;
 std::atomic_bool g_presentation_failure_logged{false};
-std::uint64_t g_captured_sequence = 0;
-LoadingScreenStage g_captured_stage =
-    LoadingScreenStage::PreparingBoneyard;
+
+struct LoadingEvidenceSample {
+    std::uint64_t elapsed_milliseconds = 0;
+    std::string reference_capture;
+    std::string semantic_json;
+};
+
+std::uint64_t g_loading_capture_sequence = 0;
+std::uint64_t g_loading_capture_started_at = 0;
+std::uint64_t g_loading_stable_started_at = 0;
+std::size_t g_loading_stable_sample_count = 0;
+bool g_loading_capture_settled = false;
+std::string g_loading_stable_semantic;
+std::vector<LoadingEvidenceSample> g_loading_capture_samples;
 
 std::wstring ReadEnvironmentVariable(const wchar_t* name) {
     const DWORD required =
@@ -114,12 +127,10 @@ void WriteRect(
           << rect.right << ',' << rect.bottom << ']';
 }
 
-bool WriteLoadingLayoutSidecar(
-    const std::filesystem::path& output_path,
+std::string SerializeLoadingLayout(
     const LoadingScreenSnapshot& snapshot,
     const LoadingScreenRenderLayout& layout,
-    const std::wstring& instance,
-    std::string* error_message) {
+    const std::wstring& instance) {
     std::ostringstream json;
     json << std::fixed << std::setprecision(4);
     json << "{\n"
@@ -171,18 +182,25 @@ bool WriteLoadingLayoutSidecar(
          << "  ]\n"
          << "}\n";
 
+    return json.str();
+}
+
+bool WriteTextAtomically(
+    const std::filesystem::path& output_path,
+    std::string_view text,
+    std::string* error_message) {
     const auto temporary_path = output_path.wstring() + L".tmp";
     std::ofstream output(
         std::filesystem::path(temporary_path),
         std::ios::binary | std::ios::trunc);
     if (!output) {
-        *error_message = "could not open JSON sidecar";
+        *error_message = "could not open temporary JSON recording";
         return false;
     }
-    output << json.str();
+    output << text;
     output.close();
     if (!output) {
-        *error_message = "could not write JSON sidecar";
+        *error_message = "could not write temporary JSON recording";
         std::error_code ignored;
         std::filesystem::remove(temporary_path, ignored);
         return false;
@@ -203,15 +221,83 @@ bool WriteLoadingLayoutSidecar(
     return true;
 }
 
+bool WriteLoadingCaptureJson(
+    const std::filesystem::path& output_path,
+    const std::wstring& instance,
+    std::string* error_message) {
+    std::ostringstream json;
+    json << "{\n"
+         << "  \"schema\": \"solomon-dark-native-loading-capture-v1\",\n"
+         << "  \"header\": {\n"
+         << "    \"instance\": \""
+         << EscapeJson(NarrowSafeFileToken(instance)) << "\",\n"
+         << "    \"pid\": " << GetCurrentProcessId() << ",\n"
+         << "    \"capture_method\": \"live D3D9 render geometry and backbuffer capture\"\n"
+         << "  },\n"
+         << "  \"samples\": [\n";
+    for (std::size_t index = 0;
+         index < g_loading_capture_samples.size();
+         ++index) {
+        const auto& sample = g_loading_capture_samples[index];
+        json << "    {\"elapsed_milliseconds\":"
+             << sample.elapsed_milliseconds
+             << ",\"reference_capture\":\""
+             << EscapeJson(sample.reference_capture)
+             << "\",\"layout\":" << sample.semantic_json << '}';
+        if (index + 1 != g_loading_capture_samples.size()) {
+            json << ',';
+        }
+        json << '\n';
+    }
+    const auto stable_span = g_loading_capture_samples.empty()
+        ? 0
+        : g_loading_capture_samples.back().elapsed_milliseconds -
+            g_loading_stable_started_at;
+    json << "  ],\n"
+         << "  \"settlement\": {\n"
+         << "    \"criterion\": \"at least 40 consecutive byte-identical semantic payloads spanning at least 2 seconds\",\n"
+         << "    \"settled\": "
+         << (g_loading_capture_settled ? "true" : "false") << ",\n"
+         << "    \"settle_latency_milliseconds\": ";
+    if (g_loading_capture_settled && !g_loading_capture_samples.empty()) {
+        json << g_loading_capture_samples.back().elapsed_milliseconds;
+    } else {
+        json << "null";
+    }
+    json << ",\n"
+         << "    \"stable_span_milliseconds\": " << stable_span << ",\n"
+         << "    \"consecutive_identical_samples\": "
+         << g_loading_stable_sample_count << ",\n"
+         << "    \"total_semantic_samples\": "
+         << g_loading_capture_samples.size() << "\n"
+         << "  }\n"
+         << "}\n";
+    return WriteTextAtomically(
+        output_path,
+        json.str(),
+        error_message);
+}
+
 void CaptureLoadingScreenEvidenceFrameInternal(
     const LoadingScreenSnapshot& snapshot,
     const LoadingScreenRenderLayout& layout) {
     const auto directory_text =
         ReadEnvironmentVariable(
             kCaptureDirectoryEnvironment);
-    if (directory_text.empty() ||
-        (g_captured_sequence == snapshot.sequence &&
-         g_captured_stage == snapshot.stage)) {
+    if (directory_text.empty()) {
+        return;
+    }
+
+    if (g_loading_capture_sequence != snapshot.sequence) {
+        g_loading_capture_sequence = snapshot.sequence;
+        g_loading_capture_started_at = GetTickCount64();
+        g_loading_stable_started_at = 0;
+        g_loading_stable_sample_count = 0;
+        g_loading_capture_settled = false;
+        g_loading_stable_semantic.clear();
+        g_loading_capture_samples.clear();
+    }
+    if (g_loading_capture_settled) {
         return;
     }
 
@@ -236,51 +322,68 @@ void CaptureLoadingScreenEvidenceFrameInternal(
             L"pid-" +
             std::to_wstring(GetCurrentProcessId());
     }
-    const auto output_path =
-        directory /
-        (instance +
-         L"-sequence-" +
-         std::to_wstring(snapshot.sequence) +
-         L"-" +
-         std::wstring(
-             snapshot.stage_id.begin(),
-             snapshot.stage_id.end()) +
-         L".bmp");
-    std::string capture_error;
-    if (!CaptureD3d9BackBufferBmp(
-            output_path.wstring(),
-            &capture_error)) {
-        Log(
-            "Loading screen evidence capture failed. path=" +
-            output_path.string() +
-            " error=" + capture_error);
-        return;
+    LoadingEvidenceSample sample;
+    sample.elapsed_milliseconds =
+        GetTickCount64() - g_loading_capture_started_at;
+    sample.semantic_json = SerializeLoadingLayout(
+        snapshot,
+        layout,
+        instance);
+    const auto semantic_changed =
+        sample.semantic_json != g_loading_stable_semantic;
+    if (semantic_changed) {
+        g_loading_stable_semantic = sample.semantic_json;
+        g_loading_stable_sample_count = 1;
+        g_loading_stable_started_at = sample.elapsed_milliseconds;
+        constexpr wchar_t reference_name[] =
+            L"loading-screen-settled-candidate.bmp";
+        const auto reference_path = directory / reference_name;
+        std::string capture_error;
+        if (!CaptureD3d9BackBufferBmp(
+                reference_path.wstring(),
+                &capture_error)) {
+            Log(
+                "Loading screen evidence capture failed. path=" +
+                reference_path.string() +
+                " error=" + capture_error);
+            return;
+        }
+        sample.reference_capture = "loading-screen-settled-candidate.bmp";
+    } else {
+        ++g_loading_stable_sample_count;
     }
+    const auto stable_span =
+        sample.elapsed_milliseconds - g_loading_stable_started_at;
+    g_loading_capture_settled =
+        g_loading_stable_sample_count >= 40 && stable_span >= 2000;
+    g_loading_capture_samples.push_back(std::move(sample));
 
-    auto sidecar_path = output_path;
-    sidecar_path.replace_extension(L".json");
-    std::string sidecar_error;
-    if (!WriteLoadingLayoutSidecar(
-            sidecar_path,
-            snapshot,
-            layout,
+    const auto recording_path = directory / "native-loading-layout.json";
+    std::string recording_error;
+    if (!WriteLoadingCaptureJson(
+            recording_path,
             instance,
-            &sidecar_error)) {
+            &recording_error)) {
         Log(
-            "Loading screen layout sidecar failed. path=" +
-            sidecar_path.string() +
-            " error=" + sidecar_error);
+            "Loading screen layout recording failed. path=" +
+            recording_path.string() +
+            " error=" + recording_error);
         return;
     }
 
-    g_captured_sequence = snapshot.sequence;
-    g_captured_stage = snapshot.stage;
-    Log(
-        "Loading screen evidence captured. sequence=" +
-        std::to_string(snapshot.sequence) +
-        " stage=" + snapshot.stage_id +
-        " path=" + output_path.string() +
-        " layout=" + sidecar_path.string());
+    if (semantic_changed || g_loading_capture_settled) {
+        Log(
+            "Loading screen evidence sampled. sequence=" +
+            std::to_string(snapshot.sequence) +
+            " stage=" + snapshot.stage_id +
+            " samples=" +
+            std::to_string(g_loading_capture_samples.size()) +
+            " stable=" +
+            std::to_string(g_loading_stable_sample_count) +
+            " settled=" +
+            (g_loading_capture_settled ? "true" : "false") +
+            " recording=" + recording_path.string());
+    }
 }
 
 void LogPresentationFailure(

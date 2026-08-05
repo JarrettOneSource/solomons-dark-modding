@@ -108,7 +108,10 @@ std::uint32_t g_native_menu_art_draw_order = 0;
 std::filesystem::path g_native_boot_capture_directory;
 std::vector<NativeBootCaptureSample> g_native_boot_capture_samples;
 ULONGLONG g_native_boot_capture_started_at = 0;
-int g_native_boot_last_reference_bucket = -1;
+std::string g_native_boot_stable_semantic;
+std::size_t g_native_boot_stable_sample_count = 0;
+std::uint64_t g_native_boot_stable_started_at = 0;
+bool g_native_boot_capture_settled = false;
 bool g_native_loader_render_active = false;
 std::vector<CapturedMenuArtElement> g_native_loader_frame_art;
 

@@ -277,6 +277,37 @@ std::string JsonEscapeMenuCapture(std::string_view value) {
     return output.str();
 }
 
+std::string SerializeNativeBootSemantic(
+    const NativeBootCaptureSample& sample) {
+    std::ostringstream output;
+    output << std::fixed << std::setprecision(6)
+           << "{\"numerator\":" << sample.numerator
+           << ",\"denominator\":" << sample.denominator
+           << ",\"complete\":" << (sample.complete ? "true" : "false")
+           << ",\"progress\":" << sample.progress
+           << ",\"elements\":[";
+    for (std::size_t index = 0; index < sample.elements.size(); ++index) {
+        const auto& element = sample.elements[index];
+        if (index != 0) {
+            output << ',';
+        }
+        output << "{\"art_id\":\""
+               << JsonEscapeMenuCapture(element.art_id)
+               << "\",\"draw_kind\":\""
+               << JsonEscapeMenuCapture(element.draw_kind)
+               << "\",\"rect\":["
+               << element.left << ',' << element.top << ','
+               << element.right << ',' << element.bottom
+               << "],\"unclipped_rect\":["
+               << element.unclipped_left << ','
+               << element.unclipped_top << ','
+               << element.unclipped_right << ','
+               << element.unclipped_bottom << "]}";
+    }
+    output << "]}";
+    return output.str();
+}
+
 void WriteNativeBootCaptureJson() {
     if (g_native_boot_capture_directory.empty()) {
         return;
@@ -347,11 +378,34 @@ void WriteNativeBootCaptureJson() {
         }
         output << '\n';
     }
-    output << "  ]\n}\n";
+    output << "  ],\n"
+           << "  \"settlement\": {\n"
+           << "    \"criterion\": \"at least 40 consecutive byte-identical semantic payloads spanning at least 2 seconds\",\n"
+           << "    \"settled\": "
+           << (g_native_boot_capture_settled ? "true" : "false") << ",\n"
+           << "    \"settle_latency_milliseconds\": ";
+    if (g_native_boot_capture_settled &&
+        !g_native_boot_capture_samples.empty()) {
+        output << g_native_boot_capture_samples.back().elapsed_milliseconds;
+    } else {
+        output << "null";
+    }
+    const auto stable_span = g_native_boot_capture_samples.empty()
+        ? 0
+        : g_native_boot_capture_samples.back().elapsed_milliseconds -
+            g_native_boot_stable_started_at;
+    output << ",\n"
+           << "    \"stable_span_milliseconds\": " << stable_span << ",\n"
+           << "    \"consecutive_identical_samples\": "
+           << g_native_boot_stable_sample_count << ",\n"
+           << "    \"total_semantic_samples\": "
+           << g_native_boot_capture_samples.size() << "\n"
+           << "  }\n}\n";
 }
 
 void CaptureNativeLoaderSample() {
-    if (g_native_boot_capture_directory.empty()) {
+    if (g_native_boot_capture_directory.empty() ||
+        g_native_boot_capture_settled) {
         return;
     }
     auto& memory = ProcessMemory::Instance();
@@ -390,25 +444,25 @@ void CaptureNativeLoaderSample() {
         sample.elements = g_native_loader_frame_art;
     }
 
-    const auto progress_bucket =
-        static_cast<int>(std::lround(sample.progress * 1000.0));
-    const auto should_capture_reference =
-        g_native_boot_last_reference_bucket < 0 ||
-        progress_bucket >= g_native_boot_last_reference_bucket + 50 ||
-        (sample.complete && g_native_boot_last_reference_bucket < 1000);
-    if (should_capture_reference &&
-        g_native_boot_capture_samples.size() < 128) {
-        std::ostringstream filename;
-        filename << "native-loader-" << std::setw(3) << std::setfill('0')
-                 << g_native_boot_capture_samples.size() << "-p"
-                 << std::setw(4) << progress_bucket << ".bmp";
-        const auto path = g_native_boot_capture_directory / filename.str();
+    const auto semantic = SerializeNativeBootSemantic(sample);
+    const auto semantic_changed = semantic != g_native_boot_stable_semantic;
+    if (semantic_changed) {
+        g_native_boot_stable_semantic = semantic;
+        g_native_boot_stable_sample_count = 1;
+        g_native_boot_stable_started_at = sample.elapsed_milliseconds;
+        constexpr char filename[] = "native-loader-settled-candidate.bmp";
+        const auto path = g_native_boot_capture_directory / filename;
         std::string capture_error;
         if (CaptureD3d9BackBufferBmp(path.wstring(), &capture_error)) {
-            sample.reference_capture = filename.str();
-            g_native_boot_last_reference_bucket = progress_bucket;
+            sample.reference_capture = filename;
         }
+    } else {
+        ++g_native_boot_stable_sample_count;
     }
+    const auto stable_span =
+        sample.elapsed_milliseconds - g_native_boot_stable_started_at;
+    g_native_boot_capture_settled =
+        g_native_boot_stable_sample_count >= 40 && stable_span >= 2000;
     g_native_boot_capture_samples.push_back(std::move(sample));
     WriteNativeBootCaptureJson();
 }
@@ -581,7 +635,10 @@ void ResetMenuLayoutCaptureStateUnlocked(DebugUiOverlayState* state) {
     g_native_boot_capture_directory.clear();
     g_native_boot_capture_samples.clear();
     g_native_boot_capture_started_at = 0;
-    g_native_boot_last_reference_bucket = -1;
+    g_native_boot_stable_semantic.clear();
+    g_native_boot_stable_sample_count = 0;
+    g_native_boot_stable_started_at = 0;
+    g_native_boot_capture_settled = false;
     g_native_loader_render_active = false;
     g_native_loader_frame_art.clear();
     g_active_settings_row_captures.clear();

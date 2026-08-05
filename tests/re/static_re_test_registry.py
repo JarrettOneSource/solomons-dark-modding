@@ -129,7 +129,9 @@ from static_re_native_progression_contracts import (
 from static_re_native_menu_shell_contracts import (
     test_designed_menu_focus_model_consumes_g14_intents,
     test_native_menu_live_transition_graph_is_pinned,
+    test_native_menu_recorders_settle_and_derive_provenance,
     test_native_menu_screen_census_and_live_layouts_are_pinned,
+    test_native_menu_settled_destinations_equal_standalones,
     test_native_menu_transition_endpoint_provenance_is_pinned,
 )
 from static_re_boneyard_lighting_contracts import (
@@ -1156,12 +1158,20 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_native_menu_screen_census_and_live_layouts_are_pinned,
     ),
     (
+        "Native menu recorders settle and derive provenance",
+        test_native_menu_recorders_settle_and_derive_provenance,
+    ),
+    (
         "Native menu live transition graph is pinned",
         test_native_menu_live_transition_graph_is_pinned,
     ),
     (
         "Native menu transition endpoint provenance is pinned",
         test_native_menu_transition_endpoint_provenance_is_pinned,
+    ),
+    (
+        "Native menu settled destinations equal standalones",
+        test_native_menu_settled_destinations_equal_standalones,
     ),
     (
         "Designed menu focus model consumes G14 intents",

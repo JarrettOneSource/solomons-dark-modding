@@ -3,6 +3,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$NavigationRecordingPath,
 
+    [string]$FixtureRoot = "",
     [string]$OutputPath = ""
 )
 
@@ -10,13 +11,45 @@ Set-StrictMode -Version 3.0
 $ErrorActionPreference = "Stop"
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).ProviderPath
-$fixtureRoot = Join-Path $root "tests\fixtures\webgame"
+if ([string]::IsNullOrWhiteSpace($FixtureRoot)) {
+    $FixtureRoot = Join-Path $root "tests\fixtures\webgame"
+}
+$fixtureRoot = [IO.Path]::GetFullPath($FixtureRoot)
 $layoutRoot = Join-Path $fixtureRoot "menu-layouts"
+$transitionLayoutRoot = Join-Path $fixtureRoot "menu-transition-layouts"
 $referenceRoot = Join-Path $fixtureRoot "menu-reference-captures"
 if ([string]::IsNullOrWhiteSpace($OutputPath)) {
     $OutputPath = Join-Path $fixtureRoot "menu-goldens.json"
 }
 $OutputPath = [IO.Path]::GetFullPath($OutputPath)
+
+function ConvertTo-SemanticLayoutJson {
+    param([Parameter(Mandatory = $true)][object]$Layout)
+
+    $semantic = [ordered]@{}
+    foreach ($property in $Layout.PSObject.Properties) {
+        if ($property.Name -ne "captured_at_milliseconds") {
+            $semantic[$property.Name] = $property.Value
+        }
+    }
+    return $semantic | ConvertTo-Json -Depth 100 -Compress
+}
+
+function ConvertTo-GoldenEndpoint {
+    param([Parameter(Mandatory = $true)][object]$Observation)
+
+    return [ordered]@{
+        semantic_surface = [string]$Observation.semantic_surface
+        semantic_generation = [uint64]$Observation.semantic_generation
+        tagged_screen = [string]$Observation.tagged_screen
+        layout_generation = [uint64]$Observation.layout_generation
+        element_count = [int]$Observation.element_count
+        capture_method = [string]$Observation.capture_method
+        frame_sha256 = [string]$Observation.frame_sha256
+        settlement = $Observation.settlement
+        layout = $Observation.layout
+    }
+}
 
 $expectedLayouts = @(
     "beta-notice",
@@ -65,6 +98,7 @@ if (
 }
 
 $layouts = [Collections.Generic.List[object]]::new()
+$layoutFixtureById = @{}
 $captureSessions = [Collections.Generic.List[object]]::new()
 $latestCapture = [DateTimeOffset]::MinValue
 foreach ($file in $layoutFiles) {
@@ -73,12 +107,19 @@ foreach ($file in $layoutFiles) {
     if ($fixture.schema -ne "solomon-dark-native-menu-layout-v1") {
         throw "Unexpected layout schema in $($file.FullName)."
     }
+    $source = $fixture.header.source
+    $settlement = $fixture.header.settlement
     if (
         [string]::IsNullOrWhiteSpace([string]$fixture.header.instance) -or
-        [string]$fixture.header.capture_commit -notmatch '^[0-9a-f]{40}$' -or
-        [string]::IsNullOrWhiteSpace(
-            [string]$fixture.header.capture_method
-        )
+        [bool]$fixture.header.recorded_live -ne $true -or
+        [string]$source.base_commit_sha -notmatch '^[0-9a-f]{40}$' -or
+        [string]$source.source_tree_sha -notmatch '^[0-9a-f]{40}$' -or
+        [string]$source.game_executable_sha256 -notmatch '^[0-9a-f]{64}$' -or
+        [string]$source.loader_dll_sha256 -notmatch '^[0-9a-f]{64}$' -or
+        [int]$settlement.consecutive_identical_samples -lt 40 -or
+        [int]$settlement.stable_span_milliseconds -lt 2000 -or
+        [int]$settlement.settle_latency_milliseconds -lt 2000 -or
+        [string]::IsNullOrWhiteSpace([string]$fixture.header.capture_method)
     ) {
         throw "Capture provenance is incomplete in $($file.FullName)."
     }
@@ -104,15 +145,84 @@ foreach ($file in $layoutFiles) {
     $captureSessions.Add([ordered]@{
         instance = [string]$fixture.header.instance
         process_id = [int]$fixture.header.process_id
-        capture_commit = [string]$fixture.header.capture_commit
-        native_exe_sha256 = [string]$fixture.header.native_exe_sha256
-        loader_dll_sha256 = [string]$fixture.header.loader_dll_sha256
+        source = $fixture.header.source
+        recorded_live = [bool]$fixture.header.recorded_live
         capture_method = [string]$fixture.header.capture_method
         captured_at_utc = $capturedAt.ToString("o")
     })
+    if ($layoutFixtureById.ContainsKey($file.BaseName)) {
+        throw "Ambiguous duplicate layout fixture ID: $($file.BaseName)"
+    }
+    $layoutFixtureById[$file.BaseName] = $fixture
     $layouts.Add([ordered]@{
         fixture = "menu-layouts/$($file.Name)"
         reference_capture = "menu-reference-captures/$([IO.Path]::GetFileName($referencePath))"
+        reference_sha256 = (
+            Get-FileHash -LiteralPath $referencePath -Algorithm SHA256
+        ).Hash.ToLowerInvariant()
+        header = $fixture.header
+        layout = $fixture.layout
+    })
+}
+
+$transitionLayoutFiles = @(
+    Get-ChildItem -LiteralPath $transitionLayoutRoot -File -Filter "*.json" |
+        Sort-Object BaseName
+)
+if (
+    $transitionLayoutFiles.Count -ne 1 -or
+    $transitionLayoutFiles[0].BaseName -ne "hub"
+) {
+    throw (
+        "The every-edge destination contract requires exactly the standalone " +
+        "menu-transition-layouts/hub.json witness."
+    )
+}
+$transitionEndpointLayouts = [Collections.Generic.List[object]]::new()
+foreach ($file in $transitionLayoutFiles) {
+    $fixture = Get-Content -LiteralPath $file.FullName -Raw |
+        ConvertFrom-Json
+    $source = $fixture.header.source
+    $settlement = $fixture.header.settlement
+    if (
+        $fixture.schema -ne "solomon-dark-native-menu-layout-v1" -or
+        [bool]$fixture.header.recorded_live -ne $true -or
+        [string]$source.base_commit_sha -notmatch '^[0-9a-f]{40}$' -or
+        [string]$source.source_tree_sha -notmatch '^[0-9a-f]{40}$' -or
+        [string]$source.game_executable_sha256 -notmatch '^[0-9a-f]{64}$' -or
+        [string]$source.loader_dll_sha256 -notmatch '^[0-9a-f]{64}$' -or
+        [int]$settlement.consecutive_identical_samples -lt 40 -or
+        [int]$settlement.stable_span_milliseconds -lt 2000
+    ) {
+        throw "Transition-only standalone provenance is incomplete: hub"
+    }
+    $referencePath = [IO.Path]::GetFullPath((Join-Path `
+        $transitionLayoutRoot `
+        ([string]$fixture.header.reference_capture)
+    ))
+    if (-not (Test-Path -LiteralPath $referencePath -PathType Leaf)) {
+        throw "Transition-only standalone reference capture is missing: hub"
+    }
+    $capturedAt = [DateTimeOffset]::Parse(
+        [string]$fixture.header.captured_at_utc
+    )
+    if ($capturedAt -gt $latestCapture) {
+        $latestCapture = $capturedAt
+    }
+    $captureSessions.Add([ordered]@{
+        instance = [string]$fixture.header.instance
+        process_id = [int]$fixture.header.process_id
+        source = $fixture.header.source
+        recorded_live = [bool]$fixture.header.recorded_live
+        capture_method = [string]$fixture.header.capture_method
+        captured_at_utc = $capturedAt.ToString("o")
+    })
+    $layoutFixtureById["hub"] = $fixture
+    $transitionEndpointLayouts.Add([ordered]@{
+        fixture = "menu-transition-layouts/$($file.Name)"
+        reference_capture = (
+            "menu-reference-captures/$([IO.Path]::GetFileName($referencePath))"
+        )
         reference_sha256 = (
             Get-FileHash -LiteralPath $referencePath -Algorithm SHA256
         ).Hash.ToLowerInvariant()
@@ -135,21 +245,21 @@ $edgeIds = @(
     "hub_to_pause",
     "pause_to_hub_resume",
     "pause_to_game_settings",
-    "settings_to_controls_verified",
+    "settings_to_controls",
     "controls_to_settings",
     "settings_to_performance",
     "performance_to_settings",
     "settings_to_dark_cloud_settings",
     "dark_cloud_settings_to_settings",
     "settings_to_hub",
-    "pause_to_leave_confirmation",
+    "pause_to_beta_notice",
     "beta_notice_to_main",
     "main_to_profile_select",
     "profile_select_to_main",
     "main_to_settings",
     "settings_to_main",
     "main_to_hall_of_fame",
-    "hall_of_fame_to_main",
+    "hall_of_fame_to_beta_notice",
     "main_to_dark_cloud",
     "dark_cloud_to_recent",
     "dark_cloud_recent_to_online",
@@ -169,9 +279,66 @@ $edgeIds = @(
     "dark_cloud_menu_to_beta_notice",
     "profile_select_resume_to_hub"
 )
+$destinationLayoutByEdge = [ordered]@{
+    control_scheme_picker_to_create = "create-element"
+    create_element_to_discipline = "create-discipline"
+    create_discipline_to_hub = "hub"
+    hub_to_pause = "pause-menu"
+    pause_to_hub_resume = "hub"
+    pause_to_game_settings = "game-settings-gameplay"
+    settings_to_controls = "controls"
+    controls_to_settings = "game-settings-gameplay"
+    settings_to_performance = "performance"
+    performance_to_settings = "game-settings-gameplay"
+    settings_to_dark_cloud_settings = "dark-cloud-settings"
+    dark_cloud_settings_to_settings = "game-settings-gameplay"
+    settings_to_hub = "hub"
+    pause_to_beta_notice = "beta-notice"
+    beta_notice_to_main = "main-menu-root"
+    main_to_profile_select = "profile-save-select"
+    profile_select_to_main = "main-menu-root"
+    main_to_settings = "game-settings-title"
+    settings_to_main = "main-menu-root"
+    main_to_hall_of_fame = "hall-of-fame"
+    hall_of_fame_to_beta_notice = "beta-notice"
+    main_to_dark_cloud = "dark-cloud-browser"
+    dark_cloud_to_recent = "dark-cloud-recent"
+    dark_cloud_recent_to_online = "dark-cloud-online-levels"
+    dark_cloud_online_to_my_levels = "dark-cloud-my-levels"
+    dark_cloud_to_search = "dark-cloud-search"
+    dark_cloud_search_to_browser = "dark-cloud-my-levels"
+    dark_cloud_to_sort = "dark-cloud-sort"
+    dark_cloud_sort_to_browser = "dark-cloud-my-levels"
+    dark_cloud_to_options = "dark-cloud-options"
+    dark_cloud_options_to_browser = "dark-cloud-my-levels"
+    dark_cloud_to_login_settings = "dark-cloud-login-settings"
+    dark_cloud_login_to_browser = "dark-cloud-my-levels"
+    dark_cloud_to_menu = "dark-cloud-menu"
+    dark_cloud_menu_resume = "dark-cloud-my-levels"
+    dark_cloud_menu_to_settings = "game-settings-dark-cloud"
+    dark_cloud_settings_done = "dark-cloud-my-levels"
+    dark_cloud_menu_to_beta_notice = "beta-notice"
+    profile_select_resume_to_hub = "hub"
+}
+if (
+    $destinationLayoutByEdge.Count -ne $edgeIds.Count -or
+    @(Compare-Object $edgeIds @($destinationLayoutByEdge.Keys)).Count -ne 0
+) {
+    throw (
+        "Every required navigation edge must name exactly one standalone " +
+        "destination layout."
+    )
+}
 $recordedById = @{}
 foreach ($edge in @($navigation.edges)) {
-    $recordedById[[string]$edge.id] = $edge
+    $recordedId = [string]$edge.id
+    if ($recordedById.ContainsKey($recordedId)) {
+        throw (
+            "Navigation recording contains ambiguous duplicate edge ID: " +
+            $recordedId
+        )
+    }
+    $recordedById[$recordedId] = $edge
 }
 $edges = [Collections.Generic.List[object]]::new()
 foreach ($edgeId in $edgeIds) {
@@ -179,30 +346,44 @@ foreach ($edgeId in $edgeIds) {
         throw "Required live navigation edge was not recorded: $edgeId"
     }
     $recorded = $recordedById[$edgeId]
+    $edgeSource = $recorded.header.source
+    $edgeSettlement = $recorded.header.settlement
+    if (
+        [bool]$recorded.header.recorded_live -ne $true -or
+        [string]$edgeSource.base_commit_sha -notmatch '^[0-9a-f]{40}$' -or
+        [string]$edgeSource.source_tree_sha -notmatch '^[0-9a-f]{40}$' -or
+        [string]$edgeSource.game_executable_sha256 -notmatch '^[0-9a-f]{64}$' -or
+        [string]$edgeSource.loader_dll_sha256 -notmatch '^[0-9a-f]{64}$' -or
+        [int]$edgeSettlement.source.consecutive_identical_samples -lt 40 -or
+        [int]$edgeSettlement.source.stable_span_milliseconds -lt 2000 -or
+        [int]$edgeSettlement.destination.consecutive_identical_samples -lt 40 -or
+        [int]$edgeSettlement.destination.stable_span_milliseconds -lt 2000 -or
+        $null -eq $recorded.before.layout -or
+        $null -eq $recorded.after.layout
+    ) {
+        throw "Navigation edge has incomplete settled provenance: $edgeId"
+    }
     if (
         [string]$recorded.before.frame_sha256 -notmatch '^[0-9a-f]{64}$' -or
         [string]$recorded.after.frame_sha256 -notmatch '^[0-9a-f]{64}$'
     ) {
         throw "Navigation edge has incomplete live frame provenance: $edgeId"
     }
-    $normalizedId = $edgeId
-    $destination = [string]$recorded.destination
-    $labelCorrection = ""
-    if ($edgeId -eq "settings_to_controls_verified") {
-        $normalizedId = "settings_to_controls"
-    } elseif ($edgeId -eq "pause_to_leave_confirmation") {
-        $normalizedId = "pause_to_beta_notice"
-        $destination = "beta_notice"
-        $labelCorrection = (
-            "The operator-supplied destination tag said leave_game_confirmation; " +
-            "the captured frame and dialog art are the beta notice."
+    $destinationLayoutId = [string]$destinationLayoutByEdge[$edgeId]
+    if (-not $layoutFixtureById.ContainsKey($destinationLayoutId)) {
+        throw (
+            "Navigation destination '$edgeId' names missing standalone " +
+            "layout '$destinationLayoutId'."
         )
-    } elseif ($edgeId -eq "hall_of_fame_to_main") {
-        $normalizedId = "hall_of_fame_to_beta_notice"
-        $destination = "beta_notice"
-        $labelCorrection = (
-            "The operator-supplied destination tag said main_menu; the captured " +
-            "frame and semantic dialog surface are the beta notice."
+    }
+    $destinationSemantic = ConvertTo-SemanticLayoutJson $recorded.after.layout
+    $standaloneSemantic = ConvertTo-SemanticLayoutJson (
+        $layoutFixtureById[$destinationLayoutId].layout
+    )
+    if ($destinationSemantic -cne $standaloneSemantic) {
+        throw (
+            "STOP: settled navigation destination '$edgeId' does not " +
+            "byte-match standalone layout '$destinationLayoutId'."
         )
     }
     $observedAt = [DateTimeOffset]::Parse(
@@ -212,20 +393,20 @@ foreach ($edgeId in $edgeIds) {
         $latestCapture = $observedAt
     }
     $entry = [ordered]@{
-        id = $normalizedId
+        header = $recorded.header
+        id = $edgeId
         screen = [string]$recorded.source
         edge = [string]$recorded.trigger
         trigger = [string]$recorded.trigger
         action_id = [string]$recorded.action_id
-        destination = $destination
+        destination = [string]$recorded.destination
+        destination_layout_fixture = (
+            "menu-layouts/$destinationLayoutId.json"
+        )
         dispatch_result = [string]$recorded.dispatch_result
-        before = $recorded.before
-        after = $recorded.after
+        before = ConvertTo-GoldenEndpoint $recorded.before
+        after = ConvertTo-GoldenEndpoint $recorded.after
         observed_at_utc = $observedAt.ToString("o")
-    }
-    if (-not [string]::IsNullOrWhiteSpace($labelCorrection)) {
-        $entry["recording_label_correction"] = $labelCorrection
-        $entry["raw_destination_tag"] = [string]$recorded.destination
     }
     $edges.Add($entry)
 }
@@ -236,7 +417,7 @@ foreach ($session in $captureSessions) {
     $key = (
         [string]$session.instance + "|" +
         [string]$session.process_id + "|" +
-        [string]$session.capture_commit + "|" +
+        [string]$session.source.base_commit_sha + "|" +
         [string]$session.capture_method
     )
     if (-not $uniqueSessionKeys.ContainsKey($key)) {
@@ -248,16 +429,15 @@ foreach ($session in @($navigation.header.sessions)) {
     $key = (
         [string]$session.instance + "|" +
         [string]$session.process_id + "|" +
-        [string]$session.capture_commit + "|navigation"
+        [string]$session.source.base_commit_sha + "|navigation"
     )
     if (-not $uniqueSessionKeys.ContainsKey($key)) {
         $uniqueSessionKeys[$key] = $true
         $uniqueSessions.Add([ordered]@{
             instance = [string]$session.instance
             process_id = [int]$session.process_id
-            capture_commit = [string]$session.capture_commit
-            native_exe_sha256 = [string]$session.native_exe_sha256
-            loader_dll_sha256 = [string]$session.loader_dll_sha256
+            source = $session.source
+            recorded_live = [bool]$session.recorded_live
             capture_method = [string]$navigation.header.capture_method
             captured_at_utc = [string]$session.captured_at_utc
         })
@@ -267,22 +447,29 @@ foreach ($session in @($navigation.header.sessions)) {
 $golden = [ordered]@{
     schema = "solomon-dark-menu-goldens-v1"
     header = [ordered]@{
-        campaign = "menure"
+        campaign = "menufix"
         gap = "G11"
         generated_from_live_capture_at_utc = $latestCapture.ToString("o")
         capture_method = (
             "live native UI tree, native Sprite/text hooks, live D3D9 render " +
             "geometry, exact-process input, and before/after backbuffer hashes"
         )
-        navigation_recording_sha256 = (
-            Get-FileHash -LiteralPath $navigationItem.FullName -Algorithm SHA256
-        ).Hash.ToLowerInvariant()
+        raw_recording = [ordered]@{
+            evidence_filename = $navigationItem.Name
+            sha256 = (
+                Get-FileHash `
+                    -LiteralPath $navigationItem.FullName `
+                    -Algorithm SHA256
+            ).Hash.ToLowerInvariant()
+            bytes = $navigationItem.Length
+        }
         screen_count = $layouts.Count
         edge_count = $edges.Count
         sessions = $uniqueSessions
     }
     screen_census = @($expectedLayouts)
     layouts = $layouts
+    transition_endpoint_layouts = $transitionEndpointLayouts
     navigation_graph = [ordered]@{
         capture_method = [string]$navigation.header.capture_method
         edges = $edges

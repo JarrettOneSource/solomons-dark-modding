@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 from pathlib import Path
 
 from static_re_contract_support import (
@@ -494,6 +495,28 @@ def _json(relative_path: str) -> object:
     return json.loads(_read(relative_path))
 
 
+def _require_regex(source: str, pattern: str, consequence: str) -> None:
+    if re.search(pattern, source, flags=re.MULTILINE | re.DOTALL) is None:
+        raise StaticReTestFailure(consequence)
+
+
+def _powershell_parameter_names(source: str) -> set[str]:
+    preamble, separator, _ = source.partition("Set-StrictMode")
+    if not separator or not preamble.lstrip().startswith("[CmdletBinding"):
+        raise StaticReTestFailure(
+            "native-menu recorder parameter census could not reach its "
+            "CmdletBinding preamble"
+        )
+    return {
+        match.group(1).lower()
+        for match in re.finditer(
+            r"^\s*\[(?:string|int|float|switch)\]\$(\w+)",
+            preamble,
+            flags=re.MULTILINE | re.IGNORECASE,
+        )
+    }
+
+
 def _require(source: str, tokens: tuple[str, ...], contract: str) -> None:
     """Require each prose token, independent of how the markdown is wrapped.
 
@@ -511,6 +534,367 @@ def _require(source: str, tokens: tuple[str, ...], contract: str) -> None:
         raise StaticReTestFailure(
             f"{contract} is incomplete: " + ", ".join(missing)
         )
+
+
+def test_native_menu_recorders_settle_and_derive_provenance() -> str:
+    recorder_paths = (
+        "scripts/Record-NativeMenuLayout.ps1",
+        "scripts/Record-NativeMenuTransition.ps1",
+        "scripts/Import-NativeMenuSpecialCaptures.ps1",
+    )
+    recorders = {path: _read(path) for path in recorder_paths}
+    forbidden_parameters = {
+        "capturecommit",
+        "basecommitsha",
+        "sourcetreesha",
+        "nativeexesha256",
+        "gameexecutablesha256",
+        "loaderdllsha256",
+        "loadercapturecommit",
+        "loadingcapturecommit",
+    }
+    for path in recorder_paths:
+        supplied = _powershell_parameter_names(recorders[path])
+        overrides = sorted(supplied & forbidden_parameters)
+        if overrides:
+            raise StaticReTestFailure(
+                "native-menu recorder accepts operator-supplied provenance "
+                f"parameters in {path}: {overrides}"
+            )
+
+    layout_recorder = recorders["scripts/Record-NativeMenuLayout.ps1"]
+    transition_recorder = recorders[
+        "scripts/Record-NativeMenuTransition.ps1"
+    ]
+    importer = recorders["scripts/Import-NativeMenuSpecialCaptures.ps1"]
+    support = _read("scripts/NativeMenuCaptureSupport.ps1")
+    loader_capture = _read(
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "menu_layout_capture_snapshot_and_hooks.inl"
+    )
+    loading_capture = _read(
+        "SolomonDarkModLoader/src/loading_screen_native_present.cpp"
+    )
+
+    for path, recorder in (
+        ("Record-NativeMenuLayout.ps1", layout_recorder),
+        ("Record-NativeMenuTransition.ps1", transition_recorder),
+    ):
+        if "Start-Sleep" in recorder or "WaitMilliseconds" in recorder:
+            raise StaticReTestFailure(
+                f"{path} regained a fixed-delay capture path"
+            )
+
+    _require_regex(
+        support,
+        r"NativeMenuSettleConsecutiveSamples\s*=\s*40\b.*?"
+        r"NativeMenuSettleMinimumSpanMilliseconds\s*=\s*2000\b",
+        "native-menu settlement no longer requires 40 identical samples over "
+        "at least two seconds",
+    )
+    _require_regex(
+        support,
+        r"\$stableCount\s+-ge\s+\$script:NativeMenuSettleConsecutiveSamples"
+        r"\s+-and\s+\$stableSpan\s+-ge\s+"
+        r"\$script:NativeMenuSettleMinimumSpanMilliseconds",
+        "native-menu settlement constants are declared but no longer gate "
+        "acceptance together",
+    )
+    _require_regex(
+        support,
+        r"if \(\$probe\.Status -ne \"ready\"\).*?"
+        r"Start-Sleep -Milliseconds "
+        r"\$script:NativeMenuSettlePollMilliseconds\s+continue",
+        "native-menu unavailable probes no longer retry only through the "
+        "bounded settlement loop",
+    )
+    _require_regex(
+        support,
+        r"if \(\s*\$stableCount -ge .*?\) \{.*?return .*?\}\s*"
+        r"Start-Sleep -Milliseconds "
+        r"\$script:NativeMenuSettlePollMilliseconds",
+        "native-menu semantic probes no longer poll between failed settlement "
+        "acceptance checks",
+    )
+    _require_regex(
+        support,
+        r"throw \(\s*\"STOP: '\$ScreenId' never settled to 40 consecutive "
+        r"byte-identical \"",
+        "a native-menu surface that never settles is no longer a STOP finding",
+    )
+    _require_regex(
+        layout_recorder,
+        r"\$observation\s*=\s*Get-SettledNativeMenuObservation\s+`\s*"
+        r"-Context \$context\s+`\s*-ScreenId \$ScreenId",
+        "the standalone menu recorder no longer obtains its fixture from the "
+        "settlement gate",
+    )
+    _require_regex(
+        transition_recorder,
+        r"\$before\s*=\s*Get-SettledNativeMenuObservation.*?"
+        r"\$after\s*=\s*Get-SettledNativeMenuObservation",
+        "the transition recorder no longer settlement-gates both source and "
+        "destination",
+    )
+    for recorder_name, recorder in (
+        ("standalone", layout_recorder),
+        ("transition", transition_recorder),
+    ):
+        if "settle_latency_milliseconds" not in recorder:
+            raise StaticReTestFailure(
+                f"{recorder_name} menu fixture no longer emits measured settle latency"
+            )
+
+    _require_regex(
+        support,
+        r"\$baseCommitSha\s*=\s*Invoke-NativeMenuGit.*?"
+        r"-Arguments @\(\"rev-parse\", \"HEAD\"\).*?"
+        r"\$sourceTreeSha\s*=\s*Invoke-NativeMenuGit.*?"
+        r"-Arguments @\(\"rev-parse\", \"HEAD\^\{tree\}\"\)",
+        "native-menu provenance no longer derives commit and tree from the "
+        "recorder checkout",
+    )
+    _require_regex(
+        support,
+        r"expectedExecutable\s*=.*?stage\\SolomonDark\.exe.*?"
+        r"stagedLoader\s*=.*?stage\\SolomonDarkModLoader\.dll.*?"
+        r"game_executable_sha256\s*=\s*\(\s*Get-FileHash "
+        r"-LiteralPath \$expectedExecutable.*?"
+        r"loader_dll_sha256\s*=\s*\(\s*Get-FileHash "
+        r"-LiteralPath \$stagedLoader",
+        "native-menu provenance no longer hashes the exact staged game and "
+        "loader binaries",
+    )
+    if "dist\\launcher\\SolomonDarkModLoader.dll" in support:
+        raise StaticReTestFailure(
+            "native-menu provenance hashes a launcher build instead of the "
+            "exact staged loader"
+        )
+    _require_regex(
+        support,
+        r"status\", \"--porcelain\", \"--untracked-files=no\".*?"
+        r"requires a clean tracked tree",
+        "native-menu capture no longer proves HEAD describes its tracked recorder",
+    )
+    _require_regex(
+        support,
+        r"Get-Command py\.exe.*?py\.exe -3 -c "
+        r"\"print\('native-menu-python-ready'\)\".*?"
+        r"exists but cannot run",
+        "native-menu capture checks Python presence but no longer proves it runs",
+    )
+    _require_regex(
+        support,
+        r"if \(-not \(Test-NativeMenuOwnedProcess.*?throw \(\s*"
+        r"\"BROKEN: the exact staged process exited.*?"
+        r"if \(\$AllowBusy -and \$pipeUnavailable\).*?Status = \"busy\"",
+        "native-menu Lua probing no longer distinguishes a broken owned process "
+        "from a busy pipe",
+    )
+    _require_regex(
+        importer,
+        r"\$baseCommitSha\s*=\s*Invoke-CaptureGit "
+        r"@\(\"rev-parse\", \"HEAD\"\).*?"
+        r"game_executable_sha256\s*=.*?Get-FileHash.*?"
+        r"loader_dll_sha256\s*=.*?Get-FileHash",
+        "special menu capture import no longer derives its own Git and binary "
+        "provenance",
+    )
+    for surface, source in (
+        ("native_loader", loader_capture),
+        ("loading_screen", loading_capture),
+    ):
+        _require_regex(
+            source,
+            r"stable_sample_count\s*>=\s*40\s*&&\s*stable_span\s*>=\s*2000",
+            f"{surface} capture no longer applies the 40-sample/two-second gate",
+        )
+        if "settle_latency_milliseconds" not in source:
+            raise StaticReTestFailure(
+                f"{surface} raw recording no longer emits measured settle latency"
+            )
+
+    return (
+        "standalone, transition, native-loader, and loading-screen capture paths "
+        "settle on 40 identical samples over two seconds and derive commit/tree/"
+        "exact-binary provenance without operator overrides"
+    )
+
+
+def _semantic_layout_bytes(layout: dict[str, object]) -> bytes:
+    semantic = {
+        key: value
+        for key, value in layout.items()
+        if key != "captured_at_milliseconds"
+    }
+    return json.dumps(
+        semantic,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def test_native_menu_settled_destinations_equal_standalones() -> str:
+    golden = _json("tests/fixtures/webgame/menu-goldens.json")
+    edges = golden["navigation_graph"]["edges"]
+    edge_ids = [edge["id"] for edge in edges]
+    if len(edge_ids) != len(set(edge_ids)):
+        raise StaticReTestFailure(
+            "settled destination contract found ambiguous duplicate edge IDs"
+        )
+    if set(edge_ids) != set(EDGE_CONTRACT):
+        raise StaticReTestFailure(
+            "settled destination contract did not reach every pinned navigation edge"
+        )
+
+    layout_entries = [
+        *golden["layouts"],
+        *golden["transition_endpoint_layouts"],
+    ]
+    fixture_names = [entry["fixture"] for entry in layout_entries]
+    if len(fixture_names) != len(set(fixture_names)):
+        raise StaticReTestFailure(
+            "settled destination contract found ambiguous duplicate standalone fixtures"
+        )
+    if "menu-transition-layouts/hub.json" not in fixture_names:
+        raise StaticReTestFailure(
+            "settled destination contract did not reach the standalone hub witness"
+        )
+    by_fixture = {entry["fixture"]: entry for entry in layout_entries}
+    fixture_root = ROOT / "tests/fixtures/webgame"
+
+    provenance_sources: list[dict[str, object]] = []
+    for entry in layout_entries:
+        fixture = entry["fixture"]
+        standalone = _json(f"tests/fixtures/webgame/{fixture}")
+        if standalone["layout"] != entry["layout"]:
+            raise StaticReTestFailure(
+                f"settled standalone {fixture} disagrees with its embedded golden"
+            )
+        reference = fixture_root / entry["reference_capture"]
+        assert_recorded_hash_matches_file(
+            entry["reference_sha256"],
+            reference,
+            f"{fixture} settled reference capture",
+        )
+        header = entry["header"]
+        settlement = header["settlement"]
+        if (
+            settlement["consecutive_identical_samples"] < 40
+            or settlement["stable_span_milliseconds"] < 2000
+            or settlement["settle_latency_milliseconds"] < 2000
+        ):
+            raise StaticReTestFailure(
+                f"settled standalone {fixture} no longer proves 40 samples over two seconds"
+            )
+        if header.get("recorded_live") is not True:
+            raise StaticReTestFailure(
+                f"settled standalone {fixture} lost recorded-live provenance"
+            )
+        provenance_sources.append(header["source"])
+
+    for edge in edges:
+        edge_id = edge["id"]
+        destination_fixture = edge.get("destination_layout_fixture")
+        if destination_fixture not in by_fixture:
+            raise StaticReTestFailure(
+                f"{edge_id} has no unique standalone destination fixture"
+            )
+        standalone_layout = by_fixture[destination_fixture]["layout"]
+        if _semantic_layout_bytes(edge["after"]["layout"]) != (
+            _semantic_layout_bytes(standalone_layout)
+        ):
+            raise StaticReTestFailure(
+                f"{edge_id} settled destination does not byte-match "
+                f"{destination_fixture}"
+            )
+        header = edge["header"]
+        for side in ("source", "destination"):
+            settlement = header["settlement"][side]
+            if (
+                settlement["consecutive_identical_samples"] < 40
+                or settlement["stable_span_milliseconds"] < 2000
+                or settlement["settle_latency_milliseconds"] < 2000
+            ):
+                raise StaticReTestFailure(
+                    f"{edge_id}.{side} no longer proves 40 samples over two seconds"
+                )
+        if header.get("recorded_live") is not True:
+            raise StaticReTestFailure(
+                f"{edge_id} lost recorded-live transition provenance"
+            )
+        provenance_sources.append(header["source"])
+
+    if len(provenance_sources) != len(layout_entries) + len(EDGE_CONTRACT):
+        raise StaticReTestFailure(
+            "settled menu provenance sweep did not reach every fixture and edge header"
+        )
+    resolved_pairs: set[tuple[str, str]] = set()
+    for source in provenance_sources:
+        commit = source.get("base_commit_sha")
+        tree = source.get("source_tree_sha")
+        game_hash = source.get("game_executable_sha256")
+        loader_hash = source.get("loader_dll_sha256")
+        if not isinstance(commit, str) or not re.fullmatch(
+            r"[0-9a-f]{40}", commit
+        ):
+            raise StaticReTestFailure(
+                "settled menu fixture lost machine-derived base commit provenance"
+            )
+        if not isinstance(tree, str) or not re.fullmatch(r"[0-9a-f]{40}", tree):
+            raise StaticReTestFailure(
+                "settled menu fixture lost machine-derived source tree provenance"
+            )
+        if not isinstance(game_hash, str) or not re.fullmatch(
+            r"[0-9a-f]{64}", game_hash
+        ):
+            raise StaticReTestFailure(
+                "settled menu fixture lost exact game-executable provenance"
+            )
+        if not isinstance(loader_hash, str) or not re.fullmatch(
+            r"[0-9a-f]{64}", loader_hash
+        ):
+            raise StaticReTestFailure(
+                "settled menu fixture lost exact staged-loader provenance"
+            )
+        resolved_pairs.add((commit, tree))
+
+    for commit, tree in sorted(resolved_pairs):
+        result = subprocess.run(
+            ["git", "-C", str(ROOT), "rev-parse", f"{commit}^{{tree}}"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0 or result.stdout.strip() != tree:
+            raise StaticReTestFailure(
+                f"settled menu provenance tree {tree} is not the tree of {commit}"
+            )
+        reachable = subprocess.run(
+            ["git", "-C", str(ROOT), "merge-base", "--is-ancestor", commit, "HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if reachable.returncode != 0:
+            raise StaticReTestFailure(
+                f"settled menu base commit {commit} is not an ancestor of HEAD"
+            )
+
+    raw = golden["header"]["raw_recording"]
+    if (
+        not raw["evidence_filename"]
+        or not re.fullmatch(r"[0-9a-f]{64}", raw["sha256"])
+        or raw["bytes"] <= 0
+    ):
+        raise StaticReTestFailure(
+            "settled menu golden lost its raw evidence-bundle provenance"
+        )
+    return (
+        "all 39 settled transition destinations byte-match their explicit "
+        "standalone fixtures, including hub, with live settlement and resolvable "
+        "machine-derived provenance"
+    )
 
 
 def test_native_menu_screen_census_and_live_layouts_are_pinned() -> str:

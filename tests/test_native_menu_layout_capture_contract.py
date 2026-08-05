@@ -26,6 +26,12 @@ def read_menu_layout_capture() -> str:
     )
 
 
+def read_native_menu_recorder() -> str:
+    return read("scripts/Record-NativeMenuLayout.ps1") + read(
+        "scripts/NativeMenuCaptureSupport.ps1"
+    )
+
+
 class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
     def test_sprite_capture_is_explicitly_opt_in(self) -> None:
         source = read_menu_layout_capture()
@@ -76,7 +82,7 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             "public_api_surface_dispatch.inl"
         )
         bindings = read("SolomonDarkModLoader/src/lua_engine_bindings_ui.cpp")
-        recorder = read("scripts/Record-NativeMenuLayout.ps1")
+        recorder = read_native_menu_recorder()
         self.assertIn("TryCaptureCurrentDebugUiLayoutSnapshot", api)
         self.assertIn('element.kind != "art"', api)
         self.assertIn('element.kind != "text"', api)
@@ -135,12 +141,65 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         self.assertIn("ObserveActiveSettingsRowTextQuad(arg2)", text_hooks)
 
     def test_recorder_never_measures_layout_from_the_reference_image(self) -> None:
-        recorder = read("scripts/Record-NativeMenuLayout.ps1")
+        recorder = read_native_menu_recorder()
         self.assertIn("sd.ui.capture_current_layout", recorder)
         self.assertIn("sd.debug.capture_backbuffer", recorder)
         self.assertIn("Get-FileHash", recorder)
         self.assertNotIn("GetPixel", recorder)
         self.assertNotIn("image recognition", recorder.lower())
+
+    def test_recorders_settle_semantics_without_provenance_overrides(self) -> None:
+        support = read("scripts/NativeMenuCaptureSupport.ps1")
+        standalone = read("scripts/Record-NativeMenuLayout.ps1")
+        transition = read("scripts/Record-NativeMenuTransition.ps1")
+        importer = read("scripts/Import-NativeMenuSpecialCaptures.ps1")
+        self.assertIn(
+            "NativeMenuSettleConsecutiveSamples = 40",
+            support,
+            "standalone settlement must require forty identical samples",
+        )
+        self.assertIn(
+            "NativeMenuSettleMinimumSpanMilliseconds = 2000",
+            support,
+            "standalone settlement must span at least two seconds",
+        )
+        self.assertIn(
+            "Get-SettledNativeMenuObservation",
+            standalone,
+            "standalone fixtures must be produced by the settlement gate",
+        )
+        self.assertRegex(
+            transition,
+            r"(?s)\$before\s*=\s*Get-SettledNativeMenuObservation.*"
+            r"\$after\s*=\s*Get-SettledNativeMenuObservation",
+            "transition source and destination must both use the settlement gate",
+        )
+        self.assertNotIn(
+            "WaitMilliseconds",
+            transition,
+            "transition capture must not expose a fixed-delay parameter",
+        )
+        self.assertNotIn(
+            "Start-Sleep",
+            transition,
+            "transition capture must not sleep before sampling a destination",
+        )
+        for recorder in (standalone, transition, importer):
+            self.assertNotIn(
+                "CaptureCommit",
+                recorder,
+                "operators must not be able to supply capture commit provenance",
+            )
+        self.assertIn(
+            "base_commit_sha = $baseCommitSha",
+            support,
+            "fixture provenance must carry the recorder-derived base commit",
+        )
+        self.assertIn(
+            "Get-FileHash -LiteralPath $stagedLoader",
+            support,
+            "fixture provenance must hash the exact staged loader DLL",
+        )
 
     def test_native_click_helper_is_pinned_to_the_exact_owned_stage(self) -> None:
         helper = read("scripts/Invoke-ExactProcessClientClick.ps1")

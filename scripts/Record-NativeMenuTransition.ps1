@@ -48,100 +48,56 @@ param(
     [switch]$ObserveOnly,
 
     [string]$ExpectedSourceSurface = "",
-    [string]$ExpectedDestinationSurface = "",
-
-    [ValidateRange(50, 10000)]
-    [int]$WaitMilliseconds = 900,
-
-    [string]$CaptureCommit = ""
+    [string]$ExpectedDestinationSurface = ""
 )
 
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = "Stop"
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).ProviderPath
-$instanceRoot = Join-Path $root (
-    "runtime\instances\" + $Instance.ToLowerInvariant()
-)
-$expectedExecutable = [IO.Path]::GetFullPath(
-    (Join-Path $instanceRoot "stage\SolomonDark.exe")
-)
-$process = Get-CimInstance Win32_Process -Filter "ProcessId = $ProcessId"
-if (
-    $null -eq $process -or
-    $null -eq $process.ExecutablePath -or
-    -not [string]::Equals(
-        [IO.Path]::GetFullPath($process.ExecutablePath),
-        $expectedExecutable,
-        [StringComparison]::OrdinalIgnoreCase
+. (Join-Path $PSScriptRoot "NativeMenuCaptureSupport.ps1")
+$context = New-NativeMenuCaptureContext `
+    -Root $root `
+    -Instance $Instance `
+    -ProcessId $ProcessId
+
+$outputItemPath = [IO.Path]::GetFullPath($OutputPath)
+if (Test-Path -LiteralPath $outputItemPath -PathType Leaf) {
+    $fixture = Get-Content -LiteralPath $outputItemPath -Raw |
+        ConvertFrom-Json
+    if ($fixture.schema -ne "solomon-dark-native-menu-navigation-v1") {
+        throw "Existing navigation recording has an incompatible schema."
+    }
+    $allIds = @($fixture.edges | ForEach-Object { [string]$_.id })
+    $duplicateIds = @(
+        $allIds | Group-Object | Where-Object Count -gt 1 |
+            ForEach-Object Name
     )
-) {
-    throw "PID $ProcessId does not own the exact $Instance staged executable."
-}
-
-if ([string]::IsNullOrWhiteSpace($CaptureCommit)) {
-    $CaptureCommit = (& git -C $root rev-parse HEAD).Trim()
-}
-if ($CaptureCommit -notmatch '^[0-9a-f]{40}$') {
-    throw "CaptureCommit must be a full lowercase Git SHA."
-}
-
-$pipeName = "SolomonDarkModLoader_LuaExec_$Instance"
-$luaExecClient = Join-Path $root "tools\lua-exec.py"
-function Invoke-TargetLua {
-    param([Parameter(Mandatory = $true)][string]$LuaCode)
-
-    $previousPipe = $env:SDMOD_LUA_EXEC_PIPE_NAME
-    try {
-        $env:SDMOD_LUA_EXEC_PIPE_NAME = $pipeName
-        $result = $LuaCode | & py.exe -3 $luaExecClient
-        if ($LASTEXITCODE -ne 0) {
-            throw "Lua exec failed with exit code $LASTEXITCODE."
+    if ($duplicateIds.Count -gt 0) {
+        throw (
+            "Existing navigation recording contains ambiguous duplicate " +
+            "edge IDs: $($duplicateIds -join ', ')."
+        )
+    }
+    if ($allIds -contains $EdgeId) {
+        throw "Navigation edge '$EdgeId' is already recorded; refusing ambiguity."
+    }
+} else {
+    $fixture = [ordered]@{
+        schema = "solomon-dark-native-menu-navigation-v1"
+        header = [ordered]@{
+            capture_method = (
+                "settled byte-identical native UI semantics + exact-process " +
+                "action/key/click dispatch + same-call D3D9 frame hashes"
+            )
+            settlement_criterion = (
+                "at least 40 consecutive byte-identical semantic payloads " +
+                "spanning at least 2 seconds"
+            )
+            recorded_live = $true
+            sessions = @()
         }
-        return ($result -join "`n").Trim()
-    } finally {
-        $env:SDMOD_LUA_EXEC_PIPE_NAME = $previousPipe
-    }
-}
-
-function Get-LiveObservation {
-    param(
-        [Parameter(Mandatory = $true)][string]$ScreenId,
-        [Parameter(Mandatory = $true)][string]$FramePath
-    )
-
-    $result = Invoke-TargetLua -LuaCode @"
-local semantic = sd.ui.get_snapshot()
-local tagged = sd.ui.capture_current_layout([[$ScreenId]])
-if type(tagged) ~= 'table' then error('current layout unavailable') end
-local ok, message = sd.debug.capture_backbuffer([[$FramePath]])
-if not ok then error(tostring(message)) end
-return table.concat({
-  tostring(semantic and semantic.surface_id or ''),
-  tostring(semantic and semantic.generation or 0),
-  tostring(tagged.screen_id or ''),
-  tostring(tagged.generation or 0),
-  tostring(#(tagged.elements or {})),
-  tostring(tagged.capture_method or '')
-}, '|')
-"@
-    $parts = @($result.Split('|', 6))
-    if ($parts.Count -ne 6) {
-        throw "Malformed live observation: $result"
-    }
-    if (-not (Test-Path -LiteralPath $FramePath -PathType Leaf)) {
-        throw "Live observation did not create its frame capture."
-    }
-    return [ordered]@{
-        semantic_surface = $parts[0]
-        semantic_generation = [uint64]$parts[1]
-        tagged_screen = $parts[2]
-        layout_generation = [uint64]$parts[3]
-        element_count = [int]$parts[4]
-        capture_method = $parts[5]
-        frame_sha256 = (
-            Get-FileHash -LiteralPath $FramePath -Algorithm SHA256
-        ).Hash.ToLowerInvariant()
+        edges = @()
     }
 }
 
@@ -152,37 +108,44 @@ $tempDirectory = Join-Path ([IO.Path]::GetTempPath()) (
 $beforeFrame = Join-Path $tempDirectory "before.bmp"
 $afterFrame = Join-Path $tempDirectory "after.bmp"
 try {
-    $before = Get-LiveObservation `
+    $sourceClock = [Diagnostics.Stopwatch]::StartNew()
+    $before = Get-SettledNativeMenuObservation `
+        -Context $context `
         -ScreenId $SourceScreen `
-        -FramePath $beforeFrame
+        -FramePath $beforeFrame `
+        -LatencyClock $sourceClock
     if (
         -not [string]::IsNullOrWhiteSpace($ExpectedSourceSurface) -and
         $before.semantic_surface -ne $ExpectedSourceSurface
     ) {
         throw (
-            "Source semantic surface '$($before.semantic_surface)' did not " +
-            "match '$ExpectedSourceSurface'."
+            "STOP: source semantic surface '$($before.semantic_surface)' did " +
+            "not match '$ExpectedSourceSurface'."
         )
     }
 
+    $destinationClock = [Diagnostics.Stopwatch]::StartNew()
     $dispatchResult = "observed"
     if ($PSCmdlet.ParameterSetName -eq "Action") {
-        $actionLiteral = "[[${ActionId}]]"
-        $surfaceLiteral = "[[${SurfaceId}]]"
-        $dispatchResult = Invoke-TargetLua -LuaCode @"
-local ok, request = sd.ui.activate_action($actionLiteral, $surfaceLiteral)
+        $dispatchResult = (Invoke-NativeMenuLua `
+            -Context $context `
+            -LuaCode @"
+local ok, request = sd.ui.activate_action([=[$ActionId]=], [=[$SurfaceId]=])
 if not ok then error(tostring(request)) end
 return tostring(request)
-"@
+"@).Text
     } elseif ($PSCmdlet.ParameterSetName -eq "Key") {
-        $keyLiteral = "[[${Key}]]"
-        $dispatchResult = Invoke-TargetLua -LuaCode @"
-local ok, message = sd.input.press_key($keyLiteral)
+        $dispatchResult = (Invoke-NativeMenuLua `
+            -Context $context `
+            -LuaCode @"
+local ok, message = sd.input.press_key([=[$Key]=])
 if not ok then error(tostring(message)) end
 return 'key'
-"@
+"@).Text
     } elseif ($PSCmdlet.ParameterSetName -eq "Lua") {
-        $dispatchResult = Invoke-TargetLua -LuaCode $LuaActionCode
+        $dispatchResult = (Invoke-NativeMenuLua `
+            -Context $context `
+            -LuaCode $LuaActionCode).Text
     } elseif ($PSCmdlet.ParameterSetName -eq "Click") {
         & (Join-Path $PSScriptRoot "Invoke-ExactProcessClientClick.ps1") `
             -Instance $Instance `
@@ -193,64 +156,78 @@ return 'key'
         $dispatchResult = "exact_owned_client_click=$ClientX,$ClientY"
     }
 
-    Start-Sleep -Milliseconds $WaitMilliseconds
-    $after = Get-LiveObservation `
+    $after = Get-SettledNativeMenuObservation `
+        -Context $context `
         -ScreenId $DestinationScreen `
-        -FramePath $afterFrame
+        -FramePath $afterFrame `
+        -LatencyClock $destinationClock
     if (
         -not [string]::IsNullOrWhiteSpace($ExpectedDestinationSurface) -and
         $after.semantic_surface -ne $ExpectedDestinationSurface
     ) {
         throw (
-            "Destination semantic surface '$($after.semantic_surface)' did " +
-            "not match '$ExpectedDestinationSurface'."
+            "STOP: destination semantic surface '$($after.semantic_surface)' " +
+            "did not match '$ExpectedDestinationSurface'."
         )
     }
 
-    $outputItemPath = [IO.Path]::GetFullPath($OutputPath)
     [IO.Directory]::CreateDirectory(
         (Split-Path -Parent $outputItemPath)
     ) | Out-Null
-    $nativeSha256 = (
-        Get-FileHash -LiteralPath $expectedExecutable -Algorithm SHA256
-    ).Hash.ToLowerInvariant()
-    $loaderPath = Join-Path $root "dist\launcher\SolomonDarkModLoader.dll"
-    $loaderSha256 = (
-        Get-FileHash -LiteralPath $loaderPath -Algorithm SHA256
-    ).Hash.ToLowerInvariant()
+    $frameDirectory = [IO.Path]::ChangeExtension(
+        $outputItemPath,
+        $null
+    ) + ".frames"
+    [IO.Directory]::CreateDirectory($frameDirectory) | Out-Null
+    $beforeEvidencePath = Join-Path $frameDirectory "$EdgeId.before.bmp"
+    $afterEvidencePath = Join-Path $frameDirectory "$EdgeId.after.bmp"
+    Copy-Item -LiteralPath $beforeFrame -Destination $beforeEvidencePath
+    Copy-Item -LiteralPath $afterFrame -Destination $afterEvidencePath
 
-    if (Test-Path -LiteralPath $outputItemPath -PathType Leaf) {
-        $fixture = Get-Content -LiteralPath $outputItemPath -Raw |
-            ConvertFrom-Json
-        if ($fixture.schema -ne "solomon-dark-native-menu-navigation-v1") {
-            throw "Existing navigation fixture has an incompatible schema."
-        }
-    } else {
-        $fixture = [ordered]@{
-            schema = "solomon-dark-native-menu-navigation-v1"
-            header = [ordered]@{
-                capture_method = (
-                    "live semantic action/key dispatch + tagged native UI " +
-                    "tree generations + before/after D3D9 frame hashes"
-                )
-                sessions = @()
-            }
-            edges = @()
-        }
-    }
-
+    $capturedAtUtc = [DateTime]::UtcNow.ToString("o")
     $fixture.header.sessions = @($fixture.header.sessions) + @(
         [ordered]@{
             instance = $Instance
             process_id = $ProcessId
-            capture_commit = $CaptureCommit
-            native_exe_sha256 = $nativeSha256
-            loader_dll_sha256 = $loaderSha256
-            captured_at_utc = [DateTime]::UtcNow.ToString("o")
+            source = $context.Source
+            recorded_live = $true
+            captured_at_utc = $capturedAtUtc
         }
     )
     $fixture.edges = @($fixture.edges) + @(
         [ordered]@{
+            header = [ordered]@{
+                label = $EdgeId
+                instance = $Instance
+                source = $context.Source
+                capture_method = [string]$fixture.header.capture_method
+                recorded_live = $true
+                captured_at_utc = $capturedAtUtc
+                settlement = [ordered]@{
+                    source = $before.settlement
+                    destination = $after.settlement
+                }
+                raw_frames = [ordered]@{
+                    before = [ordered]@{
+                        evidence_filename = [IO.Path]::GetFileName(
+                            $beforeEvidencePath
+                        )
+                        sha256 = $before.frame_sha256
+                        bytes = (
+                            Get-Item -LiteralPath $beforeEvidencePath
+                        ).Length
+                    }
+                    after = [ordered]@{
+                        evidence_filename = [IO.Path]::GetFileName(
+                            $afterEvidencePath
+                        )
+                        sha256 = $after.frame_sha256
+                        bytes = (
+                            Get-Item -LiteralPath $afterEvidencePath
+                        ).Length
+                    }
+                }
+            }
             id = $EdgeId
             source = $SourceScreen
             trigger = $Trigger
@@ -261,12 +238,12 @@ return 'key'
             dispatch_result = $dispatchResult
             before = $before
             after = $after
-            observed_at_utc = [DateTime]::UtcNow.ToString("o")
+            observed_at_utc = $capturedAtUtc
         }
     )
     [IO.File]::WriteAllText(
         $outputItemPath,
-        ($fixture | ConvertTo-Json -Depth 100) + "`n",
+        ($fixture | ConvertTo-Json -Depth 100) + [Environment]::NewLine,
         [Text.UTF8Encoding]::new($false)
     )
 
@@ -275,10 +252,16 @@ return 'key'
         edge = $EdgeId
         source = $before.semantic_surface
         destination = $after.semantic_surface
+        source_settle_latency_milliseconds = (
+            $before.settlement.settle_latency_milliseconds
+        )
+        destination_settle_latency_milliseconds = (
+            $after.settlement.settle_latency_milliseconds
+        )
         output = $outputItemPath
     } | ConvertTo-Json -Compress
 } finally {
-    if (Test-Path -LiteralPath $tempDirectory) {
+    if (Test-Path -LiteralPath $tempDirectory -PathType Container) {
         Remove-Item -LiteralPath $tempDirectory -Recurse -Force
     }
 }
