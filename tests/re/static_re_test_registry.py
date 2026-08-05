@@ -33,6 +33,12 @@ from static_re_native_input_model_contracts import (
     test_native_input_ingress_sampling_and_tick_order_are_pinned,
     test_native_surface_priority_and_loading_input_seal_are_pinned,
 )
+from static_re_native_session_flow_contracts import (
+    test_native_session_flow_input_seal_boundaries_are_pinned,
+    test_native_session_flow_legal_edge_set_is_pinned,
+    test_native_session_flow_state_enum_is_pinned,
+    test_native_session_flow_transition_step_order_is_pinned,
+)
 from static_re_native_scene_composition_contracts import (
     test_native_scene_camera_transform_and_backdrop_rate_are_pinned,
     test_native_scene_decor_determinism_path_is_pinned,
@@ -821,6 +827,22 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native action thresholds, absences, and Intent shape are pinned",
         test_native_action_thresholds_absences_and_intent_shape_are_pinned,
+    ),
+    (
+        "Native session-flow state enum is pinned",
+        test_native_session_flow_state_enum_is_pinned,
+    ),
+    (
+        "Native session-flow legal edge set is pinned",
+        test_native_session_flow_legal_edge_set_is_pinned,
+    ),
+    (
+        "Native session-flow transition step order is pinned",
+        test_native_session_flow_transition_step_order_is_pinned,
+    ),
+    (
+        "Native session-flow input seal boundaries are pinned",
+        test_native_session_flow_input_seal_boundaries_are_pinned,
     ),
     (
         "Native scene physical layer list is pinned",

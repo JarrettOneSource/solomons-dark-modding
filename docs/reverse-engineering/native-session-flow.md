@@ -1,0 +1,487 @@
+# Native session flow and room lifecycle (G13)
+
+This is the implementation contract for the retail session/room machine. It
+closes browser-rebuild gap G13 against `SolomonDark.exe` SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`.
+An implementing agent can rebuild the flow from this document and the checked-in
+golden without opening the binary.
+
+This document owns the machine that connects surfaces and worlds, not the
+contents of either:
+
+- G11 owns the boot/menu screens, their layout, and their 39 internal navigation
+  edges. Import [the native shell contract](native-menus-and-boot.md) and
+  [`menu-focus-model.json`](../../webgame-contracts/menu-focus-model.json);
+  do not recreate those screens from this state list.
+- G8 owns what the Courtyard and its private hub rooms contain, including NPCs,
+  shops, dig, and the run-entry portal. This document treats those worlds only
+  as region states and transition endpoints. The territory boundary is the
+  [G8 roadmap row](../browser-rebuild-roadmap.md#tier-b--hub-and-world-presentation-second).
+- G14 owns input routing and the loading seal. The authoritative contract is
+  [the native input model](native-input-model.md#loading-screen-input-seal-uigate);
+  this document only places its already-defined seal and unseal in the room
+  lifecycle.
+- The terminal object, spectator split, and post-death UI behavior remain owned
+  by [the Game Over session contract](native-game-over-session-semantics.md).
+  This document connects that contract to region teardown and re-entry.
+
+The live fixture is
+[`session-flow-goldens.json`](../../tests/fixtures/webgame/session-flow-goldens.json).
+It was recorded by `tools/record_native_session_flow_goldens.py` from isolated
+instance `flw-g13-final`, recorder source
+`1b7624f80758ee0f29da37464f349295395b42b0`, PID `68764`, UDP ports
+`52321/52322`, and the capture-only loader DLL SHA-256
+`cc8b334c4425598231e7b8c4ec898574a07e81283119f4ebb1f674aba5dd00b6`.
+The tool drove stock presentation input through that exact PID, used existing
+Lua-exec read probes, and recorded native lifecycle detours. The recorder is
+opt-in through `SDMOD_NATIVE_SESSION_FLOW_CAPTURE_DIRECTORY`; with the variable
+absent all added observers are inert.
+
+## The state machine
+
+### It is a product of machines, not one retail enum
+
+No single retail `SessionState` field exists. The reconstructable state is the
+product of four owners:
+
+1. the application root (`MyLoader`, front end, or `Gameplay`);
+2. the current native gameplay region, when `Gameplay` exists;
+3. a presentation overlay such as Game Over or the loader's Boneyard loading
+   barrier; and
+4. the loader's multiplayer activity label (`not-in-game`, `in-hub`, or
+   `in-boneyard`).
+
+The browser should preserve that product. In particular, Game Over is installed
+over the still-resident Arena, and post-Boneyard progression temporarily has
+region 1 resident underneath a front-end controller. Flattening either case to
+one screen name destroys information needed for correct teardown.
+
+G11's individual menu controllers are substates of `frontend.shell` or modal
+overlays on a gameplay root. They are intentionally not duplicated here. Their
+entry/exit edges are imported by reference from the G11 navigation graph.
+
+### Where the current state lives
+
+All addresses below are preferred virtual addresses for the analyzed x86 image;
+relocate them by the runtime image base. The live graph fixture also records the
+relocated addresses from its exact process.
+
+| Owner | Address / field | Meaning |
+| --- | --- | --- |
+| Gameplay singleton | `DAT_0081C264` | Current `Gameplay*`; null before a gameplay root exists. |
+| Region assignment vector | `DAT_00819E84` | Pointer to an `int` vector. Entry 0 is the authoritative current native region id. It is the value tested and replaced by `Gameplay_SwitchRegion` at `0x005CDDD0`. |
+| Pending transition | `Gameplay+0x78` | Region id staged by a presentation endpoint. `-1` means no pending transition. `Game::Tick` at `0x005D7EF0` consumes a nonnegative value and resets it to `-1` after the synchronous switch returns. |
+| Region objects | `Gameplay+0x133C,+0x1340,+0x1344,+0x1348,+0x134C,+0x1350` | Pointers for native region ids `0..5`. These objects normally remain allocated across an ordinary room switch. |
+| Active world/region | `DAT_0081C260` | Published incoming region pointer, assigned by `0x005CBA00` during attach. This is not the region id. |
+| Local gameplay actor/controller | `Gameplay+0x1358` | Gameplay-owned object passed to the incoming region and later to the outgoing post-switch virtual. It survives an ordinary region boundary. |
+| Boot controller | `MyApp+0xDA4` | `MyLoader*`; vtable `0x00799BDC`. |
+| Main front end | `MyApp+0xDAC` | `MainMenu*`, installed by `0x005A7D90`. G11 owns its screen subtree. |
+| Hall of Fame | `MyApp+0xDB0` | Outer `HallOfFame*`; vtable `0x00799334`. |
+| Game Over | application surface/CPU manager | Object with vtable `0x0079B0CC`; its presence has precedence over the underlying Arena for session presentation. |
+
+`DAT_00819E84[0]`, `Gameplay+0x78`, and `DAT_0081C260` are deliberately
+separate. A port that writes only a new room id misses the pending presentation
+gate and the active-object publication boundary.
+
+The loader publishes a separate activity projection:
+
+| Activity label | Exact meaning |
+| --- | --- |
+| `not-in-game` | No materialized shared-hub or active-run actor. Boot, front-end screens, private hub rooms, Game Over, and post-run screens all map here. |
+| `in-hub` | Local player and shared Courtyard world are materialized. |
+| `in-boneyard` | Local player belongs to a live run nonce in Arena. |
+
+These labels are multiplayer/session projections, not replacements for the
+native state list.
+
+### Complete G13 stable state list
+
+| State id | Native identifier and construction address | Native id / storage | Tick or discriminant |
+| --- | --- | --- | --- |
+| `boot.loader` | `MyLoader`, startup `0x005BAB60` | `MyApp+0xDA4` | vtable `0x00799BDC`, render `0x005BCA40` |
+| `frontend.shell` | front-end installer `0x005A7F60`; MainMenu installer `0x005A7D90`, constructor `0x0058D940` | `MyApp+0xDAC` | vtable `0x007980CC`; screen substates belong to G11 |
+| `gameplay.courtyard` | `Courtyard`, constructor `0x00506490`, factory type `0xFA1` | region `0`, `Gameplay+0x133C` | tick `0x0050C970`, vtable `0x00792644` |
+| `gameplay.mortuary` | `Mortuary`/`Memoratorium`, constructor `0x005090A0`, factory type `0xFA2` | region `1`, `Gameplay+0x1340` | tick `0x00509330`, vtable `0x007927DC` |
+| `gameplay.library` | `Library`, constructor `0x0050A360`, factory type `0xFA4` | region `2`, `Gameplay+0x1344` | tick `0x00504BB0`, vtable `0x00792C04` |
+| `gameplay.storeroom` | `StoreRoom`, constructor `0x00509B10`, factory type `0xFA3` | region `3`, `Gameplay+0x1348` | tick `0x00504220`, vtable `0x0079294C` |
+| `gameplay.office` | `Office`, constructor `0x00509C70`, factory type `0xFA5` | region `4`, `Gameplay+0x134C` | tick `0x00509F10`, vtable `0x00792AB4` |
+| `loading.boneyard` | loader readiness barrier; no retail object or region id | overlays the `0 -> 5` switch | `LoadingScreenSnapshot.active`; stages and rendering belong to G11 |
+| `gameplay.arena` | `Arena`, constructor `0x00464EE0`, factory type `0xFA6` | region `5`, `Gameplay+0x1350` | tick `0x0046E570`, vtable `0x00785934` |
+| `overlay.game_over` | `GameOver`, constructor `0x005CAD40`, installer `0x005CB570` | application surface over region 5 | tick `0x005CF4F0`, vtable `0x0079B0CC` |
+| `post_run.mortuary_frontend` | region-1 `Mortuary` plus front-end installer `0x005A7F60` | composite: native region `1` and a front-end surface | Boneyard-mode stock completion only |
+| `frontend.hall_of_fame` | factory `0x005A7E30`, constructor `0x00598120` | `MyApp+0xDB0` | tick `0x00589CD0`, vtable `0x00799334` |
+
+`loading.boneyard` and `post_run.mortuary_frontend` are explicit composite
+states needed by a portable multiplayer implementation. Their zero/nonnative
+addresses in the fixture are declarations, not missing evidence.
+
+### Complete legal cross-state edge set
+
+This table is exactly mirrored by `transition_graph.edges` in the live golden.
+It excludes G11-internal screen navigation while including every evidenced edge
+that changes a G13 state.
+
+| Source | Edge id | Trigger | Destination |
+| --- | --- | --- | --- |
+| `boot.loader` | `boot_complete` | loader completion flag/work ratio finishes | `frontend.shell` |
+| `frontend.shell` | `startup_hub` | new, resumed, or post-run onboarding selects region 0 | `gameplay.courtyard` |
+| `frontend.shell` | `startup_office` | startup pending kind selects region 4 during onboarding | `gameplay.office` |
+| `frontend.shell` | `startup_boneyard` | direct Boneyard startup selects region 5 | `loading.boneyard` |
+| `loading.boneyard` | `arena_materialized` | region 5 is attached and the readiness barrier releases | `gameplay.arena` |
+| `gameplay.courtyard` | `enter_mortuary` | Mortuary portal collision/endpoint | `gameplay.mortuary` |
+| `gameplay.mortuary` | `return_courtyard` | Mortuary return portal | `gameplay.courtyard` |
+| `gameplay.mortuary` | `completed_story_continue` | completed-story continuation after Game Over | `frontend.hall_of_fame` |
+| `gameplay.courtyard` | `enter_library` | Library portal collision/endpoint | `gameplay.library` |
+| `gameplay.library` | `return_courtyard` | Library return portal | `gameplay.courtyard` |
+| `gameplay.courtyard` | `enter_storeroom` | StoreRoom portal collision/endpoint | `gameplay.storeroom` |
+| `gameplay.storeroom` | `return_courtyard` | StoreRoom return portal | `gameplay.courtyard` |
+| `gameplay.courtyard` | `enter_office` | Office portal collision/endpoint | `gameplay.office` |
+| `gameplay.office` | `return_courtyard` | Office return portal | `gameplay.courtyard` |
+| `gameplay.courtyard` | `start_run` | authority accepts MapPicker/start-match action | `loading.boneyard` |
+| `gameplay.courtyard` | `leave_game` | stock Pause then Leave Game action | `frontend.shell` |
+| `gameplay.arena` | `terminal_death` | solo terminal callback or authority all-dead command | `overlay.game_over` |
+| `gameplay.arena` | `authority_leave_run` | host stock Leave Game followed by authenticated client stock follow | `frontend.shell` |
+| `overlay.game_over` | `story_completion` | normal Game Over accepts armed input and closes | `gameplay.mortuary` |
+| `overlay.game_over` | `boneyard_completion` | Boneyard Game Over accepts input at/after tick 1000 | `post_run.mortuary_frontend` |
+| `gameplay.arena` | `scripted_terminal_reset` | `WIN LEVEL` or `LOSE LEVEL` finish fade | `gameplay.courtyard` |
+| `post_run.mortuary_frontend` | `open_hall_of_fame` | stock Menu action exposes the Hall of Fame controller | `frontend.hall_of_fame` |
+| `frontend.hall_of_fame` | `continue_to_frontend` | accepted continue; linear close progress exceeds `1.0` | `frontend.shell` |
+
+The normal onboarding observed in the full-session golden is the composite path
+`startup_office -> return_courtyard`; run entry is
+`start_run -> arena_materialized`; and the recorded Boneyard death return is
+`boneyard_completion -> open_hall_of_fame -> continue_to_frontend -> startup_hub`.
+The fixture records those paths rather than pretending each is one retail call.
+
+### Illegal requests and non-edges
+
+| Request | Native/loader result |
+| --- | --- |
+| private region `1..4` directly to a different private region | No stock edge. Return to Courtyard first, then enter the other portal. |
+| private region `1..4` directly to Arena | No stock edge. Run entry originates in Courtyard. |
+| ordinary/raw Arena switch to any fixed region | Illegal lifecycle shortcut. Death, synchronized Leave Game, or scripted terminal reset owns exit. |
+| same region id | `0x005CDDD0` compares target to `DAT_00819E84[0]` and returns; it is a no-op, not an edge. |
+| target `-1` | Detach transient, not a stable state. It can unregister the outgoing region and return before publishing a replacement. Do not expose it to game logic. |
+| target outside `0..5` | Native table indexing is unchecked and can access arbitrary memory. The semantic Lua seam rejects it before dispatch. |
+| post-run Mortuary directly to Courtyard | Two isolated three-process probes access-violated. The only supported recovery is the stock front-end/Hall-of-Fame/onboarding path. |
+| multiplayer client self-authors Arena entry | Loader rejects it unless a fresh authenticated host run intent for a nonzero nonce is present. |
+| wave change inside Arena | Not an edge. All waves remain in native region 5. |
+
+## Transition lifecycle
+
+### Presentation-driven ordinary room switch
+
+The exact ordering is:
+
+1. A portal/controller selects a destination and starts the outgoing region's
+   fade-out by making `Region+0x8E4C` positive. `Region+0x8E48` is alpha.
+2. `Region` base tick `0x0063EFC0` continues ticking the outgoing world and adds
+   the rate to alpha. On the endpoint it clamps alpha to `1.0`, invokes region
+   vtable slot `+0x128`, then zeroes the rate.
+3. The endpoint stores the destination in `Gameplay+0x78`. The outgoing scene
+   is fully covered before any load begins.
+4. On the next `Game::Tick` (`0x005D7EF0`), the game reads the pending id. If it
+   is nonnegative, it calls `Gameplay_SwitchRegion` (`0x005CDDD0`) synchronously.
+5. If an outgoing region exists, `0x005CDDD0` performs, in this order:
+   outgoing vtable `+0xD4(slot=0)` player-slot detach; outgoing vtable `+0xDC`
+   sleep/cache; `0x00428160(Gameplay,outgoing)` lifecycle unregister.
+   `0x00428160` removes the child from the owner's manager and clears
+   `child+0x70` when it points back to `Gameplay`; it does **not** free the
+   region object.
+6. The function saves the old region id, writes the target to
+   `DAT_00819E84[0]`, calls incoming vtable `+0xE0` wake, then calls
+   `0x005CBA00(Gameplay,target)` attach.
+7. Attach publishes `DAT_0081C260`, calls the incoming setup/entry virtuals,
+   updates the previous/current assignment fields, registers the incoming
+   region plus Gameplay-owned controllers, and attaches player slots/actors.
+8. When the old id was valid, the old region receives vtable
+   `+0xC8(Gameplay+0x1358)`. The semantic purpose of this post-switch callback
+   is not yet named; its position and argument are exact and must be preserved.
+   Target 5 then receives the Arena-specific finalizer `0x005C7820`.
+9. `Gameplay_SwitchRegion` returns. `Game::Tick` resets `Gameplay+0x78` to
+   `-1`; no asynchronous loader owns the native swap itself.
+10. The incoming region runs its fade-in with a negative rate. Base tick
+    clamps alpha to `0.0`, invokes the same `+0x128` endpoint, and clears the
+    rate. Thus stock order is **fade-out endpoint, load/swap, fade-in**.
+
+`sd.scene.switch_region` is a diagnostic/authored immediate switch seam. It
+queues step 4 directly and therefore does not prove a preceding stock portal
+fade. The golden deliberately includes both: onboarding captures a stock
+fade-out before the Office-to-Courtyard swap, while the Library probe captures
+the immediate semantic seam and its post-load fade-in.
+
+### Tick graph and input
+
+There is no global scheduler pause inside `0x005CDDD0`. The outgoing region
+ticks while fading out. The swap is a synchronous portion of the next game
+tick; after it returns, later work addresses the newly published region.
+Application/UI and loader transport ticks continue throughout. A browser must
+not stop networking while it awaits room materialization.
+
+Ordinary fixed-room switches do not activate the loader's Boneyard input seal.
+Do not generalize the match-loading gate to every portal. For Arena entry the
+ordered boundary is exact:
+
+1. host/client authorization accepts the run switch;
+2. `BeginBoneyardLoadingScreen()` activates the blocking overlay **before** the
+   first outgoing player-slot detach or cache sleep;
+3. participant/world teardown and the native `0 -> 5` swap run while sealed;
+4. native Arena creation, native fade-in, and `Arena_StartWaves` may run while
+   the seal is still active;
+5. the process proves the exact expected actor set stable for `250 ms`;
+6. only the host release (or the bounded timeout path) advances to
+   `gameplay_ready`, closes the overlay, and emits `input.unseal`.
+
+The G14 rule applies unchanged: movement, key/mouse edges, holds, and cast
+queues observed while sealed are dropped, never deferred, and a fresh
+post-unseal input is required. The live start-run trace records
+`switch.enter -> input.seal -> detach/sleep/unregister -> wake/run.create ->
+attach -> fade-in endpoint -> run.wave.start -> input.unseal`.
+
+### Ordinary switch versus full reset
+
+`0x005CF920` is a different operation used by scripted terminal reset. It sets
+the reset flag `DAT_00819A84=1` so region sleep does not write caches, then
+iterates all six pointers at `Gameplay+0x133C..+0x1350`: unregister each
+non-null child through the Gameplay virtual and invoke its destructor at
+vtable `+0x18`. It recreates the region set through `0x005C6E40`, switches to
+region 0, repopulates through `0x005C8960`, and resets the view. Reusing the
+ordinary cached-room path for this edge leaks old region objects and run state.
+
+## Room entry and exit
+
+### Boneyard is one room
+
+The retail Boneyard does **not** change native room at a wave boundary. The
+whole run is `gameplay.arena`, native region `5`. `Arena_StartWaves` at
+`0x00465C00` changes Arena-owned wave state and spawns/reconciles actors in the
+same region object. The live golden records `run.wave.start.begin/end` at tick
+`4375`, both with `current_region=5`, followed by a stable region-5 snapshot.
+
+Therefore there is no `Arena room N -> Arena room N+1` edge to implement. The
+next wave is determined by Arena/wave data (owned by the wave contracts), not
+by `Gameplay+0x78`. A Boneyard selection determines which map and run seed are
+materialized before region 5 entry; the picker/catalog contract is
+[`boneyard-picker-seam.md`](../design/boneyard-picker-seam.md). G8 owns the hub
+portal interaction that requests this pipeline.
+
+### What survives an ordinary fixed-room boundary
+
+| Survives | Is replaced, quiesced, or rebuilt |
+| --- | --- |
+| `Gameplay*` and its six region pointer slots | `DAT_0081C260` active-region publication |
+| All six allocated region objects | outgoing region's active lifecycle registration |
+| Gameplay-owned local actor/controller object at `+0x1358` | outgoing player-slot/world registrations |
+| profile, completed-run globals, loaded assets, and process | incoming live actor/world bindings |
+| authenticated lobby, participant identities, durable loadout/progression/inventory state | loader transient participant materializations, transform samples, queued sync/equip/sack work, replicated hub actor and loot presentation bindings |
+| serialized `Region%d.cache` state when the reset flag is clear | scene-local transient effects and unfinished actions; they are not replayed in the next world |
+
+Sleep `0x00649F90` writes the outgoing region cache unless the full-reset flag
+is set. Wake `0x0063F460` loads/synchronizes that cache when present; otherwise
+it invokes the cold-create virtual and marks `Region+0x8E6D` initialized. The
+region object therefore persists, but its live entity registry does not simply
+remain the active world.
+
+Immediately before native detach, the multiplayer preparation boundary clears
+local tick ownership, transient target locks, pending participant sync,
+inventory-equip and sack requests, replicated hub actors, loot presentation
+bindings, and every materialized remote/bot wizard binding. A participant who
+was moving or casting does not resume that queued action in the destination.
+Durable participant state survives and is applied to a newly materialized
+actor when local and remote scene intents match.
+
+The golden's entity counts are observations, not constants: the full session
+records `0 -> 25` for frontend/onboarding to hub, `25 -> 5` for hub to Library,
+`5 -> 22` for Library to hub, `22 -> 1` for hub to Arena, `1 -> 1` for death
+overlay installation, and `1 -> 21` for the stock post-run return. Their role
+is to prove that each boundary sampled both sides, not to fix population sizes
+owned by G8 or wave generation.
+
+## Run lifecycle
+
+### Start and wave progression
+
+1. Only the host/offline authority accepts the MapPicker/start action. The
+   authority fixes the Boneyard selection, seed, expected participant set, and
+   a nonzero run nonce before clients enter.
+2. Clients cache only authenticated configured-host intent. That authorization
+   expires after `3000 ms`; a client-authored or stale region-5 switch is
+   rejected.
+3. Every participant seals input, clears transient scene bindings, and executes
+   its own stock region-5 switch. Arena wake calls the native run constructor
+   path before Gameplay attach publishes the world.
+4. `Arena_StartWaves` (`0x00465C00`) is a hook inside Arena, not a room edge.
+5. Loading remains visible until mutual materialization has held continuously
+   for `250 ms` and the host publishes release over both participant frames and
+   the reliable checkpoint lane. Only then does input unseal.
+
+### Successful/scripted terminal end
+
+Script action ids `1062` (`WIN LEVEL`) and `1063` (`LOSE LEVEL`) both call the
+same terminal path at `0x00467A50`. After their finish fade they invoke the full
+reset at `0x005CF920`: destroy all six region objects, recreate the set, switch
+to a new Courtyard, repopulate, and reset the view. The boolean/result carried
+by the script determines outcome bookkeeping; it does not select a different
+room teardown algorithm. This is the `scripted_terminal_reset` edge.
+
+### Death: final blow to Game Over and back
+
+The final blow does not switch room immediately:
+
+1. PlayerWizard terminal dispatch invokes Arena virtual `+0xD8`, resolved as
+   `0x004633D0`.
+2. Arena plays native audio actions 6 and 4, then calls
+   `Game_OnGameOver` (`0x005CB570`).
+3. A solo run continues through that original call immediately. In a
+   multiplayer run, local deaths enter spectator presentation while another
+   eligible participant is alive; the authority emits one replay-safe all-dead
+   command when none remains alive, and every peer invokes the same original
+   call exactly once on its own application thread.
+4. `Game_OnGameOver` allocates/constructs the `GameOver` object and installs it
+   over the still-resident Arena. The recorded terminal callback and overlay
+   installation share tick `4391`; region 5 and its one local entity remain
+   present on both sides.
+5. Boneyard mode is intentionally fade-only. Game Over ticks independently and
+   does not accept continuation merely because it reaches tick `1000`; input
+   at/after that threshold triggers close.
+6. Completion archives/cleans the run, performs the native `5 -> 1` switch,
+   and installs the stock front end. The lobby remains alive while activity is
+   `not-in-game`.
+7. Stock Menu exposes Hall of Fame; its validated outer controller sets close
+   rate `1.0`. `HallOfFame::Tick` integrates until progress exceeds `1.0` and
+   reinstalls MainMenu.
+8. G11 onboarding/Create commits the retained loadout and enters a fresh
+   region-0 world. Direct `1 -> 0` dispatch is not an alternative.
+
+This is why the death return is a pipeline rather than a single
+`GameOver -> hub` edge. The full-session fixture records native event sequences
+`159..194` plus before/after entity counts for it. Detailed Game Over alpha,
+screen, and authority semantics remain in the dedicated Game Over document.
+
+### Voluntary run exit
+
+The host invokes the stock Pause/Leave Game action. Its authenticated state
+then advertises `in_run=0` with the old nonce. Each client accepts that only
+from its configured authority, opens its own stock pause menu, and dispatches
+its own `pause_menu.leave_game`. An accepted all-dead command suppresses this
+follow path so it cannot race Game Over. Raw Arena region switches are never a
+valid leave operation.
+
+## Multiplayer transition ownership
+
+### Who decides and how peers converge
+
+- Hub-private navigation is participant-local. Host and clients may occupy
+  different regions `0..4`; remote actors materialize only when both scene
+  intents match. The host continues the dormant shared-Courtyard simulation
+  while its own player is private. Arbitrary authoritative simulation of
+  several different private interiors remains outside v1.
+- Run entry is host-authored. The host publishes selection, seed, nonce, and
+  intent. A client cannot convert mere transport connectivity into permission
+  to enter Arena.
+- Run death is host-authoritative only for the all-dead decision. Every process
+  still owns and ticks its own native Game Over object.
+- Run Leave Game is initiated by the host and followed through stock UI on each
+  client. Lobby leave/disconnect is a separate session operation.
+
+The run-loading roster is frozen from connected authenticated participants at
+start. Each process hashes its sorted visible participant ids, requires exact
+count/hash equality, and holds that exact set for `250 ms`. The host accepts
+acks only from the expected authenticated set on the active nonce and releases
+once all have acked. The release is duplicated on low-latency frames and the
+reliable checkpoint lane.
+
+### Participant mid-action behavior
+
+At a synchronized run switch, input sealing happens before native world
+teardown. G14 clears device levels/edges and cast queues. The scene-preparation
+boundary then clears queued participant synchronization and owner-local
+inventory work, removes replicated transient world bindings, and dematerializes
+remote/bot actors before the outgoing region sleeps. No movement edge, held
+cast, target lock, or queued equip operation is replayed after attach. Durable
+participant identity, loadout, vitals/progression ledger, lobby membership, and
+the new run nonce survive and seed the replacement actor.
+
+### Join and leave by state
+
+| State | Join behavior | Leave/disconnect behavior |
+| --- | --- | --- |
+| `boot.loader` / `frontend.shell` (`not-in-game`) | Lobby membership may establish, but no gameplay actor exists. The participant advances its own G11 prerequisite/Create flow before hub materialization. | Lobby leave tears down transport membership; there is no world actor to detach. |
+| `gameplay.courtyard` (`in-hub`) | A ready participant receives current durable checkpoints and materializes only after its loadout/world is ready. Existing participants remain live. | Its materialized actor/bindings retire; remaining members and the shared hub continue. |
+| private regions `1..4` (`not-in-game`) | Navigation is local. A joining participant follows its own onboarding/hub path and is not forced into another participant's private room. Actors become mutually visible only for matching scene intents. | The private actor/bindings retire without moving other participants. Lobby membership otherwise follows the common teardown path. |
+| `loading.boneyard` | The initial expected set is frozen. A later join is not retroactively inserted into that already-running barrier; it must resolve the retained Boneyard selection before following active authority intent. | A participant lost from the frozen set does not silently shrink the run-loading proof. The host releases the loaded peers at the `25 s` timeout and logs the waiting ids. |
+| `gameplay.arena` (`in-boneyard`) | Late join is permitted only after the retained map digest resolves and authenticated host run intent/nonce is available. Missing content keeps that client outside while the active run continues. | A nonauthority departure retires its run membership. Host stock Leave Game drives authenticated client follow. Authority-disconnect migration is not established here. |
+| `overlay.game_over` / post-run / Hall of Fame (`not-in-game`) | The run nonce is terminal; a new join does not enter that dead run. Lobby/checkpoint membership may persist while each process owns its local stock surface. | Leaving ends lobby membership but must not be confused with native Game Over cleanup. |
+| returned `gameplay.courtyard` | All participants must independently complete stock onboarding and become world-ready. A later run allocates a fresh nonce in the same lobby. | Normal hub leave rules apply. |
+
+## Failure and edge cases
+
+The retail switch is `void` and is not transactional. It has no rollback result
+for cache, allocation, or attach failure. Semantic callers must validate before
+entering it.
+
+- Same-region requests are safe no-ops.
+- An invalid positive target can index beyond the six region slots and access
+  violate. Native recovery was not found.
+- `-1` can unregister the outgoing region without publishing a replacement;
+  it is reachable as an internal transient but unrecoverable as a public stable
+  state. Do not serialize or network it.
+- Direct post-run `Mortuary -> Courtyard` probes access-violated even after a
+  two-second stable wait. Once in that composite state, stock front-end/Hall of
+  Fame progression is the recovery path.
+- A stale or unauthenticated client run intent is rejected before native
+  dispatch; it remains in its current state and may retry after a fresh host
+  checkpoint.
+- A missing selected Boneyard is fail-closed. Before launch it blocks the host;
+  after launch it leaves only the affected late joiner outside and retries
+  resolution without changing the authority's selection.
+- Run-loading failure is bounded, not fatal: host and client each have a
+  `25,000 ms` monotonic deadline. Timeout closes the loading presentation,
+  marks the release reason `timeout`, and keeps the loaded run alive.
+- Hall-of-Fame input during its entry fade is a native no-op. The stock flow
+  validates the exact vtable/ABI and retries until the surface actually
+  advances; call return is not completion evidence.
+- Boneyard Game Over at tick 1000 without input is waiting, not broken. It can
+  wait indefinitely for the stock continuation edge.
+
+### Not Yet Reversed
+
+- The semantic purpose/name of outgoing region vtable `+0xC8` is unknown. Its
+  exact order and `Gameplay+0x1358` argument are recovered and contracted.
+- Native behavior for an unreadable/corrupt `Region%d.cache`, allocation
+  failure in `0x005B7080`, or an exception inside incoming wake/attach is not
+  reachable through the existing read-only Lua seams. No fallback is claimed.
+- Stock Pause/Leave Game from each private region was not live-censused as a
+  separate G13 edge. G11 proves the Courtyard pause edge; this document does
+  not infer four additional cross-state edges from one screen action.
+- Authority migration after the host disconnects mid-transition or mid-run is
+  not established. The current contract is host-authoritative and fail-closed;
+  no browser election rule should be invented from it.
+
+## Golden interpretation
+
+The fixture has two independently headed sections:
+
+- `session_timeline`: six transitions for a complete
+  title/front-end -> onboarding -> hub -> Library -> hub -> Arena -> death ->
+  stock post-run -> hub session, each with its trigger, exact ordered native
+  steps and simulation ticks, and live entity counts on both sides; and
+- `transition_graph`: the 12 states, all 23 documented legal cross-state edges,
+  and the illegal edge classes above, emitted by the running recorder.
+
+Raw JSONL events, graph, status, and the Game Over frame remain in
+`D:\codex-evidence\flowre-20260805\live-session-flow-final`. Their SHA-256
+values are provenance constants in the committed header because those evidence
+files are intentionally not part of CI. The fixture itself is reviewable text
+and is the only committed copy of the recording.
+
+For a browser implementation, the non-negotiable ordering is:
+
+`fade-out endpoint -> seal if entering Arena -> transient participant cleanup
+-> slot detach -> cache sleep -> lifecycle unregister -> publish target -> wake
+-> attach -> old-region post callback -> target finalizer -> fade-in -> barrier
+release -> unseal`.
+
+Do not collapse this to `currentRoom = nextRoom`; that loses the exact points at
+which native state, actors, presentation, input, and multiplayer authority
+change owners.

@@ -197,7 +197,7 @@ GameOver::Tick                                      0x005CF4F0
   -> gameplay-scene factory(type=0xFA2)             0x005B7080
   -> Gameplay_SwitchRegion(game, 1)                 0x005CDDD0
      -> old region virtual +0xD4 / +0xDC
-     -> destroy old region object                    0x00428160
+     -> unregister old region lifecycle              0x00428160
      -> new region virtual +0xE0
 ```
 
@@ -206,8 +206,13 @@ manager and marks that surface closed. `0x005C9670` reads the current gameplay
 object and application-owned completed-run fields, then delegates the
 inventory/result work to `0x005BE320`; it does not close an application,
 socket, or external session. `0x005CDDD0` owns the old-region exit and
-new-region entry virtuals. Its boundary is the native gameplay region, not a
-multiplayer lobby.
+new-region entry virtuals. G13's later instruction-level pass corrects the
+earlier destructor interpretation: `0x00428160` removes the outgoing child
+from the owner's manager and clears the child's `+0x70` owner pointer when it
+matches; it does not free the region. The six region objects survive an
+ordinary switch and are destroyed only by the full-reset path described in
+[`native-session-flow.md`](native-session-flow.md#ordinary-switch-versus-full-reset).
+The switch boundary is the native gameplay region, not a multiplayer lobby.
 
 There are no Steam, Winsock, process-exit, or loader transport calls in this
 lineage. The retail executable has no knowledge of the loader's lobby.
