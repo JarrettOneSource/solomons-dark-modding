@@ -50,6 +50,35 @@ two otherwise identical Fire casts can occupy visibly different emitter lanes.
 Browser parity must derive the emitter from the current directional cast frame
 before applying the element-specific offsets below.
 
+Three details of `0x0053B830` matter to a port and are not implied by the
+sentence above.
+
+First, the wrap is a **single conditional subtraction**, not a modulo: the
+native code computes `index = (frame + 7) / 15` and then applies
+`if (index > 23) index -= 24` exactly once. That agrees with `% 24` only while
+the quotient stays below `48`; above it the native index leaves the `0..23`
+range instead of wrapping again. Write the subtraction, not the modulo.
+
+Second, the record actually indexed is `index + K * 24`, where `K` is a second
+integer derived from a float by the same `0x00747360` truncation helper the
+frame selection uses. The helper reads its operand off the x87 stack, so the
+decompile does not name `K`; what is certain is that the emitter address space
+is banked in groups of `24` directions and that the direction index alone does
+not identify the glyph. The live fixtures agree: at one fixed facing, Ether and
+Fire resolve to the same emitter-local point while Earth resolves to a
+different one, which a direction-only formula cannot produce.
+
+Third — and this is the part that blocks a port — **the glyph-local point is
+loaded asset data, not a constant in the executable.** The helper walks a
+record of stride `0xC4`, takes the point list at `+0xA8` (count at `+0xAC`,
+asserted `>= 2`), and reads **point index 1** at `+8`/`+0xC`. Only then does it
+apply `wizard_xy + scale(+0x74) * point`. A second path exists when the queried
+object's `+8` field equals `0x1B5C`: it fetches the point through the virtual
+at `+0x24` with the same `index + K * 24` and adds it to the wizard position
+**without** the `+0x74` scale multiply. So there is no 24-entry constant table
+to transcribe; a browser port must source these points from the same animation
+assets the native game loads, or capture them per facing.
+
 ## Mechanics at a glance
 
 | Element | Origin and initial motion | Contact shape and cadence | Lifetime / repeated-hit rule |
@@ -64,6 +93,29 @@ None of the three materialized primary projectiles has ballistic gravity or a
 vertical arc. Ether can steer toward a target; Fire and released Earth advance
 in the horizontal world plane. Air and Frost are query volumes, not actors
 whose paths should be integrated.
+
+**Heading convention.** Every `headingDegrees` column in the fixtures — wizard
+and projectile alike — is measured clockwise from screen-up, not
+counterclockwise from `+x`. The aim unit vector is
+
+```text
+aim = (cos(heading - 90 deg), sin(heading - 90 deg))   ==   (sin h, -cos h)
+```
+
+Applied to the captured wizard heading `287.59668`, that reproduces the stored
+Fireball unit vector `(-0.953208208, -0.302314520)` to within `2.1e-8` — float32
+serialization noise. Nothing else in this document restates the convention, and
+using the ordinary `atan2` sense instead rotates every trajectory by 90 degrees
+while still passing a magnitude check, so pin it in the port's first test.
+
+**Reproduction status.** Integrating Fireball as
+`p(t+1) = float32(p(t) + aim * 4.5)` from the fixture's first row reproduces
+`trajectories.fire.rank1` and `.rank2` **bit-exactly on every compared tick**
+(398 of 399 rows each; the final row repeats the previous position with a
+frozen `ageTicks` because the actor is already gone). Ether's `baseSpeed *
+movementScalar` likewise matches its measured per-tick displacement of `3.0`
+world units. The flight model in this document is therefore portable as
+written; the spawn point is not — see Not Yet Reversed.
 
 ## Ether: Magic Missile
 
@@ -379,6 +431,45 @@ events with world distances and resulting HP changes. These are browser
 goldens, not runtime automation instructions: tests should compare the
 reimplemented mechanics to the stored native tick sequence within the header's
 explicit epsilon and should never silently widen it.
+
+## Not Yet Reversed
+
+**The cast glyph emitter point, for 23 of the 24 facings.** The flight model
+above is portable, but the *origin* it flies from is not yet recoverable from
+this document. Two independent reasons:
+
+- The glyph-local point is loaded animation asset data reached through the
+  stride-`0xC4` record described under the shared cast pipeline, so there is no
+  constant table in the executable to transcribe. Closing this needs either the
+  animation-asset extraction path (this is `G4 animre` territory — the point
+  list belongs to the directional cast animation) or a live capture sweep.
+- Every projectile-actor capture in `projectile-goldens.json` was recorded at a
+  **single** wizard facing, `287.59668` degrees, from the single wizard position
+  `(1664.5, 1799.5)`. The other headings present in the fixture — `37.91263`,
+  `90.0`, `0.0` — occur only in the Water/Frost tables, which materialize no
+  projectile actor and therefore pin no spawn point. Ether `rank1`/`rank2`,
+  Fire `rank1`/`rank2`, and all four Earth captures share that one facing.
+
+Back-solving the emitter from the fixtures at that one facing, by subtracting
+the element offsets and the already-elapsed first tick of travel, gives:
+
+| Element | Emitter-local offset at heading `287.59668` |
+| --- | --- |
+| Ether | `(-41.50000, -24.50004)` |
+| Fire | `(-41.50004, -24.50003)` |
+| Earth | `(-45.50000, -0.50000)` |
+
+Ether and Fire agreeing to within serialization noise is real confirmation of
+the "common emitter helper" claim. Earth differing at the same facing is the
+banked `K * 24` index showing through. Note that this measurement cannot
+separate the raw glyph point from the element's documented local `(0, +10)`,
+because one facing gives one equation for two unknowns.
+
+This gap is load-bearing rather than cosmetic: the spawn point is what decides
+contact, and this document already attributes the observed Fireball misses in
+[`multiplayer-fireball-contact-2026-07-26.md`](multiplayer-fireball-contact-2026-07-26.md)
+partly to the directional emitter. A port that guesses the emitter will
+reproduce trajectories perfectly and still miss.
 
 ## Evidence inventory
 
