@@ -1107,13 +1107,6 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                 }
             }
         }
-        NativeInputSelectedSkillObservation input_trace_selected_primary_skill;
-        if (IsNativeInputTraceActive()) {
-            input_trace_selected_primary_skill.readable =
-                TryResolveLocalPlayerPrimarySpellFilterSkillId(
-                    actor_address,
-                    &input_trace_selected_primary_skill.skill_id);
-        }
         ClampLocalMultiplayerDeathPresentationTimerForStockTick(
             actor_address);
         original(self);
@@ -1146,8 +1139,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         ObserveNativeInputActorPostTick(
             gameplay_address_for_pump,
             actor_address,
-            input_trace_spell_observation,
-            input_trace_selected_primary_skill);
+            input_trace_spell_observation);
         if (cast_intent_masked) {
             (void)memory.TryWriteField<std::uint8_t>(
                 gameplay_address_for_pump,

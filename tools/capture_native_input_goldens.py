@@ -650,13 +650,6 @@ def encode_click_trace(
             if int(event.get("primary_skill_id", 0)) != 0
         }
     )
-    selected_skill_ids = sorted(
-        {
-            int((event.get("selected_primary_skill") or {}).get("skill_id", 0))
-            for event in active_actor_events
-            if (event.get("selected_primary_skill") or {}).get("readable")
-        }
-    )
     spell_samples = [
         event["active_spell"]
         for event in active_actor_events
@@ -673,11 +666,11 @@ def encode_click_trace(
         "native_actor_position_delta": position_delta,
         "active_actor_tick_count": len(active_actor_events),
         "primary_skill_ids": transient_skill_ids,
-        "selected_primary_skill_ids": selected_skill_ids,
         "active_spell_samples": spell_samples,
         "release_observed": any(
             int(event["sequence"]) > int(up["sequence"])
-            and not actor_is_casting(event)
+            and event.get("state_readable")
+            and not event.get("cast_active")
             for event in actor_events
         ),
     }
@@ -817,9 +810,7 @@ def capture_profile(
                 interact_target=interact_target,
             )
             if scenario.startswith("earth_charge_"):
-                observed_skills = capture["observations"][
-                    "selected_primary_skill_ids"
-                ]
+                observed_skills = capture["observations"]["primary_skill_ids"]
                 spell_samples = capture["observations"]["active_spell_samples"]
                 if EARTH_SKILL_ID not in observed_skills or not spell_samples:
                     raise CaptureFailure(
@@ -893,7 +884,7 @@ def capture_profile(
             context=context,
             expected_route="world_cast",
         )
-        observed_skills = capture["observations"]["selected_primary_skill_ids"]
+        observed_skills = capture["observations"]["primary_skill_ids"]
         if FROST_SKILL_ID not in observed_skills:
             raise CaptureFailure(
                 f"Frost trace did not observe skill {FROST_SKILL_ID}: "
