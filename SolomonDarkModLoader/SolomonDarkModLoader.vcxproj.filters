@@ -158,6 +158,9 @@
     <ClInclude Include="src\loading_screen_internal.h">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\loading_screen_renderer_frame_and_public.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="include\debug_ui_overlay.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -753,6 +756,18 @@
       <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\public_memory_forwarders.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\menu_layout_capture.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\menu_layout_capture_art_observation.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\menu_layout_capture_resolvers.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\menu_layout_capture_snapshot_and_hooks.inl">
       <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\public_api_actions.inl">

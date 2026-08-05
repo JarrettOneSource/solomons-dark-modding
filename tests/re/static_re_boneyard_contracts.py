@@ -339,7 +339,9 @@ def test_default_boneyard_load_seed_and_compact_decor_findings_are_registered() 
 
 def test_loading_screen_uses_native_stage_progress_and_shared_d3d9_lifetime() -> str:
     loading = _read("SolomonDarkModLoader/src/loading_screen.cpp")
-    renderer = _read("SolomonDarkModLoader/src/loading_screen_renderer.cpp")
+    renderer = _read("SolomonDarkModLoader/src/loading_screen_renderer.cpp") + _read(
+        "SolomonDarkModLoader/src/loading_screen_renderer_frame_and_public.inl"
+    )
     native_present = _read(
         "SolomonDarkModLoader/src/loading_screen_native_present.cpp"
     )
