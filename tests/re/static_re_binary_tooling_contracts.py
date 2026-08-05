@@ -1655,6 +1655,121 @@ def test_ci_runs_every_contract_that_needs_no_local_artifact() -> str:
     )
 
 
+# Contracts that are defined but deliberately NOT registered, each mapped to the
+# exact token its subsystem has since renamed or restructured away.
+#
+# These are not permission to skip work. Registering one as it stands fails;
+# rewriting its tokens to match today's source without re-verifying the
+# behaviour would convert a real gate into a tautology, which is the precise
+# failure this file exists to prevent. The census below calls every one of them
+# and requires that it STILL fails, so a repaired contract cannot be parked
+# here -- fixing one forces you to register it.
+STALE_UNREGISTERED_CONTRACTS: dict[tuple[str, str], str] = {
+    (
+        "static_multiplayer_platform_contracts",
+        "test_proton_input_targets_the_exact_native_game_window",
+    ): "proton_input_process_id()",
+    (
+        "static_multiplayer_platform_contracts",
+        "test_steam_behavior_arena_reset_waits_for_native_spawner",
+    ): "def reset_quiet_arena()",
+    (
+        "static_multiplayer_progression_contracts",
+        "test_steam_friend_native_inventory_matrix_is_wired",
+    ): "for item_type in native_item.EQUIPPABLE_TYPE_IDS:",
+    (
+        "static_multiplayer_transport_contracts",
+        "test_local_udp_ingress_and_wire_framing_are_bounded",
+    ): "void LocalUdpIngressWorkerMain(",
+    (
+        "static_re_transport_core_contracts",
+        "test_async_logger_keeps_blocking_output_off_callers",
+    ): "void LogWriterMain()",
+    (
+        "static_re_transport_core_contracts",
+        "test_dead_multiplayer_participants_are_authority_inert",
+    ): 'log_cast_drop("participant_dead");',
+    (
+        "static_wan_corpse_rendering_contracts",
+        "test_dead_owner_vitals_are_reasserted_after_the_progression_tick",
+    ): "InitializeLocalDeathProgressionTickHook(",
+}
+
+
+def test_every_defined_contract_reaches_the_registry() -> str:
+    """Every `test_*` a contract module defines must actually be registered.
+
+    `test_ci_runs_every_contract_that_needs_no_local_artifact` proves CI runs
+    everything the registry holds, but nothing proved the registry holds
+    everything the modules define. It doesn't: the registry enumerates test
+    functions by hand, so writing a contract and forgetting the entry produced a
+    file that looks like an enforced gate and runs never. Twelve had accumulated
+    that way, and seven of them no longer passed -- their subsystems had been
+    renamed underneath contracts nobody was running.
+
+    This is the same class as selecting contracts by module name (8595158) and
+    naming CI test modules one step at a time (5c5d4e7), one level further down:
+    coverage riding on a hand-maintained list instead of on discovery.
+    """
+    import importlib
+
+    from static_re_test_registry import TESTS
+
+    suite_root = ROOT / "tests/re"
+    registered = {(function.__module__, function.__name__) for _, function in TESTS}
+
+    defined: set[tuple[str, str]] = set()
+    for path in sorted(suite_root.glob("*.py")):
+        if path.name in {"static_re_test_registry.py", "run_static_re_tests.py"}:
+            continue
+        for node in ast.parse(path.read_text(encoding="utf-8")).body:
+            if (
+                isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.name.startswith("test_")
+            ):
+                defined.add((path.stem, node.name))
+
+    unregistered = defined - registered
+    undeclared = sorted(unregistered - set(STALE_UNREGISTERED_CONTRACTS))
+    if undeclared:
+        raise StaticReTestFailure(
+            "contract(s) defined but never registered, so they never run: "
+            + ", ".join(f"{module}.{name}" for module, name in undeclared)
+        )
+    vanished = sorted(set(STALE_UNREGISTERED_CONTRACTS) - unregistered)
+    if vanished:
+        raise StaticReTestFailure(
+            "STALE_UNREGISTERED_CONTRACTS names contract(s) that are no longer "
+            "unregistered or no longer exist: "
+            + ", ".join(f"{module}.{name}" for module, name in vanished)
+        )
+
+    # Each declared entry must still be broken, and must still be broken on the
+    # token it claims. Otherwise the list becomes a parking space.
+    for (module_name, name), token in sorted(STALE_UNREGISTERED_CONTRACTS.items()):
+        module = importlib.import_module(module_name)
+        source = (suite_root / f"{module_name}.py").read_text(encoding="utf-8")
+        if token not in source:
+            raise StaticReTestFailure(
+                f"{module_name}.{name} is declared stale on {token!r}, but that "
+                f"token is not in the contract at all"
+            )
+        try:
+            getattr(module, name)()
+        except Exception:
+            continue
+        raise StaticReTestFailure(
+            f"{module_name}.{name} passes now; repair is done, so register it "
+            f"instead of leaving it declared stale"
+        )
+
+    return (
+        f"all {len(defined)} defined contracts are registered or declared; the "
+        f"{len(STALE_UNREGISTERED_CONTRACTS)} declared exclusions each still "
+        "fail on the exact drifted token they name"
+    )
+
+
 PYTHON_SUITE_RUNNER = ROOT / "tests/run_python_suite.py"
 
 # CI ran 30 of the 84 test modules before the runner discovered them.

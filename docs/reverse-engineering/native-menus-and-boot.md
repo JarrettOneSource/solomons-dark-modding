@@ -415,6 +415,43 @@ destination.
 | `dark_cloud_menu_to_beta_notice` | Dark Cloud menu | Main Menu | beta notice |
 | `profile_select_resume_to_hub` | profile/save | Last Game | hub |
 
+### Provenance of the recorded screen tags
+
+Each endpoint in the graph carries a `tagged_screen`, and it **is not an
+observation** — it is the string the operator passed to
+`sd.ui.capture_current_layout`, handed straight back. The binding ends with
+`captured.screen_id = std::string(screen_id)`, so the field can never disagree
+with whoever ran the recorder. Read it as a label, never as evidence of which
+screen the game thought it was on.
+
+The game's own classification is not lost entirely, but it survives in only one
+bit. Before stamping the label, `TryCaptureCurrentDebugUiLayoutSnapshot`
+compares it against the classifier's `screen_id` through a small alias table
+(`profile_save_select`→`main_menu`, `beta_notice` and
+`leave_game_confirmation`→`dialog`, the eight Dark Cloud sub-screens→
+`dark_cloud_browser`). When they disagree it does two things: it appends
+`+ exact live-navigation screen tag (stale controls omitted)` to
+`capture_method`, and it **deletes every element that is not `art` or `text`**.
+
+That suffix therefore reads like a stronger provenance claim while actually
+marking a weaker capture, and it is the one field that tells you so. **34 of the
+78 recorded endpoints carry it.** For those, only `art` and `text` elements
+survive, so `element_count` is a stripped remnant of the screen and must not be
+read as a census of it. The clearest case is `hall_of_fame_to_beta_notice`,
+whose after-state was captured under the label `main_menu` on a state the game
+classified `dialog`: its 124 elements are an art/text remnant of a dialog, not a
+main-menu layout.
+
+Two further consequences worth stating plainly. `semantic_generation` is `0` on
+19 endpoints — there `sd.ui.get_snapshot()` returned nothing, so
+`semantic_surface` is empty and only the tagged layout is available. And
+`element_count`/`layout_generation` come from the loader's most recently cached
+layout snapshot, while `frame_sha256` hashes the backbuffer at the moment of the
+call; the two are not sampled atomically. Identical frames can therefore pair
+with different counts, and do — `dark_cloud_search` shares one frame hash across
+generations 147 and 3345 at 95 and 96 elements, and `dark_cloud_menu` across
+generations 3387/3389/3393 at 101 and 100.
+
 Presentation rules recovered to a trustworthy level are:
 
 - the Raptisoft loader has no fade or wipe and is replaced when loading is

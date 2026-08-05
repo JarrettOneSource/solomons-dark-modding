@@ -37,6 +37,7 @@ from static_re_native_menu_shell_contracts import (
     test_designed_menu_focus_model_consumes_g14_intents,
     test_native_menu_live_transition_graph_is_pinned,
     test_native_menu_screen_census_and_live_layouts_are_pinned,
+    test_native_menu_transition_endpoint_provenance_is_pinned,
 )
 from static_re_boneyard_lighting_contracts import (
     test_boneyard_tree_last_writer_render_path_is_registered,
@@ -55,6 +56,7 @@ from static_re_mod_settings_contracts import (
     test_mod_settings_are_scoped_atomic_privileged_and_replicated,
 )
 from static_lua_bot_players_contracts import (
+    test_lua_bot_player_docs_and_acceptance_surface,
     test_lua_bots_are_synthetic_remote_participants,
 )
 from static_lua_bot_brain_contracts import (
@@ -176,6 +178,7 @@ from static_multiplayer_transport_contracts import (
     test_run_enemy_materialization_preserves_exact_native_type,
     test_scene_tick_keeps_dead_remote_participants_inert,
     test_snapshot_streams_are_compact_and_bandwidth_bounded,
+    test_transport_telemetry_names_slow_app_thread_stages,
     test_unreliable_snapshot_ordering_is_wrap_safe,
 )
 from static_multiplayer_ownership_contracts import (
@@ -449,7 +452,9 @@ from static_re_projectile_spell_mechanics_contracts import (
     test_projectile_spell_native_dispatch_contract_is_complete,
 )
 from static_wan_corpse_rendering_contracts import (
+    test_authoritative_life_correction_uses_the_recipient_native_maximum,
     test_driven_remote_players_use_the_stock_light_branch_skipped_by_their_slot,
+    test_wan_death_presentation_is_a_convergent_transaction,
 )
 from static_re_audio_disable_contracts import (
     test_automation_launch_surfaces_default_to_disabled_audio,
@@ -494,6 +499,7 @@ from static_re_binary_tooling_contracts import (
     test_ci_runs_every_contract_that_needs_no_local_artifact,
     test_ci_runs_every_test_module_it_can,
     test_crash_reports_preserve_faulting_x86_frame_chain,
+    test_every_defined_contract_reaches_the_registry,
     test_investigation_register_has_static_coverage,
     test_lua_follow_preserves_timeout_teleport,
     test_multiplayer_launch_preflights_steam_before_starting_game,
@@ -800,6 +806,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native menu live transition graph is pinned",
         test_native_menu_live_transition_graph_is_pinned,
+    ),
+    (
+        "Native menu transition endpoint provenance is pinned",
+        test_native_menu_transition_endpoint_provenance_is_pinned,
     ),
     (
         "Designed menu focus model consumes G14 intents",
@@ -1631,6 +1641,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         "CI runs every test module it can",
         test_ci_runs_every_test_module_it_can,
     ),
+    (
+        "every defined contract reaches the registry",
+        test_every_defined_contract_reaches_the_registry,
+    ),
     ("staged binary matches analysis binary", test_staged_binary_matches_analysis_binary),
     (
         "stock audio bootstrap and settings are layout-backed",
@@ -1764,6 +1778,26 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "App-tick seeding provenance is documented and byte-verified",
         test_app_tick_seeding_provenance_is_documented_and_byte_verified,
+    ),
+    (
+        "Lua bot player docs and acceptance surface are pinned",
+        test_lua_bot_player_docs_and_acceptance_surface,
+    ),
+    (
+        "Transport telemetry names slow app-thread stages",
+        test_transport_telemetry_names_slow_app_thread_stages,
+    ),
+    (
+        "WSL Steam launcher isolates build artifacts from the live host",
+        test_wsl_steam_launcher_isolates_build_artifacts_from_live_host,
+    ),
+    (
+        "Authoritative life correction uses the recipient native maximum",
+        test_authoritative_life_correction_uses_the_recipient_native_maximum,
+    ),
+    (
+        "WAN death presentation is a convergent transaction",
+        test_wan_death_presentation_is_a_convergent_transaction,
     ),
 ]
 

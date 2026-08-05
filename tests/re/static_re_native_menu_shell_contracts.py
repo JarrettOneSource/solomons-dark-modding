@@ -230,6 +230,208 @@ EDGE_CONTRACT = {
     ),
 }
 
+# The capture_method the loader writes when its own screen classifier AGREED with
+# the label the operator passed to `sd.ui.capture_current_layout`, and the one it
+# writes when it did NOT.
+ENDPOINT_CAPTURE_AGREED = (
+    "live native UI tree + exact text/font hooks + native Sprite draw hooks"
+)
+ENDPOINT_CAPTURE_DISAGREED = (
+    ENDPOINT_CAPTURE_AGREED
+    + " + exact live-navigation screen tag (stale controls omitted)"
+)
+
+# Every field the navigation recorder writes on each edge endpoint, pinned:
+# (semantic_surface, semantic_generation, layout_generation, element_count,
+#  game_disagreed).  Before this table only `screen`/`trigger`/`destination` and
+# the two frame hashes were gated, so a re-recording could have scrambled all
+# five of these on all 78 endpoints without tripping anything.
+#
+# `game_disagreed` is the load-bearing one.  It is NOT decoration: when the
+# loader's classifier disagrees with the operator's label it DELETES every
+# element that is not `art` or `text` before returning the snapshot (see
+# TryCaptureCurrentDebugUiLayoutSnapshot in
+# SolomonDarkModLoader/src/debug_ui_overlay/public_api_surface_dispatch.inl).
+# So a disagreeing endpoint's `element_count` is a stripped remnant, not a
+# census of that screen, and must never be read as one.
+ENDPOINT_CONTRACT = {
+    "beta_notice_to_main": (
+        ("dialog", 13, 13, 112, False),
+        ("main_menu", 14, 14, 115, False),
+    ),
+    "control_scheme_picker_to_create": (
+        ("control_scheme_picker", 2, 2, 5, False),
+        ("create", 4, 4, 34, False),
+    ),
+    "controls_to_settings": (
+        ("", 0, 8, 31, True),
+        ("", 0, 8, 37, True),
+    ),
+    "create_discipline_to_hub": (
+        ("create", 4, 4, 45, False),
+        ("", 0, 5, 25, True),
+    ),
+    "create_element_to_discipline": (
+        ("create", 3, 3, 45, False),
+        ("create", 4, 4, 98, False),
+    ),
+    "dark_cloud_login_to_browser": (
+        ("dark_cloud_browser", 3386, 3386, 95, True),
+        ("dark_cloud_browser", 3386, 3386, 94, False),
+    ),
+    "dark_cloud_menu_resume": (
+        ("simple_menu", 3387, 3387, 101, True),
+        ("dark_cloud_browser", 3388, 3388, 94, False),
+    ),
+    "dark_cloud_menu_to_beta_notice": (
+        ("simple_menu", 3393, 3393, 100, True),
+        ("dialog", 3396, 3396, 123, False),
+    ),
+    "dark_cloud_menu_to_settings": (
+        ("simple_menu", 3389, 3389, 100, True),
+        ("dark_cloud_browser", 3392, 3392, 86, True),
+    ),
+    "dark_cloud_online_to_my_levels": (
+        ("dark_cloud_browser", 36, 36, 98, False),
+        ("dark_cloud_browser", 37, 37, 94, False),
+    ),
+    "dark_cloud_options_to_browser": (
+        ("dark_cloud_browser", 3385, 3385, 104, False),
+        ("dark_cloud_browser", 3385, 3385, 94, False),
+    ),
+    "dark_cloud_recent_to_online": (
+        ("dark_cloud_browser", 35, 35, 98, False),
+        ("dark_cloud_browser", 36, 36, 98, False),
+    ),
+    "dark_cloud_search_to_browser": (
+        ("quick_panel", 3345, 3345, 96, True),
+        ("dark_cloud_browser", 3383, 3383, 94, False),
+    ),
+    "dark_cloud_settings_done": (
+        ("dark_cloud_browser", 3392, 3392, 86, True),
+        ("dark_cloud_browser", 3392, 3392, 94, False),
+    ),
+    "dark_cloud_settings_to_settings": (
+        ("", 0, 8, 31, True),
+        ("", 0, 8, 37, True),
+    ),
+    "dark_cloud_sort_to_browser": (
+        ("dark_cloud_browser", 3384, 3384, 104, False),
+        ("dark_cloud_browser", 3384, 3384, 94, False),
+    ),
+    "dark_cloud_to_login_settings": (
+        ("dark_cloud_browser", 3385, 3385, 94, False),
+        ("dark_cloud_browser", 3386, 3386, 95, True),
+    ),
+    "dark_cloud_to_menu": (
+        ("dark_cloud_browser", 3386, 3386, 94, False),
+        ("simple_menu", 3387, 3387, 101, True),
+    ),
+    "dark_cloud_to_options": (
+        ("dark_cloud_browser", 3384, 3384, 94, False),
+        ("dark_cloud_browser", 3385, 3385, 104, False),
+    ),
+    "dark_cloud_to_recent": (
+        ("dark_cloud_browser", 34, 34, 98, False),
+        ("dark_cloud_browser", 35, 35, 98, False),
+    ),
+    "dark_cloud_to_search": (
+        ("dark_cloud_browser", 37, 37, 94, False),
+        ("quick_panel", 147, 147, 95, True),
+    ),
+    "dark_cloud_to_sort": (
+        ("dark_cloud_browser", 3383, 3383, 94, False),
+        ("dark_cloud_browser", 3384, 3384, 104, False),
+    ),
+    "hall_of_fame_to_beta_notice": (
+        ("", 0, 24, 51, True),
+        ("dialog", 26, 26, 124, True),
+    ),
+    "hub_to_pause": (
+        ("", 0, 6, 25, True),
+        ("simple_menu", 7, 7, 46, False),
+    ),
+    "main_to_dark_cloud": (
+        ("main_menu", 32, 32, 126, False),
+        ("dark_cloud_browser", 34, 34, 99, False),
+    ),
+    "main_to_hall_of_fame": (
+        ("main_menu", 27, 27, 128, False),
+        ("main_menu", 29, 29, 51, True),
+    ),
+    "main_to_profile_select": (
+        ("main_menu", 14, 14, 115, False),
+        ("main_menu", 15, 15, 113, False),
+    ),
+    "main_to_settings": (
+        ("main_menu", 20, 20, 128, False),
+        ("main_menu", 22, 22, 123, True),
+    ),
+    "pause_to_beta_notice": (
+        ("simple_menu", 11, 11, 46, False),
+        ("dialog", 13, 13, 115, False),
+    ),
+    "pause_to_game_settings": (
+        ("simple_menu", 7, 7, 46, False),
+        ("settings", 8, 8, 37, True),
+    ),
+    "pause_to_hub_resume": (
+        ("simple_menu", 6, 6, 46, False),
+        ("", 0, 6, 25, True),
+    ),
+    "performance_to_settings": (
+        ("", 0, 8, 39, True),
+        ("", 0, 8, 37, True),
+    ),
+    "profile_select_resume_to_hub": (
+        ("main_menu", 3398, 3398, 123, False),
+        ("", 0, 3400, 38, True),
+    ),
+    "profile_select_to_main": (
+        ("main_menu", 15, 15, 114, False),
+        ("main_menu", 16, 16, 115, False),
+    ),
+    "settings_to_controls": (
+        ("", 0, 8, 22, True),
+        ("", 0, 8, 16, True),
+    ),
+    "settings_to_dark_cloud_settings": (
+        ("", 0, 8, 37, True),
+        ("", 0, 8, 31, True),
+    ),
+    "settings_to_hub": (
+        ("", 0, 10, 37, True),
+        ("", 0, 10, 25, True),
+    ),
+    "settings_to_main": (
+        ("main_menu", 20, 20, 124, True),
+        ("main_menu", 20, 20, 124, False),
+    ),
+    "settings_to_performance": (
+        ("", 0, 8, 37, True),
+        ("", 0, 8, 39, True),
+    ),
+}
+
+# `tagged_screen` is NOT an observation.  `capture_current_layout(screen_id)`
+# ends with `captured.screen_id = std::string(screen_id)`, so the field always
+# echoes the string the operator typed; the game's own classification survives
+# only as the agreed/disagreed distinction above.  It is therefore pinned
+# against the edge's own `screen`/`destination` rather than trusted -- with the
+# two endpoints where the recorded label and the documented destination
+# genuinely differ declared here, so neither can drift silently and neither can
+# be "tidied" away.  Both are already called out in the G11 document.
+ENDPOINT_TAG_EXCEPTIONS = {
+    # The game classified this landing `dialog`, which both `beta_notice` and
+    # `leave_game_confirmation` alias to, so the classifier cannot tell the two
+    # dialogs apart; the destination name comes from reading the frame.
+    ("pause_to_beta_notice", "after"): "leave_game_confirmation",
+    # Captured under the label `main_menu` on a state the game classified
+    # `dialog`.  The labels disagree, so this endpoint lost its controls -- its
+    # 124 elements are an art/text remnant of a dialog, NOT a main-menu census.
+    ("hall_of_fame_to_beta_notice", "after"): "main_menu",
+}
+
 
 TAB_LABELS = frozenset({"recent", "online levels", "my levels", "multiplayer"})
 
@@ -293,7 +495,18 @@ def _json(relative_path: str) -> object:
 
 
 def _require(source: str, tokens: tuple[str, ...], contract: str) -> None:
-    missing = [token for token in tokens if token not in source]
+    """Require each prose token, independent of how the markdown is wrapped.
+
+    Every caller passes a documentation file. A raw substring test makes the
+    contract depend on where the author's editor happened to break the line, so
+    reflowing a paragraph silently breaks a passing gate and, worse, quietly
+    biases authors toward short tokens that never wrap. Collapse runs of
+    whitespace on both sides so the claim is about the prose, not its layout.
+    """
+    flattened = " ".join(source.split())
+    missing = [
+        token for token in tokens if " ".join(token.split()) not in flattened
+    ]
     if missing:
         raise StaticReTestFailure(
             f"{contract} is incomplete: " + ", ".join(missing)
@@ -569,6 +782,92 @@ def test_native_menu_live_transition_graph_is_pinned() -> str:
     ):
         raise StaticReTestFailure("the raw navigation recording hash is absent")
     return "all 39 live source/trigger/destination edges and frame hashes are pinned"
+
+
+def test_native_menu_transition_endpoint_provenance_is_pinned() -> str:
+    findings = _read("docs/reverse-engineering/native-menus-and-boot.md")
+    golden = _json("tests/fixtures/webgame/menu-goldens.json")
+    edges = golden["navigation_graph"]["edges"]
+
+    observed: dict[str, tuple] = {}
+    disagreed = 0
+    for edge in edges:
+        edge_id = edge["id"]
+        sides = []
+        for side, pinned_name in (("before", "screen"), ("after", "destination")):
+            endpoint = edge[side]
+            method = endpoint["capture_method"]
+            if method == ENDPOINT_CAPTURE_AGREED:
+                game_disagreed = False
+            elif method == ENDPOINT_CAPTURE_DISAGREED:
+                game_disagreed = True
+                disagreed += 1
+            else:
+                raise StaticReTestFailure(
+                    f"{edge_id}.{side} carries an unknown capture_method "
+                    f"{method!r}; the recorder emits exactly two"
+                )
+
+            # `tagged_screen` echoes the operator's argument, so it is checked
+            # against the edge's own pinned name rather than believed.
+            expected_tag = ENDPOINT_TAG_EXCEPTIONS.get(
+                (edge_id, side), edge[pinned_name]
+            )
+            if endpoint["tagged_screen"] != expected_tag:
+                raise StaticReTestFailure(
+                    f"{edge_id}.{side} is tagged {endpoint['tagged_screen']!r} "
+                    f"but the edge's {pinned_name} is {expected_tag!r}; an "
+                    f"undeclared label disagreement means the recording and the "
+                    f"document no longer describe the same screen"
+                )
+
+            sides.append(
+                (
+                    endpoint["semantic_surface"],
+                    endpoint["semantic_generation"],
+                    endpoint["layout_generation"],
+                    endpoint["element_count"],
+                    game_disagreed,
+                )
+            )
+        observed[edge_id] = tuple(sides)
+
+    if observed != ENDPOINT_CONTRACT:
+        drifted = sorted(
+            key
+            for key in set(observed) | set(ENDPOINT_CONTRACT)
+            if observed.get(key) != ENDPOINT_CONTRACT.get(key)
+        )
+        raise StaticReTestFailure(
+            f"live navigation endpoints drifted: {drifted}"
+        )
+
+    # A disagreeing endpoint had every non-art/text element deleted before the
+    # snapshot was returned, so its element_count is a remnant.  Pin how many
+    # endpoints are in that state: silently growing the degraded set is exactly
+    # the drift this contract exists to catch.
+    if disagreed != 34:
+        raise StaticReTestFailure(
+            f"{disagreed} endpoints were captured under a label the game "
+            f"disagreed with; the recording documents 34"
+        )
+
+    _require(
+        findings,
+        (
+            "### Provenance of the recorded screen tags",
+            "`captured.screen_id = std::string(screen_id)`",
+            "is not an observation",
+            "only `art` and `text` elements survive",
+            "34 of the 78",
+        ),
+        "navigation-endpoint provenance documentation",
+    )
+    return (
+        "all 78 live endpoint surfaces/generations/counts are pinned, every "
+        "operator label is reconciled against its edge, and the 34 "
+        "control-stripped captures are declared"
+    )
 
 
 def test_designed_menu_focus_model_consumes_g14_intents() -> str:
