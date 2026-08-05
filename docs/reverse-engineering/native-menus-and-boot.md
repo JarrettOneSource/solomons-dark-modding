@@ -452,6 +452,34 @@ with different counts, and do — `dark_cloud_search` shares one frame hash acro
 generations 147 and 3345 at 95 and 96 elements, and `dark_cloud_menu` across
 generations 3387/3389/3393 at 101 and 100.
 
+### The recorded capture commits do not exist
+
+Every session header and every layout header in the G11 goldens carries a
+`capture_commit`, and none of the five distinct values is a commit. They are
+absent from this repository's full history and the remote returns `422 No commit
+found` for each. All 66 occurrences are affected:
+`f9cac8783e72e7423a2d952987fa169fa84f3dcb` (52),
+`933fdd99f0bf85ef06b9ef04c25990bff79966f4` (5),
+`48a54aaf485e671e605cbf301441380f6538846f`,
+`911e3ed8345feda13929d36c5994990ef59333d9` and
+`d28f98a190d69662c8e6e691484b4d4e0dc939b9` (3 each).
+
+The capture ran in an isolated clone and recorded that clone's local `HEAD`; the
+commits were **never pushed** and did not survive the squash on landing. This is
+not a limit of isolated-clone capture — G1's movement and RNG goldens
+(`51d81ed3`, with `source_tree_sha` `55ea6c0c` correctly equal to that commit's
+tree), G2's projectile goldens (`1b9d454d`) and G14's input goldens (`2bc3ab13`)
+all recorded commits that are ancestors of `main`.
+
+The field cannot be repaired by editing: the correct SHA is unknowable, and
+substituting the landing commit would be invention rather than provenance, so
+**only a re-capture can fix it**. Until then, treat the G11 loader source state
+as unpinned and rely on the identities that did survive — the retail EXE sha256
+`03a83456…` and the per-session `loader_dll_sha256`, both recorded in the header.
+The contract that used to accept any forty hex characters here now requires each
+recorded object id to resolve and to be an ancestor of `HEAD`, with these five
+declared absent, so a re-capture that resolves one forces the declaration out.
+
 Presentation rules recovered to a trustworthy level are:
 
 - the Raptisoft loader has no fade or wipe and is replaced when loading is

@@ -8,6 +8,7 @@ import json
 import math
 import re
 import struct
+import subprocess
 import sys
 from pathlib import Path
 
@@ -1767,6 +1768,196 @@ def test_every_defined_contract_reaches_the_registry() -> str:
         f"all {len(defined)} defined contracts are registered or declared; the "
         f"{len(STALE_UNREGISTERED_CONTRACTS)} declared exclusions each still "
         "fail on the exact drifted token they name"
+    )
+
+
+# Every 40-hex object id a golden records as its own provenance, mapped to the
+# git object type it must be and how many times it appears. Pinned so that
+# re-recording evidence nobody can re-derive cannot quietly restate where it
+# came from.
+RECORDED_CAPTURE_SHAS: dict[str, tuple[str, int]] = {
+    # G2 projectile goldens.
+    "1b9d454da60afefa2cb5f01a0f6e8ce829efebe6": ("commit", 1),
+    # G14 input goldens: one campaign SHA repeated across nine captures.
+    "2bc3ab13f3d05e26238954e5264c3a86967bd1d4": ("commit", 9),
+    # G1 movement and RNG goldens, and the tree that commit points at.
+    "51d81ed3705468b2c96cdd5a072eb2e9b0f8db0b": ("commit", 2),
+    "55ea6c0c646df739f3243a01d0cd35c4d6f9b786": ("tree", 2),
+    # G11 menu goldens -- see UNRECOVERABLE_CAPTURE_COMMITS.
+    "48a54aaf485e671e605cbf301441380f6538846f": ("absent", 3),
+    "911e3ed8345feda13929d36c5994990ef59333d9": ("absent", 3),
+    "933fdd99f0bf85ef06b9ef04c25990bff79966f4": ("absent", 5),
+    "d28f98a190d69662c8e6e691484b4d4e0dc939b9": ("absent", 3),
+    "f9cac8783e72e7423a2d952987fa169fa84f3dcb": ("absent", 52),
+}
+
+# The G11 menu capture ran in an isolated clone and recorded that clone's local
+# HEAD. Those commits were never pushed and did not survive the landing, so all
+# 66 `capture_commit` fields in the menu goldens name objects that exist neither
+# in this repository nor on the remote. G1, G2 and G14 all recorded commits that
+# are ancestors of main, so this is one campaign's defect, not a limit of
+# isolated-clone capture.
+#
+# The value cannot be repaired by editing: the correct SHA is unknowable and
+# substituting the landing commit would be invention, not provenance. Only a
+# re-capture fixes it. The census below requires each of these to STILL be
+# absent, so a re-capture that resolves one forces the declaration to go.
+UNRECOVERABLE_CAPTURE_COMMITS: dict[str, str] = {
+    "48a54aaf485e671e605cbf301441380f6538846f": "G11 menu capture, isolated-clone HEAD, never pushed",
+    "911e3ed8345feda13929d36c5994990ef59333d9": "G11 menu capture, isolated-clone HEAD, never pushed",
+    "933fdd99f0bf85ef06b9ef04c25990bff79966f4": "G11 menu capture, isolated-clone HEAD, never pushed",
+    "d28f98a190d69662c8e6e691484b4d4e0dc939b9": "G11 menu capture, isolated-clone HEAD, never pushed",
+    "f9cac8783e72e7423a2d952987fa169fa84f3dcb": "G11 menu capture, isolated-clone HEAD, never pushed",
+}
+
+FIXTURE_ROOT = ROOT / "tests/fixtures"
+
+_HEX40 = re.compile(r"^[0-9a-f]{40}$")
+
+
+def _git_capture(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args], cwd=ROOT, capture_output=True, text=True
+    )
+
+
+def _collect_recorded_shas() -> dict[str, list[str]]:
+    """Every 40-hex string in every committed fixture, with where it appears."""
+    found: dict[str, list[str]] = {}
+
+    def walk(node: object, path: str, origin: str) -> None:
+        if isinstance(node, dict):
+            for key, value in node.items():
+                walk(value, f"{path}.{key}", origin)
+        elif isinstance(node, list):
+            for index, value in enumerate(node):
+                walk(value, f"{path}[{index}]", origin)
+        elif isinstance(node, str) and _HEX40.match(node):
+            found.setdefault(node, []).append(f"{origin}{path}")
+
+    for path in sorted(FIXTURE_ROOT.rglob("*.json")):
+        walk(
+            json.loads(path.read_text(encoding="utf-8")),
+            "",
+            path.relative_to(ROOT).as_posix(),
+        )
+    return found
+
+
+def test_recorded_capture_provenance_resolves_or_is_declared() -> str:
+    """A recorded capture commit must name a commit that actually exists.
+
+    The G11 contract checked that `capture_commit` was forty hex characters and
+    nothing else, which is the same shape as recording a sha256 and only
+    asserting its length (05ea10a): the field reads like provenance a reviewer
+    could follow, and following it was never possible. Checking it for real
+    found that all sixty-six G11 capture commits name objects that exist neither
+    here nor on the remote, while G1, G2 and G14 all recorded ancestors of main.
+
+    Commits are required to be ancestors of HEAD rather than merely present:
+    presence depends on which refs a clone happens to have fetched, and a
+    contract must not pass or fail on that.
+    """
+    shallow = _git_capture("rev-parse", "--is-shallow-repository")
+    if shallow.returncode != 0:
+        raise StaticReTestFailure(
+            "capture-provenance census needs a git repository: "
+            + shallow.stderr.strip()
+        )
+    if shallow.stdout.strip() != "false":
+        raise StaticReTestFailure(
+            "capture-provenance census cannot run against a shallow clone: "
+            "check out with fetch-depth 0"
+        )
+
+    found = _collect_recorded_shas()
+    observed = {sha: len(paths) for sha, paths in found.items()}
+    expected = {sha: count for sha, (_, count) in RECORDED_CAPTURE_SHAS.items()}
+    if observed != expected:
+        added = sorted(set(observed) - set(expected))
+        dropped = sorted(set(expected) - set(observed))
+        moved = sorted(
+            f"{sha} {expected[sha]}->{observed[sha]}"
+            for sha in set(observed) & set(expected)
+            if observed[sha] != expected[sha]
+        )
+        raise StaticReTestFailure(
+            "the recorded capture-provenance census drifted: "
+            f"new={added} gone={dropped} recount={moved}"
+        )
+
+    for sha, (kind, _) in sorted(RECORDED_CAPTURE_SHAS.items()):
+        declared = sha in UNRECOVERABLE_CAPTURE_COMMITS
+        if (kind == "absent") != declared:
+            raise StaticReTestFailure(
+                f"{sha} is recorded as {kind!r} but "
+                f"{'is' if declared else 'is not'} declared unrecoverable"
+            )
+        probe = _git_capture("cat-file", "-t", sha)
+        actual = probe.stdout.strip() if probe.returncode == 0 else "absent"
+        if declared:
+            if actual != "absent":
+                raise StaticReTestFailure(
+                    f"{sha} is declared unrecoverable but resolves to a {actual}; "
+                    f"the evidence was re-captured, so drop the declaration"
+                )
+            continue
+        if actual != kind:
+            raise StaticReTestFailure(
+                f"{sha} is recorded as a {kind} but git calls it {actual!r}"
+            )
+        if kind == "commit":
+            reachable = _git_capture("merge-base", "--is-ancestor", sha, "HEAD")
+            if reachable.returncode != 0:
+                raise StaticReTestFailure(
+                    f"{sha} is recorded as capture provenance but is not an "
+                    f"ancestor of HEAD, so the capture cannot be re-derived"
+                )
+
+    # Wherever a header records both, the tree must be the one that commit points
+    # at -- otherwise the pair is two unrelated facts wearing a matching prefix.
+    pairs = 0
+    for path in sorted(FIXTURE_ROOT.rglob("*.json")):
+        header = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(header, dict):
+            continue
+        header = header.get("header")
+        if not isinstance(header, dict):
+            continue
+        commit = header.get("source_commit_sha")
+        tree = header.get("source_tree_sha")
+        if not isinstance(commit, str) or not isinstance(tree, str):
+            continue
+        pairs += 1
+        resolved = _git_capture("rev-parse", f"{commit}^{{tree}}")
+        if resolved.returncode != 0 or resolved.stdout.strip() != tree:
+            raise StaticReTestFailure(
+                f"{path.name} records tree {tree[:12]} for commit "
+                f"{commit[:12]}, which points at "
+                f"{resolved.stdout.strip()[:12] or 'nothing'}"
+            )
+
+    findings = (
+        ROOT / "docs/reverse-engineering/native-menus-and-boot.md"
+    ).read_text(encoding="utf-8")
+    flattened = " ".join(findings.split())
+    for token in (
+        "The recorded capture commits do not exist",
+        "never pushed",
+        "only a re-capture can fix it",
+    ):
+        if token not in flattened:
+            raise StaticReTestFailure(
+                f"G11 must document its unverifiable capture provenance; "
+                f"missing {token!r}"
+            )
+
+    live = len(RECORDED_CAPTURE_SHAS) - len(UNRECOVERABLE_CAPTURE_COMMITS)
+    return (
+        f"{live} of {len(RECORDED_CAPTURE_SHAS)} recorded capture object ids "
+        f"resolve and are ancestors of HEAD, {pairs} commit/tree pairs agree, "
+        f"and the {len(UNRECOVERABLE_CAPTURE_COMMITS)} G11 capture commits are "
+        "declared unrecoverable and still absent"
     )
 
 

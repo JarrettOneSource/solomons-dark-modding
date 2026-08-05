@@ -500,6 +500,7 @@ from static_re_binary_tooling_contracts import (
     test_ci_runs_every_test_module_it_can,
     test_crash_reports_preserve_faulting_x86_frame_chain,
     test_every_defined_contract_reaches_the_registry,
+    test_recorded_capture_provenance_resolves_or_is_declared,
     test_investigation_register_has_static_coverage,
     test_lua_follow_preserves_timeout_teleport,
     test_multiplayer_launch_preflights_steam_before_starting_game,
@@ -1644,6 +1645,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "every defined contract reaches the registry",
         test_every_defined_contract_reaches_the_registry,
+    ),
+    (
+        "recorded capture provenance resolves or is declared",
+        test_recorded_capture_provenance_resolves_or_is_declared,
     ),
     ("staged binary matches analysis binary", test_staged_binary_matches_analysis_binary),
     (

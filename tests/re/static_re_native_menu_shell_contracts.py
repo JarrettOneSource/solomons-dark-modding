@@ -543,6 +543,9 @@ def test_native_menu_screen_census_and_live_layouts_are_pinned() -> str:
             raise StaticReTestFailure(
                 f"{layout_id} lost live capture provenance"
             )
+        # Shape only, for a per-layout message. Whether the commit exists at all
+        # is decided by test_recorded_capture_provenance_resolves_or_is_declared
+        # -- these five do not, and the reason is in the G11 findings document.
         if not re.fullmatch(r"[0-9a-f]{40}", header["capture_commit"]):
             raise StaticReTestFailure(
                 f"{layout_id} capture commit is not an exact SHA"
