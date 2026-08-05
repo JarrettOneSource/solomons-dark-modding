@@ -187,6 +187,42 @@ native mouse point:
 native_primary_aim = normalize(mouse_screen - player_screen_anchor)
 ```
 
+`player_screen_anchor` is **not** the player's projected point. `Game::Tick` at
+`0x005D7EF0` projects the player through the actor's `+0x58` vtable slot `0xFC`
+and then offsets the result before it calls the reanchor `0x0042FE50`:
+
+```text
+player_screen_anchor.x = project(player).x + [0x007DE840]   ; = 0.0
+player_screen_anchor.y = project(player).y - [0x007DE960]   ; = 25.0
+```
+
+Both are x87 doubles in `.rdata`, so the anchor is the player's projection
+raised by exactly **25 screen pixels** — a torso point, not the feet:
+
+```text
+player_screen_anchor = project(player) + (0, -25)      ; screen pixels
+```
+
+Because the projection is a uniform scale plus a translation, the same anchor in
+world units is `player + (0, -25 / view_scale)`. A port that reads the formula
+above literally — anchoring on the player's own position — aims off by
+**1.3380 deg to 1.9221 deg** across the goldens, which is roughly 18 world units
+of miss at 550 units of range. Replaying `input-goldens.json`:
+
+```text
+WITH    anchor (0, -25 px): 237/237 within 1e-3   max abs err = 2.572e-07
+WITHOUT anchor (doc as written): 0/237 within 1e-3   max angular error = 1.9221 deg
+```
+
+The reanchor target is a virtual-stick control: `0x0042FE50` stores the anchor at
+`this+0xAC/+0xB0`, and mouse down `0x0042FF80` forms the raw vector as
+`(mouse - base) - anchor`, keeps its magnitude over the control radius at
+`this+0xBC` clamped to `1.0`, and writes the heading in degrees to `this+0x84`
+(`atan2 * [0x007DE888] / pi`, plus `[0x007DE878]` when negative, i.e. `* 180/pi`
+wrapped into `[0, 360)`). The other caller, `0x005C6D60`, anchors the same
+control to the screen centre (`screen_extent * [0x007DE808]`, `= 0.5`) when
+`DAT_00B3BCB0 == 0`; that path is not the mouse aim path.
+
 Mouse move handler `0x004301F0` updates the stored pointer point and mouse up
 `0x004303D0` clears the level. While held, `Game::Tick` reanchors the control to
 the current player projection through `0x0042FE50` and `PlayerActor::Tick`
@@ -201,6 +237,10 @@ at `0x00462110` is:
 world.x = view_origin.x + mouse_screen.x / view_scale
 world.y = view_origin.y + mouse_screen.y / view_scale
 ```
+
+On the view object those fields are `view_scale` at `+0x80` and `view_origin` at
+`+0x8BCC` / `+0x8BD0`. Replaying every recorded cursor sample through this
+reproduces `cursor_world` at **827/827 within 1e-3**, max abs err `1.389e-04`.
 
 For primary casts this world point is a canonical representation, not a claim
 that retail stores a point: retail stores the player-anchored unit direction.
@@ -378,6 +418,21 @@ input samples are checkpointed every 10 actor ticks, while every actor tick is
 retained. A capture fails instead of writing a fixture if any event is dropped.
 The eight final captures contain all three event kinds and prove exact
 raw-to-encoding-to-raw equality.
+
+Note what that equality does and does not cover: it is a round-trip through the
+Intent encoding, so it proves the encoding is lossless, not that the documented
+*formulas* reproduce the recorded values. Those were checked separately, by
+reimplementing this document's prose against the same fixture:
+
+| Claim | Independent replay |
+| --- | --- |
+| Camera projection `0x00462110` | 827/827 within 1e-3, max abs err `1.389e-04` |
+| Primary aim, anchor `project(player) + (0, -25)` | 237/237 within 1e-3, max abs err `2.572e-07` |
+| Primary aim, anchor omitted | 0/237; up to `1.9221 deg` off |
+| Earth charge `0.18 + growth_rate * 0.0025` per held tick | exact on all six charge captures |
+
+The anchor row is why this document now states the `25` explicitly: the formula
+alone reads as complete and still misses.
 
 ## Absent by observation
 
