@@ -13,22 +13,29 @@ def read(relative_path: str) -> str:
     return (ROOT / relative_path).read_text(encoding="utf-8")
 
 
+def read_menu_layout_capture() -> str:
+    root = "SolomonDarkModLoader/src/debug_ui_overlay/"
+    return "".join(
+        read(root + filename)
+        for filename in (
+            "menu_layout_capture.inl",
+            "menu_layout_capture_resolvers.inl",
+            "menu_layout_capture_art_observation.inl",
+            "menu_layout_capture_snapshot_and_hooks.inl",
+        )
+    )
+
+
 class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
     def test_sprite_capture_is_explicitly_opt_in(self) -> None:
-        source = read(
-            "SolomonDarkModLoader/src/debug_ui_overlay/"
-            "menu_layout_capture.inl"
-        )
+        source = read_menu_layout_capture()
         self.assertIn("SDMOD_NATIVE_MENU_LAYOUT_CAPTURE", source)
         self.assertIn("SDMOD_NATIVE_BOOT_CAPTURE_DIRECTORY", source)
         self.assertIn("if (!requested)", source)
         self.assertIn("menu_layout_capture_enabled = requested", source)
 
     def test_loader_probe_uses_live_progress_and_native_draws(self) -> None:
-        source = read(
-            "SolomonDarkModLoader/src/debug_ui_overlay/"
-            "menu_layout_capture.inl"
-        )
+        source = read_menu_layout_capture()
         for token in (
             "kNativeLoaderProgressNumerator",
             "kNativeLoaderProgressDenominator",
@@ -97,10 +104,7 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         self.assertIn(f"{observer}(self, x, y)", gameplay_hook)
 
     def test_layout_capture_deduplicates_hook_chain_draws_and_names_create_phases(self) -> None:
-        source = read(
-            "SolomonDarkModLoader/src/debug_ui_overlay/"
-            "menu_layout_capture.inl"
-        )
+        source = read_menu_layout_capture()
         self.assertIn("same_layout_element", source)
         self.assertIn('has_art("Create.9")', source)
         self.assertIn('return "create_element"', source)
@@ -113,10 +117,7 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         self.assertIn("100.0f", source)
 
     def test_settings_rows_are_captured_from_live_immediate_mode_draws(self) -> None:
-        source = read(
-            "SolomonDarkModLoader/src/debug_ui_overlay/"
-            "menu_layout_capture.inl"
-        )
+        source = read_menu_layout_capture()
         for token in (
             "kSettingsScalarRowAddress",
             "kSettingsToggleRowAddress",
