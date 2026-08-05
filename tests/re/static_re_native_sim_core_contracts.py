@@ -594,7 +594,7 @@ def test_native_sim_recorder_seam_is_bounded_isolated_and_registered() -> str:
     registration_contracts = (
         (bindings, 'RegisterFunction(state, &LuaDebugSampleNativeRng, "sample_native_rng")'),
         (includes, '#include "functions_native_rng.inl"'),
-        (api, "function sd_debug.sample_native_rng(seed, range, count) end"),
+        (api, "function sd_debug.sample_native_rng(...) end"),
         (project, 'Include="src\\lua_engine_bindings_debug\\functions_native_rng.inl"'),
         (filters, 'Include="src\\lua_engine_bindings_debug\\functions_native_rng.inl"'),
     )
