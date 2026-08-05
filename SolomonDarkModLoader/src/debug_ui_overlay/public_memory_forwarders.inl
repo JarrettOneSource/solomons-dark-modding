@@ -47,6 +47,10 @@ bool TryGetCurrentHallOfFame(uintptr_t* hof_address);
 bool TryGetActiveSpellPickerRender(uintptr_t* picker_address);
 bool TryGetCurrentSpellPicker(uintptr_t* picker_address);
 bool TryGetCurrentControlSchemePicker(uintptr_t* picker_address);
+bool TryReadUiRenderContext(
+    const DebugUiOverlayConfig& config,
+    uintptr_t* render_context_address);
+void ResetMenuLayoutCaptureStateUnlocked(DebugUiOverlayState* state);
 bool TryReadMyQuickPanelBuilderOwnerAddress(
     const DebugUiOverlayConfig& config,
     uintptr_t quick_panel_address,
@@ -132,6 +136,7 @@ std::string GetOverlaySurfaceRootId(std::string_view surface_id);
 
 #include "debug_ui_overlay/state_and_actions.inl"
 #include "debug_ui_overlay/string_and_memory_readers.inl"
+#include "debug_ui_overlay/menu_layout_capture.inl"
 #include "debug_ui_overlay/exact_widget_resolution.inl"
 #include "debug_ui_overlay/widget_geometry_readers.inl"
 #include "debug_ui_overlay/control_observers.inl"

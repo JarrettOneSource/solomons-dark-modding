@@ -19,6 +19,8 @@ bool InitializeDebugUiOverlay(bool diagnostic_visuals_enabled) {
     g_debug_ui_overlay_state.frame_elements.reserve(config->max_tracked_elements_per_frame);
     g_debug_ui_overlay_state.frame_exact_text_elements.reserve(config->max_tracked_elements_per_frame);
     g_debug_ui_overlay_state.frame_exact_control_elements.reserve(config->max_tracked_elements_per_frame);
+    g_debug_ui_overlay_state.frame_menu_art_elements.reserve(
+        config->max_tracked_elements_per_frame);
     g_debug_ui_overlay_state.active_exact_text_renders.reserve(16);
     g_debug_ui_overlay_state.object_label_cache.reserve(config->max_tracked_elements_per_frame);
     Log("Debug UI overlay: prepared " + std::to_string(g_debug_ui_overlay_state.surface_ranges.size()) + " observation range(s).");
@@ -506,6 +508,17 @@ bool InitializeDebugUiOverlay(bool diagnostic_visuals_enabled) {
             "Debug UI overlay control-scheme picker render hook failed "
             "(non-fatal). " +
             hook_error);
+    }
+
+    hook_error.clear();
+    if (InstallMenuLayoutCaptureHooks(&hook_error)) {
+        if (g_debug_ui_overlay_state.menu_layout_capture_enabled) {
+            Log("Debug UI native menu-layout capture hooks installed.");
+        }
+    } else {
+        Log(
+            "Debug UI native menu-layout capture hook installation failed "
+            "(non-fatal). " + hook_error);
     }
 
     g_debug_ui_overlay_state.initialized = true;

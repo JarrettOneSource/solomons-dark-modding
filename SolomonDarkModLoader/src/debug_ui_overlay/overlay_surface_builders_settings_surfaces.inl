@@ -142,11 +142,11 @@ std::vector<OverlayRenderElement> TryBuildSettingsOverlayRenderElements(
         return {};
     }
 
-    uintptr_t live_settings_address = 0;
-    if (!has_settings_exact_evidence &&
-        (!TryGetLiveSettingsRender(&live_settings_address) || live_settings_address != settings_address)) {
-        return {};
-    }
+    // The render hook clears active_object_ptr when Settings_Render unwinds,
+    // before EndScene builds the snapshot. A fresh tracked object plus the
+    // existing one-second expiry is the live evidence; requiring a non-zero
+    // render depth here made the stale underlying MainMenu win every frame.
+    (void)has_settings_exact_evidence;
 
     float panel_left = 0.0f;
     float panel_top = 0.0f;

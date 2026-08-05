@@ -163,6 +163,7 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
     auto raw_elements = TakeObservedFrameElements();
     auto exact_text_elements = TakeExactTextFrameElements();
     auto exact_control_elements = TakeExactControlFrameElements();
+    auto menu_art_elements = TakeCapturedMenuArtFrame();
     auto elements = FilterElementsToDominantSurface(raw_elements);
     std::vector<OverlayRenderElement> semantic_surface_elements;
     const auto quick_panel_render_elements =
@@ -275,6 +276,11 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
         StoreLatestSurfaceSnapshotUnlocked(
             &g_debug_ui_overlay_state,
             semantic_surface_elements);
+        StoreLatestMenuLayoutSnapshotUnlocked(
+            &g_debug_ui_overlay_state,
+            semantic_surface_elements,
+            exact_text_elements,
+            menu_art_elements);
     }
     const auto diagnostic_surface_frame =
         RegisterDiagnosticSurfaceFrame(

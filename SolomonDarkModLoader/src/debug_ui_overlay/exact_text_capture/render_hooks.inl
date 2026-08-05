@@ -58,6 +58,7 @@ void __fastcall HookDarkCloudBrowserExactTextRender(
 }
 
 void __fastcall HookGlyphDrawHelper(void* self, void* /*unused_edx*/, float arg2, float arg3) {
+    ObserveMenuSpritePositionDraw(self, arg2, arg3, false);
     ObserveActiveExactTextGlyph(arg2, arg3);
 
     const auto original = GetX86HookTrampoline<GlyphDrawHelperFn>(g_debug_ui_overlay_state.glyph_draw_hook);

@@ -43,6 +43,8 @@ void BeginExactTextRenderCapture(
     ExactTextRenderCapture capture;
     capture.caller_address = caller_address;
     capture.label = ResolveExactTextRenderLabel(string_object, text);
+    capture.font_id = ResolveNativeFontId(
+        reinterpret_cast<uintptr_t>(self));
     float render_base_x = 0.0f;
     float render_base_y = 0.0f;
     if (IsPlausibleTitleCoordinate(origin_x) &&
@@ -239,6 +241,7 @@ void BeginExactTextRenderCapture(
         bool (*try_get_active)(uintptr_t*);
     };
     static const SimpleRenderSurface kSimpleRenderSurfaces[] = {
+        {"control_scheme_picker", "Control Scheme Picker", &TryGetCurrentControlSchemePicker},
         {"dark_cloud_browser", "Dark Cloud Browser", &TryGetActiveDarkCloudBrowserRender},
         {"hall_of_fame",       "Hall of Fame",       &TryGetActiveHallOfFameRender},
         {"spell_picker",       "Spell Picker",       &TryGetActiveSpellPickerRender},

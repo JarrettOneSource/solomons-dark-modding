@@ -29,6 +29,41 @@ struct DebugUiSurfaceSnapshot {
     std::vector<DebugUiSnapshotElement> elements;
 };
 
+// Opt-in native menu-layout capture. Unlike DebugUiSurfaceSnapshot, this
+// additive diagnostic view includes observed text/font provenance and native
+// atlas draws. Coordinates are the clipped, live D3D9 output coordinates;
+// unclipped coordinates preserve the submitted quad for scroll/scissor cases.
+struct DebugUiLayoutElement {
+    std::string id;
+    std::string kind;
+    std::string text;
+    std::string action_id;
+    std::string art_id;
+    std::string font_id;
+    std::string text_style;
+    std::uintptr_t source_object_ptr = 0;
+    bool visible = true;
+    bool interactive = false;
+    std::uint32_t draw_order = 0;
+    float left = 0.0f;
+    float top = 0.0f;
+    float right = 0.0f;
+    float bottom = 0.0f;
+    float unclipped_left = 0.0f;
+    float unclipped_top = 0.0f;
+    float unclipped_right = 0.0f;
+    float unclipped_bottom = 0.0f;
+};
+
+struct DebugUiLayoutSnapshot {
+    std::uint64_t generation = 0;
+    std::uint64_t captured_at_milliseconds = 0;
+    std::string screen_id;
+    std::string screen_title;
+    std::string capture_method;
+    std::vector<DebugUiLayoutElement> elements;
+};
+
 struct DebugUiActionDispatchSnapshot {
     std::uint64_t request_id = 0;
     std::uint64_t queued_at_milliseconds = 0;
@@ -55,6 +90,10 @@ bool TryPrepareMainMenuNewGameSaveReset(
     std::string* error_message);
 bool TryContinuePostRunHallOfFame(std::string* error_message);
 bool TryGetLatestDebugUiSurfaceSnapshot(DebugUiSurfaceSnapshot* snapshot);
+bool TryGetLatestDebugUiLayoutSnapshot(DebugUiLayoutSnapshot* snapshot);
+bool TryGetDebugUiLayoutSnapshot(
+    std::string_view screen_id,
+    DebugUiLayoutSnapshot* snapshot);
 bool TryFindDebugUiActionElement(std::string_view action_id, std::string_view surface_id, DebugUiSnapshotElement* element);
 bool TryGetDebugUiActionDispatchSnapshot(std::uint64_t request_id, DebugUiActionDispatchSnapshot* snapshot);
 bool TryActivateDebugUiAction(

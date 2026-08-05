@@ -40,6 +40,7 @@ void EndExactTextRenderCapture() {
     element.max_y = resolved_bottom;
     element.sample_count = capture.glyph_count;
     element.label = std::move(capture.label);
+    element.font_id = std::move(capture.font_id);
     auto logged_element = element;
     {
         std::scoped_lock lock(g_debug_ui_overlay_state.mutex);

@@ -99,18 +99,11 @@ std::string ResolveQuickPanelSurfaceTitle(
 }
 
 std::string ResolveBestQuickPanelControlLabel(
-    uintptr_t control_address,
     float left,
     float top,
     float right,
     float bottom,
     const std::vector<ObservedUiElement>& exact_text_elements) {
-    std::string label;
-    (void)TryReadCachedObjectLabel(control_address, &label);
-    if (!label.empty()) {
-        return label;
-    }
-
     const auto control_center_x = (left + right) * 0.5f;
     const auto control_center_y = (top + bottom) * 0.5f;
     const ObservedUiElement* best_match = nullptr;
@@ -136,7 +129,6 @@ std::string ResolveBestQuickPanelControlLabel(
     }
 
     if (best_match != nullptr) {
-        CacheObservedObjectLabel(control_address, best_match->label);
         return best_match->label;
     }
 
@@ -538,7 +530,6 @@ std::vector<OverlayRenderElement> TryBuildQuickPanelOverlayRenderElements(
         render_element.surface_id = "quick_panel";
         render_element.surface_title = surface_title;
         render_element.label = ResolveBestQuickPanelControlLabel(
-            exact_control.object_ptr,
             exact_control.min_x,
             exact_control.min_y,
             exact_control.max_x,
@@ -585,7 +576,6 @@ std::vector<OverlayRenderElement> TryBuildQuickPanelOverlayRenderElements(
         render_element.surface_id = "quick_panel";
         render_element.surface_title = surface_title;
         render_element.label = ResolveBestQuickPanelControlLabel(
-            control_pointer,
             left,
             top,
             right,

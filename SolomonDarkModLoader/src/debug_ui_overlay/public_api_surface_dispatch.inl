@@ -1,5 +1,6 @@
 void ShutdownDebugUiOverlay() {
     RemoveD3d9FrameCallback(&OnD3d9Frame);
+    RemoveMenuLayoutCaptureHooks();
     RemoveX86Hook(
         &g_debug_ui_overlay_state.control_scheme_picker_render_hook);
     RemoveX86Hook(&g_debug_ui_overlay_state.ui_rect_dispatch_hook);
@@ -55,6 +56,46 @@ bool TryGetLatestDebugUiSurfaceSnapshot(DebugUiSurfaceSnapshot* snapshot) {
     }
 
     *snapshot = g_debug_ui_overlay_state.latest_surface_snapshot;
+    return true;
+}
+
+bool TryGetLatestDebugUiLayoutSnapshot(DebugUiLayoutSnapshot* snapshot) {
+    if (snapshot == nullptr) {
+        return false;
+    }
+
+    std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
+    if (!g_debug_ui_overlay_state.initialized ||
+        !g_debug_ui_overlay_state.menu_layout_capture_enabled ||
+        g_debug_ui_overlay_state.latest_layout_snapshot.screen_id.empty() ||
+        g_debug_ui_overlay_state.latest_layout_snapshot.elements.empty()) {
+        return false;
+    }
+
+    *snapshot = g_debug_ui_overlay_state.latest_layout_snapshot;
+    return true;
+}
+
+bool TryGetDebugUiLayoutSnapshot(
+    std::string_view screen_id,
+    DebugUiLayoutSnapshot* snapshot) {
+    if (screen_id.empty() || snapshot == nullptr) {
+        return false;
+    }
+
+    std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
+    if (!g_debug_ui_overlay_state.initialized ||
+        !g_debug_ui_overlay_state.menu_layout_capture_enabled) {
+        return false;
+    }
+    const auto found =
+        g_debug_ui_overlay_state.layout_snapshots_by_screen.find(
+            std::string(screen_id));
+    if (found ==
+        g_debug_ui_overlay_state.layout_snapshots_by_screen.end()) {
+        return false;
+    }
+    *snapshot = found->second;
     return true;
 }
 

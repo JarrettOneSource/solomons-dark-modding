@@ -1,0 +1,69 @@
+"""Contracts for the opt-in, live native-menu layout recorder."""
+
+from __future__ import annotations
+
+import unittest
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def read(relative_path: str) -> str:
+    return (ROOT / relative_path).read_text(encoding="utf-8")
+
+
+class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
+    def test_sprite_capture_is_explicitly_opt_in(self) -> None:
+        source = read(
+            "SolomonDarkModLoader/src/debug_ui_overlay/"
+            "menu_layout_capture.inl"
+        )
+        self.assertIn("SDMOD_NATIVE_MENU_LAYOUT_CAPTURE", source)
+        self.assertIn("SDMOD_NATIVE_BOOT_CAPTURE_DIRECTORY", source)
+        self.assertIn("if (!requested)", source)
+        self.assertIn("menu_layout_capture_enabled = requested", source)
+
+    def test_loader_probe_uses_live_progress_and_native_draws(self) -> None:
+        source = read(
+            "SolomonDarkModLoader/src/debug_ui_overlay/"
+            "menu_layout_capture.inl"
+        )
+        for token in (
+            "kNativeLoaderProgressNumerator",
+            "kNativeLoaderProgressDenominator",
+            "kNativeLoaderCompleteFlag",
+            "HookNativeLoaderRender",
+            "Loader.",
+            "CaptureD3d9BackBufferBmp",
+            "native-loader-layout.json",
+        ):
+            self.assertIn(token, source)
+
+    def test_layout_api_retains_transient_screens(self) -> None:
+        header = read("SolomonDarkModLoader/include/debug_ui_overlay.h")
+        implementation = read(
+            "SolomonDarkModLoader/src/debug_ui_overlay/"
+            "public_api_surface_dispatch.inl"
+        )
+        state = read("SolomonDarkModLoader/src/debug_ui_overlay.cpp")
+        bindings = read(
+            "SolomonDarkModLoader/src/lua_engine_bindings_ui.cpp"
+        )
+        self.assertIn("TryGetDebugUiLayoutSnapshot", header)
+        self.assertIn("layout_snapshots_by_screen", state)
+        self.assertIn("layout_snapshots_by_screen.find", implementation)
+        self.assertIn("luaL_checkstring(state, 1)", bindings)
+        self.assertIn('"get_layout_snapshot"', bindings)
+
+    def test_recorder_never_measures_layout_from_the_reference_image(self) -> None:
+        recorder = read("scripts/Record-NativeMenuLayout.ps1")
+        self.assertIn("sd.ui.get_layout_snapshot", recorder)
+        self.assertIn("sd.debug.capture_backbuffer", recorder)
+        self.assertIn("Get-FileHash", recorder)
+        self.assertNotIn("GetPixel", recorder)
+        self.assertNotIn("image recognition", recorder.lower())
+
+
+if __name__ == "__main__":
+    unittest.main()

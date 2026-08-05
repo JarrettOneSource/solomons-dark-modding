@@ -553,6 +553,7 @@ void ResetDebugUiOverlayStateUnlocked(DebugUiOverlayState* state) {
     state->ui_unlabeled_control_render_hook = X86Hook{};
     state->ui_panel_render_hook = X86Hook{};
     state->ui_rect_dispatch_hook = X86Hook{};
+    ResetMenuLayoutCaptureStateUnlocked(state);
     state->surface_ranges.clear();
     state->frame_elements.clear();
     state->frame_exact_text_elements.clear();

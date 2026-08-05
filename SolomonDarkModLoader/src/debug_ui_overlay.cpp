@@ -22,10 +22,14 @@
 #include <cctype>
 #include <cmath>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
 #include <limits>
 #include <mutex>
 #include <optional>
 #include <set>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -110,6 +114,9 @@ using UiLabeledControlRenderFn = void(__cdecl*)(
 using UiUnlabeledControlRenderFn = void(__cdecl*)(void* self, int arg2, int arg3);
 using UiPanelRenderFn = void(__cdecl*)(float arg1, float arg2, float arg3, float arg4, float arg5);
 using UiRectDispatchFn = void(__thiscall*)(void* self, float arg2, float arg3, float arg4, float arg5);
+using SpritePositionDrawFn = void(__thiscall*)(void* self, float x, float y);
+using SpriteTransformDrawFn = void(__thiscall*)(void* self, const float* transform);
+using MyLoaderRenderFn = void(__thiscall*)(void* self);
 
 struct NativeUiString {
     uintptr_t vtable = 0;
@@ -199,6 +206,7 @@ struct ObservedUiElement {
     float max_y = 0.0f;
     std::uint32_t sample_count = 0;
     std::string label;
+    std::string font_id;
 };
 
 struct OverlayRenderElement {
@@ -277,6 +285,7 @@ struct ExactTextRenderCapture {
     std::string surface_id;
     std::string surface_title;
     std::string label;
+    std::string font_id;
     float expected_origin_x = 0.0f;
     float expected_origin_y = 0.0f;
     float min_x = (std::numeric_limits<float>::max)();
@@ -284,6 +293,22 @@ struct ExactTextRenderCapture {
     float max_x = (std::numeric_limits<float>::lowest)();
     float max_y = (std::numeric_limits<float>::lowest)();
     std::uint32_t glyph_count = 0;
+};
+
+struct CapturedMenuArtElement {
+    std::string art_id;
+    std::string draw_kind;
+    uintptr_t source_object_ptr = 0;
+    std::uint32_t draw_order = 0;
+    bool visible = true;
+    float left = 0.0f;
+    float top = 0.0f;
+    float right = 0.0f;
+    float bottom = 0.0f;
+    float unclipped_left = 0.0f;
+    float unclipped_top = 0.0f;
+    float unclipped_right = 0.0f;
+    float unclipped_bottom = 0.0f;
 };
 
 struct TrackedDialogState {
@@ -479,12 +504,17 @@ struct DebugUiOverlayState {
     X86Hook ui_unlabeled_control_render_hook;
     X86Hook ui_panel_render_hook;
     X86Hook ui_rect_dispatch_hook;
+    X86Hook menu_sprite_centered_draw_hook;
+    X86Hook menu_sprite_transform_draw_hook;
+    X86Hook native_loader_render_hook;
+    bool menu_layout_capture_enabled = false;
     FontAtlas font_atlas;
     IDirect3DDevice9* font_device = nullptr;
     std::vector<SurfaceObservationRange> surface_ranges;
     std::vector<ObservedUiElement> frame_elements;
     std::vector<ObservedUiElement> frame_exact_text_elements;
     std::vector<ObservedUiElement> frame_exact_control_elements;
+    std::vector<CapturedMenuArtElement> frame_menu_art_elements;
     std::vector<ExactTextRenderCapture> active_exact_text_renders;
     std::vector<std::string> recent_assigned_strings;
     ULONGLONG recent_assigned_strings_updated_at = 0;
@@ -511,6 +541,9 @@ struct DebugUiOverlayState {
     std::string last_logged_action_query_rejection_action_id;
     std::uint64_t next_semantic_ui_action_request_id = 0;
     DebugUiSurfaceSnapshot latest_surface_snapshot;
+    DebugUiLayoutSnapshot latest_layout_snapshot;
+    std::unordered_map<std::string, DebugUiLayoutSnapshot>
+        layout_snapshots_by_screen;
     std::mutex mutex;
 };
 
