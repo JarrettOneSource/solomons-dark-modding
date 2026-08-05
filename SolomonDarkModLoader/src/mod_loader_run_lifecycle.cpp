@@ -13,6 +13,7 @@
 #include "multiplayer_local_transport.h"
 #include "multiplayer_runtime_protocol.h"
 #include "native_enemy_types.h"
+#include "native_session_flow_capture.h"
 #include "wave_intelligence.h"
 #include "x86_hook.h"
 

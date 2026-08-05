@@ -10,6 +10,11 @@ std::uint64_t GetGameplayMouseLeftEdgeTickMs() {
     return g_gameplay_keyboard_injection.mouse_left_edge_tick_ms.load(std::memory_order_acquire);
 }
 
+std::uint64_t GetLocalPlayerSimulationTickCount() {
+    return g_gameplay_keyboard_injection.local_player_tick_generation.load(
+        std::memory_order_acquire);
+}
+
 std::uint64_t GetGameplayMouseRightEdgeSerial() {
     return g_gameplay_keyboard_injection.mouse_right_edge_serial.load(
         std::memory_order_acquire);

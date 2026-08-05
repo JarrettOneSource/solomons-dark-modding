@@ -579,17 +579,27 @@ void __fastcall HookGameplaySwitchRegion(void* self, void* /*unused_edx*/, int r
         Log("Authorized client run switch_region from fresh authenticated host intent.");
     }
 
+    NativeSessionFlowCaptureBeginSwitch(self, region_index);
     if (region_index == kArenaRegionIndex) {
         BeginBoneyardLoadingScreen();
     }
+    NativeSessionFlowCaptureObserveSwitchStep(
+        "participant_churn.begin",
+        self,
+        region_index);
     ClearAuthoritativeTurnUndeadTargetLocks();
     const auto gameplay_address = reinterpret_cast<uintptr_t>(self);
     (void)PrepareGameplaySceneSwitchOnGameThread(
         gameplay_address,
         region_index,
         "gameplay_switch_region_pre_dispatch");
+    NativeSessionFlowCaptureObserveSwitchStep(
+        "participant_churn.end",
+        self,
+        region_index);
     Log(
         "[bots] gameplay switch-region hook. gameplay=" + HexString(gameplay_address) +
         " target_region=" + std::to_string(region_index));
     original(self, region_index);
+    NativeSessionFlowCaptureEndSwitch(self, region_index);
 }

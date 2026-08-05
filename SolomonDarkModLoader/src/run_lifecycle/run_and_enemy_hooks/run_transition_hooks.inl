@@ -80,7 +80,13 @@ void __fastcall HookCreateArena(void* self, void* unused_edx) {
         Log("Blocked multiplayer Arena_Create because the host Boneyard seed could not be reinitialized.");
         return;
     }
+    NativeSessionFlowCaptureObserveSessionEvent(
+        "run.create.begin",
+        self);
     original(self, unused_edx);
+    NativeSessionFlowCaptureObserveSessionEvent(
+        "run.create.end",
+        self);
     multiplayer::NotifyLocalRunStarted();
     DispatchLuaRunStarted();
 }
@@ -110,7 +116,13 @@ void __fastcall HookStartGame(void* self, void* unused_edx) {
     }
     ClearLuaWaveSpawnFilterInstances();
     ClearRememberedEnemyTracking();
+    NativeSessionFlowCaptureObserveSessionEvent(
+        "run.start.begin",
+        self);
     original(self, unused_edx);
+    NativeSessionFlowCaptureObserveSessionEvent(
+        "run.start.end",
+        self);
     multiplayer::NotifyLocalRunStarted();
     DispatchLuaRunStarted();
 }
@@ -118,12 +130,18 @@ void __fastcall HookStartGame(void* self, void* unused_edx) {
 void __cdecl HookRunEnded() {
     const auto original = GetX86HookTrampoline<RunEndedFn>(g_state.hooks[kHookRunEnded]);
     if (original == nullptr) return;
+    NativeSessionFlowCaptureObserveSessionEvent(
+        "run.death.terminal_callback");
     if (multiplayer::BeginLocalDeathSpectatorPresentation()) {
+        NativeSessionFlowCaptureObserveSessionEvent(
+            "run.death.spectator_hold");
         RetireAuthoritativeNativeMinionsForLocalOwnerDeath();
         return;
     }
     g_state.run_active.store(false, std::memory_order_release);
     original();
+    NativeSessionFlowCaptureObserveSessionEvent(
+        "overlay.game_over.installed");
     CompleteRunLifecycleEnd("death", true, false);
 }
 

@@ -203,6 +203,9 @@
     <ClInclude Include="include\native_scene_capture.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\native_session_flow_capture.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="include\lua_item_runtime.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -486,6 +489,12 @@
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\native_scene_capture\serialization.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\native_session_flow_capture\hooks.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\native_session_flow_capture\io_and_graph.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\gameplay_seams\address_storage.inl">
@@ -2132,6 +2141,9 @@
       <Filter>Source Files\Gameplay</Filter>
     </ClCompile>
     <ClCompile Include="src\native_scene_capture.cpp">
+      <Filter>Source Files\Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="src\native_session_flow_capture.cpp">
       <Filter>Source Files\Gameplay</Filter>
     </ClCompile>
     <ClCompile Include="src\mod_loader_run_lifecycle.cpp">

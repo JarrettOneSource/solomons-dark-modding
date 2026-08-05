@@ -163,6 +163,23 @@ void Initialize(HMODULE module_handle) {
             }
         }
 
+        if (IsNativeSessionFlowCaptureRequested()) {
+            std::string session_flow_capture_error;
+            if (!InitializeNativeSessionFlowCapture(
+                    &session_flow_capture_error)) {
+                const auto message = session_flow_capture_error.empty()
+                    ? std::string(
+                        "Native session-flow capture failed to initialize.")
+                    : session_flow_capture_error;
+                Log(message);
+                ShutdownPartialRuntime();
+                write_failed_status(
+                    "native-session-flow-capture-failed",
+                    message);
+                return;
+            }
+        }
+
         {
             std::string boneyard_picker_error;
             if (!InitializeBoneyardPicker(

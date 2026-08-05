@@ -109,6 +109,7 @@
     <ClInclude Include="include\lua_world_render_runtime.h" />
     <ClInclude Include="include\native_world_render.h" />
     <ClInclude Include="include\native_scene_capture.h" />
+    <ClInclude Include="include\native_session_flow_capture.h" />
     <ClInclude Include="include\lua_item_runtime.h" />
     <ClInclude Include="src\lua_item_runtime\consumable_vfx_helpers.inl" />
     <ClInclude Include="src\lua_world_renderer\native_carrier_queue.inl" />
@@ -200,6 +201,8 @@
     <ClInclude Include="src\native_scene_capture\observation.inl" />
     <ClInclude Include="src\native_scene_capture\public_api.inl" />
     <ClInclude Include="src\native_scene_capture\serialization.inl" />
+    <ClInclude Include="src\native_session_flow_capture\hooks.inl" />
+    <ClInclude Include="src\native_session_flow_capture\io_and_graph.inl" />
     <ClInclude Include="src\gameplay_seams\address_storage.inl" />
     <ClInclude Include="src\gameplay_seams\address_storage_native_minions.inl" />
     <ClInclude Include="src\gameplay_seams\address_storage_npcs.inl" />
@@ -757,6 +760,7 @@
     <ClCompile Include="src\mod_loader_gameplay.cpp" />
     <ClCompile Include="src\native_input_trace.cpp" />
     <ClCompile Include="src\native_scene_capture.cpp" />
+    <ClCompile Include="src\native_session_flow_capture.cpp" />
     <ClCompile Include="src\mod_loader_run_lifecycle.cpp" />
     <ClCompile Include="src\multiplayer_foundation.cpp" />
     <ClCompile Include="src\multiplayer_join_flow.cpp" />

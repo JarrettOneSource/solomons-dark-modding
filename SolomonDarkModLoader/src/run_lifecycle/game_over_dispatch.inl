@@ -8,7 +8,11 @@ void DispatchPendingMultiplayerGameOverOnAppTick() {
     }
 
     g_state.run_active.store(false, std::memory_order_release);
+    NativeSessionFlowCaptureObserveSessionEvent(
+        "run.death.authority_dispatch");
     original();
+    NativeSessionFlowCaptureObserveSessionEvent(
+        "overlay.game_over.installed");
     CompleteRunLifecycleEnd(
         "all_players_dead",
         true,

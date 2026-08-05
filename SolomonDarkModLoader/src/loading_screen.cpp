@@ -1,4 +1,5 @@
 #include "loading_screen.h"
+#include "native_session_flow_capture.h"
 
 #include "binary_layout.h"
 #include "gameplay_seams.h"
@@ -507,6 +508,7 @@ void BeginBoneyardLoadingScreen() {
     BeginLoadingScreen(
         CurrentFlow(),
         LoadingScreenStage::PreparingBoneyard);
+    NativeSessionFlowCaptureObserveInputSeal();
 }
 
 void AdvanceLoadingScreen(LoadingScreenStage stage) {
@@ -518,6 +520,8 @@ void AdvanceLoadingScreen(LoadingScreenStage stage) {
 }
 
 void NotifyBoneyardGameplayStarted() {
+    NativeSessionFlowCaptureObserveSessionEvent(
+        "loading.gameplay_started");
     if (!multiplayer::IsLocalTransportClient()) {
         AdvanceLoadingScreen(
             LoadingScreenStage::MaterializingParticipants);
@@ -552,6 +556,7 @@ void CompleteLoadingScreen() {
         "Loading screen completed. sequence=" +
         std::to_string(completed.sequence) +
         " elapsed_ms=" + std::to_string(elapsed_ms));
+    NativeSessionFlowCaptureObserveInputUnseal("input.unseal");
 }
 
 void CancelLoadingScreen() {
@@ -568,6 +573,8 @@ void CancelLoadingScreen() {
         "Loading screen canceled. sequence=" +
         std::to_string(canceled.sequence) +
         " stage=" + canceled.stage_id);
+    NativeSessionFlowCaptureObserveInputUnseal(
+        "input.unseal.canceled");
 }
 
 LoadingScreenSnapshot GetLoadingScreenSnapshot() {
