@@ -206,6 +206,9 @@
     <ClInclude Include="include\native_session_flow_capture.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\native_float_rng_capture.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="include\lua_item_runtime.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -2144,6 +2147,9 @@
       <Filter>Source Files\Gameplay</Filter>
     </ClCompile>
     <ClCompile Include="src\native_session_flow_capture.cpp">
+      <Filter>Source Files\Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="src\native_float_rng_capture.cpp">
       <Filter>Source Files\Gameplay</Filter>
     </ClCompile>
     <ClCompile Include="src\mod_loader_run_lifecycle.cpp">

@@ -8,6 +8,7 @@
 #include "multiplayer_local_transport.h"
 #include "native_audio_observability.h"
 #include "native_enemy_lifecycle.h"
+#include "native_float_rng_capture.h"
 #include "native_input_trace.h"
 #include "native_scene_capture.h"
 #include "native_spell_stats.h"
@@ -50,7 +51,7 @@ enum class LuaDebugFieldType {
 }  // namespace
 
 void RegisterLuaDebugBindings(lua_State* state) {
-    lua_createtable(state, 0, 85);
+    lua_createtable(state, 0, 86);
     RegisterFunction(state, &LuaDebugTraceFunction, "trace_function");
     RegisterFunction(state, &LuaDebugUntraceFunction, "untrace_function");
     RegisterFunction(state, &LuaDebugListTraces, "list_traces");
@@ -174,6 +175,12 @@ void RegisterLuaDebugBindings(lua_State* state) {
         &LuaDebugTestNativeMovementCollision,
         "test_native_movement_collision");
     RegisterFunction(state, &LuaDebugSampleNativeRng, "sample_native_rng");
+    if (IsNativeFloatRngCaptureInitialized()) {
+        RegisterFunction(
+            state,
+            &LuaDebugCaptureNativeFloatRng,
+            "capture_native_float_rng");
+    }
     RegisterFunction(state, &LuaDebugGetGameNpcMotion, "get_gamenpc_motion");
     RegisterFunction(state, &LuaDebugGetWorldMovementGeometry, "get_world_movement_geometry");
     RegisterFunction(state, &LuaDebugCallCdeclU32RetU32, "call_cdecl_u32_ret_u32");

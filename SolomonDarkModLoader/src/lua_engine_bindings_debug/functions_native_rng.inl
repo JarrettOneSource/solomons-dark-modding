@@ -108,3 +108,44 @@ int LuaDebugSampleNativeRng(lua_State* state) {
     lua_setfield(state, -2, "final_state_words");
     return 1;
 }
+
+// sd.debug.capture_native_float_rng(
+//     label, seed, primitive, magnitude, signed, count) -> boolean, string
+// This function is registered only when the opt-in recorder initialized.
+int LuaDebugCaptureNativeFloatRng(lua_State* state) {
+    std::size_t label_size = 0;
+    const char* label = luaL_checklstring(state, 1, &label_size);
+    const auto seed =
+        CheckLuaUnsignedInteger<std::uint32_t>(state, 2, "seed");
+    const char* primitive_name = luaL_checkstring(state, 3);
+    const auto magnitude = static_cast<float>(luaL_checknumber(state, 4));
+    luaL_checktype(state, 5, LUA_TBOOLEAN);
+    const bool signed_request = lua_toboolean(state, 5) != 0;
+    const auto count =
+        CheckLuaUnsignedInteger<std::uint32_t>(state, 6, "count");
+
+    NativeFloatRngPrimitive primitive;
+    if (std::strcmp(primitive_name, "scaled") == 0) {
+        primitive = NativeFloatRngPrimitive::Scaled;
+    } else if (std::strcmp(primitive_name, "unit") == 0) {
+        primitive = NativeFloatRngPrimitive::Unit;
+    } else {
+        return luaL_error(state, "primitive must be 'scaled' or 'unit'");
+    }
+
+    std::string output_path;
+    std::string error_message;
+    const bool captured = CaptureNativeFloatRngRecording(
+        std::string_view(label, label_size),
+        seed,
+        primitive,
+        magnitude,
+        signed_request,
+        count,
+        &output_path,
+        &error_message);
+    lua_pushboolean(state, captured ? 1 : 0);
+    const auto& detail = captured ? output_path : error_message;
+    lua_pushlstring(state, detail.c_str(), detail.size());
+    return 2;
+}

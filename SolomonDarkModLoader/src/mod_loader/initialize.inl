@@ -254,6 +254,31 @@ void Initialize(HMODULE module_handle) {
             }
         }
 
+        if (IsNativeFloatRngCaptureRequested()) {
+            if (!runtime_flags.loader.lua_engine) {
+                const std::string message =
+                    "Native float RNG capture was requested but the Lua engine is disabled.";
+                Log(message);
+                ShutdownPartialRuntime();
+                write_failed_status(
+                    "native-float-rng-capture-lua-disabled", message);
+                return;
+            }
+            std::string native_float_rng_capture_error;
+            if (!InitializeNativeFloatRngCapture(
+                    &native_float_rng_capture_error)) {
+                const auto message = native_float_rng_capture_error.empty()
+                    ? std::string(
+                        "Native float RNG capture failed to initialize.")
+                    : native_float_rng_capture_error;
+                Log(message);
+                ShutdownPartialRuntime();
+                write_failed_status(
+                    "native-float-rng-capture-failed", message);
+                return;
+            }
+        }
+
         if (runtime_flags.multiplayer.steam_bootstrap) {
             InitializeSteamBootstrap();
         } else {

@@ -110,6 +110,7 @@
     <ClInclude Include="include\native_world_render.h" />
     <ClInclude Include="include\native_scene_capture.h" />
     <ClInclude Include="include\native_session_flow_capture.h" />
+    <ClInclude Include="include\native_float_rng_capture.h" />
     <ClInclude Include="include\lua_item_runtime.h" />
     <ClInclude Include="src\lua_item_runtime\consumable_vfx_helpers.inl" />
     <ClInclude Include="src\lua_world_renderer\native_carrier_queue.inl" />
@@ -761,6 +762,7 @@
     <ClCompile Include="src\native_input_trace.cpp" />
     <ClCompile Include="src\native_scene_capture.cpp" />
     <ClCompile Include="src\native_session_flow_capture.cpp" />
+    <ClCompile Include="src\native_float_rng_capture.cpp" />
     <ClCompile Include="src\mod_loader_run_lifecycle.cpp" />
     <ClCompile Include="src\multiplayer_foundation.cpp" />
     <ClCompile Include="src\multiplayer_join_flow.cpp" />
