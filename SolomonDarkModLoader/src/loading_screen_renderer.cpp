@@ -17,6 +17,7 @@
 #include <mutex>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace sdmod::detail {
@@ -63,6 +64,8 @@ struct LoadingScreenRendererState {
     std::uint64_t rendered_sequence = 0;
     LoadingScreenStage rendered_stage =
         LoadingScreenStage::PreparingBoneyard;
+    bool has_last_layout = false;
+    LoadingScreenRenderLayout last_layout;
 };
 
 LoadingScreenRendererState g_renderer;
@@ -420,7 +423,11 @@ bool DrawLoadingScreen(
     float* crop_u0,
     float* crop_v0,
     float* crop_u1,
-    float* crop_v1) {
+    float* crop_v1,
+    LoadingScreenRenderLayout* captured_layout) {
+    if (captured_layout == nullptr) {
+        return false;
+    }
     if (!ConfigureCommonState(device) ||
         !DrawBackground(
             device,
@@ -465,15 +472,19 @@ bool DrawLoadingScreen(
 
     const float bar_top =
         top + height * kProgressBarTopFraction;
+    float bar_left = 0.0f;
+    float bar_right = 0.0f;
+    float bar_bottom = 0.0f;
+    float fill_right = 0.0f;
     if (snapshot.progress_bar_visible) {
         const float bar_width =
             width * kProgressBarWidthFraction;
-        const float bar_left =
+        bar_left =
             left + (width - bar_width) * 0.5f;
         const float bar_height =
             (std::clamp)(height * 0.0083f, 8.0f, 10.0f);
-        const float bar_right = bar_left + bar_width;
-        const float bar_bottom = bar_top + bar_height;
+        bar_right = bar_left + bar_width;
+        bar_bottom = bar_top + bar_height;
         const auto border =
             D3DCOLOR_ARGB(230, 105, 82, 42);
         const auto track =
@@ -496,7 +507,7 @@ bool DrawLoadingScreen(
                 track)) {
             return false;
         }
-        const float fill_right =
+        fill_right =
             bar_left + bar_width *
                 (std::clamp)(snapshot.progress, 0.0f, 1.0f);
         if (fill_right > bar_left &&
@@ -521,13 +532,66 @@ bool DrawLoadingScreen(
         bar_top -
         g_renderer.font.line_height * text_scale -
         (std::max)(12.0f, 14.0f * text_scale);
-    return DrawText(
-        device,
-        snapshot.label,
+    if (!DrawText(
+            device,
+            snapshot.label,
+            text_x,
+            text_y,
+            text_scale,
+            D3DCOLOR_ARGB(255, 242, 229, 199))) {
+        return false;
+    }
+
+    LoadingScreenRenderLayout layout;
+    layout.sequence = snapshot.sequence;
+    layout.stage_id = snapshot.stage_id;
+    layout.label = snapshot.label;
+    layout.background_art_id =
+        g_renderer.background_path.stem().string();
+    layout.progress = snapshot.progress;
+    layout.progress_bar_visible =
+        snapshot.progress_bar_visible;
+    layout.viewport_x = viewport.X;
+    layout.viewport_y = viewport.Y;
+    layout.viewport_width = viewport.Width;
+    layout.viewport_height = viewport.Height;
+    layout.background_width = g_renderer.background_width;
+    layout.background_height = g_renderer.background_height;
+    layout.crop_u0 = *crop_u0;
+    layout.crop_v0 = *crop_v0;
+    layout.crop_u1 = *crop_u1;
+    layout.crop_v1 = *crop_v1;
+    layout.background = {left, top, right, bottom};
+    layout.bottom_scrim = {left, band_top, right, bottom};
+    if (snapshot.progress_bar_visible) {
+        layout.progress_border = {
+            bar_left - 1.0f,
+            bar_top - 1.0f,
+            bar_right + 1.0f,
+            bar_bottom + 1.0f,
+        };
+        layout.progress_track = {
+            bar_left,
+            bar_top,
+            bar_right,
+            bar_bottom,
+        };
+        layout.progress_fill = {
+            bar_left,
+            bar_top,
+            fill_right,
+            bar_bottom,
+        };
+    }
+    layout.label_rect = {
         text_x,
         text_y,
-        text_scale,
-        D3DCOLOR_ARGB(255, 242, 229, 199));
+        text_x + text_width,
+        text_y + g_renderer.font.line_height * text_scale,
+    };
+    layout.text_scale = text_scale;
+    *captured_layout = std::move(layout);
+    return true;
 }
 
 void RenderLoadingScreen(IDirect3DDevice9* device) {
@@ -568,6 +632,7 @@ void RenderLoadingScreen(IDirect3DDevice9* device) {
     float crop_v0 = 0.0f;
     float crop_u1 = 1.0f;
     float crop_v1 = 1.0f;
+    LoadingScreenRenderLayout captured_layout;
     if (!DrawLoadingScreen(
             device,
             snapshot,
@@ -575,15 +640,20 @@ void RenderLoadingScreen(IDirect3DDevice9* device) {
             &crop_u0,
             &crop_v0,
             &crop_u1,
-            &crop_v1)) {
+            &crop_v1,
+            &captured_layout)) {
         if (!g_renderer.render_failure_logged) {
             g_renderer.render_failure_logged = true;
             Log("Loading screen D3D9 draw failed.");
         }
         return;
     }
+    g_renderer.last_layout = captured_layout;
+    g_renderer.has_last_layout = true;
     g_renderer.render_failure_logged = false;
-    CaptureLoadingScreenEvidenceFrame(snapshot);
+    CaptureLoadingScreenEvidenceFrame(
+        snapshot,
+        &captured_layout);
 
     if (g_renderer.rendered_sequence != snapshot.sequence ||
         g_renderer.rendered_stage != snapshot.stage) {
@@ -651,6 +721,21 @@ void StopLoadingScreenRenderer() {
     g_renderer.rendered_sequence = 0;
     g_renderer.rendered_stage =
         LoadingScreenStage::PreparingBoneyard;
+    g_renderer.has_last_layout = false;
+    g_renderer.last_layout = {};
+}
+
+bool TryGetLastLoadingScreenRenderLayout(
+    LoadingScreenRenderLayout* layout) {
+    if (layout == nullptr) {
+        return false;
+    }
+    std::scoped_lock lock(g_renderer.mutex);
+    if (!g_renderer.has_last_layout) {
+        return false;
+    }
+    *layout = g_renderer.last_layout;
+    return true;
 }
 
 }  // namespace sdmod::detail

@@ -11,7 +11,11 @@
 #include <atomic>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <sstream>
 #include <string>
+#include <string_view>
 
 namespace sdmod::detail {
 namespace {
@@ -61,8 +65,147 @@ std::wstring SafeFileToken(std::wstring value) {
     return value;
 }
 
+std::string NarrowSafeFileToken(const std::wstring& value) {
+    std::string narrowed;
+    narrowed.reserve(value.size());
+    for (const wchar_t ch : value) {
+        narrowed.push_back(
+            ch >= 0 && ch <= 0x7f
+                ? static_cast<char>(ch)
+                : '_');
+    }
+    return narrowed;
+}
+
+std::string EscapeJson(std::string_view value) {
+    std::string escaped;
+    escaped.reserve(value.size());
+    for (const unsigned char ch : value) {
+        switch (ch) {
+        case '\\':
+            escaped += "\\\\";
+            break;
+        case '"':
+            escaped += "\\\"";
+            break;
+        case '\n':
+            escaped += "\\n";
+            break;
+        case '\r':
+            escaped += "\\r";
+            break;
+        case '\t':
+            escaped += "\\t";
+            break;
+        default:
+            if (ch >= 0x20) {
+                escaped.push_back(static_cast<char>(ch));
+            }
+            break;
+        }
+    }
+    return escaped;
+}
+
+void WriteRect(
+    std::ostringstream* json,
+    const LoadingScreenRect& rect) {
+    *json << '[' << rect.left << ',' << rect.top << ','
+          << rect.right << ',' << rect.bottom << ']';
+}
+
+bool WriteLoadingLayoutSidecar(
+    const std::filesystem::path& output_path,
+    const LoadingScreenSnapshot& snapshot,
+    const LoadingScreenRenderLayout& layout,
+    const std::wstring& instance,
+    std::string* error_message) {
+    std::ostringstream json;
+    json << std::fixed << std::setprecision(4);
+    json << "{\n"
+         << "  \"schema\": \"native-loading-layout/v1\",\n"
+         << "  \"header\": {\n"
+         << "    \"instance\": \""
+         << EscapeJson(NarrowSafeFileToken(instance))
+         << "\",\n"
+         << "    \"pid\": " << GetCurrentProcessId() << ",\n"
+         << "    \"capture_method\": \"live D3D9 render geometry and backbuffer capture\"\n"
+         << "  },\n"
+         << "  \"screen_id\": \"loading_"
+         << EscapeJson(snapshot.stage_id) << "\",\n"
+         << "  \"sequence\": " << snapshot.sequence << ",\n"
+         << "  \"stage_id\": \""
+         << EscapeJson(snapshot.stage_id) << "\",\n"
+         << "  \"progress\": " << snapshot.progress << ",\n"
+         << "  \"viewport\": [" << layout.viewport_x << ','
+         << layout.viewport_y << ',' << layout.viewport_width
+         << ',' << layout.viewport_height << "],\n"
+         << "  \"source_crop\": [" << layout.crop_u0 << ','
+         << layout.crop_v0 << ',' << layout.crop_u1 << ','
+         << layout.crop_v1 << "],\n"
+         << "  \"elements\": [\n"
+         << "    {\"id\":\"background\",\"kind\":\"art\",\"art_id\":\""
+         << EscapeJson(layout.background_art_id) << "\",\"rect\":";
+    WriteRect(&json, layout.background);
+    json << ",\"source_size\":[" << layout.background_width << ','
+         << layout.background_height << "]},\n"
+         << "    {\"id\":\"bottom_scrim\",\"kind\":\"gradient_scrim\",\"rect\":";
+    WriteRect(&json, layout.bottom_scrim);
+    json << ",\"color_top\":\"#00000000\",\"color_bottom\":\"#B3000000\"}";
+    if (layout.progress_bar_visible) {
+        json << ",\n    {\"id\":\"progress_border\",\"kind\":\"progress_border\",\"rect\":";
+        WriteRect(&json, layout.progress_border);
+        json << ",\"color\":\"#E669522A\"},\n"
+             << "    {\"id\":\"progress_track\",\"kind\":\"progress_track\",\"rect\":";
+        WriteRect(&json, layout.progress_track);
+        json << ",\"color\":\"#EB14110D\"},\n"
+             << "    {\"id\":\"progress_fill\",\"kind\":\"progress_fill\",\"rect\":";
+        WriteRect(&json, layout.progress_fill);
+        json << ",\"color\":\"#FFCAA14D\"}";
+    }
+    json << ",\n    {\"id\":\"loading_label\",\"kind\":\"text\",\"text\":\""
+         << EscapeJson(layout.label) << "\",\"rect\":";
+    WriteRect(&json, layout.label_rect);
+    json << ",\"font\":\"Segoe UI\",\"font_height\":-24,\"font_weight\":600,\"scale\":"
+         << layout.text_scale << ",\"color\":\"#FFF2E5C7\"}\n"
+         << "  ]\n"
+         << "}\n";
+
+    const auto temporary_path = output_path.wstring() + L".tmp";
+    std::ofstream output(
+        std::filesystem::path(temporary_path),
+        std::ios::binary | std::ios::trunc);
+    if (!output) {
+        *error_message = "could not open JSON sidecar";
+        return false;
+    }
+    output << json.str();
+    output.close();
+    if (!output) {
+        *error_message = "could not write JSON sidecar";
+        std::error_code ignored;
+        std::filesystem::remove(temporary_path, ignored);
+        return false;
+    }
+    std::error_code replace_error;
+    std::filesystem::remove(output_path, replace_error);
+    replace_error.clear();
+    std::filesystem::rename(
+        temporary_path,
+        output_path,
+        replace_error);
+    if (replace_error) {
+        *error_message = replace_error.message();
+        std::error_code ignored;
+        std::filesystem::remove(temporary_path, ignored);
+        return false;
+    }
+    return true;
+}
+
 void CaptureLoadingScreenEvidenceFrameInternal(
-    const LoadingScreenSnapshot& snapshot) {
+    const LoadingScreenSnapshot& snapshot,
+    const LoadingScreenRenderLayout& layout) {
     const auto directory_text =
         ReadEnvironmentVariable(
             kCaptureDirectoryEnvironment);
@@ -114,13 +257,30 @@ void CaptureLoadingScreenEvidenceFrameInternal(
         return;
     }
 
+    auto sidecar_path = output_path;
+    sidecar_path.replace_extension(L".json");
+    std::string sidecar_error;
+    if (!WriteLoadingLayoutSidecar(
+            sidecar_path,
+            snapshot,
+            layout,
+            instance,
+            &sidecar_error)) {
+        Log(
+            "Loading screen layout sidecar failed. path=" +
+            sidecar_path.string() +
+            " error=" + sidecar_error);
+        return;
+    }
+
     g_captured_sequence = snapshot.sequence;
     g_captured_stage = snapshot.stage;
     Log(
         "Loading screen evidence captured. sequence=" +
         std::to_string(snapshot.sequence) +
         " stage=" + snapshot.stage_id +
-        " path=" + output_path.string());
+        " path=" + output_path.string() +
+        " layout=" + sidecar_path.string());
 }
 
 void LogPresentationFailure(
@@ -139,8 +299,21 @@ void LogPresentationFailure(
 }  // namespace
 
 void CaptureLoadingScreenEvidenceFrame(
-    const LoadingScreenSnapshot& snapshot) {
-    CaptureLoadingScreenEvidenceFrameInternal(snapshot);
+    const LoadingScreenSnapshot& snapshot,
+    const LoadingScreenRenderLayout* layout) {
+    LoadingScreenRenderLayout current_layout;
+    if (layout == nullptr) {
+        if (!TryGetLastLoadingScreenRenderLayout(
+                &current_layout) ||
+            current_layout.sequence != snapshot.sequence ||
+            current_layout.stage_id != snapshot.stage_id) {
+            return;
+        }
+        layout = &current_layout;
+    }
+    CaptureLoadingScreenEvidenceFrameInternal(
+        snapshot,
+        *layout);
 }
 
 void PresentLoadingScreenFrame() {
