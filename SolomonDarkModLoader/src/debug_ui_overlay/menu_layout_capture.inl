@@ -79,9 +79,6 @@ constexpr uintptr_t kNativeSpriteCenteredDrawAddress = 0x004142E0;
 constexpr uintptr_t kNativeSpriteTransformDrawAddress = 0x00414540;
 constexpr uintptr_t kSettingsScalarRowAddress = 0x00436160;
 constexpr uintptr_t kSettingsToggleRowAddress = 0x00435DE0;
-constexpr uintptr_t kSettingsSectionRowAddress = 0x00436750;
-constexpr uintptr_t kSettingsSingleStringRowAddress = 0x004A5A70;
-constexpr uintptr_t kSettingsDualStringRowAddress = 0x004A5B60;
 constexpr uintptr_t kNativeLoaderProgressNumerator = 0x0081F6A8;
 constexpr uintptr_t kNativeLoaderProgressDenominator = 0x0081F6AC;
 constexpr uintptr_t kNativeLoaderCompleteFlag = 0x0081F6B0;
@@ -768,61 +765,6 @@ void __fastcall HookSettingsToggleRow(
     EndSettingsRowCapture();
 }
 
-uintptr_t __fastcall HookSettingsSectionRow(
-    void* self,
-    void* /*unused_edx*/,
-    NativeUiString label,
-    uintptr_t arg3,
-    uintptr_t arg4,
-    uintptr_t arg5) {
-    BeginSettingsRowCapture(
-        label,
-        reinterpret_cast<uintptr_t>(_ReturnAddress()));
-    const auto original = GetX86HookTrampoline<SettingsSectionRowFn>(
-        g_debug_ui_overlay_state.settings_section_row_hook);
-    const auto result = original == nullptr
-        ? uintptr_t{0}
-        : original(self, label, arg3, arg4, arg5);
-    EndSettingsRowCapture();
-    return result;
-}
-
-uintptr_t __fastcall HookSettingsSingleStringRow(
-    void* self,
-    void* /*unused_edx*/,
-    NativeUiString label) {
-    BeginSettingsRowCapture(
-        label,
-        reinterpret_cast<uintptr_t>(_ReturnAddress()));
-    const auto original =
-        GetX86HookTrampoline<SettingsSingleStringRowFn>(
-            g_debug_ui_overlay_state.settings_single_string_row_hook);
-    const auto result = original == nullptr
-        ? uintptr_t{0}
-        : original(self, label);
-    EndSettingsRowCapture();
-    return result;
-}
-
-uintptr_t __fastcall HookSettingsDualStringRow(
-    void* self,
-    void* /*unused_edx*/,
-    NativeUiString label,
-    NativeUiString detail,
-    void* value) {
-    BeginSettingsRowCapture(
-        label,
-        reinterpret_cast<uintptr_t>(_ReturnAddress()));
-    const auto original =
-        GetX86HookTrampoline<SettingsDualStringRowFn>(
-            g_debug_ui_overlay_state.settings_dual_string_row_hook);
-    const auto result = original == nullptr
-        ? uintptr_t{0}
-        : original(self, label, detail, value);
-    EndSettingsRowCapture();
-    return result;
-}
-
 std::vector<CapturedMenuArtElement> TakeCapturedMenuArtFrame() {
     std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
     auto result = std::move(
@@ -1292,16 +1234,8 @@ bool InstallMenuLayoutCaptureHooks(std::string* error_message) {
         kSettingsScalarRowAddress);
     const auto settings_toggle = memory.ResolveGameAddressOrZero(
         kSettingsToggleRowAddress);
-    const auto settings_section = memory.ResolveGameAddressOrZero(
-        kSettingsSectionRowAddress);
-    const auto settings_single = memory.ResolveGameAddressOrZero(
-        kSettingsSingleStringRowAddress);
-    const auto settings_dual = memory.ResolveGameAddressOrZero(
-        kSettingsDualStringRowAddress);
     if (centered == 0 || transformed == 0 || loader == 0 ||
-        settings_scalar == 0 || settings_toggle == 0 ||
-        settings_section == 0 || settings_single == 0 ||
-        settings_dual == 0) {
+        settings_scalar == 0 || settings_toggle == 0) {
         if (error_message != nullptr) {
             *error_message =
                 "Could not resolve native menu-layout capture targets.";
@@ -1342,12 +1276,6 @@ bool InstallMenuLayoutCaptureHooks(std::string* error_message) {
     }
     const auto remove_capture_hooks = []() {
         RemoveX86Hook(
-            &g_debug_ui_overlay_state.settings_dual_string_row_hook);
-        RemoveX86Hook(
-            &g_debug_ui_overlay_state.settings_single_string_row_hook);
-        RemoveX86Hook(
-            &g_debug_ui_overlay_state.settings_section_row_hook);
-        RemoveX86Hook(
             &g_debug_ui_overlay_state.settings_toggle_row_hook);
         RemoveX86Hook(
             &g_debug_ui_overlay_state.settings_scalar_row_hook);
@@ -1368,24 +1296,6 @@ bool InstallMenuLayoutCaptureHooks(std::string* error_message) {
             reinterpret_cast<void*>(&HookSettingsToggleRow),
             5,
             &g_debug_ui_overlay_state.settings_toggle_row_hook,
-            error_message) ||
-        !InstallSafeX86Hook(
-            reinterpret_cast<void*>(settings_section),
-            reinterpret_cast<void*>(&HookSettingsSectionRow),
-            5,
-            &g_debug_ui_overlay_state.settings_section_row_hook,
-            error_message) ||
-        !InstallSafeX86Hook(
-            reinterpret_cast<void*>(settings_single),
-            reinterpret_cast<void*>(&HookSettingsSingleStringRow),
-            5,
-            &g_debug_ui_overlay_state.settings_single_string_row_hook,
-            error_message) ||
-        !InstallSafeX86Hook(
-            reinterpret_cast<void*>(settings_dual),
-            reinterpret_cast<void*>(&HookSettingsDualStringRow),
-            5,
-            &g_debug_ui_overlay_state.settings_dual_string_row_hook,
             error_message)) {
         remove_capture_hooks();
         return false;
@@ -1395,12 +1305,6 @@ bool InstallMenuLayoutCaptureHooks(std::string* error_message) {
 }
 
 void RemoveMenuLayoutCaptureHooks() {
-    RemoveX86Hook(
-        &g_debug_ui_overlay_state.settings_dual_string_row_hook);
-    RemoveX86Hook(
-        &g_debug_ui_overlay_state.settings_single_string_row_hook);
-    RemoveX86Hook(
-        &g_debug_ui_overlay_state.settings_section_row_hook);
     RemoveX86Hook(
         &g_debug_ui_overlay_state.settings_toggle_row_hook);
     RemoveX86Hook(
@@ -1421,9 +1325,6 @@ void ResetMenuLayoutCaptureStateUnlocked(DebugUiOverlayState* state) {
     state->native_loader_render_hook = X86Hook{};
     state->settings_scalar_row_hook = X86Hook{};
     state->settings_toggle_row_hook = X86Hook{};
-    state->settings_section_row_hook = X86Hook{};
-    state->settings_single_string_row_hook = X86Hook{};
-    state->settings_dual_string_row_hook = X86Hook{};
     state->menu_layout_capture_enabled = false;
     state->frame_menu_art_elements.clear();
     state->latest_layout_snapshot = DebugUiLayoutSnapshot{};

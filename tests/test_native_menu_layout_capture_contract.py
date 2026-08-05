@@ -99,16 +99,10 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         for token in (
             "kSettingsScalarRowAddress",
             "kSettingsToggleRowAddress",
-            "kSettingsSectionRowAddress",
-            "kSettingsSingleStringRowAddress",
-            "kSettingsDualStringRowAddress",
             "BeginSettingsRowCapture",
             "ObserveActiveSettingsRowBounds",
             "HookSettingsScalarRow",
             "HookSettingsToggleRow",
-            "HookSettingsSectionRow",
-            "HookSettingsSingleStringRow",
-            "HookSettingsDualStringRow",
         ):
             self.assertIn(token, source)
 

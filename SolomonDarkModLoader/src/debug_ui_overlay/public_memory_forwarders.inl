@@ -133,17 +133,6 @@ bool TryReadSettingsPanelRect(
     float* bottom);
 bool TryReadPointerField(const void* object, std::size_t byte_offset, uintptr_t* value);
 std::string GetOverlaySurfaceRootId(std::string_view surface_id);
-void RecordExactControlElement(
-    std::string surface_id,
-    std::string surface_title,
-    uintptr_t source_object_ptr,
-    uintptr_t caller_address,
-    float left,
-    float top,
-    float right,
-    float bottom,
-    std::string label);
-
 #include "debug_ui_overlay/state_and_actions.inl"
 #include "debug_ui_overlay/string_and_memory_readers.inl"
 #include "debug_ui_overlay/menu_layout_capture.inl"
