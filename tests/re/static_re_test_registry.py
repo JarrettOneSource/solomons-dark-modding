@@ -333,6 +333,8 @@ from static_re_native_sim_core_contracts import (
     test_movement_golden_provenance_and_schema_are_live_recorded,
     test_movement_golden_traces_pin_normalization_slide_stop_and_knockback,
     test_native_movement_integrators_and_collision_are_address_pinned,
+    test_native_rng_float_primitive_reaches_both_endpoints,
+    test_native_rng_float_primitive_rounds_at_three_points,
     test_native_rng_golden_replays_exact_retail_recurrence,
     test_native_rng_stream_ownership_and_callsite_census_are_pinned,
     test_native_sim_recorder_seam_is_bounded_isolated_and_registered,
@@ -1707,6 +1709,14 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Movement goldens pin normalization, wall response, and Knockback",
         test_movement_golden_traces_pin_normalization_slide_stop_and_knockback,
+    ),
+    (
+        "Native RNG float primitive rounds to float32 at three points",
+        test_native_rng_float_primitive_rounds_at_three_points,
+    ),
+    (
+        "Native RNG float primitive reaches both range endpoints",
+        test_native_rng_float_primitive_reaches_both_endpoints,
     ),
     (
         "Native RNG goldens replay the exact retail recurrence",

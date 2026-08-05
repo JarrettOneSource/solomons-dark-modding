@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 import re
+import struct
 from pathlib import Path
 from typing import Any
 
@@ -734,3 +735,139 @@ def test_app_tick_seeding_provenance_is_documented_and_byte_verified() -> str:
         ),
     )
     return "twelve byte-verified seeding sites, App singleton provenance, and G1 closure are pinned"
+
+
+# Native float draw: k = Integer(N+1); result = f32(f32(f32(k) / N) * magnitude),
+# with N = this+0xE4, set to 0x186A0 by the constructor 0x00401110.
+RNG_FLOAT_DIVISOR = 0x186A0
+
+
+def _f32(value: float) -> float:
+    return struct.unpack("<f", struct.pack("<f", value))[0]
+
+
+def _native_float_draw(draw: int, magnitude: float) -> float:
+    """The three float32 rounding points of 0x00401310, in order."""
+    quotient = _f32(_f32(float(draw)) / RNG_FLOAT_DIVISOR)
+    return _f32(quotient * _f32(magnitude))
+
+
+def test_native_rng_float_primitive_rounds_at_three_points() -> str:
+    """A port that evaluates the draw in double and rounds once diverges.
+
+    The native primitive stores to a float32 slot after the integer convert,
+    after the divide, and after the multiply. Collapsing that into one
+    double-precision expression is the natural reimplementation and it is
+    wrong for about a quarter of all draws.
+    """
+    if RNG_FLOAT_DIVISOR != 100000:
+        raise StaticReTestFailure("float divisor contract changed")
+
+    # Powers of two are exempt: the final multiply is exact, so the
+    # intermediate rounding is unobservable and a spot check passes.
+    for magnitude in (1.0, 0.5, 2.0, 0.25):
+        for draw in range(0, RNG_FLOAT_DIVISOR + 1, 617):
+            naive = _f32(draw / RNG_FLOAT_DIVISOR * magnitude)
+            if _native_float_draw(draw, magnitude) != naive:
+                raise StaticReTestFailure(
+                    f"power-of-two magnitude {magnitude} must not diverge "
+                    f"(draw {draw})"
+                )
+
+    # Everything else diverges, and the doc's measured shares must hold.
+    expected_shares = {3.0: 27836, 4.5: 25225, 100.0: 25055, 1023.0: 25222}
+    for magnitude, expected in expected_shares.items():
+        differing = sum(
+            1
+            for draw in range(RNG_FLOAT_DIVISOR + 1)
+            if _native_float_draw(draw, magnitude)
+            != _f32(draw / RNG_FLOAT_DIVISOR * magnitude)
+        )
+        if differing != expected:
+            raise StaticReTestFailure(
+                f"divergence census for magnitude {magnitude} changed: "
+                f"{differing} != {expected}"
+            )
+
+    # The worked example the document cites.
+    if _native_float_draw(5, 3.0) != 0.00014999999257270247:
+        raise StaticReTestFailure("documented worked example no longer reproduces")
+
+    doc = read_text(DOC)
+    _require_tokens(
+        "float primitive document",
+        doc,
+        (
+            "f32(f32(f32(k) / N) * magnitude)",
+            "`this+0xE4`",
+            "`0x186A0` = `100000`",
+            "The rounding schedule is load-bearing",
+            "Powers of two are exempt",
+            "costs **two** stream words",
+            "second float primitive at `0x004011F0`",
+            "`0x00448450` (integer) and\n`0x00448480` (float)",
+        ),
+    )
+    return (
+        "float primitive rounds at three points; power-of-two magnitudes are "
+        "exempt and all other measured divergence shares hold"
+    )
+
+
+def _native_unit_float_draw(draw: int) -> float:
+    """0x004011F0: the same draw and divide, but only two roundings."""
+    return _f32(_f32(float(draw)) / RNG_FLOAT_DIVISOR)
+
+
+def test_native_rng_float_primitive_reaches_both_endpoints() -> str:
+    """The bound is `N + 1`, so the top of the range is drawable.
+
+    A port that reaches for the textbook `Integer(N) / N` gets `[0, 1)` and
+    silently loses the endpoint; one that divides by `N + 1` shrinks every
+    draw. Both are off by one in a way no statistical check would notice.
+    """
+    top = RNG_FLOAT_DIVISOR  # the largest k that Integer(N + 1) can return
+    for magnitude in (1.0, 3.0, 4.5, 100.0, 1023.0):
+        if _native_float_draw(0, magnitude) != 0.0:
+            raise StaticReTestFailure(f"zero unreachable for magnitude {magnitude}")
+        if _native_float_draw(top, magnitude) != _f32(magnitude):
+            raise StaticReTestFailure(
+                f"positive endpoint unreachable for magnitude {magnitude}"
+            )
+
+    # The second primitive is the same draw with the multiply removed, so it
+    # spans a closed [0, 1] and rounds twice, not three times.
+    if _native_unit_float_draw(0) != 0.0 or _native_unit_float_draw(top) != 1.0:
+        raise StaticReTestFailure("0x004011F0 must span a closed [0, 1]")
+    for draw in range(0, top + 1, 997):
+        if _native_unit_float_draw(draw) != _native_float_draw(draw, 1.0):
+            raise StaticReTestFailure(
+                f"0x004011F0 must agree with a unit-magnitude draw at k={draw}"
+            )
+
+    doc = read_text(DOC)
+    _require_tokens(
+        "float primitive range document",
+        doc,
+        (
+            "integer bound `100001`",
+            "the positive endpoint are reachable",
+            "returns `k / N`\non `[0, 1]`",
+            "rounds to float32 twice rather than three times",
+            "`ret 4`",
+        ),
+    )
+    roadmap = read_text(ROADMAP)
+    _require_tokens(
+        "float primitive roadmap residual",
+        roadmap,
+        (
+            "float primitive still has no goldens at all",
+            "per-object divisor at `this+0xE4`",
+            "Closing the residual is now a recorder run, not an RE pass",
+        ),
+    )
+    return (
+        "both float endpoints are reachable, the unit primitive spans a closed "
+        "[0, 1], and the residual is recorded as evidence-only"
+    )

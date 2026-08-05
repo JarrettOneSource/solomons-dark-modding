@@ -490,7 +490,61 @@ The float primitive at `0x00401310` draws integer bound `100001`, divides by
 the stored `100000`, and multiplies by the requested magnitude. Both `0.0` and
 the positive endpoint are reachable. A signed request uses the integer
 sampler's sign behavior. Public range wrappers are `0x00448450` (integer) and
-`0x00448480` (float).
+`0x00448480` (float) — the integer wrapper has an equal-endpoint fast path, the
+float wrapper orders its endpoints with `fucomp`.
+
+The divisor is not a literal. It is a per-object field at `this+0xE4`, the dword
+immediately after the 55 state words, which the constructor `0x00401110` sets to
+`0x186A0` = `100000`; no other method of the class writes it. A port that hard
+codes `100000` is right for every stock object but is encoding a default, not a
+constant.
+
+**The rounding schedule is load-bearing and is the easiest thing to get wrong.**
+The primitive rounds to float32 three separate times, once after each step:
+
+```text
+00401327  mov   [ebp-4], eax          ; k = Integer(N+1)
+0040132a  fild  dword ptr [ebp-4]
+0040132d  fstp  dword ptr [ebp-4]     ; -> f32(k)
+00401330  fld   dword ptr [ebp-4]
+00401333  fidiv dword ptr [ecx+0xe4]  ; / N, in the x87 stack
+00401339  fstp  dword ptr [ebp-4]     ; -> f32(f32(k) / N)
+0040133c  fld   dword ptr [ebp-4]
+0040133f  fmul  dword ptr [ebp+8]     ; * magnitude
+00401342  fstp  dword ptr [ebp+8]     ; -> f32(f32(f32(k) / N) * magnitude)
+```
+
+so the result is `f32(f32(f32(k) / N) * magnitude)`, **not** `f32(k / N *
+magnitude)` evaluated in double and rounded once at the end. The intermediate
+store after the divide is the one that matters. Over all `100001` reachable `k`,
+the two disagree for roughly a quarter of draws:
+
+| magnitude | draws that differ | share |
+| --- | --- | --- |
+| `1.0` | 0 / 100001 | 0.00% |
+| `0.5` | 0 / 100001 | 0.00% |
+| `3.0` | 27,836 / 100001 | 27.84% |
+| `4.5` | 25,225 / 100001 | 25.22% |
+| `100.0` | 25,055 / 100001 | 25.05% |
+| `1023.0` | 25,222 / 100001 | 25.22% |
+
+Powers of two are exempt because the final multiply is then exact, which is why
+a spot check against a unit magnitude will not reveal the bug. Everything else
+diverges in the last ulp — for example `k = 5, magnitude = 3.0` gives
+`0.00014999999257270247` natively against `0.0001500000071246177` for the
+double-precision shortcut.
+
+A signed float request costs **two** stream words, not one: after the value is
+computed, `0x00401345` falls into an inlined copy of the same lagged-Fibonacci
+step and takes bit 6 of that second word as the sign. It is inlined rather than
+a call to the integer sampler, but it is numerically the same choice the integer
+sampler's `Integer(2)` would make, and it advances the stream identically. Any
+replay that treats a signed float draw as a single advance desynchronizes.
+
+There is a second float primitive at `0x004011F0`, reached by one call site. It
+is the same draw and the same divide with the same sign branch, but no magnitude
+multiply and one stack argument instead of two (`ret 4`), so it returns `k / N`
+on `[0, 1]` and rounds to float32 twice rather than three times.
 
 ### Active stream and seeding lifecycle
 
@@ -688,7 +742,7 @@ recorded golden, so an implementer cannot check a port against it.
 | Element | State | What is missing |
 | --- | --- | --- |
 | Seeding lifecycle / run determinism | **Closed 2026-08-05** | The seeding idiom is `App[+0x28] * 0xEF3` at twelve byte-verified sites, `App+0x28` counts unpaused application ticks, and the recorded snapshot's `5683095` factors exactly as `1485 * 0xEF3`. See *Active stream and seeding lifecycle* above. What remains is not a gap in the mechanism but a consequence of it: run determinism is **not achievable from game state**, so `sd.rng.set_seed` cannot control world generation and no capture will ever show it doing so. The Boneyard `0x006388B0` private-stream transfer is still unobserved. |
-| Float primitive `0x00401310` | Unpinned | Neither fixture records a single float draw. `rng-goldens.json` holds four integer sequences; `movement-goldens.json` contains no RNG samples at all. The inclusive `Integer(100001) / 100000 * magnitude` mapping, the reachability of both `0.0` and the endpoint, and the sign behaviour are all unrecorded, yet contract item 7 demands parity on them. |
+| Float primitive `0x00401310` | **Mechanism closed 2026-08-05, still unwitnessed** | The mapping, the per-object divisor at `this+0xE4`, the three float32 rounding points, the two-word cost of a signed request, and the second primitive at `0x004011F0` are now read out of the binary — see *Active stream and seeding lifecycle* above. What is still missing is evidence, not understanding: neither fixture records a single float draw. `rng-goldens.json` holds four integer sequences; `movement-goldens.json` contains no RNG samples at all. Closing this needs a live capture of float draws, which is a recorder run, not a static pass. Until then contract item 7 demands parity on a path no golden exercises. |
 
 Closing the first needs a live capture that seeds a run with a known value and
 then reads the global at `0x00818B10` **before** generation, **after**
