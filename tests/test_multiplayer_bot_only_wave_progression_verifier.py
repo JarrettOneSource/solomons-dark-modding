@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -138,14 +139,48 @@ class BotOnlyWaveProgressionVerifierTests(unittest.TestCase):
             )
         )
 
-    def test_fixture_is_a_five_action_melee_cycle(self) -> None:
+    def test_fixture_is_one_melee_template(self) -> None:
         fixture = verifier.DEFAULT_WAVE_FIXTURE.read_text(encoding="utf-8")
         self.assertEqual(
             sum(line.strip() == "WAVE" for line in fixture.splitlines()),
-            5,
+            1,
         )
         self.assertNotIn("SKELETONARCHER", fixture)
-        self.assertEqual(fixture.count("SKELETON:FLAG_WEAK|FLAG_HPDOWN"), 5)
+        self.assertEqual(fixture.count("SKELETON:FLAG_WEAK|FLAG_HPDOWN"), 1)
+
+    def test_effective_schedule_preserves_the_retail_next_graph(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            data = root / "game" / "data"
+            data.mkdir(parents=True)
+            (data / "wave.txt").write_text(
+                "WAVE\n\tNEXT:1\n\tSPAWN:2\n\tGROUP\n\t\tSPIDER\n\tENDWAVE\n"
+                "WAVE\n\tNEXT:0\n\tSPAWN:3\n\tGROUP\n\t\tZOMBIE\n\tENDWAVE\n",
+                encoding="ascii",
+            )
+            output = root / "effective-wave.txt"
+
+            receipt = verifier.materialize_effective_wave_schedule(
+                game_directory=root / "game",
+                fixture_path=verifier.DEFAULT_WAVE_FIXTURE,
+                output_path=output,
+            )
+
+            effective = output.read_text(encoding="ascii")
+            self.assertEqual(receipt["record_count"], 2)
+            self.assertEqual(receipt["next_graph"], ["1", "0"])
+            self.assertEqual(receipt["spawn_delay_ticks"], 4096)
+            self.assertEqual(
+                sum(line == "WAVE" for line in effective.splitlines()),
+                2,
+            )
+            self.assertEqual(effective.count("\tSPAWNDELAY:4096-4096\n"), 2)
+            self.assertEqual(effective.count("\tNEXT:1\n"), 1)
+            self.assertEqual(effective.count("\tNEXT:0\n"), 1)
+            self.assertEqual(
+                effective.count("SKELETON:FLAG_WEAK|FLAG_HPDOWN"),
+                2,
+            )
 
 
 if __name__ == "__main__":

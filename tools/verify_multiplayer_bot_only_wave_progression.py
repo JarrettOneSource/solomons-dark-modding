@@ -38,6 +38,9 @@ from verify_multiplayer_death_spectator_respawn import (
     _establish_host_lethal_precondition,
     _establish_local_lethal_precondition,
 )
+from verify_multiplayer_organic_player_death import (
+    _materialize_native_wave_schedule,
+)
 from verify_player_health_death_sync import set_local_player_vitals
 from verify_remote_latency_wave5 import atomic_write_json
 
@@ -86,6 +89,21 @@ def source_sha() -> str:
         text=True,
     )
     return completed.stdout.strip()
+
+
+def materialize_effective_wave_schedule(
+    *,
+    game_directory: Path,
+    fixture_path: Path,
+    output_path: Path,
+) -> dict[str, Any]:
+    return _materialize_native_wave_schedule(
+        retail_wave_path=game_directory / "data" / "wave.txt",
+        fixture_path=fixture_path,
+        output_path=output_path,
+        spawn_delay_ticks=4096,
+        wave_delay_ticks=100,
+    )
 
 
 def integer(values: Mapping[str, str], key: str, default: int = 0) -> int:
@@ -1529,6 +1547,14 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     }
     launch: dict[str, object] | None = None
     try:
+        effective_wave_path = (
+            output_path.parent / f"{args.instance_prefix}-effective-wave.txt"
+        )
+        result["waveSchedule"] = materialize_effective_wave_schedule(
+            game_directory=args.game_directory.resolve(),
+            fixture_path=args.wave_fixture.resolve(),
+            output_path=effective_wave_path,
+        )
         launch = launch_pair(
             host_preset="map_create_fire_mind_hub",
             client_preset="map_create_fire_mind_hub",
@@ -1545,7 +1571,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             launcher_path=args.launcher.resolve(),
             runtime_root=args.runtime_root.resolve(),
             exact_mod_ids=(AUTOMATION_MOD_ID, BOT_MOD_ID),
-            test_wave_override=args.wave_fixture.resolve(),
+            test_wave_override=effective_wave_path,
             enable_audio=False,
         )
         result["launch"] = launch

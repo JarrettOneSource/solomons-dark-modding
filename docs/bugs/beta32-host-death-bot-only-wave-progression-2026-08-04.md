@@ -80,8 +80,11 @@ The other lifecycle seams already use participant semantics:
 
 `tools/verify_multiplayer_bot_only_wave_progression.py` launches an isolated
 host/client pair with one bot, starts the native arena director, and requires
-two completed bot-only actions. The fixture controls only encounter size,
-enemy health, schedule timing, and contact geometry:
+two completed bot-only actions. Before launch it materializes an effective
+schedule from the untouched retail `data/wave.txt`: all 42 native `WAVE`
+records and every `NEXT:` edge are preserved, while the one-record fixture
+supplies the stock melee enemy token. The remaining controls affect only
+encounter size, enemy health, schedule timing, and contact geometry:
 
 - each action schedules five stock melee skeletons;
 - the client and host are killed in that order by stock native damage;

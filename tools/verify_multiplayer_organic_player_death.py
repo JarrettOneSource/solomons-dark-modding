@@ -428,8 +428,14 @@ def _materialize_native_wave_schedule(
     retail_wave_path: Path,
     fixture_path: Path,
     output_path: Path,
+    spawn_delay_ticks: int = 1,
     wave_delay_ticks: int = 100,
 ) -> dict[str, Any]:
+    if not 0 < spawn_delay_ticks <= MAXIMUM_NATIVE_WAVE_DELAY_TICKS:
+        raise VerifyFailure(
+            "native spawn delay must be between 1 and "
+            f"{MAXIMUM_NATIVE_WAVE_DELAY_TICKS} ticks"
+        )
     if not 0 < wave_delay_ticks <= MAXIMUM_NATIVE_WAVE_DELAY_TICKS:
         raise VerifyFailure(
             "native wave delay must be between 1 and "
@@ -490,7 +496,7 @@ def _materialize_native_wave_schedule(
                     "WAVE",
                     f"\tNEXT:{next_value}",
                     "\tSPAWN:1",
-                    "\tSPAWNDELAY:1-1",
+                    f"\tSPAWNDELAY:{spawn_delay_ticks}-{spawn_delay_ticks}",
                     f"\tWAVEDELAY:{wave_delay_ticks}-{wave_delay_ticks}",
                     "\tMAXENEMIES:1",
                     "\tGROUP",
@@ -514,6 +520,7 @@ def _materialize_native_wave_schedule(
         "record_count": len(matches),
         "next_graph": next_graph,
         "enemy_token": enemy_token,
+        "spawn_delay_ticks": spawn_delay_ticks,
         "wave_delay_ticks": wave_delay_ticks,
         "retail_sha256": hashlib.sha256(retail_bytes).hexdigest(),
         "fixture_sha256": hashlib.sha256(

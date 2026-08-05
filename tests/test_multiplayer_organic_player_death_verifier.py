@@ -672,6 +672,7 @@ class OrganicPlayerDeathVerifierTests(unittest.TestCase):
                 [b"\tNEXT:1", b"\tNEXT:0,1"],
             )
             self.assertEqual(effective.count(b"\tSPAWN:1\r\n"), 2)
+            self.assertEqual(effective.count(b"\tSPAWNDELAY:1-1\r\n"), 2)
             self.assertEqual(effective.count(b"\tMAXENEMIES:1\r\n"), 2)
             self.assertEqual(
                 effective.count(b"\tWAVEDELAY:4096-4096\r\n"),
@@ -685,6 +686,7 @@ class OrganicPlayerDeathVerifierTests(unittest.TestCase):
                 2,
             )
             self.assertEqual(manifest["record_count"], 2)
+            self.assertEqual(manifest["spawn_delay_ticks"], 1)
             self.assertEqual(manifest["wave_delay_ticks"], 4096)
             self.assertEqual(manifest["next_graph"], ["1", "0,1"])
             self.assertEqual(
