@@ -180,6 +180,7 @@ from static_multiplayer_transport_contracts import (
     test_snapshot_streams_are_compact_and_bandwidth_bounded,
     test_transport_telemetry_names_slow_app_thread_stages,
     test_unreliable_snapshot_ordering_is_wrap_safe,
+    test_local_udp_ingress_and_wire_framing_are_bounded,
 )
 from static_multiplayer_ownership_contracts import (
     test_active_pair_visual_capture_routes_by_pair_backend,
@@ -390,6 +391,8 @@ from static_re_transport_core_contracts import (
     test_solo_death_bypasses_spectator_and_dispatches_stock_game_over,
     test_wave_boundary_respawn_has_staged_save_two_owner_live_regression,
     test_wave_completion_respawns_only_dead_owners_from_host_command,
+    test_async_logger_keeps_blocking_output_off_callers,
+    test_dead_multiplayer_participants_are_authority_inert,
 )
 from static_multiplayer_session_lifecycle_contracts import (
     test_match_end_preserves_lobby_and_reports_explicit_activity_state,
@@ -455,6 +458,7 @@ from static_wan_corpse_rendering_contracts import (
     test_authoritative_life_correction_uses_the_recipient_native_maximum,
     test_driven_remote_players_use_the_stock_light_branch_skipped_by_their_slot,
     test_wan_death_presentation_is_a_convergent_transaction,
+    test_dead_owner_vitals_are_reasserted_after_the_progression_tick,
 )
 from static_re_audio_disable_contracts import (
     test_automation_launch_surfaces_default_to_disabled_audio,
@@ -1803,6 +1807,34 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "WAN death presentation is a convergent transaction",
         test_wan_death_presentation_is_a_convergent_transaction,
+    ),
+    (
+        "asynchronous logger keeps blocking output off callers",
+        test_async_logger_keeps_blocking_output_off_callers,
+    ),
+    (
+        "dead multiplayer participants are authority inert",
+        test_dead_multiplayer_participants_are_authority_inert,
+    ),
+    (
+        "local UDP ingress and wire framing are bounded",
+        test_local_udp_ingress_and_wire_framing_are_bounded,
+    ),
+    (
+        "dead owner vitals are reasserted after the progression tick",
+        test_dead_owner_vitals_are_reasserted_after_the_progression_tick,
+    ),
+    (
+        "Proton input targets the exact native game window",
+        test_proton_input_targets_the_exact_native_game_window,
+    ),
+    (
+        "Steam behavior arena reset waits for the native spawner",
+        test_steam_behavior_arena_reset_waits_for_native_spawner,
+    ),
+    (
+        "Steam friend native inventory matrix is wired",
+        test_steam_friend_native_inventory_matrix_is_wired,
     ),
 ]
 

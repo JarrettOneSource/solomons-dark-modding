@@ -120,8 +120,21 @@ def read_source_units(*paths: str | Path) -> str:
 
 
 def _require_in_order(text: str, *tokens: str) -> None:
+    """Require each token, in order, independent of how the source is laid out.
+
+    A raw substring search makes a multi-line token depend on the indentation
+    its code happens to sit at, so wrapping a call or nesting a block one level
+    deeper breaks the contract while the behaviour it describes is untouched.
+    That has already happened once: `HOST_ENDPOINT,\\n            timeout=12.0,`
+    stopped matching when the wait moved inside an `if`. Compare on flattened
+    whitespace so reflow and re-nesting are invisible here; a contract that
+    genuinely needs to prove nesting depth should match indentation explicitly
+    with a regex rather than smuggle it into a token.
+    """
+    flattened = " ".join(text.split())
     cursor = 0
     for token in tokens:
-        position = text.find(token, cursor)
+        needle = " ".join(token.split())
+        position = flattened.find(needle, cursor)
         assert position >= 0, f"missing ordered token: {token}"
-        cursor = position + len(token)
+        cursor = position + len(needle)

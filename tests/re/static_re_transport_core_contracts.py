@@ -100,15 +100,46 @@ def test_async_logger_keeps_blocking_output_off_callers() -> str:
             )
             + read_text(ROOT / "SolomonDarkModLoader/src/logger.cpp")
         ), f"bounded asynchronous logger state lacks: {token}"
+    # Resolve the writer by what actually gets spawned, not by its signature.
+    # This contract used to require the literal `void LogWriterMain()`, so it
+    # broke -- silently, because it was never registered -- the moment the entry
+    # point became a _beginthreadex proc (`unsigned __stdcall f(void*)`). The
+    # blocking output had not moved anywhere; only the spelling had. Naming the
+    # spawn site instead also closes the hole that drift exposed: the old token
+    # proved a function existed, never that anything started it, so a writer that
+    # was defined and never run would have satisfied it.
+    spawn = re.search(
+        r"_beginthreadex\(\s*[^,]*,\s*[^,]*,\s*&?(\w+)\s*,",
+        writer_text,
+    )
+    assert spawn, (
+        "no thread is started for the log writer, so 'asynchronous' logging "
+        "would run on whichever thread called it"
+    )
+    entry = spawn.group(1)
+    definition = re.search(
+        rf"^[^\n]*\b{re.escape(entry)}\s*\([^;{{]*\)\s*{{",
+        writer_text,
+        re.M,
+    )
+    assert definition, (
+        f"the log writer thread is started on {entry}, which is not defined "
+        "in logger_writer.cpp"
+    )
+    body_end = writer_text.index("\n}\n", definition.start())
+    writer_body = writer_text[definition.start():body_end]
     for token in (
-        "void LogWriterMain()",
-        "FlushOpenStream();",
-        "OutputDebugStringW(wide.c_str());",
-        "RecordNetworkLoggerFlush(",
+        "g_queued_log_lines",  # drains the shared queue rather than its own
+        "FlushOpenStream();",  # owns the file flush
+        "WriteDebuggerLine(",  # owns the debugger output
+        "RecordNetworkLoggerFlush(",  # and reports the flush cost
     ):
-        assert token in writer_text, (
-            f"asynchronous logger writer lacks: {token}"
+        assert token in writer_body, (
+            f"the spawned log writer {entry} lacks: {token}"
         )
+    assert "OutputDebugStringW(wide.c_str());" in writer_text, (
+        "the writer no longer emits debugger output at all"
+    )
     assert 'src\\logger_writer.cpp' in project_text
     assert 'src\\logger_writer.cpp' in filters_text
 
@@ -799,11 +830,45 @@ def test_dead_multiplayer_participants_are_authority_inert() -> str:
             assert inert_gate < first_send
     assert "RetireActiveLocalCastInputWithoutPacket(" in outgoing_text
 
-    incoming_start = incoming_text.index("void ApplyRemoteCastPacket(")
-    death_rejection = incoming_text.index(
-        'log_cast_drop("participant_dead");',
-        incoming_start,
+    # The inbound authority body is ApplyParticipantCastPacket. This contract
+    # used to anchor on ApplyRemoteCastPacket, which has since been reduced to a
+    # four-line forwarder: every check moved into the shared body, so searching
+    # forward from the wrapper found none of them and the whole ordering block
+    # raised instead of asserting. Anchor on the body that holds the gate.
+    incoming_start = incoming_text.index("bool ApplyParticipantCastPacket(")
+    # Top-level `if` inside that body -- four-space indent, so the gate cannot be
+    # sitting inside a host_synthetic_ingress branch or any other conditional.
+    death_gate = re.search(
+        r"^ {4}if \(IsParticipantGameplayInertForDeath\(\*participant\)\) \{\n"
+        r" {8}log_cast_drop\(\"participant_dead\"\);\n"
+        r" {8}return false;\n",
+        incoming_text[incoming_start:],
+        re.M,
     )
+    assert death_gate, (
+        "the inbound dead-owner rejection is gone, or has been nested inside a "
+        "conditional so some ingress path can skip it"
+    )
+    death_rejection = incoming_start + death_gate.start()
+
+    # The split created a second way in that the old contract never saw: remote
+    # packets arrive through the forwarder, while host-synthetic bot casts call
+    # the body directly with host_synthetic_ingress=true. Both must land on the
+    # one gate above -- a private copy of the apply path would bypass it.
+    synthetic_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/synthetic_participant_cast_sync.inl"
+    )
+    wrapper_start = incoming_text.index("void ApplyRemoteCastPacket(")
+    for entry_name, entry_text, entry_start in (
+        ("ApplyRemoteCastPacket", incoming_text, wrapper_start),
+        ("host-synthetic cast injection", synthetic_text, 0),
+    ):
+        assert "ApplyParticipantCastPacket(" in entry_text[entry_start:], (
+            f"{entry_name} no longer routes through the shared inbound "
+            "authority body, so it would bypass the dead-owner gate"
+        )
+
     for forbidden_before_authority in (
         "input_tracker.last_packet_sequence =",
         "RelayCastPacketToPeers(",

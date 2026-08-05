@@ -66,10 +66,52 @@ def test_proton_input_targets_the_exact_native_game_window() -> str:
         assert token in activation_helper, (
             f"exact Windows activation helper lacks: {token}"
         )
-    for verifier in (storage, shop):
-        assert "proton_input_process_id()" in verifier
-        assert "hold_key(direction," in verifier
-        assert "hub_inventory.hold_real_key(" not in verifier
+    # Input targeting was centralised into steam_friend_hub_automation:
+    # resolve_hub_input_targets() builds one HubInputTarget per endpoint and the
+    # hub verifiers pass it down. These two used to call proton_input_process_id()
+    # and hold_key(direction, ...) directly, so the contract required those names
+    # inside each verifier -- and broke, unnoticed because it was never
+    # registered, the moment the calls moved. Require the routing property
+    # instead: each verifier takes its target from the one resolver, and never
+    # picks a process itself.
+    for name, verifier in (
+        ("hub inventory storage", storage),
+        ("hub shop ownership", shop),
+    ):
+        assert "resolve_hub_input_targets()" in verifier, (
+            f"the {name} verifier no longer takes its input target from the "
+            "central resolver, so it can drive a window it never identified"
+        )
+        stray = [
+            token
+            for token in (
+                "proton_input_process_id(",
+                "local_windows_game_process_id(",
+                "remote_windows_process_id(",
+                "hub_inventory.hold_real_key(",
+            )
+            if token in verifier
+        ]
+        assert not stray, (
+            f"the {name} verifier resolves its own input process instead of "
+            "routing through resolve_hub_input_targets(): " + ", ".join(stray)
+        )
+
+    # The resolver is now the single place that binds an endpoint to a process,
+    # so it carries the property the two verifiers used to assert individually:
+    # every supported backend names an exact process, and an unknown one is an
+    # error rather than a guess.
+    resolver_start = automation.index("def resolve_hub_input_targets(")
+    resolver = automation[resolver_start:automation.index("\ndef ", resolver_start + 1)]
+    for token in (
+        "proton_input_process_id()",
+        "local_windows_game_process_id()",
+        "remote_windows_process_id()",
+        "raise VerifyFailure(",
+    ):
+        assert token in resolver, (
+            f"the central hub input resolver lacks: {token}"
+        )
     for token in (
         "proton_input_process_id()",
         "hold_proton_key(",
@@ -1224,19 +1266,28 @@ def test_progression_matrices_prearm_quiet_spawning_before_run_entry() -> str:
 
 def test_steam_behavior_arena_reset_waits_for_native_spawner() -> str:
     behavior_context = _read("tools/steam_friend_behavior_context.py")
+    # reset_quiet_arena() has since grown a keyword-only opt-out, so the old
+    # `def reset_quiet_arena()` token stopped matching and the reported state
+    # key was renamed. Waiting must stay the default: the opt-out is only for
+    # skills whose own contract says a spawner is not involved, and that single
+    # caller is pinned separately (require_manual_spawner=skill.target_required
+    # in static_multiplayer_behavior_contracts).
     _require_in_order(
         behavior_context,
-        "def reset_quiet_arena()",
+        "def reset_quiet_arena(",
+        "require_manual_spawner: bool = True,",
         "manual_enemy_mode = upgrades.enable_quiet_progression_test_mode()",
+        "if require_manual_spawner:",
         '"host": primary.wait_for_manual_spawner_ready(',
-        "HOST_ENDPOINT,\n            timeout=12.0,",
+        "HOST_ENDPOINT, timeout=12.0,",
         '"client": primary.wait_for_manual_spawner_ready(',
-        "CLIENT_ENDPOINT,\n            timeout=12.0,",
-        '"manual_spawner_ready": manual_spawner_ready,',
+        "CLIENT_ENDPOINT, timeout=12.0,",
+        '"manual_spawner_required": require_manual_spawner,',
+        '"manual_spawner_state": manual_spawner_state,',
     )
     return (
         "Steam behavior fixtures wait for both real stock wave spawners after "
-        "re-enabling quiet-arena mode"
+        "re-enabling quiet-arena mode, and report whether they were required"
     )
 
 

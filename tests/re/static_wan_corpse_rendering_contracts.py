@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from static_multiplayer_contract_support import (
     _read,
     _require_in_order,
@@ -109,10 +111,59 @@ def test_dead_owner_vitals_are_reasserted_after_the_progression_tick() -> str:
         "player.progression_address ==",
         "HoldLocalSpectatorDeathVitals();",
     )
-    assert transport.count(
-        "InitializeLocalDeathProgressionTickHook("
-    ) == 2
-    assert "ShutdownLocalDeathProgressionTickHook();" in transport
+    # Both transport backends install the boundary, and neither may come up
+    # without it. This used to be `transport.count(...) == 2` against
+    # public_cast_loot_api.inl; the two install sites have since moved into
+    # transport_initialization.inl, so the count read 0 and the bare assert
+    # raised with no message -- unnoticed, because the contract was never
+    # registered. A count also never said what the two sites were or that
+    # either checked the result, so two calls ignoring their return would have
+    # satisfied it while leaving a dead owner free to regenerate.
+    initialization = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "transport_initialization.inl"
+    )
+    install_sites = [
+        match.start()
+        for match in re.finditer(
+            r"if \(!InitializeLocalDeathProgressionTickHook\(",
+            initialization,
+        )
+    ]
+    expected_failures = (
+        "Multiplayer Steam transport could not install the ",
+        "Multiplayer local UDP could not install the dead-owner ",
+    )
+    assert len(install_sites) == len(expected_failures), (
+        "the dead-owner progression boundary must be installed, and checked, "
+        f"by each transport backend; found {len(install_sites)} checked "
+        f"install site(s), expected {len(expected_failures)}"
+    )
+    for site, expected_failure in zip(install_sites, expected_failures):
+        opening = initialization.index("{", site)
+        depth, cursor = 0, opening
+        while True:
+            if initialization[cursor] == "{":
+                depth += 1
+            elif initialization[cursor] == "}":
+                depth -= 1
+                if depth == 0:
+                    break
+            cursor += 1
+        failure_branch = initialization[opening:cursor]
+        assert expected_failure in failure_branch, (
+            "a dead-owner progression boundary install site does not report "
+            f"its backend on failure: {expected_failure!r}"
+        )
+        assert "return false;" in failure_branch, (
+            "a transport backend continues after failing to install the "
+            "dead-owner progression boundary, so native passive regeneration "
+            "would revive a dead owner on that transport"
+        )
+    assert "ShutdownLocalDeathProgressionTickHook();" in transport, (
+        "transport teardown no longer removes the dead-owner progression "
+        "boundary, leaving the hook installed across sessions"
+    )
 
     return (
         "the multiplayer zero-life invariant is restored after native passive "

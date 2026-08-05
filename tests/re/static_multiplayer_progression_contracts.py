@@ -946,14 +946,55 @@ def test_steam_friend_native_inventory_matrix_is_wired() -> str:
         "gold.verify_gold_pickup_authority(shared_args)",
         "orb.verify_orb_pickup_authority(shared_args)",
         "native_potion.run(shared_args)",
-        "for item_type in native_item.EQUIPPABLE_TYPE_IDS:",
+        "for item_type in item_types:",
         "native_item.run(",
         "loot.run_verifier(shared_args)",
         "SDMOD_STEAM_HOST_INSTANCE",
         "SDMOD_STEAM_CLIENT_INSTANCE",
     ):
         assert token in verifier, f"real-Steam native inventory matrix lacks: {token}"
-    return "real Steam covers gold, both orbs, native potion, every equipment type, and loot materialization"
+
+    # The equipment sweep used to be a literal loop over EQUIPPABLE_TYPE_IDS,
+    # which is the token this contract carried -- and it stopped matching,
+    # unnoticed because the contract was never registered, when the sweep was
+    # parameterised. Two narrowing knobs came with that change, and the claim
+    # in this contract's own return line ("every equipment type") is only true
+    # if neither can narrow a run by accident. So pin the defaults, not the
+    # loop: a full matrix is what you get unless a caller explicitly asks for
+    # less, and asking for less is visible in the output.
+    for token, why in (
+        (
+            "item_types: tuple[int, ...] = native_item.EQUIPPABLE_TYPE_IDS,",
+            "the equipment sweep no longer defaults to every equippable type",
+        ),
+        (
+            "equipment_only: bool = False,",
+            "the matrix no longer defaults to running the non-equipment legs",
+        ),
+        (
+            "else native_item.EQUIPPABLE_TYPE_IDS",
+            "a command line without --item-type no longer falls back to the "
+            "full equipment set",
+        ),
+        (
+            "equipment_only=bool(args.item_type),",
+            "gold, orbs, potion, and loot can now be skipped without "
+            "explicitly narrowing to named equipment types",
+        ),
+        (
+            '"equipment_types": len(result.get("native_equipment", {})),',
+            "a narrowed run no longer reports how many equipment types it "
+            "actually covered, so it reads like a full matrix",
+        ),
+    ):
+        assert token in verifier, (
+            f"{why} (real-Steam native inventory matrix lacks: {token})"
+        )
+    return (
+        "real Steam covers gold, both orbs, native potion, every equipment "
+        "type, and loot materialization by default; narrowing needs an "
+        "explicit --item-type and is reported in the result"
+    )
 
 
 def test_steam_friend_active_run_reconnect_is_wired() -> str:

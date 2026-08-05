@@ -1659,42 +1659,16 @@ def test_ci_runs_every_contract_that_needs_no_local_artifact() -> str:
 # Contracts that are defined but deliberately NOT registered, each mapped to the
 # exact token its subsystem has since renamed or restructured away.
 #
-# These are not permission to skip work. Registering one as it stands fails;
-# rewriting its tokens to match today's source without re-verifying the
-# behaviour would convert a real gate into a tautology, which is the precise
-# failure this file exists to prevent. The census below calls every one of them
-# and requires that it STILL fails, so a repaired contract cannot be parked
-# here -- fixing one forces you to register it.
-STALE_UNREGISTERED_CONTRACTS: dict[tuple[str, str], str] = {
-    (
-        "static_multiplayer_platform_contracts",
-        "test_proton_input_targets_the_exact_native_game_window",
-    ): "proton_input_process_id()",
-    (
-        "static_multiplayer_platform_contracts",
-        "test_steam_behavior_arena_reset_waits_for_native_spawner",
-    ): "def reset_quiet_arena()",
-    (
-        "static_multiplayer_progression_contracts",
-        "test_steam_friend_native_inventory_matrix_is_wired",
-    ): "for item_type in native_item.EQUIPPABLE_TYPE_IDS:",
-    (
-        "static_multiplayer_transport_contracts",
-        "test_local_udp_ingress_and_wire_framing_are_bounded",
-    ): "void LocalUdpIngressWorkerMain(",
-    (
-        "static_re_transport_core_contracts",
-        "test_async_logger_keeps_blocking_output_off_callers",
-    ): "void LogWriterMain()",
-    (
-        "static_re_transport_core_contracts",
-        "test_dead_multiplayer_participants_are_authority_inert",
-    ): 'log_cast_drop("participant_dead");',
-    (
-        "static_wan_corpse_rendering_contracts",
-        "test_dead_owner_vitals_are_reasserted_after_the_progression_tick",
-    ): "InitializeLocalDeathProgressionTickHook(",
-}
+# This is empty, and the census below is what keeps it honest in both
+# directions: an unregistered contract that is not named here fails, and a name
+# here whose contract has been repaired also fails. Twelve orphans were found
+# when the census was written; seven of them named drifted tokens and were
+# declared here while the behaviour behind each was re-verified and the contract
+# re-expressed against what the code does now. Adding an entry is a last resort:
+# rewriting a stale contract's tokens to match today's source WITHOUT re-reading
+# the subsystem converts a real gate into a tautology, which is the precise
+# failure this file exists to prevent.
+STALE_UNREGISTERED_CONTRACTS: dict[tuple[str, str], str] = {}
 
 
 def test_every_defined_contract_reaches_the_registry() -> str:
@@ -1764,6 +1738,11 @@ def test_every_defined_contract_reaches_the_registry() -> str:
             f"instead of leaving it declared stale"
         )
 
+    if not STALE_UNREGISTERED_CONTRACTS:
+        return (
+            f"all {len(defined)} defined contracts reach the registry, with "
+            "none parked as stale"
+        )
     return (
         f"all {len(defined)} defined contracts are registered or declared; the "
         f"{len(STALE_UNREGISTERED_CONTRACTS)} declared exclusions each still "

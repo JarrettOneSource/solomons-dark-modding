@@ -98,19 +98,48 @@ def test_local_udp_ingress_and_wire_framing_are_bounded() -> str:
         "kMaximumPacketApplyBatchMicroseconds = 2000",
     ):
         assert token in transport, f"bounded app apply lacks: {token}"
+    # Resolve the ingress worker by what is actually spawned. This used to
+    # require the literal `void LocalUdpIngressWorkerMain(`, so it broke --
+    # unnoticed, because it was never registered -- when the entry point became
+    # a _beginthreadex proc (`unsigned __stdcall f(void*)`). Nothing about the
+    # ingress loop had moved. Anchoring on the spawn site also proves the loop
+    # is started: the old token was satisfied by a worker nobody ever ran.
+    spawn = re.search(
+        r"_beginthreadex\(\s*[^,]*,\s*[^,]*,\s*&?(\w+)\s*,",
+        receive,
+    )
+    assert spawn, (
+        "no thread is started for local UDP ingress, so datagrams would only "
+        "be drained when the game thread happens to poll"
+    )
+    worker_definition = re.search(
+        rf"^[^\n]*\b{re.escape(spawn.group(1))}\s*\([^;{{]*\)\s*{{",
+        receive,
+        re.M,
+    )
+    assert worker_definition, (
+        f"local UDP ingress is started on {spawn.group(1)}, which is not "
+        "defined in receive_packets.inl"
+    )
+    worker_body = receive[
+        worker_definition.start():receive.index("\n}\n", worker_definition.start())
+    ]
+    for token in ("select(", "recvfrom(", "ProcessLocalUdpDatagram("):
+        assert token in worker_body, (
+            f"the spawned local UDP ingress worker lacks: {token}"
+        )
+    # These all live in receive_packets.inl. The search used to run against
+    # receive + network_telemetry.cpp, which let any of them drift into the
+    # telemetry file -- somewhere the ingress path does not read -- and still
+    # satisfy the contract. Nothing was ever satisfied from there.
     for token in (
-        "void LocalUdpIngressWorkerMain(",
-        "select(",
-        "ProcessLocalUdpDatagram(",
         "kLocalUdpMaximumIngressPackets = 2048",
         "kLocalUdpMaximumIngressBytes",
         "TakeNextLocalUdpPacket(",
         "sizeof(TransportPacketBuffer)",
         "queue_age_us",
     ):
-        assert token in receive + _read(
-            "SolomonDarkModLoader/src/network_telemetry.cpp"
-        ), f"continuous local UDP ingress lacks: {token}"
+        assert token in receive, f"continuous local UDP ingress lacks: {token}"
     assert (
         "const auto batch_started_us = telemetry_enabled"
         not in receive
@@ -699,8 +728,22 @@ def test_empty_run_snapshot_unregisters_stale_enemies_without_parking() -> str:
         unmatched_binding,
         "if (local_it == local_by_network_id.end()) {",
         "if (allow_structural_reconciliation &&",
-        "            continue;\n        }\n\n        auto& binding = "
-        "local_bindings[local_it->second];",
+    )
+    # This one really does need the nesting, so it says so with a regex instead
+    # of smuggling indentation into an ordered token: the unmatched branch must
+    # end in an *unconditional* `continue;` at the branch's own depth, with the
+    # matched-binding dereference as the next statement after it closes. An
+    # inline guard (`if (parked) continue;`) or a deeper `continue;` would leave
+    # a path that falls through and dereferences an end() iterator.
+    assert re.search(
+        r"\n {12}continue;\n {8}\}\n\n"
+        r" {8}auto& binding = local_bindings\[local_it->second\];",
+        unmatched_binding,
+    ), (
+        "the unmatched-binding branch no longer ends in an unconditional "
+        "continue immediately before the matched-binding dereference, so an "
+        "unmatched snapshot actor could fall through to "
+        "local_bindings[local_it->second] with an end() iterator"
     )
 
     for forbidden in (
