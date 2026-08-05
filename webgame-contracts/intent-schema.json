@@ -1,28 +1,10 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://solomondark.example/contracts/intent-schema.json",
-  "title": "Solomon Dark device intent record",
-  "description": "Device-independent browser-rebuild intent plus optional exact native-source provenance.",
-  "type": "object",
-  "additionalProperties": false,
-  "required": [
-    "schema_version",
-    "sequence",
-    "tick",
-    "intent"
-  ],
-  "properties": {
-    "schema_version": {
-      "const": "1.0.0"
-    },
-    "sequence": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "tick": {
-      "type": "integer",
-      "minimum": 0
-    },
+  "title": "Solomon Dark Intent",
+  "description": "The device-independent action union every browser-rebuild input producer targets. Native trace provenance is defined separately as a golden-only encoding record.",
+  "$ref": "#/$defs/intent",
+  "$defs": {
     "intent": {
       "oneOf": [
         {
@@ -42,11 +24,6 @@
         }
       ]
     },
-    "native_source": {
-      "$ref": "#/$defs/nativeSource"
-    }
-  },
-  "$defs": {
     "worldPoint": {
       "type": "object",
       "additionalProperties": false,
@@ -259,6 +236,40 @@
         "raw": {
           "type": "object",
           "description": "Exact immutable producer record. The native-mouse lossless profile retains every key and value and reconstructs raw traces from this member verbatim."
+        }
+      }
+    },
+    "nativeEncodingRecord": {
+      "description": "Golden-only envelope. Its zero-or-more Intent actions preserve the fact that many raw native samples emit no semantic action, while native_source makes the full raw trace exactly reconstructable.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "sequence",
+        "tick",
+        "intents",
+        "native_source"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0.0"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tick": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "intents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/intent"
+          }
+        },
+        "native_source": {
+          "$ref": "#/$defs/nativeSource"
         }
       }
     }

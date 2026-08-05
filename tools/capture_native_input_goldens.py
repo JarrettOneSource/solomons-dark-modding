@@ -531,16 +531,16 @@ def aim_point_from_trace(
     raise CaptureFailure("trace did not expose a readable native cursor world point")
 
 
-def intent_record(
+def intent_encoding_record(
     sequence: int,
     raw: dict[str, Any],
-    intent: dict[str, Any],
+    intents: list[dict[str, Any]],
 ) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
         "sequence": sequence,
         "tick": int(raw.get("simulation_tick", 0)),
-        "intent": intent,
+        "intents": intents,
         "native_source": {
             "kind": str(raw["kind"]),
             "raw": raw,
@@ -619,11 +619,17 @@ def encode_click_trace(
                 },
             )
         )
-    selected.sort(key=lambda item: int(item[0]["sequence"]))
-    raw_timeline = [raw for raw, _ in selected]
-    intents = [
-        intent_record(index, raw, intent)
-        for index, (raw, intent) in enumerate(selected)
+    intents_by_raw_sequence: dict[int, list[dict[str, Any]]] = {}
+    for raw, intent in selected:
+        intents_by_raw_sequence.setdefault(int(raw["sequence"]), []).append(intent)
+    raw_timeline = events
+    intent_encoding = [
+        intent_encoding_record(
+            index,
+            raw,
+            intents_by_raw_sequence.get(int(raw["sequence"]), []),
+        )
+        for index, raw in enumerate(raw_timeline)
     ]
 
     positions = [
@@ -659,7 +665,10 @@ def encode_click_trace(
     observations = {
         "surface_route": route,
         "world_move_intent_count": sum(
-            1 for record in intents if record["intent"]["kind"] == "move"
+            1
+            for record in intent_encoding
+            for intent in record["intents"]
+            if intent["kind"] == "move"
         ),
         "native_actor_position_delta": position_delta,
         "active_actor_tick_count": len(active_actor_events),
@@ -672,7 +681,7 @@ def encode_click_trace(
             for event in actor_events
         ),
     }
-    return raw_timeline, intents, observations
+    return raw_timeline, intent_encoding, observations
 
 
 def build_capture(
@@ -693,9 +702,7 @@ def build_capture(
         expected_route=expected_route,
         interact_target=interact_target,
     )
-    reconstructed = [
-        record["native_source"]["raw"] for record in intent_timeline
-    ]
+    reconstructed = [record["native_source"]["raw"] for record in intent_timeline]
     raw_hash = sha256_bytes(canonical_bytes(raw_timeline))
     reconstructed_hash = sha256_bytes(canonical_bytes(reconstructed))
     exact_equal = reconstructed == raw_timeline
@@ -720,7 +727,10 @@ def build_capture(
             ),
             "trace_sha256": sha256_bytes(canonical_bytes(trace)),
             "round_trip": {
-                "method": "native_source.raw verbatim reconstruction in sequence order",
+                "method": (
+                    "one encoding record per native trace event; reconstruct "
+                    "native_source.raw verbatim in sequence order"
+                ),
                 "raw_sha256": raw_hash,
                 "reconstructed_sha256": reconstructed_hash,
                 "exact_equal": exact_equal,
