@@ -223,6 +223,8 @@ press starts the channel on the first eligible tick, hold sustains it, and
 release stops it. Sound/animation cleanup can trail the input fall by another
 stock tick, so consumers must key channel authority to the cast level, not to a
 presentation loop still finishing.
+The longer presentation lifecycle is cross-checked in
+[`multiplayer-frost-channel-stop-2026-07-26.md`](multiplayer-frost-channel-stop-2026-07-26.md).
 
 ### Right click and modifiers
 
@@ -338,6 +340,11 @@ timestamp, trace hash, and round-trip hashes. The traces were driven through the
 exact staged PID/path with `SendMessageTimeoutW` mouse messages into the retail
 WndProc; no fixture event or Intent was hand-authored.
 
+The harness raised the disposable solo actor's HP/max HP to 5000 before each
+trace so the wave could not kill the recorder subject. Those writes occurred
+through `sd.debug` while the recorder was disarmed; they do not alter the input,
+camera, cast, charge, or routing records and are not product behavior.
+
 The additive recorder is read-only and inert unless explicitly armed through
 `sd.debug`. It observes:
 
@@ -379,4 +386,3 @@ raw-to-encoding-to-raw equality.
 - The partial joystick-axis substrate's device enumeration and vendor mapping
   are not a supported action path and were not expanded into a fictional native
   controller contract.
-

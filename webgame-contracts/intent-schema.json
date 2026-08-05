@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://solomondark.example/contracts/intent-schema.json",
+  "$id": "urn:solomon-dark:webgame:intent-schema:1.0.0",
   "title": "Solomon Dark Intent",
   "description": "The device-independent action union every browser-rebuild input producer targets. Native trace provenance is defined separately as a golden-only encoding record.",
   "$ref": "#/$defs/intent",

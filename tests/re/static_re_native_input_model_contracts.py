@@ -54,6 +54,7 @@ def test_native_input_ingress_sampling_and_tick_order_are_pinned() -> str:
             "InputSampleStateChanged(",
             "ObserveNativeInputWindowMessage(",
             '"post_native_refresh"',
+            "if (IsNativeInputTraceActive()) {",
             "ObserveNativeInputActorPostTick(",
         ),
         "bounded read-only native input recorder",
