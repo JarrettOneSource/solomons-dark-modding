@@ -1,0 +1,2566 @@
+{
+    "schema":  "solomon-dark-native-menu-layout-v1",
+    "header":  {
+                   "instance":  "men-title",
+                   "process_id":  16140,
+                   "capture_commit":  "f9cac8783e72e7423a2d952987fa169fa84f3dcb",
+                   "native_exe_sha256":  "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+                   "loader_dll_sha256":  "f21d10e327e576ce2aed02a0626507143a9104c181d6694e2111d102433b52ec",
+                   "captured_at_utc":  "2026-08-05T07:35:21.7922319Z",
+                   "capture_method":  "live native UI tree + exact text/font hooks + native Sprite draw hooks",
+                   "reference_capture":  "../menu-reference-captures/dark-cloud-menu.png"
+               },
+    "layout":  {
+                   "generation":  3387,
+                   "captured_at_milliseconds":  1148564203,
+                   "screen_id":  "simple_menu",
+                   "screen_title":  "Title Screen",
+                   "capture_method":  "live native UI tree + exact text/font hooks + native Sprite draw hooks",
+                   "elements":  [
+                                    {
+                                        "id":  "simple_menu.art.ui_42.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.42",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  67,
+                                        "rect":  [
+                                                     9.500000,
+                                                     8.500000,
+                                                     40.500000,
+                                                     41.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               9.500000,
+                                                               8.500000,
+                                                               40.500000,
+                                                               41.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_31.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.31",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  31,
+                                        "rect":  [
+                                                     1500.000000,
+                                                     18.000000,
+                                                     1600.000000,
+                                                     208.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1500.000000,
+                                                               18.000000,
+                                                               1642.000000,
+                                                               208.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_32.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.32",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  32,
+                                        "rect":  [
+                                                     0.000000,
+                                                     26.500000,
+                                                     104.000000,
+                                                     199.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -34.000000,
+                                                               26.500000,
+                                                               104.000000,
+                                                               199.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_18.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.18",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  9,
+                                        "rect":  [
+                                                     669.000000,
+                                                     50.999992,
+                                                     931.000000,
+                                                     118.000015
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               669.000000,
+                                                               50.999992,
+                                                               931.000000,
+                                                               118.000015
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_29.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.29",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  30,
+                                        "rect":  [
+                                                     64.500000,
+                                                     54.500000,
+                                                     205.500000,
+                                                     111.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               64.500000,
+                                                               54.500000,
+                                                               205.500000,
+                                                               111.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_29.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.29",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  29,
+                                        "rect":  [
+                                                     1394.500000,
+                                                     54.500000,
+                                                     1535.500000,
+                                                     111.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1394.500000,
+                                                               54.500000,
+                                                               1535.500000,
+                                                               111.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_17.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  23,
+                                        "rect":  [
+                                                     490.000000,
+                                                     90.000000,
+                                                     570.000000,
+                                                     173.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               490.000000,
+                                                               90.000000,
+                                                               570.000000,
+                                                               173.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_17.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  24,
+                                        "rect":  [
+                                                     1030.000000,
+                                                     90.000000,
+                                                     1110.000000,
+                                                     173.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1030.000000,
+                                                               90.000000,
+                                                               1110.000000,
+                                                               173.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_107.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.107",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  1,
+                                        "rect":  [
+                                                     516.500000,
+                                                     99.500000,
+                                                     601.500000,
+                                                     188.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               516.500000,
+                                                               99.500000,
+                                                               601.500000,
+                                                               188.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_108.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.108",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  2,
+                                        "rect":  [
+                                                     998.500000,
+                                                     99.500000,
+                                                     1083.500000,
+                                                     188.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               998.500000,
+                                                               99.500000,
+                                                               1083.500000,
+                                                               188.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_17.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  5,
+                                        "rect":  [
+                                                     535.000000,
+                                                     117.000000,
+                                                     615.000000,
+                                                     200.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               535.000000,
+                                                               117.000000,
+                                                               615.000000,
+                                                               200.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_17.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  6,
+                                        "rect":  [
+                                                     985.000000,
+                                                     117.000000,
+                                                     1065.000000,
+                                                     200.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               985.000000,
+                                                               117.000000,
+                                                               1065.000000,
+                                                               200.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_13.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.13",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  51,
+                                        "rect":  [
+                                                     970.000000,
+                                                     128.000000,
+                                                     1004.000000,
+                                                     193.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               970.000000,
+                                                               128.000000,
+                                                               1004.000000,
+                                                               193.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_13.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.13",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  52,
+                                        "rect":  [
+                                                     1106.000000,
+                                                     128.000000,
+                                                     1140.000000,
+                                                     193.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1106.000000,
+                                                               128.000000,
+                                                               1140.000000,
+                                                               193.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_13.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.13",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  68,
+                                        "rect":  [
+                                                     1140.000000,
+                                                     128.000000,
+                                                     1174.000000,
+                                                     193.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1140.000000,
+                                                               128.000000,
+                                                               1174.000000,
+                                                               193.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_13.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.13",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  69,
+                                        "rect":  [
+                                                     1308.000000,
+                                                     128.000000,
+                                                     1342.000000,
+                                                     193.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1308.000000,
+                                                               128.000000,
+                                                               1342.000000,
+                                                               193.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_13.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.13",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  49,
+                                        "rect":  [
+                                                     460.000000,
+                                                     136.000000,
+                                                     494.000000,
+                                                     187.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               460.000000,
+                                                               136.000000,
+                                                               494.000000,
+                                                               201.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_13.6",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.13",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  50,
+                                        "rect":  [
+                                                     596.000000,
+                                                     136.000000,
+                                                     630.000000,
+                                                     187.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               596.000000,
+                                                               136.000000,
+                                                               630.000000,
+                                                               201.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_13.7",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.13",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  47,
+                                        "rect":  [
+                                                     630.000000,
+                                                     136.000000,
+                                                     664.000000,
+                                                     187.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               630.000000,
+                                                               136.000000,
+                                                               664.000000,
+                                                               201.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_13.8",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.13",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  48,
+                                        "rect":  [
+                                                     936.000000,
+                                                     136.000000,
+                                                     970.000000,
+                                                     187.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               936.000000,
+                                                               136.000000,
+                                                               970.000000,
+                                                               201.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_107.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.107",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  39,
+                                        "rect":  [
+                                                     34.500000,
+                                                     153.500000,
+                                                     119.500000,
+                                                     242.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               34.500000,
+                                                               153.500000,
+                                                               119.500000,
+                                                               242.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_108.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.108",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  40,
+                                        "rect":  [
+                                                     1480.500000,
+                                                     153.500000,
+                                                     1565.500000,
+                                                     242.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1480.500000,
+                                                               153.500000,
+                                                               1565.500000,
+                                                               242.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_20.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.20",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  36,
+                                        "rect":  [
+                                                     0.000000,
+                                                     162.500000,
+                                                     55.000000,
+                                                     243.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -42.500000,
+                                                               162.500000,
+                                                               152.500000,
+                                                               243.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_20.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.20",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  34,
+                                        "rect":  [
+                                                     1545.000000,
+                                                     162.500000,
+                                                     1599.000000,
+                                                     243.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1447.500000,
+                                                               162.500000,
+                                                               1642.500000,
+                                                               243.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_17.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  43,
+                                        "rect":  [
+                                                     55.000000,
+                                                     173.000000,
+                                                     135.000000,
+                                                     256.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               55.000000,
+                                                               173.000000,
+                                                               135.000000,
+                                                               256.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_17.6",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  44,
+                                        "rect":  [
+                                                     1465.000000,
+                                                     173.000000,
+                                                     1545.000000,
+                                                     256.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1465.000000,
+                                                               173.000000,
+                                                               1545.000000,
+                                                               256.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_18.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.18",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  86,
+                                        "rect":  [
+                                                     669.000000,
+                                                     195.499985,
+                                                     931.000000,
+                                                     262.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               669.000000,
+                                                               195.499985,
+                                                               931.000000,
+                                                               262.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.controlpanel_18.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "ControlPanel.18",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  16,
+                                        "rect":  [
+                                                     990.000000,
+                                                     219.000000,
+                                                     1054.000000,
+                                                     244.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               990.000000,
+                                                               219.000000,
+                                                               1054.000000,
+                                                               244.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.controlpanel_18.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "ControlPanel.18",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  17,
+                                        "rect":  [
+                                                     910.000000,
+                                                     260.000000,
+                                                     974.000000,
+                                                     285.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               910.000000,
+                                                               260.000000,
+                                                               974.000000,
+                                                               285.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_17.7",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  82,
+                                        "rect":  [
+                                                     583.500000,
+                                                     261.500000,
+                                                     663.500000,
+                                                     344.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               583.500000,
+                                                               261.500000,
+                                                               663.500000,
+                                                               344.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_17.8",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  83,
+                                        "rect":  [
+                                                     936.500000,
+                                                     261.500000,
+                                                     1016.500000,
+                                                     344.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               936.500000,
+                                                               261.500000,
+                                                               1016.500000,
+                                                               344.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_54.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  71,
+                                        "rect":  [
+                                                     617.500000,
+                                                     295.500000,
+                                                     687.500000,
+                                                     380.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               617.500000,
+                                                               295.500000,
+                                                               687.500000,
+                                                               380.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_54.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  72,
+                                        "rect":  [
+                                                     912.500000,
+                                                     295.500000,
+                                                     982.500000,
+                                                     380.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               912.500000,
+                                                               295.500000,
+                                                               982.500000,
+                                                               380.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_101.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.101",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  70,
+                                        "rect":  [
+                                                     623.500000,
+                                                     301.500000,
+                                                     976.500000,
+                                                     370.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               623.500000,
+                                                               301.500000,
+                                                               976.500000,
+                                                               370.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_18.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.18",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  27,
+                                        "rect":  [
+                                                     421.000000,
+                                                     319.000000,
+                                                     488.000000,
+                                                     581.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               421.000000,
+                                                               319.000000,
+                                                               488.000000,
+                                                               581.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_18.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.18",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  28,
+                                        "rect":  [
+                                                     1112.000000,
+                                                     319.000000,
+                                                     1179.000000,
+                                                     581.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1112.000000,
+                                                               319.000000,
+                                                               1179.000000,
+                                                               581.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.controlpanel_8.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "ControlPanel.8",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  18,
+                                        "rect":  [
+                                                     978.000000,
+                                                     348.000000,
+                                                     1060.000000,
+                                                     378.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               978.000000,
+                                                               348.000000,
+                                                               1060.000000,
+                                                               378.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_54.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  74,
+                                        "rect":  [
+                                                     617.500000,
+                                                     371.500000,
+                                                     687.500000,
+                                                     456.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               617.500000,
+                                                               371.500000,
+                                                               687.500000,
+                                                               456.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_54.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  75,
+                                        "rect":  [
+                                                     912.500000,
+                                                     371.500000,
+                                                     982.500000,
+                                                     456.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               912.500000,
+                                                               371.500000,
+                                                               982.500000,
+                                                               456.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_101.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.101",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  73,
+                                        "rect":  [
+                                                     623.500000,
+                                                     377.500000,
+                                                     976.500000,
+                                                     446.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               623.500000,
+                                                               377.500000,
+                                                               976.500000,
+                                                               446.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.controlpanel_0.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "ControlPanel.0",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  19,
+                                        "rect":  [
+                                                     1043.000000,
+                                                     396.500000,
+                                                     1057.000000,
+                                                     411.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1043.000000,
+                                                               396.500000,
+                                                               1057.000000,
+                                                               411.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_20.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.20",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  35,
+                                        "rect":  [
+                                                     0.000000,
+                                                     446.000000,
+                                                     55.000000,
+                                                     527.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -82.500000,
+                                                               446.000000,
+                                                               112.500000,
+                                                               527.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_20.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.20",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  33,
+                                        "rect":  [
+                                                     1545.000000,
+                                                     446.000000,
+                                                     1599.000000,
+                                                     527.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1487.500000,
+                                                               446.000000,
+                                                               1682.500000,
+                                                               527.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_54.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  77,
+                                        "rect":  [
+                                                     617.500000,
+                                                     447.500000,
+                                                     687.500000,
+                                                     532.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               617.500000,
+                                                               447.500000,
+                                                               687.500000,
+                                                               532.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_54.6",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  78,
+                                        "rect":  [
+                                                     912.500000,
+                                                     447.500000,
+                                                     982.500000,
+                                                     532.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               912.500000,
+                                                               447.500000,
+                                                               982.500000,
+                                                               532.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_101.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.101",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  76,
+                                        "rect":  [
+                                                     623.500000,
+                                                     453.500000,
+                                                     976.500000,
+                                                     522.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               623.500000,
+                                                               453.500000,
+                                                               976.500000,
+                                                               522.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.controlpanel_0.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "ControlPanel.0",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  20,
+                                        "rect":  [
+                                                     1043.000000,
+                                                     487.500000,
+                                                     1057.000000,
+                                                     502.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1043.000000,
+                                                               487.500000,
+                                                               1057.000000,
+                                                               502.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_54.7",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  80,
+                                        "rect":  [
+                                                     617.500000,
+                                                     523.500000,
+                                                     687.500000,
+                                                     608.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               617.500000,
+                                                               523.500000,
+                                                               687.500000,
+                                                               608.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_54.8",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  81,
+                                        "rect":  [
+                                                     912.500000,
+                                                     523.500000,
+                                                     982.500000,
+                                                     608.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               912.500000,
+                                                               523.500000,
+                                                               982.500000,
+                                                               608.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_101.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.101",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  79,
+                                        "rect":  [
+                                                     623.500000,
+                                                     529.500000,
+                                                     976.500000,
+                                                     598.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               623.500000,
+                                                               529.500000,
+                                                               976.500000,
+                                                               598.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_17.9",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  84,
+                                        "rect":  [
+                                                     583.500000,
+                                                     555.500000,
+                                                     663.500000,
+                                                     638.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               583.500000,
+                                                               555.500000,
+                                                               663.500000,
+                                                               638.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_17.10",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  85,
+                                        "rect":  [
+                                                     936.500000,
+                                                     555.500000,
+                                                     1016.500000,
+                                                     638.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               936.500000,
+                                                               555.500000,
+                                                               1016.500000,
+                                                               638.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.controlpanel_0.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "ControlPanel.0",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  21,
+                                        "rect":  [
+                                                     1043.000000,
+                                                     578.500000,
+                                                     1057.000000,
+                                                     593.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1043.000000,
+                                                               578.500000,
+                                                               1057.000000,
+                                                               593.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_54.9",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  14,
+                                        "rect":  [
+                                                     696.000000,
+                                                     637.500000,
+                                                     766.000000,
+                                                     722.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               696.000000,
+                                                               637.500000,
+                                                               766.000000,
+                                                               722.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_8.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.8",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  87,
+                                        "rect":  [
+                                                     775.500000,
+                                                     637.500000,
+                                                     824.500000,
+                                                     749.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               775.500000,
+                                                               637.500000,
+                                                               824.500000,
+                                                               749.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_54.10",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  15,
+                                        "rect":  [
+                                                     834.000000,
+                                                     637.500000,
+                                                     904.000000,
+                                                     722.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               834.000000,
+                                                               637.500000,
+                                                               904.000000,
+                                                               722.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_8.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.8",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  88,
+                                        "rect":  [
+                                                     706.625000,
+                                                     638.500000,
+                                                     743.375000,
+                                                     722.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               706.625000,
+                                                               638.500000,
+                                                               743.375000,
+                                                               722.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_8.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.8",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  89,
+                                        "rect":  [
+                                                     856.625000,
+                                                     638.500000,
+                                                     893.375000,
+                                                     722.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               856.625000,
+                                                               638.500000,
+                                                               893.375000,
+                                                               722.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_101.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.101",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  13,
+                                        "rect":  [
+                                                     702.000000,
+                                                     643.500000,
+                                                     898.000000,
+                                                     712.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               623.500000,
+                                                               643.500000,
+                                                               976.500000,
+                                                               712.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.controlpanel_0.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "ControlPanel.0",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  22,
+                                        "rect":  [
+                                                     1043.000000,
+                                                     669.500000,
+                                                     1057.000000,
+                                                     684.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1043.000000,
+                                                               669.500000,
+                                                               1057.000000,
+                                                               684.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_17.11",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  7,
+                                        "rect":  [
+                                                     535.000000,
+                                                     700.000000,
+                                                     615.000000,
+                                                     783.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               535.000000,
+                                                               700.000000,
+                                                               615.000000,
+                                                               783.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_17.12",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  8,
+                                        "rect":  [
+                                                     985.000000,
+                                                     700.000000,
+                                                     1065.000000,
+                                                     783.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               985.000000,
+                                                               700.000000,
+                                                               1065.000000,
+                                                               783.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_109.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.109",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  3,
+                                        "rect":  [
+                                                     516.500000,
+                                                     711.500000,
+                                                     601.500000,
+                                                     800.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               516.500000,
+                                                               711.500000,
+                                                               601.500000,
+                                                               800.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_110.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.110",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  4,
+                                        "rect":  [
+                                                     998.500000,
+                                                     711.500000,
+                                                     1083.500000,
+                                                     800.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               998.500000,
+                                                               711.500000,
+                                                               1083.500000,
+                                                               800.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_17.13",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  45,
+                                        "rect":  [
+                                                     55.000000,
+                                                     717.000000,
+                                                     135.000000,
+                                                     800.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               55.000000,
+                                                               717.000000,
+                                                               135.000000,
+                                                               800.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_17.14",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  46,
+                                        "rect":  [
+                                                     1465.000000,
+                                                     717.000000,
+                                                     1545.000000,
+                                                     800.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1465.000000,
+                                                               717.000000,
+                                                               1545.000000,
+                                                               800.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_17.15",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  25,
+                                        "rect":  [
+                                                     490.000000,
+                                                     727.000000,
+                                                     570.000000,
+                                                     810.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               490.000000,
+                                                               727.000000,
+                                                               570.000000,
+                                                               810.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_17.16",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  26,
+                                        "rect":  [
+                                                     1030.000000,
+                                                     727.000000,
+                                                     1110.000000,
+                                                     810.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1030.000000,
+                                                               727.000000,
+                                                               1110.000000,
+                                                               810.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_109.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.109",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  41,
+                                        "rect":  [
+                                                     34.500000,
+                                                     730.500000,
+                                                     119.500000,
+                                                     819.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               34.500000,
+                                                               730.500000,
+                                                               119.500000,
+                                                               819.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_110.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.110",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  42,
+                                        "rect":  [
+                                                     1480.500000,
+                                                     730.500000,
+                                                     1565.500000,
+                                                     819.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1480.500000,
+                                                               730.500000,
+                                                               1565.500000,
+                                                               819.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_31.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.31",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  38,
+                                        "rect":  [
+                                                     0.000000,
+                                                     765.000000,
+                                                     97.000000,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -45.000000,
+                                                               765.000000,
+                                                               97.000000,
+                                                               955.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_32.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.32",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  37,
+                                        "rect":  [
+                                                     1506.000000,
+                                                     773.500000,
+                                                     1600.000000,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1506.000000,
+                                                               773.500000,
+                                                               1644.000000,
+                                                               946.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_8.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.8",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  10,
+                                        "rect":  [
+                                                     775.500000,
+                                                     782.000000,
+                                                     824.500000,
+                                                     894.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               775.500000,
+                                                               782.000000,
+                                                               824.500000,
+                                                               894.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_8.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.8",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  11,
+                                        "rect":  [
+                                                     706.625000,
+                                                     783.000000,
+                                                     743.375000,
+                                                     867.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               706.625000,
+                                                               783.000000,
+                                                               743.375000,
+                                                               867.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_8.6",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.8",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  12,
+                                        "rect":  [
+                                                     856.625000,
+                                                     783.000000,
+                                                     893.375000,
+                                                     867.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               856.625000,
+                                                               783.000000,
+                                                               893.375000,
+                                                               867.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_54.11",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  54,
+                                        "rect":  [
+                                                     617.500000,
+                                                     803.500000,
+                                                     687.500000,
+                                                     888.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               617.500000,
+                                                               803.500000,
+                                                               687.500000,
+                                                               888.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_54.12",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  55,
+                                        "rect":  [
+                                                     912.500000,
+                                                     803.500000,
+                                                     982.500000,
+                                                     888.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               912.500000,
+                                                               803.500000,
+                                                               982.500000,
+                                                               888.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_101.6",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.101",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  53,
+                                        "rect":  [
+                                                     623.500000,
+                                                     809.500000,
+                                                     976.000000,
+                                                     878.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               623.500000,
+                                                               809.500000,
+                                                               976.500000,
+                                                               878.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_53.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.53",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  58,
+                                        "rect":  [
+                                                     384.000000,
+                                                     812.000000,
+                                                     411.000000,
+                                                     874.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               384.000000,
+                                                               812.000000,
+                                                               411.000000,
+                                                               874.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_53.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.53",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  59,
+                                        "rect":  [
+                                                     459.000000,
+                                                     812.000000,
+                                                     486.000000,
+                                                     874.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               459.000000,
+                                                               812.000000,
+                                                               486.000000,
+                                                               874.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_53.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.53",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  62,
+                                        "rect":  [
+                                                     489.000000,
+                                                     812.000000,
+                                                     516.000000,
+                                                     874.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               489.000000,
+                                                               812.000000,
+                                                               516.000000,
+                                                               874.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_53.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.53",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  63,
+                                        "rect":  [
+                                                     564.000000,
+                                                     812.000000,
+                                                     591.000000,
+                                                     874.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               564.000000,
+                                                               812.000000,
+                                                               591.000000,
+                                                               874.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_53.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.53",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  65,
+                                        "rect":  [
+                                                     1011.500000,
+                                                     812.000000,
+                                                     1038.500000,
+                                                     874.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1011.500000,
+                                                               812.000000,
+                                                               1038.500000,
+                                                               874.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_53.6",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.53",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  66,
+                                        "rect":  [
+                                                     1181.500000,
+                                                     812.000000,
+                                                     1208.500000,
+                                                     874.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1181.500000,
+                                                               812.000000,
+                                                               1208.500000,
+                                                               874.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_103.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.103",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  56,
+                                        "rect":  [
+                                                     390.000000,
+                                                     818.000000,
+                                                     480.000000,
+                                                     870.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               302.500000,
+                                                               818.000000,
+                                                               567.500000,
+                                                               870.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_103.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.103",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  60,
+                                        "rect":  [
+                                                     495.000000,
+                                                     818.000000,
+                                                     585.000000,
+                                                     870.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               407.500000,
+                                                               818.000000,
+                                                               672.500000,
+                                                               870.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_103.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.103",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  64,
+                                        "rect":  [
+                                                     1017.000000,
+                                                     818.000000,
+                                                     1202.000000,
+                                                     870.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               977.500000,
+                                                               818.000000,
+                                                               1242.500000,
+                                                               870.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_58.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.58",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  57,
+                                        "rect":  [
+                                                     421.500000,
+                                                     831.000000,
+                                                     448.500000,
+                                                     857.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               421.500000,
+                                                               831.000000,
+                                                               448.500000,
+                                                               857.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.art.ui_66.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.66",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  61,
+                                        "rect":  [
+                                                     526.500000,
+                                                     832.500000,
+                                                     553.500000,
+                                                     855.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               526.500000,
+                                                               832.500000,
+                                                               553.500000,
+                                                               855.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.control.profile_resume.1",
+                                        "kind":  "control",
+                                        "text":  "RESUME",
+                                        "action_id":  "profile.resume",
+                                        "art_id":  "",
+                                        "font_id":  "",
+                                        "text_style":  "",
+                                        "visible":  true,
+                                        "interactive":  true,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     623.500000,
+                                                     301.500000,
+                                                     976.500000,
+                                                     370.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               623.500000,
+                                                               301.500000,
+                                                               976.500000,
+                                                               370.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.control.profile_game_settings.1",
+                                        "kind":  "control",
+                                        "text":  "GAME SETTINGS",
+                                        "action_id":  "profile.game_settings",
+                                        "art_id":  "",
+                                        "font_id":  "",
+                                        "text_style":  "",
+                                        "visible":  true,
+                                        "interactive":  true,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     623.500000,
+                                                     377.500000,
+                                                     976.500000,
+                                                     446.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               623.500000,
+                                                               377.500000,
+                                                               976.500000,
+                                                               446.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.control.profile_sign_out.1",
+                                        "kind":  "control",
+                                        "text":  "SIGN OUT",
+                                        "action_id":  "profile.sign_out",
+                                        "art_id":  "",
+                                        "font_id":  "",
+                                        "text_style":  "",
+                                        "visible":  true,
+                                        "interactive":  true,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     623.500000,
+                                                     453.500000,
+                                                     976.500000,
+                                                     522.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               623.500000,
+                                                               453.500000,
+                                                               976.500000,
+                                                               522.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.control.profile_main_menu.1",
+                                        "kind":  "control",
+                                        "text":  "MAIN MENU",
+                                        "action_id":  "profile.main_menu",
+                                        "art_id":  "",
+                                        "font_id":  "",
+                                        "text_style":  "",
+                                        "visible":  true,
+                                        "interactive":  true,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     623.500000,
+                                                     529.500000,
+                                                     976.500000,
+                                                     598.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               623.500000,
+                                                               529.500000,
+                                                               976.500000,
+                                                               598.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.panel.title_screen.1",
+                                        "kind":  "panel",
+                                        "text":  "Title Screen",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "",
+                                        "text_style":  "",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     0.000000,
+                                                     0.000000,
+                                                     1600.000000,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               0.000000,
+                                                               0.000000,
+                                                               1600.000000,
+                                                               900.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.text.the_dark_cloud.1",
+                                        "kind":  "text",
+                                        "text":  "THE DARK CLOUD",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "Fonts.308-349",
+                                        "text_style":  "native_atlas_text:Fonts.308-349",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     747.000000,
+                                                     22.000000,
+                                                     1000.000000,
+                                                     52.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               747.000000,
+                                                               22.000000,
+                                                               1000.000000,
+                                                               52.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.text.beta.1",
+                                        "kind":  "text",
+                                        "text":  "beta",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "Fonts.216-307",
+                                        "text_style":  "native_atlas_text:Fonts.216-307",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     1005.000000,
+                                                     35.000000,
+                                                     1066.000000,
+                                                     52.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1005.000000,
+                                                               35.000000,
+                                                               1066.000000,
+                                                               52.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.text.you_are_signed_in_as_a_guest.1",
+                                        "kind":  "text",
+                                        "text":  "You are signed in as a GUEST.",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "Fonts.216-307",
+                                        "text_style":  "native_atlas_text:Fonts.216-307",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     742.000000,
+                                                     65.000000,
+                                                     997.000000,
+                                                     85.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               742.000000,
+                                                               65.000000,
+                                                               997.000000,
+                                                               85.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.text.to_change_this_click_here.1",
+                                        "kind":  "text",
+                                        "text":  "To change this, click here.",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "Fonts.216-307",
+                                        "text_style":  "native_atlas_text:Fonts.216-307",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     737.000000,
+                                                     86.000000,
+                                                     979.000000,
+                                                     105.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               737.000000,
+                                                               86.000000,
+                                                               979.000000,
+                                                               105.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.text.my_levels.1",
+                                        "kind":  "text",
+                                        "text":  "my levels",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "Fonts.216-307",
+                                        "text_style":  "native_atlas_text:Fonts.216-307",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     991.000000,
+                                                     158.000000,
+                                                     1119.000000,
+                                                     175.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               991.000000,
+                                                               158.000000,
+                                                               1119.000000,
+                                                               175.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.text.online_levels.1",
+                                        "kind":  "text",
+                                        "text":  "ONLINE LEVELS",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "Fonts.216-307",
+                                        "text_style":  "native_atlas_text:Fonts.216-307",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     741.000000,
+                                                     163.000000,
+                                                     908.000000,
+                                                     183.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               741.000000,
+                                                               163.000000,
+                                                               908.000000,
+                                                               183.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.text.multiplayer.1",
+                                        "kind":  "text",
+                                        "text":  "multiplayer",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "Fonts.216-307",
+                                        "text_style":  "native_atlas_text:Fonts.216-307",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     1179.000000,
+                                                     165.000000,
+                                                     1322.000000,
+                                                     182.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1179.000000,
+                                                               165.000000,
+                                                               1322.000000,
+                                                               182.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.text.recent.1",
+                                        "kind":  "text",
+                                        "text":  "recent",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "Fonts.216-307",
+                                        "text_style":  "native_atlas_text:Fonts.216-307",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     498.000000,
+                                                     166.000000,
+                                                     593.000000,
+                                                     183.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               498.000000,
+                                                               166.000000,
+                                                               593.000000,
+                                                               183.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.text.boneyard_name.1",
+                                        "kind":  "text",
+                                        "text":  "boneyard name",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "Fonts.216-307",
+                                        "text_style":  "native_atlas_text:Fonts.216-307",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     105.000000,
+                                                     223.000000,
+                                                     308.000000,
+                                                     240.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               105.000000,
+                                                               223.000000,
+                                                               308.000000,
+                                                               240.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.text.sign_out.1",
+                                        "kind":  "text",
+                                        "text":  "SIGN OUT",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "Fonts.216-307",
+                                        "text_style":  "native_atlas_text:Fonts.216-307",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     743.000000,
+                                                     479.000000,
+                                                     866.000000,
+                                                     498.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               743.000000,
+                                                               479.000000,
+                                                               866.000000,
+                                                               498.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.text.edit.1",
+                                        "kind":  "text",
+                                        "text":  "EDIT",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "Fonts.216-307",
+                                        "text_style":  "native_atlas_text:Fonts.216-307",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     769.000000,
+                                                     834.000000,
+                                                     832.000000,
+                                                     854.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               769.000000,
+                                                               834.000000,
+                                                               832.000000,
+                                                               854.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "simple_menu.text.options.1",
+                                        "kind":  "text",
+                                        "text":  "options",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "Fonts.216-307",
+                                        "text_style":  "native_atlas_text:Fonts.216-307",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     1058.000000,
+                                                     837.000000,
+                                                     1161.000000,
+                                                     853.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1058.000000,
+                                                               837.000000,
+                                                               1161.000000,
+                                                               853.000000
+                                                           ]
+                                    }
+                                ]
+               }
+}
