@@ -109,7 +109,7 @@ replayable — but twin-stick is what we build and what the phase gates test.
 | Control | Intent | Notes |
 | --- | --- | --- |
 | Left stick | `move.vector` | Radial deadzone, re-normalized between the inner and outer edge so slow walking is reachable. Mouse emits `move.target` instead; both are first-class |
-| Right stick | `aim` = `player_pos + normalize(stick) × reach` | `reach` is a measured constant, not a taste call — pick it so the aim point lands inside the visible play area at default zoom, and derive it from G14's screen→world transform. Record the number in the G14 doc |
+| Right stick | `aim` = `player_pos + normalize(stick) × reach` | `reach` is derived, not chosen: compute it in P0 from the screen→world transform G14 documents, so the aim point lands inside the visible play area at default zoom. Record the number and its derivation alongside the input producer |
 | Right stick released | aim **holds its last direction** | No auto-aim toward movement. Kiting — retreating while firing backwards — is core to the game, and snapping aim to the move vector makes it impossible |
 | Right trigger | `cast{slot: primary, phase: press → hold → release}` | Maps one-to-one onto native click-hold: holding charges earth, releasing fires. No new semantics needed |
 | Face buttons | `cast{slot: N, …}` | Slot binding follows the HUD's own slot order (G9) |
