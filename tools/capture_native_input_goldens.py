@@ -71,6 +71,16 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def native_windows_path(path: Path) -> str:
+    if os.name == "nt":
+        return str(path)
+    completed = run_command(["wslpath", "-w", str(path)], timeout=5.0)
+    converted = completed.stdout.strip()
+    if not converted:
+        raise CaptureFailure(f"wslpath returned no path for {path}")
+    return converted
+
+
 def run_command(
     command: list[str],
     *,
@@ -108,6 +118,7 @@ class LiveSession:
         self.instance = instance
         self.process_id = process_id
         self.executable_path = executable_path.resolve()
+        self.executable_windows_path = native_windows_path(self.executable_path)
         self.real_input_path = real_input_path.resolve()
         self.environment = os.environ.copy()
         self.environment["SDMOD_LUA_EXEC_PIPE_NAME"] = (
@@ -442,7 +453,7 @@ end
                 str(self.real_input_path),
                 "message-click",
                 str(self.process_id),
-                str(self.executable_path),
+                self.executable_windows_path,
                 f"{fraction_x:.9g}",
                 f"{fraction_y:.9g}",
                 str(hold_ms),
