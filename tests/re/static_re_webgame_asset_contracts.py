@@ -724,4 +724,25 @@ def test_webgame_workspace_battery_is_strict_ratcheted_and_ci_wired() -> str:
     for pattern, consequence in ci_steps:
         if re.search(pattern, workflow, flags=re.MULTILINE) is None:
             raise StaticReTestFailure(consequence)
+    pillow_step = re.search(
+        r"^      - name: Install image test dependency\n"
+        r"(?:^        #.*\n)+"
+        r"^        run: python -m pip install Pillow==12\.2\.0$",
+        workflow,
+        flags=re.MULTILINE,
+    )
+    webgame_test_step = re.search(
+        r"^      - name: Test webgame workspace\n"
+        r"^        run: npm --prefix webgame test$",
+        workflow,
+        flags=re.MULTILINE,
+    )
+    if pillow_step is None:
+        raise StaticReTestFailure(
+            "CI no longer installs the pinned Pillow runtime needed by the real bundle decoder"
+        )
+    if webgame_test_step is None or pillow_step.start() > webgame_test_step.start():
+        raise StaticReTestFailure(
+            "CI runs the real webgame decoder test before installing its Pillow dependency"
+        )
     return "strict TypeScript and locked npm tooling run in five CI steps at floors 21/18/6/14"

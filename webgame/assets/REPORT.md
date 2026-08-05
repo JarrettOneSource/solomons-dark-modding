@@ -94,6 +94,7 @@ the listed message, so a neighboring gate could not earn the result.
 | Two builds are identical | Changed only `secondOutputTreeSha256` | `double-build output tree hashes diverge, so asset emission is not deterministic` | green / green |
 | Every golden ID resolves | Removed the `DeadHawg.12` resolution | `asset manifest leaves golden reference unresolved: DeadHawg.12` | green / green |
 | CI runs the real ratchet | Added a trailing argument to the webgame typecheck command | `CI no longer runs the webgame typecheck ratchet as an isolated step` | green / green |
+| CI can run the real decoder | Moved the existing Pillow install below the webgame test | `CI runs the real webgame decoder test before installing its Pillow dependency` | green / green |
 
 The restored baseline reports:
 
@@ -101,6 +102,11 @@ The restored baseline reports:
 - determinism/weight: both 46-file trees and all pack descriptors match;
 - coverage/resolution: all 28 bundle families and all 485 golden lookups resolve; and
 - workspace/CI: strict TypeScript plus five locked webgame CI steps at floors 21/18/6/14.
+
+The first exact-SHA hosted run caught this dependency-order defect: the real bridge imported the
+existing bundle extractor before Pillow was installed. The workflow now installs its already
+pinned Pillow 12.2.0 dependency before the webgame battery, and the ordering is a mutated static
+claim rather than an implicit step-order assumption.
 
 ## Landed battery
 
