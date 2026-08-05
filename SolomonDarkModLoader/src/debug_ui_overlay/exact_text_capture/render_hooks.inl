@@ -58,6 +58,9 @@ void __fastcall HookDarkCloudBrowserExactTextRender(
 }
 
 void __fastcall HookGlyphDrawHelper(void* self, void* /*unused_edx*/, float arg2, float arg3) {
+    const auto caller_address = reinterpret_cast<uintptr_t>(_ReturnAddress());
+    NativeSceneCaptureBeginSpriteDraw(
+        self, "position", arg2, arg3, nullptr, caller_address);
     ObserveMenuSpritePositionDraw(self, arg2, arg3, false);
     ObserveActiveExactTextGlyph(arg2, arg3);
 
@@ -65,9 +68,14 @@ void __fastcall HookGlyphDrawHelper(void* self, void* /*unused_edx*/, float arg2
     if (original != nullptr) {
         original(self, arg2, arg3);
     }
+    NativeSceneCaptureEndSpriteDraw();
 }
 
 void __fastcall HookTextQuadDrawHelper(void* self, void* /*unused_edx*/, const float* arg2, const float* arg3) {
+    NativeSceneCaptureObserveTexturedQuad(
+        arg2,
+        arg3,
+        reinterpret_cast<uintptr_t>(_ReturnAddress()));
     ObserveActiveSettingsRowTextQuad(arg2);
     ObserveActiveExactTextQuad(self, arg2, arg3);
 

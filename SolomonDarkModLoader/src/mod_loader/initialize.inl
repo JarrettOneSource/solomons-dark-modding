@@ -377,9 +377,13 @@ void Initialize(HMODULE module_handle) {
         const bool native_ui_bridge_required =
             runtime_flags.loader.lua_engine ||
             runtime_flags.multiplayer.foundation ||
-            multiplayer_join_flow_enabled;
+            multiplayer_join_flow_enabled ||
+            IsNativeSceneCaptureRequested();
+        bool native_ui_bridge_initialized = false;
         if (native_ui_bridge_required || diagnostic_ui_enabled) {
-            if (!InitializeDebugUiOverlay(diagnostic_ui_enabled)) {
+            native_ui_bridge_initialized =
+                InitializeDebugUiOverlay(diagnostic_ui_enabled);
+            if (!native_ui_bridge_initialized) {
                 if (multiplayer_join_flow_enabled) {
                     const std::string message =
                         "Multiplayer quick start could not initialize its native UI bridge.";
@@ -394,6 +398,31 @@ void Initialize(HMODULE module_handle) {
             }
         } else {
             Log("Native UI bridge disabled by runtime flags.");
+        }
+
+        if (IsNativeSceneCaptureRequested()) {
+            if (!native_ui_bridge_initialized) {
+                const std::string message =
+                    "Native scene capture requires runnable Glyph/TextQuad UI hooks.";
+                Log(message);
+                ShutdownPartialRuntime();
+                write_failed_status(
+                    "native-scene-capture-ui-hooks-failed", message);
+                return;
+            }
+            std::string native_scene_capture_error;
+            if (!InitializeNativeSceneCapture(
+                    &native_scene_capture_error)) {
+                const auto message = native_scene_capture_error.empty()
+                    ? std::string(
+                        "Native scene capture failed to initialize.")
+                    : native_scene_capture_error;
+                Log(message);
+                ShutdownPartialRuntime();
+                write_failed_status(
+                    "native-scene-capture-failed", message);
+                return;
+            }
         }
 
         if (runtime_flags.loader.lua_engine) {

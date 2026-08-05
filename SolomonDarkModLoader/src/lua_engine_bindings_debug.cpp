@@ -9,6 +9,7 @@
 #include "native_audio_observability.h"
 #include "native_enemy_lifecycle.h"
 #include "native_input_trace.h"
+#include "native_scene_capture.h"
 #include "native_spell_stats.h"
 #include "runtime_debug.h"
 
@@ -49,7 +50,7 @@ enum class LuaDebugFieldType {
 }  // namespace
 
 void RegisterLuaDebugBindings(lua_State* state) {
-    lua_createtable(state, 0, 83);
+    lua_createtable(state, 0, 85);
     RegisterFunction(state, &LuaDebugTraceFunction, "trace_function");
     RegisterFunction(state, &LuaDebugUntraceFunction, "untrace_function");
     RegisterFunction(state, &LuaDebugListTraces, "list_traces");
@@ -187,6 +188,14 @@ void RegisterLuaDebugBindings(lua_State* state) {
     RegisterFunction(state, &LuaDebugResolveNativePrimarySpellStats, "resolve_native_primary_spell_stats");
     RegisterFunction(state, &LuaDebugResolveNativeSecondaryManaStats, "resolve_native_secondary_mana_stats");
     RegisterFunction(state, &LuaDebugCaptureBackBuffer, "capture_backbuffer");
+    RegisterFunction(
+        state,
+        &LuaDebugQueueNativeSceneCapture,
+        "queue_native_scene_capture");
+    RegisterFunction(
+        state,
+        &LuaDebugGetNativeSceneCaptureStatus,
+        "get_native_scene_capture_status");
     RegisterFunction(
         state,
         &LuaDebugResetLocalCastObservation,

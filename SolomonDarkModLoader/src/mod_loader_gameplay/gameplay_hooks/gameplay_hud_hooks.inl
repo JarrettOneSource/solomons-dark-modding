@@ -568,16 +568,21 @@ void __fastcall HookGameplayUiGlyphDraw(
     void* /*unused_edx*/,
     float x,
     float y) {
+    const auto caller_address = reinterpret_cast<uintptr_t>(_ReturnAddress());
+    NativeSceneCaptureBeginSpriteDraw(
+        self, "position", x, y, nullptr, caller_address);
     ObserveDebugUiMenuSpritePositionDraw(self, x, y);
     ObserveDebugUiExactTextGlyph(x, y);
 
     const auto original = GetX86HookTrampoline<GameplayUiGlyphDrawFn>(
         g_gameplay_keyboard_injection.gameplay_ui_glyph_draw_hook);
     if (original == nullptr) {
+        NativeSceneCaptureEndSpriteDraw();
         return;
     }
 
     original(self, x, y);
+    NativeSceneCaptureEndSpriteDraw();
 }
 
 void __fastcall HookGameplayUiAllyLabelGlyphDraw(

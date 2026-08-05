@@ -445,6 +445,8 @@ void __fastcall HookNativeRenderQueueFlush(
     if (original == nullptr) {
         return;
     }
+    NativeSceneCaptureBeginSortedQueue(self, pass);
     InsertWorldSpriteCarriers(self, pass);
     original(self, pass);
+    NativeSceneCaptureEndSortedQueue(self, pass);
 }

@@ -264,24 +264,36 @@ void __fastcall HookMenuSpriteCenteredDraw(
     void* /*unused_edx*/,
     float x,
     float y) {
+    const auto caller_address = reinterpret_cast<uintptr_t>(_ReturnAddress());
+    NativeSceneCapturePushCaller(caller_address);
+    NativeSceneCaptureBeginSpriteDraw(
+        self, "centered", x, y, nullptr, caller_address);
     ObserveMenuSpritePositionDraw(self, x, y, true);
     const auto original = GetX86HookTrampoline<SpritePositionDrawFn>(
         g_debug_ui_overlay_state.menu_sprite_centered_draw_hook);
     if (original != nullptr) {
         original(self, x, y);
     }
+    NativeSceneCaptureEndSpriteDraw();
+    NativeSceneCapturePopCaller();
 }
 
 void __fastcall HookMenuSpriteTransformDraw(
     void* self,
     void* /*unused_edx*/,
     const float* transform) {
+    const auto caller_address = reinterpret_cast<uintptr_t>(_ReturnAddress());
+    NativeSceneCapturePushCaller(caller_address);
+    NativeSceneCaptureBeginSpriteDraw(
+        self, "transform", 0.0f, 0.0f, transform, caller_address);
     ObserveMenuSpriteTransformDraw(self, transform);
     const auto original = GetX86HookTrampoline<SpriteTransformDrawFn>(
         g_debug_ui_overlay_state.menu_sprite_transform_draw_hook);
     if (original != nullptr) {
         original(self, transform);
     }
+    NativeSceneCaptureEndSpriteDraw();
+    NativeSceneCapturePopCaller();
 }
 
 void __fastcall HookSettingsScalarRow(

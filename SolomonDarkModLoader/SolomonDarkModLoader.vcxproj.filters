@@ -200,6 +200,9 @@
     <ClInclude Include="include\native_world_render.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\native_scene_capture.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="include\lua_item_runtime.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -467,6 +470,24 @@
     <ClInclude Include="src\native_input_trace\serialization.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\native_scene_capture\atlas_resolver.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\native_scene_capture\generated_atlas_spans.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\native_scene_capture\hooks.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\native_scene_capture\observation.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\native_scene_capture\public_api.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\native_scene_capture\serialization.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\gameplay_seams\address_storage.inl">
       <Filter>Header Files\Gameplay Seams</Filter>
     </ClInclude>
@@ -618,6 +639,9 @@
       <Filter>Header Files\Lua Debug Bindings</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_bindings_debug\functions_native_audio.inl">
+      <Filter>Header Files\Lua Debug Bindings</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_engine_bindings_debug\functions_native_scene_capture.inl">
       <Filter>Header Files\Lua Debug Bindings</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_bindings_debug\functions_field_accessors.inl">
@@ -2105,6 +2129,9 @@
       <Filter>Source Files\Gameplay</Filter>
     </ClCompile>
     <ClCompile Include="src\native_input_trace.cpp">
+      <Filter>Source Files\Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="src\native_scene_capture.cpp">
       <Filter>Source Files\Gameplay</Filter>
     </ClCompile>
     <ClCompile Include="src\mod_loader_run_lifecycle.cpp">

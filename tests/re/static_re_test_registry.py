@@ -33,6 +33,12 @@ from static_re_native_input_model_contracts import (
     test_native_input_ingress_sampling_and_tick_order_are_pinned,
     test_native_surface_priority_and_loading_input_seal_are_pinned,
 )
+from static_re_native_scene_composition_contracts import (
+    test_native_scene_camera_transform_and_backdrop_rate_are_pinned,
+    test_native_scene_decor_determinism_path_is_pinned,
+    test_native_scene_physical_layer_list_is_pinned,
+    test_native_scene_world_sort_key_and_ties_are_pinned,
+)
 from static_re_native_menu_shell_contracts import (
     test_designed_menu_focus_model_consumes_g14_intents,
     test_native_menu_live_transition_graph_is_pinned,
@@ -803,6 +809,22 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native action thresholds, absences, and Intent shape are pinned",
         test_native_action_thresholds_absences_and_intent_shape_are_pinned,
+    ),
+    (
+        "Native scene physical layer list is pinned",
+        test_native_scene_physical_layer_list_is_pinned,
+    ),
+    (
+        "Native scene world sort key and ties are pinned",
+        test_native_scene_world_sort_key_and_ties_are_pinned,
+    ),
+    (
+        "Native scene camera transform and backdrop rate are pinned",
+        test_native_scene_camera_transform_and_backdrop_rate_are_pinned,
+    ),
+    (
+        "Native scene decor determinism path is pinned",
+        test_native_scene_decor_determinism_path_is_pinned,
     ),
     (
         "Native menu screen census and live layouts are pinned",

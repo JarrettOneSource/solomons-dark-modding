@@ -1757,6 +1757,8 @@ def test_every_defined_contract_reaches_the_registry() -> str:
 RECORDED_CAPTURE_SHAS: dict[str, tuple[str, int]] = {
     # G2 projectile goldens.
     "1b9d454da60afefa2cb5f01a0f6e8ce829efebe6": ("commit", 1),
+    # G12 scene-composition goldens: one clean base repeated in four captures.
+    "50332fc8d53c37bdf83d7ed6a56caf095caf04a1": ("commit", 4),
     # G14 input goldens: one campaign SHA repeated across nine captures.
     "2bc3ab13f3d05e26238954e5264c3a86967bd1d4": ("commit", 9),
     # G1 movement and RNG goldens, and the tree that commit points at.

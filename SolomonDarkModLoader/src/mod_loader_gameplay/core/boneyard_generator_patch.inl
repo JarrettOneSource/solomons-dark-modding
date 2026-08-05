@@ -183,7 +183,9 @@ void __fastcall HookBoneyardSceneryRenderLighting(
     const auto original = GetX86HookTrampoline<BoneyardObjectTickFn>(
         g_boneyard_generator_patch.presentation_hooks[
             kBoneyardSceneryRenderLightingHook]);
+    NativeSceneCaptureBeginWorldObject(self);
     original(self);
+    NativeSceneCaptureEndWorldObject(self);
     if (!multiplayer::IsLocalTransportEnabled() || self == nullptr) {
         return;
     }

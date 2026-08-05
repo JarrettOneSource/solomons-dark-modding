@@ -26,6 +26,7 @@
 #include "native_audio_observability.h"
 #include "native_close_url_patch.h"
 #include "native_d3d9_lifetime_guard.h"
+#include "native_scene_capture.h"
 #include "network_telemetry.h"
 #include "runtime_bootstrap.h"
 #include "runtime_debug.h"
@@ -151,6 +152,7 @@ std::string GetEnvironmentString(const wchar_t* variable_name) {
 
 void ShutdownPartialRuntime() {
     StopLuaExecPipeServer();
+    ShutdownNativeSceneCapture();
     ShutdownLuaDeveloperConsole();
     ShutdownLoadingScreen();
     ShutdownCpuLifecycleGuard();
@@ -206,6 +208,7 @@ void Shutdown() {
 
     Log("SolomonDarkModLoader shutting down.");
     RunShutdownStep("lua exec pipe", &StopLuaExecPipeServer);
+    RunShutdownStep("native scene capture", &ShutdownNativeSceneCapture);
     RunShutdownStep("lua developer console", &ShutdownLuaDeveloperConsole);
     RunShutdownStep("loading screen", &ShutdownLoadingScreen);
     RunShutdownStep("CPU lifecycle guard", &ShutdownCpuLifecycleGuard);

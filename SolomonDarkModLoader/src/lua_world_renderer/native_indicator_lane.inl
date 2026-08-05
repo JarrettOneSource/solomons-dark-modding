@@ -111,12 +111,15 @@ void __fastcall HookNativeArenaRender(
     if (original == nullptr) {
         return;
     }
+    NativeSceneCaptureBeginFrame(self, "arena");
     original(self);
     SDModPlayerState player;
     if (!TryGetPlayerState(&player) || !player.valid ||
         reinterpret_cast<uintptr_t>(self) != player.world_address) {
+        NativeSceneCaptureEndFrame(self);
         return;
     }
     RenderGameplayWorldIndicatorsInNativePass();
     RenderLuaWorldMarkersInNativePass();
+    NativeSceneCaptureEndFrame(self);
 }

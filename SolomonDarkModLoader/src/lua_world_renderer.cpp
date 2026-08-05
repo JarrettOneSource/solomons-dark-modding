@@ -9,6 +9,7 @@
 #include "mod_loader.h"
 #include "multiplayer_local_transport.h"
 #include "native_world_render.h"
+#include "native_scene_capture.h"
 #include "x86_hook.h"
 
 #include <Windows.h>

@@ -22,6 +22,7 @@
 #include "multiplayer_service_loop.h"
 #include "native_audio_observability.h"
 #include "native_input_trace.h"
+#include "native_scene_capture.h"
 #include "native_spell_stats.h"
 #include "network_telemetry.h"
 #include "runtime_debug.h"

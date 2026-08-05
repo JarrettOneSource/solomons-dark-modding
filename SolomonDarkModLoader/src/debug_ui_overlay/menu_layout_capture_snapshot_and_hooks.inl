@@ -461,7 +461,8 @@ bool InstallMenuLayoutCaptureHooks(std::string* error_message) {
     const auto requested =
         IsTruthyMenuCaptureEnvironment(
             "SDMOD_NATIVE_MENU_LAYOUT_CAPTURE") ||
-        !g_native_boot_capture_directory.empty();
+        !g_native_boot_capture_directory.empty() ||
+        IsNativeSceneCaptureRequested();
     g_debug_ui_overlay_state.menu_layout_capture_enabled = requested;
     if (!requested) {
         return true;

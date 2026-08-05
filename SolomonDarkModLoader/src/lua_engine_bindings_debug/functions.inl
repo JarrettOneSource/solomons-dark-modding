@@ -9,5 +9,6 @@
 #include "functions_native_rng.inl"
 #include "functions_field_accessors.inl"
 #include "functions_frame_capture.inl"
+#include "functions_native_scene_capture.inl"
 #include "functions_combat_observations.inl"
 #include "functions_native_audio.inl"
