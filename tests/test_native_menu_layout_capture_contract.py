@@ -78,6 +78,17 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         self.assertIn("ObserveMenuSpritePositionDraw(sprite, x, y, false)", public_api)
         self.assertIn(f"{observer}(self, x, y)", gameplay_hook)
 
+    def test_layout_capture_deduplicates_hook_chain_draws_and_names_create_phases(self) -> None:
+        source = read(
+            "SolomonDarkModLoader/src/debug_ui_overlay/"
+            "menu_layout_capture.inl"
+        )
+        self.assertIn("same_layout_element", source)
+        self.assertIn('has_art("Create.9")', source)
+        self.assertIn('return "create_element"', source)
+        self.assertIn('has_art("Create.16")', source)
+        self.assertIn('return "create_discipline"', source)
+
     def test_recorder_never_measures_layout_from_the_reference_image(self) -> None:
         recorder = read("scripts/Record-NativeMenuLayout.ps1")
         self.assertIn("sd.ui.get_layout_snapshot", recorder)
@@ -85,6 +96,18 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         self.assertIn("Get-FileHash", recorder)
         self.assertNotIn("GetPixel", recorder)
         self.assertNotIn("image recognition", recorder.lower())
+
+    def test_native_click_helper_is_pinned_to_the_exact_owned_stage(self) -> None:
+        helper = read("scripts/Invoke-ExactProcessClientClick.ps1")
+        for token in (
+            "Get-CimInstance Win32_Process",
+            "ExecutablePath",
+            "StringComparison]::OrdinalIgnoreCase",
+            "ClientToScreen",
+            "SetForegroundWindow",
+            "mouse_event",
+        ):
+            self.assertIn(token, helper)
 
 
 if __name__ == "__main__":

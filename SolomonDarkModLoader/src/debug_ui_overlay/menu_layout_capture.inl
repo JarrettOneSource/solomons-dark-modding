@@ -358,6 +358,29 @@ void StoreCapturedMenuArt(CapturedMenuArtElement element) {
         kMaximumCapturedMenuArtPerFrame) {
         return;
     }
+    const auto same_layout_element = [&](const CapturedMenuArtElement& other) {
+        const auto nearly_equal = [](float left, float right) {
+            return std::fabs(left - right) <= 0.001f;
+        };
+        return other.art_id == element.art_id &&
+            other.draw_kind == element.draw_kind &&
+            other.source_object_ptr == element.source_object_ptr &&
+            other.visible == element.visible &&
+            nearly_equal(other.left, element.left) &&
+            nearly_equal(other.top, element.top) &&
+            nearly_equal(other.right, element.right) &&
+            nearly_equal(other.bottom, element.bottom) &&
+            nearly_equal(other.unclipped_left, element.unclipped_left) &&
+            nearly_equal(other.unclipped_top, element.unclipped_top) &&
+            nearly_equal(other.unclipped_right, element.unclipped_right) &&
+            nearly_equal(other.unclipped_bottom, element.unclipped_bottom);
+    };
+    if (std::any_of(
+            g_debug_ui_overlay_state.frame_menu_art_elements.begin(),
+            g_debug_ui_overlay_state.frame_menu_art_elements.end(),
+            same_layout_element)) {
+        return;
+    }
     element.draw_order = ++g_native_menu_art_draw_order;
     if (g_native_loader_render_active &&
         element.art_id.rfind("Loader.", 0) == 0) {
@@ -542,7 +565,8 @@ bool ContainsObservedText(
 
 std::string ResolveCapturedLayoutScreenId(
     const std::vector<OverlayRenderElement>& semantic_elements,
-    const std::vector<ObservedUiElement>& exact_text_elements) {
+    const std::vector<ObservedUiElement>& exact_text_elements,
+    const std::vector<CapturedMenuArtElement>& art_elements) {
     const auto semantic_root = semantic_elements.empty()
         ? std::string{}
         : GetOverlaySurfaceRootId(semantic_elements.front().surface_id);
@@ -568,6 +592,22 @@ std::string ResolveCapturedLayoutScreenId(
     for (const auto& candidate : kTextScreens) {
         if (ContainsObservedText(exact_text_elements, candidate.text)) {
             return candidate.screen_id;
+        }
+    }
+    if (semantic_root == "create") {
+        const auto has_art = [&](std::string_view art_id) {
+            return std::any_of(
+                art_elements.begin(),
+                art_elements.end(),
+                [&](const CapturedMenuArtElement& element) {
+                    return element.visible && element.art_id == art_id;
+                });
+        };
+        if (has_art("Create.9")) {
+            return "create_element";
+        }
+        if (has_art("Create.16")) {
+            return "create_discipline";
         }
     }
     if (!semantic_root.empty()) {
@@ -609,7 +649,8 @@ void StoreLatestMenuLayoutSnapshotUnlocked(
     snapshot.captured_at_milliseconds = GetTickCount64();
     snapshot.screen_id = ResolveCapturedLayoutScreenId(
         semantic_elements,
-        exact_text_elements);
+        exact_text_elements,
+        art_elements);
     if (!semantic_elements.empty()) {
         snapshot.screen_title = semantic_elements.front().surface_title;
     }
