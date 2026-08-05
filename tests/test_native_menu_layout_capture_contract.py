@@ -63,7 +63,7 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         self.assertIn("kMenuLayoutCaptureTrackedDialogPriorityMs", frame)
         self.assertIn("menu_layout_capture_enabled", frame)
 
-    def test_current_frame_tag_drops_stale_semantics(self) -> None:
+    def test_current_frame_tag_keeps_live_text_but_drops_stale_controls(self) -> None:
         api = read(
             "SolomonDarkModLoader/src/debug_ui_overlay/"
             "public_api_surface_dispatch.inl"
@@ -72,8 +72,12 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         recorder = read("scripts/Record-NativeMenuLayout.ps1")
         self.assertIn("TryCaptureCurrentDebugUiLayoutSnapshot", api)
         self.assertIn('element.kind != "art"', api)
+        self.assertIn('element.kind != "text"', api)
         self.assertIn("std::remove_if", api)
-        self.assertIn("stale semantics omitted", api)
+        self.assertIn("stale controls omitted", api)
+        self.assertIn('screen_id == "profile_save_select"', api)
+        self.assertIn('screen_id == "beta_notice"', api)
+        self.assertIn('screen_id == "dark_cloud_search"', api)
         self.assertIn("capture_current_layout", bindings)
         self.assertIn("sd.ui.capture_current_layout", recorder)
 

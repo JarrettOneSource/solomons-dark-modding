@@ -122,19 +122,35 @@ bool TryCaptureCurrentDebugUiLayoutSnapshot(
     }
 
     auto captured = g_debug_ui_overlay_state.latest_layout_snapshot;
-    const auto classification_agrees = captured.screen_id == screen_id;
+    const auto classification_agrees =
+        captured.screen_id == screen_id ||
+        (screen_id == "profile_save_select" &&
+         captured.screen_id == "main_menu") ||
+        ((screen_id == "beta_notice" ||
+          screen_id == "leave_game_confirmation") &&
+         captured.screen_id == "dialog") ||
+        ((screen_id == "dark_cloud_recent" ||
+          screen_id == "dark_cloud_online_levels" ||
+          screen_id == "dark_cloud_my_levels" ||
+          screen_id == "dark_cloud_multiplayer" ||
+          screen_id == "dark_cloud_search" ||
+          screen_id == "dark_cloud_sort" ||
+          screen_id == "dark_cloud_options" ||
+          screen_id == "dark_cloud_menu") &&
+         captured.screen_id == "dark_cloud_browser");
     if (!classification_agrees) {
         captured.elements.erase(
             std::remove_if(
                 captured.elements.begin(),
                 captured.elements.end(),
                 [](const DebugUiLayoutElement& element) {
-                    return element.kind != "art";
+                    return element.kind != "art" &&
+                        element.kind != "text";
                 }),
             captured.elements.end());
         captured.screen_title.clear();
         captured.capture_method +=
-            " + exact live-navigation screen tag (stale semantics omitted)";
+            " + exact live-navigation screen tag (stale controls omitted)";
     }
     if (captured.elements.empty()) {
         return false;
