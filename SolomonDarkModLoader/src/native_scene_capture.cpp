@@ -308,6 +308,7 @@ constexpr std::array<const char*, 5> kFixedRegionNames = {
 void FailActiveSceneCapture(std::string message);
 
 #include "native_scene_capture/atlas_resolver.inl"
+#include "native_scene_capture/animation_observation.inl"
 #include "native_scene_capture/observation.inl"
 #include "native_scene_capture/serialization.inl"
 #include "native_scene_capture/hooks.inl"
