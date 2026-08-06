@@ -403,6 +403,11 @@ from static_re_enemy_target_acquisition_contracts import (
     test_extended_target_selection_completes_native_chase_latch,
     test_native_enemy_target_acquisition_is_recovered_and_layout_backed,
 )
+from static_re_native_enemy_behavior_contracts import (
+    test_enemy_behavior_goldens_pin_live_provenance_and_attack_timing,
+    test_monster_recipe_field_semantics_are_complete,
+    test_skeleton_behavior_transition_set_is_pinned,
+)
 from static_re_native_movement_contracts import (
     test_accepted_native_shims_are_documented,
     test_active_sources_reject_read_or_and_stale_path_language,
@@ -1565,6 +1570,18 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Enemy retarget is authoritative, nearest, and event-driven",
         test_enemy_retarget_is_authoritative_nearest_and_event_driven,
+    ),
+    (
+        "MonsterRecipe fields have complete runtime semantics",
+        test_monster_recipe_field_semantics_are_complete,
+    ),
+    (
+        "Skeleton-family behavior transition set is pinned",
+        test_skeleton_behavior_transition_set_is_pinned,
+    ),
+    (
+        "Enemy behavior live goldens and attack timing are pinned",
+        test_enemy_behavior_goldens_pin_live_provenance_and_attack_timing,
     ),
     ("Player/GameNpc movement seed layout is named and documented", test_player_gamenpc_movement_seed_layout_is_named_and_documented),
     ("Bot movement speed uses native live envelope", test_bot_movement_speed_uses_native_live_envelope),

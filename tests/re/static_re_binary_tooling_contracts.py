@@ -1755,6 +1755,9 @@ def test_every_defined_contract_reaches_the_registry() -> str:
 # re-recording evidence nobody can re-derive cannot quietly restate where it
 # came from.
 RECORDED_CAPTURE_SHAS: dict[str, tuple[str, int]] = {
+    # G3 enemy-behavior goldens and the tree that commit points at.
+    "0ab44c0b482cf3b05ddac637836a9761be9a9042": ("commit", 1),
+    "191cc252d3d2dda68bc831127ff759bd71271367": ("tree", 1),
     # G2 projectile goldens.
     "1b9d454da60afefa2cb5f01a0f6e8ce829efebe6": ("commit", 1),
     # G12 scene-composition goldens: one clean base repeated in four captures.
@@ -1833,6 +1836,7 @@ FIXTURE_ROOT = ROOT / "tests/fixtures"
 COMMIT_TREE_PAIRED_FIXTURES = frozenset(
     {
         "webgame/movement-goldens.json",
+        "webgame/enemy-behavior-goldens.json",
         "webgame/rng-goldens.json",
     }
 )

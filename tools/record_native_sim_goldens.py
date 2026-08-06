@@ -157,12 +157,14 @@ class OwnedSoloSession:
         mod_id: str,
         participant_id: str,
         test_blank_boneyard: bool,
+        headless: bool = True,
     ) -> None:
         self.instance = instance
         self.ports = ports
         self.mod_id = mod_id
         self.participant_id = participant_id
         self.test_blank_boneyard = test_blank_boneyard
+        self.headless = headless
         self.pipe_name = f"SolomonDarkModLoader_LuaExec_{instance}"
         self.runtime_root = RUNTIME_ROOT
         self.process_ids: list[int] = []
@@ -256,12 +258,13 @@ class OwnedSoloSession:
             self.mod_id,
             "-LuaExecTargetModId",
             self.mod_id,
-            "-Headless",
             "-ProcessIdOutputPath",
             local_sync.path_for_powershell(ledger),
             "-ResultOutputPath",
             local_sync.path_for_powershell(result_path),
         ]
+        if self.headless:
+            arguments.append("-Headless")
         if self.test_blank_boneyard:
             arguments.append("-TestBlankBoneyard")
         environment = os.environ.copy()
@@ -292,7 +295,10 @@ class OwnedSoloSession:
             require(isinstance(result, dict), "solo launch result is not an object")
             require(result.get("success") is True, f"solo launch failed: {result}")
             require(result.get("audioDisabled") is True, "audio was not disabled")
-            require(result.get("headlessEnabled") is True, "instance was not headless")
+            require(
+                result.get("headlessEnabled") is self.headless,
+                "solo instance rendering mode did not match the request",
+            )
             identities = register_owned_launch(result)
             self.process_ids = [item.process_id for item in identities]
             require(
@@ -337,6 +343,23 @@ class OwnedSoloSession:
     def values(self, code: str, *, timeout: float = 15.0) -> dict[str, str]:
         return local_sync.parse_key_values(self.lua(code, timeout=timeout))
 
+    def assert_wait_target_runnable(self, description: str) -> None:
+        require(
+            self.launch_result is not None and bool(self.process_ids),
+            f"{description} is broken, not busy: no owned process is registered",
+        )
+        try:
+            identities = register_owned_launch(self.launch_result, validate=True)
+        except OwnedProcessError as error:
+            raise CaptureFailure(
+                f"{description} is broken, not busy: {error}"
+            ) from error
+        live_ids = sorted(identity.process_id for identity in identities)
+        require(
+            live_ids == sorted(self.process_ids),
+            f"{description} is broken, not busy: owned PID identity changed",
+        )
+
     def wait_for_pipe(self, timeout: float = 120.0) -> None:
         deadline = time.monotonic() + timeout
         last_error = ""
@@ -345,6 +368,7 @@ class OwnedSoloSession:
                 if self.lua("return 'ready'", timeout=5.0).strip() == "ready":
                     return
             except (local_sync.VerifyFailure, subprocess.TimeoutExpired) as error:
+                self.assert_wait_target_runnable("Lua pipe")
                 last_error = str(error)
             time.sleep(0.25)
         raise CaptureFailure(f"Lua pipe did not become ready: {last_error}")
@@ -364,6 +388,7 @@ print('player=' .. tostring(type(player) == 'table'))
 """
                 )
             except (local_sync.VerifyFailure, subprocess.TimeoutExpired):
+                self.assert_wait_target_runnable(f"scene {expected!r}")
                 time.sleep(0.25)
                 continue
             if (
