@@ -170,6 +170,11 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             "settlement must classify animated geometry from the measured window",
         )
         self.assertIn(
+            "Debug UI native menu-layout capture hooks installed.",
+            support,
+            "the recorder must reject a process whose capture hook cannot run",
+        )
+        self.assertIn(
             "animated_element_ids = @(",
             support,
             "settlement must carry the measured animated ID set",

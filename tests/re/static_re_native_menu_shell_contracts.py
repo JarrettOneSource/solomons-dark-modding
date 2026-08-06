@@ -716,6 +716,14 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
     )
     _require_regex(
         support,
+        r"solomondarkmodloader\.log.*?Select-String\s+`.*?"
+        r"Debug UI native menu-layout capture hooks installed\..*?"
+        r"launch it with SDMOD_NATIVE_MENU_LAYOUT_CAPTURE=1",
+        "native-menu recorder can again mistake a permanently disabled capture "
+        "hook for a screen that is merely not ready yet",
+    )
+    _require_regex(
+        support,
         r"if \(-not \(Test-NativeMenuOwnedProcess.*?throw \(\s*"
         r"\"BROKEN: the exact staged process exited.*?"
         r"if \(\$AllowBusy -and \$pipeUnavailable\).*?Status = \"busy\"",

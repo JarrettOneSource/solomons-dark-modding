@@ -125,6 +125,23 @@ function New-NativeMenuCaptureContext {
     if (-not (Test-Path -LiteralPath $settlementClassifier -PathType Leaf)) {
         throw "BROKEN: the Settlement v2 classifier is missing from the capture tree."
     }
+    $startupLog = Join-Path $instanceRoot (
+        "stage\.sdmod\logs\solomondarkmodloader.log"
+    )
+    if (-not (Test-Path -LiteralPath $startupLog -PathType Leaf)) {
+        throw "BROKEN: the exact staged process has no loader startup log."
+    }
+    $captureHookReady = Select-String `
+        -LiteralPath $startupLog `
+        -SimpleMatch `
+        -Quiet `
+        -Pattern "Debug UI native menu-layout capture hooks installed."
+    if (-not $captureHookReady) {
+        throw (
+            "BROKEN: the exact staged process did not install native menu-layout " +
+            "capture hooks; launch it with SDMOD_NATIVE_MENU_LAYOUT_CAPTURE=1."
+        )
+    }
 
     $gameExecutableSha256 = (
         Get-FileHash -LiteralPath $expectedExecutable -Algorithm SHA256
@@ -168,6 +185,7 @@ function New-NativeMenuCaptureContext {
         PipeName = "SolomonDarkModLoader_LuaExec_$Instance"
         LuaExecClient = $luaExecClient
         SettlementClassifier = $settlementClassifier
+        StartupLog = $startupLog
         Source = $source
     }
 }
