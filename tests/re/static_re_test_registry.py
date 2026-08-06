@@ -42,6 +42,7 @@ from static_re_native_session_flow_contracts import (
 from static_re_native_class_loadout_contracts import (
     test_native_class_loadout_census_and_identity_are_pinned,
     test_native_class_loadout_definition_to_actor_mapping_is_pinned,
+    test_native_class_loadout_documented_starting_kit_stats_are_exact,
     test_native_class_loadout_goldens_are_live_settled_and_participant_owned,
     test_native_class_loadout_starting_kits_are_stat_exact,
     test_native_class_loadout_unlock_conditions_are_pinned,
@@ -885,6 +886,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native class-loadout starting kits are stat-exact",
         test_native_class_loadout_starting_kits_are_stat_exact,
+    ),
+    (
+        "Native class-loadout document starting-kit table is stat-exact",
+        test_native_class_loadout_documented_starting_kit_stats_are_exact,
     ),
     (
         "Native class-loadout definition-to-actor mapping is pinned",

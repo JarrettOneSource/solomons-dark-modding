@@ -25,6 +25,7 @@ CLASS_CATALOG_PATH = ROOT / "docs/reverse-engineering/native-class-catalog.json"
 
 CLAIM_CENSUS = "class census and identity claim"
 CLAIM_KIT = "starting kit and initialized stats claim"
+CLAIM_KIT_DOC = "starting kit document table claim"
 CLAIM_MAPPING = "definition-to-actor field mapping claim"
 CLAIM_UNLOCK = "class unlock condition table claim"
 CLAIM_LIVE = "live provenance and mixed participant independence claim"
@@ -255,6 +256,67 @@ def _read_text(path: Path, claim: str) -> str:
     value = path.read_text(encoding="utf-8")
     _require(bool(value.strip()), f"{claim}: {path.name} is empty, so no claim was checked")
     return value
+
+
+def _documented_number(value: int | float) -> str:
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
+def _assert_documented_fixed_stat(
+    stat_name: str,
+    storage: str,
+    value: int | float,
+    raw: str | None,
+    initial: str,
+) -> None:
+    number_pattern = r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?"
+    if stat_name == "nonlocal_mode_flag":
+        pattern = rf"local `(?P<value>{number_pattern})`; remote bot `1`"
+    elif stat_name == "current_spell_id":
+        pattern = rf"local `(?P<value>{number_pattern})`; mixed remote bot `1014`"
+    else:
+        pattern = (
+            rf"`(?P<value>{number_pattern})`"
+            r"(?:, bits `(?P<bits>0x[0-9A-F]{8})`)?"
+        )
+    match = re.fullmatch(pattern, initial)
+    _require(
+        match is not None,
+        f"{CLAIM_KIT_DOC}: {stat_name} initial-value cell lost its explicit typed-value structure; implementers could no longer distinguish the contracted value from commentary",
+    )
+    expected_value = _documented_number(value)
+    documented_value = match.group("value")
+    _require(
+        documented_value == expected_value,
+        f"{CLAIM_KIT_DOC}: {stat_name} documented value is {documented_value}, expected {expected_value}; every class could be initialized from a decimal that disagrees with the fixture and contract",
+    )
+    documented_bits = match.groupdict().get("bits")
+    expected_bits = raw if storage == "f32" and value != 0.0 else None
+    _require(
+        documented_bits == expected_bits,
+        f"{CLAIM_KIT_DOC}: {stat_name} documented raw bit pattern is {documented_bits}, expected {expected_bits}; every class could be initialized from bytes that disagree with the fixture and contract",
+    )
+
+
+def _unique_documented_stat_initial(
+    table_rows: str,
+    stat_name: str,
+    offset: str,
+    storage: str,
+) -> str:
+    row_pattern = (
+        rf"^\| (?P<field>[^|\r\n]+?) \| `\+{re.escape(offset)} "
+        rf"{re.escape(storage)}` \| (?P<initial>[^|\r\n]+?) \| "
+        r"(?P<source>[^|\r\n]+?) \|$"
+    )
+    matches = list(re.finditer(row_pattern, table_rows, flags=re.MULTILINE))
+    _require(
+        len(matches) == 1,
+        f"{CLAIM_KIT_DOC}: {stat_name} must resolve to one structural {offset} {storage} table row, found {len(matches)}; duplicate or missing candidates could make implementers choose the wrong class initialization value",
+    )
+    return matches[0].group("initial")
 
 
 def _unique_index(
@@ -578,6 +640,148 @@ def test_native_class_loadout_census_and_identity_are_pinned() -> str:
             f"{CLAIM_CENSUS}: document census row for {class_key} no longer pins every id, art reference, and spell",
         )
     return "15 product classes, three ID namespaces, art ids, and native type anchors are exact"
+
+
+def test_native_class_loadout_documented_starting_kit_stats_are_exact() -> str:
+    doc = _read_text(DOC_PATH, CLAIM_KIT_DOC)
+    section_matches = list(
+        re.finditer(
+            r"^## Common initialized scalar state[ \t]*\r?\n"
+            r"(?P<body>.*?)(?=^## )",
+            doc,
+            flags=re.MULTILINE | re.DOTALL,
+        )
+    )
+    _require(
+        len(section_matches) == 1,
+        f"{CLAIM_KIT_DOC}: the common initialized scalar section must be unique, found {len(section_matches)}; otherwise the document does not identify which starting-kit table implementers must follow",
+    )
+    section = section_matches[0].group("body")
+    applicability_pattern = (
+        r"^The table is the complete scalar surface captured at the first controllable\r?\n"
+        r"Courtyard tick for every class\. Offsets are from that participant's\r?\n"
+        r"`Skills_Wizard`/progression object\. `f32` raw bits are shown where a decimal\r?\n"
+        rf"would otherwise lose byte identity\. All {len(EXPECTED_CLASS_KEYS)} captures agree on every fixed value\.$"
+    )
+    applicability_matches = list(
+        re.finditer(applicability_pattern, section, flags=re.MULTILINE)
+    )
+    _require(
+        len(applicability_matches) == 1,
+        f"{CLAIM_KIT_DOC}: the scalar table must structurally state that its values apply to all {len(EXPECTED_CLASS_KEYS)} classes; otherwise a class could silently fall outside the documented contract",
+    )
+
+    table_pattern = (
+        r"^\| Field \| Offset / storage \| Initial value \| Native source or status \|[ \t]*\r?\n"
+        r"^\| --- \| --- \| --- \| --- \|[ \t]*\r?\n"
+        r"(?P<rows>(?:^\|[^\r\n]*\|[ \t]*(?:\r?\n|$))+)"
+    )
+    table_matches = list(
+        re.finditer(table_pattern, section, flags=re.MULTILINE)
+    )
+    _require(
+        len(table_matches) == 1,
+        f"{CLAIM_KIT_DOC}: the four-column initialized-stat table must be unique and contiguous, found {len(table_matches)}; reflowed prose cannot stand in for row structure",
+    )
+    table_rows = table_matches[0].group("rows")
+    structured_rows = list(
+        re.finditer(
+            r"^\| (?P<field>[^|\r\n]+?) \| `\+(?P<offset>0x[0-9A-F]+) "
+            r"(?P<storage>f32|i32|u8)` \| (?P<initial>[^|\r\n]+?) \| "
+            r"(?P<source>[^|\r\n]+?) \|$",
+            table_rows,
+            flags=re.MULTILINE,
+        )
+    )
+    expected_names = (
+        set(EXPECTED_FIXED_STATS)
+        | set(EXPECTED_SELECTED_STATS)
+        | set(EXPECTED_VARIABLE_STATS)
+    )
+    _require(
+        {
+            "base_hp",
+            "move_speed",
+            "secondary_skill_row",
+            "meditation_recovery_ramp_ticks",
+        }
+        <= expected_names,
+        f"{CLAIM_KIT_DOC}: expected constants lost a fixed, selected, or runtime witness, so the document sweep could pass without checking real kit content",
+    )
+    observed_locations = [
+        (match.group("offset"), match.group("storage"))
+        for match in structured_rows
+    ]
+    duplicate_locations = sorted(
+        location
+        for location in set(observed_locations)
+        if observed_locations.count(location) > 1
+    )
+    _require(
+        not duplicate_locations,
+        f"{CLAIM_KIT_DOC}: duplicate offset/storage rows {duplicate_locations} make the starting-kit lookup ambiguous for implementers",
+    )
+    _require(
+        len(structured_rows) == len(expected_names),
+        f"{CLAIM_KIT_DOC}: the initialized-stat table exposes {len(structured_rows)} structural rows for {len(expected_names)} expected stats; an omitted or extra row would leave class initialization ambiguous",
+    )
+    expected_locations = {
+        (offset, storage)
+        for offset, storage, *_ in EXPECTED_FIXED_STATS.values()
+    } | {
+        (offset, storage)
+        for offset, storage, *_ in EXPECTED_SELECTED_STATS.values()
+    } | set(EXPECTED_VARIABLE_STATS.values())
+    _require(
+        set(observed_locations) == expected_locations,
+        f"{CLAIM_KIT_DOC}: documented stat locations drifted from the contract; missing={sorted(expected_locations - set(observed_locations))}, extra={sorted(set(observed_locations) - expected_locations)}",
+    )
+
+    for stat_name, (offset, storage, value, raw) in EXPECTED_FIXED_STATS.items():
+        initial = _unique_documented_stat_initial(
+            table_rows, stat_name, offset, storage
+        )
+        _assert_documented_fixed_stat(
+            stat_name, storage, value, raw, initial
+        )
+
+    for stat_name, (offset, storage, source_name) in EXPECTED_SELECTED_STATS.items():
+        initial = _unique_documented_stat_initial(
+            table_rows, stat_name, offset, storage
+        )
+        expected_initial = (
+            "Discipline table value"
+            if source_name == "discipline_root"
+            else "element table value"
+        )
+        _require(
+            initial == expected_initial,
+            f"{CLAIM_KIT_DOC}: {stat_name} must document {expected_initial!r}, observed {initial!r}; a selected class could start from a row unrelated to its element or Discipline definition",
+        )
+
+    documented_variable_values = {
+        "serialized_class_slot_0x834": "sample-dependent",
+        "special_choice_argument": "sample-dependent/opaque",
+        "meditation_recovery_ramp_ticks": "live runtime counter",
+    }
+    _require(
+        set(documented_variable_values) == set(EXPECTED_VARIABLE_STATS),
+        f"{CLAIM_KIT_DOC}: document-only runtime statuses no longer cover exactly the contract's variable stat constants",
+    )
+    for stat_name, (offset, storage) in EXPECTED_VARIABLE_STATS.items():
+        initial = _unique_documented_stat_initial(
+            table_rows, stat_name, offset, storage
+        )
+        expected_initial = documented_variable_values[stat_name]
+        _require(
+            initial == expected_initial,
+            f"{CLAIM_KIT_DOC}: {stat_name} must remain documented as {expected_initial!r}, observed {initial!r}; a sample-dependent runtime value could be mistaken for a class constant",
+        )
+
+    return (
+        f"all {len(expected_names)} documented stat rows structurally pin the values and raw bits shared by all "
+        f"{len(EXPECTED_CLASS_KEYS)} starting kits"
+    )
 
 
 def test_native_class_loadout_starting_kits_are_stat_exact() -> str:
