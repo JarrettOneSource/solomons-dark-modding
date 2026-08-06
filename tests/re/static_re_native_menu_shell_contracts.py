@@ -636,6 +636,17 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
     )
     _require_regex(
         support,
+        r"function Test-NativeMenuFrameMatchesSettlement.*?"
+        r"foreach \(\$geometryName in @\(\"rect\", \"unclipped_rect\"\)\).*?"
+        r"\$expectedGeometry\.Count -ne 4.*?"
+        r"for \(\$coordinate = 0; \$coordinate -lt 4;.*?"
+        r"\[double\]\$frameGeometry\[\$coordinate\] -ne\s*"
+        r"\[double\]\$expectedGeometry\[\$coordinate\]",
+        "same-call frame validation again compares JSON number formatting "
+        "instead of exact numeric non-animated geometry",
+    )
+    _require_regex(
+        support,
         r"throw \(\s*\"STOP: '\$ScreenId' never settled to 40 consecutive "
         r"structurally \".*?\"byte-identical payloads with one measured "
         r"animated ID set spanning \"",

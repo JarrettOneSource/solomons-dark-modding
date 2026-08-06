@@ -185,6 +185,11 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             "settlement must carry the measured animated ID set",
         )
         self.assertIn(
+            "[double]$frameGeometry[$coordinate] -ne",
+            support,
+            "same-call frame geometry must compare values, not JSON formatting",
+        )
+        self.assertIn(
             "Get-SettledNativeMenuObservation",
             standalone,
             "standalone fixtures must be produced by the settlement gate",

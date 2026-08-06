@@ -577,16 +577,23 @@ function Test-NativeMenuFrameMatchesSettlement {
             continue
         }
         $frameElement = $frameById[$elementId]
-        $expectedGeometry = [ordered]@{
-            rect = @($element.rect)
-            unclipped_rect = @($element.unclipped_rect)
-        } | ConvertTo-Json -Compress
-        $frameGeometry = [ordered]@{
-            rect = @($frameElement.rect)
-            unclipped_rect = @($frameElement.unclipped_rect)
-        } | ConvertTo-Json -Compress
-        if ($frameGeometry -cne $expectedGeometry) {
-            return $false
+        foreach ($geometryName in @("rect", "unclipped_rect")) {
+            $expectedGeometry = @($element.$geometryName)
+            $frameGeometry = @($frameElement.$geometryName)
+            if (
+                $expectedGeometry.Count -ne 4 -or
+                $frameGeometry.Count -ne 4
+            ) {
+                return $false
+            }
+            for ($coordinate = 0; $coordinate -lt 4; $coordinate += 1) {
+                if (
+                    [double]$frameGeometry[$coordinate] -ne
+                    [double]$expectedGeometry[$coordinate]
+                ) {
+                    return $false
+                }
+            }
         }
     }
     return $true
