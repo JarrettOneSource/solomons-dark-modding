@@ -175,6 +175,11 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             "the recorder must reject a process whose capture hook cannot run",
         )
         self.assertIn(
+            '$ErrorActionPreference = "Continue"',
+            support,
+            "native stderr must reach the busy/dead exit-code discriminator",
+        )
+        self.assertIn(
             "animated_element_ids = @(",
             support,
             "settlement must carry the measured animated ID set",

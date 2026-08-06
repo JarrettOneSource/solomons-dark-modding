@@ -724,6 +724,17 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
     )
     _require_regex(
         support,
+        r"\$previousErrorActionPreference\s*=\s*\$ErrorActionPreference.*?"
+        r"\$ErrorActionPreference\s*=\s*\"Continue\".*?"
+        r"\$result\s*=\s*@\(\$LuaCode \| & py\.exe -3 "
+        r"\$Context\.LuaExecClient 2>&1\).*?"
+        r"\$exitCode\s*=\s*\$LASTEXITCODE.*?finally \{.*?"
+        r"\$ErrorActionPreference\s*=\s*\$previousErrorActionPreference",
+        "native-menu Lua probing again lets Windows PowerShell terminate on a "
+        "busy pipe before the exit-code discriminator can classify it",
+    )
+    _require_regex(
+        support,
         r"if \(-not \(Test-NativeMenuOwnedProcess.*?throw \(\s*"
         r"\"BROKEN: the exact staged process exited.*?"
         r"if \(\$AllowBusy -and \$pipeUnavailable\).*?Status = \"busy\"",

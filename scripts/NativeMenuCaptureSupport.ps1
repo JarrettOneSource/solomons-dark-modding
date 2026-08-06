@@ -198,12 +198,18 @@ function Invoke-NativeMenuLua {
     )
 
     $previousPipe = $env:SDMOD_LUA_EXEC_PIPE_NAME
+    $previousErrorActionPreference = $ErrorActionPreference
     try {
         $env:SDMOD_LUA_EXEC_PIPE_NAME = $Context.PipeName
+        # Windows PowerShell promotes a native process's stderr to an
+        # ErrorRecord.  Keep it in the merged result so the exit code and exact
+        # text below can distinguish a contended pipe from a broken process.
+        $ErrorActionPreference = "Continue"
         $result = @($LuaCode | & py.exe -3 $Context.LuaExecClient 2>&1)
         $exitCode = $LASTEXITCODE
     } finally {
         $env:SDMOD_LUA_EXEC_PIPE_NAME = $previousPipe
+        $ErrorActionPreference = $previousErrorActionPreference
     }
     $text = (($result | ForEach-Object { [string]$_ }) -join "`n").TrimEnd()
     if ($exitCode -eq 0) {
