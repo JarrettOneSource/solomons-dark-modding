@@ -445,6 +445,7 @@ function Wait-NativeMenuLayoutSettlement {
     $busyCount = 0
     $notReadyCount = 0
     $lastUnavailable = ""
+    $lastRejectedCandidate = ""
     $structuralPhaseOrder = [Collections.Generic.List[string]]::new()
     $structuralPhaseByHash = @{}
     $stableWindow = [Collections.Generic.List[object]]::new()
@@ -501,9 +502,34 @@ function Wait-NativeMenuLayoutSettlement {
             $stableWindow.Count -ge $script:NativeMenuSettleConsecutiveSamples -and
             $stableSpan -ge $script:NativeMenuSettleMinimumSpanMilliseconds
         ) {
-            $classification = Invoke-NativeMenuSettlementClassifier `
-                -Context $Context `
-                -Samples @($stableWindow)
+            try {
+                $classification = Invoke-NativeMenuSettlementClassifier `
+                    -Context $Context `
+                    -Samples @($stableWindow)
+            } catch {
+                $classificationError = [string]$_.Exception.Message
+                if ($classificationError -notmatch
+                    'animated geometry cap exceeded:') {
+                    throw
+                }
+                # A structurally stable transition can still be moving into
+                # place. Reject that candidate window and measure a fresh one;
+                # a screen that keeps exceeding the cap reaches the bounded
+                # STOP below instead of being mislabeled as decoration.
+                $lastRejectedCandidate = $classificationError
+                $stableStartMilliseconds = $elapsed
+                $stableWindow.Clear()
+                $stableWindow.Add([ordered]@{
+                    elapsed_milliseconds = $elapsed
+                    captured_at_milliseconds = $probe.CapturedAtMilliseconds
+                    payload = $probe.SemanticPayload
+                })
+                $windowAnchorProbe = $probe
+                Start-Sleep -Milliseconds (
+                    $script:NativeMenuSettlePollMilliseconds
+                )
+                continue
+            }
             $structuralPhases = [Collections.Generic.List[object]]::new()
             foreach ($phaseHash in $structuralPhaseOrder) {
                 $structuralPhases.Add($structuralPhaseByHash[$phaseHash])
@@ -558,7 +584,8 @@ function Wait-NativeMenuLayoutSettlement {
         "byte-identical payloads with one measured animated ID set spanning " +
         "at least 2 seconds within 60 seconds. " +
         "samples=$sampleCount busy=$busyCount not_ready=$notReadyCount " +
-        "last_unavailable='$lastUnavailable'"
+        "last_unavailable='$lastUnavailable' " +
+        "last_rejected_candidate='$lastRejectedCandidate'"
     )
 }
 

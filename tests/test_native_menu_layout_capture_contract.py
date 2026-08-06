@@ -184,6 +184,13 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             support,
             "settlement must carry the measured animated ID set",
         )
+        self.assertRegex(
+            support,
+            r"(?s)animated geometry cap exceeded:.*?"
+            r"\$stableWindow\.Clear\(\).*?last_rejected_candidate",
+            "a transition-positioning window above the animation cap must be "
+            "rejected and remeasured until a compliant window or bounded STOP",
+        )
         self.assertIn(
             "table.sort(structural_elements",
             support,

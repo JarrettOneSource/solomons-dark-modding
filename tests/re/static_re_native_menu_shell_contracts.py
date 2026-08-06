@@ -636,6 +636,18 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
     )
     _require_regex(
         support,
+        r"catch \{\s*"
+        r"\$classificationError\s*=\s*\[string\]\$_\.Exception\.Message.*?"
+        r"animated geometry cap exceeded:.*?"
+        r"\$stableWindow\.Clear\(\).*?"
+        r"\$stableWindow\.Add\(\[ordered\]@\{.*?"
+        r"last_rejected_candidate='\$lastRejectedCandidate'",
+        "a population-positioning window above the animation cap no longer "
+        "gets rejected and remeasured until a compliant window or the bounded "
+        "STOP names the last rejected candidate",
+    )
+    _require_regex(
+        support,
         r"local structural_elements\s*=\s*\{\}.*?"
         r"table\.sort\(structural_elements, function\(left, right\).*?"
         r"left_order < right_order.*?"
