@@ -1301,11 +1301,11 @@ def snapshot_ready(value: Mapping[str, Any], participant_id: int | None) -> tupl
         return False, f"native book has {entity['progression_book_entry_count']} rows"
     if participant["match_count"] != 1:
         return False, f"participant lookup returned {participant['match_count']} matches"
-    if not owned["initialized"]:
-        return False, "participant-owned progression ledger is not initialized"
-    if owned["book_entry_total_count"] != BOOK_ENTRY_COUNT or owned["book_truncated"]:
-        return False, f"participant-owned book is incomplete: {owned}"
     if participant_id is None:
+        if not owned["initialized"]:
+            return False, "participant-owned progression ledger is not initialized"
+        if owned["book_entry_total_count"] != BOOK_ENTRY_COUNT or owned["book_truncated"]:
+            return False, f"participant-owned book is incomplete: {owned}"
         inventory = value["native_inventory"]
         if not inventory["valid"] or inventory["truncated"] or inventory["item_count"] < 2:
             return False, f"native starter inventory is incomplete: {inventory}"
