@@ -1,0 +1,3410 @@
+{
+  "schema": "solomon-dark-native-audio-event-goldens-v1",
+  "header": {
+    "instance": "aud-g5",
+    "ports": [
+      52377,
+      52378
+    ],
+    "audio_disabled": true,
+    "fixture_is_machine_recorded": true,
+    "source_commit_sha": "4021ce6b30b29a2abad7cb59c7ef7ca3a582cdb7",
+    "source_tree_sha": "93d87965abe1a273d70d7e4372e9b1dad8b80ade",
+    "worktree_dirty_at_capture_start": false,
+    "captured_utc": "2026-08-06T09:48:13Z",
+    "process_id": 77312,
+    "executable_path": "D:\\sd-audiore-20260806\\runtime\\audiore-live\\instances\\aud-g5\\stage\\SolomonDark.exe",
+    "loader_sha256": "8294eb832fccbcb15c30a792bd234c3ce6537905660eba2cb2053adb9d6b54eb",
+    "build_loader_sha256": "8294eb832fccbcb15c30a792bd234c3ce6537905660eba2cb2053adb9d6b54eb",
+    "game_binary_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+    "catalog_path": "docs/reverse-engineering/native-audio-catalog.json",
+    "catalog_sha256": "1d10bbe00358e985d2a2e9082d69a26f841d41266fff9205881fd2d7c262b79e",
+    "recorder_path": "tools/record_audio_event_goldens.py",
+    "recorder_sha256": "3613512e32d9d7acb5651289b3451dc51c79e2cdac7e3d4fb87e350a66cdd24c",
+    "capture_method": "live stock dispatch-wrapper hooks plus explicit silent-phase checkpoints",
+    "cleanup": [
+      {
+        "role": "aud-g5",
+        "instance": "aud-g5",
+        "processId": 77312,
+        "expectedPath": "D:\\sd-audiore-20260806\\runtime\\audiore-live\\instances\\aud-g5\\stage\\SolomonDark.exe",
+        "actualPath": "D:\\sd-audiore-20260806\\runtime\\audiore-live\\instances\\aud-g5\\stage\\SolomonDark.exe",
+        "alreadyExited": false,
+        "pathMatched": true,
+        "stopped": true
+      }
+    ]
+  },
+  "dispatch_boundary": {
+    "environment": {
+      "SDMOD_DISABLE_AUDIO": "1",
+      "SDMOD_ENABLE_AUDIO": "0",
+      "SDMOD_CAPTURE_AUDIO_EVENTS": "1"
+    },
+    "disable_point": "launch hook replaces BASS_Init and keeps DAT_00B40239 equal to zero",
+    "tap_point": "entry hooks on Sound, SoundStream, SoundLoop, and Music request wrappers, before their DAT_00B40239-gated BASS calls",
+    "relative_position": "tap is upstream of the disable point's mixer/device output boundary",
+    "proof": "every natural and probed dispatch reports engine_enabled=false; startup and scene transitions still produced in-image dispatch witnesses",
+    "zero_event_interpretation": "capture enabled and an owned runnable PID are tested separately; a missing marker or natural music event is reported as broken, not busy"
+  },
+  "event_classes": [
+    "cast.ether.release",
+    "cast.fire.release",
+    "cast.air.channel_start",
+    "cast.air.channel_hold",
+    "cast.air.channel_stop",
+    "cast.water.channel_start",
+    "cast.water.channel_hold",
+    "cast.water.channel_stop",
+    "cast.earth.charge_start",
+    "cast.earth.charge_hold",
+    "cast.earth.release",
+    "projectile.ether.flight",
+    "projectile.ether.impact",
+    "projectile.fire.flight",
+    "projectile.fire.impact",
+    "projectile.air.flight",
+    "projectile.air.impact",
+    "projectile.water.flight",
+    "projectile.water.impact",
+    "projectile.earth.flight",
+    "projectile.earth.flight_end",
+    "projectile.earth.impact",
+    "melee.player.swing",
+    "melee.player.hit_world",
+    "melee.enemy.hit",
+    "movement.footstep.wood",
+    "movement.footstep.stone",
+    "movement.footstep.splash",
+    "damage.player.taken",
+    "death.player",
+    "death.skeleton",
+    "death.zombie",
+    "death.banshee",
+    "death.unholy",
+    "death.demon",
+    "death.imp",
+    "death.spider",
+    "death.golem",
+    "death.faculty",
+    "death.heartmonger",
+    "death.portal",
+    "death.coffin",
+    "death.crow",
+    "death.maggot",
+    "pickup.coin",
+    "pickup.bag",
+    "pickup.orb",
+    "pickup.potion",
+    "pickup.magic_book",
+    "potion.use",
+    "potion.invalid",
+    "level.up",
+    "skill.unlock",
+    "wave.start",
+    "wave.end",
+    "dig.shovel",
+    "dig.throw_dirt",
+    "shop.purchase",
+    "shop.purchase_rejected",
+    "shop.storage_transfer",
+    "ui.focus",
+    "ui.confirm",
+    "ui.back",
+    "music.menu_transition"
+  ],
+  "timeline": [
+    {
+      "tick": 1433,
+      "event_class": "cast.ether.release",
+      "request_ordinal": 1,
+      "trigger": "primary Magic Missile emission",
+      "native_trigger_site": "0x0053D9CA",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_pitch_gain",
+      "requested_asset_id": "registry:57",
+      "requested_asset": {
+        "registry_index": 57,
+        "native_class": "Sound",
+        "asset_path": "sounds\\magicmissile",
+        "file_path": "sounds/magicmissile.wav",
+        "file_sha256": "a7765b778d5cc49546c5e7e7822f38aac6a3edd8636d91e4ae92ec78611ac567"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 57,
+          "native_class": "Sound",
+          "asset_path": "sounds\\magicmissile",
+          "file_path": "sounds/magicmissile.wav",
+          "file_sha256": "a7765b778d5cc49546c5e7e7822f38aac6a3edd8636d91e4ae92ec78611ac567"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "cast-computed pitch and point gain"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 1
+    },
+    {
+      "tick": 1436,
+      "event_class": "cast.fire.release",
+      "request_ordinal": 1,
+      "trigger": "primary Fire Missile emission",
+      "native_trigger_site": "0x0053E4E0",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_pitch_gain",
+      "requested_asset_id": "registry:97",
+      "requested_asset": {
+        "registry_index": 97,
+        "native_class": "Sound",
+        "asset_path": "sounds\\throwfire",
+        "file_path": "sounds/throwfire.wav",
+        "file_sha256": "b6e14b90d00e27a9b2ceba404ea1c113a7d7bf5f14aa69987ec9629669b53de0"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 97,
+          "native_class": "Sound",
+          "asset_path": "sounds\\throwfire",
+          "file_path": "sounds/throwfire.wav",
+          "file_sha256": "b6e14b90d00e27a9b2ceba404ea1c113a7d7bf5f14aa69987ec9629669b53de0"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "cast-computed pitch and point gain"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 2
+    },
+    {
+      "tick": 1439,
+      "event_class": "cast.air.channel_start",
+      "request_ordinal": 1,
+      "trigger": "primary selector transition 0 -> Air (0x18)",
+      "native_trigger_site": "0x005497EF",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:54",
+      "requested_asset": {
+        "registry_index": 54,
+        "native_class": "Sound",
+        "asset_path": "sounds\\lightningstart",
+        "file_path": "sounds/lightningstart.wav",
+        "file_sha256": "1542ec3ab4e41624b5e8d073000a02bb36a3f8c733bf709835768f095494dceb"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 54,
+          "native_class": "Sound",
+          "asset_path": "sounds\\lightningstart",
+          "file_path": "sounds/lightningstart.wav",
+          "file_sha256": "1542ec3ab4e41624b5e8d073000a02bb36a3f8c733bf709835768f095494dceb"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "world point gain"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 3
+    },
+    {
+      "tick": 1443,
+      "event_class": "cast.air.channel_start",
+      "request_ordinal": 2,
+      "trigger": "primary selector transition 0 -> Air (0x18)",
+      "native_trigger_site": "0x00549800",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "loop_start",
+      "requested_asset_id": "registry:162",
+      "requested_asset": {
+        "registry_index": 162,
+        "native_class": "SoundLoop",
+        "asset_path": "sounds\\lightningloop__loop",
+        "file_path": "sounds/lightningloop__loop.wav",
+        "file_sha256": "4bdd74a6734206d1212c52d623d0b7fe994bf4beeaa2119d34f3d1fad7d68281"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 162,
+          "native_class": "SoundLoop",
+          "asset_path": "sounds\\lightningloop__loop",
+          "file_path": "sounds/lightningloop__loop.wav",
+          "file_sha256": "4bdd74a6734206d1212c52d623d0b7fe994bf4beeaa2119d34f3d1fad7d68281"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 1,
+        "native_parameter_logic": "fixed gain=1, pitch=1"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 4
+    },
+    {
+      "tick": 1428,
+      "event_class": "cast.air.channel_hold",
+      "trigger": "Air remains selected",
+      "native_trigger_site": null,
+      "dispatch_operation": null,
+      "requested_asset_id": null,
+      "requested_track": "",
+      "parameters": {},
+      "capture_kind": "live_silent_phase_checkpoint",
+      "silent_reason": "the already-started lightning loop persists; hold ticks issue no new dispatch",
+      "engine_enabled": false,
+      "timeline_sequence": 5
+    },
+    {
+      "tick": 1446,
+      "event_class": "cast.air.channel_stop",
+      "request_ordinal": 1,
+      "trigger": "primary selector transition Air (0x18) -> other/idle",
+      "native_trigger_site": "0x00549714",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "loop_stop",
+      "requested_asset_id": "registry:162",
+      "requested_asset": {
+        "registry_index": 162,
+        "native_class": "SoundLoop",
+        "asset_path": "sounds\\lightningloop__loop",
+        "file_path": "sounds/lightningloop__loop.wav",
+        "file_sha256": "4bdd74a6734206d1212c52d623d0b7fe994bf4beeaa2119d34f3d1fad7d68281"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 162,
+          "native_class": "SoundLoop",
+          "asset_path": "sounds\\lightningloop__loop",
+          "file_path": "sounds/lightningloop__loop.wav",
+          "file_sha256": "4bdd74a6734206d1212c52d623d0b7fe994bf4beeaa2119d34f3d1fad7d68281"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 0.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "fixed gain=1, pitch=1"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 6
+    },
+    {
+      "tick": 1449,
+      "event_class": "cast.water.channel_start",
+      "request_ordinal": 1,
+      "trigger": "primary selector transition 0 -> Water (0x20)",
+      "native_trigger_site": "0x00549BA1",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:44",
+      "requested_asset": {
+        "registry_index": 44,
+        "native_class": "Sound",
+        "asset_path": "sounds\\icestart",
+        "file_path": "sounds/icestart.wav",
+        "file_sha256": "28cfda1e9d59f39dfacfd808cdb267465592ae5ce0d34a9aa4495a3f659b9694"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 44,
+          "native_class": "Sound",
+          "asset_path": "sounds\\icestart",
+          "file_path": "sounds/icestart.wav",
+          "file_sha256": "28cfda1e9d59f39dfacfd808cdb267465592ae5ce0d34a9aa4495a3f659b9694"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "world point gain"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 7
+    },
+    {
+      "tick": 1452,
+      "event_class": "cast.water.channel_start",
+      "request_ordinal": 2,
+      "trigger": "primary selector transition 0 -> Water (0x20)",
+      "native_trigger_site": "0x00549BB2",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "loop_start",
+      "requested_asset_id": "registry:161",
+      "requested_asset": {
+        "registry_index": 161,
+        "native_class": "SoundLoop",
+        "asset_path": "sounds\\iceloop__loop",
+        "file_path": "sounds/iceloop__loop.wav",
+        "file_sha256": "fd9aa082bd5bb3b6197528a5f2d6771aac7e2f478d8bdca0abd3d521c70fc89a"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 161,
+          "native_class": "SoundLoop",
+          "asset_path": "sounds\\iceloop__loop",
+          "file_path": "sounds/iceloop__loop.wav",
+          "file_sha256": "fd9aa082bd5bb3b6197528a5f2d6771aac7e2f478d8bdca0abd3d521c70fc89a"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 1,
+        "native_parameter_logic": "fixed gain=1, pitch=1"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 8
+    },
+    {
+      "tick": 1428,
+      "event_class": "cast.water.channel_hold",
+      "trigger": "Water remains selected",
+      "native_trigger_site": null,
+      "dispatch_operation": null,
+      "requested_asset_id": null,
+      "requested_track": "",
+      "parameters": {},
+      "capture_kind": "live_silent_phase_checkpoint",
+      "silent_reason": "the already-started ice loop persists; hold ticks issue no new dispatch",
+      "engine_enabled": false,
+      "timeline_sequence": 9
+    },
+    {
+      "tick": 1457,
+      "event_class": "cast.water.channel_stop",
+      "request_ordinal": 1,
+      "trigger": "primary selector transition Water (0x20) -> other/idle",
+      "native_trigger_site": "0x00549725",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "loop_stop",
+      "requested_asset_id": "registry:161",
+      "requested_asset": {
+        "registry_index": 161,
+        "native_class": "SoundLoop",
+        "asset_path": "sounds\\iceloop__loop",
+        "file_path": "sounds/iceloop__loop.wav",
+        "file_sha256": "fd9aa082bd5bb3b6197528a5f2d6771aac7e2f478d8bdca0abd3d521c70fc89a"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 161,
+          "native_class": "SoundLoop",
+          "asset_path": "sounds\\iceloop__loop",
+          "file_path": "sounds/iceloop__loop.wav",
+          "file_sha256": "fd9aa082bd5bb3b6197528a5f2d6771aac7e2f478d8bdca0abd3d521c70fc89a"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 0.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "fixed gain=1, pitch=1"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 10
+    },
+    {
+      "tick": 1462,
+      "event_class": "cast.earth.charge_start",
+      "request_ordinal": 1,
+      "trigger": "primary selector transition 0 -> Earth (0x28)",
+      "native_trigger_site": "0x00549F57",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "loop_start",
+      "requested_asset_id": "registry:159",
+      "requested_asset": {
+        "registry_index": 159,
+        "native_class": "SoundLoop",
+        "asset_path": "sounds\\gatherrocksloop__loop",
+        "file_path": "sounds/gatherrocksloop__loop.wav",
+        "file_sha256": "143cfa6a54d77570d3d929c3c536fe0306a9a1f1f5292cf4c1521481d5895990"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 159,
+          "native_class": "SoundLoop",
+          "asset_path": "sounds\\gatherrocksloop__loop",
+          "file_path": "sounds/gatherrocksloop__loop.wav",
+          "file_sha256": "143cfa6a54d77570d3d929c3c536fe0306a9a1f1f5292cf4c1521481d5895990"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 1,
+        "native_parameter_logic": "fixed gain=1, pitch=1"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 11
+    },
+    {
+      "tick": 1428,
+      "event_class": "cast.earth.charge_hold",
+      "trigger": "Earth boulder remains held while charge grows",
+      "native_trigger_site": null,
+      "dispatch_operation": null,
+      "requested_asset_id": null,
+      "requested_track": "",
+      "parameters": {},
+      "capture_kind": "live_silent_phase_checkpoint",
+      "silent_reason": "gatherrocks remains live from its transition edge; charge ticks issue no new dispatch",
+      "engine_enabled": false,
+      "timeline_sequence": 12
+    },
+    {
+      "tick": 1467,
+      "event_class": "cast.earth.release",
+      "request_ordinal": 1,
+      "trigger": "bounded Earth release and native selector transition 0x28 -> 0",
+      "native_trigger_site": "0x00549758",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "loop_stop",
+      "requested_asset_id": "registry:159",
+      "requested_asset": {
+        "registry_index": 159,
+        "native_class": "SoundLoop",
+        "asset_path": "sounds\\gatherrocksloop__loop",
+        "file_path": "sounds/gatherrocksloop__loop.wav",
+        "file_sha256": "143cfa6a54d77570d3d929c3c536fe0306a9a1f1f5292cf4c1521481d5895990"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 159,
+          "native_class": "SoundLoop",
+          "asset_path": "sounds\\gatherrocksloop__loop",
+          "file_path": "sounds/gatherrocksloop__loop.wav",
+          "file_sha256": "143cfa6a54d77570d3d929c3c536fe0306a9a1f1f5292cf4c1521481d5895990"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 0.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "fixed gain=1, pitch=1"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 13
+    },
+    {
+      "tick": 1474,
+      "event_class": "cast.earth.release",
+      "request_ordinal": 2,
+      "trigger": "bounded Earth release and native selector transition 0x28 -> 0",
+      "native_trigger_site": "0x00544FA8",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:87",
+      "requested_asset": {
+        "registry_index": 87,
+        "native_class": "Sound",
+        "asset_path": "sounds\\startboulder",
+        "file_path": "sounds/startboulder.wav",
+        "file_sha256": "c7bbd54f293ae2b8a9dbde4d8a6810a5f98f46ee6fb20912b378631a5033d503"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 87,
+          "native_class": "Sound",
+          "asset_path": "sounds\\startboulder",
+          "file_path": "sounds/startboulder.wav",
+          "file_sha256": "c7bbd54f293ae2b8a9dbde4d8a6810a5f98f46ee6fb20912b378631a5033d503"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "world point gain"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 14
+    },
+    {
+      "tick": 1479,
+      "event_class": "projectile.ether.flight",
+      "request_ordinal": 1,
+      "trigger": "Magic Missile birth",
+      "native_trigger_site": "0x0053D9CA",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_pitch_gain",
+      "requested_asset_id": "registry:57",
+      "requested_asset": {
+        "registry_index": 57,
+        "native_class": "Sound",
+        "asset_path": "sounds\\magicmissile",
+        "file_path": "sounds/magicmissile.wav",
+        "file_sha256": "a7765b778d5cc49546c5e7e7822f38aac6a3edd8636d91e4ae92ec78611ac567"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 57,
+          "native_class": "Sound",
+          "asset_path": "sounds\\magicmissile",
+          "file_path": "sounds/magicmissile.wav",
+          "file_sha256": "a7765b778d5cc49546c5e7e7822f38aac6a3edd8636d91e4ae92ec78611ac567"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "launch request shared with cast release"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 15
+    },
+    {
+      "tick": 1482,
+      "event_class": "projectile.ether.impact",
+      "request_ordinal": 1,
+      "trigger": "Magic Missile contact handler",
+      "native_trigger_site": "0x005F1FF2",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_pitch_gain",
+      "requested_asset_id": "registry:58",
+      "requested_asset": {
+        "registry_index": 58,
+        "native_class": "Sound",
+        "asset_path": "sounds\\magicmissilehit",
+        "file_path": "sounds/magicmissilehit.wav",
+        "file_sha256": "2ac1154c78ee7b9cf5b7b0477113293ff8f16aa743269ad3648ed603e1aaf608"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 58,
+          "native_class": "Sound",
+          "asset_path": "sounds\\magicmissilehit",
+          "file_path": "sounds/magicmissilehit.wav",
+          "file_sha256": "2ac1154c78ee7b9cf5b7b0477113293ff8f16aa743269ad3648ed603e1aaf608"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "contact point gain plus gameplay-RNG pitch"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 16
+    },
+    {
+      "tick": 1487,
+      "event_class": "projectile.fire.flight",
+      "request_ordinal": 1,
+      "trigger": "Fire Missile birth",
+      "native_trigger_site": "0x0053E4E0",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_pitch_gain",
+      "requested_asset_id": "registry:97",
+      "requested_asset": {
+        "registry_index": 97,
+        "native_class": "Sound",
+        "asset_path": "sounds\\throwfire",
+        "file_path": "sounds/throwfire.wav",
+        "file_sha256": "b6e14b90d00e27a9b2ceba404ea1c113a7d7bf5f14aa69987ec9629669b53de0"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 97,
+          "native_class": "Sound",
+          "asset_path": "sounds\\throwfire",
+          "file_path": "sounds/throwfire.wav",
+          "file_sha256": "b6e14b90d00e27a9b2ceba404ea1c113a7d7bf5f14aa69987ec9629669b53de0"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "launch request shared with cast release"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 17
+    },
+    {
+      "tick": 1491,
+      "event_class": "projectile.fire.impact",
+      "request_ordinal": 1,
+      "trigger": "Fire Missile contact handler",
+      "native_trigger_site": "0x005E4D80",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_pitch_gain",
+      "requested_asset_id": "registry:30",
+      "requested_asset": {
+        "registry_index": 30,
+        "native_class": "Sound",
+        "asset_path": "sounds\\fireballhit",
+        "file_path": "sounds/fireballhit.wav",
+        "file_sha256": "9bfad709cfb932b7e836c58f781a42ee78907a0211bac5d14a2583d721192738"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 30,
+          "native_class": "Sound",
+          "asset_path": "sounds\\fireballhit",
+          "file_path": "sounds/fireballhit.wav",
+          "file_sha256": "9bfad709cfb932b7e836c58f781a42ee78907a0211bac5d14a2583d721192738"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "contact point gain plus gameplay-RNG pitch"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 18
+    },
+    {
+      "tick": 1495,
+      "event_class": "projectile.air.flight",
+      "request_ordinal": 1,
+      "trigger": "Ball Lightning cast emission",
+      "native_trigger_site": "0x0053F155",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_pitch_gain",
+      "requested_asset_id": "registry:224",
+      "requested_asset": {
+        "registry_index": 224,
+        "native_class": "Sound",
+        "asset_path": "sounds\\throwlightning\\1",
+        "file_path": "sounds/throwlightning/1.wav",
+        "file_sha256": "282f45f33c27522c442248b7f12641492499dedca709341d2e5503863ba15625"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 224,
+          "native_class": "Sound",
+          "asset_path": "sounds\\throwlightning\\1",
+          "file_path": "sounds/throwlightning/1.wav",
+          "file_sha256": "282f45f33c27522c442248b7f12641492499dedca709341d2e5503863ba15625"
+        },
+        {
+          "registry_index": 225,
+          "native_class": "Sound",
+          "asset_path": "sounds\\throwlightning\\2",
+          "file_path": "sounds/throwlightning/2.wav",
+          "file_sha256": "a412108b979fb5b6a744ae5a3618c5ef699ad916cd2927f5b95bbf5788e80f17"
+        }
+      ],
+      "selection_logic": "uniform Integer(2)",
+      "rng_stream": "active gameplay stream at DAT_00818B08; G1 App-tick seed and draw order",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "cast-computed point gain and pitch"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 19
+    },
+    {
+      "tick": 1499,
+      "event_class": "projectile.air.impact",
+      "request_ordinal": 1,
+      "trigger": "electric contact/shock spawn",
+      "native_trigger_site": "0x005F365A",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_pitch_gain",
+      "requested_asset_id": "registry:203",
+      "requested_asset": {
+        "registry_index": 203,
+        "native_class": "Sound",
+        "asset_path": "sounds\\Shock\\s1",
+        "file_path": "sounds/Shock/s1.wav",
+        "file_sha256": "25994dac57db5b28d0e17c9880f6769fb941ebabfd3c91211baf5a616604859c"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 203,
+          "native_class": "Sound",
+          "asset_path": "sounds\\Shock\\s1",
+          "file_path": "sounds/Shock/s1.wav",
+          "file_sha256": "25994dac57db5b28d0e17c9880f6769fb941ebabfd3c91211baf5a616604859c"
+        },
+        {
+          "registry_index": 204,
+          "native_class": "Sound",
+          "asset_path": "sounds\\Shock\\s2",
+          "file_path": "sounds/Shock/s2.wav",
+          "file_sha256": "69ce707d2d3baabf1543a0a2ec4a606840dc9568779f06e91c3b6c75b3b9cf05"
+        },
+        {
+          "registry_index": 205,
+          "native_class": "Sound",
+          "asset_path": "sounds\\Shock\\s3",
+          "file_path": "sounds/Shock/s3.wav",
+          "file_sha256": "5ca5ce12ad76cd77f0ab856928a4048c8b466b3637783f16b6947e42b46b46d4"
+        }
+      ],
+      "selection_logic": "uniform Integer(3)",
+      "rng_stream": "active gameplay stream at DAT_00818B08; G1 App-tick seed and draw order",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "contact point gain plus gameplay-RNG pitch"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 20
+    },
+    {
+      "tick": 1501,
+      "event_class": "projectile.water.flight",
+      "request_ordinal": 1,
+      "trigger": "Frost Missile cast emission",
+      "native_trigger_site": "0x0053F741",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_pitch_gain",
+      "requested_asset_id": "registry:38",
+      "requested_asset": {
+        "registry_index": 38,
+        "native_class": "Sound",
+        "asset_path": "sounds\\frostmissile",
+        "file_path": "sounds/frostmissile.wav",
+        "file_sha256": "c1d3a682766c53071dc95717d267955128c7be472dc1329da0f5d12700c13d9b"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 38,
+          "native_class": "Sound",
+          "asset_path": "sounds\\frostmissile",
+          "file_path": "sounds/frostmissile.wav",
+          "file_sha256": "c1d3a682766c53071dc95717d267955128c7be472dc1329da0f5d12700c13d9b"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "cast-computed point gain and pitch"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 21
+    },
+    {
+      "tick": 1505,
+      "event_class": "projectile.water.impact",
+      "request_ordinal": 1,
+      "trigger": "Frost Missile contact handler",
+      "native_trigger_site": "0x005F26F2",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_pitch_gain",
+      "requested_asset_id": "registry:36",
+      "requested_asset": {
+        "registry_index": 36,
+        "native_class": "Sound",
+        "asset_path": "sounds\\freeze",
+        "file_path": "sounds/freeze.wav",
+        "file_sha256": "6c224f2acbb7c0193cc0b75ae3eb3dc3f49070542f1de63a90f4aa7ab6db35f8"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 36,
+          "native_class": "Sound",
+          "asset_path": "sounds\\freeze",
+          "file_path": "sounds/freeze.wav",
+          "file_sha256": "6c224f2acbb7c0193cc0b75ae3eb3dc3f49070542f1de63a90f4aa7ab6db35f8"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "contact point gain plus gameplay-RNG pitch"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 22
+    },
+    {
+      "tick": 1509,
+      "event_class": "projectile.earth.flight",
+      "request_ordinal": 1,
+      "trigger": "Boulder flight requests global rollingstone ambience",
+      "native_trigger_site": "0x0040B161",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "loop_start",
+      "requested_asset_id": "registry:168",
+      "requested_asset": {
+        "registry_index": 168,
+        "native_class": "SoundLoop",
+        "asset_path": "sounds\\rollingstoneloop__loop",
+        "file_path": "sounds/rollingstoneloop__loop.wav",
+        "file_sha256": "66a306a2ebe8443cb017ce8c3737477f196600a82af7472201cc123f70cee706"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 168,
+          "native_class": "SoundLoop",
+          "asset_path": "sounds\\rollingstoneloop__loop",
+          "file_path": "sounds/rollingstoneloop__loop.wav",
+          "file_sha256": "66a306a2ebe8443cb017ce8c3737477f196600a82af7472201cc123f70cee706"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 1,
+        "native_parameter_logic": "AmbientSound zero-to-positive edge; producer 0x00620B60 supplies gain"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 23
+    },
+    {
+      "tick": 1511,
+      "event_class": "projectile.earth.flight_end",
+      "request_ordinal": 1,
+      "trigger": "Boulder stops renewing rollingstone ambience",
+      "native_trigger_site": "0x0040B189",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "loop_stop",
+      "requested_asset_id": "registry:168",
+      "requested_asset": {
+        "registry_index": 168,
+        "native_class": "SoundLoop",
+        "asset_path": "sounds\\rollingstoneloop__loop",
+        "file_path": "sounds/rollingstoneloop__loop.wav",
+        "file_sha256": "66a306a2ebe8443cb017ce8c3737477f196600a82af7472201cc123f70cee706"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 168,
+          "native_class": "SoundLoop",
+          "asset_path": "sounds\\rollingstoneloop__loop",
+          "file_path": "sounds/rollingstoneloop__loop.wav",
+          "file_sha256": "66a306a2ebe8443cb017ce8c3737477f196600a82af7472201cc123f70cee706"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 0.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "fixed gain=1, pitch=1"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 24
+    },
+    {
+      "tick": 1516,
+      "event_class": "projectile.earth.impact",
+      "request_ordinal": 1,
+      "trigger": "Boulder terminal terrain/contact branch",
+      "native_trigger_site": "0x0062141B",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:77",
+      "requested_asset": {
+        "registry_index": 77,
+        "native_class": "Sound",
+        "asset_path": "sounds\\rockhit",
+        "file_path": "sounds/rockhit.wav",
+        "file_sha256": "865484cf3d7c2e199fb46f069973c43893122e934f0f46ba33d30eeeac4de25b"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 77,
+          "native_class": "Sound",
+          "asset_path": "sounds\\rockhit",
+          "file_path": "sounds/rockhit.wav",
+          "file_sha256": "865484cf3d7c2e199fb46f069973c43893122e934f0f46ba33d30eeeac4de25b"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "world point gain"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 25
+    },
+    {
+      "tick": 1522,
+      "event_class": "melee.player.swing",
+      "request_ordinal": 1,
+      "trigger": "player staff swing action",
+      "native_trigger_site": "0x0055024A",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_pitch_gain",
+      "requested_asset_id": "registry:86",
+      "requested_asset": {
+        "registry_index": 86,
+        "native_class": "Sound",
+        "asset_path": "sounds\\staffswoosh",
+        "file_path": "sounds/staffswoosh.wav",
+        "file_sha256": "04da914c919485d68cd49752a0726649cc5395bb47febcfcabee4765d71f2809"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 86,
+          "native_class": "Sound",
+          "asset_path": "sounds\\staffswoosh",
+          "file_path": "sounds/staffswoosh.wav",
+          "file_sha256": "04da914c919485d68cd49752a0726649cc5395bb47febcfcabee4765d71f2809"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "gameplay-RNG pitch and local gain"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 26
+    },
+    {
+      "tick": 1527,
+      "event_class": "melee.player.hit_world",
+      "request_ordinal": 1,
+      "trigger": "staff contact with wood/world",
+      "native_trigger_site": "0x0053BE4F",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:85",
+      "requested_asset": {
+        "registry_index": 85,
+        "native_class": "Sound",
+        "asset_path": "sounds\\staffhitwood",
+        "file_path": "sounds/staffhitwood.wav",
+        "file_sha256": "0e682ef1ba77ba08cd3b52c5a98eefe0fcb31797275a07fdce6a03abfa484b50"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 85,
+          "native_class": "Sound",
+          "asset_path": "sounds\\staffhitwood",
+          "file_path": "sounds/staffhitwood.wav",
+          "file_sha256": "0e682ef1ba77ba08cd3b52c5a98eefe0fcb31797275a07fdce6a03abfa484b50"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "hit-point attenuation"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 27
+    },
+    {
+      "tick": 1531,
+      "event_class": "melee.enemy.hit",
+      "request_ordinal": 1,
+      "trigger": "sword-family damage contact",
+      "native_trigger_site": "0x00477832",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_pitch_gain",
+      "requested_asset_id": "registry:220",
+      "requested_asset": {
+        "registry_index": 220,
+        "native_class": "Sound",
+        "asset_path": "sounds\\SwordStrike\\strike1",
+        "file_path": "sounds/SwordStrike/strike1.wav",
+        "file_sha256": "5b9add66e0acaab5e86aa0648c38123bb48d7cea5fd0f55d5378c89e478c9909"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 220,
+          "native_class": "Sound",
+          "asset_path": "sounds\\SwordStrike\\strike1",
+          "file_path": "sounds/SwordStrike/strike1.wav",
+          "file_sha256": "5b9add66e0acaab5e86aa0648c38123bb48d7cea5fd0f55d5378c89e478c9909"
+        },
+        {
+          "registry_index": 221,
+          "native_class": "Sound",
+          "asset_path": "sounds\\SwordStrike\\strike2",
+          "file_path": "sounds/SwordStrike/strike2.wav",
+          "file_sha256": "d0f1e11019cee95a45aee5ef92dd1e1bd0b49e8f4a39801b13c7da49b5b272d9"
+        }
+      ],
+      "selection_logic": "uniform Integer(2)",
+      "rng_stream": "active gameplay stream at DAT_00818B08; G1 App-tick seed and draw order",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "hit-point attenuation plus gameplay-RNG pitch"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 28
+    },
+    {
+      "tick": 1535,
+      "event_class": "movement.footstep.wood",
+      "request_ordinal": 1,
+      "trigger": "player movement cadence on the wood-material branch",
+      "native_trigger_site": "0x0054AF92",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_pitch_gain",
+      "requested_asset_id": "registry:104",
+      "requested_asset": {
+        "registry_index": 104,
+        "native_class": "Sound",
+        "asset_path": "sounds\\woodstep",
+        "file_path": "sounds/woodstep.wav",
+        "file_sha256": "501bda33f36d538128cb7ebf2ef9594379524692f442ddb6da4f4cb3ac9f3cf5"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 104,
+          "native_class": "Sound",
+          "asset_path": "sounds\\woodstep",
+          "file_path": "sounds/woodstep.wav",
+          "file_sha256": "501bda33f36d538128cb7ebf2ef9594379524692f442ddb6da4f4cb3ac9f3cf5"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "world point gain times footstep scalar plus gameplay-RNG pitch"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 29
+    },
+    {
+      "tick": 1540,
+      "event_class": "movement.footstep.stone",
+      "request_ordinal": 1,
+      "trigger": "player movement cadence on the default ground branch",
+      "native_trigger_site": "0x0054AFEC",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:214",
+      "requested_asset": {
+        "registry_index": 214,
+        "native_class": "Sound",
+        "asset_path": "sounds\\Step\\step1",
+        "file_path": "sounds/Step/step1.wav",
+        "file_sha256": "ded73389ae0481167c73a904f95c1dc12c89c7e807b5815bb65b8a786582322a"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 214,
+          "native_class": "Sound",
+          "asset_path": "sounds\\Step\\step1",
+          "file_path": "sounds/Step/step1.wav",
+          "file_sha256": "ded73389ae0481167c73a904f95c1dc12c89c7e807b5815bb65b8a786582322a"
+        },
+        {
+          "registry_index": 215,
+          "native_class": "Sound",
+          "asset_path": "sounds\\Step\\step2",
+          "file_path": "sounds/Step/step2.wav",
+          "file_sha256": "62c9ef1c7dfd68762dc32aca8d718e385821c102f4ada11502f93bf23ae50dba"
+        }
+      ],
+      "selection_logic": "uniform Integer(2)",
+      "rng_stream": "active gameplay stream at DAT_00818B08; G1 App-tick seed and draw order",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "world point gain times footstep scalar"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 30
+    },
+    {
+      "tick": 1546,
+      "event_class": "movement.footstep.splash",
+      "request_ordinal": 1,
+      "trigger": "movement cadence on a water/splash material branch",
+      "native_trigger_site": "0x0047634D",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:216",
+      "requested_asset": {
+        "registry_index": 216,
+        "native_class": "Sound",
+        "asset_path": "sounds\\stepsplash\\step1",
+        "file_path": "sounds/stepsplash/step1.wav",
+        "file_sha256": "a62f7173524c3624c7b822daa9cd048b0d6e81c6ab82647b2ac6c6cb220bcbb0"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 216,
+          "native_class": "Sound",
+          "asset_path": "sounds\\stepsplash\\step1",
+          "file_path": "sounds/stepsplash/step1.wav",
+          "file_sha256": "a62f7173524c3624c7b822daa9cd048b0d6e81c6ab82647b2ac6c6cb220bcbb0"
+        },
+        {
+          "registry_index": 217,
+          "native_class": "Sound",
+          "asset_path": "sounds\\stepsplash\\step2",
+          "file_path": "sounds/stepsplash/step2.wav",
+          "file_sha256": "4a65e83a17ba100f88822e9da4b984f06aa3a5414fa447b7de6f07614f12e72c"
+        },
+        {
+          "registry_index": 218,
+          "native_class": "Sound",
+          "asset_path": "sounds\\stepsplash\\step3",
+          "file_path": "sounds/stepsplash/step3.wav",
+          "file_sha256": "0ce07c09f14551e041fff8e620526278689863f3a53703a4d468c552200b5d01"
+        },
+        {
+          "registry_index": 219,
+          "native_class": "Sound",
+          "asset_path": "sounds\\stepsplash\\step4",
+          "file_path": "sounds/stepsplash/step4.wav",
+          "file_sha256": "4755bf590b1dd09283760e78b500bcbce3bf30ff15178fe2817bd28550aa6057"
+        }
+      ],
+      "selection_logic": "uniform Integer(4)",
+      "rng_stream": "active gameplay stream at DAT_00818B08; G1 App-tick seed and draw order",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "world point gain"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 31
+    },
+    {
+      "tick": 1551,
+      "event_class": "damage.player.taken",
+      "request_ordinal": 1,
+      "trigger": "nonlethal positive player HP loss after cooldown",
+      "native_trigger_site": "0x0053074A",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_pitch_gain",
+      "requested_asset_id": "registry:228",
+      "requested_asset": {
+        "registry_index": 228,
+        "native_class": "Sound",
+        "asset_path": "sounds\\Wizard_Ouch\\SAY_OUCH1",
+        "file_path": "sounds/Wizard_Ouch/SAY_OUCH1.wav",
+        "file_sha256": "3e851ee873c9798923624d2b117c6fc91d656f66d7961a00935cfb182393b638"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 228,
+          "native_class": "Sound",
+          "asset_path": "sounds\\Wizard_Ouch\\SAY_OUCH1",
+          "file_path": "sounds/Wizard_Ouch/SAY_OUCH1.wav",
+          "file_sha256": "3e851ee873c9798923624d2b117c6fc91d656f66d7961a00935cfb182393b638"
+        },
+        {
+          "registry_index": 229,
+          "native_class": "Sound",
+          "asset_path": "sounds\\Wizard_Ouch\\SAY_OUCH2",
+          "file_path": "sounds/Wizard_Ouch/SAY_OUCH2.wav",
+          "file_sha256": "509ce875de5322ebc4ee883cf2f1db9ba172b1cf22a6a6da6e31a0e2c91d12b7"
+        },
+        {
+          "registry_index": 230,
+          "native_class": "Sound",
+          "asset_path": "sounds\\Wizard_Ouch\\SAY_OUCH3",
+          "file_path": "sounds/Wizard_Ouch/SAY_OUCH3.wav",
+          "file_sha256": "26cd8bea5d55a47b6476f130481bad26887f7af1cf12ec43b2989e495323e5ea"
+        }
+      ],
+      "selection_logic": "uniform Integer(3); next delay is inclusive Integer(20,60)",
+      "rng_stream": "active gameplay stream at DAT_00818B08; G1 App-tick seed and draw order",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "distance gain times 0.25..1 low-life envelope; gameplay-RNG pitch"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 32
+    },
+    {
+      "tick": 1554,
+      "event_class": "death.player",
+      "request_ordinal": 1,
+      "trigger": "native player death action",
+      "native_trigger_site": "0x004757DD",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "stream_play",
+      "requested_asset_id": "registry:118",
+      "requested_asset": {
+        "registry_index": 118,
+        "native_class": "SoundStream",
+        "asset_path": "sounds\\DeathGuitar__Stream",
+        "file_path": "sounds/DeathGuitar__Stream.wav",
+        "file_sha256": "67423fcd66ff8fba55acfb09f4dedb495754bfb962a90dc7ba1cbc0c28e353e8"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 118,
+          "native_class": "SoundStream",
+          "asset_path": "sounds\\DeathGuitar__Stream",
+          "file_path": "sounds/DeathGuitar__Stream.wav",
+          "file_sha256": "67423fcd66ff8fba55acfb09f4dedb495754bfb962a90dc7ba1cbc0c28e353e8"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "fixed gain=1, pitch=1"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 33
+    },
+    {
+      "tick": 1558,
+      "event_class": "death.skeleton",
+      "request_ordinal": 1,
+      "trigger": "skeleton terminal branch",
+      "native_trigger_site": "0x0048D368",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:79",
+      "requested_asset": {
+        "registry_index": 79,
+        "native_class": "Sound",
+        "asset_path": "sounds\\skeleton_die",
+        "file_path": "sounds/skeleton_die.wav",
+        "file_sha256": "ab38f903e828bd695ffd153dfacea5701f36376ad24cb96be96d3d059f52fb18"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 79,
+          "native_class": "Sound",
+          "asset_path": "sounds\\skeleton_die",
+          "file_path": "sounds/skeleton_die.wav",
+          "file_sha256": "ab38f903e828bd695ffd153dfacea5701f36376ad24cb96be96d3d059f52fb18"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "world point gain"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 34
+    },
+    {
+      "tick": 1562,
+      "event_class": "death.zombie",
+      "request_ordinal": 1,
+      "trigger": "zombie terminal branch",
+      "native_trigger_site": "0x00494AEE",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:105",
+      "requested_asset": {
+        "registry_index": 105,
+        "native_class": "Sound",
+        "asset_path": "sounds\\zombiedie",
+        "file_path": "sounds/zombiedie.wav",
+        "file_sha256": "983aaff23ce36bdab7ec0d97f5fa783d6b25b109e5c2a2d7ab88c7cd960760a3"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 105,
+          "native_class": "Sound",
+          "asset_path": "sounds\\zombiedie",
+          "file_path": "sounds/zombiedie.wav",
+          "file_sha256": "983aaff23ce36bdab7ec0d97f5fa783d6b25b109e5c2a2d7ab88c7cd960760a3"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "world point gain; poison branches also request 108 and groan branch 110"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 35
+    },
+    {
+      "tick": 1568,
+      "event_class": "death.banshee",
+      "request_ordinal": 1,
+      "trigger": "banshee/wraith terminal branch",
+      "native_trigger_site": "0x0049612B",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:8",
+      "requested_asset": {
+        "registry_index": 8,
+        "native_class": "Sound",
+        "asset_path": "sounds\\bansheedie",
+        "file_path": "sounds/bansheedie.wav",
+        "file_sha256": "e6419e4437ee457dffdf1b2d5e488971f60cdf98e737b1a4443a8333f8a0a80d"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 8,
+          "native_class": "Sound",
+          "asset_path": "sounds\\bansheedie",
+          "file_path": "sounds/bansheedie.wav",
+          "file_sha256": "e6419e4437ee457dffdf1b2d5e488971f60cdf98e737b1a4443a8333f8a0a80d"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "world point gain"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 36
+    },
+    {
+      "tick": 1574,
+      "event_class": "death.unholy",
+      "request_ordinal": 1,
+      "trigger": "Unholy/DemonSkull terminal branch",
+      "native_trigger_site": "0x0049645C",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "stream_play",
+      "requested_asset_id": "registry:146",
+      "requested_asset": {
+        "registry_index": 146,
+        "native_class": "SoundStream",
+        "asset_path": "sounds\\UnholyDie__Stream",
+        "file_path": "sounds/UnholyDie__Stream.wav",
+        "file_sha256": "7b360a0f855eb79a0f4cf25da6c7b832158574f43b024448ae30d3e3049f0aae"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 146,
+          "native_class": "SoundStream",
+          "asset_path": "sounds\\UnholyDie__Stream",
+          "file_path": "sounds/UnholyDie__Stream.wav",
+          "file_sha256": "7b360a0f855eb79a0f4cf25da6c7b832158574f43b024448ae30d3e3049f0aae"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "stream gain from world point"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 37
+    },
+    {
+      "tick": 1577,
+      "event_class": "death.demon",
+      "request_ordinal": 1,
+      "trigger": "demon terminal branch",
+      "native_trigger_site": "0x0048760F",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:20",
+      "requested_asset": {
+        "registry_index": 20,
+        "native_class": "Sound",
+        "asset_path": "sounds\\demondies",
+        "file_path": "sounds/demondies.wav",
+        "file_sha256": "b22c5da10273648ef2f56d3375aaf667e8da408f134f2c2f5cd1a6a29617efa4"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 20,
+          "native_class": "Sound",
+          "asset_path": "sounds\\demondies",
+          "file_path": "sounds/demondies.wav",
+          "file_sha256": "b22c5da10273648ef2f56d3375aaf667e8da408f134f2c2f5cd1a6a29617efa4"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "world point gain"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 38
+    },
+    {
+      "tick": 1580,
+      "event_class": "death.imp",
+      "request_ordinal": 1,
+      "trigger": "imp terminal fire branch",
+      "native_trigger_site": "0x00482A41",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_pitch_gain",
+      "requested_asset_id": "registry:31",
+      "requested_asset": {
+        "registry_index": 31,
+        "native_class": "Sound",
+        "asset_path": "sounds\\fireydeath",
+        "file_path": "sounds/fireydeath.wav",
+        "file_sha256": "171da05d45168042f6042e58279be0b7255161c65d0d1d58caeb4d4d6b2ccc2e"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 31,
+          "native_class": "Sound",
+          "asset_path": "sounds\\fireydeath",
+          "file_path": "sounds/fireydeath.wav",
+          "file_sha256": "171da05d45168042f6042e58279be0b7255161c65d0d1d58caeb4d4d6b2ccc2e"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "world point gain plus gameplay-RNG pitch"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 39
+    },
+    {
+      "tick": 1587,
+      "event_class": "death.spider",
+      "request_ordinal": 1,
+      "trigger": "spider terminal branch",
+      "native_trigger_site": "0x00482E13",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_pitch_gain",
+      "requested_asset_id": "registry:82",
+      "requested_asset": {
+        "registry_index": 82,
+        "native_class": "Sound",
+        "asset_path": "sounds\\SpiderDie",
+        "file_path": "sounds/SpiderDie.wav",
+        "file_sha256": "44d5021c1699f3b476429745fad58c53661eff8a2f0a31a6df0b536bbbf73fa3"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 82,
+          "native_class": "Sound",
+          "asset_path": "sounds\\SpiderDie",
+          "file_path": "sounds/SpiderDie.wav",
+          "file_sha256": "44d5021c1699f3b476429745fad58c53661eff8a2f0a31a6df0b536bbbf73fa3"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "world point gain plus gameplay-RNG pitch"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 40
+    },
+    {
+      "tick": 1593,
+      "event_class": "death.golem",
+      "request_ordinal": 1,
+      "trigger": "golem terminal branch",
+      "native_trigger_site": "0x0049A74B",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "stream_play",
+      "requested_asset_id": "registry:125",
+      "requested_asset": {
+        "registry_index": 125,
+        "native_class": "SoundStream",
+        "asset_path": "sounds\\GolemDie__Stream",
+        "file_path": "sounds/GolemDie__Stream.wav",
+        "file_sha256": "cee482491c4aa21672bf7bbd4c314ab185a5e15f9daadfaa5351d0e3ca8fea56"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 125,
+          "native_class": "SoundStream",
+          "asset_path": "sounds\\GolemDie__Stream",
+          "file_path": "sounds/GolemDie__Stream.wav",
+          "file_sha256": "cee482491c4aa21672bf7bbd4c314ab185a5e15f9daadfaa5351d0e3ca8fea56"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "stream gain from world point; same branch also requests stonebreak and rockhit"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 41
+    },
+    {
+      "tick": 1598,
+      "event_class": "death.faculty",
+      "request_ordinal": 1,
+      "trigger": "Faculty terminal branch",
+      "native_trigger_site": "0x0049D19B",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "stream_play",
+      "requested_asset_id": "registry:121",
+      "requested_asset": {
+        "registry_index": 121,
+        "native_class": "SoundStream",
+        "asset_path": "sounds\\FacultyDie__Stream",
+        "file_path": "sounds/FacultyDie__Stream.wav",
+        "file_sha256": "facbf1e289dfd60172db64f2298669ec4184a73c1ac0b354133b4e333657260e"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 121,
+          "native_class": "SoundStream",
+          "asset_path": "sounds\\FacultyDie__Stream",
+          "file_path": "sounds/FacultyDie__Stream.wav",
+          "file_sha256": "facbf1e289dfd60172db64f2298669ec4184a73c1ac0b354133b4e333657260e"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "stream gain from world point"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 42
+    },
+    {
+      "tick": 1601,
+      "event_class": "death.heartmonger",
+      "request_ordinal": 1,
+      "trigger": "Heartmonger terminal branch",
+      "native_trigger_site": "0x004A0B6F",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "stream_play",
+      "requested_asset_id": "registry:111",
+      "requested_asset": {
+        "registry_index": 111,
+        "native_class": "SoundStream",
+        "asset_path": "sounds\\BreakHeartmonger__Stream",
+        "file_path": "sounds/BreakHeartmonger__Stream.wav",
+        "file_sha256": "4b0c2ca276972def804ced32163a32d30061c75b7d40d70c152f77030b4b873d"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 111,
+          "native_class": "SoundStream",
+          "asset_path": "sounds\\BreakHeartmonger__Stream",
+          "file_path": "sounds/BreakHeartmonger__Stream.wav",
+          "file_sha256": "4b0c2ca276972def804ced32163a32d30061c75b7d40d70c152f77030b4b873d"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "stream gain from world point; chain pool precedes terminal stream"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 43
+    },
+    {
+      "tick": 1606,
+      "event_class": "death.portal",
+      "request_ordinal": 1,
+      "trigger": "portal terminal branch",
+      "native_trigger_site": "0x004A2034",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:75",
+      "requested_asset": {
+        "registry_index": 75,
+        "native_class": "Sound",
+        "asset_path": "sounds\\PortalDie",
+        "file_path": "sounds/PortalDie.wav",
+        "file_sha256": "6818eabb201771662c20860cd326e28266f94a1aa588153912333589adbc758a"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 75,
+          "native_class": "Sound",
+          "asset_path": "sounds\\PortalDie",
+          "file_path": "sounds/PortalDie.wav",
+          "file_sha256": "6818eabb201771662c20860cd326e28266f94a1aa588153912333589adbc758a"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "world point gain"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 44
+    },
+    {
+      "tick": 1612,
+      "event_class": "death.coffin",
+      "request_ordinal": 1,
+      "trigger": "coffin terminal branch",
+      "native_trigger_site": "0x0049B549",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:15",
+      "requested_asset": {
+        "registry_index": 15,
+        "native_class": "Sound",
+        "asset_path": "sounds\\coffinbreak",
+        "file_path": "sounds/coffinbreak.wav",
+        "file_sha256": "5b1e1bceae4338878309256cfa083a8621efb26250fd72325d635f719b547dca"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 15,
+          "native_class": "Sound",
+          "asset_path": "sounds\\coffinbreak",
+          "file_path": "sounds/coffinbreak.wav",
+          "file_sha256": "5b1e1bceae4338878309256cfa083a8621efb26250fd72325d635f719b547dca"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "world point gain"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 45
+    },
+    {
+      "tick": 1618,
+      "event_class": "death.crow",
+      "request_ordinal": 1,
+      "trigger": "crow terminal/retirement branch",
+      "native_trigger_site": "0x00489226",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_pitch_gain",
+      "requested_asset_id": "registry:183",
+      "requested_asset": {
+        "registry_index": 183,
+        "native_class": "Sound",
+        "asset_path": "sounds\\Crow\\crow1",
+        "file_path": "sounds/Crow/crow1.wav",
+        "file_sha256": "f4972b430609927fcd34674d7305f8ebf1394a9d45772993c5b9dfabf89eafef"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 183,
+          "native_class": "Sound",
+          "asset_path": "sounds\\Crow\\crow1",
+          "file_path": "sounds/Crow/crow1.wav",
+          "file_sha256": "f4972b430609927fcd34674d7305f8ebf1394a9d45772993c5b9dfabf89eafef"
+        },
+        {
+          "registry_index": 184,
+          "native_class": "Sound",
+          "asset_path": "sounds\\Crow\\crow2",
+          "file_path": "sounds/Crow/crow2.wav",
+          "file_sha256": "1641a7fc5b1ddeb1caa06e1b6723b2458d204a8cdb876f5ce6f6986162057ea2"
+        }
+      ],
+      "selection_logic": "uniform Integer(2)",
+      "rng_stream": "active gameplay stream at DAT_00818B08; G1 App-tick seed and draw order",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "world point gain plus gameplay-RNG pitch"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 46
+    },
+    {
+      "tick": 1625,
+      "event_class": "death.maggot",
+      "request_ordinal": 1,
+      "trigger": "maggot terminal branch",
+      "native_trigger_site": "0x0049C9C6",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_pitch_gain",
+      "requested_asset_id": "registry:199",
+      "requested_asset": {
+        "registry_index": 199,
+        "native_class": "Sound",
+        "asset_path": "sounds\\MaggotSqueak\\squeak1",
+        "file_path": "sounds/MaggotSqueak/squeak1.wav",
+        "file_sha256": "cefed419346a320ada92f4fb1332ebf2fce6a0265ed520efd11a98b04751216d"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 199,
+          "native_class": "Sound",
+          "asset_path": "sounds\\MaggotSqueak\\squeak1",
+          "file_path": "sounds/MaggotSqueak/squeak1.wav",
+          "file_sha256": "cefed419346a320ada92f4fb1332ebf2fce6a0265ed520efd11a98b04751216d"
+        },
+        {
+          "registry_index": 200,
+          "native_class": "Sound",
+          "asset_path": "sounds\\MaggotSqueak\\squeak2",
+          "file_path": "sounds/MaggotSqueak/squeak2.wav",
+          "file_sha256": "8ca249e20ee5f96ccfa49c9dff37ba5c2040f342aa553170e283c9ee89b5fd3a"
+        }
+      ],
+      "selection_logic": "uniform Integer(2)",
+      "rng_stream": "active gameplay stream at DAT_00818B08; G1 App-tick seed and draw order",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "world point gain plus gameplay-RNG pitch"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 47
+    },
+    {
+      "tick": 1632,
+      "event_class": "pickup.coin",
+      "request_ordinal": 1,
+      "trigger": "coin pickup accepted",
+      "native_trigger_site": "0x005E6A1B",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:69",
+      "requested_asset": {
+        "registry_index": 69,
+        "native_class": "Sound",
+        "asset_path": "sounds\\pickupcoin",
+        "file_path": "sounds/pickupcoin.wav",
+        "file_sha256": "04a1ea7b62cdaf0fd55cf237911594d75d79c0cf5cdf7962078f2949b9f4da34"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 69,
+          "native_class": "Sound",
+          "asset_path": "sounds\\pickupcoin",
+          "file_path": "sounds/pickupcoin.wav",
+          "file_sha256": "04a1ea7b62cdaf0fd55cf237911594d75d79c0cf5cdf7962078f2949b9f4da34"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "fixed gain=1, pitch=1"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 48
+    },
+    {
+      "tick": 1644,
+      "event_class": "pickup.bag",
+      "request_ordinal": 1,
+      "trigger": "loot bag pickup accepted",
+      "native_trigger_site": "0x005E6D20",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:68",
+      "requested_asset": {
+        "registry_index": 68,
+        "native_class": "Sound",
+        "asset_path": "sounds\\pickupbag",
+        "file_path": "sounds/pickupbag.wav",
+        "file_sha256": "8b299623b5b51dc6b56dfb1acc3821664d8857a02a70179f6ba3330182443902"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 68,
+          "native_class": "Sound",
+          "asset_path": "sounds\\pickupbag",
+          "file_path": "sounds/pickupbag.wav",
+          "file_sha256": "8b299623b5b51dc6b56dfb1acc3821664d8857a02a70179f6ba3330182443902"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "fixed gain=1, pitch=1"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 49
+    },
+    {
+      "tick": 1648,
+      "event_class": "pickup.orb",
+      "request_ordinal": 1,
+      "trigger": "orb pickup accepted",
+      "native_trigger_site": "0x005E659F",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:2",
+      "requested_asset": {
+        "registry_index": 2,
+        "native_class": "Sound",
+        "asset_path": "sounds\\gotorb",
+        "file_path": "sounds/gotorb.wav",
+        "file_sha256": "e971ea0fcc9fee14e93936b83768862ff24cc61106e741c66e48f709b9c5893a"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 2,
+          "native_class": "Sound",
+          "asset_path": "sounds\\gotorb",
+          "file_path": "sounds/gotorb.wav",
+          "file_sha256": "e971ea0fcc9fee14e93936b83768862ff24cc61106e741c66e48f709b9c5893a"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "fixed gain=1, pitch=1"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 50
+    },
+    {
+      "tick": 1651,
+      "event_class": "pickup.potion",
+      "request_ordinal": 1,
+      "trigger": "potion loot enters the generic bag pickup path",
+      "native_trigger_site": "0x005E6D20",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:68",
+      "requested_asset": {
+        "registry_index": 68,
+        "native_class": "Sound",
+        "asset_path": "sounds\\pickupbag",
+        "file_path": "sounds/pickupbag.wav",
+        "file_sha256": "8b299623b5b51dc6b56dfb1acc3821664d8857a02a70179f6ba3330182443902"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 68,
+          "native_class": "Sound",
+          "asset_path": "sounds\\pickupbag",
+          "file_path": "sounds/pickupbag.wav",
+          "file_sha256": "8b299623b5b51dc6b56dfb1acc3821664d8857a02a70179f6ba3330182443902"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "fixed gain=1, pitch=1"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 51
+    },
+    {
+      "tick": 1656,
+      "event_class": "pickup.magic_book",
+      "request_ordinal": 1,
+      "trigger": "magic-book acquisition stream",
+      "native_trigger_site": "0x0056D471",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "stream_play",
+      "requested_asset_id": "registry:129",
+      "requested_asset": {
+        "registry_index": 129,
+        "native_class": "SoundStream",
+        "asset_path": "sounds\\magicbookget__stream",
+        "file_path": "sounds/magicbookget__stream.wav",
+        "file_sha256": "ab0ac9b19633d93575673f61893c5e7ba509ec315263a9b39378a494ed575999"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 129,
+          "native_class": "SoundStream",
+          "asset_path": "sounds\\magicbookget__stream",
+          "file_path": "sounds/magicbookget__stream.wav",
+          "file_sha256": "ab0ac9b19633d93575673f61893c5e7ba509ec315263a9b39378a494ed575999"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "fixed gain=1, pitch=1"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 52
+    },
+    {
+      "tick": 1660,
+      "event_class": "potion.use",
+      "request_ordinal": 1,
+      "trigger": "potion effect accepted and consumed",
+      "native_trigger_site": "0x0056D246",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:24",
+      "requested_asset": {
+        "registry_index": 24,
+        "native_class": "Sound",
+        "asset_path": "sounds\\drink",
+        "file_path": "sounds/drink.wav",
+        "file_sha256": "61fdcc02a31b1c1c43264cb6ed8d02717e9dba2c5123167ad6e309053e28f322"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 24,
+          "native_class": "Sound",
+          "asset_path": "sounds\\drink",
+          "file_path": "sounds/drink.wav",
+          "file_sha256": "61fdcc02a31b1c1c43264cb6ed8d02717e9dba2c5123167ad6e309053e28f322"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "fixed gain=1, pitch=1"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 53
+    },
+    {
+      "tick": 1663,
+      "event_class": "potion.invalid",
+      "request_ordinal": 1,
+      "trigger": "potion/action rejected",
+      "native_trigger_site": "0x0056D3D2",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:6",
+      "requested_asset": {
+        "registry_index": 6,
+        "native_class": "Sound",
+        "asset_path": "sounds\\badaction",
+        "file_path": "sounds/badaction.wav",
+        "file_sha256": "0ca71924473e6a45156f0dbd450ff7a158d39015179697c83c7b04824e3256d6"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 6,
+          "native_class": "Sound",
+          "asset_path": "sounds\\badaction",
+          "file_path": "sounds/badaction.wav",
+          "file_sha256": "0ca71924473e6a45156f0dbd450ff7a158d39015179697c83c7b04824e3256d6"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "fixed gain=1, pitch=1"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 54
+    },
+    {
+      "tick": 1667,
+      "event_class": "level.up",
+      "request_ordinal": 1,
+      "trigger": "native level threshold crossed",
+      "native_trigger_site": "0x00647F6B",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_pitch_gain",
+      "requested_asset_id": "registry:52",
+      "requested_asset": {
+        "registry_index": 52,
+        "native_class": "Sound",
+        "asset_path": "sounds\\levelup",
+        "file_path": "sounds/levelup.wav",
+        "file_sha256": "ca01cafec3167ee5bb37f0cb6605196d38bca45c7b755d5fa11781d3e4a5ea92"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 52,
+          "native_class": "Sound",
+          "asset_path": "sounds\\levelup",
+          "file_path": "sounds/levelup.wav",
+          "file_sha256": "ca01cafec3167ee5bb37f0cb6605196d38bca45c7b755d5fa11781d3e4a5ea92"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "two fixed level-up pitches are dispatched at 0x00647F6B and 0x00647FBE"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 55
+    },
+    {
+      "tick": 1672,
+      "event_class": "skill.unlock",
+      "request_ordinal": 1,
+      "trigger": "skill purchase/unlock accepted",
+      "native_trigger_site": "0x00670CD3",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:102",
+      "requested_asset": {
+        "registry_index": 102,
+        "native_class": "Sound",
+        "asset_path": "sounds\\unlockskill",
+        "file_path": "sounds/unlockskill.wav",
+        "file_sha256": "2013053abdd8a969f7c63b2c735cedb5a571fc999bf1474543cd608cee74ffaa"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 102,
+          "native_class": "Sound",
+          "asset_path": "sounds\\unlockskill",
+          "file_path": "sounds/unlockskill.wav",
+          "file_sha256": "2013053abdd8a969f7c63b2c735cedb5a571fc999bf1474543cd608cee74ffaa"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "fixed gain=1, pitch=1"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 56
+    },
+    {
+      "tick": 1423,
+      "event_class": "wave.start",
+      "trigger": "first arena wave enters combat music",
+      "native_trigger_site": "0x00465D22",
+      "observed_caller_return_address": "0x00470EA2",
+      "dispatch_operation": "music_transition",
+      "requested_asset_id": "music:combat",
+      "requested_track": "combat",
+      "parameters": {
+        "transition_ticks": -1.0
+      },
+      "capture_kind": "natural_stock_dispatch",
+      "engine_enabled": false,
+      "timeline_sequence": 57
+    },
+    {
+      "tick": 1676,
+      "event_class": "wave.end",
+      "trigger": "terminal arena completion",
+      "native_trigger_site": "0x00467AA0",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "music_play_crossfade",
+      "requested_asset_id": "music:<empty>",
+      "requested_track": "",
+      "parameters": {
+        "transition_ticks": -1.0
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 58
+    },
+    {
+      "tick": 1679,
+      "event_class": "dig.shovel",
+      "request_ordinal": 1,
+      "trigger": "accepted dig strike",
+      "native_trigger_site": "0x0048207A",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_pitch_gain",
+      "requested_asset_id": "registry:209",
+      "requested_asset": {
+        "registry_index": 209,
+        "native_class": "Sound",
+        "asset_path": "sounds\\shovel\\shovel1",
+        "file_path": "sounds/shovel/shovel1.wav",
+        "file_sha256": "be06d2e6eaacf2e0b35aaf14293e41420a0efd5ae364894cda193398838ebce6"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 209,
+          "native_class": "Sound",
+          "asset_path": "sounds\\shovel\\shovel1",
+          "file_path": "sounds/shovel/shovel1.wav",
+          "file_sha256": "be06d2e6eaacf2e0b35aaf14293e41420a0efd5ae364894cda193398838ebce6"
+        },
+        {
+          "registry_index": 210,
+          "native_class": "Sound",
+          "asset_path": "sounds\\shovel\\shovel2",
+          "file_path": "sounds/shovel/shovel2.wav",
+          "file_sha256": "4697492d7f5e07a78613b60c44122c7e3193d17d898eccf8ffe62f229d4c0fdd"
+        }
+      ],
+      "selection_logic": "uniform Integer(2)",
+      "rng_stream": "active gameplay stream at DAT_00818B08; G1 App-tick seed and draw order",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "world point gain plus gameplay-RNG pitch"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 59
+    },
+    {
+      "tick": 1682,
+      "event_class": "dig.throw_dirt",
+      "request_ordinal": 1,
+      "trigger": "dig debris emission",
+      "native_trigger_site": "0x004820FE",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_pitch_gain",
+      "requested_asset_id": "registry:222",
+      "requested_asset": {
+        "registry_index": 222,
+        "native_class": "Sound",
+        "asset_path": "sounds\\throwdirt\\throwdirt1",
+        "file_path": "sounds/throwdirt/throwdirt1.wav",
+        "file_sha256": "de233771aae5e806e4bdba0553729d1744605f512243fd30733e2e0dbd00a1ef"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 222,
+          "native_class": "Sound",
+          "asset_path": "sounds\\throwdirt\\throwdirt1",
+          "file_path": "sounds/throwdirt/throwdirt1.wav",
+          "file_sha256": "de233771aae5e806e4bdba0553729d1744605f512243fd30733e2e0dbd00a1ef"
+        },
+        {
+          "registry_index": 223,
+          "native_class": "Sound",
+          "asset_path": "sounds\\throwdirt\\throwdirt2",
+          "file_path": "sounds/throwdirt/throwdirt2.wav",
+          "file_sha256": "e527b1df105d2a2fabc65aa576d76fcf7379d3bf0d9f6a51fabb81011ffc947f"
+        }
+      ],
+      "selection_logic": "uniform Integer(2)",
+      "rng_stream": "active gameplay stream at DAT_00818B08; G1 App-tick seed and draw order",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "world point gain plus gameplay-RNG pitch"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 60
+    },
+    {
+      "tick": 1689,
+      "event_class": "shop.purchase",
+      "request_ordinal": 1,
+      "trigger": "purchase debit and transfer succeed",
+      "native_trigger_site": "0x0056C10E",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:25",
+      "requested_asset": {
+        "registry_index": 25,
+        "native_class": "Sound",
+        "asset_path": "sounds\\dropcoins",
+        "file_path": "sounds/dropcoins.wav",
+        "file_sha256": "b72d44080d99fdae8e7dce83b5f1b6a553d503a753df2deacea7ee8829ba4376"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 25,
+          "native_class": "Sound",
+          "asset_path": "sounds\\dropcoins",
+          "file_path": "sounds/dropcoins.wav",
+          "file_sha256": "b72d44080d99fdae8e7dce83b5f1b6a553d503a753df2deacea7ee8829ba4376"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "fixed gain=1, pitch=1"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 61
+    },
+    {
+      "tick": 1694,
+      "event_class": "shop.purchase_rejected",
+      "request_ordinal": 1,
+      "trigger": "purchase precondition fails",
+      "native_trigger_site": "0x0056C1A6",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:6",
+      "requested_asset": {
+        "registry_index": 6,
+        "native_class": "Sound",
+        "asset_path": "sounds\\badaction",
+        "file_path": "sounds/badaction.wav",
+        "file_sha256": "0ca71924473e6a45156f0dbd450ff7a158d39015179697c83c7b04824e3256d6"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 6,
+          "native_class": "Sound",
+          "asset_path": "sounds\\badaction",
+          "file_path": "sounds/badaction.wav",
+          "file_sha256": "0ca71924473e6a45156f0dbd450ff7a158d39015179697c83c7b04824e3256d6"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "fixed gain=1, pitch=1"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 62
+    },
+    {
+      "tick": 1697,
+      "event_class": "shop.storage_transfer",
+      "request_ordinal": 1,
+      "trigger": "storage transfer accepted",
+      "native_trigger_site": "0x0056CE80",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:4",
+      "requested_asset": {
+        "registry_index": 4,
+        "native_class": "Sound",
+        "asset_path": "sounds\\backpack_close",
+        "file_path": "sounds/backpack_close.wav",
+        "file_sha256": "32fa4ca58d0fe1eb967bb50f20dffc0edb98b25ca74c719edc2b70b9e4312319"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 4,
+          "native_class": "Sound",
+          "asset_path": "sounds\\backpack_close",
+          "file_path": "sounds/backpack_close.wav",
+          "file_sha256": "32fa4ca58d0fe1eb967bb50f20dffc0edb98b25ca74c719edc2b70b9e4312319"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "fixed gain=1, pitch=1"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 63
+    },
+    {
+      "tick": 1701,
+      "event_class": "shop.storage_transfer",
+      "request_ordinal": 2,
+      "trigger": "storage transfer accepted",
+      "native_trigger_site": "0x0056CF1A",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:0",
+      "requested_asset": {
+        "registry_index": 0,
+        "native_class": "Sound",
+        "asset_path": "sounds\\click",
+        "file_path": "sounds/click.wav",
+        "file_sha256": "8aeebcfeb69625bee2ee78fe9c63939e6b40edcc89d5facf2c0d35e1b5920307"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 0,
+          "native_class": "Sound",
+          "asset_path": "sounds\\click",
+          "file_path": "sounds/click.wav",
+          "file_sha256": "8aeebcfeb69625bee2ee78fe9c63939e6b40edcc89d5facf2c0d35e1b5920307"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "fixed gain=1, pitch=1"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 64
+    },
+    {
+      "tick": 1428,
+      "event_class": "ui.focus",
+      "trigger": "pointer hover/focus changes without activation",
+      "native_trigger_site": null,
+      "dispatch_operation": null,
+      "requested_asset_id": null,
+      "requested_track": "",
+      "parameters": {},
+      "capture_kind": "live_silent_phase_checkpoint",
+      "silent_reason": "stock pointer focus has no audio dispatch",
+      "engine_enabled": false,
+      "timeline_sequence": 65
+    },
+    {
+      "tick": 1706,
+      "event_class": "ui.confirm",
+      "request_ordinal": 1,
+      "trigger": "Game Over continue/button activation",
+      "native_trigger_site": "0x005CF7BA",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:0",
+      "requested_asset": {
+        "registry_index": 0,
+        "native_class": "Sound",
+        "asset_path": "sounds\\click",
+        "file_path": "sounds/click.wav",
+        "file_sha256": "8aeebcfeb69625bee2ee78fe9c63939e6b40edcc89d5facf2c0d35e1b5920307"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 0,
+          "native_class": "Sound",
+          "asset_path": "sounds\\click",
+          "file_path": "sounds/click.wav",
+          "file_sha256": "8aeebcfeb69625bee2ee78fe9c63939e6b40edcc89d5facf2c0d35e1b5920307"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "fixed gain=1, pitch=1"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 66
+    },
+    {
+      "tick": 1710,
+      "event_class": "ui.back",
+      "request_ordinal": 1,
+      "trigger": "storage/backpack close action",
+      "native_trigger_site": "0x0056CE80",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:4",
+      "requested_asset": {
+        "registry_index": 4,
+        "native_class": "Sound",
+        "asset_path": "sounds\\backpack_close",
+        "file_path": "sounds/backpack_close.wav",
+        "file_sha256": "32fa4ca58d0fe1eb967bb50f20dffc0edb98b25ca74c719edc2b70b9e4312319"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 4,
+          "native_class": "Sound",
+          "asset_path": "sounds\\backpack_close",
+          "file_path": "sounds/backpack_close.wav",
+          "file_sha256": "32fa4ca58d0fe1eb967bb50f20dffc0edb98b25ca74c719edc2b70b9e4312319"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "fixed gain=1, pitch=1"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 67
+    },
+    {
+      "tick": 1,
+      "event_class": "music.menu_transition",
+      "trigger": "native menu/scene music selection",
+      "native_trigger_site": "0x0058A033",
+      "observed_caller_return_address": "0x0058A038",
+      "dispatch_operation": "music_play_crossfade",
+      "requested_asset_id": "music:prelude",
+      "requested_track": "",
+      "parameters": {
+        "transition_ticks": 200.0
+      },
+      "capture_kind": "natural_stock_dispatch",
+      "engine_enabled": false,
+      "timeline_sequence": 68
+    }
+  ],
+  "natural_dispatch_witnesses": [
+    {
+      "event_sequence": 1,
+      "native_tick": 1,
+      "monotonic_ms": 1242912703,
+      "object_address": "0x0152BC28",
+      "caller_return_address": "0x0058A038",
+      "registry_index": -1,
+      "native_reference_count": 0,
+      "gain": 1.0,
+      "pitch": 1.0,
+      "transition_ticks": 200.0,
+      "engine_enabled": false,
+      "caller_in_game_image": true,
+      "native_class": "Music",
+      "operation": "music_play_crossfade",
+      "requested_name": "prelude",
+      "requested_track": ""
+    },
+    {
+      "event_sequence": 109,
+      "native_tick": 1423,
+      "monotonic_ms": 1242928468,
+      "object_address": "0x0152BC28",
+      "caller_return_address": "0x00470EA2",
+      "registry_index": -1,
+      "native_reference_count": 0,
+      "gain": 1.0,
+      "pitch": 1.0,
+      "transition_ticks": -1.0,
+      "engine_enabled": false,
+      "caller_in_game_image": true,
+      "native_class": "Music",
+      "operation": "music_transition",
+      "requested_name": "combat",
+      "requested_track": "combat"
+    }
+  ],
+  "looping_assets": [
+    {
+      "registry_index": 151,
+      "native_class": "SoundLoop",
+      "asset_path": "sounds\\beam__loop",
+      "file_path": "sounds/beam__loop.wav",
+      "file_sha256": "e9836c0785f6376791b2c156b99189902e8fa4b8a667e9e5e4cb2d5ddbd3ae0e",
+      "sample_rate_hz": 44100,
+      "channels": 2,
+      "bits_per_sample": 16,
+      "sample_frames": 220500,
+      "wav_smpl_loop_points": [],
+      "stock_effective_loop": {
+        "start_frame": 0,
+        "end_frame_exclusive": 220500,
+        "reason": "BASS_SAMPLE_LOOP loops the whole decoded sample; stock never applies WAV smpl positions"
+      }
+    },
+    {
+      "registry_index": 152,
+      "native_class": "SoundLoop",
+      "asset_path": "sounds\\comet__loop",
+      "file_path": "sounds/comet__loop.wav",
+      "file_sha256": "b8c4c69e2220778492eb25118a6c4a72169f5db3ee9e14e56210e8aba6d8fc80",
+      "sample_rate_hz": 44100,
+      "channels": 1,
+      "bits_per_sample": 16,
+      "sample_frames": 27230,
+      "wav_smpl_loop_points": [],
+      "stock_effective_loop": {
+        "start_frame": 0,
+        "end_frame_exclusive": 27230,
+        "reason": "BASS_SAMPLE_LOOP loops the whole decoded sample; stock never applies WAV smpl positions"
+      }
+    },
+    {
+      "registry_index": 153,
+      "native_class": "SoundLoop",
+      "asset_path": "sounds\\deepthunder__loop",
+      "file_path": "sounds/deepthunder__loop.wav",
+      "file_sha256": "18cc30ab286cc28543c27f9f9c3a7a148c25a546f6cc593ee3fb9e25031136c0",
+      "sample_rate_hz": 44100,
+      "channels": 2,
+      "bits_per_sample": 16,
+      "sample_frames": 93246,
+      "wav_smpl_loop_points": [],
+      "stock_effective_loop": {
+        "start_frame": 0,
+        "end_frame_exclusive": 93246,
+        "reason": "BASS_SAMPLE_LOOP loops the whole decoded sample; stock never applies WAV smpl positions"
+      }
+    },
+    {
+      "registry_index": 154,
+      "native_class": "SoundLoop",
+      "asset_path": "sounds\\earthquake__loop",
+      "file_path": "sounds/earthquake__loop.wav",
+      "file_sha256": "ac56c68d267f5d9c7431b8cadd5b6bd4e73ae6101e144ff9769d2aac1a529068",
+      "sample_rate_hz": 22050,
+      "channels": 1,
+      "bits_per_sample": 16,
+      "sample_frames": 84504,
+      "wav_smpl_loop_points": [],
+      "stock_effective_loop": {
+        "start_frame": 0,
+        "end_frame_exclusive": 84504,
+        "reason": "BASS_SAMPLE_LOOP loops the whole decoded sample; stock never applies WAV smpl positions"
+      }
+    },
+    {
+      "registry_index": 155,
+      "native_class": "SoundLoop",
+      "asset_path": "sounds\\eerie__loop",
+      "file_path": "sounds/eerie__loop.wav",
+      "file_sha256": "96b8681aef80986dd09d02a7f40d34dbbff0d1b432c2b14c314e2f5af0ff6ad2",
+      "sample_rate_hz": 44100,
+      "channels": 1,
+      "bits_per_sample": 16,
+      "sample_frames": 203197,
+      "wav_smpl_loop_points": [],
+      "stock_effective_loop": {
+        "start_frame": 0,
+        "end_frame_exclusive": 203197,
+        "reason": "BASS_SAMPLE_LOOP loops the whole decoded sample; stock never applies WAV smpl positions"
+      }
+    },
+    {
+      "registry_index": 156,
+      "native_class": "SoundLoop",
+      "asset_path": "sounds\\electric__loop",
+      "file_path": "sounds/electric__loop.wav",
+      "file_sha256": "809601e64da07ac0adfffec5f5e29dfc61ee79725fdbf85ceb501d80d6cb0db4",
+      "sample_rate_hz": 22255,
+      "channels": 1,
+      "bits_per_sample": 8,
+      "sample_frames": 15763,
+      "wav_smpl_loop_points": [],
+      "stock_effective_loop": {
+        "start_frame": 0,
+        "end_frame_exclusive": 15763,
+        "reason": "BASS_SAMPLE_LOOP loops the whole decoded sample; stock never applies WAV smpl positions"
+      }
+    },
+    {
+      "registry_index": 157,
+      "native_class": "SoundLoop",
+      "asset_path": "sounds\\fire__loop",
+      "file_path": "sounds/fire__loop.wav",
+      "file_sha256": "afb0963aa7b68590aa2faea31e86e2e080c524513d32f3c23ebe9e7dc001e00b",
+      "sample_rate_hz": 33557,
+      "channels": 1,
+      "bits_per_sample": 16,
+      "sample_frames": 75763,
+      "wav_smpl_loop_points": [],
+      "stock_effective_loop": {
+        "start_frame": 0,
+        "end_frame_exclusive": 75763,
+        "reason": "BASS_SAMPLE_LOOP loops the whole decoded sample; stock never applies WAV smpl positions"
+      }
+    },
+    {
+      "registry_index": 158,
+      "native_class": "SoundLoop",
+      "asset_path": "sounds\\flyblown__loop",
+      "file_path": "sounds/flyblown__loop.wav",
+      "file_sha256": "e4dd23bbe5a2d36762ec54587dacb7cd5465dba64268b0b4b1db198b953422d6",
+      "sample_rate_hz": 11025,
+      "channels": 1,
+      "bits_per_sample": 8,
+      "sample_frames": 39976,
+      "wav_smpl_loop_points": [],
+      "stock_effective_loop": {
+        "start_frame": 0,
+        "end_frame_exclusive": 39976,
+        "reason": "BASS_SAMPLE_LOOP loops the whole decoded sample; stock never applies WAV smpl positions"
+      }
+    },
+    {
+      "registry_index": 159,
+      "native_class": "SoundLoop",
+      "asset_path": "sounds\\gatherrocksloop__loop",
+      "file_path": "sounds/gatherrocksloop__loop.wav",
+      "file_sha256": "143cfa6a54d77570d3d929c3c536fe0306a9a1f1f5292cf4c1521481d5895990",
+      "sample_rate_hz": 44100,
+      "channels": 2,
+      "bits_per_sample": 16,
+      "sample_frames": 108620,
+      "wav_smpl_loop_points": [],
+      "stock_effective_loop": {
+        "start_frame": 0,
+        "end_frame_exclusive": 108620,
+        "reason": "BASS_SAMPLE_LOOP loops the whole decoded sample; stock never applies WAV smpl positions"
+      }
+    },
+    {
+      "registry_index": 160,
+      "native_class": "SoundLoop",
+      "asset_path": "sounds\\icebeam__loop",
+      "file_path": "sounds/icebeam__loop.wav",
+      "file_sha256": "7bb84b1df2a8cc54f0c6cc3bef5ab6f5dec6b2ce2151cd853cd4e42afd595bc6",
+      "sample_rate_hz": 44100,
+      "channels": 1,
+      "bits_per_sample": 16,
+      "sample_frames": 57835,
+      "wav_smpl_loop_points": [],
+      "stock_effective_loop": {
+        "start_frame": 0,
+        "end_frame_exclusive": 57835,
+        "reason": "BASS_SAMPLE_LOOP loops the whole decoded sample; stock never applies WAV smpl positions"
+      }
+    },
+    {
+      "registry_index": 161,
+      "native_class": "SoundLoop",
+      "asset_path": "sounds\\iceloop__loop",
+      "file_path": "sounds/iceloop__loop.wav",
+      "file_sha256": "fd9aa082bd5bb3b6197528a5f2d6771aac7e2f478d8bdca0abd3d521c70fc89a",
+      "sample_rate_hz": 11025,
+      "channels": 1,
+      "bits_per_sample": 16,
+      "sample_frames": 45845,
+      "wav_smpl_loop_points": [],
+      "stock_effective_loop": {
+        "start_frame": 0,
+        "end_frame_exclusive": 45845,
+        "reason": "BASS_SAMPLE_LOOP loops the whole decoded sample; stock never applies WAV smpl positions"
+      }
+    },
+    {
+      "registry_index": 162,
+      "native_class": "SoundLoop",
+      "asset_path": "sounds\\lightningloop__loop",
+      "file_path": "sounds/lightningloop__loop.wav",
+      "file_sha256": "4bdd74a6734206d1212c52d623d0b7fe994bf4beeaa2119d34f3d1fad7d68281",
+      "sample_rate_hz": 22050,
+      "channels": 1,
+      "bits_per_sample": 16,
+      "sample_frames": 58956,
+      "wav_smpl_loop_points": [],
+      "stock_effective_loop": {
+        "start_frame": 0,
+        "end_frame_exclusive": 58956,
+        "reason": "BASS_SAMPLE_LOOP loops the whole decoded sample; stock never applies WAV smpl positions"
+      }
+    },
+    {
+      "registry_index": 163,
+      "native_class": "SoundLoop",
+      "asset_path": "sounds\\lowfire__loop",
+      "file_path": "sounds/lowfire__loop.wav",
+      "file_sha256": "8d42e14b1848f1f2b45fabb52c1f83620a986557416f59ee08f78e630439ce8a",
+      "sample_rate_hz": 44100,
+      "channels": 2,
+      "bits_per_sample": 8,
+      "sample_frames": 450560,
+      "wav_smpl_loop_points": [],
+      "stock_effective_loop": {
+        "start_frame": 0,
+        "end_frame_exclusive": 450560,
+        "reason": "BASS_SAMPLE_LOOP loops the whole decoded sample; stock never applies WAV smpl positions"
+      }
+    },
+    {
+      "registry_index": 164,
+      "native_class": "SoundLoop",
+      "asset_path": "sounds\\maggots__loop",
+      "file_path": "sounds/maggots__loop.wav",
+      "file_sha256": "725332465d0f7d85bd84043ae4a691f0827b227c3ee2aa9fd3226d72bece40db",
+      "sample_rate_hz": 44100,
+      "channels": 2,
+      "bits_per_sample": 16,
+      "sample_frames": 290305,
+      "wav_smpl_loop_points": [
+        {
+          "start_frame": 0,
+          "end_frame_inclusive": 290304
+        }
+      ],
+      "stock_effective_loop": {
+        "start_frame": 0,
+        "end_frame_exclusive": 290305,
+        "reason": "BASS_SAMPLE_LOOP loops the whole decoded sample; stock never applies WAV smpl positions"
+      }
+    },
+    {
+      "registry_index": 165,
+      "native_class": "SoundLoop",
+      "asset_path": "sounds\\meteor__loop",
+      "file_path": "sounds/meteor__loop.wav",
+      "file_sha256": "0161a346a636790b0e5e2ca105c2f6d6ac9d22359742ae1f8469634393e39bcd",
+      "sample_rate_hz": 44100,
+      "channels": 1,
+      "bits_per_sample": 16,
+      "sample_frames": 27230,
+      "wav_smpl_loop_points": [],
+      "stock_effective_loop": {
+        "start_frame": 0,
+        "end_frame_exclusive": 27230,
+        "reason": "BASS_SAMPLE_LOOP loops the whole decoded sample; stock never applies WAV smpl positions"
+      }
+    },
+    {
+      "registry_index": 166,
+      "native_class": "SoundLoop",
+      "asset_path": "sounds\\PlaneCross__Loop",
+      "file_path": "sounds/PlaneCross__Loop.wav",
+      "file_sha256": "04d3bc7b433ef47b758933456e9feecb83924fa9b0ec31e0aeedb0946cd14a24",
+      "sample_rate_hz": 44100,
+      "channels": 1,
+      "bits_per_sample": 16,
+      "sample_frames": 38011,
+      "wav_smpl_loop_points": [],
+      "stock_effective_loop": {
+        "start_frame": 0,
+        "end_frame_exclusive": 38011,
+        "reason": "BASS_SAMPLE_LOOP loops the whole decoded sample; stock never applies WAV smpl positions"
+      }
+    },
+    {
+      "registry_index": 167,
+      "native_class": "SoundLoop",
+      "asset_path": "sounds\\rainfall__loop",
+      "file_path": "sounds/rainfall__loop.wav",
+      "file_sha256": "a27e5ea5d44bb5daf6b80dee6f0f5c9123a5bddfc198340c633b8791c4733a79",
+      "sample_rate_hz": 22050,
+      "channels": 1,
+      "bits_per_sample": 16,
+      "sample_frames": 63207,
+      "wav_smpl_loop_points": [],
+      "stock_effective_loop": {
+        "start_frame": 0,
+        "end_frame_exclusive": 63207,
+        "reason": "BASS_SAMPLE_LOOP loops the whole decoded sample; stock never applies WAV smpl positions"
+      }
+    },
+    {
+      "registry_index": 168,
+      "native_class": "SoundLoop",
+      "asset_path": "sounds\\rollingstoneloop__loop",
+      "file_path": "sounds/rollingstoneloop__loop.wav",
+      "file_sha256": "66a306a2ebe8443cb017ce8c3737477f196600a82af7472201cc123f70cee706",
+      "sample_rate_hz": 11025,
+      "channels": 1,
+      "bits_per_sample": 16,
+      "sample_frames": 32431,
+      "wav_smpl_loop_points": [],
+      "stock_effective_loop": {
+        "start_frame": 0,
+        "end_frame_exclusive": 32431,
+        "reason": "BASS_SAMPLE_LOOP loops the whole decoded sample; stock never applies WAV smpl positions"
+      }
+    },
+    {
+      "registry_index": 169,
+      "native_class": "SoundLoop",
+      "asset_path": "sounds\\shockblast__loop",
+      "file_path": "sounds/shockblast__loop.wav",
+      "file_sha256": "a38948a3ca7bc13d40e7058e12a79014bc624341624c4ac369638d03dd8a7153",
+      "sample_rate_hz": 22255,
+      "channels": 1,
+      "bits_per_sample": 8,
+      "sample_frames": 10509,
+      "wav_smpl_loop_points": [],
+      "stock_effective_loop": {
+        "start_frame": 0,
+        "end_frame_exclusive": 10509,
+        "reason": "BASS_SAMPLE_LOOP loops the whole decoded sample; stock never applies WAV smpl positions"
+      }
+    },
+    {
+      "registry_index": 170,
+      "native_class": "SoundLoop",
+      "asset_path": "sounds\\Soul__Loop",
+      "file_path": "sounds/Soul__Loop.wav",
+      "file_sha256": "661515f9ac51cfb7be5aaa08d7d87667f5b06b6a1e7a530e1a8863b1c46450b4",
+      "sample_rate_hz": 44100,
+      "channels": 2,
+      "bits_per_sample": 16,
+      "sample_frames": 420589,
+      "wav_smpl_loop_points": [],
+      "stock_effective_loop": {
+        "start_frame": 0,
+        "end_frame_exclusive": 420589,
+        "reason": "BASS_SAMPLE_LOOP loops the whole decoded sample; stock never applies WAV smpl positions"
+      }
+    },
+    {
+      "registry_index": 171,
+      "native_class": "SoundLoop",
+      "asset_path": "sounds\\steadywind__loop",
+      "file_path": "sounds/steadywind__loop.wav",
+      "file_sha256": "2c87905f66fa7b02ab18c6b9e5d875ed2c9258ce37c961ba858c17d031141487",
+      "sample_rate_hz": 44100,
+      "channels": 2,
+      "bits_per_sample": 16,
+      "sample_frames": 49116,
+      "wav_smpl_loop_points": [],
+      "stock_effective_loop": {
+        "start_frame": 0,
+        "end_frame_exclusive": 49116,
+        "reason": "BASS_SAMPLE_LOOP loops the whole decoded sample; stock never applies WAV smpl positions"
+      }
+    },
+    {
+      "registry_index": 172,
+      "native_class": "SoundLoop",
+      "asset_path": "sounds\\steam__loop",
+      "file_path": "sounds/steam__loop.wav",
+      "file_sha256": "d817fd149e8b87fa6b7a87bf3b05255749c2d3955469cbe00a0af32d61b5a649",
+      "sample_rate_hz": 22050,
+      "channels": 1,
+      "bits_per_sample": 16,
+      "sample_frames": 26093,
+      "wav_smpl_loop_points": [],
+      "stock_effective_loop": {
+        "start_frame": 0,
+        "end_frame_exclusive": 26093,
+        "reason": "BASS_SAMPLE_LOOP loops the whole decoded sample; stock never applies WAV smpl positions"
+      }
+    }
+  ],
+  "music_catalog": {
+    "native_loader": "Music_Load / 0x004088A0",
+    "table": {
+      "path": "music/music.txt",
+      "size": 1768,
+      "sha256": "080fa830e8c80bb37e84f8ff2d45f920dba3ca0735d2ba16d177d2c323447849"
+    },
+    "module": {
+      "path": "music/music.mo3",
+      "size": 1240482,
+      "sha256": "32bf92cc3191e136b6d186d77d75de48ad28f4bd58acae0c278204455fa57c82"
+    },
+    "songs": [
+      {
+        "name": "prelude",
+        "module_offset": 0,
+        "source_line": 24,
+        "tracks": []
+      },
+      {
+        "name": "combatprelude",
+        "module_offset": 5,
+        "source_line": 25,
+        "tracks": [
+          {
+            "name": "base",
+            "channels": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "source_line": 26
+          },
+          {
+            "name": "combat",
+            "channels": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20
+            ],
+            "source_line": 27
+          },
+          {
+            "name": "heavycombat",
+            "channels": [
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20
+            ],
+            "source_line": 28
+          },
+          {
+            "name": "danger",
+            "channels": [
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24
+            ],
+            "source_line": 29
+          },
+          {
+            "name": "glory",
+            "channels": [
+              25,
+              26,
+              27,
+              28,
+              29,
+              31,
+              31,
+              32
+            ],
+            "source_line": 30
+          }
+        ]
+      },
+      {
+        "name": "combat",
+        "module_offset": 6,
+        "source_line": 31,
+        "tracks": [
+          {
+            "name": "base",
+            "channels": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "source_line": 32
+          },
+          {
+            "name": "combat",
+            "channels": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20
+            ],
+            "source_line": 33
+          },
+          {
+            "name": "heavycombat",
+            "channels": [
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20
+            ],
+            "source_line": 34
+          },
+          {
+            "name": "danger",
+            "channels": [
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24
+            ],
+            "source_line": 35
+          },
+          {
+            "name": "glory",
+            "channels": [
+              25,
+              26,
+              27,
+              28,
+              29,
+              31,
+              31,
+              32
+            ],
+            "source_line": 36
+          }
+        ]
+      },
+      {
+        "name": "boss_aggressive",
+        "module_offset": 58,
+        "source_line": 37,
+        "tracks": [
+          {
+            "name": "base",
+            "channels": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "source_line": 38
+          },
+          {
+            "name": "combat",
+            "channels": [
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16
+            ],
+            "source_line": 39
+          },
+          {
+            "name": "heavycombat",
+            "channels": [
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20
+            ],
+            "source_line": 40
+          }
+        ]
+      },
+      {
+        "name": "boss_squirmy",
+        "module_offset": 70,
+        "source_line": 41,
+        "tracks": [
+          {
+            "name": "base",
+            "channels": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "source_line": 42
+          },
+          {
+            "name": "combat",
+            "channels": [
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16
+            ],
+            "source_line": 43
+          },
+          {
+            "name": "heavycombat",
+            "channels": [
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20
+            ],
+            "source_line": 44
+          }
+        ]
+      },
+      {
+        "name": "boss_gargantuan",
+        "module_offset": 82,
+        "source_line": 45,
+        "tracks": [
+          {
+            "name": "base",
+            "channels": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "source_line": 46
+          },
+          {
+            "name": "combat",
+            "channels": [
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16
+            ],
+            "source_line": 47
+          },
+          {
+            "name": "heavycombat",
+            "channels": [
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20
+            ],
+            "source_line": 48
+          }
+        ]
+      },
+      {
+        "name": "solomondarktheme",
+        "module_offset": 95,
+        "source_line": 49,
+        "tracks": []
+      },
+      {
+        "name": "selection",
+        "module_offset": 116,
+        "source_line": 50,
+        "tracks": []
+      },
+      {
+        "name": "academy",
+        "module_offset": 101,
+        "source_line": 51,
+        "tracks": []
+      },
+      {
+        "name": "death",
+        "module_offset": 118,
+        "source_line": 52,
+        "tracks": []
+      },
+      {
+        "name": "deathguitar",
+        "module_offset": 122,
+        "source_line": 53,
+        "tracks": []
+      },
+      {
+        "name": "academyold",
+        "module_offset": 126,
+        "source_line": 54,
+        "tracks": []
+      }
+    ]
+  },
+  "not_yet_reversed": [
+    {
+      "claim": "sub-frame BASS resampler interpolation and driver-specific output latency",
+      "reason": "these are BASS/device behavior below the disabled engine boundary, not native trigger behavior"
+    }
+  ]
+}

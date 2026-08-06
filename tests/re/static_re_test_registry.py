@@ -531,6 +531,11 @@ from static_re_audio_disable_contracts import (
     test_launch_audio_disable_is_engine_level_and_player_opt_in,
     test_stock_audio_bootstrap_and_settings_are_layout_backed,
 )
+from static_re_native_audio_event_contracts import (
+    test_native_audio_event_census_and_dispatch_golden_are_pinned,
+    test_native_audio_loop_points_and_playback_semantics_are_pinned,
+    test_native_audio_multiplayer_ownership_is_stock_transition_owned,
+)
 from static_staged_release_loader_contracts import (
     test_live_acceptance_launchers_require_release_loader,
     test_native_loader_build_flavor_stamp_is_explicit_and_logged,
@@ -1892,6 +1897,18 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "launch audio disable is engine-level and player opt-in",
         test_launch_audio_disable_is_engine_level_and_player_opt_in,
+    ),
+    (
+        "native audio event census and dispatch golden are pinned",
+        test_native_audio_event_census_and_dispatch_golden_are_pinned,
+    ),
+    (
+        "native audio loop points and playback semantics are pinned",
+        test_native_audio_loop_points_and_playback_semantics_are_pinned,
+    ),
+    (
+        "native audio multiplayer ownership is stock-transition owned",
+        test_native_audio_multiplayer_ownership_is_stock_transition_owned,
     ),
     (
         "automation launch surfaces default to disabled audio",
