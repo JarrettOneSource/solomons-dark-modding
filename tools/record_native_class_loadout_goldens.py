@@ -1290,6 +1290,8 @@ def snapshot_ready(value: Mapping[str, Any], participant_id: int | None) -> tupl
     owned = participant["owned_progression"]
     if observed["scene"] != "hub" or observed["region_index"] != 0:
         return False, f"scene not hub/0: {observed}"
+    if observed["session_state"] != "in-hub":
+        return False, f"run-entry session is not in-hub: {observed}"
     if observed["input_sealed"]:
         return False, "input remains sealed"
     if entity["actor_address"] == 0 or entity["progression_address"] == 0:
