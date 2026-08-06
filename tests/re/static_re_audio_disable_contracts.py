@@ -10,6 +10,7 @@ from static_re_contract_support import (
     BINARY_LAYOUT,
     ROOT,
     StaticReTestFailure,
+    read_source_unit,
     read_text,
     sha256,
 )
@@ -565,7 +566,7 @@ def test_launch_audio_disable_is_engine_level_and_player_opt_in() -> str:
         ROOT
         / "SolomonDarkModLoader/include/native_audio_observability.h"
     )
-    observability_source = read_text(
+    observability_source = read_source_unit(
         ROOT
         / "SolomonDarkModLoader/src/native_audio_observability.cpp"
     )

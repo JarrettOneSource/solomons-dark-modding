@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from static_multiplayer_contract_support import _read, _require_in_order
+from static_multiplayer_contract_support import (
+    _read,
+    _require_in_order,
+    read_source_unit,
+)
 
 
 def test_local_participant_hit_feedback_is_event_owned_and_presentation_only() -> str:
@@ -47,7 +51,7 @@ def test_local_participant_hit_feedback_is_event_owned_and_presentation_only() -
         "SolomonDarkModLoader/src/mod_loader_gameplay/"
         "dispatch_and_hooks_local_hit_feedback.inl"
     )
-    native_audio = _read(
+    native_audio = read_source_unit(
         "SolomonDarkModLoader/src/native_audio_observability.cpp"
     )
     vitals_correction = _read(

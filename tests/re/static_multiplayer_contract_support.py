@@ -80,6 +80,10 @@ _SPLIT_SOURCE_FRAGMENTS = frozenset(
         "state_reconciliation.inl",
         "lifecycle_and_materialization.inl",
         "address_storage_native_minions.inl",
+        "native_audio_census_probe.inl",
+        "native_audio_lifecycle_hooks.inl",
+        "native_audio_public_api.inl",
+        "native_audio_state_and_capture.inl",
     }
 )
 

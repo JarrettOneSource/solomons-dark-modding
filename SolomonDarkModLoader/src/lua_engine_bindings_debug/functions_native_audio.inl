@@ -113,3 +113,101 @@ int LuaDebugClearNativeAudioChannelHistory(lua_State* state) {
     lua_pushinteger(state, static_cast<lua_Integer>(removed));
     return 1;
 }
+
+// sd.debug.get_native_audio_dispatch_events() -> array, capture_enabled
+int LuaDebugGetNativeAudioDispatchEvents(lua_State* state) {
+    const auto events = SnapshotNativeAudioDispatchEvents();
+    lua_createtable(state, static_cast<int>(events.size()), 0);
+    for (std::size_t index = 0; index < events.size(); ++index) {
+        const auto& event = events[index];
+        lua_createtable(state, 0, 16);
+        lua_pushnumber(
+            state,
+            static_cast<lua_Number>(event.event_sequence));
+        lua_setfield(state, -2, "event_sequence");
+        lua_pushnumber(
+            state,
+            static_cast<lua_Number>(event.native_tick));
+        lua_setfield(state, -2, "native_tick");
+        lua_pushnumber(
+            state,
+            static_cast<lua_Number>(event.monotonic_ms));
+        lua_setfield(state, -2, "monotonic_ms");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(event.object_address));
+        lua_setfield(state, -2, "object_address");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(event.caller_return_address));
+        lua_setfield(state, -2, "caller_return_address");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(event.registry_index));
+        lua_setfield(state, -2, "registry_index");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(event.native_reference_count));
+        lua_setfield(state, -2, "native_reference_count");
+        lua_pushnumber(state, static_cast<lua_Number>(event.gain));
+        lua_setfield(state, -2, "gain");
+        lua_pushnumber(state, static_cast<lua_Number>(event.pitch));
+        lua_setfield(state, -2, "pitch");
+        lua_pushnumber(
+            state,
+            static_cast<lua_Number>(event.transition_ticks));
+        lua_setfield(state, -2, "transition_ticks");
+        lua_pushboolean(state, event.engine_enabled ? 1 : 0);
+        lua_setfield(state, -2, "engine_enabled");
+        lua_pushboolean(state, event.caller_in_game_image ? 1 : 0);
+        lua_setfield(state, -2, "caller_in_game_image");
+        lua_pushstring(state, event.native_class.c_str());
+        lua_setfield(state, -2, "native_class");
+        lua_pushstring(state, event.operation.c_str());
+        lua_setfield(state, -2, "operation");
+        lua_pushstring(state, event.requested_name.c_str());
+        lua_setfield(state, -2, "requested_name");
+        lua_pushstring(state, event.requested_track.c_str());
+        lua_setfield(state, -2, "requested_track");
+        lua_rawseti(
+            state,
+            -2,
+            static_cast<lua_Integer>(index + 1));
+    }
+    lua_pushboolean(
+        state,
+        IsNativeAudioDispatchCaptureEnabled() ? 1 : 0);
+    return 2;
+}
+
+// sd.debug.clear_native_audio_dispatch_events() -> removed_count
+int LuaDebugClearNativeAudioDispatchEvents(lua_State* state) {
+    (void)state;
+    const auto removed = ClearNativeAudioDispatchEvents();
+    lua_pushinteger(state, static_cast<lua_Integer>(removed));
+    return 1;
+}
+
+// sd.debug.dispatch_native_audio_census_probe(
+//   registry_index, operation, gain?, pitch?) -> ok, error
+int LuaDebugDispatchNativeAudioCensusProbe(lua_State* state) {
+    const auto registry_index = static_cast<std::int32_t>(
+        luaL_checkinteger(state, 1));
+    const char* operation_text = luaL_checkstring(state, 2);
+    const float gain = static_cast<float>(luaL_optnumber(state, 3, 1.0));
+    const float pitch = static_cast<float>(luaL_optnumber(state, 4, 1.0));
+    std::string error;
+    const bool dispatched = DispatchNativeAudioCensusProbe(
+        registry_index,
+        operation_text == nullptr ? std::string() : operation_text,
+        gain,
+        pitch,
+        &error);
+    lua_pushboolean(state, dispatched ? 1 : 0);
+    if (dispatched) {
+        lua_pushnil(state);
+    } else {
+        lua_pushstring(state, error.c_str());
+    }
+    return 2;
+}

@@ -39,6 +39,25 @@ struct NativeAudioChannelSnapshot {
     std::string owner;
 };
 
+struct NativeAudioDispatchSnapshot {
+    std::uint64_t event_sequence = 0;
+    std::uint64_t native_tick = 0;
+    std::uint64_t monotonic_ms = 0;
+    uintptr_t object_address = 0;
+    uintptr_t caller_return_address = 0;
+    std::int32_t registry_index = -1;
+    std::int32_t native_reference_count = 0;
+    float gain = 1.0f;
+    float pitch = 1.0f;
+    float transition_ticks = 0.0f;
+    bool engine_enabled = false;
+    bool caller_in_game_image = false;
+    std::string native_class;
+    std::string operation;
+    std::string requested_name;
+    std::string requested_track;
+};
+
 class ScopedNativeAudioAttribution final {
 public:
     explicit ScopedNativeAudioAttribution(uintptr_t actor_address);
@@ -74,5 +93,15 @@ std::vector<NativeAudioChannelSnapshot> SnapshotNativeAudioChannels(
     bool include_inactive);
 std::size_t ClearInactiveNativeAudioChannelHistory();
 std::size_t DumpNativeAudioChannelsToLog(bool include_inactive);
+
+bool IsNativeAudioDispatchCaptureEnabled();
+std::vector<NativeAudioDispatchSnapshot> SnapshotNativeAudioDispatchEvents();
+std::size_t ClearNativeAudioDispatchEvents();
+bool DispatchNativeAudioCensusProbe(
+    std::int32_t registry_index,
+    const std::string& operation,
+    float gain,
+    float pitch,
+    std::string* error_message);
 
 }  // namespace sdmod

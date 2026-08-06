@@ -60,6 +60,7 @@ from static_re_contract_support import (
     STANDALONE_SLOT_BOT_CREATION,
     StaticReTestFailure,
     read_player_cast_hooks_source,
+    read_source_unit,
     read_text,
 )
 
@@ -283,7 +284,7 @@ def test_player_family_locomotion_uses_native_step_and_footstep_dispatch() -> st
     audio_header = read_text(
         ROOT / "SolomonDarkModLoader/include/native_audio_observability.h"
     )
-    audio_source = read_text(
+    audio_source = read_source_unit(
         ROOT / "SolomonDarkModLoader/src/native_audio_observability.cpp"
     )
     debug_bindings = read_text(

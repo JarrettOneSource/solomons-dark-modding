@@ -649,6 +649,10 @@
     <ClInclude Include="src\native_audio_observability\footstep_dispatch.inl" />
     <ClInclude Include="src\native_audio_observability\footstep_dispatch_helpers.inl" />
     <ClInclude Include="src\native_audio_observability\ouch_dispatch.inl" />
+    <ClInclude Include="src\native_audio_observability\native_audio_census_probe.inl" />
+    <ClInclude Include="src\native_audio_observability\native_audio_lifecycle_hooks.inl" />
+    <ClInclude Include="src\native_audio_observability\native_audio_public_api.inl" />
+    <ClInclude Include="src\native_audio_observability\native_audio_state_and_capture.inl" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\background_focus_bypass.cpp" />

@@ -261,6 +261,18 @@ void RegisterLuaDebugBindings(lua_State* state) {
         state,
         &LuaDebugClearNativeAudioChannelHistory,
         "clear_native_audio_channel_history");
+    RegisterFunction(
+        state,
+        &LuaDebugGetNativeAudioDispatchEvents,
+        "get_native_audio_dispatch_events");
+    RegisterFunction(
+        state,
+        &LuaDebugClearNativeAudioDispatchEvents,
+        "clear_native_audio_dispatch_events");
+    RegisterFunction(
+        state,
+        &LuaDebugDispatchNativeAudioCensusProbe,
+        "dispatch_native_audio_census_probe");
     lua_setfield(state, -2, "debug");
 }
 
