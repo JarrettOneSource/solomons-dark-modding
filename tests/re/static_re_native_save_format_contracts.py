@@ -90,6 +90,108 @@ EXPECTED_GOLD = {
     "post_unlock": 250,
 }
 
+SAVE_DOCUMENT_TABLE_CLAIM = "native save document table claim"
+EXPECTED_FRESH_PROFILE_DEFAULTS = {
+    "profile_gold": 500,
+    "class_available": [False, True, True, True, False, True, True, False, False, True],
+    "stock_tutorial_pending": True,
+    "class_enabled": [True] * 10,
+    "class_display_order": [9, 1, 0, 2, 7, 4, 3, 8, 5, 6],
+    "profile_stat_0xf4": 1000,
+    "class_canonical_order": list(range(10)),
+    "next_portrait_index": 100,
+    "last_portrait_index": 0,
+    "profile_flag_0x105": False,
+    "hagatha_bulk_selectors": [],
+    "hagatha_first_mix_flags_before_first_serialization": [False] * 30,
+    "settled_persisted_hagatha_flags": [index == 27 for index in range(30)],
+    "serializer_initialized_flag_index": 27,
+    "shlorio_fee": {"minimum": 500, "maximum": 950, "step": 50},
+}
+EXPECTED_CORE_FIELD_LAYOUT = (
+    ("profile_gold", 0, 4, "i32", 0x58),
+    *((f"class_available[{i}]", 4 + i, 1, "bool", 0x90 + i) for i in range(10)),
+    ("stock_tutorial_pending", 14, 1, "bool", 0x104),
+    *((f"class_enabled[{i}]", 15 + i, 1, "bool", 0x9A + i) for i in range(10)),
+    *((f"class_display_order[{i}]", 25 + i * 4, 4, "i32", 0xA4 + i * 4) for i in range(10)),
+    ("profile_stat_0xf4", 65, 4, "i32", 0xF4),
+    *((f"class_canonical_order[{i}]", 69 + i * 4, 4, "i32", 0xCC + i * 4) for i in range(10)),
+    ("next_portrait_index", 109, 4, "i32", 0xF8),
+    ("last_portrait_index", 113, 4, "i32", 0xFC),
+    ("profile_flag_0x105", 117, 1, "bool", 0x105),
+)
+EXPECTED_DARKDATA_NODE_ROWS = (
+    (0, "fixed 118-byte core, detailed below", "profile object `0x0081A330`", "gold, class/profile state, portrait/stat fields", 118),
+    (1, "polymorphic inventory serialization", "profile `+0x8C` (`DAT_0081A3BC`)", "Luthacus Scavenged Goods storage", 4),
+    (2, "`u32 count`, then `i32 selector[count]`", "profile `+0x60/+0x64`", "Hagatha bulk selector list", 4),
+    (3, "`bool first_mix[30]`", "profile `+0x6C..+0x89`", "per-selector first-mix/purchase flags", 30),
+    (4, "one `i32`", "profile `+0x100` (`DAT_0081A430`)", "current Shlorio Dowsing fee", 4),
+    (5, "empty payload, zero children", "reserved", "retail writes an empty reserved node", 0),
+)
+EXPECTED_FIRST_PROFILE_STREAM_ROWS: tuple[dict[str, Any], ...] = (
+    {
+        "location": "`0x000`",
+        "contents": "root payload length `0`, then child count `6`",
+        "root_offset": 0,
+        "root_payload_length": 0,
+        "child_count": 6,
+    },
+    {
+        "location": "`0x008`, payload `0x00C..0x081`",
+        "contents": "child 0, 118-byte core",
+        "child": 0,
+        "offset": 0x008,
+        "payload_offset": 0x00C,
+        "payload_length": 118,
+    },
+    {
+        "location": "`0x086`, payload `0x08A..0x08D`",
+        "contents": "child 1, `00 00 00 00`",
+        "child": 1,
+        "offset": 0x086,
+        "payload_offset": 0x08A,
+        "payload_length": 4,
+    },
+    {
+        "location": "`0x092`, payload `0x096..0x099`",
+        "contents": "child 2, selector count `0`",
+        "child": 2,
+        "offset": 0x092,
+        "payload_offset": 0x096,
+        "payload_length": 4,
+    },
+    {
+        "location": "`0x09E`, payload `0x0A2..0x0BF`",
+        "contents": "child 3, 30 flags; only index 27 is `01`",
+        "child": 3,
+        "offset": 0x09E,
+        "payload_offset": 0x0A2,
+        "payload_length": 30,
+    },
+    {
+        "location": "`0x0C4`, payload `0x0C8..0x0CB`",
+        "contents": "child 4, fee `F4 01 00 00`",
+        "child": 4,
+        "offset": 0x0C4,
+        "payload_offset": 0x0C8,
+        "payload_length": 4,
+    },
+    {
+        "location": "`0x0D0`",
+        "contents": "empty child 5",
+        "child": 5,
+        "offset": 0x0D0,
+        "payload_offset": 0x0D4,
+        "payload_length": 0,
+    },
+    {
+        "location": "`0x0D8`",
+        "contents": "root named-buffer count `0`; stream ends at `0x0DC`",
+        "named_buffer_count": 0,
+        "end_offset": 0x0DC,
+    },
+)
+
 
 def _require(condition: bool, message: str) -> None:
     if not condition:
@@ -317,41 +419,223 @@ def test_native_save_goldens_round_trip_all_committed_files() -> str:
     return "three live saves and all nine decoded files round-trip to exact native hashes"
 
 
-def test_native_save_fresh_defaults_and_runtime_offsets_are_pinned() -> str:
-    expected_defaults = {
-        "profile_gold": 500,
-        "class_available": [False, True, True, True, False, True, True, False, False, True],
-        "stock_tutorial_pending": True,
-        "class_enabled": [True] * 10,
-        "class_display_order": [9, 1, 0, 2, 7, 4, 3, 8, 5, 6],
-        "profile_stat_0xf4": 1000,
-        "class_canonical_order": list(range(10)),
-        "next_portrait_index": 100,
-        "last_portrait_index": 0,
-        "profile_flag_0x105": False,
-        "hagatha_bulk_selectors": [],
-        "hagatha_first_mix_flags_before_first_serialization": [False] * 30,
-        "settled_persisted_hagatha_flags": [index == 27 for index in range(30)],
-        "serializer_initialized_flag_index": 27,
-        "shlorio_fee": {"minimum": 500, "maximum": 950, "step": 50},
-    }
+def _core_layout_groups() -> list[list[tuple[str, int, int, str, int]]]:
     _require(
-        FRESH_PROFILE_DEFAULTS == expected_defaults,
+        len(EXPECTED_CORE_FIELD_LAYOUT) == 46
+        and EXPECTED_CORE_FIELD_LAYOUT[0][0] == "profile_gold"
+        and EXPECTED_CORE_FIELD_LAYOUT[-1][0] == "profile_flag_0x105",
+        f"{SAVE_DOCUMENT_TABLE_CLAIM}: expected core constants lost the first, last, or 46-field census witness",
+    )
+    groups: list[list[tuple[str, int, int, str, int]]] = []
+    for field in EXPECTED_CORE_FIELD_LAYOUT:
+        base_name = field[0].split("[", 1)[0]
+        if not groups or groups[-1][0][0].split("[", 1)[0] != base_name:
+            groups.append([])
+        groups[-1].append(field)
+    _require(
+        len(groups) == 10,
+        f"{SAVE_DOCUMENT_TABLE_CLAIM}: core payload constants no longer form ten concrete contiguous rows",
+    )
+    return groups
+
+
+def _fresh_group_values(group: list[tuple[str, int, int, str, int]]) -> list[int]:
+    values: list[int] = []
+    for name, *_ in group:
+        if "[" in name:
+            base, raw_index = name[:-1].split("[", 1)
+            value = EXPECTED_FRESH_PROFILE_DEFAULTS[base][int(raw_index)]
+        else:
+            value = EXPECTED_FRESH_PROFILE_DEFAULTS[name]
+        _require(
+            isinstance(value, (bool, int)),
+            f"{SAVE_DOCUMENT_TABLE_CLAIM}: {name} has no scalar fresh-value contract",
+        )
+        values.append(int(value))
+    return values
+
+
+def _parse_hex_span(cell: str, row_label: str) -> tuple[int, int]:
+    match = re.fullmatch(r"0x([0-9A-F]+)(?:\.\.0x([0-9A-F]+))?", cell)
+    _require(
+        match is not None,
+        f"{SAVE_DOCUMENT_TABLE_CLAIM}: {row_label} payload span lost its explicit hexadecimal shape",
+    )
+    start = int(match.group(1), 16)
+    end = int(match.group(2), 16) if match.group(2) is not None else start
+    return start, end
+
+
+def test_native_save_document_node_and_payload_tables_are_exact() -> str:
+    document = _read_text(
+        DOC,
+        f"{SAVE_DOCUMENT_TABLE_CLAIM}: native save implementation document disappeared",
+    )
+
+    node_table_matches = list(
+        re.finditer(
+            r"^\| Root child \| Payload layout \| Runtime source \| Meaning \|[ \t]*\r?\n"
+            r"^\| ---: \| --- \| --- \| --- \|[ \t]*\r?\n"
+            r"(?P<rows>(?:^\|[^\r\n]*\|[ \t]*(?:\r?\n|$))+)",
+            document,
+            flags=re.MULTILINE,
+        )
+    )
+    _require(
+        len(node_table_matches) == 1,
+        f"{SAVE_DOCUMENT_TABLE_CLAIM}: the root-child node-format table must be unique and contiguous, found {len(node_table_matches)}",
+    )
+    node_rows_text = node_table_matches[0].group("rows")
+    node_matches = list(
+        re.finditer(
+            r"^\| (?P<id>\d+) \| (?P<layout>[^|\r\n]+?) \| "
+            r"(?P<runtime>[^|\r\n]+?) \| (?P<meaning>[^|\r\n]+?) \|$",
+            node_rows_text,
+            flags=re.MULTILINE,
+        )
+    )
+    node_ids = [int(match.group("id")) for match in node_matches]
+    duplicate_nodes = sorted({node for node in node_ids if node_ids.count(node) > 1})
+    _require(
+        not duplicate_nodes,
+        f"{SAVE_DOCUMENT_TABLE_CLAIM}: duplicate darkdata node rows {duplicate_nodes} make payload decoding ambiguous",
+    )
+    _require(
+        node_ids == list(range(6)),
+        f"{SAVE_DOCUMENT_TABLE_CLAIM}: node-format table must enumerate root children 0 through 5 exactly once, observed {node_ids}",
+    )
+    for node_id, layout, runtime, meaning, _ in EXPECTED_DARKDATA_NODE_ROWS:
+        expected_row = f"| {node_id} | {layout} | {runtime} | {meaning} |"
+        matches = list(
+            re.finditer(rf"^{re.escape(expected_row)}$", node_rows_text, flags=re.MULTILINE)
+        )
+        _require(
+            len(matches) == 1,
+            f"{SAVE_DOCUMENT_TABLE_CLAIM}: darkdata node {node_id} doc row no longer pins format {layout!r} and profile source {runtime!r}",
+        )
+
+    core_table_matches = list(
+        re.finditer(
+            r"^\| Payload bytes \| Type \| Runtime field \| Portable meaning \| Fresh value \|[ \t]*\r?\n"
+            r"^\| ---: \| --- \| ---: \| --- \| --- \|[ \t]*\r?\n"
+            r"(?P<rows>(?:^\|[^\r\n]*\|[ \t]*(?:\r?\n|$))+)",
+            document,
+            flags=re.MULTILINE,
+        )
+    )
+    _require(
+        len(core_table_matches) == 1,
+        f"{SAVE_DOCUMENT_TABLE_CLAIM}: the core payload-offset table must be unique and contiguous, found {len(core_table_matches)}",
+    )
+    core_rows_text = core_table_matches[0].group("rows")
+    core_matches = list(
+        re.finditer(
+            r"^\| `(?P<payload>0x[0-9A-F]+(?:\.\.0x[0-9A-F]+)?)` \| "
+            r"`(?P<type>[^`\r\n]+)` \| (?P<runtime>[^|\r\n]+?) \| "
+            r"(?P<meaning>[^|\r\n]+?) \| (?P<fresh>[^|\r\n]+?) \|$",
+            core_rows_text,
+            flags=re.MULTILINE,
+        )
+    )
+    payload_spans = [match.group("payload") for match in core_matches]
+    duplicate_spans = sorted(
+        {span for span in payload_spans if payload_spans.count(span) > 1}
+    )
+    _require(
+        not duplicate_spans,
+        f"{SAVE_DOCUMENT_TABLE_CLAIM}: duplicate core payload rows {duplicate_spans} make field decoding ambiguous",
+    )
+    expected_groups = _core_layout_groups()
+    _require(
+        len(core_matches) == len(expected_groups),
+        f"{SAVE_DOCUMENT_TABLE_CLAIM}: core payload table exposes {len(core_matches)} structural rows for {len(expected_groups)} expected field groups",
+    )
+    for match, group in zip(core_matches, expected_groups, strict=True):
+        label = group[0][0].split("[", 1)[0]
+        actual_start, actual_end = _parse_hex_span(match.group("payload"), label)
+        expected_start = group[0][1]
+        expected_end = group[-1][1] + group[-1][2] - 1
+        _require(
+            (actual_start, actual_end) == (expected_start, expected_end),
+            f"{SAVE_DOCUMENT_TABLE_CLAIM}: {label} doc row payload span is 0x{actual_start:02X}..0x{actual_end:02X}, expected 0x{expected_start:02X}..0x{expected_end:02X}",
+        )
+        expected_type = group[0][3] + (f"[{len(group)}]" if len(group) > 1 else "")
+        _require(
+            match.group("type") == expected_type,
+            f"{SAVE_DOCUMENT_TABLE_CLAIM}: {label} doc row type is {match.group('type')!r}, expected {expected_type!r}",
+        )
+        runtime_offsets = [
+            int(value, 16)
+            for value in re.findall(r"\+0x([0-9A-F]+)", match.group("runtime"))
+        ]
+        expected_runtime = [group[0][4]]
+        if len(group) > 1:
+            expected_runtime.append(group[-1][4] + group[-1][2] - 1)
+        _require(
+            runtime_offsets == expected_runtime,
+            f"{SAVE_DOCUMENT_TABLE_CLAIM}: {label} doc row profile offsets are {runtime_offsets}, expected {expected_runtime}",
+        )
+        documented_values = (
+            [1] * 10
+            if match.group("fresh") == "ten `1` bytes"
+            else [int(value) for value in re.findall(r"-?\d+", match.group("fresh"))]
+        )
+        expected_values = _fresh_group_values(group)
+        _require(
+            documented_values == expected_values,
+            f"{SAVE_DOCUMENT_TABLE_CLAIM}: {label} doc row fresh payload values are {documented_values}, expected {expected_values}",
+        )
+
+    stream_table_matches = list(
+        re.finditer(
+            r"^\| Decoded stream location \| Contents \|[ \t]*\r?\n"
+            r"^\| ---: \| --- \|[ \t]*\r?\n"
+            r"(?P<rows>(?:^\|[^\r\n]*\|[ \t]*(?:\r?\n|$))+)",
+            document,
+            flags=re.MULTILINE,
+        )
+    )
+    _require(
+        len(stream_table_matches) == 1,
+        f"{SAVE_DOCUMENT_TABLE_CLAIM}: the first-profile stream-offset table must be unique and contiguous, found {len(stream_table_matches)}",
+    )
+    stream_rows_text = stream_table_matches[0].group("rows")
+    stream_locations = re.findall(
+        r"^\| (?P<location>[^|\r\n]+?) \| (?P<contents>[^|\r\n]+?) \|$",
+        stream_rows_text,
+        flags=re.MULTILINE,
+    )
+    location_cells = [location for location, _ in stream_locations]
+    duplicate_locations = sorted(
+        {location for location in location_cells if location_cells.count(location) > 1}
+    )
+    _require(
+        not duplicate_locations,
+        f"{SAVE_DOCUMENT_TABLE_CLAIM}: duplicate first-profile stream rows {duplicate_locations} make offsets ambiguous",
+    )
+    _require(
+        len(stream_locations) == len(EXPECTED_FIRST_PROFILE_STREAM_ROWS),
+        f"{SAVE_DOCUMENT_TABLE_CLAIM}: first-profile stream table exposes {len(stream_locations)} rows for {len(EXPECTED_FIRST_PROFILE_STREAM_ROWS)} expected offsets",
+    )
+    for expected in EXPECTED_FIRST_PROFILE_STREAM_ROWS:
+        expected_row = f"| {expected['location']} | {expected['contents']} |"
+        matches = list(
+            re.finditer(rf"^{re.escape(expected_row)}$", stream_rows_text, flags=re.MULTILINE)
+        )
+        _require(
+            len(matches) == 1,
+            f"{SAVE_DOCUMENT_TABLE_CLAIM}: decoded stream row {expected['location']} no longer pins {expected['contents']}",
+        )
+
+    return "darkdata nodes 0..5, all ten core payload ranges, and all eight first-profile stream offsets are exact"
+
+
+def test_native_save_fresh_defaults_and_runtime_offsets_are_pinned() -> str:
+    _require(
+        FRESH_PROFILE_DEFAULTS == EXPECTED_FRESH_PROFILE_DEFAULTS,
         "native missing-profile defaults no longer match the retail initializer and first serializer",
     )
 
-    expected_groups = (
-        ("profile_gold", 0, 4, "i32", 0x58),
-        *((f"class_available[{i}]", 4 + i, 1, "bool", 0x90 + i) for i in range(10)),
-        ("stock_tutorial_pending", 14, 1, "bool", 0x104),
-        *((f"class_enabled[{i}]", 15 + i, 1, "bool", 0x9A + i) for i in range(10)),
-        *((f"class_display_order[{i}]", 25 + i * 4, 4, "i32", 0xA4 + i * 4) for i in range(10)),
-        ("profile_stat_0xf4", 65, 4, "i32", 0xF4),
-        *((f"class_canonical_order[{i}]", 69 + i * 4, 4, "i32", 0xCC + i * 4) for i in range(10)),
-        ("next_portrait_index", 109, 4, "i32", 0xF8),
-        ("last_portrait_index", 113, 4, "i32", 0xFC),
-        ("profile_flag_0x105", 117, 1, "bool", 0x105),
-    )
     actual_groups = tuple(
         (
             field.name,
@@ -363,7 +647,7 @@ def test_native_save_fresh_defaults_and_runtime_offsets_are_pinned() -> str:
         for field in DARKDATA_CORE_FIELDS
     )
     _require(
-        actual_groups == expected_groups and len(actual_groups) == 46,
+        actual_groups == EXPECTED_CORE_FIELD_LAYOUT and len(actual_groups) == 46,
         "native darkdata core no longer pins all 46 field offsets, types, and runtime mappings",
     )
 
@@ -406,15 +690,34 @@ def test_native_save_fresh_defaults_and_runtime_offsets_are_pinned() -> str:
     darkdata = _darkdata_entry(fresh)
     tree = darkdata["tree"]
     children = tree["root"]["children"]
+    stream_children = {
+        int(row["child"]): row
+        for row in EXPECTED_FIRST_PROFILE_STREAM_ROWS
+        if "child" in row
+    }
     _require(
-        tree.get("offset") == 0
-        and tree.get("end_offset") == 220
-        and tree["root"].get("offset") == 0
-        and tree["root"].get("payload_length") == 0
-        and len(children) == 6
-        and [row["offset"] for row in children] == [8, 134, 146, 158, 196, 208]
-        and [row["payload_offset"] for row in children] == [12, 138, 150, 162, 200, 212]
-        and [row["payload_length"] for row in children] == [118, 4, 4, 30, 4, 0],
+        len(stream_children) == 6 and set(stream_children) == set(range(6)),
+        "native save expected stream constants lost a concrete child row",
+    )
+    _require(
+        [row[4] for row in EXPECTED_DARKDATA_NODE_ROWS]
+        == [stream_children[index]["payload_length"] for index in range(6)],
+        "native save node formats and first-profile stream constants disagree on child payload lengths",
+    )
+    _require(
+        tree.get("offset") == EXPECTED_FIRST_PROFILE_STREAM_ROWS[0]["root_offset"]
+        and tree.get("end_offset") == EXPECTED_FIRST_PROFILE_STREAM_ROWS[-1]["end_offset"]
+        and tree["root"].get("offset")
+        == EXPECTED_FIRST_PROFILE_STREAM_ROWS[0]["root_offset"]
+        and tree["root"].get("payload_length")
+        == EXPECTED_FIRST_PROFILE_STREAM_ROWS[0]["root_payload_length"]
+        and len(children) == EXPECTED_FIRST_PROFILE_STREAM_ROWS[0]["child_count"]
+        and [row["offset"] for row in children]
+        == [stream_children[index]["offset"] for index in range(6)]
+        and [row["payload_offset"] for row in children]
+        == [stream_children[index]["payload_offset"] for index in range(6)]
+        and [row["payload_length"] for row in children]
+        == [stream_children[index]["payload_length"] for index in range(6)],
         "fresh native profile no longer pins the byte-exact six-child SyncBuffer tree",
     )
     _require(
@@ -866,6 +1169,7 @@ def test_native_save_fixture_provenance_hashes_the_committed_recording() -> str:
 TESTS = [
     test_native_save_container_codec_and_layout_are_pinned,
     test_native_save_goldens_round_trip_all_committed_files,
+    test_native_save_document_node_and_payload_tables_are_exact,
     test_native_save_fresh_defaults_and_runtime_offsets_are_pinned,
     test_native_save_recorder_is_self_provenanced_settled_bounded_and_owned,
     test_native_save_lifecycle_and_failure_semantics_are_pinned,

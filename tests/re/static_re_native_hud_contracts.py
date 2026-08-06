@@ -33,63 +33,42 @@ SCENE_CAPTURE_PUBLIC_API_PATH = (
 BINARY_LAYOUT_PATH = ROOT / "config/binary-layout.ini"
 
 
-EXPECTED_ELEMENTS: dict[str, tuple[list[float], str]] = {
-    "cast.primary.card": ([730.5, 825.0, 793.5, 892.0], "UI.47"),
-    "cast.secondary.card": ([810.5, 825.0, 873.5, 892.0], "UI.48"),
-    "belt.slot.0": ([473.5, 840.5, 515.5, 877.5], "Skills.72"),
-    "belt.slot.1": ([528.0, 832.5, 581.0, 885.5], "none"),
-    "belt.slot.2": ([588.0, 832.5, 641.0, 885.5], "none"),
-    "belt.slot.3": ([648.0, 834.0, 706.0, 889.0], "Inventory.46"),
-    "belt.slot.4": ([899.5, 834.5, 954.5, 888.5], "Inventory.47"),
-    "belt.slot.5": ([958.0, 832.5, 1011.0, 885.5], "none"),
-    "belt.slot.6": ([1018.0, 832.5, 1071.0, 885.5], "none"),
-    "belt.slot.7": ([1078.0, 832.5, 1131.0, 885.5], "none"),
-    "belt.slot.0.input_hint": ([483.5, 877.0, 505.5, 908.0], "UI.100"),
-    "belt.slot.3.count": ([671.0, 888.0, 679.0, 897.0], "Fonts.535-626@0x2A4C"),
-    "belt.slot.4.count": ([920.0, 888.0, 930.0, 897.0], "Fonts.535-626@0x2B20"),
-    "progression.xp.fill": ([798.0, 833.0, 802.0, 881.0], "UI.81"),
-    "progression.xp.track": ([794.5, 829.0, 806.5, 885.0], "UI.82"),
-    "mana.track": ([850.0, 14.5, 960.0, 34.5], "UI.70"),
-    "mana.fill": ([855.0, 19.5, 955.0, 29.5], "UI.40"),
-    "health.track": ([640.0, 14.5, 750.0, 34.5], "UI.70"),
-    "health.fill": ([645.0, 19.5, 745.0, 29.5], "UI.26"),
-    "mana.reserve.overlay": ([906.5, 19.5, 954.5, 29.5], "UI.41"),
-    "health.magic_shield.overlay": ([645.0, 19.5, 745.0, 29.5], "UI.26"),
-    "ally.row.0.identity": ([612.0, 39.0, 740.0, 46.0], "UI.0"),
-    "ally.row.0.health": ([560.0, 39.5, 610.0, 44.5], "native.untextured-quad"),
-    "concentration.binding.12.emblem": ([783.875, 9.75, 816.125, 41.25], "Skills.67"),
-    "aim.cursor": ([9.5, 8.5, 40.5, 41.5], "UI.42"),
-    "notification.gold": ([741.0, 49.0, 860.0, 71.0], "Fonts.376-442"),
-}
+EXPECTED_ELEMENT_ROWS = (
+    '| 1 | `cast.primary.card` | `[730.5,825,793.5,892]` | center-bottom; base is `[730.5,825,788.5,887]`, black shadow is `+5,+5` | `UI.47` (Manifest) | none | `0..1` shadow then base | `0x005D2520`, `0x005D3E10` |',
+    '| 2 | `cast.secondary.card` | `[810.5,825,873.5,892]` | center-bottom; base is `[810.5,825,868.5,887]`, black shadow is `+5,+5` | `UI.48` (Manifest) | none | `2..3` shadow then base | `0x005D2520`, `0x005D3E10` |',
+    '| 3 | `belt.slot.0` | visual `[473.5,840.5,515.5,877.5]`; logical `[468,832.5,521,885.5]` | center-bottom; first position of 60 px pitch; 53 x 53 logical box | `Skills.72` (Native `images/Skills.bundle`, record 72) | none | `4` | `0x005D3E10` |',
+    '| 4 | `belt.slot.1` | logical `[528,832.5,581,885.5]` | center-bottom; 60 px pitch | no draw | none | none | `0x005D3E10` |',
+    '| 5 | `belt.slot.2` | logical `[588,832.5,641,885.5]` | center-bottom; 60 px pitch | no draw | none | none | `0x005D3E10` |',
+    '| 6 | `belt.slot.3` | visual `[648,834,706,889]`; logical `[648,832.5,701,885.5]` | center-bottom; shadow is `+5,+5` | `Inventory.46` (Native `images/Inventory.bundle`, record 46) | none | `6..7` shadow then base | `0x005D3E10` |',
+    '| 7 | `belt.slot.4` | visual `[899.5,834.5,954.5,888.5]`; logical `[898,832.5,951,885.5]` | center-bottom; right bank resumes after XP/cast center gap; shadow is `+5,+5` | `Inventory.47` (Native `images/Inventory.bundle`, record 47) | none | `12..13` shadow then base | `0x005D3E10` |',
+    '| 8 | `belt.slot.5` | logical `[958,832.5,1011,885.5]` | center-bottom; 60 px pitch | no draw | none | none | `0x005D3E10` |',
+    '| 9 | `belt.slot.6` | logical `[1018,832.5,1071,885.5]` | center-bottom; 60 px pitch | no draw | none | none | `0x005D3E10` |',
+    '| 10 | `belt.slot.7` | logical `[1078,832.5,1131,885.5]` | center-bottom; 60 px pitch | no draw | none | none | `0x005D3E10` |',
+    '| 11 | `belt.slot.0.input_hint` | authored `[483.5,877,505.5,908]`; clipped `[483.5,877,505.5,900]` | centered below slot 0; the bottom 8 px intentionally leave the viewport | `UI.100` (Manifest) | none | `5` | `0x005D3E10` |',
+    '| 12 | `belt.slot.3.count` | glyph `[671,888,679,897]`; backing glyph strip spans `[667.5,885,680.5,900]` | right/bottom badge on slot 3 | `UI.22` backing (Native) plus `Fonts.535-626@0x2A4C` | `Fonts` group 8, header `[10,3,28]`, measured line height 9 px; observed `3` is 8 px wide | `8..11` | `0x005D3E10`, `0x004A57C0`, `0x00415230` |',
+    '| 13 | `belt.slot.4.count` | glyph `[920,888,930,897]`; backing glyph strip spans `[917.5,885,930.5,900]` | right/bottom badge on slot 4 | `UI.22` backing (Native) plus `Fonts.535-626@0x2B20` | same group/header/9 px line; observed `4` is 10 px wide | `14..17` | `0x005D3E10`, `0x004A57C0`, `0x00415230` |',
+    '| 14 | `progression.xp.fill` | maximum `[798,833,802,881]`; live 45/90 clip `[798,857,802,881]` | center-bottom; 4 x 48 maximum, bottom-fixed at `y=881`, grows upward | `UI.81` (Native `images/UI.bundle`, record 81; UI object `+0x3E3C`) | none | `18` | `0x005D2B0C`, `0x00414D00` |',
+    '| 15 | `progression.xp.track` | `[794.5,829,806.5,885]` | center-bottom; 12 x 56 frame centered at `x=800`, bottom inset 15 | `UI.82` (Manifest) | none | `19` | `0x005D2B0C`, `0x004142E0` |',
+    '| 16 | `mana.track` | `[850,14.5,960,34.5]` | center-top; 110 x 20, left edge `center+50` | `UI.70` (Native `images/UI.bundle`, record 70) | none | `20..22` | `0x005D2520`, `0x00415230`, `0x00420EC0` |',
+    '| 17 | `mana.fill` | maximum `[855,19.5,955,29.5]` | center-top; 100 x 10, left-clipped | `UI.40` (Native `images/UI.bundle`, record 40) | none | `23..25` | `0x005D2520`, `0x00415230`, `0x00420EC0` |',
+    '| 18 | `health.track` | `[640,14.5,750,34.5]` | center-top; 110 x 20, right edge `center-50` | `UI.70` (Native record 70) | none | `26..28` | `0x005D2520`, `0x00415230`, `0x00420EC0` |',
+    '| 19 | `health.fill` | maximum `[645,19.5,745,29.5]` | center-top; 100 x 10, left-clipped | `UI.26` (Native `images/UI.bundle`, record 26) | none | `29..31` | `0x005D2520`, `0x00415230`, `0x00420EC0` |',
+    '| 20 | `mana.reserve.overlay` | observed 50/100 `[906.5,19.5,954.5,29.5]` | center-top; right-side reserved-capacity segment, right edge approximately `x=955` | `UI.41` (Native `images/UI.bundle`, record 41) | none | conditional `26..32`, before health; later baseline orders shift by 7 | `0x005D2BDD`, `0x00415230` |',
+    '| 21 | `health.magic_shield.overlay` | maximum `[645,19.5,745,29.5]` | center-top; independently left-clipped, then width-sorted against life | `UI.26` (Native record 26), cyan tint `(0.5,1,1,1)` | none | conditional three-call strip; shorter of life/shield first, longer last | `0x005D2BDD`, `0x00415230`, `0x00420EC0` |',
+    '| 22 | `ally.row.0.identity` | reserved `[612,39,740,46]` | center-top; reservation begins `center-188`; name left `x=614`, baseline `y=46` in multiplayer | stock `UI.0` (Manifest) or `Fonts.376-442` exact-name replacement | stock `ALLY` art is 26 x 7 inside the expanded reservation; multiplayer font advances 4 px/non-space byte and 2 px/space with 2 px side padding | `32` baseline | `0x005D3408`, `0x005CF480`, `0x004142E0`, loader `0x0043BCD0` |',
+    '| 23 | `ally.row.0.health` | maximum `[560,39.5,610,44.5]` | center-top; 50 x 5, left `center-240`; subsequent rows use 20 px pitch | Primitive untextured quad | none | `33` baseline | `0x005D3408`, `0x005CF480`, `0x004142E0` |',
+    '| 24 | `concentration.binding.12.emblem` | `[783.875,9.75,816.125,41.25]` | center-top; 32.25 x 31.5 centered at `(800,25.5)` | `Skills.67` (Native `images/Skills.bundle`, record 67) | none | `34` baseline | `0x005D367A`, `0x0046B140`, `0x00414EA0` |',
+    '| 25 | `aim.cursor` | observed `[9.5,8.5,40.5,41.5]` | pointer; 31 x 33 centered on the native mouse point and viewport-clipped | `UI.42` (Manifest) | none | `35`, always in the tail | `0x005D3D48`, `0x004F6070` |',
+    '| 26 | `notification.gold` | base `[741,49,860,69]`, shadow `[741,51,860,71]`, union `[741,49,860,71]` | center-top transient stack; shadow offset `(0,+2)` | `Fonts.376-442` (Native bitmap-font group 6) | header `[24,5,28]`; exact string `_s(1)25 GOLD`; measured 119 x 20 per line | transient notification pass, after the main HUD body and before cursor tail | `0x005CA7C0`, `0x005CF000`, `0x004F5620` |',
+)
 
-EXPECTED_SOURCE_KINDS = {
-    "cast.primary.card": "assetpack-manifest-id",
-    "cast.secondary.card": "assetpack-manifest-id",
-    "belt.slot.0": "native-bundle-record",
-    "belt.slot.1": "native-renderer-or-no-draw",
-    "belt.slot.2": "native-renderer-or-no-draw",
-    "belt.slot.3": "native-bundle-record",
-    "belt.slot.4": "native-bundle-record",
-    "belt.slot.5": "native-renderer-or-no-draw",
-    "belt.slot.6": "native-renderer-or-no-draw",
-    "belt.slot.7": "native-renderer-or-no-draw",
-    "belt.slot.0.input_hint": "assetpack-manifest-id",
-    "belt.slot.3.count": "native-bundle-record-group",
-    "belt.slot.4.count": "native-bundle-record-group",
-    "progression.xp.fill": "native-bundle-record",
-    "progression.xp.track": "assetpack-manifest-id",
-    "mana.track": "native-bundle-record",
-    "mana.fill": "native-bundle-record",
-    "health.track": "native-bundle-record",
-    "health.fill": "native-bundle-record",
-    "mana.reserve.overlay": "native-bundle-record",
-    "health.magic_shield.overlay": "native-bundle-record",
-    "ally.row.0.identity": "assetpack-manifest-id",
-    "ally.row.0.health": "native-renderer-or-no-draw",
-    "concentration.binding.12.emblem": "native-bundle-record",
-    "aim.cursor": "assetpack-manifest-id",
-    "notification.gold": "native-bundle-record-group",
-}
+HUD_DOCUMENT_CLAIM = "native HUD document element-table claim"
+HUD_ELEMENT_ROW_PATTERN = re.compile(
+    r"^\| (?P<number>\d+) \| `(?P<id>[a-z0-9._]+)` \| "
+    r"(?P<geometry>[^|\r\n]+?) \| (?P<alignment>[^|\r\n]+?) \| "
+    r"(?P<art>[^|\r\n]+?) \| (?P<font>[^|\r\n]+?) \| "
+    r"(?P<order>[^|\r\n]+?) \| (?P<owners>[^|\r\n]+?) \|$"
+)
 
 EXPECTED_SCENARIOS = (
     "full_health",
@@ -153,8 +132,298 @@ def _is_sha256(value: object) -> bool:
     return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
 
 
+def _parse_element_row(row: str, consequence: str) -> dict[str, str]:
+    match = HUD_ELEMENT_ROW_PATTERN.fullmatch(row)
+    if match is None:
+        raise StaticReTestFailure(consequence)
+    return match.groupdict()
+
+
+def _expected_element_rows() -> dict[str, dict[str, str]]:
+    rows = [
+        _parse_element_row(
+            row,
+            f"{HUD_DOCUMENT_CLAIM}: a reviewed expected row lost its eight-column structure",
+        )
+        for row in EXPECTED_ELEMENT_ROWS
+    ]
+    ids = [row["id"] for row in rows]
+    if len(rows) != 26 or [int(row["number"]) for row in rows] != list(range(1, 27)):
+        raise StaticReTestFailure(
+            f"{HUD_DOCUMENT_CLAIM}: expected constants no longer enumerate concrete rows 1 through 26"
+        )
+    if not {
+        "cast.primary.card",
+        "belt.slot.3.count",
+        "progression.xp.fill",
+        "notification.gold",
+    }.issubset(ids):
+        raise StaticReTestFailure(
+            f"{HUD_DOCUMENT_CLAIM}: expected geometry sweep lost a card, glyph, clipped fill, or font witness"
+        )
+    duplicates = sorted({element_id for element_id in ids if ids.count(element_id) > 1})
+    if duplicates:
+        raise StaticReTestFailure(
+            f"{HUD_DOCUMENT_CLAIM}: expected constants contain ambiguous duplicate ids {duplicates}"
+        )
+    return {row["id"]: row for row in rows}
+
+
+def _rects(cell: str, element_id: str) -> list[list[float]]:
+    matches = re.findall(
+        r"\[(-?(?:\d+(?:\.\d+)?)),(-?(?:\d+(?:\.\d+)?)),"
+        r"(-?(?:\d+(?:\.\d+)?)),(-?(?:\d+(?:\.\d+)?))\]",
+        cell,
+    )
+    if not matches:
+        raise StaticReTestFailure(
+            f"{HUD_DOCUMENT_CLAIM}: {element_id} geometry cell contains no explicit four-coordinate rect"
+        )
+    return [[float(value) for value in match] for match in matches]
+
+
+def _rect_matches(actual: object, expected: list[float]) -> bool:
+    return (
+        isinstance(actual, list)
+        and len(actual) == 4
+        and all(
+            isinstance(value, (int, float))
+            and math.isclose(float(value), target, abs_tol=0.001)
+            for value, target in zip(actual, expected, strict=True)
+        )
+    )
+
+
+def _primary_rect(element_id: str, rects: list[list[float]]) -> list[float]:
+    return rects[-1] if element_id == "notification.gold" else rects[0]
+
+
+def _expected_atlas_and_source(row: dict[str, str]) -> tuple[str, str, list[str]]:
+    art = row["art"]
+    if art == "no draw":
+        return "none", "native-renderer-or-no-draw", []
+    if art == "Primitive untextured quad":
+        return "native.untextured-quad", "native-renderer-or-no-draw", []
+    atlas_ids = re.findall(r"`((?:UI|Skills|Inventory|Fonts)\.[^`]+)`", art)
+    if not atlas_ids:
+        raise StaticReTestFailure(
+            f"{HUD_DOCUMENT_CLAIM}: {row['id']} art cell lost its explicit atlas reference"
+        )
+    atlas_id = atlas_ids[-1] if " plus " in art else atlas_ids[0]
+    if "Manifest" in art:
+        source_kind = "assetpack-manifest-id"
+    elif "bitmap-font group" in art or " plus " in art:
+        source_kind = "native-bundle-record-group"
+    else:
+        source_kind = "native-bundle-record"
+    return atlas_id, source_kind, atlas_ids
+
+
+def _assert_element_row_matches_fixture(
+    row: dict[str, str], element: dict[str, Any]
+) -> None:
+    element_id = row["id"]
+    rects = _rects(row["geometry"], element_id)
+    expected_native_rect = _primary_rect(element_id, rects)
+    if not _rect_matches(element.get("native_rect"), expected_native_rect):
+        raise StaticReTestFailure(
+            f"native HUD fixture row {element_id} would move from document geometry {expected_native_rect}"
+        )
+
+    logical_rects = re.findall(
+        r"logical `\[(-?(?:\d+(?:\.\d+)?),-?(?:\d+(?:\.\d+)?),"
+        r"-?(?:\d+(?:\.\d+)?),-?(?:\d+(?:\.\d+)?))\]`",
+        row["geometry"],
+    )
+    expected_logical = (
+        [float(value) for value in logical_rects[-1].split(",")]
+        if logical_rects
+        else None
+    )
+    if expected_logical is None and row["geometry"].startswith("logical `"):
+        expected_logical = rects[0]
+    if expected_logical is not None and not _rect_matches(
+        element.get("logical_rect"), expected_logical
+    ):
+        raise StaticReTestFailure(
+            f"native HUD fixture row {element_id} would move its logical box from {expected_logical}"
+        )
+
+    expected_clipped = expected_native_rect
+    if element_id in {"belt.slot.0.input_hint", "progression.xp.fill"}:
+        expected_clipped = rects[-1]
+    if not _rect_matches(element.get("clipped_native_rect"), expected_clipped):
+        raise StaticReTestFailure(
+            f"native HUD fixture row {element_id} would move its settled clip from {expected_clipped}"
+        )
+
+    expected_atlas, expected_source, component_ids = _expected_atlas_and_source(row)
+    if element.get("atlas_id") != expected_atlas:
+        raise StaticReTestFailure(
+            f"native HUD fixture row {element_id} would select an atlas other than {expected_atlas}"
+        )
+    asset_source = element.get("asset_source")
+    if not isinstance(asset_source, dict) or asset_source.get("kind") != expected_source:
+        raise StaticReTestFailure(
+            f"native HUD fixture row {element_id} would lose its {expected_source} source classification"
+        )
+    if len(component_ids) > 1 and element.get("component_atlas_ids") != component_ids:
+        raise StaticReTestFailure(
+            f"native HUD fixture row {element_id} would disagree with component atlases {component_ids}"
+        )
+    bundle = re.search(r"Native `([^`]+\.bundle)`", row["art"])
+    if bundle is not None and asset_source.get("bundle") != bundle.group(1):
+        raise StaticReTestFailure(
+            f"native HUD fixture row {element_id} would read a different native bundle than {bundle.group(1)}"
+        )
+    record = re.search(r"\brecord (\d+)\b", row["art"])
+    if record is not None and asset_source.get("record_index") != int(record.group(1)):
+        raise StaticReTestFailure(
+            f"native HUD fixture row {element_id} would read a different bundle record than {record.group(1)}"
+        )
+
+    expected_addresses = re.findall(r"0x[0-9A-F]{8}", row["owners"])
+    if element.get("native_addresses") != expected_addresses:
+        raise StaticReTestFailure(
+            f"native HUD fixture row {element_id} would move from native owners {expected_addresses}"
+        )
+
+    font = element.get("font")
+    if row["font"] == "none":
+        if font is not None:
+            raise StaticReTestFailure(
+                f"native HUD fixture row {element_id} would invent font metrics for a non-text element"
+            )
+    elif not isinstance(font, dict):
+        raise StaticReTestFailure(
+            f"native HUD fixture row {element_id} would lose its documented glyph metrics"
+        )
+    else:
+        font_contract = row["font"]
+        if element_id == "belt.slot.4.count":
+            font_contract = _expected_element_rows()["belt.slot.3.count"]["font"]
+        header = re.search(r"header `\[(\d+),(\d+),(\d+)\]`", font_contract)
+        if header is not None and font.get("header") != [
+            int(header.group(1)),
+            int(header.group(2)),
+            int(header.group(3)),
+        ]:
+            raise StaticReTestFailure(
+                f"native HUD fixture row {element_id} would change its bitmap-font header"
+            )
+        line_height = re.search(r"(?:line height|header/)(\d+) px", row["font"])
+        if line_height is not None and font.get("measured_line_height_px") != int(
+            line_height.group(1)
+        ):
+            raise StaticReTestFailure(
+                f"native HUD fixture row {element_id} would change its measured glyph line height"
+            )
+        records = re.search(r"Fonts\.(\d+)-(\d+)", expected_atlas)
+        if records is not None and (
+            font.get("bundle") != "images/Fonts.bundle"
+            or font.get("records") != f"{records.group(1)}..{records.group(2)}"
+        ):
+            raise StaticReTestFailure(
+                f"native HUD fixture row {element_id} would change its bitmap-font record group"
+            )
+        if element_id.startswith("belt.slot.") and element_id.endswith(".count"):
+            if font.get("renderer") != "0x004A57C0":
+                raise StaticReTestFailure(
+                    f"native HUD fixture row {element_id} would change its glyph renderer owner"
+                )
+        if element_id == "ally.row.0.identity":
+            expected_metrics = {
+                "loader_glyph_advance_px": 4,
+                "loader_space_advance_px": 2,
+                "loader_padding_px": 2,
+                "loader_baseline_offset_px": 7,
+            }
+            if any(font.get(key) != value for key, value in expected_metrics.items()):
+                raise StaticReTestFailure(
+                    "native HUD fixture row ally.row.0.identity would change its exact-name glyph advances, padding, or baseline"
+                )
+
+    observed_width = re.search(r"observed `\d+` is (\d+) px wide", row["font"])
+    if observed_width is not None and not math.isclose(
+        expected_native_rect[2] - expected_native_rect[0],
+        float(observed_width.group(1)),
+    ):
+        raise StaticReTestFailure(
+            f"{HUD_DOCUMENT_CLAIM}: {element_id} glyph width disagrees with its documented rect"
+        )
+    if element_id == "notification.gold":
+        measured = re.search(r"measured (\d+) x (\d+) per line", row["font"])
+        base = rects[0]
+        if measured is None or (
+            base[2] - base[0],
+            base[3] - base[1],
+        ) != (float(measured.group(1)), float(measured.group(2))):
+            raise StaticReTestFailure(
+                f"{HUD_DOCUMENT_CLAIM}: notification.gold measured glyph box disagrees with its base rect"
+            )
+
+
+def test_native_hud_document_element_table_is_exact() -> str:
+    doc = _read(DOC_PATH)
+    section_matches = list(
+        re.finditer(
+            r"^## Complete element census[ \t]*\r?\n(?P<body>.*?)(?=^### |^## )",
+            doc,
+            flags=re.MULTILINE | re.DOTALL,
+        )
+    )
+    if len(section_matches) != 1:
+        raise StaticReTestFailure(
+            f"{HUD_DOCUMENT_CLAIM}: the implementer census section must be unique, found {len(section_matches)}"
+        )
+    table_matches = list(
+        re.finditer(
+            r"^\| # \| Stable element id \| Native rect \| Anchor and alignment \| "
+            r"Art and source \| Font/text metrics \| Baseline order \| Native owner\(s\) \|[ \t]*\r?\n"
+            r"^\| ---: \| --- \| --- \| --- \| --- \| --- \| --- \| --- \|[ \t]*\r?\n"
+            r"(?P<rows>(?:^\|[^\r\n]*\|[ \t]*(?:\r?\n|$))+)",
+            section_matches[0].group("body"),
+            flags=re.MULTILINE,
+        )
+    )
+    if len(table_matches) != 1:
+        raise StaticReTestFailure(
+            f"{HUD_DOCUMENT_CLAIM}: the eight-column geometry/source table must be unique and contiguous, found {len(table_matches)}"
+        )
+    table_rows = table_matches[0].group("rows")
+    parsed_rows = [
+        _parse_element_row(
+            line,
+            f"{HUD_DOCUMENT_CLAIM}: an implementer row lost its explicit eight-column structure",
+        )
+        for line in table_rows.splitlines()
+        if line
+    ]
+    ids = [row["id"] for row in parsed_rows]
+    duplicates = sorted({element_id for element_id in ids if ids.count(element_id) > 1})
+    if duplicates:
+        raise StaticReTestFailure(
+            f"{HUD_DOCUMENT_CLAIM}: duplicate document row ids {duplicates} make geometry/source lookup ambiguous"
+        )
+    expected = _expected_element_rows()
+    if len(parsed_rows) != len(expected) or set(ids) != set(expected):
+        raise StaticReTestFailure(
+            f"{HUD_DOCUMENT_CLAIM}: document must expose exactly the 26 reviewed element rows; missing={sorted(set(expected) - set(ids))}, extra={sorted(set(ids) - set(expected))}"
+        )
+    for element_id, expected_row in zip(expected, EXPECTED_ELEMENT_ROWS, strict=True):
+        matches = list(
+            re.finditer(rf"^{re.escape(expected_row)}$", table_rows, flags=re.MULTILINE)
+        )
+        if len(matches) != 1:
+            raise StaticReTestFailure(
+                f"{HUD_DOCUMENT_CLAIM}: {element_id} doc row no longer pins its exact rects, atlas/source, glyph metrics, draw order, and native owners"
+            )
+    return "all 26 HUD document rows structurally pin complete geometry, sources, glyph metrics, order, and owners"
+
+
 def test_native_hud_element_census_and_rects_are_pinned() -> str:
     doc, golden = _load_fixture()
+    expected_rows = _expected_element_rows()
     census = golden.get("element_census")
     if not isinstance(census, dict):
         raise StaticReTestFailure(
@@ -165,7 +434,7 @@ def test_native_hud_element_census_and_rects_are_pinned() -> str:
         raise StaticReTestFailure(
             "HUD element validation examined no live census content"
         )
-    if census.get("count") != len(EXPECTED_ELEMENTS) or len(elements) != len(EXPECTED_ELEMENTS):
+    if census.get("count") != len(expected_rows) or len(elements) != len(expected_rows):
         raise StaticReTestFailure(
             "HUD semantic census would no longer contain exactly the 26 reviewed elements"
         )
@@ -174,7 +443,7 @@ def test_native_hud_element_census_and_rects_are_pinned() -> str:
         raise StaticReTestFailure(
             "HUD element lookup would be ambiguous because stable ids are duplicated"
         )
-    if set(ids) != set(EXPECTED_ELEMENTS):
+    if set(ids) != set(expected_rows):
         raise StaticReTestFailure(
             "HUD semantic census would add, remove, or rename a reviewed element identity"
         )
@@ -184,20 +453,9 @@ def test_native_hud_element_census_and_rects_are_pinned() -> str:
             "HUD census sweep did not reach the named XP and pointer witnesses"
         )
 
-    for element_id, (expected_rect, expected_atlas) in EXPECTED_ELEMENTS.items():
+    for element_id, expected_row in expected_rows.items():
         element = by_id[element_id]
-        if element.get("native_rect") != expected_rect:
-            raise StaticReTestFailure(
-                f"{element_id} would move from its native rect {expected_rect}"
-            )
-        if element.get("atlas_id") != expected_atlas:
-            raise StaticReTestFailure(
-                f"{element_id} would select a different retail atlas record than {expected_atlas}"
-            )
-        if element.get("asset_source", {}).get("kind") != EXPECTED_SOURCE_KINDS[element_id]:
-            raise StaticReTestFailure(
-                f"{element_id} would lose whether its art comes from the landed manifest, native bundle, or primitive renderer"
-            )
+        _assert_element_row_matches_fixture(expected_row, element)
         if not element.get("anchor") or not element.get("alignment"):
             raise StaticReTestFailure(
                 f"{element_id} would no longer have enough anchor information for viewport reconstruction"
@@ -242,7 +500,7 @@ def test_native_hud_element_census_and_rects_are_pinned() -> str:
         raise StaticReTestFailure(
             "HUD reference-crop lookup would be ambiguous because crop ids are duplicated"
         )
-    if not set(EXPECTED_ELEMENTS).issubset(crop_ids):
+    if not set(expected_rows).issubset(crop_ids):
         raise StaticReTestFailure(
             "HUD visual diffing would no longer include every named census element"
         )

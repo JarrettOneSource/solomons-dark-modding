@@ -50,6 +50,7 @@ from static_re_native_class_loadout_contracts import (
 from static_re_native_save_format_contracts import (
     test_launcher_save_layer_and_account_seam_are_pinned,
     test_native_save_container_codec_and_layout_are_pinned,
+    test_native_save_document_node_and_payload_tables_are_exact,
     test_native_save_fixture_provenance_hashes_the_committed_recording,
     test_native_save_fresh_defaults_and_runtime_offsets_are_pinned,
     test_native_save_goldens_round_trip_all_committed_files,
@@ -70,6 +71,7 @@ from static_re_native_scene_composition_contracts import (
     test_native_scene_world_sort_key_and_ties_are_pinned,
 )
 from static_re_native_hud_contracts import (
+    test_native_hud_document_element_table_is_exact,
     test_native_hud_element_census_and_rects_are_pinned,
     test_native_hud_fill_cooldown_charge_and_notification_behavior_are_pinned,
     test_native_hud_recorder_is_self_provenanced_settled_and_visual_diffable,
@@ -554,6 +556,7 @@ from static_re_audio_disable_contracts import (
     test_stock_audio_bootstrap_and_settings_are_layout_backed,
 )
 from static_re_native_audio_event_contracts import (
+    test_native_audio_document_trigger_asset_rows_are_exact,
     test_native_audio_event_census_and_dispatch_golden_are_pinned,
     test_native_audio_loop_points_and_playback_semantics_are_pinned,
     test_native_audio_multiplayer_ownership_is_stock_transition_owned,
@@ -972,6 +975,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native scene decor determinism path is pinned",
         test_native_scene_decor_determinism_path_is_pinned,
+    ),
+    (
+        "Native HUD document element table is exact",
+        test_native_hud_document_element_table_is_exact,
     ),
     (
         "Native HUD element census and rects are pinned",
@@ -1957,6 +1964,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_launch_audio_disable_is_engine_level_and_player_opt_in,
     ),
     (
+        "native audio document trigger asset rows are exact",
+        test_native_audio_document_trigger_asset_rows_are_exact,
+    ),
+    (
         "native audio event census and dispatch golden are pinned",
         test_native_audio_event_census_and_dispatch_golden_are_pinned,
     ),
@@ -2168,6 +2179,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native save goldens round-trip every committed file",
         test_native_save_goldens_round_trip_all_committed_files,
+    ),
+    (
+        "Native save document node and payload tables are exact",
+        test_native_save_document_node_and_payload_tables_are_exact,
     ),
     (
         "Native save fresh defaults and runtime offsets are pinned",

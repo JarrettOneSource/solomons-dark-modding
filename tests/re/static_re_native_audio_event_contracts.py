@@ -38,71 +38,79 @@ GAME_BINARY_SHA256 = (
     "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3"
 )
 
-EXPECTED_EVENT_CLASSES = (
-    "cast.ether.release",
-    "cast.fire.release",
-    "cast.air.channel_start",
-    "cast.air.channel_hold",
-    "cast.air.channel_stop",
-    "cast.water.channel_start",
-    "cast.water.channel_hold",
-    "cast.water.channel_stop",
-    "cast.earth.charge_start",
-    "cast.earth.charge_hold",
-    "cast.earth.release",
-    "projectile.ether.flight",
-    "projectile.ether.impact",
-    "projectile.fire.flight",
-    "projectile.fire.impact",
-    "projectile.air.flight",
-    "projectile.air.impact",
-    "projectile.water.flight",
-    "projectile.water.impact",
-    "projectile.earth.flight",
-    "projectile.earth.flight_end",
-    "projectile.earth.impact",
-    "melee.player.swing",
-    "melee.player.hit_world",
-    "melee.enemy.hit",
-    "movement.footstep.wood",
-    "movement.footstep.stone",
-    "movement.footstep.splash",
-    "damage.player.taken",
-    "death.player",
-    "death.skeleton",
-    "death.zombie",
-    "death.banshee",
-    "death.unholy",
-    "death.demon",
-    "death.imp",
-    "death.spider",
-    "death.golem",
-    "death.faculty",
-    "death.heartmonger",
-    "death.portal",
-    "death.coffin",
-    "death.crow",
-    "death.maggot",
-    "pickup.coin",
-    "pickup.bag",
-    "pickup.orb",
-    "pickup.potion",
-    "pickup.magic_book",
-    "potion.use",
-    "potion.invalid",
-    "level.up",
-    "skill.unlock",
-    "wave.start",
-    "wave.end",
-    "dig.shovel",
-    "dig.throw_dirt",
-    "shop.purchase",
-    "shop.purchase_rejected",
-    "shop.storage_transfer",
-    "ui.focus",
-    "ui.confirm",
-    "ui.back",
-    "music.menu_transition",
+EXPECTED_TRIGGER_ASSET_CELLS = {
+    "cast.ether.release": r"57 `sounds\magicmissile`, pitch+gain one-shot",
+    "cast.fire.release": r"97 `sounds\throwfire`, pitch+gain one-shot",
+    "cast.air.channel_start": r"54 `sounds\lightningstart`; start 162 `sounds\lightningloop__loop`",
+    "cast.air.channel_hold": "no new request",
+    "cast.air.channel_stop": "stop 162",
+    "cast.water.channel_start": r"44 `sounds\icestart`; start 161 `sounds\iceloop__loop`",
+    "cast.water.channel_hold": "no new request",
+    "cast.water.channel_stop": "stop 161",
+    "cast.earth.charge_start": r"start 159 `sounds\gatherrocksloop__loop`",
+    "cast.earth.charge_hold": "no new request",
+    "cast.earth.release": r"stop 159; 87 `sounds\startboulder`",
+    "projectile.ether.flight": r"57 `sounds\magicmissile`",
+    "projectile.ether.impact": r"58 `sounds\magicmissilehit`",
+    "projectile.fire.flight": r"97 `sounds\throwfire`",
+    "projectile.fire.impact": r"30 `sounds\fireballhit`",
+    "projectile.air.flight": r"uniform pool 224 `sounds\throwlightning\1`, 225 `...\2`",
+    "projectile.air.impact": r"uniform pool 203..205 `sounds\Shock\s1..s3`",
+    "projectile.water.flight": r"38 `sounds\frostmissile`",
+    "projectile.water.impact": r"36 `sounds\freeze`; then 44 `sounds\icestart` when that branch creates the ice effect",
+    "projectile.earth.flight": r"start 168 `sounds\rollingstoneloop__loop`",
+    "projectile.earth.flight_end": "stop 168",
+    "projectile.earth.impact": r"77 `sounds\rockhit`",
+    "melee.player.swing": r"86 `sounds\staffswoosh`",
+    "melee.player.hit_world": r"85 `sounds\staffhitwood`",
+    "melee.enemy.hit": r"uniform pool 220..221 `sounds\SwordStrike\strike1..2`",
+    "movement.footstep.wood": r"104 `sounds\woodstep`",
+    "movement.footstep.stone": r"uniform pool 214..215 `sounds\Step\step1..2`",
+    "movement.footstep.splash": r"uniform pool 216..219 `sounds\stepsplash\step1..4`",
+    "damage.player.taken": r"uniform pool 228..230 `sounds\Wizard_Ouch\SAY_OUCH1..3`",
+    "death.player": r"stream 118 `sounds\DeathGuitar__Stream`; immediate song `death`",
+    "death.skeleton": r"79 `sounds\skeleton_die`",
+    "death.zombie": r"105 `zombiedie`; 108 `zombiepoisonsplat`; conditional 110 `zombie_die_groan`",
+    "death.banshee": r"8 `sounds\bansheedie`; preceding terminal flash uses 34 at `0x004960DF`",
+    "death.unholy": r"stream 146 `UnholyDie__Stream`; 54 `lightningstart`; 59 `magicshieldexplode`",
+    "death.demon": r"20 `sounds\demondies`",
+    "death.imp": r"31 `sounds\fireydeath`",
+    "death.spider": r"82 `sounds\SpiderDie`",
+    "death.golem": r"89 `stonebreak`; 33 `flamelashstart`; stream 125 `GolemDie__Stream`; 77 `rockhit`",
+    "death.faculty": r"stream 121 `FacultyDie__Stream`",
+    "death.heartmonger": r"pool 179..180 `Chain\clank1..2`; stream 111 `BreakHeartmonger__Stream`",
+    "death.portal": r"75 `sounds\PortalDie`",
+    "death.coffin": r"15 `sounds\coffinbreak`",
+    "death.crow": r"uniform pool 183..184 `sounds\Crow\crow1..2`",
+    "death.maggot": r"uniform pool 199..200 `sounds\MaggotSqueak\squeak1..2`",
+    "pickup.coin": r"69 `sounds\pickupcoin`",
+    "pickup.bag": r"68 `sounds\pickupbag`",
+    "pickup.orb": r"2 `sounds\gotorb`",
+    "pickup.potion": r"68 `sounds\pickupbag`",
+    "pickup.magic_book": r"stream 129 `magicbookget__stream`",
+    "potion.use": r"24 `sounds\drink`",
+    "potion.invalid": r"6 `sounds\badaction`",
+    "level.up": r"52 `sounds\levelup`",
+    "skill.unlock": r"102 `sounds\unlockskill`",
+    "wave.start": "Music transition to song `combat`, track `combat`",
+    "wave.end": "Music crossfade to empty song",
+    "dig.shovel": r"uniform pool 209..210 `sounds\shovel\shovel1..2`",
+    "dig.throw_dirt": r"uniform pool 222..223 `sounds\throwdirt\throwdirt1..2`",
+    "shop.purchase": r"25 `sounds\dropcoins`",
+    "shop.purchase_rejected": r"6 `sounds\badaction`",
+    "shop.storage_transfer": r"4 `backpack_close`, then 0 `click`",
+    "ui.focus": "no request",
+    "ui.confirm": r"0 `sounds\click`",
+    "ui.back": r"4 `sounds\backpack_close`",
+    "music.menu_transition": "`prelude`, `selection`, or `academy` through `Music::PlayCrossfade`",
+}
+
+EXPECTED_EVENT_CLASSES = tuple(EXPECTED_TRIGGER_ASSET_CELLS)
+AUDIO_TRIGGER_DOCUMENT_CLAIM = "native audio trigger document table claim"
+AUDIO_TRIGGER_ROW_PATTERN = re.compile(
+    r"^\| `(?P<event>[a-z][a-z0-9_.]+)` \| (?P<trigger>[^|\r\n]+?) \| "
+    r"(?P<sites>[^|\r\n]+?) \| (?P<assets>[^|\r\n]+?) \| "
+    r"(?P<selection>[^|\r\n]+?) \|$"
 )
 
 SILENT_EVENT_CLASSES = frozenset(
@@ -209,6 +217,92 @@ def _documented_event_classes(text: str) -> tuple[str, ...]:
     )
     expected = set(EXPECTED_EVENT_CLASSES)
     return tuple(candidate for candidate in candidates if candidate in expected)
+
+
+def _expected_registry_ids(asset_cell: str) -> tuple[int, ...]:
+    without_literals = re.sub(r"`[^`]*`", "", asset_cell)
+    ranges = [
+        (int(start), int(end))
+        for start, end in re.findall(r"\b(?:uniform )?pool (\d+)\.\.(\d+)", without_literals)
+    ]
+    without_ranges = re.sub(
+        r"\b(?:uniform )?pool \d+\.\.\d+", "", without_literals
+    )
+    values = {
+        int(value)
+        for value in re.findall(r"(?<![.A-Za-z0-9_])\d+(?![.A-Za-z0-9_])", without_ranges)
+    }
+    for start, end in ranges:
+        _require(
+            start <= end,
+            f"{AUDIO_TRIGGER_DOCUMENT_CLAIM}: expected pool range {start}..{end} is reversed",
+        )
+        values.update(range(start, end + 1))
+    return tuple(sorted(values))
+
+
+def _expected_pool_groups(asset_cell: str) -> tuple[tuple[int, ...], ...]:
+    without_literals = re.sub(r"`[^`]*`", "", asset_cell)
+    groups = [
+        tuple(range(int(start), int(end) + 1))
+        for start, end in re.findall(r"\b(?:uniform )?pool (\d+)\.\.(\d+)", without_literals)
+    ]
+    explicit = re.search(r"\buniform pool (\d+)\s*,\s*(\d+)\b", without_literals)
+    if explicit is not None:
+        groups.append((int(explicit.group(1)), int(explicit.group(2))))
+    return tuple(groups)
+
+
+def test_native_audio_document_trigger_asset_rows_are_exact() -> str:
+    document = read_text(DOCUMENT)
+    table_matches = list(
+        re.finditer(
+            r"^\| Event class \| Native trigger \| Exact call site\(s\) \| "
+            r"Requested asset\(s\) \| Selection and parameters \|[ \t]*\r?\n"
+            r"^\| --- \| --- \| --- \| --- \| --- \|[ \t]*\r?\n"
+            r"(?P<rows>(?:^\|[^\r\n]*\|[ \t]*(?:\r?\n|$))+)",
+            document,
+            flags=re.MULTILINE,
+        )
+    )
+    _require(
+        len(table_matches) == 3,
+        f"{AUDIO_TRIGGER_DOCUMENT_CLAIM}: casts, actor/death, and progression/UI trigger tables must be three structural tables, found {len(table_matches)}",
+    )
+    parsed_rows: list[dict[str, str]] = []
+    for table in table_matches:
+        for line in table.group("rows").splitlines():
+            match = AUDIO_TRIGGER_ROW_PATTERN.fullmatch(line)
+            _require(
+                match is not None,
+                f"{AUDIO_TRIGGER_DOCUMENT_CLAIM}: a trigger row lost its explicit five-column structure",
+            )
+            parsed_rows.append(match.groupdict())
+    events = [row["event"] for row in parsed_rows]
+    duplicates = sorted({event for event in events if events.count(event) > 1})
+    _require(
+        not duplicates,
+        f"{AUDIO_TRIGGER_DOCUMENT_CLAIM}: duplicate document trigger rows {duplicates} make asset selection ambiguous",
+    )
+    _require(
+        len(parsed_rows) == 64
+        and tuple(events) == EXPECTED_EVENT_CLASSES
+        and {
+            "cast.air.channel_start",
+            "movement.footstep.splash",
+            "death.player",
+            "music.menu_transition",
+        }.issubset(events),
+        f"{AUDIO_TRIGGER_DOCUMENT_CLAIM}: document must enumerate the exact 64 trigger rows in reviewed order",
+    )
+    for row in parsed_rows:
+        event = row["event"]
+        expected_assets = EXPECTED_TRIGGER_ASSET_CELLS[event]
+        _require(
+            row["assets"] == expected_assets,
+            f"{AUDIO_TRIGGER_DOCUMENT_CLAIM}: {event} doc row requested assets are {row['assets']!r}, expected {expected_assets!r}; its fixed, pool, loop, or stream selection could drift from the fixture and catalog",
+        )
+    return "all 64 audio trigger rows structurally pin fixed assets, pool ranges, loop/stream ids, and music requests"
 
 
 def test_native_audio_event_census_and_dispatch_golden_are_pinned() -> str:
@@ -498,6 +592,95 @@ def test_native_audio_event_census_and_dispatch_golden_are_pinned() -> str:
         CATALOG,
         "audio event census lost the committed native asset catalog",
     )
+    catalog_rows = catalog.get("compiled_registry")
+    _require(
+        isinstance(catalog_rows, list)
+        and len(catalog_rows) == 233
+        and all(isinstance(row, dict) for row in catalog_rows),
+        "audio trigger contract no longer reaches the complete 233-slot catalog",
+    )
+    catalog_by_index = {row.get("registry_index"): row for row in catalog_rows}
+    _require(
+        len(catalog_by_index) == 233
+        and set(catalog_by_index) == set(range(233)),
+        "audio trigger catalog lookup can silently choose a duplicate or omit a registry slot",
+    )
+    _require(
+        len(EXPECTED_TRIGGER_ASSET_CELLS) == 64
+        and EXPECTED_TRIGGER_ASSET_CELLS["movement.footstep.splash"].startswith(
+            "uniform pool 216..219"
+        )
+        and EXPECTED_TRIGGER_ASSET_CELLS["death.player"].startswith("stream 118"),
+        "audio trigger expected constants lost a concrete pool or stream witness",
+    )
+    timeline_by_event = {
+        event: [row for row in timeline if row.get("event_class") == event]
+        for event in EXPECTED_EVENT_CLASSES
+    }
+    for event, asset_cell in EXPECTED_TRIGGER_ASSET_CELLS.items():
+        expected_ids = _expected_registry_ids(asset_cell)
+        pool_groups = _expected_pool_groups(asset_cell)
+        fixture_rows = timeline_by_event[event]
+        _require(
+            bool(fixture_rows),
+            f"audio fixture row {event} disappeared before its requested assets were checked",
+        )
+        observed_registry_ids: set[int] = set()
+        for fixture_row in fixture_rows:
+            requested = fixture_row.get("requested_asset_id")
+            if not isinstance(requested, str) or not requested.startswith("registry:"):
+                continue
+            requested_index = int(requested.split(":", 1)[1])
+            observed_registry_ids.add(requested_index)
+            selection_pool = fixture_row.get("selection_pool")
+            _require(
+                isinstance(selection_pool, list) and bool(selection_pool),
+                f"audio fixture row {event} lost the concrete selection pool for registry {requested_index}",
+            )
+            actual_pool = tuple(row.get("registry_index") for row in selection_pool)
+            _require(
+                all(isinstance(index, int) for index in actual_pool),
+                f"audio fixture row {event} has an uninspectable registry selection pool",
+            )
+            if len(actual_pool) > 1:
+                _require(
+                    actual_pool in pool_groups,
+                    f"audio fixture row {event} selection pool {actual_pool} disagrees with documented pool group(s) {pool_groups}",
+                )
+            else:
+                _require(
+                    actual_pool == (requested_index,),
+                    f"audio fixture row {event} fixed request {requested_index} has an ambiguous selection pool {actual_pool}",
+                )
+            _require(
+                requested_index in expected_ids,
+                f"audio fixture row {event} requests registry {requested_index}, outside documented ids {expected_ids}",
+            )
+        if expected_ids:
+            _require(
+                bool(observed_registry_ids),
+                f"audio fixture row {event} never dispatches any documented registry id {expected_ids}",
+            )
+
+        stream_ids = {
+            int(value) for value in re.findall(r"\bstream (\d+)\b", asset_cell)
+        }
+        loop_ids = {
+            int(value) for value in re.findall(r"\b(?:start|stop) (\d+)\b", asset_cell)
+        }
+        for registry_index in expected_ids:
+            catalog_row = catalog_by_index[registry_index]
+            expected_class = (
+                "SoundStream"
+                if registry_index in stream_ids
+                else "SoundLoop"
+                if registry_index in loop_ids
+                else "Sound"
+            )
+            _require(
+                catalog_row.get("native_class") == expected_class,
+                f"audio catalog registry {registry_index} for {event} is not the documented {expected_class}",
+            )
     _require(
         fixture.get("music_catalog") == catalog.get("music"),
         "audio fixture music catalog disagrees with the committed asset catalog",
