@@ -111,6 +111,7 @@ $tempDirectory = Join-Path ([IO.Path]::GetTempPath()) (
 [IO.Directory]::CreateDirectory($tempDirectory) | Out-Null
 $beforeFrame = Join-Path $tempDirectory "before.bmp"
 $afterFrame = Join-Path $tempDirectory "after.bmp"
+$populationSamplerArmed = $false
 try {
     $sourceClock = [Diagnostics.Stopwatch]::StartNew()
     $before = Get-SettledNativeMenuObservation `
@@ -127,6 +128,13 @@ try {
             "not match '$ExpectedSourceSurface'."
         )
     }
+
+    Initialize-NativeMenuPopulationSampler -Context $context
+    Start-NativeMenuPopulationSampler `
+        -Context $context `
+        -ScreenId $DestinationScreen `
+        -ExpectedSurface $ExpectedDestinationSurface
+    $populationSamplerArmed = $true
 
     $destinationClock = [Diagnostics.Stopwatch]::StartNew()
     $dispatchResult = "observed"
@@ -165,6 +173,14 @@ return 'key'
         -ScreenId $DestinationScreen `
         -FramePath $afterFrame `
         -LatencyClock $destinationClock
+    $populationTrace = Stop-NativeMenuPopulationSampler -Context $context
+    $populationSamplerArmed = $false
+    $after.settlement_trace["high_cadence_sample_count"] = (
+        [int]$populationTrace.sample_count
+    )
+    $after.settlement_trace["high_cadence_structural_phases"] = @(
+        $populationTrace.structural_phases
+    )
     if (
         -not [string]::IsNullOrWhiteSpace($ExpectedDestinationSurface) -and
         $after.semantic_surface -ne $ExpectedDestinationSurface
@@ -268,6 +284,16 @@ return 'key'
         output = $outputItemPath
     } | ConvertTo-Json -Compress
 } finally {
+    if ($populationSamplerArmed) {
+        try {
+            Stop-NativeMenuPopulationSampler -Context $context | Out-Null
+        } catch {
+            Write-Warning (
+                "Could not disarm native-menu population sampler after " +
+                "transition failure: $($_.Exception.Message)"
+            )
+        }
+    }
     if (Test-Path -LiteralPath $tempDirectory -PathType Container) {
         Remove-Item -LiteralPath $tempDirectory -Recurse -Force
     }

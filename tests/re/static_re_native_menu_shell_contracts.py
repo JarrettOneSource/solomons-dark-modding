@@ -658,6 +658,30 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
     )
     _require_regex(
         support,
+        r"function Initialize-NativeMenuPopulationSampler.*?"
+        r"sd\.events\.on\('runtime\.tick', function\(event\).*?"
+        r"table\.sort\(structural_elements, function\(left, right\).*?"
+        r"left_order < right_order.*?"
+        r"tostring\(left\.id or ''\) < tostring\(right\.id or ''\).*?"
+        r"if #state\.phases >= 128 then.*?"
+        r"function Stop-NativeMenuPopulationSampler.*?"
+        r"observed no destination phase",
+        "the transition recorder no longer captures bounded, canonical, "
+        "runtime-tick population phases or fails closed when none are runnable",
+    )
+    _require_regex(
+        transition_recorder,
+        r"Initialize-NativeMenuPopulationSampler -Context \$context\s*"
+        r"Start-NativeMenuPopulationSampler.*?"
+        r"\$dispatchResult\s*=.*?"
+        r"\$after\s*=\s*Get-SettledNativeMenuObservation.*?"
+        r"\$populationTrace\s*=\s*Stop-NativeMenuPopulationSampler.*?"
+        r"high_cadence_structural_phases",
+        "navigation dispatch no longer arms its high-cadence sampler before "
+        "the action and binds the stopped trace to the settled destination",
+    )
+    _require_regex(
+        support,
         r"function Test-NativeMenuFrameMatchesSettlement.*?"
         r"foreach \(\$geometryName in @\(\"rect\", \"unclipped_rect\"\)\).*?"
         r"\$expectedGeometry\.Count -ne 4.*?"
@@ -940,6 +964,14 @@ def test_native_menu_landed_population_override_is_fail_closed() -> str:
         r"lacks two-instance population",
         "Settlement v2.1 landed override no longer rejects settled members or "
         "requires every old value in both population traces and neither settled window",
+    )
+    _require_regex(
+        classifier,
+        r"high_cadence_phases\s*=\s*trace\.get\("
+        r"\"high_cadence_structural_phases\", \[\]\).*?"
+        r"phases\s*=\s*\[\*high_cadence_phases, \*polled_phases\]",
+        "Settlement v2.1 override proof no longer consumes the high-cadence "
+        "dispatch phases that can witness pre-poll population members",
     )
     _require_regex(
         attacher,

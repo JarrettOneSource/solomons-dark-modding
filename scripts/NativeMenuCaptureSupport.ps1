@@ -389,6 +389,216 @@ return table.concat({
     }
 }
 
+function Initialize-NativeMenuPopulationSampler {
+    param([Parameter(Mandatory = $true)][object]$Context)
+
+    $result = Invoke-NativeMenuLua -Context $Context -LuaCode @'
+local sampler = rawget(_G, '__sd_native_menu_population_sampler')
+if sampler == nil then
+  sampler = {
+    active = false,
+    by_structure = {},
+    phases = {},
+    sample_count = 0,
+    overflow = false,
+    error = ''
+  }
+  rawset(_G, '__sd_native_menu_population_sampler', sampler)
+  local function quote(value)
+    value = tostring(value or '')
+    value = value:gsub('\\', '\\\\')
+    value = value:gsub('"', '\\"')
+    value = value:gsub('\b', '\\b')
+    value = value:gsub('\f', '\\f')
+    value = value:gsub('\n', '\\n')
+    value = value:gsub('\r', '\\r')
+    value = value:gsub('\t', '\\t')
+    return '"' .. value .. '"'
+  end
+  local function number(value)
+    value = tonumber(value) or 0
+    if value ~= value or value == math.huge or value == -math.huge then
+      error('population trace contains a non-finite number')
+    end
+    return string.format('%.6f', value)
+  end
+  local function boolean(value)
+    return value and 'true' or 'false'
+  end
+  local function core(element)
+    return table.concat({
+      '{"id":', quote(element.id),
+      ',"kind":', quote(element.kind),
+      ',"text":', quote(element.text),
+      ',"action_id":', quote(element.action_id),
+      ',"art_id":', quote(element.art_id),
+      ',"font_id":', quote(element.font_id),
+      ',"text_style":', quote(element.text_style),
+      ',"visible":', boolean(element.visible),
+      ',"interactive":', boolean(element.interactive),
+      ',"draw_order":', tostring(element.draw_order or 0)
+    })
+  end
+  sd.events.on('runtime.tick', function(event)
+    local state = rawget(_G, '__sd_native_menu_population_sampler')
+    if state == nil or not state.active then return end
+    local ok, detail = pcall(function()
+      local semantic = sd.ui.get_snapshot()
+      if state.expected_surface ~= '' and
+          tostring(semantic and semantic.surface_id or '') ~=
+            state.expected_surface then
+        return
+      end
+      local snapshot = sd.ui.capture_current_layout(state.screen_id)
+      if type(snapshot) ~= 'table' then return end
+      local structural_elements = {}
+      for index, element in ipairs(snapshot.elements or {}) do
+        structural_elements[index] = element
+      end
+      table.sort(structural_elements, function(left, right)
+        local left_order = tonumber(left.draw_order) or 0
+        local right_order = tonumber(right.draw_order) or 0
+        if left_order ~= right_order then return left_order < right_order end
+        return tostring(left.id or '') < tostring(right.id or '')
+      end)
+      local structure_elements = {}
+      for index, element in ipairs(structural_elements) do
+        structure_elements[index] = core(element) .. '}'
+      end
+      local payload_elements = {}
+      for index, element in ipairs(snapshot.elements or {}) do
+        payload_elements[index] = core(element) .. table.concat({
+          ',"rect":[', number(element.left), ',', number(element.top), ',',
+            number(element.right), ',', number(element.bottom), ']',
+          ',"unclipped_rect":[', number(element.unclipped_left), ',',
+            number(element.unclipped_top), ',', number(element.unclipped_right),
+            ',', number(element.unclipped_bottom), ']}'
+        })
+      end
+      local prefix = table.concat({
+        '{"generation":', tostring(snapshot.generation or 0),
+        ',"screen_id":', quote(snapshot.screen_id),
+        ',"screen_title":', quote(snapshot.screen_title),
+        ',"capture_method":', quote(snapshot.capture_method),
+        ',"elements":['
+      })
+      local structure = prefix .. table.concat(structure_elements, ',') .. ']}'
+      local payload = prefix .. table.concat(payload_elements, ',') .. ']}'
+      local now = tonumber(event and event.monotonic_milliseconds) or 0
+      state.sample_count = state.sample_count + 1
+      local phase_index = state.by_structure[structure]
+      if phase_index ~= nil then
+        local phase = state.phases[phase_index]
+        phase.last_seen_milliseconds = now
+        phase.observations = phase.observations + 1
+        return
+      end
+      if #state.phases >= 128 then
+        state.overflow = true
+        state.active = false
+        return
+      end
+      state.phases[#state.phases + 1] = {
+        first_seen_milliseconds = now,
+        last_seen_milliseconds = now,
+        observations = 1,
+        payload_json = payload
+      }
+      state.by_structure[structure] = #state.phases
+    end)
+    if not ok then
+      state.error = tostring(detail)
+      state.active = false
+    end
+  end)
+end
+return 'population-sampler-ready'
+'@
+    if ($result.Text.Trim() -ne "population-sampler-ready") {
+        throw "BROKEN: native-menu population sampler did not initialize."
+    }
+}
+
+function Start-NativeMenuPopulationSampler {
+    param(
+        [Parameter(Mandatory = $true)][object]$Context,
+        [Parameter(Mandatory = $true)][string]$ScreenId,
+        [string]$ExpectedSurface = ""
+    )
+
+    $result = Invoke-NativeMenuLua -Context $Context -LuaCode @"
+local sampler = rawget(_G, '__sd_native_menu_population_sampler')
+if sampler == nil then error('population sampler was not initialized') end
+sampler.active = false
+sampler.by_structure = {}
+sampler.phases = {}
+sampler.sample_count = 0
+sampler.overflow = false
+sampler.error = ''
+sampler.screen_id = [=[$ScreenId]=]
+sampler.expected_surface = [=[$ExpectedSurface]=]
+sampler.active = true
+return 'population-sampler-armed'
+"@
+    if ($result.Text.Trim() -ne "population-sampler-armed") {
+        throw "BROKEN: native-menu population sampler did not arm."
+    }
+}
+
+function Stop-NativeMenuPopulationSampler {
+    param([Parameter(Mandatory = $true)][object]$Context)
+
+    $result = Invoke-NativeMenuLua -Context $Context -LuaCode @'
+local sampler = rawget(_G, '__sd_native_menu_population_sampler')
+if sampler == nil then error('population sampler was not initialized') end
+sampler.active = false
+local function quote(value)
+  value = tostring(value or '')
+  value = value:gsub('\\', '\\\\')
+  value = value:gsub('"', '\\"')
+  value = value:gsub('\n', '\\n')
+  value = value:gsub('\r', '\\r')
+  value = value:gsub('\t', '\\t')
+  return '"' .. value .. '"'
+end
+local output = {
+  '{"sample_count":', tostring(sampler.sample_count or 0),
+  ',"overflow":', sampler.overflow and 'true' or 'false',
+  ',"error":', quote(sampler.error),
+  ',"structural_phases":['
+}
+for index, phase in ipairs(sampler.phases or {}) do
+  if index > 1 then output[#output + 1] = ',' end
+  output[#output + 1] = table.concat({
+    '{"first_seen_milliseconds":',
+      tostring(phase.first_seen_milliseconds or 0),
+    ',"last_seen_milliseconds":',
+      tostring(phase.last_seen_milliseconds or 0),
+    ',"observations":', tostring(phase.observations or 0),
+    ',"payload":', phase.payload_json, '}'
+  })
+end
+output[#output + 1] = ']}'
+return table.concat(output)
+'@
+    try {
+        $trace = $result.Text | ConvertFrom-Json
+    } catch {
+        throw "BROKEN: native-menu population sampler returned invalid JSON."
+    }
+    if (-not [string]::IsNullOrWhiteSpace([string]$trace.error)) {
+        throw "BROKEN: native-menu population sampler failed: $($trace.error)"
+    }
+    if ([bool]$trace.overflow) {
+        throw "STOP: native-menu population sampler exceeded 128 structural phases."
+    }
+    if ([int]$trace.sample_count -le 0 -or
+        @($trace.structural_phases).Count -le 0) {
+        throw "STOP: native-menu population sampler observed no destination phase."
+    }
+    return $trace
+}
+
 function Invoke-NativeMenuSettlementClassifier {
     param(
         [Parameter(Mandatory = $true)][object]$Context,

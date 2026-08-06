@@ -660,13 +660,24 @@ def assert_canonical_structure_matches(
 
 def _trace_payloads(
     trace: dict[str, Any], label: str
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    phases = trace.get("structural_phases")
+) -> tuple[
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+]:
+    polled_phases = trace.get("structural_phases")
+    high_cadence_phases = trace.get("high_cadence_structural_phases", [])
     samples = trace.get("settled_window_samples")
-    if not isinstance(phases, list) or not phases:
+    if not isinstance(polled_phases, list) or not polled_phases:
         raise SettlementV2Error(
             f"landed population override: {label} trace has no population phases"
         )
+    if not isinstance(high_cadence_phases, list):
+        raise SettlementV2Error(
+            "landed population override: "
+            f"{label} high-cadence population phases are not a list"
+        )
+    phases = [*high_cadence_phases, *polled_phases]
     if not isinstance(samples, list) or len(samples) < MINIMUM_SAMPLES:
         raise SettlementV2Error(
             f"landed population override: {label} trace has no 40-sample "
@@ -690,7 +701,7 @@ def _trace_payloads(
                 f"{label} settled sample {index} has no payload"
             )
         settled_payloads.append(payload)
-    return phase_payloads, settled_payloads
+    return phase_payloads, settled_payloads, phases
 
 
 def _element_for_id(
@@ -760,9 +771,10 @@ def _difference_label(difference: dict[str, Any]) -> str:
 
 
 def _population_trace_summary(
-    trace: dict[str, Any], phase_payloads: list[dict[str, Any]]
+    trace: dict[str, Any],
+    phase_payloads: list[dict[str, Any]],
+    phases: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    phases = trace["structural_phases"]
     return {
         "element_count_trace": [
             len(payload.get("elements", [])) for payload in phase_payloads
@@ -810,13 +822,15 @@ def build_population_phase_override(
             "landed population override: generation mismatch was not enumerated"
         )
 
-    primary_phases, primary_settled = _trace_payloads(
+    primary_phases, primary_settled, primary_phase_entries = _trace_payloads(
         primary_trace,
         "primary",
     )
-    confirmation_phases, confirmation_settled = _trace_payloads(
+    confirmation_phases, confirmation_settled, confirmation_phase_entries = (
+        _trace_payloads(
         confirmation_trace,
         "confirmation",
+        )
     )
     proven_differences: list[dict[str, Any]] = []
     for difference in differences:
@@ -886,10 +900,12 @@ def build_population_phase_override(
         "primary_population_trace": _population_trace_summary(
             primary_trace,
             primary_phases,
+            primary_phase_entries,
         ),
         "confirmation_population_trace": _population_trace_summary(
             confirmation_trace,
             confirmation_phases,
+            confirmation_phase_entries,
         ),
     }
 

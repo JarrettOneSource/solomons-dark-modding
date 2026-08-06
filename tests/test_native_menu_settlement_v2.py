@@ -286,6 +286,34 @@ class NativeMenuSettlementV2Tests(unittest.TestCase):
         ):
             build_population_phase_override(*inputs)
 
+    def test_population_override_uses_high_cadence_dispatch_phases(self) -> None:
+        inputs = list(_population_override_inputs())
+        for trace_index in (3, 4):
+            trace = copy.deepcopy(inputs[trace_index])
+            high_cadence = copy.deepcopy(trace["structural_phases"])
+            trace["high_cadence_structural_phases"] = high_cadence
+            trace["structural_phases"][0]["payload"]["elements"] = [
+                element
+                for element in trace["structural_phases"][0]["payload"][
+                    "elements"
+                ]
+                if element["id"] != "screen.art.item_99.1"
+            ]
+            inputs[trace_index] = trace
+
+        override = build_population_phase_override(*inputs)
+
+        vanished = next(
+            difference
+            for difference in override["structural_differences"]
+            if difference["kind"] == "landed_only_element"
+        )
+        self.assertEqual(vanished["primary_population_phase_indexes"], [0])
+        self.assertEqual(
+            vanished["confirmation_population_phase_indexes"],
+            [0],
+        )
+
     def test_structural_comparison_ignores_only_measured_animation(self) -> None:
         candidate = classify_window(_samples())["layout"]
         landed = copy.deepcopy(candidate)
