@@ -7,6 +7,7 @@ $script:NativeMenuSettlePollMilliseconds = 55
 $script:NativeMenuExtendedMinimumMilliseconds = 60000
 $script:NativeMenuExtendedSpanMultiplier = 10
 $script:NativeMenuExtendedMinimumSamples = 200
+$script:NativeMenuPopulationPhaseLimit = 4096
 
 function Get-NativeMenuStringSha256 {
     param([Parameter(Mandatory = $true)][string]$Value)
@@ -440,7 +441,7 @@ return table.concat({
 function Initialize-NativeMenuPopulationSampler {
     param([Parameter(Mandatory = $true)][object]$Context)
 
-    $result = Invoke-NativeMenuLua -Context $Context -LuaCode @'
+    $result = Invoke-NativeMenuLua -Context $Context -LuaCode @"
 local sampler = rawget(_G, '__sd_native_menu_population_sampler')
 if sampler == nil then
   sampler = {
@@ -548,7 +549,7 @@ if sampler == nil then
         phase.observations = phase.observations + 1
         return
       end
-      if #state.phases >= 128 then
+      if #state.phases >= $script:NativeMenuPopulationPhaseLimit then
         state.overflow = true
         state.active = false
         return
@@ -568,7 +569,7 @@ if sampler == nil then
   end)
 end
 return 'population-sampler-ready'
-'@
+"@
     if ($result.Text.Trim() -ne "population-sampler-ready") {
         throw "BROKEN: native-menu population sampler did not initialize."
     }
@@ -616,43 +617,79 @@ local function quote(value)
   value = value:gsub('\t', '\\t')
   return '"' .. value .. '"'
 end
-local output = {
+return table.concat({
   '{"sample_count":', tostring(sampler.sample_count or 0),
   ',"overflow":', sampler.overflow and 'true' or 'false',
   ',"error":', quote(sampler.error),
-  ',"structural_phases":['
-}
-for index, phase in ipairs(sampler.phases or {}) do
-  if index > 1 then output[#output + 1] = ',' end
-  output[#output + 1] = table.concat({
-    '{"first_seen_milliseconds":',
-      tostring(phase.first_seen_milliseconds or 0),
-    ',"last_seen_milliseconds":',
-      tostring(phase.last_seen_milliseconds or 0),
-    ',"observations":', tostring(phase.observations or 0),
-    ',"payload_encoding":"structural-element-arrays-v1"',
-    ',"payload":', phase.payload_json, '}'
-  })
-end
-output[#output + 1] = ']}'
-return table.concat(output)
+  ',"phase_count":', tostring(#(sampler.phases or {})), '}'
+})
 '@
     try {
-        $trace = $result.Text | ConvertFrom-Json
+        $metadata = $result.Text | ConvertFrom-Json
     } catch {
-        throw "BROKEN: native-menu population sampler returned invalid JSON."
+        throw "BROKEN: native-menu population sampler returned invalid metadata."
     }
-    if (-not [string]::IsNullOrWhiteSpace([string]$trace.error)) {
-        throw "BROKEN: native-menu population sampler failed: $($trace.error)"
+    if (-not [string]::IsNullOrWhiteSpace([string]$metadata.error)) {
+        throw "BROKEN: native-menu population sampler failed: $($metadata.error)"
     }
-    if ([bool]$trace.overflow) {
-        throw "STOP: native-menu population sampler exceeded 128 structural phases."
+    if ([bool]$metadata.overflow) {
+        throw (
+            "STOP: native-menu population sampler exceeded " +
+            "$script:NativeMenuPopulationPhaseLimit structural phases."
+        )
     }
-    if ([int]$trace.sample_count -le 0 -or
-        @($trace.structural_phases).Count -le 0) {
+    $phaseCount = [int]$metadata.phase_count
+    if ([int]$metadata.sample_count -le 0 -or $phaseCount -le 0) {
         throw "STOP: native-menu population sampler observed no destination phase."
     }
-    return $trace
+    if ($phaseCount -gt $script:NativeMenuPopulationPhaseLimit) {
+        throw "BROKEN: native-menu population phase count exceeded its declared limit."
+    }
+
+    $phases = [Collections.Generic.List[object]]::new()
+    try {
+        for ($phaseIndex = 1; $phaseIndex -le $phaseCount; $phaseIndex++) {
+            $phaseResult = Invoke-NativeMenuLua -Context $Context -LuaCode @"
+local sampler = rawget(_G, '__sd_native_menu_population_sampler')
+if sampler == nil then error('population sampler was not initialized') end
+local phase = (sampler.phases or {})[$phaseIndex]
+if phase == nil then error('population sampler phase is absent') end
+return table.concat({
+  '{"first_seen_milliseconds":',
+    tostring(phase.first_seen_milliseconds or 0),
+  ',"last_seen_milliseconds":',
+    tostring(phase.last_seen_milliseconds or 0),
+  ',"observations":', tostring(phase.observations or 0),
+  ',"payload_encoding":"structural-element-arrays-v1"',
+  ',"payload":', phase.payload_json, '}'
+})
+"@
+            try {
+                $phases.Add(($phaseResult.Text | ConvertFrom-Json))
+            } catch {
+                throw (
+                    "BROKEN: native-menu population sampler phase " +
+                    "$phaseIndex returned invalid JSON."
+                )
+            }
+        }
+    } finally {
+        Invoke-NativeMenuLua -Context $Context -LuaCode @'
+local sampler = rawget(_G, '__sd_native_menu_population_sampler')
+if sampler ~= nil then
+  sampler.by_structure = {}
+  sampler.phases = {}
+end
+return 'population-sampler-released'
+'@ | Out-Null
+    }
+
+    return [pscustomobject]@{
+        sample_count = [int]$metadata.sample_count
+        overflow = $false
+        error = ""
+        structural_phases = @($phases)
+    }
 }
 
 function Invoke-NativeMenuSettlementClassifier {

@@ -667,17 +667,24 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
     )
     _require_regex(
         support,
+        r"\$script:NativeMenuPopulationPhaseLimit\s*=\s*4096.*?"
         r"function Initialize-NativeMenuPopulationSampler.*?"
         r"sd\.events\.on\('runtime\.tick', function\(event\).*?"
         r"table\.sort\(structural_elements, function\(left, right\).*?"
         r"left_order < right_order.*?"
         r"tostring\(left\.id or ''\) < tostring\(right\.id or ''\).*?"
-        r"if #state\.phases >= 128 then.*?"
+        r"if #state\.phases >= "
+        r"\$script:NativeMenuPopulationPhaseLimit then.*?"
         r"function Stop-NativeMenuPopulationSampler.*?"
-        r"payload_encoding.*?structural-element-arrays-v1.*?"
-        r"observed no destination phase",
-        "the transition recorder no longer captures bounded, canonical, "
-        "runtime-tick population phases or fails closed when none are runnable",
+        r"phase_count.*?"
+        r"observed no destination phase.*?"
+        r"for \(\$phaseIndex = 1; "
+        r"\$phaseIndex -le \$phaseCount; \$phaseIndex\+\+\).*?"
+        r"Invoke-NativeMenuLua -Context \$Context.*?"
+        r"payload_encoding.*?structural-element-arrays-v1",
+        "the transition recorder no longer captures bounded, canonical "
+        "runtime-tick population phases, retrieves each phase below the Lua "
+        "pipe payload ceiling, or fails closed when none are runnable",
     )
     _require_regex(
         transition_recorder,
