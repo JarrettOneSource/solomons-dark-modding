@@ -95,11 +95,28 @@ try {
     }
 }
 
-$primaryIdsJson = ConvertTo-Json `
-    -InputObject @($primary.layout.animated_element_ids) `
-    -Compress
+$primaryIds = @($primary.layout.animated_element_ids | ForEach-Object { [string]$_ })
+$confirmationIds = @(
+    $observation.layout.animated_element_ids | ForEach-Object { [string]$_ }
+)
+foreach ($labelAndIds in @(
+    [pscustomobject]@{ Label = "primary"; Ids = $primaryIds },
+    [pscustomobject]@{ Label = "confirmation"; Ids = $confirmationIds }
+)) {
+    $duplicates = @(
+        $labelAndIds.Ids | Group-Object | Where-Object Count -gt 1 |
+            ForEach-Object Name
+    )
+    if ($duplicates.Count -ne 0) {
+        throw (
+            "STOP: $($labelAndIds.Label) animated ID set is ambiguous: " +
+            ($duplicates -join ", ")
+        )
+    }
+}
+$primaryIdsJson = ConvertTo-Json -InputObject @($primaryIds | Sort-Object) -Compress
 $confirmationIdsJson = ConvertTo-Json `
-    -InputObject @($observation.layout.animated_element_ids) `
+    -InputObject @($confirmationIds | Sort-Object) `
     -Compress
 if ($primaryIdsJson -cne $confirmationIdsJson) {
     throw (

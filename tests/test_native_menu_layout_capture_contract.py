@@ -185,6 +185,16 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             "settlement must carry the measured animated ID set",
         )
         self.assertIn(
+            "table.sort(structural_elements",
+            support,
+            "settlement structure must canonicalize instance-arbitrary list order",
+        )
+        self.assertIn(
+            "return tostring(left.id or '') < tostring(right.id or '')",
+            support,
+            "canonical structure must break equal draw-order ties by native id",
+        )
+        self.assertIn(
             "[double]$frameGeometry[$coordinate] -ne",
             support,
             "same-call frame geometry must compare values, not JSON formatting",

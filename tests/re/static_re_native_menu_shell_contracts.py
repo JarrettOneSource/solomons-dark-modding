@@ -636,6 +636,16 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
     )
     _require_regex(
         support,
+        r"local structural_elements\s*=\s*\{\}.*?"
+        r"table\.sort\(structural_elements, function\(left, right\).*?"
+        r"left_order < right_order.*?"
+        r"tostring\(left\.id or ''\) < tostring\(right\.id or ''\).*?"
+        r"structure\[#structure \+ 1\]\s*=\s*core\(element\)",
+        "the live Settlement v2.1 probe no longer canonicalizes only its "
+        "structural hash by draw_order then element id",
+    )
+    _require_regex(
+        support,
         r"function Test-NativeMenuFrameMatchesSettlement.*?"
         r"foreach \(\$geometryName in @\(\"rect\", \"unclipped_rect\"\)\).*?"
         r"\$expectedGeometry\.Count -ne 4.*?"
@@ -768,9 +778,14 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
         importer,
         r"py\.exe -3 \$classifierPath find\s+`\s*"
         r"--input \$inputPath\s+`\s*--output \$outputPath.*?"
+        r"settlement_spec\s*=\s*"
+        r"\[string\]\$Classification\.settlement_spec.*?"
+        r"structural_element_order\s*=\s*\(.*?"
+        r"\[string\]\$Classification\.structural_element_order.*?"
         r"consecutive_structural_samples.*?structural_sha256",
         "native-loader/loading import no longer reclassifies the complete raw "
-        "sample stream under Settlement v2",
+        "sample stream or carry Settlement v2.1 canonical ordering into its "
+        "fixture header",
     )
     for surface, source in (
         ("native_loader", loader_capture),
@@ -804,7 +819,7 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
 
     return (
         "standalone, transition, native-loader, and loading-screen capture paths "
-        "apply Settlement v2, confirm animation from a fresh exact process, and "
+        "apply Settlement v2.1, confirm animation from a fresh exact process, and "
         "derive commit/tree/exact-binary provenance without operator overrides"
     )
 
@@ -849,22 +864,114 @@ def test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired() -> str:
     _require_regex(
         classifier,
         r"def assert_confirmation_matches\(.*?"
-        r"if primary_ids != confirmation_ids:.*?"
+        r"if set\(primary_ids\) != set\(confirmation_ids\):.*?"
         r"animated ID confirmation mismatch",
         "fresh-instance confirmation no longer requires exactly equal measured "
         "animated ID sets",
     )
     confirmation_body = classifier.partition(
         "def assert_confirmation_matches("
-    )[2].partition("\ndef _read_json(")[0]
+    )[2].partition("\ndef assert_canonical_structure_matches(")[0]
     if not confirmation_body or "structural_layout_bytes" in confirmation_body:
         raise StaticReTestFailure(
             "fresh-instance confirmation widened ATC's animated-ID-set rule "
             "into an undeclared cross-instance structural-equality rule"
         )
+    _require_regex(
+        classifier,
+        r"def _canonical_element_key\(.*?"
+        r"return float\(draw_order\), element_id.*?"
+        r"def canonical_structural_layout\(.*?"
+        r"result\[\"elements\"\]\s*=\s*_canonical_elements\(elements\).*?"
+        r"def structural_layout_bytes\(.*?canonical_structural_layout\(",
+        "Settlement v2.1 cross-instance comparison no longer sorts elements "
+        "by draw_order then native element id",
+    )
+    _require_regex(
+        classifier,
+        r"def _assert_non_geometry_stable\(.*?"
+        r"if set\(order\) != set\(anchor_order\):.*?"
+        r"element membership varied .*?within the settled window",
+        "Settlement v2.1 again treats instance-arbitrary raw list position as "
+        "structural state",
+    )
     return (
-        "Settlement v2 classification, guardrails, fixture shaping, and fresh-"
-        "instance animated-ID confirmation are behavior-tested by the CI unit module"
+        "Settlement v2.1 classification, guardrails, canonical structural "
+        "ordering, fixture shaping, and fresh-instance animated-ID confirmation "
+        "are behavior-tested by the CI unit module"
+    )
+
+
+def test_native_menu_landed_population_override_is_fail_closed() -> str:
+    assert_module_runs_in_ci("test_native_menu_settlement_v2")
+    classifier = _read("tools/native_menu_settlement_v2.py")
+    attacher = _read("tools/attach_native_menu_landed_override.py")
+    promoter = _read("tools/promote_native_menu_recapture.py")
+
+    _require_regex(
+        classifier,
+        r"def build_population_phase_override\(.*?"
+        r"assert_canonical_structure_matches\(primary_layout, confirmation_layout\).*?"
+        r"differences\s*=\s*structural_differences\(.*?"
+        r"if landed_generation == settled_generation:.*?"
+        r"landed and settled generations do not differ",
+        "Settlement v2.1 landed override no longer requires a generation change "
+        "and canonical second-instance structural agreement",
+    )
+    _require_regex(
+        classifier,
+        r"if difference\[\"kind\"\] == \"settled_only_element\":.*?"
+        r"is not a vanishing population member.*?"
+        r"_landed_difference_in_settled_payload.*?"
+        r"landed population override rejected:.*?is present.*?settled window.*?"
+        r"if not primary_witnesses or not confirmation_witnesses:.*?"
+        r"lacks two-instance population",
+        "Settlement v2.1 landed override no longer rejects settled members or "
+        "requires every old value in both population traces and neither settled window",
+    )
+    _require_regex(
+        attacher,
+        r"landed_path\s*=\s*\(.*?primary_path\.name.*?"
+        r"build_population_phase_override\(.*?"
+        r"header\[\"landed_population_override\"\]\s*=\s*override",
+        "the landed override attacher no longer derives its old/new proof from "
+        "the uniquely named landed fixture and two raw traces",
+    )
+    forbidden_override_options = (
+        "--landed-generation",
+        "--settled-generation",
+        "--landed-element-count",
+        "--settled-element-count",
+        "--structural-differences",
+        "--base-commit-sha",
+        "--game-executable-sha256",
+        "--loader-dll-sha256",
+    )
+    smuggled = [value for value in forbidden_override_options if value in attacher]
+    if smuggled:
+        raise StaticReTestFailure(
+            "the landed override attacher accepts operator-supplied proof or "
+            f"provenance values: {smuggled}"
+        )
+    _require_regex(
+        promoter,
+        r"def validate_population_override\(.*?"
+        r"build_population_phase_override\(",
+        "menu promotion no longer re-derives a declared Settlement v2.1 "
+        "override from its raw evidence",
+    )
+    _require_regex(
+        promoter,
+        r"if structural_bit_match:.*?"
+        r"landed_population_override.*?matching landed .*?structure.*?"
+        r"else:\s*override\s*=\s*validate_population_override\(",
+        "menu promotion can bypass or falsely declare the Settlement v2.1 "
+        "landed population override",
+    )
+    return (
+        "Settlement v2.1 landed overrides are machine-derived from two exact "
+        "population traces, require canonical structural agreement and a "
+        "generation change, and reject any difference surviving settlement"
     )
 
 
@@ -888,6 +995,16 @@ def _animated_ids_for_layout(
 def _assert_settlement_v2_layout(
     layout: dict[str, Any], settlement: dict[str, Any], witness: str
 ) -> list[str]:
+    if settlement.get("settlement_spec") != "2.1":
+        raise StaticReTestFailure(
+            f"{witness} does not identify the Settlement v2.1 discipline"
+        )
+    if settlement.get("structural_element_order") != (
+        "draw_order_then_element_id"
+    ):
+        raise StaticReTestFailure(
+            f"{witness} makes raw element-list position structural"
+        )
     elements = layout.get("elements")
     if not isinstance(elements, list) or not elements:
         raise StaticReTestFailure(
@@ -1089,7 +1206,7 @@ def _assert_animation_confirmation(
             "second-capture structural hash"
         )
     if confirmation.get("animated_element_ids_sha256") != hashlib.sha256(
-        canonical_bytes(animated_ids)
+        canonical_bytes(sorted(animated_ids))
     ).hexdigest():
         raise StaticReTestFailure(
             f"{witness} animation confirmation records a false animated-ID hash"
@@ -1103,6 +1220,194 @@ def _assert_animation_confirmation(
         raise StaticReTestFailure(
             f"{witness} lost its evidence-bundle confirmation provenance"
         )
+
+
+def _assert_landed_population_override(
+    header: dict[str, Any], layout: dict[str, Any], witness: str
+) -> bool:
+    override = header.get("landed_population_override")
+    if override is None:
+        return False
+    if not isinstance(override, dict):
+        raise StaticReTestFailure(
+            f"{witness} landed population override is not an object"
+        )
+    if override.get("rule") != (
+        "Settlement v2.1 landed population-phase override"
+    ):
+        raise StaticReTestFailure(
+            f"{witness} does not name the narrow Settlement v2.1 override rule"
+        )
+    if override.get("canonical_order") != "draw_order_then_element_id":
+        raise StaticReTestFailure(
+            f"{witness} override makes raw element-list position contractual"
+        )
+    elements = layout.get("elements")
+    if not isinstance(elements, list) or not elements:
+        raise StaticReTestFailure(
+            f"{witness} override did not reach a settled element census"
+        )
+    settled_generation = layout.get("generation")
+    if override.get("settled_generation") != settled_generation:
+        raise StaticReTestFailure(
+            f"{witness} override records a false settled generation"
+        )
+    if override.get("landed_generation") == settled_generation:
+        raise StaticReTestFailure(
+            f"{witness} override did not supersede a different landed generation"
+        )
+    if override.get("settled_element_count") != len(elements):
+        raise StaticReTestFailure(
+            f"{witness} override records a false settled element census"
+        )
+    animated_ids = _animated_ids_for_layout(layout, witness)
+    structural_sha = hashlib.sha256(
+        structural_layout_bytes(layout, animated_ids)
+    ).hexdigest()
+    if override.get("canonical_structural_sha256") != structural_sha:
+        raise StaticReTestFailure(
+            f"{witness} override records a false canonical settled structure"
+        )
+    if override.get("confirmation_canonical_structural_sha256") != structural_sha:
+        raise StaticReTestFailure(
+            f"{witness} override lacks second-instance canonical structural agreement"
+        )
+
+    differences = override.get("structural_differences")
+    if not isinstance(differences, list) or not differences:
+        raise StaticReTestFailure(
+            f"{witness} override enumerates no landed structural difference"
+        )
+    identities = [
+        (
+            difference.get("kind"),
+            difference.get("element_id"),
+            difference.get("field"),
+        )
+        for difference in differences
+        if isinstance(difference, dict)
+    ]
+    if len(identities) != len(differences):
+        raise StaticReTestFailure(
+            f"{witness} override contains a non-object structural difference"
+        )
+    if len(identities) != len(set(identities)):
+        raise StaticReTestFailure(
+            f"{witness} override ambiguously repeats a structural difference"
+        )
+    generation_differences = [
+        difference
+        for difference in differences
+        if difference.get("kind") == "layout_field"
+        and difference.get("field") == "generation"
+    ]
+    if len(generation_differences) != 1:
+        raise StaticReTestFailure(
+            f"{witness} override does not enumerate exactly one generation change"
+        )
+    current_by_id = {element.get("id"): element for element in elements}
+    landed_only_count = 0
+    for difference in differences:
+        kind = difference.get("kind")
+        if kind == "settled_only_element":
+            raise StaticReTestFailure(
+                f"{witness} override admits a settled-only member instead of a "
+                "vanishing population member"
+            )
+        if difference.get("landed_value") == difference.get("settled_value"):
+            raise StaticReTestFailure(
+                f"{witness} override records a structural difference with equal values"
+            )
+        for instance_label in ("primary", "confirmation"):
+            indexes = difference.get(
+                f"{instance_label}_population_phase_indexes"
+            )
+            if not isinstance(indexes, list) or not indexes or not all(
+                isinstance(index, int) and index >= 0 for index in indexes
+            ):
+                raise StaticReTestFailure(
+                    f"{witness} difference {identities[differences.index(difference)]} "
+                    f"has no {instance_label} population witness"
+                )
+            if difference.get(
+                f"{instance_label}_settled_absence_samples", 0
+            ) < MINIMUM_SAMPLES:
+                raise StaticReTestFailure(
+                    f"{witness} difference {identities[differences.index(difference)]} "
+                    f"was not absent from the {instance_label} settled window"
+                )
+        if kind == "landed_only_element":
+            landed_only_count += 1
+            element_id = difference.get("element_id")
+            landed_value = difference.get("landed_value")
+            if (
+                element_id in current_by_id
+                or not isinstance(landed_value, dict)
+                or landed_value.get("id") != element_id
+                or difference.get("settled_value") is not None
+            ):
+                raise StaticReTestFailure(
+                    f"{witness} falsely identifies vanished member {element_id!r}"
+                )
+        elif kind == "element_field":
+            element_id = difference.get("element_id")
+            field = difference.get("field")
+            element = current_by_id.get(element_id)
+            if not isinstance(element, dict) or element.get(field) != difference.get(
+                "settled_value"
+            ):
+                raise StaticReTestFailure(
+                    f"{witness} records a false settled value for {element_id}.{field}"
+                )
+        elif kind == "layout_field":
+            field = difference.get("field")
+            if layout.get(field) != difference.get("settled_value"):
+                raise StaticReTestFailure(
+                    f"{witness} records a false settled layout field {field}"
+                )
+        else:
+            raise StaticReTestFailure(
+                f"{witness} override contains unknown difference kind {kind!r}"
+            )
+    if override.get("landed_element_count") != len(elements) + landed_only_count:
+        raise StaticReTestFailure(
+            f"{witness} override census does not equal settled plus vanished members"
+        )
+
+    for trace_label in ("primary_population_trace", "confirmation_population_trace"):
+        trace = override.get(trace_label)
+        if not isinstance(trace, dict):
+            raise StaticReTestFailure(
+                f"{witness} override has no {trace_label} provenance"
+            )
+        if (
+            not isinstance(trace.get("evidence_path"), str)
+            or not trace["evidence_path"]
+            or not re.fullmatch(r"[0-9a-f]{64}", str(trace.get("sha256")))
+            or trace.get("bytes", 0) <= 0
+            or not isinstance(trace.get("edge_id"), str)
+            or not trace["edge_id"]
+            or trace.get("side") != "destination"
+        ):
+            raise StaticReTestFailure(
+                f"{witness} override lost exact {trace_label} evidence provenance"
+            )
+        counts = trace.get("element_count_trace")
+        generations = trace.get("generation_trace")
+        observations = trace.get("phase_observations")
+        if (
+            not isinstance(counts, list)
+            or not counts
+            or not isinstance(generations, list)
+            or len(generations) != len(counts)
+            or not isinstance(observations, list)
+            or len(observations) != len(counts)
+            or trace.get("settled_sample_count", 0) < MINIMUM_SAMPLES
+        ):
+            raise StaticReTestFailure(
+                f"{witness} override lost its measured {trace_label} phase trace"
+            )
+    return True
 
 
 def test_native_menu_settled_destinations_equal_standalones() -> str:
@@ -1148,6 +1453,7 @@ def test_native_menu_settled_destinations_equal_standalones() -> str:
     fixture_root = ROOT / "tests/fixtures/webgame"
 
     provenance_sources: list[dict[str, Any]] = []
+    override_fixtures: list[str] = []
     for entry in layout_entries:
         fixture = entry["fixture"]
         standalone = _json(f"tests/fixtures/webgame/{fixture}")
@@ -1184,7 +1490,15 @@ def test_native_menu_settled_destinations_equal_standalones() -> str:
             entry["layout"], header["settlement"], f"standalone {fixture}"
         )
         _assert_animation_confirmation(header, animated_ids, fixture)
+        if _assert_landed_population_override(header, entry["layout"], fixture):
+            override_fixtures.append(fixture)
         provenance_sources.append(header["source"])
+
+    if "menu-layouts/create-element.json" not in override_fixtures:
+        raise StaticReTestFailure(
+            "settled menu override sweep did not reach the accepted transient "
+            "create-element standalone witness"
+        )
 
     for edge in edges:
         edge_id = edge["id"]
@@ -1215,7 +1529,7 @@ def test_native_menu_settled_destinations_equal_standalones() -> str:
         standalone_ids = _animated_ids_for_layout(
             standalone_layout, f"standalone {destination_fixture}"
         )
-        if after_ids != standalone_ids:
+        if set(after_ids) != set(standalone_ids):
             raise StaticReTestFailure(
                 f"{edge_id} settled destination animated ID set does not equal "
                 f"{destination_fixture}"

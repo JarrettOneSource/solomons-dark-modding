@@ -14,6 +14,7 @@ from typing import Any
 from native_menu_settlement_v2 import (
     SettlementV2Error,
     assert_confirmation_matches,
+    build_population_phase_override,
     canonical_bytes,
     structural_layout_bytes,
     validate_declared_settlement,
@@ -120,7 +121,7 @@ def validate_settlement_fixture(
     evidence_root: Path,
     fixture_path: Path,
     fixture: dict[str, Any],
-) -> Path:
+) -> tuple[Path, dict[str, Any]]:
     if fixture.get("schema") != "solomon-dark-native-menu-layout-v2":
         raise PromotionError(f"{fixture_path} does not use the Settlement v2 schema")
     header = fixture.get("header")
@@ -130,6 +131,14 @@ def validate_settlement_fixture(
     settlement = header.get("settlement")
     if not isinstance(settlement, dict):
         raise PromotionError(f"{fixture_path} has no Settlement v2 measurement")
+    if settlement.get("settlement_spec") != "2.1":
+        raise PromotionError(f"{fixture_path} does not identify Settlement v2.1")
+    if settlement.get("structural_element_order") != (
+        "draw_order_then_element_id"
+    ):
+        raise PromotionError(
+            f"{fixture_path} makes raw element-list position structural"
+        )
     ids = animated_ids(layout)
     if settlement.get("animated_element_ids") != ids:
         raise PromotionError(f"{fixture_path} settlement animated ids disagree with its layout")
@@ -193,7 +202,7 @@ def validate_settlement_fixture(
             f"{fixture_path} confirmation records a false second-capture "
             "structural hash"
         )
-    expected_ids_sha = hashlib.sha256(canonical_bytes(ids)).hexdigest()
+    expected_ids_sha = hashlib.sha256(canonical_bytes(sorted(ids))).hexdigest()
     if confirmation.get("animated_element_ids_sha256") != expected_ids_sha:
         raise PromotionError(f"{fixture_path} confirmation animated-id hash is false")
     if confirmation.get("instance") == header.get("instance"):
@@ -202,7 +211,126 @@ def validate_settlement_fixture(
         raise PromotionError(f"{fixture_path} confirmation reused the primary process")
     if confirmation.get("source") != header.get("source"):
         raise PromotionError(f"{fixture_path} confirmation used different provenance")
-    return raw_path
+    return raw_path, confirmation_layout
+
+
+def resolve_population_trace(
+    evidence_root: Path,
+    reference: dict[str, Any],
+    expected_layout: dict[str, Any],
+    expected_source: dict[str, Any],
+    label: str,
+) -> dict[str, Any]:
+    evidence_path = reference.get("evidence_path")
+    if not isinstance(evidence_path, str) or not evidence_path:
+        raise PromotionError(f"{label} has no exact population evidence path")
+    root = evidence_root.resolve()
+    path = (root / evidence_path).resolve()
+    if not path.is_relative_to(root) or not path.is_file():
+        raise PromotionError(f"{label} population evidence escapes or is absent")
+    if path.stat().st_size != reference.get("bytes"):
+        raise PromotionError(f"{label} population evidence byte count is false")
+    if file_sha256(path) != reference.get("sha256"):
+        raise PromotionError(f"{label} population evidence hash is false")
+    if reference.get("side") != "destination":
+        raise PromotionError(f"{label} population proof is not a destination trace")
+    navigation = read_json(path)
+    if navigation.get("schema") != "solomon-dark-native-menu-navigation-v2":
+        raise PromotionError(f"{label} population evidence is not navigation data")
+    edge_id = reference.get("edge_id")
+    matches = [
+        edge for edge in navigation.get("edges", []) if edge.get("id") == edge_id
+    ]
+    if len(matches) != 1:
+        raise PromotionError(
+            f"{label} population edge {edge_id!r} is absent or ambiguous"
+        )
+    edge = matches[0]
+    if edge.get("header", {}).get("source") != expected_source:
+        raise PromotionError(f"{label} population evidence changed provenance")
+    after = edge.get("after")
+    if not isinstance(after, dict) or not isinstance(after.get("layout"), dict):
+        raise PromotionError(f"{label} population edge has no destination layout")
+    if structural_layout_bytes(after["layout"]) != structural_layout_bytes(
+        expected_layout
+    ):
+        raise PromotionError(
+            f"{label} population destination does not canonically match standalone"
+        )
+    trace = after.get("settlement_trace")
+    if not isinstance(trace, dict):
+        raise PromotionError(f"{label} population edge has no settlement trace")
+    return trace
+
+
+def validate_population_override(
+    evidence_root: Path,
+    fixture_path: Path,
+    header: dict[str, Any],
+    landed_layout: dict[str, Any],
+    candidate_layout: dict[str, Any],
+    confirmation_layout: dict[str, Any],
+) -> dict[str, Any]:
+    declared = header.get("landed_population_override")
+    if not isinstance(declared, dict):
+        raise PromotionError(
+            f"STOP: standalone {fixture_path.name} differs from landed structure "
+            "without a Settlement v2.1 population-phase override"
+        )
+    primary_reference = declared.get("primary_population_trace")
+    confirmation_reference = declared.get("confirmation_population_trace")
+    if not isinstance(primary_reference, dict) or not isinstance(
+        confirmation_reference, dict
+    ):
+        raise PromotionError(
+            f"{fixture_path} population override has no two trace references"
+        )
+    primary_trace = resolve_population_trace(
+        evidence_root,
+        primary_reference,
+        candidate_layout,
+        header["source"],
+        f"{fixture_path}.primary",
+    )
+    confirmation_source = header["animation_confirmation"]["source"]
+    confirmation_trace = resolve_population_trace(
+        evidence_root,
+        confirmation_reference,
+        confirmation_layout,
+        confirmation_source,
+        f"{fixture_path}.confirmation",
+    )
+    try:
+        expected = build_population_phase_override(
+            landed_layout,
+            candidate_layout,
+            confirmation_layout,
+            primary_trace,
+            confirmation_trace,
+        )
+    except SettlementV2Error as error:
+        raise PromotionError(f"{fixture_path}: {error}") from error
+    reference_keys = {"evidence_path", "sha256", "bytes", "edge_id", "side"}
+    expected["primary_population_trace"] = {
+        **{
+            key: primary_reference.get(key)
+            for key in reference_keys
+        },
+        **expected["primary_population_trace"],
+    }
+    expected["confirmation_population_trace"] = {
+        **{
+            key: confirmation_reference.get(key)
+            for key in reference_keys
+        },
+        **expected["confirmation_population_trace"],
+    }
+    if canonical_bytes(declared) != canonical_bytes(expected):
+        raise PromotionError(
+            f"{fixture_path} records a landed override that was not derived "
+            "exactly from both population traces"
+        )
+    return expected
 
 
 def endpoint_source_signature(endpoint: dict[str, Any]) -> dict[str, Any]:
@@ -299,29 +427,44 @@ def validate_and_promote(
         for entry in landed_golden["layouts"]
     }
     standalone_results: list[dict[str, Any]] = []
+    override_by_layout: dict[str, dict[str, Any]] = {}
     for name in sorted(layout_names):
         candidate_fixture = read_json(candidate_layouts[name])
         landed_entry = landed_by_name[name]
-        validate_settlement_fixture(
+        _, confirmation_layout = validate_settlement_fixture(
             evidence_root,
             candidate_layouts[name],
             candidate_fixture,
         )
         candidate_layout = candidate_fixture["layout"]
         candidate_ids = animated_ids(candidate_layout)
-        if not structurally_matches(
+        structural_bit_match = structurally_matches(
             candidate_layout,
             landed_entry["layout"],
             candidate_ids,
-        ):
-            raise PromotionError(
-                f"STOP: standalone {name} differs from its landed structural payload "
-                "outside measured animated geometry"
+        )
+        override = None
+        if structural_bit_match:
+            if "landed_population_override" in candidate_fixture["header"]:
+                raise PromotionError(
+                    f"{name} declares a population override despite matching landed "
+                    "structure"
+                )
+        else:
+            override = validate_population_override(
+                evidence_root,
+                candidate_layouts[name],
+                candidate_fixture["header"],
+                landed_entry["layout"],
+                candidate_layout,
+                confirmation_layout,
             )
+            override_by_layout[name] = override
         standalone_results.append(
             {
                 "layout": name,
-                "structural_bit_match": True,
+                "structural_bit_match": structural_bit_match,
+                "landed_population_override": override,
                 "animated_element_ids": candidate_ids,
                 "animated_geometry": animated_geometry_report(
                     candidate_layout,
@@ -365,40 +508,68 @@ def validate_and_promote(
             *candidate_golden["transition_endpoint_layouts"],
         )
     }
+    candidate_layout_by_name = {
+        Path(entry["fixture"]).name: entry["layout"]
+        for entry in candidate_golden["layouts"]
+    }
     destination_changes: list[dict[str, Any]] = []
+    source_overrides: list[dict[str, Any]] = []
     for edge in candidate_edges:
         edge_id = edge["id"]
         landed = old_edges[edge_id]
-        if endpoint_source_signature(edge["before"]) != endpoint_source_signature(
-            landed["before"]
-        ):
-            raise PromotionError(
-                f"STOP: transition source {edge_id} does not bit-match the landed "
-                "structural endpoint generation/elements/method payload"
-            )
         before_layout = edge["before"].get("layout")
         if not isinstance(before_layout, dict):
             raise PromotionError(f"STOP: transition source {edge_id} has no v2 layout")
         before_ids = animated_ids(before_layout)
-        if not before_ids:
-            if edge["before"].get("frame_sha256") != landed["before"].get(
-                "frame_sha256"
-            ):
-                raise PromotionError(
-                    f"STOP: non-animated transition source {edge_id} did not "
-                    "bit-match the landed frame"
-                )
-        else:
-            source_matches = [
+        source_signature_match = endpoint_source_signature(
+            edge["before"]
+        ) == endpoint_source_signature(landed["before"])
+        if not source_signature_match:
+            override_matches = [
                 name
-                for name, entry in landed_by_name.items()
-                if structurally_matches(before_layout, entry["layout"], before_ids)
-            ]
-            if len(source_matches) != 1:
-                raise PromotionError(
-                    f"STOP: animated transition source {edge_id} has "
-                    f"{len(source_matches)} landed structural matches: {source_matches}"
+                for name in override_by_layout
+                if set(before_ids)
+                == set(animated_ids(candidate_layout_by_name[name]))
+                and structurally_matches(
+                    before_layout,
+                    candidate_layout_by_name[name],
+                    before_ids,
                 )
+            ]
+            if len(override_matches) != 1:
+                raise PromotionError(
+                    f"STOP: transition source {edge_id} does not bit-match its "
+                    "landed endpoint and has no unique approved standalone "
+                    f"override: {override_matches}"
+                )
+            source_overrides.append(
+                {
+                    "edge": edge_id,
+                    "standalone": override_matches[0],
+                    "old": endpoint_source_signature(landed["before"]),
+                    "new": endpoint_source_signature(edge["before"]),
+                }
+            )
+        else:
+            if not before_ids:
+                if edge["before"].get("frame_sha256") != landed["before"].get(
+                    "frame_sha256"
+                ):
+                    raise PromotionError(
+                        f"STOP: non-animated transition source {edge_id} did not "
+                        "bit-match the landed frame"
+                    )
+            else:
+                source_matches = [
+                    name
+                    for name, entry in landed_by_name.items()
+                    if structurally_matches(before_layout, entry["layout"], before_ids)
+                ]
+                if len(source_matches) != 1:
+                    raise PromotionError(
+                        f"STOP: animated transition source {edge_id} has "
+                        f"{len(source_matches)} landed structural matches: {source_matches}"
+                    )
         fixture_name = edge.get("destination_layout_fixture")
         if fixture_name not in candidate_standalones:
             raise PromotionError(
@@ -408,7 +579,7 @@ def validate_and_promote(
         standalone_layout = candidate_standalones[fixture_name]["layout"]
         destination_ids = animated_ids(destination_layout)
         standalone_ids = animated_ids(standalone_layout)
-        if destination_ids != standalone_ids:
+        if set(destination_ids) != set(standalone_ids):
             raise PromotionError(
                 f"STOP: transition destination {edge_id} animated IDs "
                 f"{destination_ids} do not equal {fixture_name} IDs {standalone_ids}"
@@ -500,7 +671,13 @@ def validate_and_promote(
         "hub_settle_latency_milliseconds": hub_fixture["header"]["settlement"][
             "settle_latency_milliseconds"
         ],
-        "transition_sources_structurally_bit_match": len(candidate_edges),
+        "transition_sources_structurally_bit_match_landed": (
+            len(candidate_edges) - len(source_overrides)
+        ),
+        "transition_sources_structurally_match_accepted_truth": len(
+            candidate_edges
+        ),
+        "transition_source_overrides": source_overrides,
         "transition_destinations_structurally_match_standalones": len(candidate_edges),
         "destination_changes": destination_changes,
         "promoted_files": [str(destination) for _, destination in promotion_pairs],

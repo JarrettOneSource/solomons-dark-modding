@@ -261,7 +261,11 @@ function ConvertTo-SettlementSummaryV2 {
     param([Parameter(Mandatory = $true)][object]$Classification)
 
     return [ordered]@{
+        settlement_spec = [string]$Classification.settlement_spec
         criterion = [string]$Classification.criterion
+        structural_element_order = (
+            [string]$Classification.structural_element_order
+        )
         settle_latency_milliseconds = (
             [long]$Classification.settle_latency_milliseconds
         )

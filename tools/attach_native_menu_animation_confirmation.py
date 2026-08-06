@@ -119,7 +119,7 @@ def attach(primary_path: Path, confirmation_path: Path, evidence_path: Path) -> 
         "source": confirmation_header["source"],
         "confirmation_structural_sha256": confirmation_structural_sha,
         "animated_element_ids_sha256": hashlib.sha256(
-            canonical_bytes(ids)
+            canonical_bytes(sorted(ids))
         ).hexdigest(),
     }
     write_atomically(primary_path, primary)

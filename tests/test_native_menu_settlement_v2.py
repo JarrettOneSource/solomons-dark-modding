@@ -6,6 +6,7 @@ import unittest
 from tools.native_menu_settlement_v2 import (
     SettlementV2Error,
     assert_confirmation_matches,
+    build_population_phase_override,
     classify_window,
     find_settled_window,
     structural_layout_bytes,
@@ -59,6 +60,55 @@ def _samples(*, animated_count: int = 1) -> list[dict[str, object]]:
             }
         )
     return result
+
+
+def _reordered_samples() -> list[dict[str, object]]:
+    samples = _samples()
+    for sample in samples:
+        sample["payload"]["elements"] = list(  # type: ignore[index]
+            reversed(sample["payload"]["elements"])  # type: ignore[index]
+        )
+    return samples
+
+
+def _population_override_inputs() -> tuple[
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+]:
+    primary_samples = _samples()
+    confirmation_samples = _reordered_samples()
+    primary_layout = classify_window(primary_samples)["layout"]
+    confirmation_layout = classify_window(confirmation_samples)["layout"]
+    landed = copy.deepcopy(primary_samples[0]["payload"])
+    landed["generation"] = 6
+    landed["elements"].append(_element(99))  # type: ignore[index]
+    primary_population = copy.deepcopy(landed)
+    confirmation_population = copy.deepcopy(landed)
+    confirmation_population["elements"] = list(  # type: ignore[index]
+        reversed(confirmation_population["elements"])  # type: ignore[index]
+    )
+    primary_trace = {
+        "structural_phases": [
+            {"payload": primary_population, "observations": 1},
+        ],
+        "settled_window_samples": primary_samples,
+    }
+    confirmation_trace = {
+        "structural_phases": [
+            {"payload": confirmation_population, "observations": 1},
+        ],
+        "settled_window_samples": confirmation_samples,
+    }
+    return (
+        landed,
+        primary_layout,
+        confirmation_layout,
+        primary_trace,
+        confirmation_trace,
+    )
 
 
 class NativeMenuSettlementV2Tests(unittest.TestCase):
@@ -129,11 +179,112 @@ class NativeMenuSettlementV2Tests(unittest.TestCase):
             assert_confirmation_matches(primary, confirmation)
 
     def test_fresh_confirmation_does_not_widen_beyond_animated_ids(self) -> None:
-        primary = classify_window(_samples())["layout"]
+        primary = classify_window(_samples(animated_count=2))["layout"]
         confirmation = copy.deepcopy(primary)
         confirmation["elements"] = list(reversed(confirmation["elements"]))
+        confirmation["animated_element_ids"] = list(
+            reversed(confirmation["animated_element_ids"])
+        )
 
         assert_confirmation_matches(primary, confirmation)
+
+    def test_settlement_ignores_only_raw_element_list_position(self) -> None:
+        samples = _samples()
+        for index, sample in enumerate(samples):
+            if index % 2:
+                sample["payload"]["elements"] = list(  # type: ignore[index]
+                    reversed(sample["payload"]["elements"])  # type: ignore[index]
+                )
+
+        classified = classify_window(samples)
+
+        self.assertEqual(classified["element_count"], 10)
+        self.assertEqual(classified["layout"]["elements"][0]["id"], "screen.art.item_0.1")
+
+    def test_cross_instance_structure_uses_draw_order_then_id(self) -> None:
+        primary = classify_window(_samples())["layout"]
+        confirmation = classify_window(_reordered_samples())["layout"]
+
+        self.assertNotEqual(primary["elements"], confirmation["elements"])
+        self.assertEqual(
+            structural_layout_bytes(primary),
+            structural_layout_bytes(confirmation),
+        )
+
+    def test_population_phase_override_is_derived_from_two_traces(self) -> None:
+        override = build_population_phase_override(*_population_override_inputs())
+
+        self.assertEqual(
+            override["canonical_order"],
+            "draw_order_then_element_id",
+        )
+        self.assertEqual(override["landed_generation"], 6)
+        self.assertEqual(override["settled_generation"], 7)
+        self.assertEqual(override["landed_element_count"], 11)
+        self.assertEqual(override["settled_element_count"], 10)
+        differences = override["structural_differences"]
+        self.assertEqual(
+            [(value["kind"], value.get("element_id")) for value in differences],
+            [("layout_field", None), ("landed_only_element", "screen.art.item_99.1")],
+        )
+        for difference in differences:
+            self.assertEqual(difference["primary_population_phase_indexes"], [0])
+            self.assertEqual(
+                difference["confirmation_population_phase_indexes"],
+                [0],
+            )
+            self.assertEqual(difference["primary_settled_absence_samples"], 40)
+            self.assertEqual(
+                difference["confirmation_settled_absence_samples"],
+                40,
+            )
+
+    def test_population_override_requires_second_instance_agreement(self) -> None:
+        inputs = list(_population_override_inputs())
+        confirmation = copy.deepcopy(inputs[2])
+        confirmation["elements"][1]["text"] = "different"
+        inputs[2] = confirmation
+
+        with self.assertRaisesRegex(
+            SettlementV2Error,
+            "landed population override requires second-instance canonical "
+            "structural agreement",
+        ):
+            build_population_phase_override(*inputs)
+
+    def test_population_override_rejects_member_in_settled_window(self) -> None:
+        inputs = list(_population_override_inputs())
+        primary_trace = copy.deepcopy(inputs[3])
+        primary_trace["settled_window_samples"][0]["payload"]["elements"].append(
+            _element(99)
+        )
+        inputs[3] = primary_trace
+
+        with self.assertRaisesRegex(
+            SettlementV2Error,
+            "landed population override rejected: differing member "
+            "'screen.art.item_99.1' is present in a settled window",
+        ):
+            build_population_phase_override(*inputs)
+
+    def test_population_override_requires_both_population_traces(self) -> None:
+        inputs = list(_population_override_inputs())
+        confirmation_trace = copy.deepcopy(inputs[4])
+        confirmation_trace["structural_phases"][0]["payload"]["elements"] = [
+            element
+            for element in confirmation_trace["structural_phases"][0]["payload"][
+                "elements"
+            ]
+            if element["id"] != "screen.art.item_99.1"
+        ]
+        inputs[4] = confirmation_trace
+
+        with self.assertRaisesRegex(
+            SettlementV2Error,
+            "landed population override lacks two-instance population proof "
+            "for differing member 'screen.art.item_99.1'",
+        ):
+            build_population_phase_override(*inputs)
 
     def test_structural_comparison_ignores_only_measured_animation(self) -> None:
         candidate = classify_window(_samples())["layout"]

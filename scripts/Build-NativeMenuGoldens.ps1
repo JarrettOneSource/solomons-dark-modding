@@ -59,6 +59,22 @@ function Get-NativeMenuStructuralSummary {
     }
 }
 
+function ConvertTo-NativeMenuIdSetJson {
+    param([Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Values)
+
+    $ids = @($Values | ForEach-Object { [string]$_ })
+    $duplicates = @(
+        $ids | Group-Object | Where-Object Count -gt 1 | ForEach-Object Name
+    )
+    if ($duplicates.Count -ne 0) {
+        throw (
+            "Animated element ID set is ambiguous: " +
+            ($duplicates -join ", ")
+        )
+    }
+    return ConvertTo-Json -InputObject @($ids | Sort-Object) -Compress
+}
+
 function ConvertTo-GoldenEndpoint {
     param([Parameter(Mandatory = $true)][object]$Observation)
 
@@ -142,6 +158,9 @@ foreach ($file in $layoutFiles) {
         [string]$source.source_tree_sha -notmatch '^[0-9a-f]{40}$' -or
         [string]$source.game_executable_sha256 -notmatch '^[0-9a-f]{64}$' -or
         [string]$source.loader_dll_sha256 -notmatch '^[0-9a-f]{64}$' -or
+        [string]$settlement.settlement_spec -cne "2.1" -or
+        [string]$settlement.structural_element_order -cne
+            "draw_order_then_element_id" -or
         [int]$settlement.consecutive_structural_samples -lt 40 -or
         [int]$settlement.animated_id_set_sample_count -lt 40 -or
         [int]$settlement.stable_span_milliseconds -lt 2000 -or
@@ -156,11 +175,11 @@ foreach ($file in $layoutFiles) {
     if (
         [string]$fixtureStructural.structural_sha256 -ne
             [string]$settlement.structural_sha256 -or
-        (ConvertTo-Json -InputObject @(
+        (ConvertTo-NativeMenuIdSetJson @(
             $fixtureStructural.animated_element_ids
-        ) -Compress) -cne (ConvertTo-Json -InputObject @(
+        )) -cne (ConvertTo-NativeMenuIdSetJson @(
             $fixture.layout.animated_element_ids
-        ) -Compress)
+        ))
     ) {
         throw (
             "Settlement v2 header does not describe the structural layout " +
@@ -257,6 +276,9 @@ foreach ($file in $transitionLayoutFiles) {
         [string]$source.source_tree_sha -notmatch '^[0-9a-f]{40}$' -or
         [string]$source.game_executable_sha256 -notmatch '^[0-9a-f]{64}$' -or
         [string]$source.loader_dll_sha256 -notmatch '^[0-9a-f]{64}$' -or
+        [string]$settlement.settlement_spec -cne "2.1" -or
+        [string]$settlement.structural_element_order -cne
+            "draw_order_then_element_id" -or
         [int]$settlement.consecutive_structural_samples -lt 40 -or
         [int]$settlement.animated_id_set_sample_count -lt 40 -or
         [int]$settlement.stable_span_milliseconds -lt 2000 -or
@@ -446,10 +468,16 @@ foreach ($edgeId in $edgeIds) {
         [string]$edgeSource.source_tree_sha -notmatch '^[0-9a-f]{40}$' -or
         [string]$edgeSource.game_executable_sha256 -notmatch '^[0-9a-f]{64}$' -or
         [string]$edgeSource.loader_dll_sha256 -notmatch '^[0-9a-f]{64}$' -or
+        [string]$edgeSettlement.source.settlement_spec -cne "2.1" -or
+        [string]$edgeSettlement.source.structural_element_order -cne
+            "draw_order_then_element_id" -or
         [int]$edgeSettlement.source.consecutive_structural_samples -lt 40 -or
         [int]$edgeSettlement.source.animated_id_set_sample_count -lt 40 -or
         [int]$edgeSettlement.source.stable_span_milliseconds -lt 2000 -or
         [double]$edgeSettlement.source.animated_fraction -gt 0.30 -or
+        [string]$edgeSettlement.destination.settlement_spec -cne "2.1" -or
+        [string]$edgeSettlement.destination.structural_element_order -cne
+            "draw_order_then_element_id" -or
         [int]$edgeSettlement.destination.consecutive_structural_samples -lt 40 -or
         [int]$edgeSettlement.destination.animated_id_set_sample_count -lt 40 -or
         [int]$edgeSettlement.destination.stable_span_milliseconds -lt 2000 -or
@@ -476,12 +504,10 @@ foreach ($edgeId in $edgeIds) {
         -Layout $recorded.after.layout
     $standaloneStructural = Get-NativeMenuStructuralSummary `
         -Layout $layoutFixtureById[$destinationLayoutId].layout
-    $destinationAnimatedJson = ConvertTo-Json `
-        -InputObject @($destinationStructural.animated_element_ids) `
-        -Compress
-    $standaloneAnimatedJson = ConvertTo-Json `
-        -InputObject @($standaloneStructural.animated_element_ids) `
-        -Compress
+    $destinationAnimatedJson = ConvertTo-NativeMenuIdSetJson `
+        @($destinationStructural.animated_element_ids)
+    $standaloneAnimatedJson = ConvertTo-NativeMenuIdSetJson `
+        @($standaloneStructural.animated_element_ids)
     if ($destinationAnimatedJson -cne $standaloneAnimatedJson) {
         throw (
             "STOP: settled navigation destination '$edgeId' classified " +
@@ -565,9 +591,10 @@ $golden = [ordered]@{
         gap = "G11"
         generated_from_live_capture_at_utc = $latestCapture.ToString("o")
         capture_method = (
-            "Settlement v2 structural native UI capture, measured animated " +
+            "Settlement v2.1 structural native UI capture, measured animated " +
             "geometry anchors/envelopes, native Sprite/text hooks, live D3D9 " +
-            "frames, exact-process input, and fresh-instance animation confirmation"
+            "frames, exact-process input, canonical draw-order/id comparison, " +
+            "and fresh-instance animation confirmation"
         )
         raw_recording = [ordered]@{
             evidence_filename = $navigationItem.Name

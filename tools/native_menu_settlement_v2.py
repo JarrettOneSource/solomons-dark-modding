@@ -81,6 +81,25 @@ def _elements_by_id(
     return order, indexed
 
 
+def _canonical_element_key(element: dict[str, Any]) -> tuple[float, str]:
+    element_id = _element_id(element)
+    draw_order = element.get("draw_order")
+    if (
+        isinstance(draw_order, bool)
+        or not isinstance(draw_order, (int, float))
+        or not math.isfinite(float(draw_order))
+    ):
+        raise SettlementV2Error(
+            "canonical structural comparison: element "
+            f"'{element_id}' has no finite numeric draw_order"
+        )
+    return float(draw_order), element_id
+
+
+def _canonical_elements(elements: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(elements, key=_canonical_element_key)
+
+
 def _non_geometry_element(element: dict[str, Any]) -> dict[str, Any]:
     return {
         key: copy.deepcopy(value)
@@ -96,10 +115,10 @@ def non_geometry_payload(payload: dict[str, Any]) -> dict[str, Any]:
         for key, value in payload.items()
         if key not in _NON_STRUCTURAL_LAYOUT_FIELDS and key != "elements"
     }
-    order, indexed = _elements_by_id(payload)
-    result["elements"] = [
-        _non_geometry_element(indexed[element_id]) for element_id in order
-    ]
+    _, indexed = _elements_by_id(payload)
+    result["elements"] = _canonical_elements(
+        _non_geometry_element(element) for element in indexed.values()
+    )
     return result
 
 
@@ -190,10 +209,10 @@ def _assert_non_geometry_stable(
 ) -> None:
     anchor_order, anchor_elements = _elements_by_id(anchor_payload)
     order, elements = _elements_by_id(payload)
-    if order != anchor_order:
+    if set(order) != set(anchor_order):
         raise SettlementV2Error(
-            "structural settlement guardrail: element membership or ordering "
-            "varied within the settled window"
+            "structural settlement guardrail: element membership varied "
+            "within the settled window"
         )
 
     anchor_top = {
@@ -268,11 +287,120 @@ def structural_layout(
     return result
 
 
+def canonical_structural_layout(
+    layout: dict[str, Any],
+    animated_element_ids: Iterable[str] | None = None,
+) -> dict[str, Any]:
+    """Return structural data with only element-list order canonicalized.
+
+    Native hook traversal order is instance-arbitrary.  The fixture retains
+    its captured order, while comparisons sort by the explicit draw contract
+    and use the native element id only as a deterministic tie-breaker.
+    """
+    result = structural_layout(layout, animated_element_ids)
+    elements = result.get("elements")
+    if not isinstance(elements, list):
+        raise SettlementV2Error(
+            "canonical structural comparison: layout has no element list"
+        )
+    result["elements"] = _canonical_elements(elements)
+    return result
+
+
 def structural_layout_bytes(
     layout: dict[str, Any],
     animated_element_ids: Iterable[str] | None = None,
 ) -> bytes:
-    return canonical_bytes(structural_layout(layout, animated_element_ids))
+    return canonical_bytes(
+        canonical_structural_layout(layout, animated_element_ids)
+    )
+
+
+def canonical_structural_sha256(
+    layout: dict[str, Any],
+    animated_element_ids: Iterable[str] | None = None,
+) -> str:
+    return hashlib.sha256(
+        structural_layout_bytes(layout, animated_element_ids)
+    ).hexdigest()
+
+
+def structural_differences(
+    landed_layout: dict[str, Any],
+    settled_layout: dict[str, Any],
+    animated_element_ids: Iterable[str],
+) -> list[dict[str, Any]]:
+    """Enumerate every structural field/member changed from landed truth."""
+    landed = structural_layout(landed_layout, animated_element_ids)
+    settled = structural_layout(settled_layout, animated_element_ids)
+    landed_elements = landed.pop("elements")
+    settled_elements = settled.pop("elements")
+    differences: list[dict[str, Any]] = []
+
+    for field in sorted(set(landed) | set(settled)):
+        landed_value = landed.get(field)
+        settled_value = settled.get(field)
+        if field not in landed or field not in settled or landed_value != settled_value:
+            differences.append(
+                {
+                    "kind": "layout_field",
+                    "field": field,
+                    "landed_value": copy.deepcopy(landed_value),
+                    "settled_value": copy.deepcopy(settled_value),
+                }
+            )
+
+    landed_by_id = {_element_id(element): element for element in landed_elements}
+    settled_by_id = {_element_id(element): element for element in settled_elements}
+    landed_ids = set(landed_by_id)
+    settled_ids = set(settled_by_id)
+    for element in _canonical_elements(
+        landed_by_id[element_id] for element_id in landed_ids - settled_ids
+    ):
+        differences.append(
+            {
+                "kind": "landed_only_element",
+                "element_id": _element_id(element),
+                "landed_value": copy.deepcopy(element),
+                "settled_value": None,
+            }
+        )
+    for element in _canonical_elements(
+        settled_by_id[element_id] for element_id in settled_ids - landed_ids
+    ):
+        differences.append(
+            {
+                "kind": "settled_only_element",
+                "element_id": _element_id(element),
+                "landed_value": None,
+                "settled_value": copy.deepcopy(element),
+            }
+        )
+    shared_ids = landed_ids & settled_ids
+    for element in _canonical_elements(
+        settled_by_id[element_id] for element_id in shared_ids
+    ):
+        element_id = _element_id(element)
+        landed_element = landed_by_id[element_id]
+        settled_element = settled_by_id[element_id]
+        for field in sorted(set(landed_element) | set(settled_element)):
+            landed_value = landed_element.get(field)
+            settled_value = settled_element.get(field)
+            if (
+                field not in landed_element
+                or field not in settled_element
+                or landed_value != settled_value
+            ):
+                differences.append(
+                    {
+                        "kind": "element_field",
+                        "element_id": element_id,
+                        "field": field,
+                        "landed_value": copy.deepcopy(landed_value),
+                        "settled_value": copy.deepcopy(settled_value),
+                    }
+                )
+    return differences
 
 
 def _shape_layout(
@@ -381,11 +509,13 @@ def classify_window(
     )
     structural = structural_layout(layout, animated_ids)
     return {
+        "settlement_spec": "2.1",
         "criterion": (
             "at least 40 consecutive samples spanning at least 2 seconds with "
             "byte-identical structural payloads and an identical measured "
             "animated element-id set"
         ),
+        "structural_element_order": "draw_order_then_element_id",
         "settle_latency_milliseconds": elapsed[-1],
         "stable_span_milliseconds": stable_span,
         "consecutive_structural_samples": len(samples),
@@ -484,11 +614,284 @@ def assert_confirmation_matches(
 ) -> None:
     primary_ids = primary_layout.get("animated_element_ids", [])
     confirmation_ids = confirmation_layout.get("animated_element_ids", [])
-    if primary_ids != confirmation_ids:
+    if (
+        not isinstance(primary_ids, list)
+        or not isinstance(confirmation_ids, list)
+        or not all(isinstance(value, str) and value for value in primary_ids)
+        or not all(isinstance(value, str) and value for value in confirmation_ids)
+        or len(primary_ids) != len(set(primary_ids))
+        or len(confirmation_ids) != len(set(confirmation_ids))
+    ):
+        raise SettlementV2Error(
+            "animated ID confirmation mismatch: fresh captures need unique "
+            "non-empty animated element ids"
+        )
+    if set(primary_ids) != set(confirmation_ids):
         raise SettlementV2Error(
             "animated ID confirmation mismatch: fresh captures classified "
             f"primary={primary_ids} confirmation={confirmation_ids}"
         )
+
+
+def assert_canonical_structure_matches(
+    primary_layout: dict[str, Any], confirmation_layout: dict[str, Any]
+) -> None:
+    """Require v2.1 cross-instance structure without contracting list position."""
+    try:
+        assert_confirmation_matches(primary_layout, confirmation_layout)
+        primary_ids = primary_layout.get("animated_element_ids", [])
+        confirmation_ids = confirmation_layout.get("animated_element_ids", [])
+        primary_bytes = structural_layout_bytes(primary_layout, primary_ids)
+        confirmation_bytes = structural_layout_bytes(
+            confirmation_layout,
+            confirmation_ids,
+        )
+    except SettlementV2Error as error:
+        raise SettlementV2Error(
+            "landed population override requires second-instance canonical "
+            f"structural agreement: {error}"
+        ) from error
+    if primary_bytes != confirmation_bytes:
+        raise SettlementV2Error(
+            "landed population override requires second-instance canonical "
+            "structural agreement"
+        )
+
+
+def _trace_payloads(
+    trace: dict[str, Any], label: str
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    phases = trace.get("structural_phases")
+    samples = trace.get("settled_window_samples")
+    if not isinstance(phases, list) or not phases:
+        raise SettlementV2Error(
+            f"landed population override: {label} trace has no population phases"
+        )
+    if not isinstance(samples, list) or len(samples) < MINIMUM_SAMPLES:
+        raise SettlementV2Error(
+            f"landed population override: {label} trace has no 40-sample "
+            "settled window"
+        )
+    phase_payloads: list[dict[str, Any]] = []
+    for index, phase in enumerate(phases):
+        payload = phase.get("payload") if isinstance(phase, dict) else None
+        if not isinstance(payload, dict):
+            raise SettlementV2Error(
+                "landed population override: "
+                f"{label} population phase {index} has no payload"
+            )
+        phase_payloads.append(payload)
+    settled_payloads: list[dict[str, Any]] = []
+    for index, sample in enumerate(samples):
+        payload = sample.get("payload") if isinstance(sample, dict) else None
+        if not isinstance(payload, dict):
+            raise SettlementV2Error(
+                "landed population override: "
+                f"{label} settled sample {index} has no payload"
+            )
+        settled_payloads.append(payload)
+    return phase_payloads, settled_payloads
+
+
+def _element_for_id(
+    payload: dict[str, Any], element_id: str
+) -> dict[str, Any] | None:
+    _, indexed = _elements_by_id(payload)
+    return indexed.get(element_id)
+
+
+def _population_witness_indexes(
+    difference: dict[str, Any], phase_payloads: list[dict[str, Any]]
+) -> list[int]:
+    kind = difference["kind"]
+    landed_value = difference.get("landed_value")
+    witnesses: list[int] = []
+    for index, payload in enumerate(phase_payloads):
+        if kind == "layout_field":
+            field = difference["field"]
+            matched = field in payload and payload[field] == landed_value
+        elif kind == "landed_only_element":
+            matched = _element_for_id(payload, difference["element_id"]) is not None
+        elif kind == "element_field":
+            element = _element_for_id(payload, difference["element_id"])
+            field = difference["field"]
+            matched = (
+                isinstance(element, dict)
+                and field in element
+                and element[field] == landed_value
+            )
+        else:
+            matched = False
+        if matched:
+            witnesses.append(index)
+    return witnesses
+
+
+def _landed_difference_in_settled_payload(
+    difference: dict[str, Any], payload: dict[str, Any]
+) -> bool:
+    kind = difference["kind"]
+    landed_value = difference.get("landed_value")
+    if kind == "layout_field":
+        field = difference["field"]
+        return field in payload and payload[field] == landed_value
+    if kind == "landed_only_element":
+        return _element_for_id(payload, difference["element_id"]) is not None
+    if kind == "element_field":
+        element = _element_for_id(payload, difference["element_id"])
+        field = difference["field"]
+        return (
+            isinstance(element, dict)
+            and field in element
+            and element[field] == landed_value
+        )
+    return False
+
+
+def _difference_label(difference: dict[str, Any]) -> str:
+    if difference["kind"] == "layout_field":
+        return f"layout field '{difference['field']}'"
+    if difference["kind"] == "element_field":
+        return (
+            f"element '{difference['element_id']}' field "
+            f"'{difference['field']}'"
+        )
+    return f"differing member '{difference['element_id']}'"
+
+
+def _population_trace_summary(
+    trace: dict[str, Any], phase_payloads: list[dict[str, Any]]
+) -> dict[str, Any]:
+    phases = trace["structural_phases"]
+    return {
+        "element_count_trace": [
+            len(payload.get("elements", [])) for payload in phase_payloads
+        ],
+        "generation_trace": [payload.get("generation") for payload in phase_payloads],
+        "phase_observations": [
+            phase.get("observations") if isinstance(phase, dict) else None
+            for phase in phases
+        ],
+        "settled_sample_count": len(trace["settled_window_samples"]),
+    }
+
+
+def build_population_phase_override(
+    landed_layout: dict[str, Any],
+    primary_layout: dict[str, Any],
+    confirmation_layout: dict[str, Any],
+    primary_trace: dict[str, Any],
+    confirmation_trace: dict[str, Any],
+) -> dict[str, Any]:
+    """Derive and validate the narrow Settlement v2.1 landed override."""
+    assert_canonical_structure_matches(primary_layout, confirmation_layout)
+    primary_ids = primary_layout.get("animated_element_ids", [])
+    differences = structural_differences(
+        landed_layout,
+        primary_layout,
+        primary_ids,
+    )
+    if not differences:
+        raise SettlementV2Error(
+            "landed population override: candidate already matches landed structure"
+        )
+    landed_generation = landed_layout.get("generation")
+    settled_generation = primary_layout.get("generation")
+    if landed_generation == settled_generation:
+        raise SettlementV2Error(
+            "landed population override: landed and settled generations do not differ"
+        )
+    if not any(
+        difference["kind"] == "layout_field"
+        and difference["field"] == "generation"
+        for difference in differences
+    ):
+        raise SettlementV2Error(
+            "landed population override: generation mismatch was not enumerated"
+        )
+
+    primary_phases, primary_settled = _trace_payloads(
+        primary_trace,
+        "primary",
+    )
+    confirmation_phases, confirmation_settled = _trace_payloads(
+        confirmation_trace,
+        "confirmation",
+    )
+    proven_differences: list[dict[str, Any]] = []
+    for difference in differences:
+        if difference["kind"] == "settled_only_element":
+            raise SettlementV2Error(
+                "landed population override: settled-only member "
+                f"'{difference['element_id']}' is not a vanishing population member"
+            )
+        label = _difference_label(difference)
+        if any(
+            _landed_difference_in_settled_payload(difference, payload)
+            for payload in (*primary_settled, *confirmation_settled)
+        ):
+            raise SettlementV2Error(
+                f"landed population override rejected: {label} is present "
+                "in a settled window"
+            )
+        primary_witnesses = _population_witness_indexes(
+            difference,
+            primary_phases,
+        )
+        confirmation_witnesses = _population_witness_indexes(
+            difference,
+            confirmation_phases,
+        )
+        if not primary_witnesses or not confirmation_witnesses:
+            raise SettlementV2Error(
+                "landed population override lacks two-instance population "
+                f"proof for {label}"
+            )
+        proof = copy.deepcopy(difference)
+        proof["primary_population_phase_indexes"] = primary_witnesses
+        proof["confirmation_population_phase_indexes"] = confirmation_witnesses
+        proof["primary_settled_absence_samples"] = len(primary_settled)
+        proof["confirmation_settled_absence_samples"] = len(
+            confirmation_settled
+        )
+        proven_differences.append(proof)
+
+    validate_declared_settlement(
+        primary_layout,
+        primary_trace["settled_window_samples"],
+    )
+    validate_declared_settlement(
+        confirmation_layout,
+        confirmation_trace["settled_window_samples"],
+    )
+
+    primary_elements = primary_layout.get("elements", [])
+    landed_elements = landed_layout.get("elements", [])
+    return {
+        "rule": "Settlement v2.1 landed population-phase override",
+        "canonical_order": "draw_order_then_element_id",
+        "landed_generation": landed_generation,
+        "landed_element_count": len(landed_elements),
+        "settled_generation": settled_generation,
+        "settled_element_count": len(primary_elements),
+        "canonical_structural_sha256": canonical_structural_sha256(
+            primary_layout,
+            primary_ids,
+        ),
+        "confirmation_canonical_structural_sha256": canonical_structural_sha256(
+            confirmation_layout,
+            confirmation_layout.get("animated_element_ids", []),
+        ),
+        "structural_differences": proven_differences,
+        "primary_population_trace": _population_trace_summary(
+            primary_trace,
+            primary_phases,
+        ),
+        "confirmation_population_trace": _population_trace_summary(
+            confirmation_trace,
+            confirmation_phases,
+        ),
+    }
 
 
 def _read_json(path: Path) -> Any:

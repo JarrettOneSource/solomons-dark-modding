@@ -271,6 +271,20 @@ end
 local function boolean(value)
   return value and 'true' or 'false'
 end
+local function core(element)
+  return table.concat({
+    '{"id":', quote(element.id),
+    ',"kind":', quote(element.kind),
+    ',"text":', quote(element.text),
+    ',"action_id":', quote(element.action_id),
+    ',"art_id":', quote(element.art_id),
+    ',"font_id":', quote(element.font_id),
+    ',"text_style":', quote(element.text_style),
+    ',"visible":', boolean(element.visible),
+    ',"interactive":', boolean(element.interactive),
+    ',"draw_order":', tostring(element.draw_order or 0)
+  })
+end
 local semantic = sd.ui.get_snapshot()
 local snapshot = sd.ui.capture_current_layout([=[$ScreenId]=])
 if type(snapshot) ~= 'table' then
@@ -295,28 +309,28 @@ local structure = {
 for index, element in ipairs(snapshot.elements or {}) do
   if index > 1 then
     output[#output + 1] = ','
-    structure[#structure + 1] = ','
   end
-  local core = table.concat({
-    '{"id":', quote(element.id),
-    ',"kind":', quote(element.kind),
-    ',"text":', quote(element.text),
-    ',"action_id":', quote(element.action_id),
-    ',"art_id":', quote(element.art_id),
-    ',"font_id":', quote(element.font_id),
-    ',"text_style":', quote(element.text_style),
-    ',"visible":', boolean(element.visible),
-    ',"interactive":', boolean(element.interactive),
-    ',"draw_order":', tostring(element.draw_order or 0)
-  })
-  structure[#structure + 1] = core .. '}'
-  output[#output + 1] = core .. table.concat({
+  output[#output + 1] = core(element) .. table.concat({
     ',"rect":[', number(element.left), ',', number(element.top), ',',
       number(element.right), ',', number(element.bottom), ']',
     ',"unclipped_rect":[', number(element.unclipped_left), ',',
       number(element.unclipped_top), ',', number(element.unclipped_right),
       ',', number(element.unclipped_bottom), ']}'
   })
+end
+local structural_elements = {}
+for index, element in ipairs(snapshot.elements or {}) do
+  structural_elements[index] = element
+end
+table.sort(structural_elements, function(left, right)
+  local left_order = tonumber(left.draw_order) or 0
+  local right_order = tonumber(right.draw_order) or 0
+  if left_order ~= right_order then return left_order < right_order end
+  return tostring(left.id or '') < tostring(right.id or '')
+end)
+for index, element in ipairs(structural_elements) do
+  if index > 1 then structure[#structure + 1] = ',' end
+  structure[#structure + 1] = core(element) .. '}'
 end
 output[#output + 1] = ']}'
 structure[#structure + 1] = ']}'
@@ -495,7 +509,11 @@ function Wait-NativeMenuLayoutSettlement {
                 $structuralPhases.Add($structuralPhaseByHash[$phaseHash])
             }
             $summary = [ordered]@{
+                settlement_spec = [string]$classification.settlement_spec
                 criterion = [string]$classification.criterion
+                structural_element_order = (
+                    [string]$classification.structural_element_order
+                )
                 settle_latency_milliseconds = (
                     [long]$classification.settle_latency_milliseconds
                 )
