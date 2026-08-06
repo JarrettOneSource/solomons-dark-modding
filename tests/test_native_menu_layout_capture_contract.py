@@ -196,9 +196,9 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             "fixture provenance must carry the recorder-derived base commit",
         )
         self.assertIn(
-            "Get-FileHash -LiteralPath $stagedLoader",
+            "Get-FileHash -LiteralPath $injectedLoader",
             support,
-            "fixture provenance must hash the exact staged loader DLL",
+            "fixture provenance must hash the exact launcher-injected loader DLL",
         )
 
     def test_native_click_helper_is_pinned_to_the_exact_owned_stage(self) -> None:

@@ -127,14 +127,36 @@ function New-CaptureHeader {
         "runtime\instances\" + $Instance.ToLowerInvariant()
     )
     $nativeExecutable = Join-Path $instanceRoot "stage\SolomonDark.exe"
-    $stagedLoader = Join-Path $instanceRoot (
-        "stage\SolomonDarkModLoader.dll"
+    $injectedLoader = Join-Path $root (
+        "dist\launcher\SolomonDarkModLoader.dll"
     )
     if (-not (Test-Path -LiteralPath $nativeExecutable -PathType Leaf)) {
         throw "Exact staged game executable is missing for '$Instance'."
     }
-    if (-not (Test-Path -LiteralPath $stagedLoader -PathType Leaf)) {
-        throw "Exact staged loader DLL is missing for '$Instance'."
+    if (-not (Test-Path -LiteralPath $injectedLoader -PathType Leaf)) {
+        throw "Exact launcher-side loader DLL is missing for '$Instance'."
+    }
+    $gameExecutableSha256 = (
+        Get-FileHash -LiteralPath $nativeExecutable -Algorithm SHA256
+    ).Hash.ToLowerInvariant()
+    $loaderDllSha256 = (
+        Get-FileHash -LiteralPath $injectedLoader -Algorithm SHA256
+    ).Hash.ToLowerInvariant()
+    $compatibilityPath = Join-Path $instanceRoot (
+        "stage\.sdmod\multiplayer-compatibility.json"
+    )
+    $compatibility = Get-Content -LiteralPath $compatibilityPath -Raw |
+        ConvertFrom-Json
+    if (
+        [string]$compatibility.compatibility.gameExecutable.sha256 -ne
+            $gameExecutableSha256 -or
+        [string]$compatibility.compatibility.loader.sha256 -ne
+            $loaderDllSha256
+    ) {
+        throw (
+            "Staged compatibility receipt does not identify the exact game " +
+            "and launcher-side loader being imported."
+        )
     }
     $sourceJson = Get-Item -LiteralPath $SourceJsonPath
     return [ordered]@{
@@ -145,16 +167,8 @@ function New-CaptureHeader {
             base_commit_sha = $baseCommitSha
             source_tree_sha = $sourceTreeSha
             capture_tree = "exact committed tree at base_commit_sha"
-            game_executable_sha256 = (
-                Get-FileHash `
-                    -LiteralPath $nativeExecutable `
-                    -Algorithm SHA256
-            ).Hash.ToLowerInvariant()
-            loader_dll_sha256 = (
-                Get-FileHash `
-                    -LiteralPath $stagedLoader `
-                    -Algorithm SHA256
-            ).Hash.ToLowerInvariant()
+            game_executable_sha256 = $gameExecutableSha256
+            loader_dll_sha256 = $loaderDllSha256
         }
         recorded_live = $true
         captured_at_utc = $sourceJson.LastWriteTimeUtc.ToString("o")

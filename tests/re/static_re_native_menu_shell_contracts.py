@@ -657,19 +657,17 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
     _require_regex(
         support,
         r"expectedExecutable\s*=.*?stage\\SolomonDark\.exe.*?"
-        r"stagedLoader\s*=.*?stage\\SolomonDarkModLoader\.dll.*?"
-        r"game_executable_sha256\s*=\s*\(\s*Get-FileHash "
+        r"injectedLoader\s*=.*?dist\\launcher\\SolomonDarkModLoader\.dll.*?"
+        r"\$gameExecutableSha256\s*=\s*\(\s*Get-FileHash "
         r"-LiteralPath \$expectedExecutable.*?"
-        r"loader_dll_sha256\s*=\s*\(\s*Get-FileHash "
-        r"-LiteralPath \$stagedLoader",
+        r"\$loaderDllSha256\s*=\s*\(\s*Get-FileHash "
+        r"-LiteralPath \$injectedLoader.*?"
+        r"multiplayer-compatibility\.json.*?"
+        r"compatibility\.compatibility\.loader\.sha256\s+-ne\s*"
+        r"\$loaderDllSha256",
         "native-menu provenance no longer hashes the exact staged game and "
-        "loader binaries",
+        "launcher-injected loader or ties them to the stage receipt",
     )
-    if "dist\\launcher\\SolomonDarkModLoader.dll" in support:
-        raise StaticReTestFailure(
-            "native-menu provenance hashes a launcher build instead of the "
-            "exact staged loader"
-        )
     _require_regex(
         support,
         r"status\", \"--porcelain\", \"--untracked-files=no\".*?"
@@ -695,8 +693,12 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
         importer,
         r"\$baseCommitSha\s*=\s*Invoke-CaptureGit "
         r"@\(\"rev-parse\", \"HEAD\"\).*?"
-        r"game_executable_sha256\s*=.*?Get-FileHash.*?"
-        r"loader_dll_sha256\s*=.*?Get-FileHash",
+        r"\$gameExecutableSha256\s*=\s*\(\s*Get-FileHash "
+        r"-LiteralPath \$nativeExecutable.*?"
+        r"\$loaderDllSha256\s*=\s*\(\s*Get-FileHash "
+        r"-LiteralPath \$injectedLoader.*?"
+        r"compatibility\.compatibility\.loader\.sha256\s+-ne\s*"
+        r"\$loaderDllSha256",
         "special menu capture import no longer derives its own Git and binary "
         "provenance",
     )
