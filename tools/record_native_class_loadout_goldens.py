@@ -53,6 +53,7 @@ SETTLE_MIN_SECONDS = 2.0
 BOOK_ENTRY_COUNT = 83
 BOOK_ENTRY_STRIDE = 0x70
 BOOK_BYTE_COUNT = BOOK_ENTRY_COUNT * BOOK_ENTRY_STRIDE
+DYNAMIC_RUNTIME_STAT_FIELDS = ("meditation_recovery_ramp_ticks",)
 
 ELEMENTS: tuple[dict[str, Any], ...] = (
     {
@@ -1315,6 +1316,8 @@ def structural_payload(snapshot_value: Mapping[str, Any]) -> dict[str, Any]:
     value = json.loads(json.dumps(snapshot_value))
     value["observed"].pop("tick", None)
     value["observed"].pop("app_tick", None)
+    for field in DYNAMIC_RUNTIME_STAT_FIELDS:
+        value["stats"].pop(field, None)
     return value
 
 
@@ -1328,13 +1331,14 @@ def structural_digest(snapshot_value: Mapping[str, Any]) -> str:
 
 
 def class_state_digest(snapshot_value: Mapping[str, Any]) -> str:
+    normalized = structural_payload(snapshot_value)
     payload = {
-        "entity": snapshot_value["entity"],
-        "stats": snapshot_value["stats"],
-        "progression_book": snapshot_value["progression_book"],
-        "raw_regions": snapshot_value["raw_regions"],
-        "native_inventory": snapshot_value["native_inventory"],
-        "equipment": snapshot_value["participant"]["equipment"],
+        "entity": normalized["entity"],
+        "stats": normalized["stats"],
+        "progression_book": normalized["progression_book"],
+        "raw_regions": normalized["raw_regions"],
+        "native_inventory": normalized["native_inventory"],
+        "equipment": normalized["participant"]["equipment"],
     }
     return sha256_text(
         json.dumps(payload, sort_keys=True, separators=(",", ":"))
@@ -1400,6 +1404,10 @@ def capture_settled_snapshot(
             "tick": first["observed"]["tick"],
             "app_tick": first["observed"]["app_tick"],
             "structural_sha256": digest,
+            "dynamic_runtime_stats": {
+                field: first["stats"][field]
+                for field in DYNAMIC_RUNTIME_STAT_FIELDS
+            },
         }
     ]
     settle_started = time.monotonic()
@@ -1436,10 +1444,27 @@ def capture_settled_snapshot(
                 "tick": candidate["observed"]["tick"],
                 "app_tick": candidate["observed"]["app_tick"],
                 "structural_sha256": candidate_digest,
+                "dynamic_runtime_stats": {
+                    field: candidate["stats"][field]
+                    for field in DYNAMIC_RUNTIME_STAT_FIELDS
+                },
             }
         )
 
     settle_seconds = time.monotonic() - settle_started
+    dynamic_runtime_fields: dict[str, Any] = {}
+    for field in DYNAMIC_RUNTIME_STAT_FIELDS:
+        observed_values = [sample["dynamic_runtime_stats"][field] for sample in samples]
+        raw_values = [value["raw_u32"] for value in observed_values]
+        numeric_values = [value["value"] for value in observed_values]
+        dynamic_runtime_fields[field] = {
+            "classification": "runtime counter; retained at first tick but excluded from structural digest",
+            "first": observed_values[0],
+            "last": observed_values[-1],
+            "minimum_value": min(numeric_values),
+            "maximum_value": max(numeric_values),
+            "distinct_raw_u32": list(dict.fromkeys(raw_values)),
+        }
     result = {
         "first_complete_controllable_snapshot": first,
         "settle_gate": {
@@ -1452,6 +1477,7 @@ def capture_settled_snapshot(
             "first_app_tick": samples[0]["app_tick"],
             "last_app_tick": samples[-1]["app_tick"],
             "structural_sha256": digest,
+            "dynamic_runtime_fields": dynamic_runtime_fields,
             "samples": samples,
         },
     }
@@ -1851,7 +1877,8 @@ def main() -> int:
                 "minimum_span_seconds": SETTLE_MIN_SECONDS,
                 "structural_payload": (
                     "actor mapping, every stat, all 83 rows, raw regions, "
-                    "inventory, equipment, and participant-owned ledgers; ticks excluded"
+                    "inventory, equipment, and participant-owned ledgers; ticks and the "
+                    "named progression+0x88C runtime counter excluded"
                 ),
             },
         },
