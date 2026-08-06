@@ -1778,8 +1778,8 @@ RECORDED_CAPTURE_SHAS: dict[str, tuple[str, int]] = {
     # loadre class/loadout golden: one clean base in the fixture header.
     "c36f0a81721fa5d3dc2edda65f3347354974b2f0": ("commit", 1),
     # G5 audio dispatch golden: one clean capture commit/tree pair.
-    "4021ce6b30b29a2abad7cb59c7ef7ca3a582cdb7": ("commit", 1),
-    "93d87965abe1a273d70d7e4372e9b1dad8b80ade": ("tree", 1),
+    "508c5be780692c8e30a8c68d395b31d27f0866e8": ("commit", 1),
+    "0a0a49fedbf242c5be02760a71f4ff9468b4623f": ("tree", 1),
     # G1 movement and RNG goldens, and the tree that commit points at.
     "51d81ed3705468b2c96cdd5a072eb2e9b0f8db0b": ("commit", 2),
     "55ea6c0c646df739f3243a01d0cd35c4d6f9b786": ("tree", 2),
