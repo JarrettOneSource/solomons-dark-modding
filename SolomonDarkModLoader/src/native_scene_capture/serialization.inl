@@ -73,6 +73,161 @@ void WriteStringArray(
     stream << ']';
 }
 
+void WriteHexBytes(
+    std::ostream& stream,
+    const std::vector<std::uint8_t>& values) {
+    const auto flags = stream.flags();
+    const auto fill = stream.fill();
+    stream << '"' << std::hex << std::setfill('0');
+    for (const auto value : values) {
+        stream << std::setw(2) << static_cast<unsigned int>(value);
+    }
+    stream << '"';
+    stream.flags(flags);
+    stream.fill(fill);
+}
+
+void WritePlayerAnimationRecord(
+    std::ostream& stream,
+    const SDModPlayerState& player,
+    std::int32_t animation_duration_ticks,
+    std::uint32_t render_frame_state,
+    const PlayerFixedTickAnimationCapture* fixed_tick) {
+    stream << "{\"tick\":" << player.local_player_tick_count
+           << ",\"tick_observed_ms\":" << player.local_player_tick_observed_ms
+           << ",\"actor_address\":" << player.actor_address
+           << ",\"position\":[";
+    WriteFloat(stream, player.x);
+    stream << ',';
+    WriteFloat(stream, player.y);
+    stream << "],\"heading\":";
+    WriteFloat(stream, player.heading);
+    stream << ",\"hp\":";
+    WriteFloat(stream, player.hp);
+    stream << ",\"movement_intent\":[";
+    WriteFloat(stream, player.movement_intent_x);
+    stream << ',';
+    WriteFloat(stream, player.movement_intent_y);
+    stream << ']';
+    stream << ",\"anim_drive_state\":"
+           << static_cast<unsigned int>(player.anim_drive_state)
+           << ",\"animation_duration_ticks\":"
+           << animation_duration_ticks
+           << ",\"render_frame_state\":"
+           << render_frame_state
+           << ",\"resolved_animation_state_id\":"
+           << player.resolved_animation_state_id
+           << ",\"walk_cycle_primary\":";
+    WriteFloat(stream, player.walk_cycle_primary);
+    stream << ",\"walk_cycle_secondary\":";
+    WriteFloat(stream, player.walk_cycle_secondary);
+    stream << ",\"render_drive_stride\":";
+    WriteFloat(stream, player.render_drive_stride);
+    stream << ",\"render_advance_rate\":";
+    WriteFloat(stream, player.render_advance_rate);
+    stream << ",\"render_advance_phase\":";
+    WriteFloat(stream, player.render_advance_phase);
+    stream << ",\"render_selection_byte\":"
+           << static_cast<unsigned int>(player.render_selection_byte)
+           << ",\"render_weapon_type\":"
+           << static_cast<unsigned int>(player.render_weapon_type)
+           << ",\"render_variant_primary\":"
+           << static_cast<unsigned int>(player.render_variant_primary)
+           << ",\"render_variant_secondary\":"
+           << static_cast<unsigned int>(player.render_variant_secondary)
+           << ",\"render_variant_tertiary\":"
+           << static_cast<unsigned int>(player.render_variant_tertiary)
+           << ",\"render_overlay_phase\":";
+    WriteFloat(stream, player.render_drive_move_blend);
+    stream << ",\"magic_shield_absorb_remaining\":";
+    WriteFloat(stream, player.magic_shield_absorb_remaining);
+    stream << ",\"magic_shield_absorb_capacity\":";
+    WriteFloat(stream, player.magic_shield_absorb_capacity);
+    stream << ",\"magic_shield_hit_flash\":";
+    WriteFloat(stream, player.magic_shield_hit_flash);
+    if (fixed_tick != nullptr) {
+        stream << ",\"action_count\":" << fixed_tick->action_count
+               << ",\"action_id\":" << fixed_tick->action_id
+               << ",\"action_progress\":";
+        WriteFloat(stream, fixed_tick->action_progress);
+    }
+    stream << '}';
+}
+
+void WritePlayerAnimationCapture(
+    std::ostream& stream,
+    const SceneFrameCapture& frame) {
+    if (!frame.player_available) {
+        stream << "null";
+        return;
+    }
+    WritePlayerAnimationRecord(
+        stream,
+        frame.player,
+        frame.player_animation_duration_ticks,
+        frame.player_render_frame_state,
+        nullptr);
+}
+
+void WritePlayerFixedTickAnimationCaptures(
+    std::ostream& stream,
+    const SceneFrameCapture& frame) {
+    stream << '[';
+    for (std::size_t index = 0;
+         index < frame.player_fixed_tick_animation.size();
+         ++index) {
+        if (index != 0) {
+            stream << ',';
+        }
+        const auto& capture = frame.player_fixed_tick_animation[index];
+        WritePlayerAnimationRecord(
+            stream,
+            capture.player,
+            capture.animation_duration_ticks,
+            capture.render_frame_state,
+            &capture);
+    }
+    stream << ']';
+}
+
+void WriteActorAnimationCaptures(
+    std::ostream& stream,
+    const SceneFrameCapture& frame) {
+    stream << '[';
+    for (std::size_t index = 0; index < frame.actors.size(); ++index) {
+        if (index != 0) {
+            stream << ',';
+        }
+        const auto& capture = frame.actors[index];
+        stream << "{\"actor_address\":" << capture.actor.actor_address
+               << ",\"type_id\":" << capture.actor.object_type_id
+               << ",\"enemy_type\":" << capture.actor.enemy_type
+               << ",\"position\":[";
+        WriteFloat(stream, capture.actor.x);
+        stream << ',';
+        WriteFloat(stream, capture.actor.y);
+        stream << "],\"heading\":";
+        WriteFloat(stream, capture.heading);
+        stream << ",\"hp\":";
+        WriteFloat(stream, capture.actor.hp);
+        stream << ",\"dead\":"
+               << (capture.actor.dead ? "true" : "false")
+               << ",\"anim_drive_state\":"
+               << static_cast<unsigned int>(capture.actor.anim_drive_state)
+               << ",\"action_available\":"
+               << (capture.action_available ? "true" : "false")
+               << ",\"action_count\":" << capture.action_count
+               << ",\"action_id\":" << capture.action_id
+               << ",\"action_progress\":";
+        WriteFloat(stream, capture.action_progress);
+        stream << ",\"presentation_window_offset\":288,"
+               << "\"presentation_bytes\":";
+        WriteHexBytes(stream, capture.presentation_bytes);
+        stream << '}';
+    }
+    stream << ']';
+}
+
 void WriteSortCapture(std::ostream& stream, const SortCapture& sort) {
     if (!sort.present) {
         stream << "null";
@@ -147,7 +302,8 @@ void WriteDrawCapture(std::ostream& stream, const DrawCapture& draw) {
     if (draw.object_type == 0 && !draw.sort.present) {
         stream << "null";
     } else {
-        stream << "{\"type_id\":" << draw.object_type
+        stream << "{\"address\":" << draw.object_address
+               << ",\"type_id\":" << draw.object_type
                << ",\"x\":";
         WriteFloat(stream, draw.object_world_x);
         stream << ",\"y\":";
@@ -222,6 +378,15 @@ bool WriteNativeSceneCaptureFile(std::string* error_message) {
            << "\",\n"
            << "  \"label\": \"" << EscapeSceneJson(frame.label)
            << "\",\n"
+           << "  \"render_sequence_index\": " << frame.sequence_index
+           << ",\n  \"render_observed_ms\": " << frame.render_observed_ms
+           << ",\n  \"player_animation\": ";
+    WritePlayerAnimationCapture(stream, frame);
+    stream << ",\n  \"player_fixed_tick_animation\": ";
+    WritePlayerFixedTickAnimationCaptures(stream, frame);
+    stream << ",\n  \"tracked_enemy_animation\": ";
+    WriteActorAnimationCaptures(stream, frame);
+    stream << ",\n"
            << "  \"scene\": {\"kind\": \""
            << EscapeSceneJson(frame.scene_kind) << "\"},\n"
            << "  \"epsilon\": {\"screen_pixels\": 0.001, \"world_units\": 0.001, \"reason\": \"live float32/x87 submissions are serialized to 9 significant digits; 0.001 is below one native pixel and exceeds only representation noise\"},\n"

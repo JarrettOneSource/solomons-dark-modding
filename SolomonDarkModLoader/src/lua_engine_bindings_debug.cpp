@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cmath>
 #include <cstring>
 #include <iomanip>
 #include <limits>
@@ -203,6 +204,14 @@ void RegisterLuaDebugBindings(lua_State* state) {
         state,
         &LuaDebugQueueNativeSceneCapture,
         "queue_native_scene_capture");
+    RegisterFunction(
+        state,
+        &LuaDebugQueueNativeSceneCaptureSequence,
+        "queue_native_scene_capture_sequence");
+    RegisterFunction(
+        state,
+        &LuaDebugObserveNativeCastGlyphEmitter,
+        "observe_native_cast_glyph_emitter");
     RegisterFunction(
         state,
         &LuaDebugGetNativeSceneCaptureStatus,

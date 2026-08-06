@@ -196,6 +196,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
     }
 
     const auto actor_address = reinterpret_cast<uintptr_t>(self);
+    std::uint64_t local_simulation_tick = 0;
     ScopedNativeAudioAttribution native_audio_attribution(
         actor_address);
     uintptr_t gameplay_address_for_pump = 0;
@@ -204,7 +205,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         gameplay_address_for_pump != 0 &&
         TryResolvePlayerActorForSlot(gameplay_address_for_pump, 0, &local_actor_address) &&
         local_actor_address == actor_address) {
-        const auto simulation_tick_count = PublishLocalPlayerTickOwnership(
+        local_simulation_tick = PublishLocalPlayerTickOwnership(
             gameplay_address_for_pump,
             actor_address);
         MaybeArmLocalPlayerCastProbe(gameplay_address_for_pump, actor_address);
@@ -213,7 +214,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         PumpQueuedGameplayActions();
         const RuntimeTickContext lua_tick_context = {
             kGameplaySimulationTickIntervalMs,
-            simulation_tick_count,
+            local_simulation_tick,
             static_cast<std::uint64_t>(GetTickCount64()),
         };
         PumpLuaWorkOnGameplayThread(lua_tick_context);
@@ -1185,4 +1186,9 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
             static_cast<std::uint64_t>(::GetTickCount64()));
     }
     LogLocalPlayerAnimationProbe();
+    if (local_player_actor && local_simulation_tick != 0) {
+        NativeSceneCaptureObservePlayerFixedTick(
+            actor_address,
+            local_simulation_tick);
+    }
 }

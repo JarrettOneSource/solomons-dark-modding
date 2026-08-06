@@ -4,6 +4,7 @@
 #include "d3d9_end_scene_hook.h"
 #include "logger.h"
 #include "memory_access.h"
+#include "mod_loader.h"
 #include "x86_hook.h"
 
 #include <Windows.h>
@@ -38,6 +39,7 @@ constexpr const char* kCaptureDirectoryEnvironment =
     "SDMOD_NATIVE_SCENE_CAPTURE_DIRECTORY";
 constexpr const char* kInstanceEnvironment = "SDMOD_LUA_EXEC_PIPE_NAME";
 constexpr std::size_t kMaximumDrawsPerFrame = 32768;
+constexpr std::size_t kMaximumFixedTickAnimationSamples = 4096;
 constexpr std::size_t kNativeSpriteStride = 0xC4;
 constexpr std::size_t kNativeSpriteTextureHandleOffset = 0x08;
 constexpr std::size_t kNativeSpriteUvOffset = 0x4C;
@@ -55,6 +57,9 @@ constexpr std::size_t kObjectWorldXOffset = 0x18;
 constexpr std::size_t kObjectWorldYOffset = 0x1C;
 constexpr std::size_t kObjectSortBiasOffset = 0xA0;
 constexpr std::size_t kObjectLightingScalarOffset = 0xCC;
+constexpr std::size_t kActorHeadingOffset = 0x6C;
+constexpr std::size_t kAnimationWindowOffset = 0x120;
+constexpr std::size_t kMaximumAnimationWindowBytes = 0x190;
 constexpr std::size_t kRegionScaleOffset = 0x80;
 constexpr std::size_t kRegionWorldBoundsOffset = 0x8BBC;
 constexpr std::size_t kRegionPrimaryViewOffset = 0x8BCC;
@@ -158,9 +163,31 @@ struct DrawCapture {
     std::array<float, 16> submitted_matrix = {};
     std::array<float, 8> inverse_projected_world_quad = {};
     SortCapture sort;
+    uintptr_t object_address = 0;
     std::uint32_t object_type = 0;
     float object_world_x = 0.0f;
     float object_world_y = 0.0f;
+};
+
+struct ActorAnimationCapture {
+    SDModSceneActorState actor;
+    float heading = 0.0f;
+    bool action_available = false;
+    std::int32_t action_count = 0;
+    std::int32_t action_id = 0;
+    float action_progress = 0.0f;
+    std::vector<std::uint8_t> presentation_bytes;
+};
+
+struct PlayerFixedTickAnimationCapture {
+    std::uint64_t tick = 0;
+    std::uint64_t observed_ms = 0;
+    SDModPlayerState player;
+    std::int32_t animation_duration_ticks = 0;
+    std::uint32_t render_frame_state = 0;
+    std::int32_t action_count = 0;
+    std::int32_t action_id = 0;
+    float action_progress = 0.0f;
 };
 
 struct PendingSpriteDraw {
@@ -178,6 +205,16 @@ struct SceneFrameCapture {
     std::string scene_kind;
     std::string instance;
     uintptr_t region = 0;
+    std::uint32_t sequence_index = 0;
+    std::uint64_t render_observed_ms = 0;
+    bool player_available = false;
+    SDModPlayerState player;
+    std::int32_t player_animation_duration_ticks = 0;
+    std::uint32_t player_render_frame_state = 0;
+    std::vector<PlayerFixedTickAnimationCapture>
+        player_fixed_tick_animation;
+    bool actors_available = false;
+    std::vector<ActorAnimationCapture> actors;
     CameraCapture camera;
     std::vector<SortCapture> insertions;
     std::vector<uintptr_t> insertion_objects;
@@ -216,9 +253,12 @@ struct NativeSceneCaptureState {
     std::filesystem::path directory;
     std::string status = "unavailable";
     std::string pending_label;
+    std::string sequence_base_label;
     std::string active_label;
     std::string output_path;
     std::string error_message;
+    std::uint32_t requested_frame_count = 0;
+    std::uint32_t captured_frame_count = 0;
     uintptr_t runtime_image_base = 0;
     uintptr_t native_renderer_global = 0;
     std::size_t native_renderer_draw_state_offset = 0;
@@ -232,6 +272,8 @@ struct NativeSceneCaptureState {
     std::unordered_map<uintptr_t, std::vector<std::string>> art_by_address;
     std::unordered_map<std::string, std::vector<std::string>>
         art_by_signature;
+    std::vector<PlayerFixedTickAnimationCapture>
+        pending_player_fixed_tick_animation;
     SceneFrameCapture frame;
 };
 
@@ -262,6 +304,8 @@ constexpr std::array<const char*, 5> kFixedRegionNames = {
     "library",
     "office",
 };
+
+void FailActiveSceneCapture(std::string message);
 
 #include "native_scene_capture/atlas_resolver.inl"
 #include "native_scene_capture/observation.inl"

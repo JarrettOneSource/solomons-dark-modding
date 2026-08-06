@@ -108,6 +108,26 @@ void ShutdownNativeSceneCapture() {
 bool QueueNativeSceneCapture(
     std::string_view label,
     std::string* error_message) {
+    return QueueNativeSceneCaptureSequence(label, 1, error_message);
+}
+
+std::string NativeSceneSequenceLabel(
+    std::string_view base_label,
+    std::uint32_t frame_index,
+    std::uint32_t frame_count) {
+    if (frame_count == 1) {
+        return std::string(base_label);
+    }
+    std::ostringstream stream;
+    stream << base_label << "-frame-" << std::setw(4)
+           << std::setfill('0') << frame_index;
+    return stream.str();
+}
+
+bool QueueNativeSceneCaptureSequence(
+    std::string_view label,
+    std::uint32_t frame_count,
+    std::string* error_message) {
     if (error_message != nullptr) {
         error_message->clear();
     }
@@ -117,6 +137,11 @@ bool QueueNativeSceneCapture(
     if (!g_scene_capture.requested || !g_scene_capture.initialized) {
         *error_message =
             "native scene capture is unavailable; launch with SDMOD_NATIVE_SCENE_CAPTURE_DIRECTORY";
+        return false;
+    }
+    if (frame_count == 0 || frame_count > 512) {
+        *error_message =
+            "native scene capture sequence must request 1-512 render frames";
         return false;
     }
     if (g_scene_capture.status == "armed" ||
@@ -141,28 +166,33 @@ bool QueueNativeSceneCapture(
         return false;
     }
 
-    const auto output =
-        g_scene_capture.directory / (std::string(label) + ".json");
-    const auto temporary =
-        g_scene_capture.directory / (std::string(label) + ".json.tmp");
-    std::error_code exists_error;
-    const bool output_exists = std::filesystem::exists(output, exists_error);
-    if (exists_error) {
-        *error_message =
-            "native scene capture could not inspect its output path";
-        return false;
-    }
-    const bool temporary_exists =
-        std::filesystem::exists(temporary, exists_error);
-    if (exists_error) {
-        *error_message =
-            "native scene capture could not inspect its temporary path";
-        return false;
-    }
-    if (output_exists || temporary_exists) {
-        *error_message =
-            "native scene capture refuses to overwrite an existing output or temporary file";
-        return false;
+    for (std::uint32_t index = 0; index < frame_count; ++index) {
+        const auto frame_label = NativeSceneSequenceLabel(
+            label, index, frame_count);
+        const auto output =
+            g_scene_capture.directory / (frame_label + ".json");
+        const auto temporary =
+            g_scene_capture.directory / (frame_label + ".json.tmp");
+        std::error_code exists_error;
+        const bool output_exists =
+            std::filesystem::exists(output, exists_error);
+        if (exists_error) {
+            *error_message =
+                "native scene capture could not inspect a sequence output path";
+            return false;
+        }
+        const bool temporary_exists =
+            std::filesystem::exists(temporary, exists_error);
+        if (exists_error) {
+            *error_message =
+                "native scene capture could not inspect a sequence temporary path";
+            return false;
+        }
+        if (output_exists || temporary_exists) {
+            *error_message =
+                "native scene capture refuses to overwrite any sequence output or temporary file";
+            return false;
+        }
     }
 
     RebuildNativeSceneArtResolver();
@@ -173,7 +203,12 @@ bool QueueNativeSceneCapture(
         g_scene_capture.error_message = *error_message;
         return false;
     }
-    g_scene_capture.pending_label.assign(label.begin(), label.end());
+    g_scene_capture.sequence_base_label.assign(label.begin(), label.end());
+    g_scene_capture.requested_frame_count = frame_count;
+    g_scene_capture.captured_frame_count = 0;
+    g_scene_capture.pending_player_fixed_tick_animation.clear();
+    g_scene_capture.pending_label = NativeSceneSequenceLabel(
+        label, 0, frame_count);
     g_scene_capture.active_label.clear();
     g_scene_capture.output_path.clear();
     g_scene_capture.error_message.clear();
@@ -196,7 +231,74 @@ bool TryGetNativeSceneCaptureStatus(NativeSceneCaptureStatus* status) {
     status->error_message = g_scene_capture.error_message;
     status->draw_count = static_cast<std::uint32_t>(
         g_scene_capture.frame.draws.size());
+    status->requested_frame_count =
+        g_scene_capture.requested_frame_count;
+    status->captured_frame_count =
+        g_scene_capture.captured_frame_count;
     return true;
+}
+
+void NativeSceneCaptureObservePlayerFixedTick(
+    std::uintptr_t actor_address,
+    std::uint64_t simulation_tick) {
+    if (!g_scene_capture.initialized || actor_address == 0 ||
+        simulation_tick == 0 ||
+        (g_scene_capture.status != "armed" &&
+         g_scene_capture.status != "capturing")) {
+        return;
+    }
+    if (g_scene_capture.pending_player_fixed_tick_animation.size() >=
+        kMaximumFixedTickAnimationSamples) {
+        FailActiveSceneCapture(
+            "native scene capture fixed-tick animation history exceeded its 4096-sample bound");
+        return;
+    }
+
+    PlayerFixedTickAnimationCapture capture;
+    capture.tick = simulation_tick;
+    capture.observed_ms = GetTickCount64();
+    if (!TryGetPlayerState(&capture.player) ||
+        capture.player.actor_address != actor_address ||
+        !TryReadRuntimeField(
+            actor_address,
+            0x1BC,
+            &capture.animation_duration_ticks) ||
+        !TryReadRuntimeField(
+            actor_address,
+            0x22C,
+            &capture.render_frame_state) ||
+        !TryReadRuntimeField(
+            actor_address,
+            0xE4,
+            &capture.action_count)) {
+        FailActiveSceneCapture(
+            "native scene capture could not read the local player fixed-tick animation state");
+        return;
+    }
+    if (capture.action_count == 1) {
+        uintptr_t action_list = 0;
+        uintptr_t control = 0;
+        uintptr_t action = 0;
+        if (!TryReadRuntimeField(
+                actor_address, 0xF0, &action_list) ||
+            action_list == 0 ||
+            !ProcessMemory::Instance().TryReadValue(
+                action_list, &control) ||
+            control == 0 ||
+            !ProcessMemory::Instance().TryReadValue(control, &action) ||
+            action == 0 ||
+            !TryReadRuntimeField(action, 0x14, &capture.action_id) ||
+            !TryReadRuntimeField(
+                action, 0x30, &capture.action_progress)) {
+            FailActiveSceneCapture(
+                "native scene capture could not resolve the local player fixed-tick action");
+            return;
+        }
+    }
+    capture.player.local_player_tick_count = simulation_tick;
+    capture.player.local_player_tick_observed_ms = capture.observed_ms;
+    g_scene_capture.pending_player_fixed_tick_animation.push_back(
+        std::move(capture));
 }
 
 void NativeSceneCaptureBeginFrame(void* region, const char* scene_kind) {
@@ -224,9 +326,19 @@ void NativeSceneCaptureEndFrame(void* region) {
     } else {
         std::string write_error;
         if (WriteNativeSceneCaptureFile(&write_error)) {
-            g_scene_capture.status = "complete";
+            ++g_scene_capture.captured_frame_count;
             g_scene_capture.error_message.clear();
             g_scene_capture.frame_active = false;
+            if (g_scene_capture.captured_frame_count <
+                g_scene_capture.requested_frame_count) {
+                g_scene_capture.pending_label = NativeSceneSequenceLabel(
+                    g_scene_capture.sequence_base_label,
+                    g_scene_capture.captured_frame_count,
+                    g_scene_capture.requested_frame_count);
+                g_scene_capture.status = "armed";
+            } else {
+                g_scene_capture.status = "complete";
+            }
         } else {
             FailActiveSceneCapture(std::move(write_error));
         }

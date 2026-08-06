@@ -14,6 +14,8 @@ struct NativeSceneCaptureStatus {
     std::string output_path;
     std::string error_message;
     std::uint32_t draw_count = 0;
+    std::uint32_t requested_frame_count = 0;
+    std::uint32_t captured_frame_count = 0;
 };
 
 bool IsNativeSceneCaptureRequested();
@@ -22,7 +24,14 @@ void ShutdownNativeSceneCapture();
 bool QueueNativeSceneCapture(
     std::string_view label,
     std::string* error_message);
+bool QueueNativeSceneCaptureSequence(
+    std::string_view label,
+    std::uint32_t frame_count,
+    std::string* error_message);
 bool TryGetNativeSceneCaptureStatus(NativeSceneCaptureStatus* status);
+void NativeSceneCaptureObservePlayerFixedTick(
+    std::uintptr_t actor_address,
+    std::uint64_t simulation_tick);
 
 void NativeSceneCaptureBeginFrame(void* region, const char* scene_kind);
 void NativeSceneCaptureEndFrame(void* region);

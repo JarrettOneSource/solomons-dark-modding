@@ -511,17 +511,19 @@ bytes `+8`/`+0xC` of the list.
 
 `images/Clothes.bundle`, parsed with the record grammar already implemented in
 `tools/extract_bundles.py` (45-byte common header, `point_count` as `<I` at
-`+0x29`, then `point_count` × `<2f`), yields 3724 records. Exactly three runs
-carry two or more points, and **each is an exact multiple of 24**:
+`+0x29`, then `point_count` × `<2f`), yields 3724 records. The apparent first
+five-bank run crosses a native-array boundary; G4 recovered the consumers:
 
 | Records | Count | Banks | Points/record | Array |
 | --- | --- | --- | --- | --- |
-| `#460..#579` | 120 | 5 × 24 | 2 | — |
-| `#796..#867` | 72 | **3 × 24** | 2 | the `[g+0x5D0]` array, whose `K` is clamped to `{0,1,2}` |
-| `#3244..#3483` | 240 | **10 × 24** | 3 | the `0x1B5C` array, whose `K` is unclamped |
+| `#460..#483` | 24 | 1 × 24 | 2 | `[g+0x590]`, the unarmed hand/socket reference bank used by wizard composition |
+| `#484..#603` | 120 | 5 × 24 | first four banks have 2; final bank has no usable list | `[g+0x5A0]`, the bare-hand cast/attachment banks; the originally noted `#484..#579` portion is its first four banks |
+| `#796..#867` | 72 | **3 × 24** | 2 | `[g+0x5D0]`, the wand hand-to-tip banks; point 1 is the cast emitter and `K` is clamped to `{0,1,2}` |
+| `#3244..#3483` | 240 | **10 × 24** | 3 | the Staff type `7004`/`0x1B5C` socket banks; point 1 is the staff orb/emitter and `K` is unclamped |
 
-The 3-bank clamp in the instruction stream and a 3 × 24 run in the asset are
-independent facts that agree. The 240-record block is bounded by records that
+Thus `#460..#579` is wizard bare-hand composition, not an enemy attachment,
+and `#796..#867` is the wand. The 3-bank clamp in the instruction stream and a
+3 × 24 run in the asset are independent facts that agree. The 240-record block is bounded by records that
 carry no usable point list (`#3243` has 0 points, `#3484` has 1), so its base is
 pinned by the asset itself rather than by the fit — without that boundary,
 goldens at a single facing would pin only `base + 24*K`, not `base` and `K`
@@ -561,10 +563,18 @@ capture to a single `(bank, facing)` cell:
 | `fire.rank1`, `fire.rank2` | bank 7, facing 19 | `3.84e-05` |
 | `earth.rank2` + 3 × `rank1ChargeCaptures` | 1137/1137 held samples exact | `0` |
 
-All well inside the fixture's own `trajectoryWorldUnits` epsilon of `1e-4`. The
-Earth held samples resolve as bank `0` for the first tick and bank `7` for every
-tick after, i.e. the emitter tracks the hand as the cast animation advances —
-the `K` term doing precisely what the index arithmetic says it does.
+All are inside the fixture's own `trajectoryWorldUnits` epsilon of `1e-4`.
+G4's independent
+[`animation-goldens.json`](../../tests/fixtures/webgame/animation-goldens.json)
+then forces headings `0,15,...,345`, calls retail `0x0053B830` after each write,
+and matches all 24 returned points to Staff bank 7 with residual at most
+`1e-4`; every facing is now `observed`, not `derived_only`. Its heading-359
+sample observes the one-subtract wrap to facing zero. The same fixture's
+per-fixed-tick Player lane names `actor+0x238` as the equipment/body pose
+selector and observes the complete Staff Cast 1 branch `0 -> 1 -> 8 -> 7 -> 0`.
+The earlier Earth recorder samples only its callback/held lane: it resolves
+bank `0` on the first sample and bank `7` thereafter, so it did not observe the
+intervening action poses.
 
 One trap worth naming, since it cost a full debugging cycle: Fire's
 `velocityX`/`velocityY` columns store the aim **unit vector**, not the per-tick
@@ -580,22 +590,12 @@ partly to the directional emitter.
 
 ## Not Yet Reversed
 
-Every projectile-actor capture in `projectile-goldens.json` was recorded at a
-**single** wizard facing, `287.59668` degrees, from the single wizard position
-`(1664.5, 1799.5)`. The other headings in the fixture — `37.91263`, `90.0`,
-`0.0` — occur only in the Water/Frost tables, which materialize no projectile
-actor and so pin no spawn point.
-
-The emitter section above closes the resulting gap *analytically* — the index
-arithmetic is read from the instruction stream and the table from the asset, so
-all 24 facings are recoverable — but only facing `19` is confirmed against
-recorded native output. A capture sweep across several headings would convert
-the remaining 23 from derived to observed, and is the cheapest way to catch a
-sign or ordering error in the facing formula that a single sample cannot see.
-
-Also unexercised by any golden: the null-sprite-set path (flat `[g+0x5A0]`
-array, no bank term) and the clamped `[g+0x5D0]` path, plus the Earth
-conditional along-aim push described above.
+The directional Staff emitter is closed analytically and live for all 24
+facings by G4. Still unexercised by a live emitter golden are the null/bare-hand
+path (flat `[g+0x5A0]` array, no bank term), the clamped wand `[g+0x5D0]` path,
+and the Earth conditional along-aim push described above. Their consumers and
+index rules are statically identified; this is a live-coverage residual, not
+an unnamed G4 attachment run.
 
 ## Evidence inventory
 

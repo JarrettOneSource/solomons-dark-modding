@@ -46,6 +46,13 @@ from static_re_native_class_loadout_contracts import (
     test_native_class_loadout_starting_kits_are_stat_exact,
     test_native_class_loadout_unlock_conditions_are_pinned,
 )
+from static_re_native_animation_contracts import (
+    test_native_animation_attachment_and_emitter_facings_are_pinned,
+    test_native_animation_frame_programs_and_tick_anchor_are_pinned,
+    test_native_animation_lighting_shadow_and_camera_constants_are_pinned,
+    test_native_animation_recorder_is_self_provenanced_settled_and_bounded,
+    test_native_animation_state_lists_and_legal_transitions_are_pinned,
+)
 from static_re_native_scene_composition_contracts import (
     test_native_scene_camera_transform_and_backdrop_rate_are_pinned,
     test_native_scene_decor_determinism_path_is_pinned,
@@ -890,6 +897,26 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native class-loadout goldens are live-settled and participant-owned",
         test_native_class_loadout_goldens_are_live_settled_and_participant_owned,
+    ),
+    (
+        "Native animation state lists and legal transitions are pinned",
+        test_native_animation_state_lists_and_legal_transitions_are_pinned,
+    ),
+    (
+        "Native animation frame programs and tick anchor are pinned",
+        test_native_animation_frame_programs_and_tick_anchor_are_pinned,
+    ),
+    (
+        "Native animation attachment and emitter facings are pinned",
+        test_native_animation_attachment_and_emitter_facings_are_pinned,
+    ),
+    (
+        "Native animation lighting, shadow, and camera constants are pinned",
+        test_native_animation_lighting_shadow_and_camera_constants_are_pinned,
+    ),
+    (
+        "Native animation recorder is self-provenanced, settled, and bounded",
+        test_native_animation_recorder_is_self_provenanced_settled_and_bounded,
     ),
     (
         "Native scene physical layer list is pinned",
