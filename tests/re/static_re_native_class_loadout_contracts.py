@@ -135,21 +135,21 @@ EXPECTED_CLASS_KEYS = tuple(
 )
 
 EXPECTED_EXTERNAL_EVIDENCE_HASHES = {
-    "ether-arcane": "6208ffd5307acdde638227227449a083e852e8a79fcb56eb6d1eec276a69712a",
-    "ether-body": "f15f48a38b0d4a1c5ca9d481a69c0749046becb3893cbd7ccfac927f8cee691a",
-    "ether-mind": "c7099c62bf735e7940efb946ad0c67014305a9761b887389cb59e0f1acb9a00c",
-    "fire-arcane": "a8fcac29306e2cca7313cf522895f31982b8010f4fdffb3ec7a4715d4bd63f7a",
-    "fire-body": "dc689ffc4b47d9b3fc39794a93d553a60f469bbe29660bf104cc72bfd9897b4d",
-    "fire-mind": "b912fec2dab3530765746b642bc0dd5c5e4c1b639b62912d0e90a73bf073adfb",
-    "air-arcane": "c945f4a651c9b84f4591a160dfe95e89af3b58dae2884c7dc1d8d3cc228ea571",
-    "air-body": "232d6440de02d2066c9aea7c7dc53384a6086517ad1696a06c3cc3e0149c6581",
-    "air-mind": "b617a96d4d2b4b67aaaf62ca0c0212f431da9189f1a0dae9cd5151c718c2ddc3",
-    "water-arcane": "aec6e89101067e7b0b0c4bec6f267de1e24d982224602e3380a67bd5b7fdc207",
-    "water-body": "f1db92903dbf6585313821989a61cebb8b6af3c2cc23584dc382b96883410003",
-    "water-mind": "4ec6704c25125c6265f93b7446e9e07a3f528bfdc451b4ed75c0129ed68b0e4b",
-    "earth-arcane": "6b0df060b64bbd26c9f026e0e027ab60f2a884c00970a1ddb8ad14c82da54801",
-    "earth-body": "5933d77372ff0a11b49707079323197aeab5d963008cbf37638de700edfadf65",
-    "earth-mind": "23cb5580d3e49c8e3abca7cbcbc1e0aeee95302954a801858db55e10a56f486e",
+    "ether-arcane": "e21ef6070978e1127bd3698be0cd08cb27a4238eed41b5d70eec70294b726113",
+    "ether-body": "66e58cb6ad82bdfdb445467927f4c18617bbf390734b2614440beb8cee1ef913",
+    "ether-mind": "fdbbd00cc7d2b0c647714cdc3400c532b7db6192f7d312d07cde9e200fecfed0",
+    "fire-arcane": "e7e5ccb19b542b11db0ec48684d99bcc141c4a7b3ed122d959651205859b4336",
+    "fire-body": "ac1d4e2d24b10aab523cb5f9276b07a22cbcdaa6eb5e563a5318b82ca0f7e631",
+    "fire-mind": "96551d38e1db2e52726bcd5015b2b0c3e3a42aa0cdbad7970cc7afc661c96bde",
+    "air-arcane": "14bb37f93b200aed1550247137d701e6166ceda48237cf05de5fd098ed31b362",
+    "air-body": "515a81281e5a7a3645a7ff6d8f935529cae88ae5ea43f9287b0ce45a10a19858",
+    "air-mind": "f83467b4cd9c33b35e1056ba987085de5d9663839d42fbb42346a90ddc91edf2",
+    "water-arcane": "c1dc91a7c0f64c025beedc0c4bb27365be69e3b03d0efa592397bf3db00baa45",
+    "water-body": "10b8a37e4bd01453d0d273340f3d5d6e5165d81f6f53342733a9c0a2316a9fc2",
+    "water-mind": "a937a1fd0d6c6f8e5cf6ebe975db41f5e66bd20ca95e85ecf49d71854369c9ce",
+    "earth-arcane": "fa958968e37652409ee50abbf11adf045f7249f2d05b18bd16863c68b8d4847b",
+    "earth-body": "0db46a2029f162e12a253d217bbef13e36d4634db3fce5b4929cf1e0ffcbf46f",
+    "earth-mind": "fdcc0d0ef5c486f4d83c154721b3fda58335ba82d69c58bf38d72bff7d86b707",
 }
 
 EXPECTED_COMMITTED_HASH_PATHS = {
@@ -1060,7 +1060,7 @@ def test_native_class_loadout_goldens_are_live_settled_and_participant_owned() -
     )
     source = header.get("source") or {}
     _require(
-        source.get("base_commit") == "89c9675aecf97b3dd0cbdc01ba4cd3faf6809dc1"
+        source.get("base_commit") == "c36f0a81721fa5d3dc2edda65f3347354974b2f0"
         and source.get("branch") == "main"
         and source.get("dirty") is False,
         f"{CLAIM_LIVE}: recorder provenance must name its exact clean source revision",
@@ -1110,7 +1110,7 @@ def test_native_class_loadout_goldens_are_live_settled_and_participant_owned() -
         f"{CLAIM_LIVE}: retail binary provenance no longer pins the analyzed executable",
     )
     loader = header.get("loader") or {}
-    expected_loader_hash = "179a9f555884744c0dadf184c0aaa2c218ab47f431881125da4fa4393740c060"
+    expected_loader_hash = "db14aaf55da2b6939ca5702227698e3eecf9eee5b0d43cdd430dcdd3a6ca5852"
     _require(
         loader.get("release_sha256") == expected_loader_hash
         and loader.get("launcher_staged_sha256") == expected_loader_hash
@@ -1273,7 +1273,7 @@ def test_native_class_loadout_goldens_are_live_settled_and_participant_owned() -
         mixed.get("local_before_bot_class_state_sha256")
         == mixed.get("local_after_bot_class_state_sha256")
         == local_digest
-        == "321b985680a62e89e16e619b53d11f044d5c1147b7dbbfd0cd58f9e1e0a3acdb",
+        == "30a78c75598dc813c3a8087a75b8f478f17d808713a67e0a9b4b0fbdeb24ff22",
         f"{CLAIM_LIVE}: bot creation changed the local participant's class-state digest",
     )
     _require(
