@@ -47,6 +47,15 @@ from static_re_native_class_loadout_contracts import (
     test_native_class_loadout_starting_kits_are_stat_exact,
     test_native_class_loadout_unlock_conditions_are_pinned,
 )
+from static_re_native_save_format_contracts import (
+    test_launcher_save_layer_and_account_seam_are_pinned,
+    test_native_save_container_codec_and_layout_are_pinned,
+    test_native_save_fixture_provenance_hashes_the_committed_recording,
+    test_native_save_fresh_defaults_and_runtime_offsets_are_pinned,
+    test_native_save_goldens_round_trip_all_committed_files,
+    test_native_save_lifecycle_and_failure_semantics_are_pinned,
+    test_native_save_recorder_is_self_provenanced_settled_bounded_and_owned,
+)
 from static_re_native_animation_contracts import (
     test_native_animation_attachment_and_emitter_facings_are_pinned,
     test_native_animation_frame_programs_and_tick_anchor_are_pinned,
@@ -2124,6 +2133,34 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Steam friend native inventory matrix is wired",
         test_steam_friend_native_inventory_matrix_is_wired,
+    ),
+    (
+        "Native save container codec and layout are pinned",
+        test_native_save_container_codec_and_layout_are_pinned,
+    ),
+    (
+        "Native save goldens round-trip every committed file",
+        test_native_save_goldens_round_trip_all_committed_files,
+    ),
+    (
+        "Native save fresh defaults and runtime offsets are pinned",
+        test_native_save_fresh_defaults_and_runtime_offsets_are_pinned,
+    ),
+    (
+        "Native save recorder is self-provenanced, settled, bounded, and owned",
+        test_native_save_recorder_is_self_provenanced_settled_bounded_and_owned,
+    ),
+    (
+        "Native save lifecycle and failure semantics are pinned",
+        test_native_save_lifecycle_and_failure_semantics_are_pinned,
+    ),
+    (
+        "Launcher save layer and account seam are pinned",
+        test_launcher_save_layer_and_account_seam_are_pinned,
+    ),
+    (
+        "Native save fixture provenance hashes the committed recording",
+        test_native_save_fixture_provenance_hashes_the_committed_recording,
     ),
 ]
 

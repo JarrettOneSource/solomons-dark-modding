@@ -1,0 +1,4192 @@
+{
+  "provenance": {
+    "schema": "solomon-dark-save-format-goldens-v1",
+    "source_revision": "8deaa9400cc1df33748976aa0464e8016c11a46b",
+    "captured_at_utc": "2026-08-06T11:53:22.348551+00:00",
+    "retail_executable": {
+      "role": "campaign-owned D-drive source-game replica",
+      "sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3"
+    },
+    "loader": {
+      "role": "Release loader injected into each isolated stage",
+      "sha256": "5fe8f85dc116f85eaa742f7ed671355fdaed9f39092eca6b273a705e8b99d1cf"
+    },
+    "recorder": "tests/re/record_live_save_format_goldens.py",
+    "provenance_policy": "source revision and binary hashes are derived by this recorder; no provenance override arguments exist",
+    "capture_contract": {
+      "instances": [
+        "sav-fresh",
+        "sav-mid",
+        "sav-unlock"
+      ],
+      "allowed_udp_ports": [
+        52401,
+        52402,
+        52403,
+        52404,
+        52405,
+        52406,
+        52407,
+        52408
+      ],
+      "audio_disabled": true,
+      "owner_saves_opened": false,
+      "raw_files_location": "evidence only",
+      "settle_samples": 40,
+      "settle_minimum_seconds": 2.0,
+      "settle_payload": "relative path, byte length, and Windows-side SHA-256 for every persistence file"
+    }
+  },
+  "format_contract": {
+    "endianness": "little",
+    "magic": null,
+    "version": null,
+    "darkdata_xor_key_utf8": "MagicEncryptionWord=\"SolomonDarkEncryption\"|there$w#st w&187sfj21\t89n4v 1984x98mn12xc39931c87241@@@@@@",
+    "darkdata_core_fields": [
+      {
+        "name": "profile_gold",
+        "payload_offset": 0,
+        "size": 4,
+        "type": "i32",
+        "runtime_offset": 88
+      },
+      {
+        "name": "class_available[0]",
+        "payload_offset": 4,
+        "size": 1,
+        "type": "bool",
+        "runtime_offset": 144
+      },
+      {
+        "name": "class_available[1]",
+        "payload_offset": 5,
+        "size": 1,
+        "type": "bool",
+        "runtime_offset": 145
+      },
+      {
+        "name": "class_available[2]",
+        "payload_offset": 6,
+        "size": 1,
+        "type": "bool",
+        "runtime_offset": 146
+      },
+      {
+        "name": "class_available[3]",
+        "payload_offset": 7,
+        "size": 1,
+        "type": "bool",
+        "runtime_offset": 147
+      },
+      {
+        "name": "class_available[4]",
+        "payload_offset": 8,
+        "size": 1,
+        "type": "bool",
+        "runtime_offset": 148
+      },
+      {
+        "name": "class_available[5]",
+        "payload_offset": 9,
+        "size": 1,
+        "type": "bool",
+        "runtime_offset": 149
+      },
+      {
+        "name": "class_available[6]",
+        "payload_offset": 10,
+        "size": 1,
+        "type": "bool",
+        "runtime_offset": 150
+      },
+      {
+        "name": "class_available[7]",
+        "payload_offset": 11,
+        "size": 1,
+        "type": "bool",
+        "runtime_offset": 151
+      },
+      {
+        "name": "class_available[8]",
+        "payload_offset": 12,
+        "size": 1,
+        "type": "bool",
+        "runtime_offset": 152
+      },
+      {
+        "name": "class_available[9]",
+        "payload_offset": 13,
+        "size": 1,
+        "type": "bool",
+        "runtime_offset": 153
+      },
+      {
+        "name": "stock_tutorial_pending",
+        "payload_offset": 14,
+        "size": 1,
+        "type": "bool",
+        "runtime_offset": 260
+      },
+      {
+        "name": "class_enabled[0]",
+        "payload_offset": 15,
+        "size": 1,
+        "type": "bool",
+        "runtime_offset": 154
+      },
+      {
+        "name": "class_enabled[1]",
+        "payload_offset": 16,
+        "size": 1,
+        "type": "bool",
+        "runtime_offset": 155
+      },
+      {
+        "name": "class_enabled[2]",
+        "payload_offset": 17,
+        "size": 1,
+        "type": "bool",
+        "runtime_offset": 156
+      },
+      {
+        "name": "class_enabled[3]",
+        "payload_offset": 18,
+        "size": 1,
+        "type": "bool",
+        "runtime_offset": 157
+      },
+      {
+        "name": "class_enabled[4]",
+        "payload_offset": 19,
+        "size": 1,
+        "type": "bool",
+        "runtime_offset": 158
+      },
+      {
+        "name": "class_enabled[5]",
+        "payload_offset": 20,
+        "size": 1,
+        "type": "bool",
+        "runtime_offset": 159
+      },
+      {
+        "name": "class_enabled[6]",
+        "payload_offset": 21,
+        "size": 1,
+        "type": "bool",
+        "runtime_offset": 160
+      },
+      {
+        "name": "class_enabled[7]",
+        "payload_offset": 22,
+        "size": 1,
+        "type": "bool",
+        "runtime_offset": 161
+      },
+      {
+        "name": "class_enabled[8]",
+        "payload_offset": 23,
+        "size": 1,
+        "type": "bool",
+        "runtime_offset": 162
+      },
+      {
+        "name": "class_enabled[9]",
+        "payload_offset": 24,
+        "size": 1,
+        "type": "bool",
+        "runtime_offset": 163
+      },
+      {
+        "name": "class_display_order[0]",
+        "payload_offset": 25,
+        "size": 4,
+        "type": "i32",
+        "runtime_offset": 164
+      },
+      {
+        "name": "class_display_order[1]",
+        "payload_offset": 29,
+        "size": 4,
+        "type": "i32",
+        "runtime_offset": 168
+      },
+      {
+        "name": "class_display_order[2]",
+        "payload_offset": 33,
+        "size": 4,
+        "type": "i32",
+        "runtime_offset": 172
+      },
+      {
+        "name": "class_display_order[3]",
+        "payload_offset": 37,
+        "size": 4,
+        "type": "i32",
+        "runtime_offset": 176
+      },
+      {
+        "name": "class_display_order[4]",
+        "payload_offset": 41,
+        "size": 4,
+        "type": "i32",
+        "runtime_offset": 180
+      },
+      {
+        "name": "class_display_order[5]",
+        "payload_offset": 45,
+        "size": 4,
+        "type": "i32",
+        "runtime_offset": 184
+      },
+      {
+        "name": "class_display_order[6]",
+        "payload_offset": 49,
+        "size": 4,
+        "type": "i32",
+        "runtime_offset": 188
+      },
+      {
+        "name": "class_display_order[7]",
+        "payload_offset": 53,
+        "size": 4,
+        "type": "i32",
+        "runtime_offset": 192
+      },
+      {
+        "name": "class_display_order[8]",
+        "payload_offset": 57,
+        "size": 4,
+        "type": "i32",
+        "runtime_offset": 196
+      },
+      {
+        "name": "class_display_order[9]",
+        "payload_offset": 61,
+        "size": 4,
+        "type": "i32",
+        "runtime_offset": 200
+      },
+      {
+        "name": "profile_stat_0xf4",
+        "payload_offset": 65,
+        "size": 4,
+        "type": "i32",
+        "runtime_offset": 244
+      },
+      {
+        "name": "class_canonical_order[0]",
+        "payload_offset": 69,
+        "size": 4,
+        "type": "i32",
+        "runtime_offset": 204
+      },
+      {
+        "name": "class_canonical_order[1]",
+        "payload_offset": 73,
+        "size": 4,
+        "type": "i32",
+        "runtime_offset": 208
+      },
+      {
+        "name": "class_canonical_order[2]",
+        "payload_offset": 77,
+        "size": 4,
+        "type": "i32",
+        "runtime_offset": 212
+      },
+      {
+        "name": "class_canonical_order[3]",
+        "payload_offset": 81,
+        "size": 4,
+        "type": "i32",
+        "runtime_offset": 216
+      },
+      {
+        "name": "class_canonical_order[4]",
+        "payload_offset": 85,
+        "size": 4,
+        "type": "i32",
+        "runtime_offset": 220
+      },
+      {
+        "name": "class_canonical_order[5]",
+        "payload_offset": 89,
+        "size": 4,
+        "type": "i32",
+        "runtime_offset": 224
+      },
+      {
+        "name": "class_canonical_order[6]",
+        "payload_offset": 93,
+        "size": 4,
+        "type": "i32",
+        "runtime_offset": 228
+      },
+      {
+        "name": "class_canonical_order[7]",
+        "payload_offset": 97,
+        "size": 4,
+        "type": "i32",
+        "runtime_offset": 232
+      },
+      {
+        "name": "class_canonical_order[8]",
+        "payload_offset": 101,
+        "size": 4,
+        "type": "i32",
+        "runtime_offset": 236
+      },
+      {
+        "name": "class_canonical_order[9]",
+        "payload_offset": 105,
+        "size": 4,
+        "type": "i32",
+        "runtime_offset": 240
+      },
+      {
+        "name": "next_portrait_index",
+        "payload_offset": 109,
+        "size": 4,
+        "type": "i32",
+        "runtime_offset": 248
+      },
+      {
+        "name": "last_portrait_index",
+        "payload_offset": 113,
+        "size": 4,
+        "type": "i32",
+        "runtime_offset": 252
+      },
+      {
+        "name": "profile_flag_0x105",
+        "payload_offset": 117,
+        "size": 1,
+        "type": "bool",
+        "runtime_offset": 261
+      }
+    ]
+  },
+  "fresh_profile_defaults": {
+    "profile_gold": 500,
+    "class_available": [
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false,
+      true
+    ],
+    "stock_tutorial_pending": true,
+    "class_enabled": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "class_display_order": [
+      9,
+      1,
+      0,
+      2,
+      7,
+      4,
+      3,
+      8,
+      5,
+      6
+    ],
+    "profile_stat_0xf4": 1000,
+    "class_canonical_order": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "next_portrait_index": 100,
+    "last_portrait_index": 0,
+    "profile_flag_0x105": false,
+    "hagatha_bulk_selectors": [],
+    "hagatha_first_mix_flags_before_first_serialization": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "settled_persisted_hagatha_flags": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ],
+    "serializer_initialized_flag_index": 27,
+    "shlorio_fee": {
+      "minimum": 500,
+      "maximum": 950,
+      "step": 50
+    }
+  },
+  "captures": [
+    {
+      "id": "fresh_profile",
+      "generation": {
+        "instance": "sav-fresh",
+        "local_port": 52401,
+        "unused_remote_port": 52402,
+        "headless": true,
+        "audio_disabled": true,
+        "fresh_install": true,
+        "source_game_role": "campaign-owned isolated replica",
+        "native_profile_path_observed": "runtime/savere-captures/instances/sav-fresh/stage/sandbox/savegames/solomondark/",
+        "launch_startup_code": null
+      },
+      "scenario_trace": {
+        "driver": "native fresh-profile initializer 0x005A8390 followed by native save 0x005BE0B0",
+        "save_result": 1,
+        "persisted_gold": 500,
+        "persisted_first_mix_0": false
+      },
+      "live_profile": {
+        "profile_address": 15770416,
+        "gold": 500,
+        "stock_tutorial_pending": true,
+        "profile_flag_0x105": false,
+        "profile_stat_0xf4": 1000,
+        "next_portrait_index": 100,
+        "last_portrait_index": 0,
+        "shlorio_fee": 500,
+        "class_available": [
+          false,
+          true,
+          true,
+          true,
+          false,
+          true,
+          true,
+          false,
+          false,
+          true
+        ],
+        "class_enabled": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "class_display_order": [
+          9,
+          1,
+          0,
+          2,
+          7,
+          4,
+          3,
+          8,
+          5,
+          6
+        ],
+        "class_canonical_order": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "hagatha_first_mix_flags": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false
+        ],
+        "progression": {
+          "address": 0,
+          "perk_count": 0,
+          "perk_capacity": -1,
+          "selectors": []
+        }
+      },
+      "settle_gate": {
+        "sample_count": 40,
+        "total_samples": 80,
+        "stable_seconds": 5.4750065999999995,
+        "animated_elements": []
+      },
+      "files": [
+        {
+          "relative_path": "savegames/solomondark/darkdata.cfg",
+          "evidence_relative_path": "raw/fresh_profile/savegames/solomondark/darkdata.cfg",
+          "length": 211,
+          "sha256": "acd77847db8ffdcb6915184eeaa77656e9d127502ff7858542d4dadf7db1a5c9",
+          "raw_length": 211,
+          "raw_sha256": "acd77847db8ffdcb6915184eeaa77656e9d127502ff7858542d4dadf7db1a5c9",
+          "round_trip_identical": true,
+          "round_trip_sha256": "acd77847db8ffdcb6915184eeaa77656e9d127502ff7858542d4dadf7db1a5c9",
+          "codec": {
+            "kind": "xor_then_native_marker_lz",
+            "compressed_marker": 0,
+            "compressed_length": 211,
+            "syncbuffer_length": 220,
+            "xor_key_sha256": "27c0dc1eb34b7d60a2f79cbb60cab0a2da05e336dbf8d75ff8b68d4fad5d0cf3"
+          },
+          "census": {
+            "buffer_count": 1,
+            "node_count": 7,
+            "payload_bytes": 160,
+            "maximum_node_depth": 1,
+            "named_buffer_paths": [
+              "/"
+            ]
+          },
+          "tree": {
+            "offset": 0,
+            "end_offset": 220,
+            "root": {
+              "offset": 0,
+              "payload_offset": 4,
+              "payload_length": 0,
+              "payload_hex": "",
+              "children": [
+                {
+                  "offset": 8,
+                  "payload_offset": 12,
+                  "payload_length": 118,
+                  "payload_hex": "f401000000010101000101000001010101010101010101010109000000010000000000000002000000070000000400000003000000080000000500000006000000e803000000000000010000000200000003000000040000000500000006000000070000000800000009000000640000000000000000",
+                  "children": []
+                },
+                {
+                  "offset": 134,
+                  "payload_offset": 138,
+                  "payload_length": 4,
+                  "payload_hex": "00000000",
+                  "children": []
+                },
+                {
+                  "offset": 146,
+                  "payload_offset": 150,
+                  "payload_length": 4,
+                  "payload_hex": "00000000",
+                  "children": []
+                },
+                {
+                  "offset": 158,
+                  "payload_offset": 162,
+                  "payload_length": 30,
+                  "payload_hex": "000000000000000000000000000000000000000000000000000000010000",
+                  "children": []
+                },
+                {
+                  "offset": 196,
+                  "payload_offset": 200,
+                  "payload_length": 4,
+                  "payload_hex": "f4010000",
+                  "children": []
+                },
+                {
+                  "offset": 208,
+                  "payload_offset": 212,
+                  "payload_length": 0,
+                  "payload_hex": "",
+                  "children": []
+                }
+              ]
+            },
+            "named_buffers": []
+          },
+          "decoded_fields": {
+            "core_payload_length": 118,
+            "core_fields": [
+              {
+                "name": "profile_gold",
+                "payload_offset": 0,
+                "payload_offset_hex": "0x00",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x058",
+                "value": 500,
+                "semantics": "persistent profile gold"
+              },
+              {
+                "name": "class_available[0]",
+                "payload_offset": 4,
+                "payload_offset_hex": "0x04",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x090",
+                "value": false,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_available[1]",
+                "payload_offset": 5,
+                "payload_offset_hex": "0x05",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x091",
+                "value": true,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_available[2]",
+                "payload_offset": 6,
+                "payload_offset_hex": "0x06",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x092",
+                "value": true,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_available[3]",
+                "payload_offset": 7,
+                "payload_offset_hex": "0x07",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x093",
+                "value": true,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_available[4]",
+                "payload_offset": 8,
+                "payload_offset_hex": "0x08",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x094",
+                "value": false,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_available[5]",
+                "payload_offset": 9,
+                "payload_offset_hex": "0x09",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x095",
+                "value": true,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_available[6]",
+                "payload_offset": 10,
+                "payload_offset_hex": "0x0A",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x096",
+                "value": true,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_available[7]",
+                "payload_offset": 11,
+                "payload_offset_hex": "0x0B",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x097",
+                "value": false,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_available[8]",
+                "payload_offset": 12,
+                "payload_offset_hex": "0x0C",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x098",
+                "value": false,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_available[9]",
+                "payload_offset": 13,
+                "payload_offset_hex": "0x0D",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x099",
+                "value": true,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "stock_tutorial_pending",
+                "payload_offset": 14,
+                "payload_offset_hex": "0x0E",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x104",
+                "value": true,
+                "semantics": "stock tutorial/game-over gate"
+              },
+              {
+                "name": "class_enabled[0]",
+                "payload_offset": 15,
+                "payload_offset_hex": "0x0F",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x09A",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_enabled[1]",
+                "payload_offset": 16,
+                "payload_offset_hex": "0x10",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x09B",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_enabled[2]",
+                "payload_offset": 17,
+                "payload_offset_hex": "0x11",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x09C",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_enabled[3]",
+                "payload_offset": 18,
+                "payload_offset_hex": "0x12",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x09D",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_enabled[4]",
+                "payload_offset": 19,
+                "payload_offset_hex": "0x13",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x09E",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_enabled[5]",
+                "payload_offset": 20,
+                "payload_offset_hex": "0x14",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x09F",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_enabled[6]",
+                "payload_offset": 21,
+                "payload_offset_hex": "0x15",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x0A0",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_enabled[7]",
+                "payload_offset": 22,
+                "payload_offset_hex": "0x16",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x0A1",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_enabled[8]",
+                "payload_offset": 23,
+                "payload_offset_hex": "0x17",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x0A2",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_enabled[9]",
+                "payload_offset": 24,
+                "payload_offset_hex": "0x18",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x0A3",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_display_order[0]",
+                "payload_offset": 25,
+                "payload_offset_hex": "0x19",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0A4",
+                "value": 9,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_display_order[1]",
+                "payload_offset": 29,
+                "payload_offset_hex": "0x1D",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0A8",
+                "value": 1,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_display_order[2]",
+                "payload_offset": 33,
+                "payload_offset_hex": "0x21",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0AC",
+                "value": 0,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_display_order[3]",
+                "payload_offset": 37,
+                "payload_offset_hex": "0x25",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0B0",
+                "value": 2,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_display_order[4]",
+                "payload_offset": 41,
+                "payload_offset_hex": "0x29",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0B4",
+                "value": 7,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_display_order[5]",
+                "payload_offset": 45,
+                "payload_offset_hex": "0x2D",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0B8",
+                "value": 4,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_display_order[6]",
+                "payload_offset": 49,
+                "payload_offset_hex": "0x31",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0BC",
+                "value": 3,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_display_order[7]",
+                "payload_offset": 53,
+                "payload_offset_hex": "0x35",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0C0",
+                "value": 8,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_display_order[8]",
+                "payload_offset": 57,
+                "payload_offset_hex": "0x39",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0C4",
+                "value": 5,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_display_order[9]",
+                "payload_offset": 61,
+                "payload_offset_hex": "0x3D",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0C8",
+                "value": 6,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "profile_stat_0xf4",
+                "payload_offset": 65,
+                "payload_offset_hex": "0x41",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0F4",
+                "value": 1000,
+                "semantics": "opaque profile statistic; default 1000"
+              },
+              {
+                "name": "class_canonical_order[0]",
+                "payload_offset": 69,
+                "payload_offset_hex": "0x45",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0CC",
+                "value": 0,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_canonical_order[1]",
+                "payload_offset": 73,
+                "payload_offset_hex": "0x49",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0D0",
+                "value": 1,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_canonical_order[2]",
+                "payload_offset": 77,
+                "payload_offset_hex": "0x4D",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0D4",
+                "value": 2,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_canonical_order[3]",
+                "payload_offset": 81,
+                "payload_offset_hex": "0x51",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0D8",
+                "value": 3,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_canonical_order[4]",
+                "payload_offset": 85,
+                "payload_offset_hex": "0x55",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0DC",
+                "value": 4,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_canonical_order[5]",
+                "payload_offset": 89,
+                "payload_offset_hex": "0x59",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0E0",
+                "value": 5,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_canonical_order[6]",
+                "payload_offset": 93,
+                "payload_offset_hex": "0x5D",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0E4",
+                "value": 6,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_canonical_order[7]",
+                "payload_offset": 97,
+                "payload_offset_hex": "0x61",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0E8",
+                "value": 7,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_canonical_order[8]",
+                "payload_offset": 101,
+                "payload_offset_hex": "0x65",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0EC",
+                "value": 8,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_canonical_order[9]",
+                "payload_offset": 105,
+                "payload_offset_hex": "0x69",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0F0",
+                "value": 9,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "next_portrait_index",
+                "payload_offset": 109,
+                "payload_offset_hex": "0x6D",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0F8",
+                "value": 100,
+                "semantics": "next Portraits/portrait%d.raw index"
+              },
+              {
+                "name": "last_portrait_index",
+                "payload_offset": 113,
+                "payload_offset_hex": "0x71",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0FC",
+                "value": 0,
+                "semantics": "most recently written portrait index"
+              },
+              {
+                "name": "profile_flag_0x105",
+                "payload_offset": 117,
+                "payload_offset_hex": "0x75",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x105",
+                "value": false,
+                "semantics": "opaque profile flag"
+              }
+            ],
+            "luthacus_storage": {
+              "payload_length": 4,
+              "payload_hex": "00000000",
+              "child_count": 0,
+              "status": "polymorphic inventory payload; byte-exact but semantically opaque"
+            },
+            "hagatha_bulk_selectors": [],
+            "hagatha_first_mix_flags": [
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              true,
+              false,
+              false
+            ],
+            "serializer_initialized_flag_index": 27,
+            "shlorio_fee": 500,
+            "reserved_child_5": "empty"
+          }
+        },
+        {
+          "relative_path": "savegames/solomondark/savegames/INGENUIUS/Region4._cache",
+          "evidence_relative_path": "raw/fresh_profile/savegames/solomondark/savegames/INGENUIUS/Region4._cache",
+          "length": 2068,
+          "sha256": "4754a8cfa1832237d18bc44deefc10ecd5ed5682fc98e458faf500c913db0398",
+          "raw_length": 2068,
+          "raw_sha256": "4754a8cfa1832237d18bc44deefc10ecd5ed5682fc98e458faf500c913db0398",
+          "round_trip_identical": true,
+          "round_trip_sha256": "4754a8cfa1832237d18bc44deefc10ecd5ed5682fc98e458faf500c913db0398",
+          "codec": {
+            "kind": "plain_syncbuffer",
+            "syncbuffer_length": 2068
+          },
+          "census": {
+            "buffer_count": 1,
+            "node_count": 34,
+            "payload_bytes": 1792,
+            "maximum_node_depth": 4,
+            "named_buffer_paths": [
+              "/"
+            ]
+          },
+          "tree": {
+            "offset": 0,
+            "end_offset": 2068,
+            "root": {
+              "offset": 0,
+              "payload_offset": 4,
+              "payload_length": 0,
+              "payload_hex": "",
+              "children": [
+                {
+                  "offset": 8,
+                  "payload_offset": 12,
+                  "payload_length": 48,
+                  "payload_hex": "00000000000000000000804400008044acaaaa42000089435555554400803b4400000000000000000000804400008044",
+                  "children": []
+                },
+                {
+                  "offset": 64,
+                  "payload_offset": 68,
+                  "payload_length": 0,
+                  "payload_hex": "",
+                  "children": [
+                    {
+                      "offset": 72,
+                      "payload_offset": 76,
+                      "payload_length": 1201,
+                      "payload_hex": "010000804400008044070000000700000000001643000016430700000007000000000016430000164330000000002016440020734400a0154400606644000000000000000000a015440060664400a0214400e05444000000000000000000a0214400e0544400204844002053440000000000000000002048440020534400a0554400604844000000000000000000a05544006048440060554400a02f4400000000000000000060554400a02f4400e0634400a02f44000000000000000000e0634400a02f4400a0634400201244000000000000000000a063440020124400a0554400601244000000000000000000a055440060124400a0484400201044000000000000000000a04844002010440060414400600a4400000000000000000060414400600a4400e0374400e00944000000000000000000e0374400e0094400e02d4400e00044000000000000000000e02d4400e0004400a0234400200144000000000000000000a023440020014400202244002007440000000000000000002022440020074400601c4400e00944000000000000000000601c4400e0094400e00f4400200b44000000000000000000e00f4400200b4400600944002005440000000000000000006009440020054400a008440040ff43000000000000000000a008440040ff4300c0f14300c0fe43000000000000000000c0f14300c0fe430040ec4300e0064400000000000000000040ec4300e0064400c0dd4300a00644000000000000000000c0dd4300a006440040d14300e0044400000000000000000040d14300e004440040b84300c0f94300000000000000000040b84300c0f94300409e4300600444000000000000000000409e430060044400c08f430040fe43000000000000000000c08f430040fe430040874300600044000000000000000000408743006000440040874300200444000000000000000000408743002004440080684300e0064400000000000000000080684300e006440080364300200244000000000000000000803643002002440080304300601144000000000000000000803043006011440000e1420020124400000000000000000000e142002012440000e74200202d4400000000000000000000e74200202d440080274300e02e4400000000000000000080274300e02e4400802c4300604a44000000000000000000802c4300604a440080614300e0554400000000000000000080614300e0554400c0b64300205744000000000000000000c0b643002057440040d04300e0654400000000000000000040d04300e0654400c0cd4300e0744400000000000000000040e1430060394400601344006039440000000000000000006013440060394400e01c4400e03644000000000000000000e01c4400e0364400a01f4400203144000000000000000000a01f440020314400a01f4400202944000000000000000000a01f440020294400601c4400202144000000000000000000601c44002021440040cf430020214400000000000000000040cf43002021440040c9430060284400000000000000000040c943006028440040c94300a0314400000000000000000040c94300a031440040d0430060374400000000000000000040d0430060374400c0e14300603944000000000000000000000000",
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "offset": 1281,
+                  "payload_offset": 1285,
+                  "payload_length": 0,
+                  "payload_hex": "",
+                  "children": [
+                    {
+                      "offset": 1289,
+                      "payload_offset": 1293,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1301,
+                      "payload_offset": 1305,
+                      "payload_length": 0,
+                      "payload_hex": "",
+                      "children": [
+                        {
+                          "offset": 1309,
+                          "payload_offset": 1313,
+                          "payload_length": 4,
+                          "payload_hex": "00000000",
+                          "children": []
+                        },
+                        {
+                          "offset": 1321,
+                          "payload_offset": 1325,
+                          "payload_length": 4,
+                          "payload_hex": "00000000",
+                          "children": [
+                            {
+                              "offset": 1333,
+                              "payload_offset": 1337,
+                              "payload_length": 8,
+                              "payload_hex": "0000000000000000",
+                              "children": []
+                            }
+                          ]
+                        },
+                        {
+                          "offset": 1349,
+                          "payload_offset": 1353,
+                          "payload_length": 4,
+                          "payload_hex": "00000000",
+                          "children": []
+                        }
+                      ]
+                    },
+                    {
+                      "offset": 1361,
+                      "payload_offset": 1365,
+                      "payload_length": 12,
+                      "payload_hex": "000080440000804400000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1381,
+                      "payload_offset": 1385,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1393,
+                      "payload_offset": 1397,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1405,
+                      "payload_offset": 1409,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1417,
+                      "payload_offset": 1421,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1429,
+                      "payload_offset": 1433,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1441,
+                      "payload_offset": 1445,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1453,
+                      "payload_offset": 1457,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1465,
+                      "payload_offset": 1469,
+                      "payload_length": 1,
+                      "payload_hex": "00",
+                      "children": []
+                    },
+                    {
+                      "offset": 1474,
+                      "payload_offset": 1478,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1486,
+                      "payload_offset": 1490,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1498,
+                      "payload_offset": 1502,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "offset": 1510,
+                  "payload_offset": 1514,
+                  "payload_length": 0,
+                  "payload_hex": "",
+                  "children": []
+                },
+                {
+                  "offset": 1518,
+                  "payload_offset": 1522,
+                  "payload_length": 20,
+                  "payload_hex": "03000000f9070000931300009413000000000000",
+                  "children": [
+                    {
+                      "offset": 1546,
+                      "payload_offset": 1550,
+                      "payload_length": 41,
+                      "payload_hex": "0060014400402a4400000000000000000000b442000000000000204200000000000000000010000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1595,
+                      "payload_offset": 1599,
+                      "payload_length": 101,
+                      "payload_hex": "0001000400000000000000000000803f0000803f000000000000803f000000000000803f0000803f0000803f0000803f00000000000000803f01000001000000000000803f0000803f0000803f0000803f0000803f0000000000000000000000008e000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1704,
+                      "payload_offset": 1708,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1716,
+                      "payload_offset": 1720,
+                      "payload_length": 41,
+                      "payload_hex": "00800d4400c0374400000000000000000000b442000000000000704100000000000000000000000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1765,
+                      "payload_offset": 1769,
+                      "payload_length": 101,
+                      "payload_hex": "0002002000000000000000000000803f0000803f000000000000803f000000000000803f0000803f0000803f0000803f00000000000000803f01000001000000000000803f0000803f0000803f0000803f0000803f0000000000000000000000008e000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1874,
+                      "payload_offset": 1878,
+                      "payload_length": 8,
+                      "payload_hex": "3a8b7440cdcc4c3d",
+                      "children": []
+                    },
+                    {
+                      "offset": 1890,
+                      "payload_offset": 1894,
+                      "payload_length": 41,
+                      "payload_hex": "008000440080e94300000000000000000000b4420000000000005c4200000000000000000000000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1939,
+                      "payload_offset": 1943,
+                      "payload_length": 101,
+                      "payload_hex": "0003002000000000000000000000803f0000803f000000000000803f000000000000803f0000803f0000803f0000803f00000000000000803f01000001000000000000803f0000803f0000803f0000803f0000803f00000000000000000000000000000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 2048,
+                      "payload_offset": 2052,
+                      "payload_length": 8,
+                      "payload_hex": "0000000000000000",
+                      "children": []
+                    }
+                  ]
+                }
+              ]
+            },
+            "named_buffers": []
+          },
+          "decoded_fields": null
+        },
+        {
+          "relative_path": "settings.txt",
+          "evidence_relative_path": "raw/fresh_profile/settings.txt",
+          "length": 904,
+          "sha256": "80b523cb96adbbe3ba656b01813ae49efe342b9874bea3dcae4e7ea3d19161ab",
+          "codec": {
+            "kind": "key_value_text",
+            "encoding": "utf-8",
+            "newline": "crlf"
+          },
+          "raw_length": 904,
+          "entries": [
+            {
+              "line": "1",
+              "kind": "setting",
+              "key": "Graphics.Resolution",
+              "value": "1600,900"
+            },
+            {
+              "line": "2",
+              "kind": "setting",
+              "key": "Graphics.Fullscreen",
+              "value": "false"
+            },
+            {
+              "line": "3",
+              "kind": "setting",
+              "key": "System.Username",
+              "value": ""
+            },
+            {
+              "line": "4",
+              "kind": "setting",
+              "key": "System.Userpassword",
+              "value": ""
+            },
+            {
+              "line": "5",
+              "kind": "setting",
+              "key": "System.Token",
+              "value": ""
+            },
+            {
+              "line": "6",
+              "kind": "setting",
+              "key": "System.ComputerName",
+              "value": "0x00B34DF0"
+            },
+            {
+              "line": "7",
+              "kind": "setting",
+              "key": "System.IPAddress",
+              "value": "128.0.0.1"
+            },
+            {
+              "line": "8",
+              "kind": "setting",
+              "key": "System.PlayCount",
+              "value": "0"
+            },
+            {
+              "line": "9",
+              "kind": "setting",
+              "key": "Graphics.SaveVideoMemory",
+              "value": "false"
+            },
+            {
+              "line": "10",
+              "kind": "setting",
+              "key": "Game.ComplexLighting",
+              "value": "true"
+            },
+            {
+              "line": "11",
+              "kind": "setting",
+              "key": "Game.ZoomFX",
+              "value": "true"
+            },
+            {
+              "line": "12",
+              "kind": "setting",
+              "key": "Game.ComplexShadows",
+              "value": "true"
+            },
+            {
+              "line": "13",
+              "kind": "setting",
+              "key": "Game.MultipleShadows",
+              "value": "false"
+            },
+            {
+              "line": "14",
+              "kind": "setting",
+              "key": "Game.CastSecondariesOnMouse",
+              "value": "true"
+            },
+            {
+              "line": "15",
+              "kind": "setting",
+              "key": "Game.KidMode",
+              "value": "false"
+            },
+            {
+              "line": "16",
+              "kind": "setting",
+              "key": "Game.Controls",
+              "value": "0"
+            },
+            {
+              "line": "17",
+              "kind": "setting",
+              "key": "Game.Controls.KeyboardUp",
+              "value": "17"
+            },
+            {
+              "line": "18",
+              "kind": "setting",
+              "key": "Game.Controls.KeyboardDown",
+              "value": "31"
+            },
+            {
+              "line": "19",
+              "kind": "setting",
+              "key": "Game.Controls.KeyboardLeft",
+              "value": "30"
+            },
+            {
+              "line": "20",
+              "kind": "setting",
+              "key": "Game.Controls.KeyboardRight",
+              "value": "32"
+            },
+            {
+              "line": "21",
+              "kind": "setting",
+              "key": "Game.Controls.Inventory",
+              "value": "23"
+            },
+            {
+              "line": "22",
+              "kind": "setting",
+              "key": "Game.Controls.Skills",
+              "value": "20"
+            },
+            {
+              "line": "23",
+              "kind": "setting",
+              "key": "Game.Controls.Menu",
+              "value": "1"
+            },
+            {
+              "line": "24",
+              "kind": "setting",
+              "key": "Game.Controls.Belt1",
+              "value": "513"
+            },
+            {
+              "line": "25",
+              "kind": "setting",
+              "key": "Game.Controls.Belt2",
+              "value": "2"
+            },
+            {
+              "line": "26",
+              "kind": "setting",
+              "key": "Game.Controls.Belt3",
+              "value": "3"
+            },
+            {
+              "line": "27",
+              "kind": "setting",
+              "key": "Game.Controls.Belt4",
+              "value": "4"
+            },
+            {
+              "line": "28",
+              "kind": "setting",
+              "key": "Game.Controls.Belt5",
+              "value": "5"
+            },
+            {
+              "line": "29",
+              "kind": "setting",
+              "key": "Game.Controls.Belt6",
+              "value": "6"
+            },
+            {
+              "line": "30",
+              "kind": "setting",
+              "key": "Game.Controls.Belt7",
+              "value": "7"
+            },
+            {
+              "line": "31",
+              "kind": "setting",
+              "key": "Game.Controls.Belt8",
+              "value": "8"
+            },
+            {
+              "line": "32",
+              "kind": "setting",
+              "key": "Game.FastCPU",
+              "value": "false"
+            },
+            {
+              "line": "33",
+              "kind": "setting",
+              "key": "Game.ItemRecipeUID",
+              "value": "524288"
+            },
+            {
+              "line": "34",
+              "kind": "setting",
+              "key": "Game.UID",
+              "value": "32814"
+            },
+            {
+              "line": "35",
+              "kind": "setting",
+              "key": "Game.Resume",
+              "value": ""
+            },
+            {
+              "line": "36",
+              "kind": "setting",
+              "key": "Game.Shredded",
+              "value": "false"
+            },
+            {
+              "line": "37",
+              "kind": "setting",
+              "key": "Game.LightQuality",
+              "value": "0.060000"
+            }
+          ],
+          "final_newline": true,
+          "round_trip_identical": true,
+          "raw_sha256": "80b523cb96adbbe3ba656b01813ae49efe342b9874bea3dcae4e7ea3d19161ab",
+          "round_trip_sha256": "80b523cb96adbbe3ba656b01813ae49efe342b9874bea3dcae4e7ea3d19161ab"
+        }
+      ]
+    },
+    {
+      "id": "mid_progression_after_scripted_run",
+      "generation": {
+        "instance": "sav-mid",
+        "local_port": 52403,
+        "unused_remote_port": 52404,
+        "headless": true,
+        "audio_disabled": true,
+        "fresh_install": true,
+        "source_game_role": "campaign-owned isolated replica",
+        "native_profile_path_observed": "runtime/savere-captures/instances/sav-mid/stage/sandbox/savegames/solomondark/",
+        "launch_startup_code": null
+      },
+      "scenario_trace": {
+        "driver": "three-step live scripted run-reward checkpoint ending in native save 0x005BE0B0",
+        "checkpoints": [
+          {
+            "label": "run_start",
+            "profile_gold": 500
+          },
+          {
+            "label": "reward_checkpoint_1",
+            "profile_gold": 625
+          },
+          {
+            "label": "run_end",
+            "profile_gold": 875
+          }
+        ],
+        "save_result": 1,
+        "scope_note": "The script drives the recovered profile reward seam; it does not claim a natural enemy/drop replay."
+      },
+      "live_profile": {
+        "profile_address": 8692528,
+        "gold": 875,
+        "stock_tutorial_pending": true,
+        "profile_flag_0x105": false,
+        "profile_stat_0xf4": 1000,
+        "next_portrait_index": 100,
+        "last_portrait_index": 0,
+        "shlorio_fee": 650,
+        "class_available": [
+          false,
+          true,
+          true,
+          true,
+          false,
+          true,
+          true,
+          false,
+          false,
+          true
+        ],
+        "class_enabled": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "class_display_order": [
+          9,
+          1,
+          0,
+          2,
+          7,
+          4,
+          3,
+          8,
+          5,
+          6
+        ],
+        "class_canonical_order": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "hagatha_first_mix_flags": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false
+        ],
+        "progression": {
+          "address": 0,
+          "perk_count": 0,
+          "perk_capacity": -1,
+          "selectors": []
+        }
+      },
+      "settle_gate": {
+        "sample_count": 40,
+        "total_samples": 82,
+        "stable_seconds": 5.3625963,
+        "animated_elements": []
+      },
+      "files": [
+        {
+          "relative_path": "savegames/solomondark/darkdata.cfg",
+          "evidence_relative_path": "raw/mid_progression_after_scripted_run/savegames/solomondark/darkdata.cfg",
+          "length": 211,
+          "sha256": "7d870123ceb96050a0a437f51188855b15a643742a27693595232c724536359e",
+          "raw_length": 211,
+          "raw_sha256": "7d870123ceb96050a0a437f51188855b15a643742a27693595232c724536359e",
+          "round_trip_identical": true,
+          "round_trip_sha256": "7d870123ceb96050a0a437f51188855b15a643742a27693595232c724536359e",
+          "codec": {
+            "kind": "xor_then_native_marker_lz",
+            "compressed_marker": 0,
+            "compressed_length": 211,
+            "syncbuffer_length": 220,
+            "xor_key_sha256": "27c0dc1eb34b7d60a2f79cbb60cab0a2da05e336dbf8d75ff8b68d4fad5d0cf3"
+          },
+          "census": {
+            "buffer_count": 1,
+            "node_count": 7,
+            "payload_bytes": 160,
+            "maximum_node_depth": 1,
+            "named_buffer_paths": [
+              "/"
+            ]
+          },
+          "tree": {
+            "offset": 0,
+            "end_offset": 220,
+            "root": {
+              "offset": 0,
+              "payload_offset": 4,
+              "payload_length": 0,
+              "payload_hex": "",
+              "children": [
+                {
+                  "offset": 8,
+                  "payload_offset": 12,
+                  "payload_length": 118,
+                  "payload_hex": "6b03000000010101000101000001010101010101010101010109000000010000000000000002000000070000000400000003000000080000000500000006000000e803000000000000010000000200000003000000040000000500000006000000070000000800000009000000640000000000000000",
+                  "children": []
+                },
+                {
+                  "offset": 134,
+                  "payload_offset": 138,
+                  "payload_length": 4,
+                  "payload_hex": "00000000",
+                  "children": []
+                },
+                {
+                  "offset": 146,
+                  "payload_offset": 150,
+                  "payload_length": 4,
+                  "payload_hex": "00000000",
+                  "children": []
+                },
+                {
+                  "offset": 158,
+                  "payload_offset": 162,
+                  "payload_length": 30,
+                  "payload_hex": "000000000000000000000000000000000000000000000000000000010000",
+                  "children": []
+                },
+                {
+                  "offset": 196,
+                  "payload_offset": 200,
+                  "payload_length": 4,
+                  "payload_hex": "8a020000",
+                  "children": []
+                },
+                {
+                  "offset": 208,
+                  "payload_offset": 212,
+                  "payload_length": 0,
+                  "payload_hex": "",
+                  "children": []
+                }
+              ]
+            },
+            "named_buffers": []
+          },
+          "decoded_fields": {
+            "core_payload_length": 118,
+            "core_fields": [
+              {
+                "name": "profile_gold",
+                "payload_offset": 0,
+                "payload_offset_hex": "0x00",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x058",
+                "value": 875,
+                "semantics": "persistent profile gold"
+              },
+              {
+                "name": "class_available[0]",
+                "payload_offset": 4,
+                "payload_offset_hex": "0x04",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x090",
+                "value": false,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_available[1]",
+                "payload_offset": 5,
+                "payload_offset_hex": "0x05",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x091",
+                "value": true,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_available[2]",
+                "payload_offset": 6,
+                "payload_offset_hex": "0x06",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x092",
+                "value": true,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_available[3]",
+                "payload_offset": 7,
+                "payload_offset_hex": "0x07",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x093",
+                "value": true,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_available[4]",
+                "payload_offset": 8,
+                "payload_offset_hex": "0x08",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x094",
+                "value": false,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_available[5]",
+                "payload_offset": 9,
+                "payload_offset_hex": "0x09",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x095",
+                "value": true,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_available[6]",
+                "payload_offset": 10,
+                "payload_offset_hex": "0x0A",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x096",
+                "value": true,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_available[7]",
+                "payload_offset": 11,
+                "payload_offset_hex": "0x0B",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x097",
+                "value": false,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_available[8]",
+                "payload_offset": 12,
+                "payload_offset_hex": "0x0C",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x098",
+                "value": false,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_available[9]",
+                "payload_offset": 13,
+                "payload_offset_hex": "0x0D",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x099",
+                "value": true,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "stock_tutorial_pending",
+                "payload_offset": 14,
+                "payload_offset_hex": "0x0E",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x104",
+                "value": true,
+                "semantics": "stock tutorial/game-over gate"
+              },
+              {
+                "name": "class_enabled[0]",
+                "payload_offset": 15,
+                "payload_offset_hex": "0x0F",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x09A",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_enabled[1]",
+                "payload_offset": 16,
+                "payload_offset_hex": "0x10",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x09B",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_enabled[2]",
+                "payload_offset": 17,
+                "payload_offset_hex": "0x11",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x09C",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_enabled[3]",
+                "payload_offset": 18,
+                "payload_offset_hex": "0x12",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x09D",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_enabled[4]",
+                "payload_offset": 19,
+                "payload_offset_hex": "0x13",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x09E",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_enabled[5]",
+                "payload_offset": 20,
+                "payload_offset_hex": "0x14",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x09F",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_enabled[6]",
+                "payload_offset": 21,
+                "payload_offset_hex": "0x15",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x0A0",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_enabled[7]",
+                "payload_offset": 22,
+                "payload_offset_hex": "0x16",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x0A1",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_enabled[8]",
+                "payload_offset": 23,
+                "payload_offset_hex": "0x17",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x0A2",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_enabled[9]",
+                "payload_offset": 24,
+                "payload_offset_hex": "0x18",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x0A3",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_display_order[0]",
+                "payload_offset": 25,
+                "payload_offset_hex": "0x19",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0A4",
+                "value": 9,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_display_order[1]",
+                "payload_offset": 29,
+                "payload_offset_hex": "0x1D",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0A8",
+                "value": 1,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_display_order[2]",
+                "payload_offset": 33,
+                "payload_offset_hex": "0x21",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0AC",
+                "value": 0,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_display_order[3]",
+                "payload_offset": 37,
+                "payload_offset_hex": "0x25",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0B0",
+                "value": 2,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_display_order[4]",
+                "payload_offset": 41,
+                "payload_offset_hex": "0x29",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0B4",
+                "value": 7,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_display_order[5]",
+                "payload_offset": 45,
+                "payload_offset_hex": "0x2D",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0B8",
+                "value": 4,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_display_order[6]",
+                "payload_offset": 49,
+                "payload_offset_hex": "0x31",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0BC",
+                "value": 3,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_display_order[7]",
+                "payload_offset": 53,
+                "payload_offset_hex": "0x35",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0C0",
+                "value": 8,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_display_order[8]",
+                "payload_offset": 57,
+                "payload_offset_hex": "0x39",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0C4",
+                "value": 5,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_display_order[9]",
+                "payload_offset": 61,
+                "payload_offset_hex": "0x3D",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0C8",
+                "value": 6,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "profile_stat_0xf4",
+                "payload_offset": 65,
+                "payload_offset_hex": "0x41",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0F4",
+                "value": 1000,
+                "semantics": "opaque profile statistic; default 1000"
+              },
+              {
+                "name": "class_canonical_order[0]",
+                "payload_offset": 69,
+                "payload_offset_hex": "0x45",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0CC",
+                "value": 0,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_canonical_order[1]",
+                "payload_offset": 73,
+                "payload_offset_hex": "0x49",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0D0",
+                "value": 1,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_canonical_order[2]",
+                "payload_offset": 77,
+                "payload_offset_hex": "0x4D",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0D4",
+                "value": 2,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_canonical_order[3]",
+                "payload_offset": 81,
+                "payload_offset_hex": "0x51",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0D8",
+                "value": 3,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_canonical_order[4]",
+                "payload_offset": 85,
+                "payload_offset_hex": "0x55",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0DC",
+                "value": 4,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_canonical_order[5]",
+                "payload_offset": 89,
+                "payload_offset_hex": "0x59",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0E0",
+                "value": 5,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_canonical_order[6]",
+                "payload_offset": 93,
+                "payload_offset_hex": "0x5D",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0E4",
+                "value": 6,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_canonical_order[7]",
+                "payload_offset": 97,
+                "payload_offset_hex": "0x61",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0E8",
+                "value": 7,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_canonical_order[8]",
+                "payload_offset": 101,
+                "payload_offset_hex": "0x65",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0EC",
+                "value": 8,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_canonical_order[9]",
+                "payload_offset": 105,
+                "payload_offset_hex": "0x69",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0F0",
+                "value": 9,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "next_portrait_index",
+                "payload_offset": 109,
+                "payload_offset_hex": "0x6D",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0F8",
+                "value": 100,
+                "semantics": "next Portraits/portrait%d.raw index"
+              },
+              {
+                "name": "last_portrait_index",
+                "payload_offset": 113,
+                "payload_offset_hex": "0x71",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0FC",
+                "value": 0,
+                "semantics": "most recently written portrait index"
+              },
+              {
+                "name": "profile_flag_0x105",
+                "payload_offset": 117,
+                "payload_offset_hex": "0x75",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x105",
+                "value": false,
+                "semantics": "opaque profile flag"
+              }
+            ],
+            "luthacus_storage": {
+              "payload_length": 4,
+              "payload_hex": "00000000",
+              "child_count": 0,
+              "status": "polymorphic inventory payload; byte-exact but semantically opaque"
+            },
+            "hagatha_bulk_selectors": [],
+            "hagatha_first_mix_flags": [
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              true,
+              false,
+              false
+            ],
+            "serializer_initialized_flag_index": 27,
+            "shlorio_fee": 650,
+            "reserved_child_5": "empty"
+          }
+        },
+        {
+          "relative_path": "savegames/solomondark/savegames/SATURNINUS/Region4._cache",
+          "evidence_relative_path": "raw/mid_progression_after_scripted_run/savegames/solomondark/savegames/SATURNINUS/Region4._cache",
+          "length": 2068,
+          "sha256": "f6bef21b20a752d90718b07d8694c7c8532643c1b8f2dbe8fc5a19d5ce77f435",
+          "raw_length": 2068,
+          "raw_sha256": "f6bef21b20a752d90718b07d8694c7c8532643c1b8f2dbe8fc5a19d5ce77f435",
+          "round_trip_identical": true,
+          "round_trip_sha256": "f6bef21b20a752d90718b07d8694c7c8532643c1b8f2dbe8fc5a19d5ce77f435",
+          "codec": {
+            "kind": "plain_syncbuffer",
+            "syncbuffer_length": 2068
+          },
+          "census": {
+            "buffer_count": 1,
+            "node_count": 34,
+            "payload_bytes": 1792,
+            "maximum_node_depth": 4,
+            "named_buffer_paths": [
+              "/"
+            ]
+          },
+          "tree": {
+            "offset": 0,
+            "end_offset": 2068,
+            "root": {
+              "offset": 0,
+              "payload_offset": 4,
+              "payload_length": 0,
+              "payload_hex": "",
+              "children": [
+                {
+                  "offset": 8,
+                  "payload_offset": 12,
+                  "payload_length": 48,
+                  "payload_hex": "00000000000000000000804400008044acaaaa42000089435555554400803b4400000000000000000000804400008044",
+                  "children": []
+                },
+                {
+                  "offset": 64,
+                  "payload_offset": 68,
+                  "payload_length": 0,
+                  "payload_hex": "",
+                  "children": [
+                    {
+                      "offset": 72,
+                      "payload_offset": 76,
+                      "payload_length": 1201,
+                      "payload_hex": "010000804400008044070000000700000000001643000016430700000007000000000016430000164330000000002016440020734400a0154400606644000000000000000000a015440060664400a0214400e05444000000000000000000a0214400e0544400204844002053440000000000000000002048440020534400a0554400604844000000000000000000a05544006048440060554400a02f4400000000000000000060554400a02f4400e0634400a02f44000000000000000000e0634400a02f4400a0634400201244000000000000000000a063440020124400a0554400601244000000000000000000a055440060124400a0484400201044000000000000000000a04844002010440060414400600a4400000000000000000060414400600a4400e0374400e00944000000000000000000e0374400e0094400e02d4400e00044000000000000000000e02d4400e0004400a0234400200144000000000000000000a023440020014400202244002007440000000000000000002022440020074400601c4400e00944000000000000000000601c4400e0094400e00f4400200b44000000000000000000e00f4400200b4400600944002005440000000000000000006009440020054400a008440040ff43000000000000000000a008440040ff4300c0f14300c0fe43000000000000000000c0f14300c0fe430040ec4300e0064400000000000000000040ec4300e0064400c0dd4300a00644000000000000000000c0dd4300a006440040d14300e0044400000000000000000040d14300e004440040b84300c0f94300000000000000000040b84300c0f94300409e4300600444000000000000000000409e430060044400c08f430040fe43000000000000000000c08f430040fe430040874300600044000000000000000000408743006000440040874300200444000000000000000000408743002004440080684300e0064400000000000000000080684300e006440080364300200244000000000000000000803643002002440080304300601144000000000000000000803043006011440000e1420020124400000000000000000000e142002012440000e74200202d4400000000000000000000e74200202d440080274300e02e4400000000000000000080274300e02e4400802c4300604a44000000000000000000802c4300604a440080614300e0554400000000000000000080614300e0554400c0b64300205744000000000000000000c0b643002057440040d04300e0654400000000000000000040d04300e0654400c0cd4300e0744400000000000000000040e1430060394400601344006039440000000000000000006013440060394400e01c4400e03644000000000000000000e01c4400e0364400a01f4400203144000000000000000000a01f440020314400a01f4400202944000000000000000000a01f440020294400601c4400202144000000000000000000601c44002021440040cf430020214400000000000000000040cf43002021440040c9430060284400000000000000000040c943006028440040c94300a0314400000000000000000040c94300a031440040d0430060374400000000000000000040d0430060374400c0e14300603944000000000000000000000000",
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "offset": 1281,
+                  "payload_offset": 1285,
+                  "payload_length": 0,
+                  "payload_hex": "",
+                  "children": [
+                    {
+                      "offset": 1289,
+                      "payload_offset": 1293,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1301,
+                      "payload_offset": 1305,
+                      "payload_length": 0,
+                      "payload_hex": "",
+                      "children": [
+                        {
+                          "offset": 1309,
+                          "payload_offset": 1313,
+                          "payload_length": 4,
+                          "payload_hex": "00000000",
+                          "children": []
+                        },
+                        {
+                          "offset": 1321,
+                          "payload_offset": 1325,
+                          "payload_length": 4,
+                          "payload_hex": "00000000",
+                          "children": [
+                            {
+                              "offset": 1333,
+                              "payload_offset": 1337,
+                              "payload_length": 8,
+                              "payload_hex": "0000000000000000",
+                              "children": []
+                            }
+                          ]
+                        },
+                        {
+                          "offset": 1349,
+                          "payload_offset": 1353,
+                          "payload_length": 4,
+                          "payload_hex": "00000000",
+                          "children": []
+                        }
+                      ]
+                    },
+                    {
+                      "offset": 1361,
+                      "payload_offset": 1365,
+                      "payload_length": 12,
+                      "payload_hex": "000080440000804400000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1381,
+                      "payload_offset": 1385,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1393,
+                      "payload_offset": 1397,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1405,
+                      "payload_offset": 1409,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1417,
+                      "payload_offset": 1421,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1429,
+                      "payload_offset": 1433,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1441,
+                      "payload_offset": 1445,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1453,
+                      "payload_offset": 1457,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1465,
+                      "payload_offset": 1469,
+                      "payload_length": 1,
+                      "payload_hex": "00",
+                      "children": []
+                    },
+                    {
+                      "offset": 1474,
+                      "payload_offset": 1478,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1486,
+                      "payload_offset": 1490,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1498,
+                      "payload_offset": 1502,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "offset": 1510,
+                  "payload_offset": 1514,
+                  "payload_length": 0,
+                  "payload_hex": "",
+                  "children": []
+                },
+                {
+                  "offset": 1518,
+                  "payload_offset": 1522,
+                  "payload_length": 20,
+                  "payload_hex": "03000000f9070000931300009413000000000000",
+                  "children": [
+                    {
+                      "offset": 1546,
+                      "payload_offset": 1550,
+                      "payload_length": 41,
+                      "payload_hex": "0060014400402a4400000000000000000000b442000000000000204200000000000000000010000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1595,
+                      "payload_offset": 1599,
+                      "payload_length": 101,
+                      "payload_hex": "0001000400000000000000000000803f0000803f000000000000803f000000000000803f0000803f0000803f0000803f00000000000000803f01000001000000000000803f0000803f0000803f0000803f0000803f0000000000000000000000008e000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1704,
+                      "payload_offset": 1708,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1716,
+                      "payload_offset": 1720,
+                      "payload_length": 41,
+                      "payload_hex": "00800d4400c0374400000000000000000000b442000000000000704100000000000000000000000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1765,
+                      "payload_offset": 1769,
+                      "payload_length": 101,
+                      "payload_hex": "0002002000000000000000000000803f0000803f000000000000803f000000000000803f0000803f0000803f0000803f00000000000000803f01000001000000000000803f0000803f0000803f0000803f0000803f0000000000000000000000008e000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1874,
+                      "payload_offset": 1878,
+                      "payload_length": 8,
+                      "payload_hex": "79fb7540cdcc4c3d",
+                      "children": []
+                    },
+                    {
+                      "offset": 1890,
+                      "payload_offset": 1894,
+                      "payload_length": 41,
+                      "payload_hex": "008000440080e94300000000000000000000b4420000000000005c4200000000000000000000000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1939,
+                      "payload_offset": 1943,
+                      "payload_length": 101,
+                      "payload_hex": "0003002000000000000000000000803f0000803f000000000000803f000000000000803f0000803f0000803f0000803f00000000000000803f01000001000000000000803f0000803f0000803f0000803f0000803f00000000000000000000000000000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 2048,
+                      "payload_offset": 2052,
+                      "payload_length": 8,
+                      "payload_hex": "0000000000000000",
+                      "children": []
+                    }
+                  ]
+                }
+              ]
+            },
+            "named_buffers": []
+          },
+          "decoded_fields": null
+        },
+        {
+          "relative_path": "settings.txt",
+          "evidence_relative_path": "raw/mid_progression_after_scripted_run/settings.txt",
+          "length": 904,
+          "sha256": "094de28e40b4b496a0241a129bbe014148506b983007f8d9422146d935ff402b",
+          "codec": {
+            "kind": "key_value_text",
+            "encoding": "utf-8",
+            "newline": "crlf"
+          },
+          "raw_length": 904,
+          "entries": [
+            {
+              "line": "1",
+              "kind": "setting",
+              "key": "Graphics.Resolution",
+              "value": "1600,900"
+            },
+            {
+              "line": "2",
+              "kind": "setting",
+              "key": "Graphics.Fullscreen",
+              "value": "false"
+            },
+            {
+              "line": "3",
+              "kind": "setting",
+              "key": "System.Username",
+              "value": ""
+            },
+            {
+              "line": "4",
+              "kind": "setting",
+              "key": "System.Userpassword",
+              "value": ""
+            },
+            {
+              "line": "5",
+              "kind": "setting",
+              "key": "System.Token",
+              "value": ""
+            },
+            {
+              "line": "6",
+              "kind": "setting",
+              "key": "System.ComputerName",
+              "value": "0x00474DF0"
+            },
+            {
+              "line": "7",
+              "kind": "setting",
+              "key": "System.IPAddress",
+              "value": "128.0.0.1"
+            },
+            {
+              "line": "8",
+              "kind": "setting",
+              "key": "System.PlayCount",
+              "value": "0"
+            },
+            {
+              "line": "9",
+              "kind": "setting",
+              "key": "Graphics.SaveVideoMemory",
+              "value": "false"
+            },
+            {
+              "line": "10",
+              "kind": "setting",
+              "key": "Game.ComplexLighting",
+              "value": "true"
+            },
+            {
+              "line": "11",
+              "kind": "setting",
+              "key": "Game.ZoomFX",
+              "value": "true"
+            },
+            {
+              "line": "12",
+              "kind": "setting",
+              "key": "Game.ComplexShadows",
+              "value": "true"
+            },
+            {
+              "line": "13",
+              "kind": "setting",
+              "key": "Game.MultipleShadows",
+              "value": "false"
+            },
+            {
+              "line": "14",
+              "kind": "setting",
+              "key": "Game.CastSecondariesOnMouse",
+              "value": "true"
+            },
+            {
+              "line": "15",
+              "kind": "setting",
+              "key": "Game.KidMode",
+              "value": "false"
+            },
+            {
+              "line": "16",
+              "kind": "setting",
+              "key": "Game.Controls",
+              "value": "0"
+            },
+            {
+              "line": "17",
+              "kind": "setting",
+              "key": "Game.Controls.KeyboardUp",
+              "value": "17"
+            },
+            {
+              "line": "18",
+              "kind": "setting",
+              "key": "Game.Controls.KeyboardDown",
+              "value": "31"
+            },
+            {
+              "line": "19",
+              "kind": "setting",
+              "key": "Game.Controls.KeyboardLeft",
+              "value": "30"
+            },
+            {
+              "line": "20",
+              "kind": "setting",
+              "key": "Game.Controls.KeyboardRight",
+              "value": "32"
+            },
+            {
+              "line": "21",
+              "kind": "setting",
+              "key": "Game.Controls.Inventory",
+              "value": "23"
+            },
+            {
+              "line": "22",
+              "kind": "setting",
+              "key": "Game.Controls.Skills",
+              "value": "20"
+            },
+            {
+              "line": "23",
+              "kind": "setting",
+              "key": "Game.Controls.Menu",
+              "value": "1"
+            },
+            {
+              "line": "24",
+              "kind": "setting",
+              "key": "Game.Controls.Belt1",
+              "value": "513"
+            },
+            {
+              "line": "25",
+              "kind": "setting",
+              "key": "Game.Controls.Belt2",
+              "value": "2"
+            },
+            {
+              "line": "26",
+              "kind": "setting",
+              "key": "Game.Controls.Belt3",
+              "value": "3"
+            },
+            {
+              "line": "27",
+              "kind": "setting",
+              "key": "Game.Controls.Belt4",
+              "value": "4"
+            },
+            {
+              "line": "28",
+              "kind": "setting",
+              "key": "Game.Controls.Belt5",
+              "value": "5"
+            },
+            {
+              "line": "29",
+              "kind": "setting",
+              "key": "Game.Controls.Belt6",
+              "value": "6"
+            },
+            {
+              "line": "30",
+              "kind": "setting",
+              "key": "Game.Controls.Belt7",
+              "value": "7"
+            },
+            {
+              "line": "31",
+              "kind": "setting",
+              "key": "Game.Controls.Belt8",
+              "value": "8"
+            },
+            {
+              "line": "32",
+              "kind": "setting",
+              "key": "Game.FastCPU",
+              "value": "false"
+            },
+            {
+              "line": "33",
+              "kind": "setting",
+              "key": "Game.ItemRecipeUID",
+              "value": "524288"
+            },
+            {
+              "line": "34",
+              "kind": "setting",
+              "key": "Game.UID",
+              "value": "32814"
+            },
+            {
+              "line": "35",
+              "kind": "setting",
+              "key": "Game.Resume",
+              "value": ""
+            },
+            {
+              "line": "36",
+              "kind": "setting",
+              "key": "Game.Shredded",
+              "value": "false"
+            },
+            {
+              "line": "37",
+              "kind": "setting",
+              "key": "Game.LightQuality",
+              "value": "0.060000"
+            }
+          ],
+          "final_newline": true,
+          "round_trip_identical": true,
+          "raw_sha256": "094de28e40b4b496a0241a129bbe014148506b983007f8d9422146d935ff402b",
+          "round_trip_sha256": "094de28e40b4b496a0241a129bbe014148506b983007f8d9422146d935ff402b"
+        }
+      ]
+    },
+    {
+      "id": "post_unlock",
+      "generation": {
+        "instance": "sav-unlock",
+        "local_port": 52405,
+        "unused_remote_port": 52406,
+        "headless": true,
+        "audio_disabled": true,
+        "fresh_install": true,
+        "source_game_role": "campaign-owned isolated replica",
+        "native_profile_path_observed": "runtime/savere-captures/instances/sav-unlock/stage/sandbox/savegames/solomondark/",
+        "launch_startup_code": null
+      },
+      "scenario_trace": {
+        "driver": "native Hagatha perk apply 0x0066EF70 selector 0, matching first-mix flag, gold debit, then native profile save",
+        "before_progression_perk_count": 0,
+        "after_progression_perk_count": 1,
+        "after_progression_selectors": [
+          0
+        ],
+        "save_result": 1
+      },
+      "live_profile": {
+        "profile_address": 10199856,
+        "gold": 250,
+        "stock_tutorial_pending": true,
+        "profile_flag_0x105": false,
+        "profile_stat_0xf4": 1000,
+        "next_portrait_index": 100,
+        "last_portrait_index": 0,
+        "shlorio_fee": 600,
+        "class_available": [
+          false,
+          true,
+          true,
+          true,
+          false,
+          true,
+          true,
+          false,
+          false,
+          true
+        ],
+        "class_enabled": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "class_display_order": [
+          9,
+          1,
+          0,
+          2,
+          7,
+          4,
+          3,
+          8,
+          5,
+          6
+        ],
+        "class_canonical_order": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "hagatha_first_mix_flags": [
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false
+        ],
+        "progression": {
+          "address": 286138400,
+          "perk_count": 1,
+          "perk_capacity": 3,
+          "selectors": [
+            0
+          ]
+        }
+      },
+      "settle_gate": {
+        "sample_count": 40,
+        "total_samples": 43,
+        "stable_seconds": 5.3505101999999995,
+        "animated_elements": []
+      },
+      "files": [
+        {
+          "relative_path": "savegames/solomondark/darkdata.cfg",
+          "evidence_relative_path": "raw/post_unlock/savegames/solomondark/darkdata.cfg",
+          "length": 211,
+          "sha256": "01c95c269093610fdb31a9a1857bff5f23a134555318032609c0fe0435ba10e2",
+          "raw_length": 211,
+          "raw_sha256": "01c95c269093610fdb31a9a1857bff5f23a134555318032609c0fe0435ba10e2",
+          "round_trip_identical": true,
+          "round_trip_sha256": "01c95c269093610fdb31a9a1857bff5f23a134555318032609c0fe0435ba10e2",
+          "codec": {
+            "kind": "xor_then_native_marker_lz",
+            "compressed_marker": 0,
+            "compressed_length": 211,
+            "syncbuffer_length": 220,
+            "xor_key_sha256": "27c0dc1eb34b7d60a2f79cbb60cab0a2da05e336dbf8d75ff8b68d4fad5d0cf3"
+          },
+          "census": {
+            "buffer_count": 1,
+            "node_count": 7,
+            "payload_bytes": 160,
+            "maximum_node_depth": 1,
+            "named_buffer_paths": [
+              "/"
+            ]
+          },
+          "tree": {
+            "offset": 0,
+            "end_offset": 220,
+            "root": {
+              "offset": 0,
+              "payload_offset": 4,
+              "payload_length": 0,
+              "payload_hex": "",
+              "children": [
+                {
+                  "offset": 8,
+                  "payload_offset": 12,
+                  "payload_length": 118,
+                  "payload_hex": "fa00000000010101000101000001010101010101010101010109000000010000000000000002000000070000000400000003000000080000000500000006000000e803000000000000010000000200000003000000040000000500000006000000070000000800000009000000640000000000000000",
+                  "children": []
+                },
+                {
+                  "offset": 134,
+                  "payload_offset": 138,
+                  "payload_length": 4,
+                  "payload_hex": "00000000",
+                  "children": []
+                },
+                {
+                  "offset": 146,
+                  "payload_offset": 150,
+                  "payload_length": 4,
+                  "payload_hex": "00000000",
+                  "children": []
+                },
+                {
+                  "offset": 158,
+                  "payload_offset": 162,
+                  "payload_length": 30,
+                  "payload_hex": "010000000000000000000000000000000000000000000000000000010000",
+                  "children": []
+                },
+                {
+                  "offset": 196,
+                  "payload_offset": 200,
+                  "payload_length": 4,
+                  "payload_hex": "58020000",
+                  "children": []
+                },
+                {
+                  "offset": 208,
+                  "payload_offset": 212,
+                  "payload_length": 0,
+                  "payload_hex": "",
+                  "children": []
+                }
+              ]
+            },
+            "named_buffers": []
+          },
+          "decoded_fields": {
+            "core_payload_length": 118,
+            "core_fields": [
+              {
+                "name": "profile_gold",
+                "payload_offset": 0,
+                "payload_offset_hex": "0x00",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x058",
+                "value": 250,
+                "semantics": "persistent profile gold"
+              },
+              {
+                "name": "class_available[0]",
+                "payload_offset": 4,
+                "payload_offset_hex": "0x04",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x090",
+                "value": false,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_available[1]",
+                "payload_offset": 5,
+                "payload_offset_hex": "0x05",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x091",
+                "value": true,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_available[2]",
+                "payload_offset": 6,
+                "payload_offset_hex": "0x06",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x092",
+                "value": true,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_available[3]",
+                "payload_offset": 7,
+                "payload_offset_hex": "0x07",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x093",
+                "value": true,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_available[4]",
+                "payload_offset": 8,
+                "payload_offset_hex": "0x08",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x094",
+                "value": false,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_available[5]",
+                "payload_offset": 9,
+                "payload_offset_hex": "0x09",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x095",
+                "value": true,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_available[6]",
+                "payload_offset": 10,
+                "payload_offset_hex": "0x0A",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x096",
+                "value": true,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_available[7]",
+                "payload_offset": 11,
+                "payload_offset_hex": "0x0B",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x097",
+                "value": false,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_available[8]",
+                "payload_offset": 12,
+                "payload_offset_hex": "0x0C",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x098",
+                "value": false,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_available[9]",
+                "payload_offset": 13,
+                "payload_offset_hex": "0x0D",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x099",
+                "value": true,
+                "semantics": "class availability flag; selector identity not yet reversed"
+              },
+              {
+                "name": "stock_tutorial_pending",
+                "payload_offset": 14,
+                "payload_offset_hex": "0x0E",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x104",
+                "value": true,
+                "semantics": "stock tutorial/game-over gate"
+              },
+              {
+                "name": "class_enabled[0]",
+                "payload_offset": 15,
+                "payload_offset_hex": "0x0F",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x09A",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_enabled[1]",
+                "payload_offset": 16,
+                "payload_offset_hex": "0x10",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x09B",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_enabled[2]",
+                "payload_offset": 17,
+                "payload_offset_hex": "0x11",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x09C",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_enabled[3]",
+                "payload_offset": 18,
+                "payload_offset_hex": "0x12",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x09D",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_enabled[4]",
+                "payload_offset": 19,
+                "payload_offset_hex": "0x13",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x09E",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_enabled[5]",
+                "payload_offset": 20,
+                "payload_offset_hex": "0x14",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x09F",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_enabled[6]",
+                "payload_offset": 21,
+                "payload_offset_hex": "0x15",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x0A0",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_enabled[7]",
+                "payload_offset": 22,
+                "payload_offset_hex": "0x16",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x0A1",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_enabled[8]",
+                "payload_offset": 23,
+                "payload_offset_hex": "0x17",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x0A2",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_enabled[9]",
+                "payload_offset": 24,
+                "payload_offset_hex": "0x18",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x0A3",
+                "value": true,
+                "semantics": "class selection flag; selector identity not yet reversed"
+              },
+              {
+                "name": "class_display_order[0]",
+                "payload_offset": 25,
+                "payload_offset_hex": "0x19",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0A4",
+                "value": 9,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_display_order[1]",
+                "payload_offset": 29,
+                "payload_offset_hex": "0x1D",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0A8",
+                "value": 1,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_display_order[2]",
+                "payload_offset": 33,
+                "payload_offset_hex": "0x21",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0AC",
+                "value": 0,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_display_order[3]",
+                "payload_offset": 37,
+                "payload_offset_hex": "0x25",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0B0",
+                "value": 2,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_display_order[4]",
+                "payload_offset": 41,
+                "payload_offset_hex": "0x29",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0B4",
+                "value": 7,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_display_order[5]",
+                "payload_offset": 45,
+                "payload_offset_hex": "0x2D",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0B8",
+                "value": 4,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_display_order[6]",
+                "payload_offset": 49,
+                "payload_offset_hex": "0x31",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0BC",
+                "value": 3,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_display_order[7]",
+                "payload_offset": 53,
+                "payload_offset_hex": "0x35",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0C0",
+                "value": 8,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_display_order[8]",
+                "payload_offset": 57,
+                "payload_offset_hex": "0x39",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0C4",
+                "value": 5,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_display_order[9]",
+                "payload_offset": 61,
+                "payload_offset_hex": "0x3D",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0C8",
+                "value": 6,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "profile_stat_0xf4",
+                "payload_offset": 65,
+                "payload_offset_hex": "0x41",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0F4",
+                "value": 1000,
+                "semantics": "opaque profile statistic; default 1000"
+              },
+              {
+                "name": "class_canonical_order[0]",
+                "payload_offset": 69,
+                "payload_offset_hex": "0x45",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0CC",
+                "value": 0,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_canonical_order[1]",
+                "payload_offset": 73,
+                "payload_offset_hex": "0x49",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0D0",
+                "value": 1,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_canonical_order[2]",
+                "payload_offset": 77,
+                "payload_offset_hex": "0x4D",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0D4",
+                "value": 2,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_canonical_order[3]",
+                "payload_offset": 81,
+                "payload_offset_hex": "0x51",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0D8",
+                "value": 3,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_canonical_order[4]",
+                "payload_offset": 85,
+                "payload_offset_hex": "0x55",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0DC",
+                "value": 4,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_canonical_order[5]",
+                "payload_offset": 89,
+                "payload_offset_hex": "0x59",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0E0",
+                "value": 5,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_canonical_order[6]",
+                "payload_offset": 93,
+                "payload_offset_hex": "0x5D",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0E4",
+                "value": 6,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_canonical_order[7]",
+                "payload_offset": 97,
+                "payload_offset_hex": "0x61",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0E8",
+                "value": 7,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_canonical_order[8]",
+                "payload_offset": 101,
+                "payload_offset_hex": "0x65",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0EC",
+                "value": 8,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "class_canonical_order[9]",
+                "payload_offset": 105,
+                "payload_offset_hex": "0x69",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0F0",
+                "value": 9,
+                "semantics": "class selector permutation; names not yet reversed"
+              },
+              {
+                "name": "next_portrait_index",
+                "payload_offset": 109,
+                "payload_offset_hex": "0x6D",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0F8",
+                "value": 100,
+                "semantics": "next Portraits/portrait%d.raw index"
+              },
+              {
+                "name": "last_portrait_index",
+                "payload_offset": 113,
+                "payload_offset_hex": "0x71",
+                "size": 4,
+                "type": "i32",
+                "runtime_offset_hex": "0x0FC",
+                "value": 0,
+                "semantics": "most recently written portrait index"
+              },
+              {
+                "name": "profile_flag_0x105",
+                "payload_offset": 117,
+                "payload_offset_hex": "0x75",
+                "size": 1,
+                "type": "bool",
+                "runtime_offset_hex": "0x105",
+                "value": false,
+                "semantics": "opaque profile flag"
+              }
+            ],
+            "luthacus_storage": {
+              "payload_length": 4,
+              "payload_hex": "00000000",
+              "child_count": 0,
+              "status": "polymorphic inventory payload; byte-exact but semantically opaque"
+            },
+            "hagatha_bulk_selectors": [],
+            "hagatha_first_mix_flags": [
+              true,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              true,
+              false,
+              false
+            ],
+            "serializer_initialized_flag_index": 27,
+            "shlorio_fee": 600,
+            "reserved_child_5": "empty"
+          }
+        },
+        {
+          "relative_path": "savegames/solomondark/savegames/SATURNINUS/Region4._cache",
+          "evidence_relative_path": "raw/post_unlock/savegames/solomondark/savegames/SATURNINUS/Region4._cache",
+          "length": 2068,
+          "sha256": "d1d4e35516e5e60ad31c61b4ce1ec539fae307e0d0ac278971d2de1496e21d64",
+          "raw_length": 2068,
+          "raw_sha256": "d1d4e35516e5e60ad31c61b4ce1ec539fae307e0d0ac278971d2de1496e21d64",
+          "round_trip_identical": true,
+          "round_trip_sha256": "d1d4e35516e5e60ad31c61b4ce1ec539fae307e0d0ac278971d2de1496e21d64",
+          "codec": {
+            "kind": "plain_syncbuffer",
+            "syncbuffer_length": 2068
+          },
+          "census": {
+            "buffer_count": 1,
+            "node_count": 34,
+            "payload_bytes": 1792,
+            "maximum_node_depth": 4,
+            "named_buffer_paths": [
+              "/"
+            ]
+          },
+          "tree": {
+            "offset": 0,
+            "end_offset": 2068,
+            "root": {
+              "offset": 0,
+              "payload_offset": 4,
+              "payload_length": 0,
+              "payload_hex": "",
+              "children": [
+                {
+                  "offset": 8,
+                  "payload_offset": 12,
+                  "payload_length": 48,
+                  "payload_hex": "00000000000000000000804400008044acaaaa42000089435555554400803b4400000000000000000000804400008044",
+                  "children": []
+                },
+                {
+                  "offset": 64,
+                  "payload_offset": 68,
+                  "payload_length": 0,
+                  "payload_hex": "",
+                  "children": [
+                    {
+                      "offset": 72,
+                      "payload_offset": 76,
+                      "payload_length": 1201,
+                      "payload_hex": "010000804400008044070000000700000000001643000016430700000007000000000016430000164330000000002016440020734400a0154400606644000000000000000000a015440060664400a0214400e05444000000000000000000a0214400e0544400204844002053440000000000000000002048440020534400a0554400604844000000000000000000a05544006048440060554400a02f4400000000000000000060554400a02f4400e0634400a02f44000000000000000000e0634400a02f4400a0634400201244000000000000000000a063440020124400a0554400601244000000000000000000a055440060124400a0484400201044000000000000000000a04844002010440060414400600a4400000000000000000060414400600a4400e0374400e00944000000000000000000e0374400e0094400e02d4400e00044000000000000000000e02d4400e0004400a0234400200144000000000000000000a023440020014400202244002007440000000000000000002022440020074400601c4400e00944000000000000000000601c4400e0094400e00f4400200b44000000000000000000e00f4400200b4400600944002005440000000000000000006009440020054400a008440040ff43000000000000000000a008440040ff4300c0f14300c0fe43000000000000000000c0f14300c0fe430040ec4300e0064400000000000000000040ec4300e0064400c0dd4300a00644000000000000000000c0dd4300a006440040d14300e0044400000000000000000040d14300e004440040b84300c0f94300000000000000000040b84300c0f94300409e4300600444000000000000000000409e430060044400c08f430040fe43000000000000000000c08f430040fe430040874300600044000000000000000000408743006000440040874300200444000000000000000000408743002004440080684300e0064400000000000000000080684300e006440080364300200244000000000000000000803643002002440080304300601144000000000000000000803043006011440000e1420020124400000000000000000000e142002012440000e74200202d4400000000000000000000e74200202d440080274300e02e4400000000000000000080274300e02e4400802c4300604a44000000000000000000802c4300604a440080614300e0554400000000000000000080614300e0554400c0b64300205744000000000000000000c0b643002057440040d04300e0654400000000000000000040d04300e0654400c0cd4300e0744400000000000000000040e1430060394400601344006039440000000000000000006013440060394400e01c4400e03644000000000000000000e01c4400e0364400a01f4400203144000000000000000000a01f440020314400a01f4400202944000000000000000000a01f440020294400601c4400202144000000000000000000601c44002021440040cf430020214400000000000000000040cf43002021440040c9430060284400000000000000000040c943006028440040c94300a0314400000000000000000040c94300a031440040d0430060374400000000000000000040d0430060374400c0e14300603944000000000000000000000000",
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "offset": 1281,
+                  "payload_offset": 1285,
+                  "payload_length": 0,
+                  "payload_hex": "",
+                  "children": [
+                    {
+                      "offset": 1289,
+                      "payload_offset": 1293,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1301,
+                      "payload_offset": 1305,
+                      "payload_length": 0,
+                      "payload_hex": "",
+                      "children": [
+                        {
+                          "offset": 1309,
+                          "payload_offset": 1313,
+                          "payload_length": 4,
+                          "payload_hex": "00000000",
+                          "children": []
+                        },
+                        {
+                          "offset": 1321,
+                          "payload_offset": 1325,
+                          "payload_length": 4,
+                          "payload_hex": "00000000",
+                          "children": [
+                            {
+                              "offset": 1333,
+                              "payload_offset": 1337,
+                              "payload_length": 8,
+                              "payload_hex": "0000000000000000",
+                              "children": []
+                            }
+                          ]
+                        },
+                        {
+                          "offset": 1349,
+                          "payload_offset": 1353,
+                          "payload_length": 4,
+                          "payload_hex": "00000000",
+                          "children": []
+                        }
+                      ]
+                    },
+                    {
+                      "offset": 1361,
+                      "payload_offset": 1365,
+                      "payload_length": 12,
+                      "payload_hex": "000080440000804400000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1381,
+                      "payload_offset": 1385,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1393,
+                      "payload_offset": 1397,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1405,
+                      "payload_offset": 1409,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1417,
+                      "payload_offset": 1421,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1429,
+                      "payload_offset": 1433,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1441,
+                      "payload_offset": 1445,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1453,
+                      "payload_offset": 1457,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1465,
+                      "payload_offset": 1469,
+                      "payload_length": 1,
+                      "payload_hex": "00",
+                      "children": []
+                    },
+                    {
+                      "offset": 1474,
+                      "payload_offset": 1478,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1486,
+                      "payload_offset": 1490,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1498,
+                      "payload_offset": 1502,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "offset": 1510,
+                  "payload_offset": 1514,
+                  "payload_length": 0,
+                  "payload_hex": "",
+                  "children": []
+                },
+                {
+                  "offset": 1518,
+                  "payload_offset": 1522,
+                  "payload_length": 20,
+                  "payload_hex": "03000000f9070000931300009413000000000000",
+                  "children": [
+                    {
+                      "offset": 1546,
+                      "payload_offset": 1550,
+                      "payload_length": 41,
+                      "payload_hex": "0060014400402a4400000000000000000000b442000000000000204200000000000000000010000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1595,
+                      "payload_offset": 1599,
+                      "payload_length": 101,
+                      "payload_hex": "0001000400000000000000000000803f0000803f000000000000803f000000000000803f0000803f0000803f0000803f00000000000000803f01000001000000000000803f0000803f0000803f0000803f0000803f0000000000000000000000008e000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1704,
+                      "payload_offset": 1708,
+                      "payload_length": 4,
+                      "payload_hex": "00000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1716,
+                      "payload_offset": 1720,
+                      "payload_length": 41,
+                      "payload_hex": "00800d4400c0374400000000000000000000b442000000000000704100000000000000000000000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1765,
+                      "payload_offset": 1769,
+                      "payload_length": 101,
+                      "payload_hex": "0002002000000000000000000000803f0000803f000000000000803f000000000000803f0000803f0000803f0000803f00000000000000803f01000001000000000000803f0000803f0000803f0000803f0000803f0000000000000000000000008e000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1874,
+                      "payload_offset": 1878,
+                      "payload_length": 8,
+                      "payload_hex": "311b7840cdcc4c3d",
+                      "children": []
+                    },
+                    {
+                      "offset": 1890,
+                      "payload_offset": 1894,
+                      "payload_length": 41,
+                      "payload_hex": "008000440080e94300000000000000000000b4420000000000005c4200000000000000000000000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 1939,
+                      "payload_offset": 1943,
+                      "payload_length": 101,
+                      "payload_hex": "0003002000000000000000000000803f0000803f000000000000803f000000000000803f0000803f0000803f0000803f00000000000000803f01000001000000000000803f0000803f0000803f0000803f0000803f00000000000000000000000000000000",
+                      "children": []
+                    },
+                    {
+                      "offset": 2048,
+                      "payload_offset": 2052,
+                      "payload_length": 8,
+                      "payload_hex": "372c3f40f834293f",
+                      "children": []
+                    }
+                  ]
+                }
+              ]
+            },
+            "named_buffers": []
+          },
+          "decoded_fields": null
+        },
+        {
+          "relative_path": "settings.txt",
+          "evidence_relative_path": "raw/post_unlock/settings.txt",
+          "length": 904,
+          "sha256": "5d42b8c383bda5864fde817cd405fc417fdbc3165bc08c047c1c3a040573089e",
+          "codec": {
+            "kind": "key_value_text",
+            "encoding": "utf-8",
+            "newline": "crlf"
+          },
+          "raw_length": 904,
+          "entries": [
+            {
+              "line": "1",
+              "kind": "setting",
+              "key": "Graphics.Resolution",
+              "value": "1600,900"
+            },
+            {
+              "line": "2",
+              "kind": "setting",
+              "key": "Graphics.Fullscreen",
+              "value": "false"
+            },
+            {
+              "line": "3",
+              "kind": "setting",
+              "key": "System.Username",
+              "value": ""
+            },
+            {
+              "line": "4",
+              "kind": "setting",
+              "key": "System.Userpassword",
+              "value": ""
+            },
+            {
+              "line": "5",
+              "kind": "setting",
+              "key": "System.Token",
+              "value": ""
+            },
+            {
+              "line": "6",
+              "kind": "setting",
+              "key": "System.ComputerName",
+              "value": "0x005E4DF0"
+            },
+            {
+              "line": "7",
+              "kind": "setting",
+              "key": "System.IPAddress",
+              "value": "128.0.0.1"
+            },
+            {
+              "line": "8",
+              "kind": "setting",
+              "key": "System.PlayCount",
+              "value": "0"
+            },
+            {
+              "line": "9",
+              "kind": "setting",
+              "key": "Graphics.SaveVideoMemory",
+              "value": "false"
+            },
+            {
+              "line": "10",
+              "kind": "setting",
+              "key": "Game.ComplexLighting",
+              "value": "true"
+            },
+            {
+              "line": "11",
+              "kind": "setting",
+              "key": "Game.ZoomFX",
+              "value": "true"
+            },
+            {
+              "line": "12",
+              "kind": "setting",
+              "key": "Game.ComplexShadows",
+              "value": "true"
+            },
+            {
+              "line": "13",
+              "kind": "setting",
+              "key": "Game.MultipleShadows",
+              "value": "false"
+            },
+            {
+              "line": "14",
+              "kind": "setting",
+              "key": "Game.CastSecondariesOnMouse",
+              "value": "true"
+            },
+            {
+              "line": "15",
+              "kind": "setting",
+              "key": "Game.KidMode",
+              "value": "false"
+            },
+            {
+              "line": "16",
+              "kind": "setting",
+              "key": "Game.Controls",
+              "value": "0"
+            },
+            {
+              "line": "17",
+              "kind": "setting",
+              "key": "Game.Controls.KeyboardUp",
+              "value": "17"
+            },
+            {
+              "line": "18",
+              "kind": "setting",
+              "key": "Game.Controls.KeyboardDown",
+              "value": "31"
+            },
+            {
+              "line": "19",
+              "kind": "setting",
+              "key": "Game.Controls.KeyboardLeft",
+              "value": "30"
+            },
+            {
+              "line": "20",
+              "kind": "setting",
+              "key": "Game.Controls.KeyboardRight",
+              "value": "32"
+            },
+            {
+              "line": "21",
+              "kind": "setting",
+              "key": "Game.Controls.Inventory",
+              "value": "23"
+            },
+            {
+              "line": "22",
+              "kind": "setting",
+              "key": "Game.Controls.Skills",
+              "value": "20"
+            },
+            {
+              "line": "23",
+              "kind": "setting",
+              "key": "Game.Controls.Menu",
+              "value": "1"
+            },
+            {
+              "line": "24",
+              "kind": "setting",
+              "key": "Game.Controls.Belt1",
+              "value": "513"
+            },
+            {
+              "line": "25",
+              "kind": "setting",
+              "key": "Game.Controls.Belt2",
+              "value": "2"
+            },
+            {
+              "line": "26",
+              "kind": "setting",
+              "key": "Game.Controls.Belt3",
+              "value": "3"
+            },
+            {
+              "line": "27",
+              "kind": "setting",
+              "key": "Game.Controls.Belt4",
+              "value": "4"
+            },
+            {
+              "line": "28",
+              "kind": "setting",
+              "key": "Game.Controls.Belt5",
+              "value": "5"
+            },
+            {
+              "line": "29",
+              "kind": "setting",
+              "key": "Game.Controls.Belt6",
+              "value": "6"
+            },
+            {
+              "line": "30",
+              "kind": "setting",
+              "key": "Game.Controls.Belt7",
+              "value": "7"
+            },
+            {
+              "line": "31",
+              "kind": "setting",
+              "key": "Game.Controls.Belt8",
+              "value": "8"
+            },
+            {
+              "line": "32",
+              "kind": "setting",
+              "key": "Game.FastCPU",
+              "value": "false"
+            },
+            {
+              "line": "33",
+              "kind": "setting",
+              "key": "Game.ItemRecipeUID",
+              "value": "524288"
+            },
+            {
+              "line": "34",
+              "kind": "setting",
+              "key": "Game.UID",
+              "value": "32814"
+            },
+            {
+              "line": "35",
+              "kind": "setting",
+              "key": "Game.Resume",
+              "value": ""
+            },
+            {
+              "line": "36",
+              "kind": "setting",
+              "key": "Game.Shredded",
+              "value": "false"
+            },
+            {
+              "line": "37",
+              "kind": "setting",
+              "key": "Game.LightQuality",
+              "value": "0.060000"
+            }
+          ],
+          "final_newline": true,
+          "round_trip_identical": true,
+          "raw_sha256": "5d42b8c383bda5864fde817cd405fc417fdbc3165bc08c047c1c3a040573089e",
+          "round_trip_sha256": "5d42b8c383bda5864fde817cd405fc417fdbc3165bc08c047c1c3a040573089e"
+        }
+      ]
+    }
+  ]
+}

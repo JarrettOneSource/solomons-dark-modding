@@ -1780,6 +1780,8 @@ RECORDED_CAPTURE_SHAS: dict[str, tuple[str, int]] = {
     "6b58f4db1ba8ce5c5018d6278940efb6f9a6dff3": ("tree", 1),
     # loadre class/loadout golden: one clean base in the fixture header.
     "c36f0a81721fa5d3dc2edda65f3347354974b2f0": ("commit", 1),
+    # G10 save-format goldens: one clean base in the fixture header.
+    "8deaa9400cc1df33748976aa0464e8016c11a46b": ("commit", 1),
     # G5 audio dispatch golden: one clean capture commit/tree pair.
     "508c5be780692c8e30a8c68d395b31d27f0866e8": ("commit", 1),
     "0a0a49fedbf242c5be02760a71f4ff9468b4623f": ("tree", 1),
@@ -1796,6 +1798,18 @@ RECORDED_CAPTURE_SHAS: dict[str, tuple[str, int]] = {
     "933fdd99f0bf85ef06b9ef04c25990bff79966f4": ("absent", 5),
     "d28f98a190d69662c8e6e691484b4d4e0dc939b9": ("absent", 3),
     "f9cac8783e72e7423a2d952987fa169fa84f3dcb": ("absent", 52),
+}
+
+# The G10 Region1 payload happens to be exactly twenty bytes, so its ordinary
+# hexadecimal serialization has the same lexical shape as a Git object id.
+# Name every location rather than exempting the value by count: moving it into
+# a provenance field must not make the capture-object census silently ignore it.
+NON_PROVENANCE_HEX40_LOCATIONS: dict[str, tuple[str, ...]] = {
+    "03000000f9070000931300009413000000000000": (
+        "tests/fixtures/webgame/save-format-goldens.json.captures[0].files[1].tree.root.children[4].payload_hex",
+        "tests/fixtures/webgame/save-format-goldens.json.captures[1].files[1].tree.root.children[4].payload_hex",
+        "tests/fixtures/webgame/save-format-goldens.json.captures[2].files[1].tree.root.children[4].payload_hex",
+    ),
 }
 
 # The G11 menu capture ran in an isolated clone and recorded that clone's local
@@ -1919,6 +1933,14 @@ def test_recorded_capture_provenance_resolves_or_is_declared() -> str:
         )
 
     found = _collect_recorded_shas()
+    for value, expected_locations in NON_PROVENANCE_HEX40_LOCATIONS.items():
+        actual_locations = tuple(sorted(found.pop(value, ())))
+        if actual_locations != expected_locations:
+            raise StaticReTestFailure(
+                "the declared non-provenance native-save payload moved or changed: "
+                f"value={value} expected={list(expected_locations)} "
+                f"actual={list(actual_locations)}"
+            )
     observed = {sha: len(paths) for sha, paths in found.items()}
     expected = {sha: count for sha, (_, count) in RECORDED_CAPTURE_SHAS.items()}
     if observed != expected:
