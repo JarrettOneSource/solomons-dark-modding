@@ -80,6 +80,13 @@ from static_re_native_hub_economy_contracts import (
     test_native_hub_inventory_generation_and_rng_provenance_are_pinned,
     test_native_hub_price_formulas_and_transaction_constants_are_pinned,
 )
+from static_re_native_loot_selector_contracts import (
+    test_native_loot_actor_private_seed_lifecycle_replays_bit_exact,
+    test_native_loot_amounts_and_non_enemy_sources_are_pinned,
+    test_native_loot_golden_provenance_and_recorder_contract_are_pinned,
+    test_native_loot_physics_lifetimes_and_multiplayer_credit_are_pinned,
+    test_native_loot_selector_tables_and_decision_traces_are_pinned,
+)
 from static_re_native_menu_shell_contracts import (
     test_designed_menu_focus_model_consumes_g14_intents,
     test_native_menu_live_transition_graph_is_pinned,
@@ -994,6 +1001,26 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native hub Dig and run boundary fields are pinned",
         test_native_hub_dig_and_run_boundary_fields_are_pinned,
+    ),
+    (
+        "Native loot golden provenance and recorder contract are pinned",
+        test_native_loot_golden_provenance_and_recorder_contract_are_pinned,
+    ),
+    (
+        "Native loot actor-private seed lifecycle replays bit-exact",
+        test_native_loot_actor_private_seed_lifecycle_replays_bit_exact,
+    ),
+    (
+        "Native loot selector tables and decision traces are pinned",
+        test_native_loot_selector_tables_and_decision_traces_are_pinned,
+    ),
+    (
+        "Native loot amounts and non-enemy sources are pinned",
+        test_native_loot_amounts_and_non_enemy_sources_are_pinned,
+    ),
+    (
+        "Native loot physics, lifetimes, and multiplayer credit are pinned",
+        test_native_loot_physics_lifetimes_and_multiplayer_credit_are_pinned,
     ),
     (
         "Native menu screen census and live layouts are pinned",

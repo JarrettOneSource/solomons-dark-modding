@@ -29,6 +29,11 @@ python3 tools/build_native_item_catalog.py \
   --output docs/reverse-engineering/native-item-catalog.json
 ```
 
+The complete runtime selector, actor-private seed lifecycle, amount tables,
+pickup physics, lifetimes, and multiplayer credit rule are in
+[`native-loot-selector.md`](native-loot-selector.md). This document remains the
+definition, object-layout, ownership, art, and effect reference.
+
 This document covers the retail `SolomonDark.exe` whose SHA-256 is
 `03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`.
 
@@ -413,21 +418,25 @@ floor:
 Orb `+0x13C` selects health or mana; `+0x140` is remaining value; `+0x144`
 starts at 900 and controls delayed value decay; `+0x148/+0x14C` drive phase
 and alpha. The tick scans native player slots 0..3 using each progression
-object's orb-pull radius. Outside pickup range it accelerates toward the
-candidate. Inside range it creates the collection effect, scales the reward
-from remaining value, and deletes the actor. The stock resource write is
-gated to slot 0: health calls `0x0052AC80`, mana calls `0x0052B150`.
+object's orb-pull radius. Between its strict pull and capture radii it moves a
+constant 1.5 units per actor tick toward each qualifying slot; it has no
+velocity or acceleration curve. Inside capture range it creates the collection
+effect, scales the reward from remaining value, and deletes the actor. The
+stock resource write is gated to slot 0: health calls `0x0052AC80`, mana calls
+`0x0052B150`. Exact radii, decay endpoints, and multi-slot consequences are in
+`native-loot-selector.md`.
 
 Art is BadGuys 434/435 for the two rendered orb kinds, with BadGuys 15 and
 related transient effect records used during animation/collection.
 
 ### Gold
 
-Gold owns tier `+0x13C`, amount `+0x140`, lifetime `+0x144`, animation state
+Gold owns tier `+0x13C`, amount `+0x140`, activation/scatter delay `+0x144`, animation state
 `+0x148`, and transient motion fields through `+0x158`. `0x005E13C0` maps
 amount `<3`, `<5`, `<8`, or larger to tiers 0..3. Pickup checks only local
 slot 0, deletes the actor, shows `%d GOLD`, and credits the process-global gold
-scalar through `0x005A7C60(amount, false)`.
+scalar through `0x005A7C60(amount, false)`. Gold has no stock despawn timer;
+`+0x144` is not lifetime.
 
 The renderer selects BadGuys 188..197 and 198..201 by tier/state; record 73 is
 also used by the render path and record 83 by the tick effect. `0x0046AA90`
@@ -460,8 +469,8 @@ recipe definitions and materialized a type-2012 Gold actor with amount 7. See
 
 ### Bonus powerup
 
-Bonus `+0x13C` is randomized among 0..2 with a native reroll that biases one
-branch; `+0x150` is animation phase and `+0x154` starts at 1200. Pickup checks
+Bonus `+0x13C` has exact kind weights `1/4, 1/8, 5/8` for kinds 0, 1, and 2;
+`+0x150` is animation phase and `+0x154` starts at 1200. Pickup checks
 only local slot 0, fades/deletes the actor, and calls `0x005D5910(kind)`:
 
 | Kind | Native result |
@@ -476,10 +485,13 @@ Presentation uses BadGuys 122..139 and 140..157, plus records 7 and 61.
 
 `0x0047C070` builds one candidate list from the monster-definition flags at
 `+0xCC..+0xD1` (orbs, powerups, items, gold, specific items, potions), chooses
-one candidate, and dispatches the category-specific factory. Definition-backed
-equipment selection reaches `0x0046BDE0`; potions use `0x0046AE20`; keys use
-`0x00468440`; the owner vtable supplies item and potion carrier creation. See
-[`native-enemies.md`](native-enemies.md) for the exact candidate/mask policy.
+one candidate, and dispatches the category-specific factory. Its category
+rolls use an actor-seeded private stream, while materializers continue on the
+active shared stream. Enemy equipment selection uses `0x0046A360` over the
+definition stores and random-equipment placeholders; the narrower
+definition-only path is `0x0046BDE0`. Potions use `0x0046AE20`; keys use
+`0x00468440`. See [`native-loot-selector.md`](native-loot-selector.md) for the
+complete order, probabilities, seed writers, and dispatch constraints.
 
 ## Ownership and multiplayer consequences
 
