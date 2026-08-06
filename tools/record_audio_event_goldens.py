@@ -819,15 +819,17 @@ def main() -> int:
 
     document = {
         "schema": "solomon-dark-native-audio-event-goldens-v1",
-        "provenance": {
+        "header": {
+            "instance": INSTANCE,
+            "ports": list(PORTS),
+            "audio_disabled": True,
+            "fixture_is_machine_recorded": True,
             "source_commit_sha": source["commit_sha"],
             "source_tree_sha": source["tree_sha"],
             "worktree_dirty_at_capture_start": source["worktree_dirty"],
             "captured_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "instance": INSTANCE,
-            "ports": list(PORTS),
             "process_id": launch_result["processId"],
-            "staged_executable": launch_result["executablePath"],
+            "executable_path": launch_result["executablePath"],
             "loader_sha256": native_sim.sha256_file(native_sim.STAGED_LOADER),
             "build_loader_sha256": native_sim.sha256_file(native_sim.LOADER),
             "game_binary_sha256": native_sim.sha256_file(native_sim.GAME_BINARY),
@@ -836,7 +838,7 @@ def main() -> int:
             "recorder_path": RECORDER.relative_to(ROOT).as_posix(),
             "recorder_sha256": native_sim.sha256_file(RECORDER),
             "capture_method": "live stock dispatch-wrapper hooks plus explicit silent-phase checkpoints",
-            "cleanup_receipts": cleanup_receipts,
+            "cleanup": cleanup_receipts,
         },
         "dispatch_boundary": {
             "environment": {"SDMOD_DISABLE_AUDIO": "1", "SDMOD_ENABLE_AUDIO": "0", "SDMOD_CAPTURE_AUDIO_EVENTS": "1"},
