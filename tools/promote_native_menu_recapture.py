@@ -14,14 +14,15 @@ from typing import Any
 from native_menu_settlement_v2 import (
     SettlementV2Error,
     assert_overlay_hygiene,
-    assert_confirmation_matches,
     build_overlay_contamination_override,
     build_population_phase_override,
     canonical_bytes,
+    classify_window,
     structural_layout_bytes,
     validate_declared_settlement,
     validate_overlay_reference,
 )
+from resolve_native_menu_motion_campaign import ResolutionError, resolve_campaign
 
 
 class PromotionError(RuntimeError):
@@ -135,8 +136,8 @@ def validate_settlement_fixture(
     settlement = header.get("settlement")
     if not isinstance(settlement, dict):
         raise PromotionError(f"{fixture_path} has no Settlement v2 measurement")
-    if settlement.get("settlement_spec") != "2.2":
-        raise PromotionError(f"{fixture_path} does not identify Settlement v2.2")
+    if settlement.get("settlement_spec") != "2.3":
+        raise PromotionError(f"{fixture_path} does not identify Settlement v2.3")
     if settlement.get("structural_element_order") != (
         "draw_order_then_element_id"
     ):
@@ -146,6 +147,20 @@ def validate_settlement_fixture(
     ids = animated_ids(layout)
     if settlement.get("animated_element_ids") != ids:
         raise PromotionError(f"{fixture_path} settlement animated ids disagree with its layout")
+    raw_ids = settlement.get("raw_window_animated_element_ids")
+    if not isinstance(raw_ids, list) or not all(
+        isinstance(value, str) for value in raw_ids
+    ):
+        raise PromotionError(
+            f"{fixture_path} lost its raw per-window animation measurement"
+        )
+    motion_capability = header.get("motion_capability")
+    if not isinstance(motion_capability, dict) or motion_capability.get(
+        "resolved_animated_element_ids"
+    ) != ids:
+        raise PromotionError(
+            f"{fixture_path} animated IDs are not bound to screen-level motion capability"
+        )
     element_count = len(layout.get("elements", []))
     if element_count == 0:
         raise PromotionError(f"{fixture_path} reached no layout elements")
@@ -168,9 +183,13 @@ def validate_settlement_fixture(
         if not isinstance(samples, list):
             raise PromotionError(f"{fixture_path} trace has no settled sample window")
         try:
-            validate_declared_settlement(layout, samples)
+            raw_classification = classify_window(samples)
         except SettlementV2Error as error:
             raise PromotionError(f"{fixture_path}: {error}") from error
+        if raw_classification["animated_element_ids"] != raw_ids:
+            raise PromotionError(
+                f"{fixture_path} records a false raw-window animated ID set"
+            )
 
     confirmation = header.get("animation_confirmation")
     if not isinstance(confirmation, dict):
@@ -193,24 +212,27 @@ def validate_settlement_fixture(
         raise PromotionError(f"{fixture_path} confirmation has no measured second layout")
     try:
         assert_overlay_hygiene(layout, overlay_reference)
-        assert_confirmation_matches(layout, confirmation_layout)
         assert_overlay_hygiene(confirmation_layout, overlay_reference)
     except SettlementV2Error as error:
         raise PromotionError(f"{fixture_path}: {error}") from error
-    confirmation_structural_sha = hashlib.sha256(
+    raw_confirmation_structural_sha = hashlib.sha256(
         structural_layout_bytes(confirmation_layout)
     ).hexdigest()
     if (
-        confirmation.get("confirmation_structural_sha256")
-        != confirmation_structural_sha
+        confirmation.get("raw_confirmation_structural_sha256")
+        != raw_confirmation_structural_sha
     ):
         raise PromotionError(
-            f"{fixture_path} confirmation records a false second-capture "
+            f"{fixture_path} confirmation records a false raw second-capture "
             "structural hash"
         )
     expected_ids_sha = hashlib.sha256(canonical_bytes(sorted(ids))).hexdigest()
     if confirmation.get("animated_element_ids_sha256") != expected_ids_sha:
         raise PromotionError(f"{fixture_path} confirmation animated-id hash is false")
+    if confirmation.get("confirmation_structural_sha256") != structural_sha:
+        raise PromotionError(
+            f"{fixture_path} confirmation resolved structure disagrees with the primary"
+        )
     if confirmation.get("instance") == header.get("instance"):
         raise PromotionError(f"{fixture_path} confirmation reused the primary instance")
     if confirmation.get("process_id") == header.get("process_id"):
@@ -517,6 +539,60 @@ def validate_and_promote(
     dry_run: bool,
 ) -> dict[str, Any]:
     landed_root = repo_root / "tests/fixtures/webgame"
+    resolved_navigation = read_json(navigation_path)
+    resolution_header = resolved_navigation.get("header", {}).get(
+        "motion_capability_resolution"
+    )
+    if not isinstance(resolution_header, dict) or resolution_header.get(
+        "settlement_spec"
+    ) != "2.3":
+        raise PromotionError(
+            "candidate navigation has no machine-derived Settlement v2.3 resolution"
+        )
+
+    def resolution_evidence_path(field: str) -> Path:
+        receipt = resolution_header.get(field)
+        if not isinstance(receipt, dict):
+            raise PromotionError(f"motion resolution lost {field}")
+        relative = receipt.get("evidence_path")
+        if not isinstance(relative, str) or not relative:
+            raise PromotionError(f"motion resolution {field} has no evidence path")
+        root = evidence_root.resolve()
+        path = (root / relative).resolve()
+        if not path.is_relative_to(root) or not path.is_file():
+            raise PromotionError(f"motion resolution {field} evidence is absent")
+        if path.stat().st_size != receipt.get("bytes") or file_sha256(path) != receipt.get(
+            "sha256"
+        ):
+            raise PromotionError(f"motion resolution {field} receipt is false")
+        return path
+
+    raw_primary_navigation = resolution_evidence_path("primary_raw_recording")
+    raw_confirmation_navigation = resolution_evidence_path(
+        "confirmation_raw_recording"
+    )
+    motion_directory = resolution_header.get("motion_observation_directory")
+    if not isinstance(motion_directory, str) or not motion_directory:
+        raise PromotionError("motion resolution lost its observation directory")
+    motion_root = (evidence_root.resolve() / motion_directory).resolve()
+    if not motion_root.is_relative_to(evidence_root.resolve()):
+        raise PromotionError("motion observation directory escapes the evidence root")
+    try:
+        resolve_campaign(
+            candidate_root,
+            evidence_root,
+            raw_primary_navigation,
+            raw_confirmation_navigation,
+            motion_root,
+            navigation_path,
+            evidence_root / "motion-resolution-verification-unused.json",
+            False,
+            True,
+        )
+    except (ResolutionError, SettlementV2Error) as error:
+        raise PromotionError(
+            f"candidate Settlement v2.3 resolution did not re-derive: {error}"
+        ) from error
     overlay_reference_path, overlay_reference = resolve_overlay_reference(
         repo_root,
         evidence_root,

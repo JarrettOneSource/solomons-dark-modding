@@ -4,6 +4,9 @@ $script:NativeMenuSettleConsecutiveSamples = 40
 $script:NativeMenuSettleMinimumSpanMilliseconds = 2000
 $script:NativeMenuSettleTimeoutMilliseconds = 60000
 $script:NativeMenuSettlePollMilliseconds = 55
+$script:NativeMenuExtendedMinimumMilliseconds = 60000
+$script:NativeMenuExtendedSpanMultiplier = 10
+$script:NativeMenuExtendedMinimumSamples = 200
 
 function Get-NativeMenuStringSha256 {
     param([Parameter(Mandatory = $true)][string]$Value)
@@ -680,6 +683,53 @@ function Invoke-NativeMenuSettlementClassifier {
         }
         if (-not (Test-Path -LiteralPath $outputPath -PathType Leaf)) {
             throw "BROKEN: Settlement v2 classifier produced no result."
+        }
+        return Get-Content -LiteralPath $outputPath -Raw | ConvertFrom-Json
+    } finally {
+        if (Test-Path -LiteralPath $temporaryDirectory -PathType Container) {
+            Remove-Item -LiteralPath $temporaryDirectory -Recurse -Force
+        }
+    }
+}
+
+function Invoke-NativeMenuExtendedObservationClassifier {
+    param(
+        [Parameter(Mandatory = $true)][object]$Context,
+        [Parameter(Mandatory = $true)][object[]]$Samples,
+        [Parameter(Mandatory = $true)][long]$RequiredSpanMilliseconds
+    )
+
+    $temporaryDirectory = Join-Path ([IO.Path]::GetTempPath()) (
+        "sdmod-menu-motion-v23-" + [Guid]::NewGuid().ToString("N")
+    )
+    [IO.Directory]::CreateDirectory($temporaryDirectory) | Out-Null
+    $inputPath = Join-Path $temporaryDirectory "samples.json"
+    $outputPath = Join-Path $temporaryDirectory "classification.json"
+    try {
+        [IO.File]::WriteAllText(
+            $inputPath,
+            (($Samples | ConvertTo-Json -Depth 100) + [Environment]::NewLine),
+            [Text.UTF8Encoding]::new($false)
+        )
+        $classifierOutput = @(
+            & py.exe -3 $Context.SettlementClassifier classify-extended `
+                --input $inputPath `
+                --output $outputPath `
+                --required-span-milliseconds $RequiredSpanMilliseconds 2>&1
+        )
+        if ($LASTEXITCODE -ne 0) {
+            $message = (
+                ($classifierOutput | ForEach-Object { [string]$_ }) -join "`n"
+            ).Trim()
+            if ([string]::IsNullOrWhiteSpace($message)) {
+                $message = (
+                    "Settlement v2.3 extended classifier exited without diagnostics."
+                )
+            }
+            throw $message
+        }
+        if (-not (Test-Path -LiteralPath $outputPath -PathType Leaf)) {
+            throw "BROKEN: Settlement v2.3 extended classifier produced no result."
         }
         return Get-Content -LiteralPath $outputPath -Raw | ConvertFrom-Json
     } finally {

@@ -15,7 +15,10 @@ from typing import Any, Iterable
 MINIMUM_SAMPLES = 40
 MINIMUM_SPAN_MILLISECONDS = 2_000
 MAXIMUM_ANIMATED_FRACTION = 0.30
-SETTLEMENT_SPEC = "2.2"
+EXTENDED_OBSERVATION_MINIMUM_MILLISECONDS = 60_000
+EXTENDED_OBSERVATION_SETTLE_SPAN_MULTIPLIER = 10
+EXTENDED_OBSERVATION_MINIMUM_SAMPLES = 200
+SETTLEMENT_SPEC = "2.3"
 OVERLAY_REFERENCE_SCHEMA = "solomon-dark-native-menu-overlay-reference-v1"
 _INTENTIONAL_OVERLAY_SCREEN_IDS = {"beta_notice"}
 
@@ -602,6 +605,537 @@ def _shape_layout(
         elements.append(element)
     layout["elements"] = elements
     return layout
+
+
+def _motion_events(
+    samples: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Derive every exact inter-sample rect change from measured payloads."""
+    if not samples:
+        raise SettlementV2Error(
+            "motion capability recorder defect: observation contains no samples"
+        )
+    payloads = [sample.get("payload") for sample in samples]
+    if not all(isinstance(payload, dict) for payload in payloads):
+        raise SettlementV2Error(
+            "motion capability recorder defect: every observation sample needs a payload"
+        )
+    typed_payloads: list[dict[str, Any]] = payloads  # type: ignore[assignment]
+    anchor = typed_payloads[0]
+    anchor_order, _ = _elements_by_id(anchor)
+    for payload in typed_payloads[1:]:
+        _assert_non_geometry_stable(anchor, payload)
+
+    events: list[dict[str, Any]] = []
+    _, previous = _elements_by_id(anchor)
+    for sample_index, (sample, payload) in enumerate(
+        zip(samples[1:], typed_payloads[1:]), start=1
+    ):
+        _, current = _elements_by_id(payload)
+        for element_id in anchor_order:
+            previous_rect = _finite_rect(previous[element_id], "rect", element_id)
+            current_rect = _finite_rect(current[element_id], "rect", element_id)
+            previous_unclipped = _finite_rect(
+                previous[element_id], "unclipped_rect", element_id
+            )
+            current_unclipped = _finite_rect(
+                current[element_id], "unclipped_rect", element_id
+            )
+            if (
+                previous_rect == current_rect
+                and previous_unclipped == current_unclipped
+            ):
+                continue
+            events.append(
+                {
+                    "sample_index": sample_index,
+                    "elapsed_milliseconds": int(sample["elapsed_milliseconds"]),
+                    "element_id": element_id,
+                    "rect_delta": [
+                        current_rect[index] - previous_rect[index]
+                        for index in range(4)
+                    ],
+                    "unclipped_rect_delta": [
+                        current_unclipped[index] - previous_unclipped[index]
+                        for index in range(4)
+                    ],
+                }
+            )
+        previous = current
+    return events
+
+
+def classify_extended_observation(
+    samples: list[dict[str, Any]],
+    *,
+    required_span_milliseconds: int,
+    minimum_samples: int = EXTENDED_OBSERVATION_MINIMUM_SAMPLES,
+) -> dict[str, Any]:
+    """Validate and summarize one v2.3 corroboration observation."""
+    minimum_span = max(
+        EXTENDED_OBSERVATION_MINIMUM_MILLISECONDS,
+        int(required_span_milliseconds),
+    )
+    if len(samples) < minimum_samples:
+        raise SettlementV2Error(
+            "motion capability corroboration contract: extended observation has "
+            f"{len(samples)} samples; at least {minimum_samples} are required"
+        )
+    elapsed = [int(sample["elapsed_milliseconds"]) for sample in samples]
+    if elapsed != sorted(elapsed):
+        raise SettlementV2Error(
+            "motion capability corroboration contract: sample clocks are not monotonic"
+        )
+    span = elapsed[-1] - elapsed[0]
+    if span < minimum_span:
+        raise SettlementV2Error(
+            "motion capability corroboration contract: extended observation spans "
+            f"{span} ms; at least {minimum_span} ms are required"
+        )
+    events = _motion_events(samples)
+    moving_ids = sorted({event["element_id"] for event in events})
+    return {
+        "required_span_milliseconds": minimum_span,
+        "observed_span_milliseconds": span,
+        "sample_count": len(samples),
+        "motion_event_count": len(events),
+        "moving_element_ids": moving_ids,
+        "motion_events": events,
+    }
+
+
+def _observation_identity(observation: dict[str, Any], label: str) -> tuple[str, int]:
+    instance = observation.get("instance")
+    process_id = observation.get("process_id")
+    if (
+        not isinstance(instance, str)
+        or not instance
+        or isinstance(process_id, bool)
+        or not isinstance(process_id, int)
+        or process_id <= 0
+    ):
+        raise SettlementV2Error(
+            f"motion capability recorder defect: {label} has no exact instance/process identity"
+        )
+    return instance, process_id
+
+
+def _observation_evidence(
+    observation: dict[str, Any], label: str
+) -> dict[str, Any]:
+    evidence = observation.get("evidence")
+    if not isinstance(evidence, dict):
+        raise SettlementV2Error(
+            f"motion capability recorder defect: {label} has no evidence receipt"
+        )
+    path = evidence.get("evidence_path")
+    sha256 = evidence.get("sha256")
+    size = evidence.get("bytes")
+    if (
+        not isinstance(path, str)
+        or not path
+        or not isinstance(sha256, str)
+        or len(sha256) != 64
+        or any(character not in "0123456789abcdef" for character in sha256)
+        or isinstance(size, bool)
+        or not isinstance(size, int)
+        or size <= 0
+    ):
+        raise SettlementV2Error(
+            f"motion capability recorder defect: {label} evidence receipt is incomplete"
+        )
+    return copy.deepcopy(evidence)
+
+
+def _raw_observation(
+    observation: dict[str, Any], label: str
+) -> dict[str, Any]:
+    samples = observation.get("samples")
+    layout = observation.get("layout")
+    settlement = observation.get("settlement")
+    if (
+        not isinstance(samples, list)
+        or not isinstance(layout, dict)
+        or not isinstance(settlement, dict)
+    ):
+        raise SettlementV2Error(
+            f"motion capability recorder defect: {label} lacks its raw window"
+        )
+    classified = validate_declared_settlement(layout, samples)
+    if settlement.get("structural_sha256") != classified["structural_sha256"]:
+        raise SettlementV2Error(
+            f"motion capability recorder defect: {label} records a false raw structural hash"
+        )
+    instance, process_id = _observation_identity(observation, label)
+    pair_id = observation.get("pair_id")
+    if not isinstance(pair_id, str) or not pair_id:
+        raise SettlementV2Error(
+            f"motion capability recorder defect: {label} has no independent-pair id"
+        )
+    return {
+        "label": label,
+        "pair_id": pair_id,
+        "instance": instance,
+        "process_id": process_id,
+        "evidence": _observation_evidence(observation, label),
+        "samples": samples,
+        "layout": layout,
+        "settlement": settlement,
+        "classification": classified,
+    }
+
+
+def resolve_motion_capability(
+    observations: list[dict[str, Any]],
+    extended_observations: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Resolve screen-member animation from every valid campaign observation.
+
+    A single measured rect change proves capability.  A raw stationary window
+    never disproves it.  When independent raw windows disagree, the stationary
+    instance must carry the long corroboration observation required by v2.3.
+    """
+    if len(observations) < 2:
+        raise SettlementV2Error(
+            "motion capability resolution requires at least two independent observations"
+        )
+    raw = [
+        _raw_observation(observation, f"observation[{index}]")
+        for index, observation in enumerate(observations)
+    ]
+    identities = [(value["instance"], value["process_id"]) for value in raw]
+    if len(set(identities)) < 2:
+        raise SettlementV2Error(
+            "motion capability resolution requires two independent fresh instances"
+        )
+
+    screen_ids = {
+        str(value["samples"][0]["payload"].get("screen_id", "")) for value in raw
+    }
+    if len(screen_ids) != 1 or not next(iter(screen_ids)):
+        raise SettlementV2Error(
+            "motion capability resolution cannot mix or omit screen identities"
+        )
+    screen_id = next(iter(screen_ids))
+    raw_id_sets = [
+        set(value["classification"]["animated_element_ids"]) for value in raw
+    ]
+    pairs: dict[str, list[tuple[dict[str, Any], set[str]]]] = {}
+    for value, measured in zip(raw, raw_id_sets):
+        pairs.setdefault(value["pair_id"], []).append((value, measured))
+    for pair_id, members in pairs.items():
+        if len(members) != 2 or len(
+            {(value["instance"], value["process_id"]) for value, _ in members}
+        ) != 2:
+            raise SettlementV2Error(
+                "motion capability resolution requires pair "
+                f"'{pair_id}' to contain exactly two fresh instances"
+            )
+
+    extended: list[dict[str, Any]] = []
+    for index, observation in enumerate(extended_observations):
+        label = f"extended_observation[{index}]"
+        samples = observation.get("samples")
+        if not isinstance(samples, list) or not samples:
+            raise SettlementV2Error(
+                f"motion capability recorder defect: {label} lacks samples"
+            )
+        instance, process_id = _observation_identity(observation, label)
+        matching_raw = [
+            value
+            for value in raw
+            if (value["instance"], value["process_id"]) == (instance, process_id)
+        ]
+        if len(matching_raw) != 1:
+            raise SettlementV2Error(
+                "motion capability corroboration contract: extended observation "
+                f"{label} does not resolve one exact stationary instance"
+            )
+        required_span = max(
+            EXTENDED_OBSERVATION_MINIMUM_MILLISECONDS,
+            EXTENDED_OBSERVATION_SETTLE_SPAN_MULTIPLIER
+            * int(matching_raw[0]["settlement"]["stable_span_milliseconds"]),
+        )
+        summary = classify_extended_observation(
+            samples,
+            required_span_milliseconds=required_span,
+        )
+        extended_screen = str(samples[0]["payload"].get("screen_id", ""))
+        if extended_screen != screen_id:
+            raise SettlementV2Error(
+                "motion capability corroboration contract: extended observation "
+                f"changed screen from '{screen_id}' to '{extended_screen}'"
+            )
+        _assert_non_geometry_stable(
+            raw[0]["samples"][0]["payload"], samples[0]["payload"]
+        )
+        extended.append(
+            {
+                "label": label,
+                "instance": instance,
+                "process_id": process_id,
+                "evidence": _observation_evidence(observation, label),
+                "samples": samples,
+                "summary": summary,
+            }
+        )
+
+    all_measured_sets = [*raw_id_sets]
+    all_measured_sets.extend(
+        set(value["summary"]["moving_element_ids"]) for value in extended
+    )
+    resolved_ids = sorted(set().union(*all_measured_sets))
+    disputed_ids = sorted(
+        set().union(
+            *(
+                first_ids.symmetric_difference(second_ids)
+                for (_, first_ids), (_, second_ids) in pairs.values()
+            )
+        )
+    )
+    for pair_id, members in pairs.items():
+        pair_disputed = members[0][1].symmetric_difference(members[1][1])
+        for element_id in sorted(pair_disputed):
+            for value, measured in members:
+                if element_id in measured:
+                    continue
+                corroborations = [
+                    item
+                    for item in extended
+                    if (item["instance"], item["process_id"])
+                    == (value["instance"], value["process_id"])
+                ]
+                if len(corroborations) != 1:
+                    raise SettlementV2Error(
+                        "motion capability resolution requires extended observation "
+                        f"evidence for stationary member '{element_id}' in pair "
+                        f"'{pair_id}' on instance '{value['instance']}' PID "
+                        f"{value['process_id']}"
+                    )
+
+    motion_evidence: list[dict[str, Any]] = []
+    for element_id in resolved_ids:
+        witnesses: list[dict[str, Any]] = []
+        for value in raw:
+            events = [
+                event
+                for event in _motion_events(value["samples"])
+                if event["element_id"] == element_id
+            ]
+            if events:
+                witnesses.append(
+                    {
+                        "kind": "settled_window",
+                        "instance": value["instance"],
+                        "process_id": value["process_id"],
+                        "motion_event_count": len(events),
+                        "first_event": copy.deepcopy(events[0]),
+                        "evidence": copy.deepcopy(value["evidence"]),
+                    }
+                )
+        for value in extended:
+            events = [
+                event
+                for event in value["summary"]["motion_events"]
+                if event["element_id"] == element_id
+            ]
+            if events:
+                witnesses.append(
+                    {
+                        "kind": "extended_observation",
+                        "instance": value["instance"],
+                        "process_id": value["process_id"],
+                        "motion_event_count": len(events),
+                        "first_event": copy.deepcopy(events[0]),
+                        "evidence": copy.deepcopy(value["evidence"]),
+                    }
+                )
+        if not witnesses:
+            raise SettlementV2Error(
+                "motion capability recorder defect: phantom animated classification "
+                f"for '{element_id}' has no varying recorded samples"
+            )
+        motion_evidence.append(
+            {"element_id": element_id, "witnesses": witnesses}
+        )
+
+    anchor_payload = raw[0]["samples"][0]["payload"]
+    anchor_order, _ = _elements_by_id(anchor_payload)
+    animated_fraction = len(resolved_ids) / len(anchor_order)
+    if animated_fraction > MAXIMUM_ANIMATED_FRACTION:
+        raise SettlementV2Error(
+            "resolved animated geometry cap exceeded: "
+            f"{len(resolved_ids)}/{len(anchor_order)} elements "
+            f"({animated_fraction:.1%}) exceeds 30% for '{screen_id}'"
+        )
+
+    for value in raw[1:]:
+        _assert_non_geometry_stable(
+            anchor_payload, value["samples"][0]["payload"]
+        )
+    expected_structure = structural_layout_bytes(anchor_payload, resolved_ids)
+    for value in raw[1:]:
+        if structural_layout_bytes(
+            value["samples"][0]["payload"], resolved_ids
+        ) != expected_structure:
+            raise SettlementV2Error(
+                "motion capability resolution found cross-instance disagreement "
+                "outside resolved animated geometry"
+            )
+    for value in extended:
+        if structural_layout_bytes(
+            value["samples"][0]["payload"], resolved_ids
+        ) != expected_structure:
+            raise SettlementV2Error(
+                "motion capability corroboration found disagreement outside "
+                "resolved animated geometry"
+            )
+    for value in raw:
+        measured = set(value["classification"]["animated_element_ids"])
+        unexpected = measured - set(resolved_ids)
+        if unexpected:
+            element_id = sorted(unexpected)[0]
+            raise SettlementV2Error(
+                "future motion drift: member "
+                f"'{element_id}' was pinned stationary by the resolved screen contract"
+            )
+
+    geometries: dict[str, list[tuple[Any, ...]]] = {
+        element_id: [] for element_id in anchor_order
+    }
+    all_sample_groups = [value["samples"] for value in raw] + [
+        value["samples"] for value in extended
+    ]
+    for samples in all_sample_groups:
+        for sample in samples:
+            _, indexed = _elements_by_id(sample["payload"])
+            for element_id in anchor_order:
+                geometries[element_id].append(
+                    _geometry_signature(indexed[element_id], element_id)
+                )
+
+    resolved_observations: list[dict[str, Any]] = []
+    for value in raw:
+        first_sample = value["samples"][0]
+        layout = _shape_layout(
+            first_sample["payload"],
+            resolved_ids,
+            geometries,
+            int(
+                first_sample.get(
+                    "captured_at_milliseconds",
+                    first_sample["elapsed_milliseconds"],
+                )
+            ),
+        )
+        settlement = copy.deepcopy(value["settlement"])
+        settlement.update(
+            {
+                "settlement_spec": SETTLEMENT_SPEC,
+                "criterion": (
+                    "at least 40 consecutive structurally byte-identical samples "
+                    "over at least 2 seconds; screen-member motion capability is "
+                    "the union of every measured rect change"
+                ),
+                "raw_window_animated_element_ids": value["classification"][
+                    "animated_element_ids"
+                ],
+                "animated_element_ids": resolved_ids,
+                "animated_element_count": len(resolved_ids),
+                "animated_fraction": animated_fraction,
+                "structural_sha256": canonical_structural_sha256(
+                    layout, resolved_ids
+                ),
+                "motion_envelope_sample_count": len(
+                    geometries[resolved_ids[0]]
+                )
+                if resolved_ids
+                else sum(len(samples) for samples in all_sample_groups),
+            }
+        )
+        resolved_observations.append(
+            {"layout": layout, "settlement": settlement}
+        )
+
+    proof = {
+        "rule": "Settlement v2.3 screen-member motion capability",
+        "screen_id": screen_id,
+        "resolved_animated_element_ids": resolved_ids,
+        "disputed_element_ids": disputed_ids,
+        "raw_observations": [
+            {
+                "instance": value["instance"],
+                "process_id": value["process_id"],
+                "pair_id": value["pair_id"],
+                "animated_element_ids": value["classification"][
+                    "animated_element_ids"
+                ],
+                "sample_count": len(value["samples"]),
+                "stable_span_milliseconds": value["classification"][
+                    "stable_span_milliseconds"
+                ],
+                "motion_event_count": len(_motion_events(value["samples"])),
+                "evidence": copy.deepcopy(value["evidence"]),
+            }
+            for value in raw
+        ],
+        "extended_observations": [
+            {
+                "instance": value["instance"],
+                "process_id": value["process_id"],
+                **{
+                    key: copy.deepcopy(value["summary"][key])
+                    for key in (
+                        "required_span_milliseconds",
+                        "observed_span_milliseconds",
+                        "sample_count",
+                        "motion_event_count",
+                        "moving_element_ids",
+                    )
+                },
+                "evidence": copy.deepcopy(value["evidence"]),
+            }
+            for value in extended
+        ],
+        "motion_evidence": motion_evidence,
+        "envelope_sample_count": (
+            len(geometries[resolved_ids[0]])
+            if resolved_ids
+            else sum(len(samples) for samples in all_sample_groups)
+        ),
+    }
+    return {"resolution": proof, "observations": resolved_observations}
+
+
+def validate_resolved_motion_capability(
+    resolution: dict[str, Any],
+    observations: list[dict[str, Any]],
+    extended_observations: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Re-derive a declared v2.3 proof and reject phantom or stale claims."""
+    expected = resolve_motion_capability(observations, extended_observations)
+    declared_ids = resolution.get("resolved_animated_element_ids")
+    expected_ids = expected["resolution"]["resolved_animated_element_ids"]
+    if isinstance(declared_ids, list):
+        phantom = sorted(set(declared_ids) - set(expected_ids))
+        if phantom:
+            raise SettlementV2Error(
+                "motion capability recorder defect: phantom animated classification "
+                f"for '{phantom[0]}' has no varying recorded samples"
+            )
+        future = sorted(set(expected_ids) - set(declared_ids))
+        if future:
+            raise SettlementV2Error(
+                "future motion drift: member "
+                f"'{future[0]}' was pinned stationary by the resolved screen contract"
+            )
+    if canonical_bytes(resolution) != canonical_bytes(expected["resolution"]):
+        difference = _first_difference(expected["resolution"], resolution)
+        raise SettlementV2Error(
+            "motion capability resolution proof was not machine-derived; "
+            f"first difference is '{difference}'"
+        )
+    return expected
 
 
 def classify_window(
@@ -1418,6 +1952,23 @@ def _find_command(input_path: Path, output_path: Path) -> None:
     _write_json(output_path, find_settled_window(samples))
 
 
+def _classify_extended_command(
+    input_path: Path, output_path: Path, required_span_milliseconds: int
+) -> None:
+    samples = _read_json(input_path)
+    if not isinstance(samples, list):
+        raise SettlementV2Error(
+            "extended observation classifier input must be a JSON sample list"
+        )
+    _write_json(
+        output_path,
+        classify_extended_observation(
+            samples,
+            required_span_milliseconds=required_span_milliseconds,
+        ),
+    )
+
+
 def _summarize_layout_command(input_path: Path, output_path: Path) -> None:
     layout = _read_json(input_path)
     if not isinstance(layout, dict):
@@ -1471,6 +2022,12 @@ def main() -> int:
     find_parser = subparsers.add_parser("find")
     find_parser.add_argument("--input", type=Path, required=True)
     find_parser.add_argument("--output", type=Path, required=True)
+    extended_parser = subparsers.add_parser("classify-extended")
+    extended_parser.add_argument("--input", type=Path, required=True)
+    extended_parser.add_argument("--output", type=Path, required=True)
+    extended_parser.add_argument(
+        "--required-span-milliseconds", type=int, required=True
+    )
     summary_parser = subparsers.add_parser("summarize-layout")
     summary_parser.add_argument("--input", type=Path, required=True)
     summary_parser.add_argument("--output", type=Path, required=True)
@@ -1486,6 +2043,12 @@ def main() -> int:
             _classify_command(args.input, args.output)
         elif args.command == "find":
             _find_command(args.input, args.output)
+        elif args.command == "classify-extended":
+            _classify_extended_command(
+                args.input,
+                args.output,
+                args.required_span_milliseconds,
+            )
         elif args.command == "summarize-layout":
             _summarize_layout_command(args.input, args.output)
         elif args.command == "check-overlay":

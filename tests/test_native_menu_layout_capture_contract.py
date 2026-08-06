@@ -153,6 +153,8 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         standalone = read("scripts/Record-NativeMenuLayout.ps1")
         transition = read("scripts/Record-NativeMenuTransition.ps1")
         confirmation = read("scripts/Confirm-NativeMenuLayoutAnimation.ps1")
+        motion = read("scripts/Observe-NativeMenuMotionCapability.ps1")
+        resolver = read("tools/resolve_native_menu_motion_campaign.py")
         importer = read("scripts/Import-NativeMenuSpecialCaptures.ps1")
         self.assertIn(
             "NativeMenuSettleConsecutiveSamples = 40",
@@ -237,7 +239,43 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             confirmation,
             "animation confirmation must reject process reuse",
         )
-        for recorder in (standalone, transition, confirmation, importer):
+        self.assertIn(
+            "$rawSetsMatch = $primaryIdsJson -ceq $confirmationIdsJson",
+            confirmation,
+            "raw-set disagreement must reach screen-level motion resolution",
+        )
+        self.assertNotIn(
+            "animated ID confirmation mismatch",
+            confirmation,
+            "a stationary window must not veto a measured moving window",
+        )
+        for token in (
+            "NativeMenuExtendedMinimumMilliseconds = 60000",
+            "NativeMenuExtendedSpanMultiplier = 10",
+            "NativeMenuExtendedMinimumSamples = 200",
+        ):
+            self.assertIn(token, support)
+        self.assertIn(
+            "$stableSpanMilliseconds = [long]$baselineSettlement.stable_span_milliseconds",
+            motion,
+            "extended duration must be derived from the exact stationary window",
+        )
+        self.assertIn(
+            "$samples.Count -lt $script:NativeMenuExtendedMinimumSamples",
+            motion,
+            "extended observation must reach at least 200 runnable samples",
+        )
+        self.assertIn(
+            "motion_events = @($classification.motion_events)",
+            motion,
+            "the recorder must retain the exact motion-event census",
+        )
+        self.assertIn(
+            "resolve_motion_capability(",
+            resolver,
+            "campaign promotion must resolve one classification per screen member",
+        )
+        for recorder in (standalone, transition, confirmation, motion, importer):
             self.assertNotIn(
                 "CaptureCommit",
                 recorder,

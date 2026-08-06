@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
 from tools.native_menu_settlement_v2 import (
     OVERLAY_REFERENCE_SCHEMA,
@@ -11,12 +15,16 @@ from tools.native_menu_settlement_v2 import (
     assert_confirmation_matches,
     build_overlay_contamination_override,
     build_population_phase_override,
+    classify_extended_observation,
     classify_window,
     derive_overlay_reference,
     find_settled_window,
+    resolve_motion_capability,
     structural_layout_bytes,
     validate_declared_settlement,
+    validate_resolved_motion_capability,
 )
+from tools.resolve_native_menu_motion_campaign import resolve_campaign
 
 
 def _element(index: int) -> dict[str, object]:
@@ -74,6 +82,73 @@ def _reordered_samples() -> list[dict[str, object]]:
             reversed(sample["payload"]["elements"])  # type: ignore[index]
         )
     return samples
+
+
+def _stationary_samples(
+    *, sample_count: int = 40, interval_milliseconds: int = 55
+) -> list[dict[str, object]]:
+    samples = _samples()
+    anchor = copy.deepcopy(samples[0]["payload"]["elements"][0])  # type: ignore[index]
+    result: list[dict[str, object]] = []
+    for sample_index in range(sample_count):
+        elements = [_element(index) for index in range(10)]
+        elements[0] = copy.deepcopy(anchor)
+        result.append(
+            {
+                "elapsed_milliseconds": sample_index * interval_milliseconds,
+                "captured_at_milliseconds": 1_000
+                + sample_index * interval_milliseconds,
+                "payload": {
+                    "generation": 7,
+                    "screen_id": "screen",
+                    "screen_title": "Screen",
+                    "capture_method": "native",
+                    "elements": elements,
+                },
+            }
+        )
+    return result
+
+
+def _motion_observation(
+    samples: list[dict[str, object]],
+    instance: str,
+    process_id: int,
+    pair_id: str = "standalone:screen",
+) -> dict[str, object]:
+    classified = classify_window(samples)
+    return {
+        "instance": instance,
+        "process_id": process_id,
+        "pair_id": pair_id,
+        "evidence": {
+            "evidence_path": f"raw-v5/{instance}.json",
+            "sha256": f"{process_id % 10}" * 64,
+            "bytes": 100 + process_id,
+        },
+        "samples": samples,
+        "layout": classified["layout"],
+        "settlement": {
+            key: copy.deepcopy(value)
+            for key, value in classified.items()
+            if key != "layout"
+        },
+    }
+
+
+def _extended_observation(
+    samples: list[dict[str, object]], instance: str, process_id: int
+) -> dict[str, object]:
+    return {
+        "instance": instance,
+        "process_id": process_id,
+        "evidence": {
+            "evidence_path": f"raw-v5/{instance}.extended.json",
+            "sha256": f"{(process_id + 1) % 10}" * 64,
+            "bytes": 1_000 + process_id,
+        },
+        "samples": samples,
+    }
 
 
 def _population_override_inputs() -> tuple[
@@ -266,6 +341,131 @@ class NativeMenuSettlementV2Tests(unittest.TestCase):
         )
 
         assert_confirmation_matches(primary, confirmation)
+
+    def test_motion_capability_resolves_intermittent_mover(self) -> None:
+        stationary = _motion_observation(
+            _stationary_samples(), "menufx-stationary", 101
+        )
+        moving = _motion_observation(_samples(), "menufx-moving", 202)
+        extended = _extended_observation(
+            _stationary_samples(sample_count=200, interval_milliseconds=310),
+            "menufx-stationary",
+            101,
+        )
+
+        resolved = resolve_motion_capability(
+            [stationary, moving], [extended]
+        )
+
+        self.assertEqual(
+            resolved["resolution"]["resolved_animated_element_ids"],
+            ["screen.art.item_0.1"],
+        )
+        self.assertEqual(
+            resolved["resolution"]["disputed_element_ids"],
+            ["screen.art.item_0.1"],
+        )
+        for observation in resolved["observations"]:
+            self.assertEqual(
+                observation["layout"]["animated_element_ids"],
+                ["screen.art.item_0.1"],
+            )
+            animated = next(
+                element
+                for element in observation["layout"]["elements"]
+                if element["id"] == "screen.art.item_0.1"
+            )
+            self.assertEqual(animated["envelope"]["sample_count"], 280)
+            self.assertEqual(animated["envelope"]["rect"]["min_x"], 0.0)
+            self.assertEqual(animated["envelope"]["rect"]["max_x"], 9.75)
+
+    def test_motion_mismatch_requires_extended_stationary_evidence(self) -> None:
+        stationary = _motion_observation(
+            _stationary_samples(), "menufx-stationary", 101
+        )
+        moving = _motion_observation(_samples(), "menufx-moving", 202)
+
+        with self.assertRaisesRegex(
+            SettlementV2Error,
+            "motion capability resolution requires extended observation "
+            "evidence for stationary member 'screen.art.item_0.1' in pair "
+            "'standalone:screen'",
+        ):
+            resolve_motion_capability([stationary, moving], [])
+
+    def test_phantom_resolved_classification_is_a_recorder_defect(self) -> None:
+        primary = _motion_observation(_samples(), "menufx-primary", 101)
+        confirmation = _motion_observation(
+            _reordered_samples(), "menufx-confirmation", 202
+        )
+        resolved = resolve_motion_capability([primary, confirmation], [])
+        declaration = copy.deepcopy(resolved["resolution"])
+        declaration["resolved_animated_element_ids"].append(
+            "screen.art.item_1.1"
+        )
+
+        with self.assertRaisesRegex(
+            SettlementV2Error,
+            "motion capability recorder defect: phantom animated "
+            "classification for 'screen.art.item_1.1'",
+        ):
+            validate_resolved_motion_capability(
+                declaration, [primary, confirmation], []
+            )
+
+    def test_extended_observation_records_exact_change_census(self) -> None:
+        samples = _stationary_samples(
+            sample_count=200, interval_milliseconds=310
+        )
+        moving = samples[100]["payload"]["elements"][0]  # type: ignore[index]
+        moving["rect"][0] += 1.0  # type: ignore[index]
+        moving["rect"][2] += 1.0  # type: ignore[index]
+        moving["unclipped_rect"] = list(moving["rect"])
+
+        classified = classify_extended_observation(
+            samples, required_span_milliseconds=60_000
+        )
+
+        self.assertEqual(
+            classified["moving_element_ids"], ["screen.art.item_0.1"]
+        )
+        self.assertEqual(classified["motion_event_count"], 2)
+        self.assertEqual(
+            classified["motion_events"][0]["elapsed_milliseconds"], 31_000
+        )
+
+    def test_resolved_union_rechecks_thirty_percent_cap(self) -> None:
+        primary_samples = _samples(animated_count=3)
+        confirmation_samples = _samples(animated_count=1)
+        for sample_index, sample in enumerate(confirmation_samples):
+            elements = sample["payload"]["elements"]  # type: ignore[index]
+            elements[0] = _element(0)
+            offset = sample_index * 0.25
+            elements[3]["rect"] = [30.0 + offset, 20.0, 38.0 + offset, 26.0]
+            elements[3]["unclipped_rect"] = list(elements[3]["rect"])
+        primary = _motion_observation(primary_samples, "menufx-primary", 101)
+        confirmation = _motion_observation(
+            confirmation_samples, "menufx-confirmation", 202
+        )
+        primary_extended = _extended_observation(
+            _stationary_samples(sample_count=200, interval_milliseconds=310),
+            "menufx-primary",
+            101,
+        )
+        confirmation_extended = _extended_observation(
+            _stationary_samples(sample_count=200, interval_milliseconds=310),
+            "menufx-confirmation",
+            202,
+        )
+
+        with self.assertRaisesRegex(
+            SettlementV2Error,
+            r"resolved animated geometry cap exceeded: 4/10 elements \(40.0%\)",
+        ):
+            resolve_motion_capability(
+                [primary, confirmation],
+                [primary_extended, confirmation_extended],
+            )
 
     def test_settlement_ignores_only_raw_element_list_position(self) -> None:
         samples = _samples()
@@ -567,6 +767,187 @@ class NativeMenuSettlementV2Tests(unittest.TestCase):
         self.assertEqual(result["stable_start_index"], len(transient))
         self.assertEqual(result["stable_end_index"], 49)
         self.assertEqual(result["total_semantic_samples"], 50)
+
+    def test_campaign_resolver_applies_and_rederives_every_pair(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            evidence_root = Path(temporary)
+            candidate_root = evidence_root / "candidate"
+            layout_root = candidate_root / "menu-layouts"
+            confirmation_root = candidate_root / "menu-animation-confirmations"
+            raw_root = evidence_root / "raw-v5"
+            motion_root = raw_root / "motion-observations"
+            for path in (layout_root, confirmation_root, raw_root, motion_root):
+                path.mkdir(parents=True, exist_ok=True)
+
+            def write(path: Path, value: object) -> None:
+                path.write_text(json.dumps(value) + "\n", encoding="utf-8")
+
+            def receipt(path: Path) -> dict[str, object]:
+                return {
+                    "evidence_filename": path.name,
+                    "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                    "bytes": path.stat().st_size,
+                }
+
+            samples = _samples()
+            classified = classify_window(samples)
+            settlement = {
+                key: copy.deepcopy(value)
+                for key, value in classified.items()
+                if key != "layout"
+            }
+            trace_path = raw_root / "screen.settlement.json"
+            write(
+                trace_path,
+                {
+                    "schema": "solomon-dark-native-menu-settlement-trace-v2",
+                    "structural_phases": [],
+                    "settled_window_samples": samples,
+                },
+            )
+            source = {
+                "base_commit_sha": "1" * 40,
+                "source_tree_sha": "2" * 40,
+                "game_executable_sha256": "3" * 64,
+                "loader_dll_sha256": "4" * 64,
+            }
+            confirmation_path = confirmation_root / "screen.confirmation.json"
+            confirmation_samples = _reordered_samples()
+            confirmation_classified = classify_window(confirmation_samples)
+            confirmation = {
+                "schema": "solomon-dark-native-menu-animation-confirmation-v3",
+                "header": {
+                    "label": "screen",
+                    "instance": "menufx-confirmation",
+                    "process_id": 202,
+                    "source": source,
+                },
+                "settlement": {
+                    key: copy.deepcopy(value)
+                    for key, value in confirmation_classified.items()
+                    if key != "layout"
+                },
+                "confirmation_layout": confirmation_classified["layout"],
+                "structural_phases": [],
+                "settled_window_samples": confirmation_samples,
+            }
+            write(confirmation_path, confirmation)
+            fixture_path = layout_root / "screen.json"
+            fixture = {
+                "schema": "solomon-dark-native-menu-layout-v2",
+                "header": {
+                    "label": "screen",
+                    "instance": "menufx-primary",
+                    "process_id": 101,
+                    "source": source,
+                    "settlement": settlement,
+                    "raw_recording": receipt(trace_path),
+                    "animation_confirmation": {
+                        **receipt(confirmation_path),
+                        "instance": "menufx-confirmation",
+                        "process_id": 202,
+                        "source": source,
+                        "confirmation_structural_sha256": settlement[
+                            "structural_sha256"
+                        ],
+                        "animated_element_ids_sha256": hashlib.sha256(
+                            json.dumps(
+                                ["screen.art.item_0.1"],
+                                separators=(",", ":"),
+                            ).encode()
+                        ).hexdigest(),
+                    },
+                },
+                "layout": classified["layout"],
+            }
+            write(fixture_path, fixture)
+
+            def endpoint(layout_samples: list[dict[str, object]]) -> dict[str, object]:
+                value = classify_window(layout_samples)
+                return {
+                    "layout": value["layout"],
+                    "settlement": {
+                        key: copy.deepcopy(item)
+                        for key, item in value.items()
+                        if key != "layout"
+                    },
+                    "settlement_trace": {
+                        "structural_phases": [],
+                        "settled_window_samples": layout_samples,
+                    },
+                    "animated_element_ids": value["animated_element_ids"],
+                    "element_count": value["element_count"],
+                }
+
+            primary_navigation_path = raw_root / "navigation-primary.json"
+            confirmation_navigation_path = raw_root / "navigation-confirmation.json"
+            for path, instance, process_id, layout_samples in (
+                (
+                    primary_navigation_path,
+                    "menufx-primary",
+                    101,
+                    samples,
+                ),
+                (
+                    confirmation_navigation_path,
+                    "menufx-confirmation",
+                    202,
+                    _reordered_samples(),
+                ),
+            ):
+                write(
+                    path,
+                    {
+                        "schema": "solomon-dark-native-menu-navigation-v2",
+                        "header": {},
+                        "edges": [
+                            {
+                                "id": "screen_to_screen",
+                                "header": {
+                                    "instance": instance,
+                                    "process_id": process_id,
+                                    "source": source,
+                                    "settlement": {},
+                                },
+                                "before": endpoint(layout_samples),
+                                "after": endpoint(layout_samples),
+                            }
+                        ],
+                    },
+                )
+            resolved_navigation = raw_root / "navigation-resolved.json"
+            audit = raw_root / "motion-audit.json"
+            result = resolve_campaign(
+                candidate_root,
+                evidence_root,
+                primary_navigation_path,
+                confirmation_navigation_path,
+                motion_root,
+                resolved_navigation,
+                audit,
+                True,
+            )
+
+            self.assertEqual(result["standalone_fixture_count"], 1)
+            promoted = json.loads(fixture_path.read_text(encoding="utf-8"))
+            proof = promoted["header"]["motion_capability"]
+            self.assertEqual(proof["layout_id"], "screen")
+            self.assertEqual(proof["envelope_sample_count"], 240)
+            self.assertEqual(
+                promoted["layout"]["elements"][0]["envelope"]["sample_count"],
+                240,
+            )
+            resolve_campaign(
+                candidate_root,
+                evidence_root,
+                primary_navigation_path,
+                confirmation_navigation_path,
+                motion_root,
+                resolved_navigation,
+                audit,
+                False,
+                True,
+            )
 
 
 if __name__ == "__main__":

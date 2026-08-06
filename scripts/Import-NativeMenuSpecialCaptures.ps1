@@ -17,6 +17,7 @@ $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).ProviderPath
 $fixtureRoot = [IO.Path]::GetFullPath($OutputRoot)
 $layoutRoot = Join-Path $fixtureRoot "menu-layouts"
 $referenceRoot = Join-Path $fixtureRoot "menu-reference-captures"
+$traceRoot = Join-Path $fixtureRoot "menu-settlement-traces"
 $overlayReferencePath = Join-Path $root (
     "tests\fixtures\webgame\menu-overlay-reference.json"
 )
@@ -25,6 +26,7 @@ if (-not (Test-Path -LiteralPath $overlayReferencePath -PathType Leaf)) {
 }
 [IO.Directory]::CreateDirectory($layoutRoot) | Out-Null
 [IO.Directory]::CreateDirectory($referenceRoot) | Out-Null
+[IO.Directory]::CreateDirectory($traceRoot) | Out-Null
 
 function Invoke-CaptureGit {
     param([Parameter(Mandatory = $true)][string[]]$Arguments)
@@ -297,6 +299,60 @@ function ConvertTo-SettlementSummaryV2 {
     }
 }
 
+function Write-SpecialSettlementTrace {
+    param(
+        [Parameter(Mandatory = $true)][string]$Label,
+        [Parameter(Mandatory = $true)][object[]]$Samples,
+        [Parameter(Mandatory = $true)][object]$Classification,
+        [Parameter(Mandatory = $true)][IO.FileInfo]$SourceRecording
+    )
+
+    $startIndex = [int]$Classification.stable_start_index
+    $endIndex = [int]$Classification.stable_end_index
+    if (
+        $startIndex -lt 0 -or
+        $endIndex -lt $startIndex -or
+        $endIndex -ge $Samples.Count
+    ) {
+        throw "BROKEN: '$Label' classifier returned an invalid settled window."
+    }
+    $settledWindow = @(
+        for ($index = $startIndex; $index -le $endIndex; $index += 1) {
+            $Samples[$index]
+        }
+    )
+    if ($settledWindow.Count -lt 40) {
+        throw "BROKEN: '$Label' standardized trace reached fewer than 40 samples."
+    }
+    $tracePath = Join-Path $traceRoot "$Label.settlement.json"
+    $trace = [ordered]@{
+        schema = "solomon-dark-native-menu-settlement-trace-v2"
+        header = [ordered]@{
+            label = $Label
+            source_recording = [ordered]@{
+                evidence_filename = $SourceRecording.Name
+                sha256 = (
+                    Get-FileHash `
+                        -LiteralPath $SourceRecording.FullName `
+                        -Algorithm SHA256
+                ).Hash.ToLowerInvariant()
+                bytes = $SourceRecording.Length
+            }
+        }
+        structural_phases = @()
+        settled_window_samples = $settledWindow
+    }
+    Write-Utf8Json $trace $tracePath
+    $traceItem = Get-Item -LiteralPath $tracePath
+    return [ordered]@{
+        evidence_filename = $traceItem.Name
+        sha256 = (
+            Get-FileHash -LiteralPath $traceItem.FullName -Algorithm SHA256
+        ).Hash.ToLowerInvariant()
+        bytes = $traceItem.Length
+    }
+}
+
 function Assert-SpecialCaptureOverlayHygiene {
     param(
         [Parameter(Mandatory = $true)][object]$Layout,
@@ -465,6 +521,11 @@ $loaderFixture = [ordered]@{
         -ReferenceCapture "../menu-reference-captures/$loaderReferenceName"
     layout = $loaderSettled.layout
 }
+$loaderFixture.header.settlement_trace = Write-SpecialSettlementTrace `
+    -Label "native_loader" `
+    -Samples @($loaderClassifierSamples) `
+    -Classification $loaderSettled `
+    -SourceRecording $loaderCaptureItem
 Write-Utf8Json $loaderFixture (Join-Path $layoutRoot "native-loader.json")
 
 $loadingCaptureItem = Get-Item -LiteralPath $LoadingCapturePath
@@ -587,6 +648,11 @@ $loadingFixture = [ordered]@{
         -ReferenceCapture "../menu-reference-captures/$loadingReferenceName"
     layout = $loadingSettled.layout
 }
+$loadingFixture.header.settlement_trace = Write-SpecialSettlementTrace `
+    -Label "loading_screen" `
+    -Samples @($loadingClassifierSamples) `
+    -Classification $loadingSettled `
+    -SourceRecording $loadingCaptureItem
 Write-Utf8Json $loadingFixture (Join-Path $layoutRoot "loading-screen.json")
 
 [ordered]@{

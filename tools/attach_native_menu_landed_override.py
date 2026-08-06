@@ -153,10 +153,10 @@ def attach(
     confirmation_evidence = read_object(confirmation_evidence_path)
     if primary.get("schema") != "solomon-dark-native-menu-layout-v2":
         raise SettlementV2Error("primary fixture does not use Settlement v2")
-    if (
-        confirmation_evidence.get("schema")
-        != "solomon-dark-native-menu-animation-confirmation-v2"
-    ):
+    if confirmation_evidence.get("schema") not in {
+        "solomon-dark-native-menu-animation-confirmation-v2",
+        "solomon-dark-native-menu-animation-confirmation-v3",
+    }:
         raise SettlementV2Error("confirmation evidence does not use Settlement v2")
     header = primary.get("header")
     layout = primary.get("layout")

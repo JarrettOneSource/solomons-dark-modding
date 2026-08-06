@@ -557,6 +557,7 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
         "scripts/Record-NativeMenuLayout.ps1",
         "scripts/Record-NativeMenuTransition.ps1",
         "scripts/Confirm-NativeMenuLayoutAnimation.ps1",
+        "scripts/Observe-NativeMenuMotionCapability.ps1",
         "scripts/Import-NativeMenuSpecialCaptures.ps1",
     )
     recorders = {path: _read(path) for path in recorder_paths}
@@ -585,6 +586,9 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
     ]
     confirmation_recorder = recorders[
         "scripts/Confirm-NativeMenuLayoutAnimation.ps1"
+    ]
+    motion_recorder = recorders[
+        "scripts/Observe-NativeMenuMotionCapability.ps1"
     ]
     importer = recorders["scripts/Import-NativeMenuSpecialCaptures.ps1"]
     support = _read("scripts/NativeMenuCaptureSupport.ps1")
@@ -734,10 +738,42 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
         r"primary\.header\.process_id\s+-eq\s+\$ProcessId.*?"
         r"primarySourceJson\s+-cne\s+\$confirmationSourceJson.*?"
         r"Get-SettledNativeMenuObservation.*?"
-        r"primaryIdsJson\s+-cne\s+\$confirmationIdsJson.*?"
-        r"settlement\s*=\s*\$observation\.settlement",
+        r"\$rawSetsMatch\s*=\s*\$primaryIdsJson\s+-ceq\s+"
+        r"\$confirmationIdsJson.*?"
+        r"settlement\s*=\s*\$observation\.settlement.*?"
+        r"requires_extended_observation\s*=\s*\(-not \$rawSetsMatch\)",
         "animation confirmation no longer proves a fresh instance/process, "
-        "identical machine provenance, and animated ID set",
+        "identical machine provenance, or preserves raw-set disagreement for v2.3",
+    )
+    if "animated ID confirmation mismatch" in confirmation_recorder:
+        raise StaticReTestFailure(
+            "raw window animation disagreement again vetoes the v2.3 "
+            "motion-capability resolution path"
+        )
+    _require_regex(
+        motion_recorder,
+        r"stableSpanMilliseconds\s*=\s*\[long\]"
+        r"\$baselineSettlement\.stable_span_milliseconds.*?"
+        r"requiredSpanMilliseconds\s*=\s*\[Math\]::Max\(\s*"
+        r"\[long\]\$script:NativeMenuExtendedMinimumMilliseconds,\s*"
+        r"\[long\]\$script:NativeMenuExtendedSpanMultiplier\s*\*\s*"
+        r"\$stableSpanMilliseconds\s*\).*?"
+        r"while \(\s*\$clock\.ElapsedMilliseconds\s+-lt\s*"
+        r"\$requiredSpanMilliseconds\s+-or\s*\$samples\.Count\s+-lt\s*"
+        r"\$script:NativeMenuExtendedMinimumSamples\s*\).*?"
+        r"Invoke-NativeMenuExtendedObservationClassifier",
+        "the v2.3 corroboration recorder no longer derives 60-second/10x "
+        "duration from the stationary window and requires at least 200 samples",
+    )
+    _require_regex(
+        motion_recorder,
+        r"baselineHeader\.instance\s+-cne\s+\$Instance.*?"
+        r"baselineHeader\.process_id\s+-ne\s+\$ProcessId.*?"
+        r"baselineSourceJson\s+-cne\s+\$currentSourceJson.*?"
+        r"Assert-NativeMenuOverlayHygiene.*?"
+        r"motion_events\s*=\s*@\(\$classification\.motion_events\)",
+        "the v2.3 corroboration recorder no longer binds the exact stationary "
+        "process/provenance, overlay-gates samples, and records every motion delta",
     )
 
     _require_regex(
@@ -829,6 +865,19 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
         "sample stream or carry Settlement v2.2 canonical ordering into its "
         "fixture header",
     )
+    _require_regex(
+        importer,
+        r"function Write-SpecialSettlementTrace.*?"
+        r"if \(\$settledWindow\.Count -lt 40\).*?"
+        r"schema\s*=\s*\"solomon-dark-native-menu-settlement-trace-v2\".*?"
+        r"settled_window_samples\s*=\s*\$settledWindow.*?"
+        r"loaderFixture\.header\.settlement_trace\s*=\s*"
+        r"Write-SpecialSettlementTrace.*?"
+        r"loadingFixture\.header\.settlement_trace\s*=\s*"
+        r"Write-SpecialSettlementTrace",
+        "native loader/loading import no longer emits real standardized raw "
+        "windows for v2.3 campaign-wide motion resolution",
+    )
     for surface, source in (
         ("native_loader", loader_capture),
         ("loading_screen", loading_capture),
@@ -861,7 +910,8 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
 
     return (
         "standalone, transition, native-loader, and loading-screen capture paths "
-        "apply Settlement v2.2, confirm animation from a fresh exact process, and "
+        "apply Settlement v2.3, preserve fresh-instance raw measurements, "
+        "derive long corroboration from the stationary window, and "
         "derive commit/tree/exact-binary provenance without operator overrides"
     )
 
@@ -873,9 +923,13 @@ def test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired() -> str:
         classifier,
         r"MINIMUM_SAMPLES\s*=\s*40\b.*?"
         r"MINIMUM_SPAN_MILLISECONDS\s*=\s*2_000\b.*?"
-        r"MAXIMUM_ANIMATED_FRACTION\s*=\s*0\.30\b",
+        r"MAXIMUM_ANIMATED_FRACTION\s*=\s*0\.30\b.*?"
+        r"EXTENDED_OBSERVATION_MINIMUM_MILLISECONDS\s*=\s*60_000\b.*?"
+        r"EXTENDED_OBSERVATION_SETTLE_SPAN_MULTIPLIER\s*=\s*10\b.*?"
+        r"EXTENDED_OBSERVATION_MINIMUM_SAMPLES\s*=\s*200\b.*?"
+        r"SETTLEMENT_SPEC\s*=\s*\"2\.3\"",
         "Settlement v2 sample/span/animated-cap constants drifted from the "
-        "amended menu capture definition",
+        "amended menu capture and corroboration definition",
     )
     _require_regex(
         classifier,
@@ -905,20 +959,36 @@ def test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired() -> str:
     )
     _require_regex(
         classifier,
-        r"def assert_confirmation_matches\(.*?"
-        r"if set\(primary_ids\) != set\(confirmation_ids\):.*?"
-        r"animated ID confirmation mismatch",
-        "fresh-instance confirmation no longer requires exactly equal measured "
-        "animated ID sets",
+        r"def resolve_motion_capability\(.*?"
+        r"all_measured_sets\s*=\s*\[\*raw_id_sets\].*?"
+        r"resolved_ids\s*=\s*sorted\(set\(\)\.union\(\*all_measured_sets\)\).*?"
+        r"pair_disputed\s*=\s*members\[0\]\[1\]\.symmetric_difference"
+        r"\(members\[1\]\[1\]\).*?"
+        r"motion capability resolution requires extended observation.*?"
+        r"phantom animated classification.*?"
+        r"resolved animated geometry cap exceeded",
+        "Settlement v2.3 no longer resolves screen-member motion by asymmetric "
+        "union, corroborates a stationary side, rejects phantoms, and reapplies the cap",
     )
-    confirmation_body = classifier.partition(
-        "def assert_confirmation_matches("
-    )[2].partition("\ndef assert_canonical_structure_matches(")[0]
-    if not confirmation_body or "structural_layout_bytes" in confirmation_body:
-        raise StaticReTestFailure(
-            "fresh-instance confirmation widened ATC's animated-ID-set rule "
-            "into an undeclared cross-instance structural-equality rule"
-        )
+    _require_regex(
+        classifier,
+        r"def classify_extended_observation\(.*?"
+        r"max\(\s*EXTENDED_OBSERVATION_MINIMUM_MILLISECONDS,.*?"
+        r"if len\(samples\) < minimum_samples:.*?"
+        r"events\s*=\s*_motion_events\(samples\).*?"
+        r"motion_events\": events",
+        "Settlement v2.3 extended observations no longer prove duration/sample "
+        "floors and retain the exact timestamped change census",
+    )
+    _require_regex(
+        classifier,
+        r"def validate_resolved_motion_capability\(.*?"
+        r"phantom\s*=\s*sorted\(set\(declared_ids\) - set\(expected_ids\)\).*?"
+        r"future\s*=\s*sorted\(set\(expected_ids\) - set\(declared_ids\)\).*?"
+        r"future motion drift: member",
+        "Settlement v2.3 can no longer distinguish neither phantom flags nor "
+        "later motion by a member pinned stationary",
+    )
     _require_regex(
         classifier,
         r"def _canonical_element_key\(.*?"
@@ -938,9 +1008,81 @@ def test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired() -> str:
         "structural state",
     )
     return (
-        "Settlement v2.2 classification, guardrails, canonical structural "
-        "ordering, fixture shaping, and fresh-instance animated-ID confirmation "
+        "Settlement v2.3 classification, guardrails, canonical structural "
+        "ordering, fixture shaping, motion asymmetry, corroboration, and drift "
         "are behavior-tested by the CI unit module"
+    )
+
+
+def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> str:
+    assert_module_runs_in_ci("test_native_menu_settlement_v2")
+    resolver = _read("tools/resolve_native_menu_motion_campaign.py")
+    promoter = _read("tools/promote_native_menu_recapture.py")
+    confirmation = _read("scripts/Confirm-NativeMenuLayoutAnimation.ps1")
+
+    forbidden_provenance_options = (
+        "--base-commit-sha",
+        "--source-tree-sha",
+        "--game-executable-sha256",
+        "--loader-dll-sha256",
+        "--resolved-animated-element-id",
+    )
+    smuggled = [
+        option for option in forbidden_provenance_options if option in resolver
+    ]
+    if smuggled:
+        raise StaticReTestFailure(
+            "motion-capability resolver accepts operator-supplied provenance "
+            f"or classification values: {smuggled}"
+        )
+    _require_regex(
+        resolver,
+        r"def collect_standalones\(.*?"
+        r"if not fixture_paths:.*?standalone sweep reached no candidate fixtures.*?"
+        r"if layout_id in fixtures:.*?ambiguous.*?"
+        r"def collect_navigation\(.*?"
+        r"set\(primary_by_id\) != set\(confirmation_by_id\).*?"
+        r"edge census is absent or ambiguous",
+        "motion-capability resolution no longer proves it reached real "
+        "standalones or refuses duplicate/missing screen and edge candidates",
+    )
+    _require_regex(
+        resolver,
+        r"pair_id\s*=\s*f\"standalone:\{layout_id\}\".*?"
+        r"pair_id\s*=\s*f\"edge:\{edge_id\}:\{side\}\".*?"
+        r"resolve_motion_capability\(.*?"
+        r"if len\(resolved_by_index\) != len\(observations\):.*?"
+        r"did not reach every campaign observation",
+        "screen motion resolution no longer pairs every standalone and every "
+        "edge endpoint across two fresh recordings before normalization",
+    )
+    _require_regex(
+        resolver,
+        r"endpoint\[\"layout\"\]\s*=\s*normalized\[\"layout\"\].*?"
+        r"endpoint\[\"motion_capability\"\]\s*=\s*proofs\[layout_id\].*?"
+        r"if verify:.*?"
+        r"resolved candidate .*? is not the machine-derived v2\.3 result.*?"
+        r"resolved navigation is not the machine-derived v2\.3 result",
+        "the v2.3 resolver no longer applies one screen classification to every "
+        "fixture/endpoint or verifies the derived artifacts byte-for-byte",
+    )
+    _require_regex(
+        promoter,
+        r"motion_capability_resolution.*?settlement_spec.*?2\.3.*?"
+        r"resolve_campaign\(.*?False,\s*True,",
+        "menu promotion can bypass re-derivation of the complete v2.3 campaign",
+    )
+    _require_regex(
+        confirmation,
+        r"\$rawSetsMatch\s*=.*?"
+        r"requires_extended_observation\s*=\s*\(-not \$rawSetsMatch\)",
+        "fresh confirmation no longer preserves a raw-set mismatch for the "
+        "mandatory stationary-side observation",
+    )
+    return (
+        "Settlement v2.3 resolves one motion-capability set across every paired "
+        "standalone/edge observation, refuses ambiguity and operator provenance, "
+        "and promotion re-derives the complete campaign"
     )
 
 
@@ -1188,12 +1330,245 @@ def _animated_ids_for_layout(
     return animated_ids
 
 
-def _assert_settlement_v2_layout(
-    layout: dict[str, Any], settlement: dict[str, Any], witness: str
-) -> list[str]:
-    if settlement.get("settlement_spec") != "2.2":
+def _assert_external_evidence_receipt(receipt: object, witness: str) -> None:
+    if not isinstance(receipt, dict):
+        raise StaticReTestFailure(f"{witness} lost its external evidence receipt")
+    if (
+        not isinstance(receipt.get("evidence_path"), str)
+        or not receipt["evidence_path"]
+        or not re.fullmatch(r"[0-9a-f]{64}", str(receipt.get("sha256")))
+        or isinstance(receipt.get("bytes"), bool)
+        or not isinstance(receipt.get("bytes"), int)
+        or receipt["bytes"] <= 0
+    ):
         raise StaticReTestFailure(
-            f"{witness} does not identify the Settlement v2.2 discipline"
+            f"{witness} external evidence provenance is incomplete"
+        )
+
+
+def _assert_motion_capability(
+    proof: object,
+    layout: dict[str, Any],
+    animated_ids: list[str],
+    witness: str,
+    pair_id: str,
+    instance: str,
+    process_id: object,
+) -> tuple[int, list[str]]:
+    if not isinstance(proof, dict) or proof.get("rule") != (
+        "Settlement v2.3 screen-member motion capability"
+    ):
+        raise StaticReTestFailure(
+            f"{witness} lost its Settlement v2.3 motion-capability proof"
+        )
+    if proof.get("screen_id") != layout.get("screen_id"):
+        raise StaticReTestFailure(
+            f"{witness} motion-capability proof names a different screen"
+        )
+    if not isinstance(proof.get("layout_id"), str) or not proof["layout_id"]:
+        raise StaticReTestFailure(
+            f"{witness} motion-capability proof lost its logical layout identity"
+        )
+    if (
+        not instance
+        or isinstance(process_id, bool)
+        or not isinstance(process_id, int)
+        or process_id <= 0
+    ):
+        raise StaticReTestFailure(
+            f"{witness} lost its exact capture process identity"
+        )
+    if proof.get("resolved_animated_element_ids") != animated_ids:
+        raise StaticReTestFailure(
+            f"{witness} fixture animated IDs disagree with screen capability"
+        )
+    raw = proof.get("raw_observations")
+    if not isinstance(raw, list) or len(raw) < 2:
+        raise StaticReTestFailure(
+            f"{witness} motion-capability sweep reached fewer than two raw observations"
+        )
+    pairs: dict[str, list[dict[str, Any]]] = {}
+    raw_union: set[str] = set()
+    for index, row in enumerate(raw):
+        if not isinstance(row, dict):
+            raise StaticReTestFailure(
+                f"{witness} raw motion observation {index} is not an object"
+            )
+        row_pair = row.get("pair_id")
+        row_ids = row.get("animated_element_ids")
+        if (
+            not isinstance(row_pair, str)
+            or not row_pair
+            or not isinstance(row_ids, list)
+            or not all(isinstance(value, str) and value for value in row_ids)
+            or len(row_ids) != len(set(row_ids))
+            or row.get("sample_count", 0) < MINIMUM_SAMPLES
+            or row.get("stable_span_milliseconds", 0)
+            < MINIMUM_SPAN_MILLISECONDS
+            or isinstance(row.get("motion_event_count"), bool)
+            or not isinstance(row.get("motion_event_count"), int)
+            or row["motion_event_count"] < 0
+        ):
+            raise StaticReTestFailure(
+                f"{witness} raw motion observation {index} is incomplete"
+            )
+        _assert_external_evidence_receipt(
+            row.get("evidence"), f"{witness} raw motion observation {index}"
+        )
+        raw_union.update(row_ids)
+        pairs.setdefault(row_pair, []).append(row)
+    if not pairs:
+        raise StaticReTestFailure(
+            f"{witness} motion-capability proof resolved no independent pair"
+        )
+    for row_pair, members in pairs.items():
+        identities = {
+            (member.get("instance"), member.get("process_id"))
+            for member in members
+        }
+        if len(members) != 2 or len(identities) != 2:
+            raise StaticReTestFailure(
+                f"{witness} pair {row_pair!r} does not contain two fresh processes"
+            )
+    endpoint_rows = [
+        row
+        for row in raw
+        if row.get("pair_id") == pair_id
+        and row.get("instance") == instance
+        and row.get("process_id") == process_id
+    ]
+    if len(endpoint_rows) != 1:
+        raise StaticReTestFailure(
+            f"{witness} does not resolve one raw observation for its exact process/pair"
+        )
+
+    extended = proof.get("extended_observations")
+    if not isinstance(extended, list):
+        raise StaticReTestFailure(
+            f"{witness} motion-capability proof lost its extended-observation list"
+        )
+    extended_by_identity: dict[tuple[object, object], list[dict[str, Any]]] = {}
+    extended_union: set[str] = set()
+    for index, row in enumerate(extended):
+        if not isinstance(row, dict):
+            raise StaticReTestFailure(
+                f"{witness} extended motion observation {index} is not an object"
+            )
+        moving_ids = row.get("moving_element_ids")
+        if (
+            not isinstance(moving_ids, list)
+            or not all(isinstance(value, str) and value for value in moving_ids)
+            or len(moving_ids) != len(set(moving_ids))
+            or row.get("required_span_milliseconds", 0) < 60_000
+            or row.get("observed_span_milliseconds", 0)
+            < row.get("required_span_milliseconds", 0)
+            or row.get("sample_count", 0) < 200
+            or isinstance(row.get("motion_event_count"), bool)
+            or not isinstance(row.get("motion_event_count"), int)
+            or row["motion_event_count"] < 0
+        ):
+            raise StaticReTestFailure(
+                f"{witness} extended motion observation {index} violates its floor"
+            )
+        _assert_external_evidence_receipt(
+            row.get("evidence"), f"{witness} extended motion observation {index}"
+        )
+        extended_union.update(moving_ids)
+        extended_by_identity.setdefault(
+            (row.get("instance"), row.get("process_id")), []
+        ).append(row)
+
+    disputed: set[str] = set()
+    for row_pair, members in pairs.items():
+        first_ids = set(members[0]["animated_element_ids"])
+        second_ids = set(members[1]["animated_element_ids"])
+        for element_id in first_ids.symmetric_difference(second_ids):
+            disputed.add(element_id)
+            stationary = members[0] if element_id not in first_ids else members[1]
+            corroborations = extended_by_identity.get(
+                (stationary.get("instance"), stationary.get("process_id")), []
+            )
+            if len(corroborations) != 1:
+                raise StaticReTestFailure(
+                    f"{witness} disputed member {element_id!r} in pair "
+                    f"{row_pair!r} lacks one stationary-side extended observation"
+                )
+            required = max(
+                60_000,
+                10 * int(stationary["stable_span_milliseconds"]),
+            )
+            if corroborations[0]["required_span_milliseconds"] != required:
+                raise StaticReTestFailure(
+                    f"{witness} disputed member {element_id!r} records a false "
+                    "60-second/10x corroboration bound"
+                )
+    if proof.get("disputed_element_ids") != sorted(disputed):
+        raise StaticReTestFailure(
+            f"{witness} records a false disputed-member census"
+        )
+    if set(animated_ids) != raw_union | extended_union:
+        raise StaticReTestFailure(
+            f"{witness} resolved set is not the asymmetric union of measured motion"
+        )
+
+    motion_evidence = proof.get("motion_evidence")
+    if not isinstance(motion_evidence, list):
+        raise StaticReTestFailure(
+            f"{witness} lost its per-member motion-event evidence"
+        )
+    evidence_by_id = {
+        row.get("element_id"): row
+        for row in motion_evidence
+        if isinstance(row, dict)
+    }
+    if set(evidence_by_id) != set(animated_ids) or len(evidence_by_id) != len(
+        motion_evidence
+    ):
+        raise StaticReTestFailure(
+            f"{witness} contains a phantom or ambiguous animated classification"
+        )
+    for element_id, row in evidence_by_id.items():
+        witnesses = row.get("witnesses")
+        if not isinstance(witnesses, list) or not witnesses:
+            raise StaticReTestFailure(
+                f"{witness} animated member {element_id!r} has no measured motion event"
+            )
+        for event_witness in witnesses:
+            if (
+                not isinstance(event_witness, dict)
+                or event_witness.get("motion_event_count", 0) <= 0
+                or not isinstance(event_witness.get("first_event"), dict)
+                or event_witness["first_event"].get("element_id") != element_id
+            ):
+                raise StaticReTestFailure(
+                    f"{witness} animated member {element_id!r} has phantom event evidence"
+                )
+            _assert_external_evidence_receipt(
+                event_witness.get("evidence"),
+                f"{witness} animated member {element_id} event",
+            )
+    expected_sample_count = sum(row["sample_count"] for row in raw) + sum(
+        row["sample_count"] for row in extended
+    )
+    if proof.get("envelope_sample_count") != expected_sample_count:
+        raise StaticReTestFailure(
+            f"{witness} motion envelope does not cover every campaign sample"
+        )
+    return expected_sample_count, endpoint_rows[0]["animated_element_ids"]
+
+
+def _assert_settlement_v2_layout(
+    layout: dict[str, Any],
+    settlement: dict[str, Any],
+    witness: str,
+    motion_capability: object,
+    pair_id: str,
+    instance: str,
+    process_id: object,
+) -> list[str]:
+    if settlement.get("settlement_spec") != "2.3":
+        raise StaticReTestFailure(
+            f"{witness} does not identify the Settlement v2.3 discipline"
         )
     if settlement.get("structural_element_order") != (
         "draw_order_then_element_id"
@@ -1217,6 +1592,15 @@ def _assert_settlement_v2_layout(
         )
 
     animated_ids = _animated_ids_for_layout(layout, witness)
+    motion_sample_count, expected_raw_ids = _assert_motion_capability(
+        motion_capability,
+        layout,
+        animated_ids,
+        witness,
+        pair_id,
+        instance,
+        process_id,
+    )
     animated_set = set(animated_ids)
     shaped_ids: list[str] = []
     required_static_fields = {
@@ -1273,11 +1657,9 @@ def _assert_settlement_v2_layout(
                 raise StaticReTestFailure(
                     f"{witness}.{element_id} lost its exact motion-envelope shape"
                 )
-            if envelope["sample_count"] != settlement.get(
-                "consecutive_structural_samples"
-            ):
+            if envelope["sample_count"] != motion_sample_count:
                 raise StaticReTestFailure(
-                    f"{witness}.{element_id} envelope does not cover the settled window"
+                    f"{witness}.{element_id} envelope does not cover every campaign observation"
                 )
             for geometry_name in ("rect", "unclipped_rect"):
                 geometry = envelope.get(geometry_name)
@@ -1346,6 +1728,23 @@ def _assert_settlement_v2_layout(
         raise StaticReTestFailure(
             f"{witness} settlement header disagrees with its animated ID list"
         )
+    raw_ids = settlement.get("raw_window_animated_element_ids")
+    if (
+        not isinstance(raw_ids, list)
+        or not all(isinstance(value, str) and value for value in raw_ids)
+        or len(raw_ids) != len(set(raw_ids))
+    ):
+        raise StaticReTestFailure(
+            f"{witness} lost its raw per-window animated ID measurement"
+        )
+    if raw_ids != expected_raw_ids:
+        raise StaticReTestFailure(
+            f"{witness} settlement disagrees with its exact raw-window observation"
+        )
+    if settlement.get("motion_envelope_sample_count") != motion_sample_count:
+        raise StaticReTestFailure(
+            f"{witness} settlement records a false campaign envelope sample count"
+        )
     if settlement.get("element_count") != len(elements):
         raise StaticReTestFailure(
             f"{witness} settlement header disagrees with its element census"
@@ -1374,7 +1773,10 @@ def _assert_settlement_v2_layout(
 
 
 def _assert_animation_confirmation(
-    header: dict[str, Any], animated_ids: list[str], witness: str
+    header: dict[str, Any],
+    animated_ids: list[str],
+    structural_sha256: str,
+    witness: str,
 ) -> None:
     confirmation = header.get("animation_confirmation")
     if not isinstance(confirmation, dict):
@@ -1393,19 +1795,27 @@ def _assert_animation_confirmation(
         raise StaticReTestFailure(
             f"{witness} animation confirmation changed machine provenance"
         )
-    if not re.fullmatch(
-        r"[0-9a-f]{64}",
-        str(confirmation.get("confirmation_structural_sha256")),
-    ):
+    if confirmation.get("confirmation_structural_sha256") != structural_sha256:
         raise StaticReTestFailure(
-            f"{witness} animation confirmation lost its independently measured "
-            "second-capture structural hash"
+            f"{witness} resolved confirmation structure disagrees with its screen"
         )
     if confirmation.get("animated_element_ids_sha256") != hashlib.sha256(
         canonical_bytes(sorted(animated_ids))
     ).hexdigest():
         raise StaticReTestFailure(
             f"{witness} animation confirmation records a false animated-ID hash"
+        )
+    for field in (
+        "raw_confirmation_structural_sha256",
+        "raw_confirmation_animated_element_ids_sha256",
+    ):
+        if not re.fullmatch(r"[0-9a-f]{64}", str(confirmation.get(field))):
+            raise StaticReTestFailure(
+                f"{witness} animation confirmation lost {field}"
+            )
+    if confirmation.get("motion_capability_resolved") is not True:
+        raise StaticReTestFailure(
+            f"{witness} animation confirmation bypassed screen-level resolution"
         )
     if (
         not isinstance(confirmation.get("evidence_filename"), str)
@@ -1926,6 +2336,26 @@ def test_native_menu_settled_destinations_equal_standalones() -> str:
         raise StaticReTestFailure(
             "settled destination contract did not reach a Settlement v2 aggregate"
         )
+    resolution_header = golden.get("header", {}).get(
+        "motion_capability_resolution"
+    )
+    if (
+        not isinstance(resolution_header, dict)
+        or resolution_header.get("settlement_spec") != "2.3"
+        or resolution_header.get("screen_count", 0) < len(LAYOUT_IDS) + 1
+        or not isinstance(
+            resolution_header.get("motion_observation_directory"), str
+        )
+    ):
+        raise StaticReTestFailure(
+            "settled destination contract did not reach the complete v2.3 "
+            "campaign-resolution receipt"
+        )
+    for field in ("primary_raw_recording", "confirmation_raw_recording"):
+        _assert_external_evidence_receipt(
+            resolution_header.get(field),
+            f"settled menu {field}",
+        )
     overlay_reference_path = (
         ROOT / "tests/fixtures/webgame/menu-overlay-reference.json"
     )
@@ -2031,8 +2461,20 @@ def test_native_menu_settled_destinations_equal_standalones() -> str:
             raise StaticReTestFailure(
                 f"settled standalone {fixture} lost recorded-live provenance"
             )
+        standalone_motion = header.get("motion_capability")
+        standalone_layout_id = (
+            standalone_motion.get("layout_id", "")
+            if isinstance(standalone_motion, dict)
+            else ""
+        )
         animated_ids = _assert_settlement_v2_layout(
-            entry["layout"], header["settlement"], f"standalone {fixture}"
+            entry["layout"],
+            header["settlement"],
+            f"standalone {fixture}",
+            standalone_motion,
+            "standalone:" + str(standalone_layout_id),
+            str(header.get("instance", "")),
+            header.get("process_id"),
         )
         try:
             assert_overlay_hygiene(entry["layout"], overlay_reference)
@@ -2040,7 +2482,12 @@ def test_native_menu_settled_destinations_equal_standalones() -> str:
             raise StaticReTestFailure(
                 f"standalone {fixture} failed overlay hygiene: {error}"
             ) from error
-        _assert_animation_confirmation(header, animated_ids, fixture)
+        _assert_animation_confirmation(
+            header,
+            animated_ids,
+            header["settlement"]["structural_sha256"],
+            fixture,
+        )
         population_override = _assert_landed_population_override(
             header, entry["layout"], fixture
         )
@@ -2078,11 +2525,19 @@ def test_native_menu_settled_destinations_equal_standalones() -> str:
             edge["before"]["layout"],
             edge["before"]["settlement"],
             f"{edge_id}.source",
+            edge["before"].get("motion_capability"),
+            f"edge:{edge_id}:source",
+            str(edge.get("header", {}).get("instance", "")),
+            edge.get("header", {}).get("process_id"),
         )
         after_ids = _assert_settlement_v2_layout(
             edge["after"]["layout"],
             edge["after"]["settlement"],
             f"{edge_id}.destination",
+            edge["after"].get("motion_capability"),
+            f"edge:{edge_id}:destination",
+            str(edge.get("header", {}).get("instance", "")),
+            edge.get("header", {}).get("process_id"),
         )
         try:
             assert_overlay_hygiene(edge["before"]["layout"], overlay_reference)
@@ -2100,6 +2555,9 @@ def test_native_menu_settled_destinations_equal_standalones() -> str:
                 f"{edge_id}.destination endpoint summary changed its animated ID set"
             )
         standalone_layout = by_fixture[destination_fixture]["layout"]
+        standalone_motion = by_fixture[destination_fixture]["header"].get(
+            "motion_capability"
+        )
         standalone_ids = _animated_ids_for_layout(
             standalone_layout, f"standalone {destination_fixture}"
         )
@@ -2107,6 +2565,11 @@ def test_native_menu_settled_destinations_equal_standalones() -> str:
             raise StaticReTestFailure(
                 f"{edge_id} settled destination animated ID set does not equal "
                 f"{destination_fixture}"
+            )
+        if edge["after"].get("motion_capability") != standalone_motion:
+            raise StaticReTestFailure(
+                f"{edge_id} destination does not carry the same resolved "
+                f"screen-member motion proof as {destination_fixture}"
             )
         try:
             destination_bytes = structural_layout_bytes(

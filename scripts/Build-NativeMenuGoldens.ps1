@@ -210,7 +210,7 @@ foreach ($file in $layoutFiles) {
         [string]$source.source_tree_sha -notmatch '^[0-9a-f]{40}$' -or
         [string]$source.game_executable_sha256 -notmatch '^[0-9a-f]{64}$' -or
         [string]$source.loader_dll_sha256 -notmatch '^[0-9a-f]{64}$' -or
-        [string]$settlement.settlement_spec -cne "2.2" -or
+        [string]$settlement.settlement_spec -cne "2.3" -or
         [string]$settlement.structural_element_order -cne
             "draw_order_then_element_id" -or
         [int]$settlement.consecutive_structural_samples -lt 40 -or
@@ -222,6 +222,16 @@ foreach ($file in $layoutFiles) {
         [string]::IsNullOrWhiteSpace([string]$fixture.header.capture_method)
     ) {
         throw "Capture provenance is incomplete in $($file.FullName)."
+    }
+    if (
+        $null -eq $fixture.header.motion_capability -or
+        (ConvertTo-NativeMenuIdSetJson @(
+            $fixture.header.motion_capability.resolved_animated_element_ids
+        )) -cne (ConvertTo-NativeMenuIdSetJson @(
+            $fixture.layout.animated_element_ids
+        ))
+    ) {
+        throw "Screen-level motion capability is incomplete in $($file.FullName)."
     }
     Assert-NativeMenuGoldenOverlayHygiene `
         -Layout $fixture.layout `
@@ -331,7 +341,7 @@ foreach ($file in $transitionLayoutFiles) {
         [string]$source.source_tree_sha -notmatch '^[0-9a-f]{40}$' -or
         [string]$source.game_executable_sha256 -notmatch '^[0-9a-f]{64}$' -or
         [string]$source.loader_dll_sha256 -notmatch '^[0-9a-f]{64}$' -or
-        [string]$settlement.settlement_spec -cne "2.2" -or
+        [string]$settlement.settlement_spec -cne "2.3" -or
         [string]$settlement.structural_element_order -cne
             "draw_order_then_element_id" -or
         [int]$settlement.consecutive_structural_samples -lt 40 -or
@@ -341,6 +351,16 @@ foreach ($file in $transitionLayoutFiles) {
         [string]$settlement.structural_sha256 -notmatch '^[0-9a-f]{64}$'
     ) {
         throw "Transition-only standalone provenance is incomplete: hub"
+    }
+    if (
+        $null -eq $fixture.header.motion_capability -or
+        (ConvertTo-NativeMenuIdSetJson @(
+            $fixture.header.motion_capability.resolved_animated_element_ids
+        )) -cne (ConvertTo-NativeMenuIdSetJson @(
+            $fixture.layout.animated_element_ids
+        ))
+    ) {
+        throw "Transition-only hub lost its screen-level motion capability proof."
     }
     Assert-NativeMenuGoldenOverlayHygiene `
         -Layout $fixture.layout `
@@ -526,14 +546,14 @@ foreach ($edgeId in $edgeIds) {
         [string]$edgeSource.source_tree_sha -notmatch '^[0-9a-f]{40}$' -or
         [string]$edgeSource.game_executable_sha256 -notmatch '^[0-9a-f]{64}$' -or
         [string]$edgeSource.loader_dll_sha256 -notmatch '^[0-9a-f]{64}$' -or
-        [string]$edgeSettlement.source.settlement_spec -cne "2.2" -or
+        [string]$edgeSettlement.source.settlement_spec -cne "2.3" -or
         [string]$edgeSettlement.source.structural_element_order -cne
             "draw_order_then_element_id" -or
         [int]$edgeSettlement.source.consecutive_structural_samples -lt 40 -or
         [int]$edgeSettlement.source.animated_id_set_sample_count -lt 40 -or
         [int]$edgeSettlement.source.stable_span_milliseconds -lt 2000 -or
         [double]$edgeSettlement.source.animated_fraction -gt 0.30 -or
-        [string]$edgeSettlement.destination.settlement_spec -cne "2.2" -or
+        [string]$edgeSettlement.destination.settlement_spec -cne "2.3" -or
         [string]$edgeSettlement.destination.structural_element_order -cne
             "draw_order_then_element_id" -or
         [int]$edgeSettlement.destination.consecutive_structural_samples -lt 40 -or
@@ -655,7 +675,8 @@ $golden = [ordered]@{
         gap = "G11"
         generated_from_live_capture_at_utc = $latestCapture.ToString("o")
         capture_method = (
-            "Settlement v2.2 structural native UI capture, measured animated " +
+            "Settlement v2.3 structural native UI capture, resolved screen-member " +
+            "motion capability, measured animated " +
             "geometry anchors/envelopes, native Sprite/text hooks, live D3D9 " +
             "frames, exact-process input, canonical draw-order/id comparison, " +
             "and fresh-instance animation confirmation"
@@ -669,6 +690,7 @@ $golden = [ordered]@{
             ).Hash.ToLowerInvariant()
             bytes = $navigationItem.Length
         }
+        motion_capability_resolution = $navigation.header.motion_capability_resolution
         overlay_reference = [ordered]@{
             fixture = "menu-overlay-reference.json"
             sha256 = (
