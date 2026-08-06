@@ -39,6 +39,13 @@ from static_re_native_session_flow_contracts import (
     test_native_session_flow_state_enum_is_pinned,
     test_native_session_flow_transition_step_order_is_pinned,
 )
+from static_re_native_class_loadout_contracts import (
+    test_native_class_loadout_census_and_identity_are_pinned,
+    test_native_class_loadout_definition_to_actor_mapping_is_pinned,
+    test_native_class_loadout_goldens_are_live_settled_and_participant_owned,
+    test_native_class_loadout_starting_kits_are_stat_exact,
+    test_native_class_loadout_unlock_conditions_are_pinned,
+)
 from static_re_native_scene_composition_contracts import (
     test_native_scene_camera_transform_and_backdrop_rate_are_pinned,
     test_native_scene_decor_determinism_path_is_pinned,
@@ -863,6 +870,26 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native session-flow input seal boundaries are pinned",
         test_native_session_flow_input_seal_boundaries_are_pinned,
+    ),
+    (
+        "Native class-loadout census and identity are pinned",
+        test_native_class_loadout_census_and_identity_are_pinned,
+    ),
+    (
+        "Native class-loadout starting kits are stat-exact",
+        test_native_class_loadout_starting_kits_are_stat_exact,
+    ),
+    (
+        "Native class-loadout definition-to-actor mapping is pinned",
+        test_native_class_loadout_definition_to_actor_mapping_is_pinned,
+    ),
+    (
+        "Native class-loadout unlock conditions are pinned",
+        test_native_class_loadout_unlock_conditions_are_pinned,
+    ),
+    (
+        "Native class-loadout goldens are live-settled and participant-owned",
+        test_native_class_loadout_goldens_are_live_settled_and_participant_owned,
     ),
     (
         "Native scene physical layer list is pinned",

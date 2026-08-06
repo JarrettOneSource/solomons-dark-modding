@@ -962,6 +962,9 @@ def test_automation_launch_surfaces_default_to_disabled_audio() -> str:
         "tools/verify_lua_consumable_presentation.py",
         "tools/verify_multiplayer_bot_only_wave_progression.py",
     }
+    delegated_default_disabled_python = {
+        "tools/record_native_class_loadout_goldens.py",
+    }
     reference_only_python = {
         "tools/verify_bot_level_up_continuity.py",
         "tools/verify_hostile_targeting_continuity.py",
@@ -1011,6 +1014,7 @@ def test_automation_launch_surfaces_default_to_disabled_audio() -> str:
         direct_python |
         hard_disabled_python |
         delegated_hard_disabled_python |
+        delegated_default_disabled_python |
         reference_only_python
     ):
         raise StaticReTestFailure(
@@ -1020,6 +1024,8 @@ def test_automation_launch_surfaces_default_to_disabled_audio() -> str:
                 sorted(
                     direct_python |
                     hard_disabled_python |
+                    delegated_hard_disabled_python |
+                    delegated_default_disabled_python |
                     reference_only_python
                 )
             )
@@ -1069,6 +1075,14 @@ def test_automation_launch_surfaces_default_to_disabled_audio() -> str:
     for relative_path in sorted(delegated_hard_disabled_python):
         text = read_text(ROOT / relative_path)
         if "enable_audio=False" not in text or "enable_audio=True" in text:
+            failures.append(relative_path)
+    for relative_path in sorted(delegated_default_disabled_python):
+        text = read_text(ROOT / relative_path)
+        if (
+            "LAUNCH_SCRIPT" not in text
+            or '"-EnableAudio"' in text
+            or 'launch.get("audioDisabled") is True' not in text
+        ):
             failures.append(relative_path)
     if failures:
         raise StaticReTestFailure(
