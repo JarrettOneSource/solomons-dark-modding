@@ -185,6 +185,37 @@ std::string SerializeLoadingLayout(
     return json.str();
 }
 
+std::string SerializeLoadingStructure(
+    const LoadingScreenSnapshot& snapshot,
+    const LoadingScreenRenderLayout& layout,
+    const std::wstring& instance) {
+    std::ostringstream json;
+    json << std::fixed << std::setprecision(4)
+         << "{\"instance\":\""
+         << EscapeJson(NarrowSafeFileToken(instance))
+         << "\",\"pid\":" << GetCurrentProcessId()
+         << ",\"screen_id\":\"loading_"
+         << EscapeJson(snapshot.stage_id)
+         << "\",\"sequence\":" << snapshot.sequence
+         << ",\"stage_id\":\"" << EscapeJson(snapshot.stage_id)
+         << "\",\"progress\":" << snapshot.progress
+         << ",\"viewport\":[" << layout.viewport_x << ','
+         << layout.viewport_y << ',' << layout.viewport_width << ','
+         << layout.viewport_height << "]"
+         << ",\"source_crop\":[" << layout.crop_u0 << ','
+         << layout.crop_v0 << ',' << layout.crop_u1 << ','
+         << layout.crop_v1 << "]"
+         << ",\"background_art_id\":\""
+         << EscapeJson(layout.background_art_id)
+         << "\",\"background_size\":[" << layout.background_width << ','
+         << layout.background_height << "]"
+         << ",\"progress_bar_visible\":"
+         << (layout.progress_bar_visible ? "true" : "false")
+         << ",\"label\":\"" << EscapeJson(layout.label)
+         << "\",\"text_scale\":" << layout.text_scale << '}';
+    return json.str();
+}
+
 bool WriteTextAtomically(
     const std::filesystem::path& output_path,
     std::string_view text,
@@ -255,7 +286,7 @@ bool WriteLoadingCaptureJson(
             g_loading_stable_started_at;
     json << "  ],\n"
          << "  \"settlement\": {\n"
-         << "    \"criterion\": \"at least 40 consecutive byte-identical semantic payloads spanning at least 2 seconds\",\n"
+         << "    \"criterion\": \"at least 40 consecutive samples spanning at least 2 seconds with byte-identical structural payloads; animated geometry is measured by the importer\",\n"
          << "    \"settled\": "
          << (g_loading_capture_settled ? "true" : "false") << ",\n"
          << "    \"settle_latency_milliseconds\": ";
@@ -266,7 +297,7 @@ bool WriteLoadingCaptureJson(
     }
     json << ",\n"
          << "    \"stable_span_milliseconds\": " << stable_span << ",\n"
-         << "    \"consecutive_identical_samples\": "
+         << "    \"consecutive_structural_samples\": "
          << g_loading_stable_sample_count << ",\n"
          << "    \"total_semantic_samples\": "
          << g_loading_capture_samples.size() << "\n"
@@ -329,10 +360,14 @@ void CaptureLoadingScreenEvidenceFrameInternal(
         snapshot,
         layout,
         instance);
+    const auto structure_json = SerializeLoadingStructure(
+        snapshot,
+        layout,
+        instance);
     const auto semantic_changed =
-        sample.semantic_json != g_loading_stable_semantic;
+        structure_json != g_loading_stable_semantic;
     if (semantic_changed) {
-        g_loading_stable_semantic = sample.semantic_json;
+        g_loading_stable_semantic = structure_json;
         g_loading_stable_sample_count = 1;
         g_loading_stable_started_at = sample.elapsed_milliseconds;
         constexpr wchar_t reference_name[] =

@@ -79,17 +79,23 @@ try {
 
 $capturedAtUtc = [DateTime]::UtcNow.ToString("o")
 $trace = [ordered]@{
-    schema = "solomon-dark-native-menu-settlement-trace-v1"
+    schema = "solomon-dark-native-menu-settlement-trace-v2"
     header = [ordered]@{
         label = $ScreenId
         instance = $Instance
+        process_id = $ProcessId
         source = $context.Source
         recorded_live = $true
         captured_at_utc = $capturedAtUtc
         capture_method = $observation.capture_method
     }
     settlement = $observation.settlement
-    distinct_semantic_payloads = @($observation.settlement_trace)
+    structural_phases = @(
+        $observation.settlement_trace.structural_phases
+    )
+    settled_window_samples = @(
+        $observation.settlement_trace.settled_window_samples
+    )
 }
 [IO.File]::WriteAllText(
     $traceItemPath,
@@ -107,10 +113,11 @@ $referenceRelative = [Uri]::UnescapeDataString(
 )
 $traceItem = Get-Item -LiteralPath $traceItemPath
 $fixture = [ordered]@{
-    schema = "solomon-dark-native-menu-layout-v1"
+    schema = "solomon-dark-native-menu-layout-v2"
     header = [ordered]@{
         label = $ScreenId
         instance = $Instance
+        process_id = $ProcessId
         source = $context.Source
         capture_method = $observation.capture_method
         recorded_live = $true
@@ -137,6 +144,7 @@ $fixture = [ordered]@{
     success = $true
     screen = $ScreenId
     elements = $observation.element_count
+    animated_elements = @($observation.animated_element_ids).Count
     settle_latency_milliseconds = (
         $observation.settlement.settle_latency_milliseconds
     )

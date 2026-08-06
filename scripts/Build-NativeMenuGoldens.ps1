@@ -18,21 +18,45 @@ $fixtureRoot = [IO.Path]::GetFullPath($FixtureRoot)
 $layoutRoot = Join-Path $fixtureRoot "menu-layouts"
 $transitionLayoutRoot = Join-Path $fixtureRoot "menu-transition-layouts"
 $referenceRoot = Join-Path $fixtureRoot "menu-reference-captures"
+$confirmationRoot = Join-Path $fixtureRoot "menu-animation-confirmations"
 if ([string]::IsNullOrWhiteSpace($OutputPath)) {
     $OutputPath = Join-Path $fixtureRoot "menu-goldens.json"
 }
 $OutputPath = [IO.Path]::GetFullPath($OutputPath)
 
-function ConvertTo-SemanticLayoutJson {
+function Get-NativeMenuStructuralSummary {
     param([Parameter(Mandatory = $true)][object]$Layout)
 
-    $semantic = [ordered]@{}
-    foreach ($property in $Layout.PSObject.Properties) {
-        if ($property.Name -ne "captured_at_milliseconds") {
-            $semantic[$property.Name] = $property.Value
+    $classifier = Join-Path $root "tools\native_menu_settlement_v2.py"
+    $temporaryDirectory = Join-Path ([IO.Path]::GetTempPath()) (
+        "sdmod-menu-structural-summary-" + [Guid]::NewGuid().ToString("N")
+    )
+    [IO.Directory]::CreateDirectory($temporaryDirectory) | Out-Null
+    $inputPath = Join-Path $temporaryDirectory "layout.json"
+    $outputPath = Join-Path $temporaryDirectory "summary.json"
+    try {
+        [IO.File]::WriteAllText(
+            $inputPath,
+            (($Layout | ConvertTo-Json -Depth 100) + [Environment]::NewLine),
+            [Text.UTF8Encoding]::new($false)
+        )
+        $result = @(
+            & py.exe -3 $classifier summarize-layout `
+                --input $inputPath `
+                --output $outputPath 2>&1
+        )
+        if ($LASTEXITCODE -ne 0) {
+            throw (
+                "Settlement v2 structural layout summary failed: " +
+                (($result | ForEach-Object { [string]$_ }) -join "`n")
+            )
+        }
+        return Get-Content -LiteralPath $outputPath -Raw | ConvertFrom-Json
+    } finally {
+        if (Test-Path -LiteralPath $temporaryDirectory -PathType Container) {
+            Remove-Item -LiteralPath $temporaryDirectory -Recurse -Force
         }
     }
-    return $semantic | ConvertTo-Json -Depth 100 -Compress
 }
 
 function ConvertTo-GoldenEndpoint {
@@ -44,6 +68,8 @@ function ConvertTo-GoldenEndpoint {
         tagged_screen = [string]$Observation.tagged_screen
         layout_generation = [uint64]$Observation.layout_generation
         element_count = [int]$Observation.element_count
+        animated_element_ids = @($Observation.animated_element_ids)
+        structural_sha256 = [string]$Observation.settlement.structural_sha256
         capture_method = [string]$Observation.capture_method
         frame_sha256 = [string]$Observation.frame_sha256
         settlement = $Observation.settlement
@@ -104,7 +130,7 @@ $latestCapture = [DateTimeOffset]::MinValue
 foreach ($file in $layoutFiles) {
     $fixture = Get-Content -LiteralPath $file.FullName -Raw |
         ConvertFrom-Json
-    if ($fixture.schema -ne "solomon-dark-native-menu-layout-v1") {
+    if ($fixture.schema -ne "solomon-dark-native-menu-layout-v2") {
         throw "Unexpected layout schema in $($file.FullName)."
     }
     $source = $fixture.header.source
@@ -116,12 +142,30 @@ foreach ($file in $layoutFiles) {
         [string]$source.source_tree_sha -notmatch '^[0-9a-f]{40}$' -or
         [string]$source.game_executable_sha256 -notmatch '^[0-9a-f]{64}$' -or
         [string]$source.loader_dll_sha256 -notmatch '^[0-9a-f]{64}$' -or
-        [int]$settlement.consecutive_identical_samples -lt 40 -or
+        [int]$settlement.consecutive_structural_samples -lt 40 -or
+        [int]$settlement.animated_id_set_sample_count -lt 40 -or
         [int]$settlement.stable_span_milliseconds -lt 2000 -or
         [int]$settlement.settle_latency_milliseconds -lt 2000 -or
+        [double]$settlement.animated_fraction -gt 0.30 -or
+        [string]$settlement.structural_sha256 -notmatch '^[0-9a-f]{64}$' -or
         [string]::IsNullOrWhiteSpace([string]$fixture.header.capture_method)
     ) {
         throw "Capture provenance is incomplete in $($file.FullName)."
+    }
+    $fixtureStructural = Get-NativeMenuStructuralSummary -Layout $fixture.layout
+    if (
+        [string]$fixtureStructural.structural_sha256 -ne
+            [string]$settlement.structural_sha256 -or
+        (ConvertTo-Json -InputObject @(
+            $fixtureStructural.animated_element_ids
+        ) -Compress) -cne (ConvertTo-Json -InputObject @(
+            $fixture.layout.animated_element_ids
+        ) -Compress)
+    ) {
+        throw (
+            "Settlement v2 header does not describe the structural layout " +
+            "in $($file.FullName)."
+        )
     }
     $referenceRelative = [string]$fixture.header.reference_capture
     $referencePath = [IO.Path]::GetFullPath(
@@ -135,6 +179,28 @@ foreach ($file in $layoutFiles) {
         -not (Test-Path -LiteralPath $referencePath -PathType Leaf)
     ) {
         throw "Reference capture is missing or outside its fixture root: $referenceRelative"
+    }
+    $confirmation = $fixture.header.animation_confirmation
+    $confirmationPath = [IO.Path]::GetFullPath(
+        (Join-Path $confirmationRoot ([string]$confirmation.evidence_filename))
+    )
+    if (
+        [string]::IsNullOrWhiteSpace([string]$confirmation.instance) -or
+        [int]$confirmation.process_id -eq [int]$fixture.header.process_id -or
+        [string]$confirmation.sha256 -notmatch '^[0-9a-f]{64}$' -or
+        [string]$confirmation.structural_sha256 -ne
+            [string]$settlement.structural_sha256 -or
+        -not (Test-Path -LiteralPath $confirmationPath -PathType Leaf) -or
+        [long]$confirmation.bytes -ne
+            (Get-Item -LiteralPath $confirmationPath).Length -or
+        [string]$confirmation.sha256 -ne (
+            Get-FileHash -LiteralPath $confirmationPath -Algorithm SHA256
+        ).Hash.ToLowerInvariant()
+    ) {
+        throw (
+            "Fresh-instance animated-ID confirmation is incomplete or false " +
+            "in $($file.FullName)."
+        )
     }
     $capturedAt = [DateTimeOffset]::Parse(
         [string]$fixture.header.captured_at_utc
@@ -185,16 +251,26 @@ foreach ($file in $transitionLayoutFiles) {
     $source = $fixture.header.source
     $settlement = $fixture.header.settlement
     if (
-        $fixture.schema -ne "solomon-dark-native-menu-layout-v1" -or
+        $fixture.schema -ne "solomon-dark-native-menu-layout-v2" -or
         [bool]$fixture.header.recorded_live -ne $true -or
         [string]$source.base_commit_sha -notmatch '^[0-9a-f]{40}$' -or
         [string]$source.source_tree_sha -notmatch '^[0-9a-f]{40}$' -or
         [string]$source.game_executable_sha256 -notmatch '^[0-9a-f]{64}$' -or
         [string]$source.loader_dll_sha256 -notmatch '^[0-9a-f]{64}$' -or
-        [int]$settlement.consecutive_identical_samples -lt 40 -or
-        [int]$settlement.stable_span_milliseconds -lt 2000
+        [int]$settlement.consecutive_structural_samples -lt 40 -or
+        [int]$settlement.animated_id_set_sample_count -lt 40 -or
+        [int]$settlement.stable_span_milliseconds -lt 2000 -or
+        [double]$settlement.animated_fraction -gt 0.30 -or
+        [string]$settlement.structural_sha256 -notmatch '^[0-9a-f]{64}$'
     ) {
         throw "Transition-only standalone provenance is incomplete: hub"
+    }
+    $fixtureStructural = Get-NativeMenuStructuralSummary -Layout $fixture.layout
+    if (
+        [string]$fixtureStructural.structural_sha256 -ne
+        [string]$settlement.structural_sha256
+    ) {
+        throw "Transition-only hub settlement header does not describe its layout."
     }
     $referencePath = [IO.Path]::GetFullPath((Join-Path `
         $transitionLayoutRoot `
@@ -202,6 +278,22 @@ foreach ($file in $transitionLayoutFiles) {
     ))
     if (-not (Test-Path -LiteralPath $referencePath -PathType Leaf)) {
         throw "Transition-only standalone reference capture is missing: hub"
+    }
+    $confirmation = $fixture.header.animation_confirmation
+    $confirmationPath = [IO.Path]::GetFullPath(
+        (Join-Path $confirmationRoot ([string]$confirmation.evidence_filename))
+    )
+    if (
+        [int]$confirmation.process_id -eq [int]$fixture.header.process_id -or
+        [string]$confirmation.sha256 -notmatch '^[0-9a-f]{64}$' -or
+        [string]$confirmation.structural_sha256 -ne
+            [string]$settlement.structural_sha256 -or
+        -not (Test-Path -LiteralPath $confirmationPath -PathType Leaf) -or
+        [string]$confirmation.sha256 -ne (
+            Get-FileHash -LiteralPath $confirmationPath -Algorithm SHA256
+        ).Hash.ToLowerInvariant()
+    ) {
+        throw "Transition-only hub lost its fresh-instance animation confirmation."
     }
     $capturedAt = [DateTimeOffset]::Parse(
         [string]$fixture.header.captured_at_utc
@@ -234,7 +326,7 @@ foreach ($file in $transitionLayoutFiles) {
 $navigationItem = Get-Item -LiteralPath $NavigationRecordingPath
 $navigation = Get-Content -LiteralPath $navigationItem.FullName -Raw |
     ConvertFrom-Json
-if ($navigation.schema -ne "solomon-dark-native-menu-navigation-v1") {
+if ($navigation.schema -ne "solomon-dark-native-menu-navigation-v2") {
     throw "Navigation recording schema was not recognized."
 }
 
@@ -354,10 +446,14 @@ foreach ($edgeId in $edgeIds) {
         [string]$edgeSource.source_tree_sha -notmatch '^[0-9a-f]{40}$' -or
         [string]$edgeSource.game_executable_sha256 -notmatch '^[0-9a-f]{64}$' -or
         [string]$edgeSource.loader_dll_sha256 -notmatch '^[0-9a-f]{64}$' -or
-        [int]$edgeSettlement.source.consecutive_identical_samples -lt 40 -or
+        [int]$edgeSettlement.source.consecutive_structural_samples -lt 40 -or
+        [int]$edgeSettlement.source.animated_id_set_sample_count -lt 40 -or
         [int]$edgeSettlement.source.stable_span_milliseconds -lt 2000 -or
-        [int]$edgeSettlement.destination.consecutive_identical_samples -lt 40 -or
+        [double]$edgeSettlement.source.animated_fraction -gt 0.30 -or
+        [int]$edgeSettlement.destination.consecutive_structural_samples -lt 40 -or
+        [int]$edgeSettlement.destination.animated_id_set_sample_count -lt 40 -or
         [int]$edgeSettlement.destination.stable_span_milliseconds -lt 2000 -or
+        [double]$edgeSettlement.destination.animated_fraction -gt 0.30 -or
         $null -eq $recorded.before.layout -or
         $null -eq $recorded.after.layout
     ) {
@@ -376,14 +472,30 @@ foreach ($edgeId in $edgeIds) {
             "layout '$destinationLayoutId'."
         )
     }
-    $destinationSemantic = ConvertTo-SemanticLayoutJson $recorded.after.layout
-    $standaloneSemantic = ConvertTo-SemanticLayoutJson (
-        $layoutFixtureById[$destinationLayoutId].layout
-    )
-    if ($destinationSemantic -cne $standaloneSemantic) {
+    $destinationStructural = Get-NativeMenuStructuralSummary `
+        -Layout $recorded.after.layout
+    $standaloneStructural = Get-NativeMenuStructuralSummary `
+        -Layout $layoutFixtureById[$destinationLayoutId].layout
+    $destinationAnimatedJson = ConvertTo-Json `
+        -InputObject @($destinationStructural.animated_element_ids) `
+        -Compress
+    $standaloneAnimatedJson = ConvertTo-Json `
+        -InputObject @($standaloneStructural.animated_element_ids) `
+        -Compress
+    if ($destinationAnimatedJson -cne $standaloneAnimatedJson) {
+        throw (
+            "STOP: settled navigation destination '$edgeId' classified " +
+            "animated ids $destinationAnimatedJson but standalone " +
+            "'$destinationLayoutId' classified $standaloneAnimatedJson."
+        )
+    }
+    if (
+        [string]$destinationStructural.structural_sha256 -ne
+        [string]$standaloneStructural.structural_sha256
+    ) {
         throw (
             "STOP: settled navigation destination '$edgeId' does not " +
-            "byte-match standalone layout '$destinationLayoutId'."
+            "structurally byte-match standalone layout '$destinationLayoutId'."
         )
     }
     $observedAt = [DateTimeOffset]::Parse(
@@ -400,9 +512,11 @@ foreach ($edgeId in $edgeIds) {
         trigger = [string]$recorded.trigger
         action_id = [string]$recorded.action_id
         destination = [string]$recorded.destination
-        destination_layout_fixture = (
+        destination_layout_fixture = $(if ($destinationLayoutId -eq "hub") {
+            "menu-transition-layouts/hub.json"
+        } else {
             "menu-layouts/$destinationLayoutId.json"
-        )
+        })
         dispatch_result = [string]$recorded.dispatch_result
         before = ConvertTo-GoldenEndpoint $recorded.before
         after = ConvertTo-GoldenEndpoint $recorded.after
@@ -445,14 +559,15 @@ foreach ($session in @($navigation.header.sessions)) {
 }
 
 $golden = [ordered]@{
-    schema = "solomon-dark-menu-goldens-v1"
+    schema = "solomon-dark-menu-goldens-v2"
     header = [ordered]@{
         campaign = "menufix"
         gap = "G11"
         generated_from_live_capture_at_utc = $latestCapture.ToString("o")
         capture_method = (
-            "live native UI tree, native Sprite/text hooks, live D3D9 render " +
-            "geometry, exact-process input, and before/after backbuffer hashes"
+            "Settlement v2 structural native UI capture, measured animated " +
+            "geometry anchors/envelopes, native Sprite/text hooks, live D3D9 " +
+            "frames, exact-process input, and fresh-instance animation confirmation"
         )
         raw_recording = [ordered]@{
             evidence_filename = $navigationItem.Name

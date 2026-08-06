@@ -2,15 +2,26 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
 from pathlib import Path
+from typing import Any
 
 from static_re_contract_support import (
     ROOT,
     StaticReTestFailure,
+    assert_module_runs_in_ci,
     assert_recorded_hash_matches_file,
+)
+from native_menu_settlement_v2 import (
+    MAXIMUM_ANIMATED_FRACTION,
+    MINIMUM_SAMPLES,
+    MINIMUM_SPAN_MILLISECONDS,
+    SettlementV2Error,
+    canonical_bytes,
+    structural_layout_bytes,
 )
 
 
@@ -540,6 +551,7 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
     recorder_paths = (
         "scripts/Record-NativeMenuLayout.ps1",
         "scripts/Record-NativeMenuTransition.ps1",
+        "scripts/Confirm-NativeMenuLayoutAnimation.ps1",
         "scripts/Import-NativeMenuSpecialCaptures.ps1",
     )
     recorders = {path: _read(path) for path in recorder_paths}
@@ -566,6 +578,9 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
     transition_recorder = recorders[
         "scripts/Record-NativeMenuTransition.ps1"
     ]
+    confirmation_recorder = recorders[
+        "scripts/Confirm-NativeMenuLayoutAnimation.ps1"
+    ]
     importer = recorders["scripts/Import-NativeMenuSpecialCaptures.ps1"]
     support = _read("scripts/NativeMenuCaptureSupport.ps1")
     loader_capture = _read(
@@ -579,6 +594,7 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
     for path, recorder in (
         ("Record-NativeMenuLayout.ps1", layout_recorder),
         ("Record-NativeMenuTransition.ps1", transition_recorder),
+        ("Confirm-NativeMenuLayoutAnimation.ps1", confirmation_recorder),
     ):
         if "Start-Sleep" in recorder or "WaitMilliseconds" in recorder:
             raise StaticReTestFailure(
@@ -589,16 +605,17 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
         support,
         r"NativeMenuSettleConsecutiveSamples\s*=\s*40\b.*?"
         r"NativeMenuSettleMinimumSpanMilliseconds\s*=\s*2000\b",
-        "native-menu settlement no longer requires 40 identical samples over "
-        "at least two seconds",
+        "native-menu Settlement v2 no longer requires 40 samples over at "
+        "least two seconds",
     )
     _require_regex(
         support,
-        r"\$stableCount\s+-ge\s+\$script:NativeMenuSettleConsecutiveSamples"
-        r"\s+-and\s+\$stableSpan\s+-ge\s+"
+        r"\$stableWindow\.Count\s+-ge\s+"
+        r"\$script:NativeMenuSettleConsecutiveSamples\s+-and\s+"
+        r"\$stableSpan\s+-ge\s+"
         r"\$script:NativeMenuSettleMinimumSpanMilliseconds",
-        "native-menu settlement constants are declared but no longer gate "
-        "acceptance together",
+        "native-menu Settlement v2 constants are declared but no longer gate "
+        "the same candidate window",
     )
     _require_regex(
         support,
@@ -610,17 +627,20 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
     )
     _require_regex(
         support,
-        r"if \(\s*\$stableCount -ge .*?\) \{.*?return .*?\}\s*"
-        r"Start-Sleep -Milliseconds "
-        r"\$script:NativeMenuSettlePollMilliseconds",
-        "native-menu semantic probes no longer poll between failed settlement "
-        "acceptance checks",
+        r"\$classification\s*=\s*Invoke-NativeMenuSettlementClassifier\s+`"
+        r"\s*-Context \$Context\s+`\s*-Samples @\(\$stableWindow\).*?"
+        r"animated_element_ids\s*=\s*@\(\s*"
+        r"\$classification\.animated_element_ids\s*\)",
+        "native-menu settlement reaches its measured animation classifier but "
+        "no longer carries that exact classification into the accepted result",
     )
     _require_regex(
         support,
         r"throw \(\s*\"STOP: '\$ScreenId' never settled to 40 consecutive "
-        r"byte-identical \"",
-        "a native-menu surface that never settles is no longer a STOP finding",
+        r"structurally \".*?\"byte-identical payloads with one measured "
+        r"animated ID set spanning \"",
+        "a native-menu surface that never satisfies Settlement v2 is no longer "
+        "a STOP finding",
     )
     _require_regex(
         layout_recorder,
@@ -644,6 +664,19 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
             raise StaticReTestFailure(
                 f"{recorder_name} menu fixture no longer emits measured settle latency"
             )
+
+    _require_regex(
+        confirmation_recorder,
+        r"primary\.header\.instance\s+-eq\s+\$Instance.*?"
+        r"primary\.header\.process_id\s+-eq\s+\$ProcessId.*?"
+        r"primarySourceJson\s+-cne\s+\$confirmationSourceJson.*?"
+        r"Get-SettledNativeMenuObservation.*?"
+        r"primaryIdsJson\s+-cne\s+\$confirmationIdsJson.*?"
+        r"fresh confirmation structural mismatch.*?"
+        r"settlement\s*=\s*\$observation\.settlement",
+        "animation confirmation no longer proves a fresh instance/process, "
+        "identical machine provenance, animated ID set, and structural payload",
+    )
 
     _require_regex(
         support,
@@ -702,6 +735,14 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
         "special menu capture import no longer derives its own Git and binary "
         "provenance",
     )
+    _require_regex(
+        importer,
+        r"py\.exe -3 \$classifierPath find\s+`\s*"
+        r"--input \$inputPath\s+`\s*--output \$outputPath.*?"
+        r"consecutive_structural_samples.*?structural_sha256",
+        "native-loader/loading import no longer reclassifies the complete raw "
+        "sample stream under Settlement v2",
+    )
     for surface, source in (
         ("native_loader", loader_capture),
         ("loading_screen", loading_capture),
@@ -715,31 +756,330 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
             raise StaticReTestFailure(
                 f"{surface} raw recording no longer emits measured settle latency"
             )
+    _require_regex(
+        loader_capture,
+        r"SerializeNativeBootStructure\(.*?"
+        r"const auto semantic = SerializeNativeBootStructure\(sample\).*?"
+        r"semantic != g_native_boot_stable_semantic",
+        "native-loader capture no longer gates population on structure before "
+        "the importer measures animated geometry",
+    )
+    _require_regex(
+        loading_capture,
+        r"SerializeLoadingStructure\(.*?"
+        r"const auto structure_json = SerializeLoadingStructure\(.*?"
+        r"structure_json != g_loading_stable_semantic",
+        "loading-screen capture no longer gates population on structure before "
+        "the importer measures animated geometry",
+    )
 
     return (
         "standalone, transition, native-loader, and loading-screen capture paths "
-        "settle on 40 identical samples over two seconds and derive commit/tree/"
-        "exact-binary provenance without operator overrides"
+        "apply Settlement v2, confirm animation from a fresh exact process, and "
+        "derive commit/tree/exact-binary provenance without operator overrides"
     )
 
 
-def _semantic_layout_bytes(layout: dict[str, object]) -> bytes:
-    semantic = {
-        key: value
-        for key, value in layout.items()
-        if key != "captured_at_milliseconds"
+def test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired() -> str:
+    assert_module_runs_in_ci("test_native_menu_settlement_v2")
+    classifier = _read("tools/native_menu_settlement_v2.py")
+    _require_regex(
+        classifier,
+        r"MINIMUM_SAMPLES\s*=\s*40\b.*?"
+        r"MINIMUM_SPAN_MILLISECONDS\s*=\s*2_000\b.*?"
+        r"MAXIMUM_ANIMATED_FRACTION\s*=\s*0\.30\b",
+        "Settlement v2 sample/span/animated-cap constants drifted from the "
+        "amended menu capture definition",
+    )
+    _require_regex(
+        classifier,
+        r"for payload in typed_payloads\[1:\]:\s*"
+        r"_assert_non_geometry_stable\(anchor_payload, payload\).*?"
+        r"animated_ids\s*=\s*\[.*?"
+        r"len\(set\(geometries\[element_id\]\)\)\s*>\s*1",
+        "Settlement v2 no longer derives animation only after every "
+        "non-geometry field and element membership stay fixed",
+    )
+    _require_regex(
+        classifier,
+        r"if animated_fraction > maximum_animated_fraction:.*?"
+        r"raise SettlementV2Error\(\s*\"animated geometry cap exceeded:",
+        "Settlement v2 no longer stops when measured animation exceeds 30 "
+        "percent of a screen",
+    )
+    _require_regex(
+        classifier,
+        r"element\[\"animated_geometry\"\]\s*=\s*True.*?"
+        r"element\[\"anchor_rect\"\].*?"
+        r"element\[\"anchor_unclipped_rect\"\].*?"
+        r"element\[\"envelope\"\]\s*=\s*\{.*?"
+        r"\"sample_count\": len\(rects\)",
+        "Settlement v2 fixtures no longer preserve an honest first-sample "
+        "anchor and measured motion envelope",
+    )
+    _require_regex(
+        classifier,
+        r"def assert_confirmation_matches\(.*?"
+        r"if primary_ids != confirmation_ids:.*?"
+        r"animated ID confirmation mismatch.*?"
+        r"structural_layout_bytes\(primary_layout, primary_ids\).*?"
+        r"fresh confirmation structural mismatch",
+        "fresh-instance confirmation no longer requires exactly equal measured "
+        "animated ID sets and structural payloads",
+    )
+    return (
+        "Settlement v2 classification, guardrails, fixture shaping, and fresh-"
+        "instance confirmation are behavior-tested by the CI unit module"
+    )
+
+
+def _animated_ids_for_layout(
+    layout: dict[str, Any], witness: str
+) -> list[str]:
+    animated_ids = layout.get("animated_element_ids")
+    if not isinstance(animated_ids, list) or not all(
+        isinstance(value, str) and value for value in animated_ids
+    ):
+        raise StaticReTestFailure(
+            f"{witness} lost its measured animated_element_ids list"
+        )
+    if len(animated_ids) != len(set(animated_ids)):
+        raise StaticReTestFailure(
+            f"{witness} contains ambiguous duplicate animated element IDs"
+        )
+    return animated_ids
+
+
+def _assert_settlement_v2_layout(
+    layout: dict[str, Any], settlement: dict[str, Any], witness: str
+) -> list[str]:
+    elements = layout.get("elements")
+    if not isinstance(elements, list) or not elements:
+        raise StaticReTestFailure(
+            f"{witness} did not reach any real menu elements"
+        )
+    element_ids = [element.get("id") for element in elements]
+    if not all(isinstance(value, str) and value for value in element_ids):
+        raise StaticReTestFailure(
+            f"{witness} contains an element without a stable native ID"
+        )
+    if len(element_ids) != len(set(element_ids)):
+        raise StaticReTestFailure(
+            f"{witness} contains ambiguous duplicate native element IDs"
+        )
+
+    animated_ids = _animated_ids_for_layout(layout, witness)
+    animated_set = set(animated_ids)
+    shaped_ids: list[str] = []
+    required_static_fields = {
+        "id",
+        "kind",
+        "text",
+        "action_id",
+        "art_id",
+        "font_id",
+        "text_style",
+        "visible",
+        "interactive",
+        "draw_order",
     }
-    return json.dumps(
-        semantic,
-        ensure_ascii=False,
-        separators=(",", ":"),
-    ).encode("utf-8")
+    envelope_fields = {
+        "min_x",
+        "max_x",
+        "min_y",
+        "max_y",
+        "min_width",
+        "max_width",
+        "min_height",
+        "max_height",
+    }
+    for element in elements:
+        element_id = element["id"]
+        if not required_static_fields.issubset(element):
+            raise StaticReTestFailure(
+                f"{witness}.{element_id} lost part of its exact static remainder"
+            )
+        if element_id in animated_set:
+            shaped_ids.append(element_id)
+            if element.get("animated_geometry") is not True:
+                raise StaticReTestFailure(
+                    f"{witness}.{element_id} is measured animated but lacks its marker"
+                )
+            if "rect" in element or "unclipped_rect" in element:
+                raise StaticReTestFailure(
+                    f"{witness}.{element_id} smuggles a frozen moving rect into "
+                    "the structural payload"
+                )
+            for anchor_name in ("anchor_rect", "anchor_unclipped_rect"):
+                anchor = element.get(anchor_name)
+                if not isinstance(anchor, list) or len(anchor) != 4:
+                    raise StaticReTestFailure(
+                        f"{witness}.{element_id} lost its four-coordinate {anchor_name}"
+                    )
+            envelope = element.get("envelope")
+            if not isinstance(envelope, dict) or set(envelope) != {
+                "sample_count",
+                "rect",
+                "unclipped_rect",
+            }:
+                raise StaticReTestFailure(
+                    f"{witness}.{element_id} lost its exact motion-envelope shape"
+                )
+            if envelope["sample_count"] != settlement.get(
+                "consecutive_structural_samples"
+            ):
+                raise StaticReTestFailure(
+                    f"{witness}.{element_id} envelope does not cover the settled window"
+                )
+            for geometry_name in ("rect", "unclipped_rect"):
+                geometry = envelope.get(geometry_name)
+                if not isinstance(geometry, dict) or set(geometry) != envelope_fields:
+                    raise StaticReTestFailure(
+                        f"{witness}.{element_id}.{geometry_name} lost a measured "
+                        "min/max envelope coordinate"
+                    )
+                for minimum, maximum in (
+                    ("min_x", "max_x"),
+                    ("min_y", "max_y"),
+                    ("min_width", "max_width"),
+                    ("min_height", "max_height"),
+                ):
+                    if geometry[minimum] > geometry[maximum]:
+                        raise StaticReTestFailure(
+                            f"{witness}.{element_id}.{geometry_name} records an "
+                            f"impossible {minimum}/{maximum} envelope"
+                        )
+        else:
+            if any(
+                field in element
+                for field in (
+                    "animated_geometry",
+                    "anchor_rect",
+                    "anchor_unclipped_rect",
+                    "envelope",
+                )
+            ):
+                raise StaticReTestFailure(
+                    f"{witness}.{element_id} carries animation data without "
+                    "measured classification"
+                )
+            for geometry_name in ("rect", "unclipped_rect"):
+                geometry = element.get(geometry_name)
+                if not isinstance(geometry, list) or len(geometry) != 4:
+                    raise StaticReTestFailure(
+                        f"{witness}.{element_id} lost exact non-animated geometry"
+                    )
+    if shaped_ids != animated_ids:
+        raise StaticReTestFailure(
+            f"{witness} animated ID list does not equal its marked element set"
+        )
+
+    if settlement.get("consecutive_structural_samples", 0) < MINIMUM_SAMPLES:
+        raise StaticReTestFailure(
+            f"{witness} no longer proves 40 consecutive structural samples"
+        )
+    if settlement.get("animated_id_set_sample_count", 0) < MINIMUM_SAMPLES:
+        raise StaticReTestFailure(
+            f"{witness} no longer proves one animated ID set across all 40 samples"
+        )
+    if settlement.get("stable_span_milliseconds", 0) < (
+        MINIMUM_SPAN_MILLISECONDS
+    ):
+        raise StaticReTestFailure(
+            f"{witness} no longer proves a two-second settled window"
+        )
+    if settlement.get("settle_latency_milliseconds", 0) < (
+        MINIMUM_SPAN_MILLISECONDS
+    ):
+        raise StaticReTestFailure(
+            f"{witness} lost its measured end-to-end settle latency"
+        )
+    if settlement.get("animated_element_ids") != animated_ids:
+        raise StaticReTestFailure(
+            f"{witness} settlement header disagrees with its animated ID list"
+        )
+    if settlement.get("element_count") != len(elements):
+        raise StaticReTestFailure(
+            f"{witness} settlement header disagrees with its element census"
+        )
+    if settlement.get("animated_element_count") != len(animated_ids):
+        raise StaticReTestFailure(
+            f"{witness} settlement header disagrees with its animated census"
+        )
+    animated_fraction = len(animated_ids) / len(elements)
+    if animated_fraction > MAXIMUM_ANIMATED_FRACTION:
+        raise StaticReTestFailure(
+            f"{witness} exceeds the 30 percent animated-screen STOP cap"
+        )
+    if settlement.get("animated_fraction") != animated_fraction:
+        raise StaticReTestFailure(
+            f"{witness} records a false animated element fraction"
+        )
+    structural_sha = hashlib.sha256(
+        structural_layout_bytes(layout, animated_ids)
+    ).hexdigest()
+    if settlement.get("structural_sha256") != structural_sha:
+        raise StaticReTestFailure(
+            f"{witness} records a false structural payload hash"
+        )
+    return animated_ids
+
+
+def _assert_animation_confirmation(
+    header: dict[str, Any], animated_ids: list[str], witness: str
+) -> None:
+    confirmation = header.get("animation_confirmation")
+    if not isinstance(confirmation, dict):
+        raise StaticReTestFailure(
+            f"{witness} lost its independent animated-ID confirmation"
+        )
+    if confirmation.get("instance") == header.get("instance"):
+        raise StaticReTestFailure(
+            f"{witness} animation confirmation reused the primary instance"
+        )
+    if confirmation.get("process_id") == header.get("process_id"):
+        raise StaticReTestFailure(
+            f"{witness} animation confirmation reused the primary process"
+        )
+    if confirmation.get("source") != header.get("source"):
+        raise StaticReTestFailure(
+            f"{witness} animation confirmation changed machine provenance"
+        )
+    if confirmation.get("structural_sha256") != header["settlement"].get(
+        "structural_sha256"
+    ):
+        raise StaticReTestFailure(
+            f"{witness} animation confirmation changed the structural payload"
+        )
+    if confirmation.get("animated_element_ids_sha256") != hashlib.sha256(
+        canonical_bytes(animated_ids)
+    ).hexdigest():
+        raise StaticReTestFailure(
+            f"{witness} animation confirmation records a false animated-ID hash"
+        )
+    if (
+        not isinstance(confirmation.get("evidence_filename"), str)
+        or not confirmation["evidence_filename"]
+        or not re.fullmatch(r"[0-9a-f]{64}", str(confirmation.get("sha256")))
+        or confirmation.get("bytes", 0) <= 0
+    ):
+        raise StaticReTestFailure(
+            f"{witness} lost its evidence-bundle confirmation provenance"
+        )
 
 
 def test_native_menu_settled_destinations_equal_standalones() -> str:
     golden = _json("tests/fixtures/webgame/menu-goldens.json")
+    if golden.get("schema") != "solomon-dark-menu-goldens-v2":
+        raise StaticReTestFailure(
+            "settled destination contract did not reach a Settlement v2 aggregate"
+        )
     edges = golden["navigation_graph"]["edges"]
     edge_ids = [edge["id"] for edge in edges]
+    if len(edge_ids) != len(EDGE_CONTRACT):
+        raise StaticReTestFailure(
+            "settled destination contract did not examine all 39 navigation edges"
+        )
     if len(edge_ids) != len(set(edge_ids)):
         raise StaticReTestFailure(
             "settled destination contract found ambiguous duplicate edge IDs"
@@ -753,6 +1093,11 @@ def test_native_menu_settled_destinations_equal_standalones() -> str:
         *golden["layouts"],
         *golden["transition_endpoint_layouts"],
     ]
+    if len(layout_entries) != len(LAYOUT_IDS) + 1:
+        raise StaticReTestFailure(
+            "settled destination contract did not examine all 28 census layouts "
+            "and the standalone hub witness"
+        )
     fixture_names = [entry["fixture"] for entry in layout_entries]
     if len(fixture_names) != len(set(fixture_names)):
         raise StaticReTestFailure(
@@ -765,34 +1110,43 @@ def test_native_menu_settled_destinations_equal_standalones() -> str:
     by_fixture = {entry["fixture"]: entry for entry in layout_entries}
     fixture_root = ROOT / "tests/fixtures/webgame"
 
-    provenance_sources: list[dict[str, object]] = []
+    provenance_sources: list[dict[str, Any]] = []
     for entry in layout_entries:
         fixture = entry["fixture"]
         standalone = _json(f"tests/fixtures/webgame/{fixture}")
-        if standalone["layout"] != entry["layout"]:
+        if standalone.get("schema") != "solomon-dark-native-menu-layout-v2":
+            raise StaticReTestFailure(
+                f"settled standalone {fixture} does not use Settlement v2"
+            )
+        if standalone["header"] != entry["header"] or (
+            standalone["layout"] != entry["layout"]
+        ):
             raise StaticReTestFailure(
                 f"settled standalone {fixture} disagrees with its embedded golden"
             )
         reference = fixture_root / entry["reference_capture"]
+        standalone_reference = (
+            (fixture_root / fixture).parent / standalone["header"]["reference_capture"]
+        ).resolve()
+        if standalone_reference != reference.resolve():
+            raise StaticReTestFailure(
+                f"settled standalone {fixture} and its aggregate name different "
+                "reference captures"
+            )
         assert_recorded_hash_matches_file(
             entry["reference_sha256"],
             reference,
             f"{fixture} settled reference capture",
         )
         header = entry["header"]
-        settlement = header["settlement"]
-        if (
-            settlement["consecutive_identical_samples"] < 40
-            or settlement["stable_span_milliseconds"] < 2000
-            or settlement["settle_latency_milliseconds"] < 2000
-        ):
-            raise StaticReTestFailure(
-                f"settled standalone {fixture} no longer proves 40 samples over two seconds"
-            )
         if header.get("recorded_live") is not True:
             raise StaticReTestFailure(
                 f"settled standalone {fixture} lost recorded-live provenance"
             )
+        animated_ids = _assert_settlement_v2_layout(
+            entry["layout"], header["settlement"], f"standalone {fixture}"
+        )
+        _assert_animation_confirmation(header, animated_ids, fixture)
         provenance_sources.append(header["source"])
 
     for edge in edges:
@@ -802,25 +1156,58 @@ def test_native_menu_settled_destinations_equal_standalones() -> str:
             raise StaticReTestFailure(
                 f"{edge_id} has no unique standalone destination fixture"
             )
-        standalone_layout = by_fixture[destination_fixture]["layout"]
-        if _semantic_layout_bytes(edge["after"]["layout"]) != (
-            _semantic_layout_bytes(standalone_layout)
-        ):
+        before_ids = _assert_settlement_v2_layout(
+            edge["before"]["layout"],
+            edge["before"]["settlement"],
+            f"{edge_id}.source",
+        )
+        after_ids = _assert_settlement_v2_layout(
+            edge["after"]["layout"],
+            edge["after"]["settlement"],
+            f"{edge_id}.destination",
+        )
+        if edge["before"].get("animated_element_ids") != before_ids:
             raise StaticReTestFailure(
-                f"{edge_id} settled destination does not byte-match "
+                f"{edge_id}.source endpoint summary changed its animated ID set"
+            )
+        if edge["after"].get("animated_element_ids") != after_ids:
+            raise StaticReTestFailure(
+                f"{edge_id}.destination endpoint summary changed its animated ID set"
+            )
+        standalone_layout = by_fixture[destination_fixture]["layout"]
+        standalone_ids = _animated_ids_for_layout(
+            standalone_layout, f"standalone {destination_fixture}"
+        )
+        if after_ids != standalone_ids:
+            raise StaticReTestFailure(
+                f"{edge_id} settled destination animated ID set does not equal "
                 f"{destination_fixture}"
             )
+        try:
+            destination_bytes = structural_layout_bytes(
+                edge["after"]["layout"], after_ids
+            )
+            standalone_bytes = structural_layout_bytes(
+                standalone_layout, standalone_ids
+            )
+        except SettlementV2Error as error:
+            raise StaticReTestFailure(
+                f"{edge_id} structural destination comparison was ambiguous: {error}"
+            ) from error
+        if destination_bytes != standalone_bytes:
+            raise StaticReTestFailure(
+                f"{edge_id} settled destination structural payload does not "
+                f"byte-match {destination_fixture}"
+            )
         header = edge["header"]
-        for side in ("source", "destination"):
-            settlement = header["settlement"][side]
-            if (
-                settlement["consecutive_identical_samples"] < 40
-                or settlement["stable_span_milliseconds"] < 2000
-                or settlement["settle_latency_milliseconds"] < 2000
-            ):
-                raise StaticReTestFailure(
-                    f"{edge_id}.{side} no longer proves 40 samples over two seconds"
-                )
+        if header["settlement"]["source"] != edge["before"]["settlement"]:
+            raise StaticReTestFailure(
+                f"{edge_id} carries two disagreeing source settlement records"
+            )
+        if header["settlement"]["destination"] != edge["after"]["settlement"]:
+            raise StaticReTestFailure(
+                f"{edge_id} carries two disagreeing destination settlement records"
+            )
         if header.get("recorded_live") is not True:
             raise StaticReTestFailure(
                 f"{edge_id} lost recorded-live transition provenance"
@@ -829,7 +1216,7 @@ def test_native_menu_settled_destinations_equal_standalones() -> str:
 
     if len(provenance_sources) != len(layout_entries) + len(EDGE_CONTRACT):
         raise StaticReTestFailure(
-            "settled menu provenance sweep did not reach every fixture and edge header"
+            "settled menu provenance sweep did not reach all 68 fixture/edge headers"
         )
     resolved_pairs: set[tuple[str, str]] = set()
     for source in provenance_sources:
@@ -861,6 +1248,10 @@ def test_native_menu_settled_destinations_equal_standalones() -> str:
             )
         resolved_pairs.add((commit, tree))
 
+    if not resolved_pairs:
+        raise StaticReTestFailure(
+            "settled menu provenance sweep resolved no commit/tree witness"
+        )
     for commit, tree in sorted(resolved_pairs):
         result = subprocess.run(
             ["git", "-C", str(ROOT), "rev-parse", f"{commit}^{{tree}}"],
@@ -893,16 +1284,16 @@ def test_native_menu_settled_destinations_equal_standalones() -> str:
             "settled menu golden lost its raw evidence-bundle provenance"
         )
     return (
-        "all 39 settled transition destinations byte-match their explicit "
-        "standalone fixtures, including hub, with live settlement and resolvable "
-        "machine-derived provenance"
+        "all 39 transition destinations structurally byte-match their explicit "
+        "settled standalone fixtures with equal animated ID sets, committed "
+        "reference hashes, fresh-instance confirmation, and resolvable provenance"
     )
 
 
 def test_native_menu_screen_census_and_live_layouts_are_pinned() -> str:
     findings = _read("docs/reverse-engineering/native-menus-and-boot.md")
     golden = _json("tests/fixtures/webgame/menu-goldens.json")
-    if golden["schema"] != "solomon-dark-menu-goldens-v1":
+    if golden["schema"] != "solomon-dark-menu-goldens-v2":
         raise StaticReTestFailure("the G11 golden schema drifted")
     if golden["screen_census"] != list(LAYOUT_IDS):
         raise StaticReTestFailure(
@@ -929,14 +1320,12 @@ def test_native_menu_screen_census_and_live_layouts_are_pinned() -> str:
             raise StaticReTestFailure(
                 f"{layout_id} lost live capture provenance"
             )
-        # Shape only, for a per-layout message. Whether the commit exists at all
-        # is decided by test_recorded_capture_provenance_resolves_or_is_declared
-        # -- these five do not, and the reason is in the G11 findings document.
-        if not re.fullmatch(r"[0-9a-f]{40}", header["capture_commit"]):
+        source = header["source"]
+        if not re.fullmatch(r"[0-9a-f]{40}", source["base_commit_sha"]):
             raise StaticReTestFailure(
-                f"{layout_id} capture commit is not an exact SHA"
+                f"{layout_id} machine-derived base commit is not an exact SHA"
             )
-        if header["native_exe_sha256"] != (
+        if source["game_executable_sha256"] != (
             "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3"
         ):
             raise StaticReTestFailure(
@@ -976,7 +1365,14 @@ def test_native_menu_screen_census_and_live_layouts_are_pinned() -> str:
         if not elements:
             raise StaticReTestFailure(f"{layout_id} has no live elements")
         for element in elements:
-            if not element["id"] or len(element["rect"]) != 4:
+            geometry = (
+                element.get("anchor_rect")
+                if element.get("animated_geometry") is True
+                else element.get("rect")
+            )
+            if not element["id"] or not isinstance(geometry, list) or (
+                len(geometry) != 4
+            ):
                 raise StaticReTestFailure(
                     f"{layout_id} contains an incomplete live element"
                 )
@@ -1128,8 +1524,8 @@ def test_native_menu_screen_census_and_live_layouts_are_pinned() -> str:
         "native boot, splash, loading, and screen-census documentation",
     )
     return (
-        "all 28 live screen layouts, references, capture headers, and exact "
-        "Raptisoft/loading geometry are pinned"
+        "all 28 live Settlement v2 screen layouts, references, capture headers, "
+        "and exact Raptisoft/loading geometry are pinned"
     )
 
 

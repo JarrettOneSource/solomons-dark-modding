@@ -277,7 +277,7 @@ std::string JsonEscapeMenuCapture(std::string_view value) {
     return output.str();
 }
 
-std::string SerializeNativeBootSemantic(
+std::string SerializeNativeBootStructure(
     const NativeBootCaptureSample& sample) {
     std::ostringstream output;
     output << std::fixed << std::setprecision(6)
@@ -295,14 +295,7 @@ std::string SerializeNativeBootSemantic(
                << JsonEscapeMenuCapture(element.art_id)
                << "\",\"draw_kind\":\""
                << JsonEscapeMenuCapture(element.draw_kind)
-               << "\",\"rect\":["
-               << element.left << ',' << element.top << ','
-               << element.right << ',' << element.bottom
-               << "],\"unclipped_rect\":["
-               << element.unclipped_left << ','
-               << element.unclipped_top << ','
-               << element.unclipped_right << ','
-               << element.unclipped_bottom << "]}";
+               << "\"}";
     }
     output << "]}";
     return output.str();
@@ -380,7 +373,7 @@ void WriteNativeBootCaptureJson() {
     }
     output << "  ],\n"
            << "  \"settlement\": {\n"
-           << "    \"criterion\": \"at least 40 consecutive byte-identical semantic payloads spanning at least 2 seconds\",\n"
+           << "    \"criterion\": \"at least 40 consecutive samples spanning at least 2 seconds with byte-identical structural payloads; animated geometry is measured by the importer\",\n"
            << "    \"settled\": "
            << (g_native_boot_capture_settled ? "true" : "false") << ",\n"
            << "    \"settle_latency_milliseconds\": ";
@@ -396,7 +389,7 @@ void WriteNativeBootCaptureJson() {
             g_native_boot_stable_started_at;
     output << ",\n"
            << "    \"stable_span_milliseconds\": " << stable_span << ",\n"
-           << "    \"consecutive_identical_samples\": "
+           << "    \"consecutive_structural_samples\": "
            << g_native_boot_stable_sample_count << ",\n"
            << "    \"total_semantic_samples\": "
            << g_native_boot_capture_samples.size() << "\n"
@@ -444,7 +437,7 @@ void CaptureNativeLoaderSample() {
         sample.elements = g_native_loader_frame_art;
     }
 
-    const auto semantic = SerializeNativeBootSemantic(sample);
+    const auto semantic = SerializeNativeBootStructure(sample);
     const auto semantic_changed = semantic != g_native_boot_stable_semantic;
     if (semantic_changed) {
         g_native_boot_stable_semantic = semantic;

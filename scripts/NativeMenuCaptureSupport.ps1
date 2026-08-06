@@ -119,6 +119,12 @@ function New-NativeMenuCaptureContext {
     if (-not (Test-Path -LiteralPath $luaExecClient -PathType Leaf)) {
         throw "BROKEN: the Lua exec client is missing from the capture tree."
     }
+    $settlementClassifier = Join-Path $Root (
+        "tools\native_menu_settlement_v2.py"
+    )
+    if (-not (Test-Path -LiteralPath $settlementClassifier -PathType Leaf)) {
+        throw "BROKEN: the Settlement v2 classifier is missing from the capture tree."
+    }
 
     $gameExecutableSha256 = (
         Get-FileHash -LiteralPath $expectedExecutable -Algorithm SHA256
@@ -161,6 +167,7 @@ function New-NativeMenuCaptureContext {
         InjectedLoader = $injectedLoader
         PipeName = "SolomonDarkModLoader_LuaExec_$Instance"
         LuaExecClient = $luaExecClient
+        SettlementClassifier = $settlementClassifier
         Source = $source
     }
 }
@@ -253,9 +260,20 @@ local output = {
   '"capture_method":' .. quote(snapshot.capture_method) .. ',',
   '"elements":['
 }
+local structure = {
+  '{',
+  '"generation":' .. tostring(snapshot.generation or 0) .. ',',
+  '"screen_id":' .. quote(snapshot.screen_id) .. ',',
+  '"screen_title":' .. quote(snapshot.screen_title) .. ',',
+  '"capture_method":' .. quote(snapshot.capture_method) .. ',',
+  '"elements":['
+}
 for index, element in ipairs(snapshot.elements or {}) do
-  if index > 1 then output[#output + 1] = ',' end
-  output[#output + 1] = table.concat({
+  if index > 1 then
+    output[#output + 1] = ','
+    structure[#structure + 1] = ','
+  end
+  local core = table.concat({
     '{"id":', quote(element.id),
     ',"kind":', quote(element.kind),
     ',"text":', quote(element.text),
@@ -265,7 +283,10 @@ for index, element in ipairs(snapshot.elements or {}) do
     ',"text_style":', quote(element.text_style),
     ',"visible":', boolean(element.visible),
     ',"interactive":', boolean(element.interactive),
-    ',"draw_order":', tostring(element.draw_order or 0),
+    ',"draw_order":', tostring(element.draw_order or 0)
+  })
+  structure[#structure + 1] = core .. '}'
+  output[#output + 1] = core .. table.concat({
     ',"rect":[', number(element.left), ',', number(element.top), ',',
       number(element.right), ',', number(element.bottom), ']',
     ',"unclipped_rect":[', number(element.unclipped_left), ',',
@@ -274,11 +295,13 @@ for index, element in ipairs(snapshot.elements or {}) do
   })
 end
 output[#output + 1] = ']}'
+structure[#structure + 1] = ']}'
 $captureFrame
 return table.concat({
   '__SURFACE__=' .. tostring(semantic and semantic.surface_id or ''),
   '__SEMANTIC_GENERATION__=' .. tostring(semantic and semantic.generation or 0),
   '__CAPTURED_AT__=' .. tostring(snapshot.captured_at_milliseconds or 0),
+  '__STRUCTURE__=' .. table.concat(structure),
   '__PAYLOAD__=' .. table.concat(output)
 }, '\n')
 "@
@@ -295,17 +318,19 @@ return table.concat({
             Detail = "capture_current_layout returned no current frame"
         }
     }
-    $parts = @($result.Text -split "`r?`n", 4)
+    $parts = @($result.Text -split "`r?`n", 5)
     if (
-        $parts.Count -ne 4 -or
+        $parts.Count -ne 5 -or
         -not $parts[0].StartsWith("__SURFACE__=") -or
         -not $parts[1].StartsWith("__SEMANTIC_GENERATION__=") -or
         -not $parts[2].StartsWith("__CAPTURED_AT__=") -or
-        -not $parts[3].StartsWith("__PAYLOAD__=")
+        -not $parts[3].StartsWith("__STRUCTURE__=") -or
+        -not $parts[4].StartsWith("__PAYLOAD__=")
     ) {
         throw "BROKEN: malformed native-menu semantic probe: $($result.Text)"
     }
-    $semanticJson = $parts[3].Substring("__PAYLOAD__=".Length)
+    $nonGeometryJson = $parts[3].Substring("__STRUCTURE__=".Length)
+    $semanticJson = $parts[4].Substring("__PAYLOAD__=".Length)
     try {
         $semanticPayload = $semanticJson | ConvertFrom-Json
     } catch {
@@ -320,8 +345,52 @@ return table.concat({
         CapturedAtMilliseconds = [uint64]$parts[2].Substring(
             "__CAPTURED_AT__=".Length
         )
+        NonGeometryJson = $nonGeometryJson
         SemanticJson = $semanticJson
         SemanticPayload = $semanticPayload
+    }
+}
+
+function Invoke-NativeMenuSettlementClassifier {
+    param(
+        [Parameter(Mandatory = $true)][object]$Context,
+        [Parameter(Mandatory = $true)][object[]]$Samples
+    )
+
+    $temporaryDirectory = Join-Path ([IO.Path]::GetTempPath()) (
+        "sdmod-menu-settlement-v2-" + [Guid]::NewGuid().ToString("N")
+    )
+    [IO.Directory]::CreateDirectory($temporaryDirectory) | Out-Null
+    $inputPath = Join-Path $temporaryDirectory "samples.json"
+    $outputPath = Join-Path $temporaryDirectory "classification.json"
+    try {
+        [IO.File]::WriteAllText(
+            $inputPath,
+            (($Samples | ConvertTo-Json -Depth 100) + [Environment]::NewLine),
+            [Text.UTF8Encoding]::new($false)
+        )
+        $classifierOutput = @(
+            & py.exe -3 $Context.SettlementClassifier classify `
+                --input $inputPath `
+                --output $outputPath 2>&1
+        )
+        if ($LASTEXITCODE -ne 0) {
+            $message = (
+                ($classifierOutput | ForEach-Object { [string]$_ }) -join "`n"
+            ).Trim()
+            if ([string]::IsNullOrWhiteSpace($message)) {
+                $message = "Settlement v2 classifier exited without diagnostics."
+            }
+            throw $message
+        }
+        if (-not (Test-Path -LiteralPath $outputPath -PathType Leaf)) {
+            throw "BROKEN: Settlement v2 classifier produced no result."
+        }
+        return Get-Content -LiteralPath $outputPath -Raw | ConvertFrom-Json
+    } finally {
+        if (Test-Path -LiteralPath $temporaryDirectory -PathType Container) {
+            Remove-Item -LiteralPath $temporaryDirectory -Recurse -Force
+        }
     }
 }
 
@@ -332,15 +401,16 @@ function Wait-NativeMenuLayoutSettlement {
         [Parameter(Mandatory = $true)][Diagnostics.Stopwatch]$LatencyClock
     )
 
-    $stableJson = ""
+    $stableStructureJson = ""
     $stableStartMilliseconds = 0L
-    $stableCount = 0
     $sampleCount = 0
     $busyCount = 0
     $notReadyCount = 0
     $lastUnavailable = ""
-    $distinctOrder = [Collections.Generic.List[string]]::new()
-    $distinctByHash = @{}
+    $structuralPhaseOrder = [Collections.Generic.List[string]]::new()
+    $structuralPhaseByHash = @{}
+    $stableWindow = [Collections.Generic.List[object]]::new()
+    $windowAnchorProbe = $null
 
     while ($LatencyClock.ElapsedMilliseconds -le
         $script:NativeMenuSettleTimeoutMilliseconds) {
@@ -360,82 +430,142 @@ function Wait-NativeMenuLayoutSettlement {
 
         $sampleCount += 1
         $elapsed = [long]$LatencyClock.ElapsedMilliseconds
-        $hash = Get-NativeMenuStringSha256 $probe.SemanticJson
-        if (-not $distinctByHash.ContainsKey($hash)) {
+        $structureHash = Get-NativeMenuStringSha256 $probe.NonGeometryJson
+        if (-not $structuralPhaseByHash.ContainsKey($structureHash)) {
             $entry = [ordered]@{
-                semantic_sha256 = $hash
+                non_geometry_sha256 = $structureHash
                 first_seen_milliseconds = $elapsed
                 last_seen_milliseconds = $elapsed
                 observations = 1
                 payload = $probe.SemanticPayload
             }
-            $distinctByHash[$hash] = $entry
-            $distinctOrder.Add($hash)
+            $structuralPhaseByHash[$structureHash] = $entry
+            $structuralPhaseOrder.Add($structureHash)
         } else {
-            $entry = $distinctByHash[$hash]
+            $entry = $structuralPhaseByHash[$structureHash]
             $entry["last_seen_milliseconds"] = $elapsed
             $entry["observations"] = [int]$entry["observations"] + 1
         }
 
-        if ($probe.SemanticJson -ceq $stableJson) {
-            $stableCount += 1
-        } else {
-            $stableJson = $probe.SemanticJson
+        if ($probe.NonGeometryJson -cne $stableStructureJson) {
+            $stableStructureJson = $probe.NonGeometryJson
             $stableStartMilliseconds = $elapsed
-            $stableCount = 1
+            $stableWindow.Clear()
+            $windowAnchorProbe = $probe
         }
+        $stableWindow.Add([ordered]@{
+            elapsed_milliseconds = $elapsed
+            captured_at_milliseconds = $probe.CapturedAtMilliseconds
+            payload = $probe.SemanticPayload
+        })
         $stableSpan = $elapsed - $stableStartMilliseconds
         if (
-            $stableCount -ge $script:NativeMenuSettleConsecutiveSamples -and
+            $stableWindow.Count -ge $script:NativeMenuSettleConsecutiveSamples -and
             $stableSpan -ge $script:NativeMenuSettleMinimumSpanMilliseconds
         ) {
-            $distinctPayloads = [Collections.Generic.List[object]]::new()
-            foreach ($distinctHash in $distinctOrder) {
-                $distinctPayloads.Add($distinctByHash[$distinctHash])
+            $classification = Invoke-NativeMenuSettlementClassifier `
+                -Context $Context `
+                -Samples @($stableWindow)
+            $structuralPhases = [Collections.Generic.List[object]]::new()
+            foreach ($phaseHash in $structuralPhaseOrder) {
+                $structuralPhases.Add($structuralPhaseByHash[$phaseHash])
+            }
+            $summary = [ordered]@{
+                criterion = [string]$classification.criterion
+                settle_latency_milliseconds = (
+                    [long]$classification.settle_latency_milliseconds
+                )
+                stable_span_milliseconds = (
+                    [long]$classification.stable_span_milliseconds
+                )
+                consecutive_structural_samples = (
+                    [int]$classification.consecutive_structural_samples
+                )
+                animated_id_set_sample_count = (
+                    [int]$classification.animated_id_set_sample_count
+                )
+                total_semantic_samples = $sampleCount
+                busy_probe_count = $busyCount
+                not_ready_probe_count = $notReadyCount
+                structural_phase_count = $structuralPhases.Count
+                structural_sha256 = [string]$classification.structural_sha256
+                animated_element_ids = @(
+                    $classification.animated_element_ids
+                )
+                animated_element_count = (
+                    [int]$classification.animated_element_count
+                )
+                element_count = [int]$classification.element_count
+                animated_fraction = [double]$classification.animated_fraction
             }
             return [pscustomobject]@{
-                Probe = $probe
-                Summary = [ordered]@{
-                    criterion = (
-                        "at least 40 consecutive byte-identical semantic " +
-                        "payloads spanning at least 2 seconds"
-                    )
-                    settle_latency_milliseconds = $elapsed
-                    stable_span_milliseconds = $stableSpan
-                    consecutive_identical_samples = $stableCount
-                    total_semantic_samples = $sampleCount
-                    busy_probe_count = $busyCount
-                    not_ready_probe_count = $notReadyCount
-                    semantic_sha256 = $hash
-                }
-                DistinctPayloads = $distinctPayloads
+                AnchorProbe = $windowAnchorProbe
+                Summary = $summary
+                Layout = $classification.layout
+                AnimatedElementIds = @($classification.animated_element_ids)
+                NonGeometryJson = $stableStructureJson
+                StructuralPhases = $structuralPhases
+                SettledWindowSamples = @($stableWindow)
             }
         }
         Start-Sleep -Milliseconds $script:NativeMenuSettlePollMilliseconds
     }
 
     throw (
-        "STOP: '$ScreenId' never settled to 40 consecutive byte-identical " +
-        "semantic payloads spanning at least 2 seconds within 60 seconds. " +
+        "STOP: '$ScreenId' never settled to 40 consecutive structurally " +
+        "byte-identical payloads with one measured animated ID set spanning " +
+        "at least 2 seconds within 60 seconds. " +
         "samples=$sampleCount busy=$busyCount not_ready=$notReadyCount " +
         "last_unavailable='$lastUnavailable'"
     )
 }
 
-function ConvertTo-NativeMenuLayout {
+function Test-NativeMenuFrameMatchesSettlement {
     param(
-        [Parameter(Mandatory = $true)][object]$SemanticPayload,
-        [Parameter(Mandatory = $true)][uint64]$CapturedAtMilliseconds
+        [Parameter(Mandatory = $true)][object]$FrameProbe,
+        [Parameter(Mandatory = $true)][object]$Settlement
     )
 
-    return [ordered]@{
-        generation = [uint64]$SemanticPayload.generation
-        captured_at_milliseconds = $CapturedAtMilliseconds
-        screen_id = [string]$SemanticPayload.screen_id
-        screen_title = [string]$SemanticPayload.screen_title
-        capture_method = [string]$SemanticPayload.capture_method
-        elements = @($SemanticPayload.elements)
+    if (
+        $FrameProbe.Status -ne "ready" -or
+        $FrameProbe.NonGeometryJson -cne $Settlement.NonGeometryJson
+    ) {
+        return $false
     }
+    $animated = @{}
+    foreach ($elementId in @($Settlement.AnimatedElementIds)) {
+        $animated[[string]$elementId] = $true
+    }
+    $frameById = @{}
+    foreach ($element in @($FrameProbe.SemanticPayload.elements)) {
+        $elementId = [string]$element.id
+        if ($frameById.ContainsKey($elementId)) {
+            throw "BROKEN: settled frame contains ambiguous duplicate element '$elementId'."
+        }
+        $frameById[$elementId] = $element
+    }
+    foreach ($element in @($Settlement.Layout.elements)) {
+        $elementId = [string]$element.id
+        if (-not $frameById.ContainsKey($elementId)) {
+            return $false
+        }
+        if ($animated.ContainsKey($elementId)) {
+            continue
+        }
+        $frameElement = $frameById[$elementId]
+        $expectedGeometry = [ordered]@{
+            rect = @($element.rect)
+            unclipped_rect = @($element.unclipped_rect)
+        } | ConvertTo-Json -Compress
+        $frameGeometry = [ordered]@{
+            rect = @($frameElement.rect)
+            unclipped_rect = @($frameElement.unclipped_rect)
+        } | ConvertTo-Json -Compress
+        if ($frameGeometry -cne $expectedGeometry) {
+            return $false
+        }
+    }
+    return $true
 }
 
 function Get-SettledNativeMenuObservation {
@@ -458,10 +588,9 @@ function Get-SettledNativeMenuObservation {
             -Context $Context `
             -ScreenId $ScreenId `
             -FramePath $FramePath
-        if (
-            $frameProbe.Status -ne "ready" -or
-            $frameProbe.SemanticJson -cne $settled.Probe.SemanticJson
-        ) {
+        if (-not (Test-NativeMenuFrameMatchesSettlement `
+            -FrameProbe $frameProbe `
+            -Settlement $settled)) {
             if ($LatencyClock.ElapsedMilliseconds -gt
                 $script:NativeMenuSettleTimeoutMilliseconds) {
                 throw (
@@ -475,22 +604,24 @@ function Get-SettledNativeMenuObservation {
             throw "BROKEN: settled native-menu probe did not create its frame capture."
         }
 
-        $payload = $frameProbe.SemanticPayload
+        $layout = $settled.Layout
         return [pscustomobject]@{
-            semantic_surface = $frameProbe.SemanticSurface
-            semantic_generation = $frameProbe.SemanticGeneration
-            tagged_screen = [string]$payload.screen_id
-            layout_generation = [uint64]$payload.generation
-            element_count = @($payload.elements).Count
-            capture_method = [string]$payload.capture_method
+            semantic_surface = $settled.AnchorProbe.SemanticSurface
+            semantic_generation = $settled.AnchorProbe.SemanticGeneration
+            tagged_screen = [string]$layout.screen_id
+            layout_generation = [uint64]$layout.generation
+            element_count = @($layout.elements).Count
+            animated_element_ids = @($settled.AnimatedElementIds)
+            capture_method = [string]$layout.capture_method
             frame_sha256 = (
                 Get-FileHash -LiteralPath $FramePath -Algorithm SHA256
             ).Hash.ToLowerInvariant()
             settlement = $settled.Summary
-            layout = ConvertTo-NativeMenuLayout `
-                -SemanticPayload $payload `
-                -CapturedAtMilliseconds $frameProbe.CapturedAtMilliseconds
-            settlement_trace = @($settled.DistinctPayloads)
+            layout = $layout
+            settlement_trace = [ordered]@{
+                structural_phases = @($settled.StructuralPhases)
+                settled_window_samples = @($settled.SettledWindowSamples)
+            }
         }
     }
 }

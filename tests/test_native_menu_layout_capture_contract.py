@@ -152,6 +152,7 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         support = read("scripts/NativeMenuCaptureSupport.ps1")
         standalone = read("scripts/Record-NativeMenuLayout.ps1")
         transition = read("scripts/Record-NativeMenuTransition.ps1")
+        confirmation = read("scripts/Confirm-NativeMenuLayoutAnimation.ps1")
         importer = read("scripts/Import-NativeMenuSpecialCaptures.ps1")
         self.assertIn(
             "NativeMenuSettleConsecutiveSamples = 40",
@@ -162,6 +163,16 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             "NativeMenuSettleMinimumSpanMilliseconds = 2000",
             support,
             "standalone settlement must span at least two seconds",
+        )
+        self.assertIn(
+            "Invoke-NativeMenuSettlementClassifier",
+            support,
+            "settlement must classify animated geometry from the measured window",
+        )
+        self.assertIn(
+            "animated_element_ids = @(",
+            support,
+            "settlement must carry the measured animated ID set",
         )
         self.assertIn(
             "Get-SettledNativeMenuObservation",
@@ -184,7 +195,17 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             transition,
             "transition capture must not sleep before sampling a destination",
         )
-        for recorder in (standalone, transition, importer):
+        self.assertIn(
+            "Get-SettledNativeMenuObservation",
+            confirmation,
+            "fresh-instance animation confirmation must use Settlement v2",
+        )
+        self.assertIn(
+            "primary.header.process_id -eq $ProcessId",
+            confirmation,
+            "animation confirmation must reject process reuse",
+        )
+        for recorder in (standalone, transition, confirmation, importer):
             self.assertNotIn(
                 "CaptureCommit",
                 recorder,

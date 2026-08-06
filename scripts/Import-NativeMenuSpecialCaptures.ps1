@@ -192,57 +192,44 @@ function New-CaptureHeader {
     }
 }
 
-function Find-SettledCaptureSample {
+function Find-SettledCaptureSampleV2 {
     param(
         [Parameter(Mandatory = $true)][object[]]$Samples,
-        [Parameter(Mandatory = $true)][scriptblock]$SelectSemanticPayload,
         [Parameter(Mandatory = $true)][string]$Label
     )
 
     if ($Samples.Count -eq 0) {
         throw "STOP: '$Label' capture contained no semantic samples."
     }
-    $stableJson = ""
-    $stableStartIndex = 0
-    $stableStartMilliseconds = 0L
-    $stableCount = 0
-    for ($index = 0; $index -lt $Samples.Count; $index += 1) {
-        $sample = $Samples[$index]
-        $elapsed = [long]$sample.elapsed_milliseconds
-        $semanticJson = (& $SelectSemanticPayload $sample) |
-            ConvertTo-Json -Depth 60 -Compress
-        if ($semanticJson -ceq $stableJson) {
-            $stableCount += 1
-        } else {
-            $stableJson = $semanticJson
-            $stableStartIndex = $index
-            $stableStartMilliseconds = $elapsed
-            $stableCount = 1
+    $classifierPath = Join-Path $root "tools\native_menu_settlement_v2.py"
+    if (-not (Test-Path -LiteralPath $classifierPath -PathType Leaf)) {
+        throw "Settlement v2 classifier is missing from the capture tree."
+    }
+    $temporaryDirectory = Join-Path ([IO.Path]::GetTempPath()) (
+        "sdmod-special-settlement-v2-" + [Guid]::NewGuid().ToString("N")
+    )
+    [IO.Directory]::CreateDirectory($temporaryDirectory) | Out-Null
+    $inputPath = Join-Path $temporaryDirectory "samples.json"
+    $outputPath = Join-Path $temporaryDirectory "classification.json"
+    try {
+        Write-Utf8Json $Samples $inputPath
+        $result = @(
+            & py.exe -3 $classifierPath find `
+                --input $inputPath `
+                --output $outputPath 2>&1
+        )
+        if ($LASTEXITCODE -ne 0) {
+            $message = (
+                ($result | ForEach-Object { [string]$_ }) -join "`n"
+            ).Trim()
+            throw "STOP: '$Label' Settlement v2 classification failed: $message"
         }
-        $stableSpan = $elapsed - $stableStartMilliseconds
-        if ($stableCount -ge 40 -and $stableSpan -ge 2000) {
-            return [pscustomobject]@{
-                Sample = $sample
-                StableStartIndex = $stableStartIndex
-                StableEndIndex = $index
-                Settlement = [ordered]@{
-                    criterion = (
-                        "at least 40 consecutive byte-identical semantic " +
-                        "payloads spanning at least 2 seconds"
-                    )
-                    settle_latency_milliseconds = $elapsed
-                    stable_span_milliseconds = $stableSpan
-                    consecutive_identical_samples = $stableCount
-                    total_semantic_samples = $index + 1
-                }
-            }
+        return Get-Content -LiteralPath $outputPath -Raw | ConvertFrom-Json
+    } finally {
+        if (Test-Path -LiteralPath $temporaryDirectory -PathType Container) {
+            Remove-Item -LiteralPath $temporaryDirectory -Recurse -Force
         }
     }
-    throw (
-        "STOP: '$Label' never settled to 40 consecutive byte-identical " +
-        "semantic payloads spanning at least 2 seconds. " +
-        "samples=$($Samples.Count)"
-    )
 }
 
 function Assert-RecordedSettlementMatches {
@@ -258,15 +245,45 @@ function Assert-RecordedSettlementMatches {
             [long]$Computed.settle_latency_milliseconds -or
         [long]$Recorded.stable_span_milliseconds -ne
             [long]$Computed.stable_span_milliseconds -or
-        [int]$Recorded.consecutive_identical_samples -ne
-            [int]$Computed.consecutive_identical_samples -or
+        [int]$Recorded.consecutive_structural_samples -ne
+            [int]$Computed.consecutive_structural_samples -or
         [int]$Recorded.total_semantic_samples -ne
             [int]$Computed.total_semantic_samples
     ) {
         throw (
             "STOP: '$Label' recorder settlement header does not match its " +
-            "own byte-identical sample trail."
+            "own Settlement v2 structural sample trail."
         )
+    }
+}
+
+function ConvertTo-SettlementSummaryV2 {
+    param([Parameter(Mandatory = $true)][object]$Classification)
+
+    return [ordered]@{
+        criterion = [string]$Classification.criterion
+        settle_latency_milliseconds = (
+            [long]$Classification.settle_latency_milliseconds
+        )
+        stable_span_milliseconds = (
+            [long]$Classification.stable_span_milliseconds
+        )
+        consecutive_structural_samples = (
+            [int]$Classification.consecutive_structural_samples
+        )
+        animated_id_set_sample_count = (
+            [int]$Classification.animated_id_set_sample_count
+        )
+        total_semantic_samples = (
+            [int]$Classification.total_semantic_samples
+        )
+        structural_sha256 = [string]$Classification.structural_sha256
+        animated_element_ids = @($Classification.animated_element_ids)
+        animated_element_count = (
+            [int]$Classification.animated_element_count
+        )
+        element_count = [int]$Classification.element_count
+        animated_fraction = [double]$Classification.animated_fraction
     }
 }
 
@@ -277,28 +294,54 @@ if ($loader.schema -ne "solomon-dark-native-loader-capture-v1") {
     throw "Loader capture schema was not recognized."
 }
 $loaderSamples = @($loader.samples)
-$loaderSettled = Find-SettledCaptureSample `
-    -Samples $loaderSamples `
-    -Label "native_loader" `
-    -SelectSemanticPayload {
-        param($sample)
-        [ordered]@{
-            numerator = [uint32]$sample.numerator
-            denominator = [uint32]$sample.denominator
-            complete = [bool]$sample.complete
-            progress = [double]$sample.progress
-            elements = @($sample.elements)
-        }
+$loaderClassifierSamples = [Collections.Generic.List[object]]::new()
+foreach ($sample in $loaderSamples) {
+    $elements = [Collections.Generic.List[object]]::new()
+    $elementIndex = 0
+    foreach ($element in @($sample.elements)) {
+        $elementIndex += 1
+        $elements.Add([ordered]@{
+            id = "native_loader.art.$(($element.art_id -replace '\.', '_').ToLowerInvariant()).$elementIndex"
+            kind = "art"
+            text = ""
+            action_id = ""
+            art_id = [string]$element.art_id
+            font_id = ""
+            text_style = [string]$element.draw_kind
+            visible = $true
+            interactive = $false
+            draw_order = $elementIndex
+            rect = @($element.rect)
+            unclipped_rect = @($element.unclipped_rect)
+        })
     }
+    $loaderClassifierSamples.Add([ordered]@{
+        elapsed_milliseconds = [long]$sample.elapsed_milliseconds
+        captured_at_milliseconds = [long]$sample.elapsed_milliseconds
+        payload = [ordered]@{
+            generation = 1
+            screen_id = "native_loader"
+            screen_title = "Raptisoft loader"
+            capture_method = [string]$loader.capture_method
+            progress_numerator = [int]$sample.numerator
+            progress_denominator = [int]$sample.denominator
+            progress = [double]$sample.progress
+            complete = [bool]$sample.complete
+            elements = $elements
+        }
+    })
+}
+$loaderSettled = Find-SettledCaptureSampleV2 `
+    -Samples @($loaderClassifierSamples) `
+    -Label "native_loader"
 Assert-RecordedSettlementMatches `
     -Recorded $loader.settlement `
-    -Computed $loaderSettled.Settlement `
+    -Computed $loaderSettled `
     -Label "native_loader"
-$loaderSample = $loaderSettled.Sample
 $loaderReferenceSample = $null
 for (
-    $loaderSampleIndex = $loaderSettled.StableStartIndex;
-    $loaderSampleIndex -le $loaderSettled.StableEndIndex;
+    $loaderSampleIndex = [int]$loaderSettled.stable_start_index;
+    $loaderSampleIndex -le [int]$loaderSettled.stable_end_index;
     $loaderSampleIndex += 1
 ) {
     if (-not [string]::IsNullOrWhiteSpace(
@@ -326,27 +369,8 @@ $loaderReferenceName = "native-loader.png"
 $loaderReferencePath = Join-Path $referenceRoot $loaderReferenceName
 Convert-BmpToPng $loaderSourceFrame $loaderReferencePath
 $loaderInstance = Resolve-InstanceName $loader.instance
-$loaderElements = [Collections.Generic.List[object]]::new()
-$loaderIndex = 0
-foreach ($element in @($loaderSample.elements)) {
-    $loaderIndex += 1
-    $loaderElements.Add([ordered]@{
-        id = "native_loader.art.$(($element.art_id -replace '\.', '_').ToLowerInvariant()).$loaderIndex"
-        kind = "art"
-        text = ""
-        action_id = ""
-        art_id = [string]$element.art_id
-        font_id = ""
-        text_style = [string]$element.draw_kind
-        visible = $true
-        interactive = $false
-        draw_order = $loaderIndex
-        rect = @($element.rect)
-        unclipped_rect = @($element.unclipped_rect)
-    })
-}
 $loaderFixture = [ordered]@{
-    schema = "solomon-dark-native-menu-layout-v1"
+    schema = "solomon-dark-native-menu-layout-v2"
     header = New-CaptureHeader `
         -Label "native_loader" `
         -Instance $loaderInstance `
@@ -354,20 +378,9 @@ $loaderFixture = [ordered]@{
         -CaptureMethod ([string]$loader.capture_method) `
         -SourceJsonPath $loaderCaptureItem.FullName `
         -SourceFramePath $loaderSourceFrame `
-        -Settlement $loaderSettled.Settlement `
+        -Settlement (ConvertTo-SettlementSummaryV2 $loaderSettled) `
         -ReferenceCapture "../menu-reference-captures/$loaderReferenceName"
-    layout = [ordered]@{
-        generation = 1
-        captured_at_milliseconds = [int]$loaderSample.elapsed_milliseconds
-        screen_id = "native_loader"
-        screen_title = "Raptisoft loader"
-        capture_method = [string]$loader.capture_method
-        progress_numerator = [int]$loaderSample.numerator
-        progress_denominator = [int]$loaderSample.denominator
-        progress = [double]$loaderSample.progress
-        complete = [bool]$loaderSample.complete
-        elements = $loaderElements
-    }
+    layout = $loaderSettled.layout
 }
 Write-Utf8Json $loaderFixture (Join-Path $layoutRoot "native-loader.json")
 
@@ -381,23 +394,70 @@ if (
     throw "Loading capture schema was not recognized."
 }
 $loadingSamples = @($loadingRecording.samples)
-$loadingSettled = Find-SettledCaptureSample `
-    -Samples $loadingSamples `
-    -Label "loading_screen" `
-    -SelectSemanticPayload {
-        param($sample)
-        $sample.layout
+$loadingClassifierSamples = [Collections.Generic.List[object]]::new()
+foreach ($sample in $loadingSamples) {
+    $loading = $sample.layout
+    $elements = [Collections.Generic.List[object]]::new()
+    $elementIndex = 0
+    foreach ($element in @($loading.elements)) {
+        $elementIndex += 1
+        $entry = [ordered]@{
+            id = "loading.$($element.id)"
+            kind = [string]$element.kind
+            text = [string](Get-OptionalProperty $element "text" "")
+            action_id = ""
+            art_id = [string](Get-OptionalProperty $element "art_id" "")
+            font_id = [string](Get-OptionalProperty $element "font" "")
+            text_style = [string]$element.kind
+            visible = $true
+            interactive = $false
+            draw_order = $elementIndex
+            rect = @($element.rect)
+            unclipped_rect = @($element.rect)
+        }
+        foreach ($property in @(
+            "color",
+            "color_top",
+            "color_bottom",
+            "source_size",
+            "font_height",
+            "font_weight",
+            "scale"
+        )) {
+            $propertyValue = Get-OptionalProperty $element $property
+            if ($null -ne $propertyValue) {
+                $entry[$property] = $propertyValue
+            }
+        }
+        $elements.Add($entry)
     }
+    $loadingClassifierSamples.Add([ordered]@{
+        elapsed_milliseconds = [long]$sample.elapsed_milliseconds
+        captured_at_milliseconds = [long]$sample.elapsed_milliseconds
+        payload = [ordered]@{
+            generation = [int]$loading.sequence
+            screen_id = "loading_screen"
+            screen_title = [string]$loading.elements[-1].text
+            capture_method = [string]$loadingRecording.header.capture_method
+            stage_id = [string]$loading.stage_id
+            progress = [double]$loading.progress
+            viewport = @($loading.viewport)
+            source_crop = @($loading.source_crop)
+            elements = $elements
+        }
+    })
+}
+$loadingSettled = Find-SettledCaptureSampleV2 `
+    -Samples @($loadingClassifierSamples) `
+    -Label "loading_screen"
 Assert-RecordedSettlementMatches `
     -Recorded $loadingRecording.settlement `
-    -Computed $loadingSettled.Settlement `
+    -Computed $loadingSettled `
     -Label "loading_screen"
-$loadingSample = $loadingSettled.Sample
-$loading = $loadingSample.layout
 $loadingReferenceSample = $null
 for (
-    $loadingSampleIndex = $loadingSettled.StableStartIndex;
-    $loadingSampleIndex -le $loadingSettled.StableEndIndex;
+    $loadingSampleIndex = [int]$loadingSettled.stable_start_index;
+    $loadingSampleIndex -le [int]$loadingSettled.stable_end_index;
     $loadingSampleIndex += 1
 ) {
     if (-not [string]::IsNullOrWhiteSpace(
@@ -425,42 +485,8 @@ $loadingReferenceName = "loading-screen.png"
 $loadingReferencePath = Join-Path $referenceRoot $loadingReferenceName
 Convert-BmpToPng $loadingSourceFrame $loadingReferencePath
 $loadingInstance = Resolve-InstanceName $loadingRecording.header.instance
-$loadingElements = [Collections.Generic.List[object]]::new()
-$loadingIndex = 0
-foreach ($element in @($loading.elements)) {
-    $loadingIndex += 1
-    $entry = [ordered]@{
-        id = "loading.$($element.id)"
-        kind = [string]$element.kind
-        text = [string](Get-OptionalProperty $element "text" "")
-        action_id = ""
-        art_id = [string](Get-OptionalProperty $element "art_id" "")
-        font_id = [string](Get-OptionalProperty $element "font" "")
-        text_style = [string]$element.kind
-        visible = $true
-        interactive = $false
-        draw_order = $loadingIndex
-        rect = @($element.rect)
-        unclipped_rect = @($element.rect)
-    }
-    foreach ($property in @(
-        "color",
-        "color_top",
-        "color_bottom",
-        "source_size",
-        "font_height",
-        "font_weight",
-        "scale"
-    )) {
-        $propertyValue = Get-OptionalProperty $element $property
-        if ($null -ne $propertyValue) {
-            $entry[$property] = $propertyValue
-        }
-    }
-    $loadingElements.Add($entry)
-}
 $loadingFixture = [ordered]@{
-    schema = "solomon-dark-native-menu-layout-v1"
+    schema = "solomon-dark-native-menu-layout-v2"
     header = New-CaptureHeader `
         -Label "loading_screen" `
         -Instance $loadingInstance `
@@ -468,22 +494,9 @@ $loadingFixture = [ordered]@{
         -CaptureMethod ([string]$loadingRecording.header.capture_method) `
         -SourceJsonPath $loadingCaptureItem.FullName `
         -SourceFramePath $loadingSourceFrame `
-        -Settlement $loadingSettled.Settlement `
+        -Settlement (ConvertTo-SettlementSummaryV2 $loadingSettled) `
         -ReferenceCapture "../menu-reference-captures/$loadingReferenceName"
-    layout = [ordered]@{
-        generation = [int]$loading.sequence
-        captured_at_milliseconds = (
-            [int]$loadingSample.elapsed_milliseconds
-        )
-        screen_id = "loading_screen"
-        screen_title = [string]$loading.elements[-1].text
-        capture_method = [string]$loadingRecording.header.capture_method
-        stage_id = [string]$loading.stage_id
-        progress = [double]$loading.progress
-        viewport = @($loading.viewport)
-        source_crop = @($loading.source_crop)
-        elements = $loadingElements
-    }
+    layout = $loadingSettled.layout
 }
 Write-Utf8Json $loadingFixture (Join-Path $layoutRoot "loading-screen.json")
 

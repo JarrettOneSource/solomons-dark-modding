@@ -131,6 +131,7 @@ from static_re_native_menu_shell_contracts import (
     test_native_menu_live_transition_graph_is_pinned,
     test_native_menu_recorders_settle_and_derive_provenance,
     test_native_menu_screen_census_and_live_layouts_are_pinned,
+    test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired,
     test_native_menu_settled_destinations_equal_standalones,
     test_native_menu_transition_endpoint_provenance_is_pinned,
 )
@@ -1160,6 +1161,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native menu recorders settle and derive provenance",
         test_native_menu_recorders_settle_and_derive_provenance,
+    ),
+    (
+        "Native menu Settlement v2 classifier is strict and CI wired",
+        test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired,
     ),
     (
         "Native menu live transition graph is pinned",

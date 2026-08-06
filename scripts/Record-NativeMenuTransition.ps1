@@ -65,7 +65,7 @@ $outputItemPath = [IO.Path]::GetFullPath($OutputPath)
 if (Test-Path -LiteralPath $outputItemPath -PathType Leaf) {
     $fixture = Get-Content -LiteralPath $outputItemPath -Raw |
         ConvertFrom-Json
-    if ($fixture.schema -ne "solomon-dark-native-menu-navigation-v1") {
+    if ($fixture.schema -ne "solomon-dark-native-menu-navigation-v2") {
         throw "Existing navigation recording has an incompatible schema."
     }
     $allIds = @($fixture.edges | ForEach-Object { [string]$_.id })
@@ -84,15 +84,17 @@ if (Test-Path -LiteralPath $outputItemPath -PathType Leaf) {
     }
 } else {
     $fixture = [ordered]@{
-        schema = "solomon-dark-native-menu-navigation-v1"
+        schema = "solomon-dark-native-menu-navigation-v2"
         header = [ordered]@{
             capture_method = (
-                "settled byte-identical native UI semantics + exact-process " +
-                "action/key/click dispatch + same-call D3D9 frame hashes"
+                "Settlement v2 structural native UI semantics + measured " +
+                "animated geometry + exact-process action/key/click dispatch " +
+                "+ same-call D3D9 frame hashes"
             )
             settlement_criterion = (
-                "at least 40 consecutive byte-identical semantic payloads " +
-                "spanning at least 2 seconds"
+                "at least 40 consecutive samples spanning at least 2 seconds " +
+                "with byte-identical structural payloads and an identical " +
+                "measured animated element-id set"
             )
             recorded_live = $true
             sessions = @()
@@ -199,6 +201,7 @@ return 'key'
             header = [ordered]@{
                 label = $EdgeId
                 instance = $Instance
+                process_id = $ProcessId
                 source = $context.Source
                 capture_method = [string]$fixture.header.capture_method
                 recorded_live = $true
@@ -252,6 +255,8 @@ return 'key'
         edge = $EdgeId
         source = $before.semantic_surface
         destination = $after.semantic_surface
+        source_animated_elements = @($before.animated_element_ids).Count
+        destination_animated_elements = @($after.animated_element_ids).Count
         source_settle_latency_milliseconds = (
             $before.settlement.settle_latency_milliseconds
         )
