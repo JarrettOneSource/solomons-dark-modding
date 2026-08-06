@@ -894,6 +894,10 @@ local requested = {selector}
 local player = sd.player and sd.player.get_state and sd.player.get_state() or nil
 local bot = requested ~= nil and sd.bots and sd.bots.get_participant_state and
   sd.bots.get_participant_state(requested) or nil
+local public_bot = requested ~= nil and sd.bots and sd.bots.get_state and
+  sd.bots.get_state(requested) or nil
+local profile = bot and bot.profile or public_bot and public_bot.profile or {{}}
+local profile_loadout = profile.loadout or {{}}
 local actor = requested == nil and tonumber(player and player.actor_address) or
   tonumber(bot and bot.actor_address)
 actor = actor or 0
@@ -943,6 +947,22 @@ emit('actor_progression_direct', actor_direct)
 emit('actor_progression_handle', actor_handle)
 emit('actor_progression_handle_inner', actor_handle_inner)
 emit('bot_available', requested == nil or bot ~= nil)
+emit('bot_profile.element_id', profile.element_id or -1)
+emit('bot_profile.discipline_id', profile.discipline_id or -1)
+emit('bot_profile.level', profile.level or -1)
+emit('bot_profile.experience', profile.experience or -1)
+emit('bot_profile.loadout.primary_entry_index', profile_loadout.primary_entry_index or -1)
+emit('bot_profile.loadout.primary_combo_entry_index', profile_loadout.primary_combo_entry_index or -1)
+local appearance_choices = {{}}
+for _, value in ipairs(profile.appearance_choice_ids or {{}}) do
+  appearance_choices[#appearance_choices + 1] = tostring(value)
+end
+emit('bot_profile.appearance_choice_ids', table.concat(appearance_choices, ','))
+local secondary_entries = {{}}
+for _, value in ipairs(profile_loadout.secondary_entry_indices or {{}}) do
+  secondary_entries[#secondary_entries + 1] = tostring(value)
+end
+emit('bot_profile.loadout.secondary_entry_indices', table.concat(secondary_entries, ','))
 
 emit('participant.id', runtime_participant and runtime_participant.participant_id or 0)
 emit('participant.name', runtime_participant and runtime_participant.name or '')
@@ -1070,6 +1090,12 @@ def _parse_items(values: Mapping[str, str], prefix: str, count: int) -> list[dic
             }
         )
     return rows
+
+
+def _parse_int_csv(value: str) -> list[int]:
+    if not value:
+        return []
+    return [_parse_int(item) for item in value.split(",")]
 
 
 def parse_snapshot(values: Mapping[str, str], participant_id: int | None) -> dict[str, Any]:
@@ -1233,6 +1259,31 @@ def parse_snapshot(values: Mapping[str, str], participant_id: int | None) -> dic
                 "slots": equipment,
             },
         },
+        "bot_profile": {
+            "element_id": _parse_int(values.get("bot_profile.element_id"), default=-1),
+            "discipline_id": _parse_int(
+                values.get("bot_profile.discipline_id"), default=-1
+            ),
+            "level": _parse_int(values.get("bot_profile.level"), default=-1),
+            "experience": _parse_int(
+                values.get("bot_profile.experience"), default=-1
+            ),
+            "appearance_choice_ids": _parse_int_csv(
+                values.get("bot_profile.appearance_choice_ids", "")
+            ),
+            "loadout": {
+                "primary_entry_index": _parse_int(
+                    values.get("bot_profile.loadout.primary_entry_index"), default=-1
+                ),
+                "primary_combo_entry_index": _parse_int(
+                    values.get("bot_profile.loadout.primary_combo_entry_index"),
+                    default=-1,
+                ),
+                "secondary_entry_indices": _parse_int_csv(
+                    values.get("bot_profile.loadout.secondary_entry_indices", "")
+                ),
+            },
+        },
         "native_inventory": {
             "valid": _bool(values.get("native_inventory.valid")),
             "raw_item_count": _parse_int(
@@ -1309,6 +1360,8 @@ def snapshot_ready(value: Mapping[str, Any], participant_id: int | None) -> tupl
         inventory = value["native_inventory"]
         if not inventory["valid"] or inventory["truncated"] or inventory["item_count"] < 2:
             return False, f"native starter inventory is incomplete: {inventory}"
+    elif value["bot_profile"]["element_id"] < 0 or value["bot_profile"]["discipline_id"] < 0:
+        return False, f"bot profile is not populated: {value['bot_profile']}"
     return True, "complete"
 
 
@@ -1488,8 +1541,6 @@ def capture_settled_snapshot(
 def validate_class_snapshot(
     definition: Mapping[str, Any],
     settled: Mapping[str, Any],
-    *,
-    validate_stock_starter_kit: bool = True,
 ) -> None:
     class_key = str(definition["class_key"])
     value = settled["first_complete_controllable_snapshot"]
@@ -1511,18 +1562,17 @@ def validate_class_snapshot(
     for stat_name, expected in expected_mapping.items():
         actual = value["stats"][stat_name]["value"]
         require(actual == expected, f"{class_key} definition did not map {stat_name}: {actual} != {expected}")
-    if validate_stock_starter_kit:
-        stat_kinds = {name: kind for name, _, kind in STAT_FIELDS}
-        for stat_name, expected_bits in EXPECTED_COMMON_STAT_BITS.items():
-            if stat_kinds[stat_name] == "f32":
-                actual = int(value["stats"][stat_name]["raw_u32"], 0)
-            else:
-                actual = int(value["stats"][stat_name]["value"])
-            require(
-                actual == expected_bits,
-                f"{class_key} starting stat {stat_name} changed: "
-                f"0x{actual & 0xFFFFFFFF:08X} != 0x{expected_bits:08X}",
-            )
+    stat_kinds = {name: kind for name, _, kind in STAT_FIELDS}
+    for stat_name, expected_bits in EXPECTED_COMMON_STAT_BITS.items():
+        if stat_kinds[stat_name] == "f32":
+            actual = int(value["stats"][stat_name]["raw_u32"], 0)
+        else:
+            actual = int(value["stats"][stat_name]["value"])
+        require(
+            actual == expected_bits,
+            f"{class_key} starting stat {stat_name} changed: "
+            f"0x{actual & 0xFFFFFFFF:08X} != 0x{expected_bits:08X}",
+        )
 
     primary = int(mapping["primary_spell"]["value"])
     secondary = int(mapping["secondary_spell"]["value"])
@@ -1541,9 +1591,6 @@ def validate_class_snapshot(
             f"{class_key} row {row['entry_index']} starting rank changed",
         )
 
-    if not validate_stock_starter_kit:
-        return
-
     equipment = value["participant"]["equipment"]["slots"]
     expected_equipment = definition["starting_kit"]["equipment_type_ids"]
     for slot, type_id in expected_equipment.items():
@@ -1561,6 +1608,57 @@ def validate_class_snapshot(
         potion_rows == [(7001, 0), (7001, 1)],
         f"{class_key} starter potion rows changed: {potion_rows}",
     )
+
+
+def validate_bot_class_snapshot(
+    definition: Mapping[str, Any],
+    settled: Mapping[str, Any],
+) -> None:
+    class_key = str(definition["class_key"])
+    value = settled["first_complete_controllable_snapshot"]
+    entity = value["entity"]
+    require(
+        entity["progression_address"]
+        in {
+            entity["actor_plus_0x200_progression"],
+            entity["actor_plus_0x300_handle_inner"],
+        },
+        f"{class_key} bot actor does not own its captured progression book",
+    )
+    identity = definition["native_identity"]
+    profile = value["bot_profile"]
+    require(
+        profile["element_id"] == identity["profile_element_id"]
+        and profile["discipline_id"] == identity["profile_discipline_id"],
+        f"{class_key} bot profile lost its semantic class identity: {profile}",
+    )
+    mapping = definition["definition_to_actor_fields"]
+    primary = int(mapping["primary_spell"]["value"])
+    discipline = int(mapping["discipline_root"]["value"])
+    require(
+        value["stats"]["element_skill_row"]["value"] == -1
+        and value["stats"]["discipline_skill_row"]["value"] == discipline
+        and value["stats"]["primary_skill_row"]["value"] == -1
+        and value["stats"]["secondary_skill_row"]["value"] == -1,
+        f"{class_key} bot native selection priming changed",
+    )
+    active = {
+        row["entry_index"]
+        for row in value["progression_book"]["entries"]
+        if row["base_rank_u16"] != 0 or row["effective_rank_u16"] != 0
+    }
+    expected_active = set(range(8)) | {primary}
+    require(
+        active == expected_active,
+        f"{class_key} bot active progression rows changed: {sorted(active)}",
+    )
+    for row in value["progression_book"]["entries"]:
+        expected_rank = 1 if row["entry_index"] in expected_active else 0
+        require(
+            row["base_rank_u16"] == expected_rank
+            and row["effective_rank_u16"] == expected_rank,
+            f"{class_key} bot row {row['entry_index']} starting rank changed",
+        )
 
 
 def spawn_mixed_bot(pipe_name: str) -> int:
@@ -1676,11 +1774,7 @@ def capture_one_class(
                 len(earth_body_matches) == 1,
                 f"Earth/Body mixed-case lookup is ambiguous: {len(earth_body_matches)} candidates",
             )
-            validate_class_snapshot(
-                earth_body_matches[0],
-                bot_capture,
-                validate_stock_starter_kit=False,
-            )
+            validate_bot_class_snapshot(earth_body_matches[0], bot_capture)
             bot_snapshot = bot_capture["first_complete_controllable_snapshot"]
             require(
                 bot_snapshot["entity"]["progression_address"]
