@@ -59,7 +59,32 @@ public static class MenureNativeInput
     public static extern bool SetCursorPos(int x, int y);
 
     [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(
+        IntPtr window,
+        out uint processId
+    );
+
+    [DllImport("kernel32.dll")]
+    public static extern uint GetCurrentThreadId();
+
+    [DllImport("user32.dll")]
+    public static extern bool AttachThreadInput(
+        uint firstThread,
+        uint secondThread,
+        bool attach
+    );
+
+    [DllImport("user32.dll")]
     public static extern bool SetForegroundWindow(IntPtr window);
+
+    [DllImport("user32.dll")]
+    public static extern bool BringWindowToTop(IntPtr window);
+
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(IntPtr window, int command);
 
     [DllImport("user32.dll")]
     public static extern void mouse_event(
@@ -86,12 +111,57 @@ if (-not [MenureNativeInput]::ClientToScreen($window, [ref]$point)) {
     throw 'ClientToScreen failed.'
 }
 
-[MenureNativeInput]::SetForegroundWindow($window) | Out-Null
-Start-Sleep -Milliseconds 100
+$foregroundWindow = [MenureNativeInput]::GetForegroundWindow()
+[uint32]$foregroundProcessId = 0
+$foregroundThread = [MenureNativeInput]::GetWindowThreadProcessId(
+    $foregroundWindow,
+    [ref]$foregroundProcessId
+)
+$currentThread = [MenureNativeInput]::GetCurrentThreadId()
+$attached = [MenureNativeInput]::AttachThreadInput(
+    $currentThread,
+    $foregroundThread,
+    $true
+)
+try {
+    [MenureNativeInput]::ShowWindow($window, 5) | Out-Null
+    [MenureNativeInput]::BringWindowToTop($window) | Out-Null
+    $setForeground = [MenureNativeInput]::SetForegroundWindow($window)
+}
+finally {
+    if ($attached) {
+        [MenureNativeInput]::AttachThreadInput(
+            $currentThread,
+            $foregroundThread,
+            $false
+        ) | Out-Null
+    }
+}
+Start-Sleep -Milliseconds 500
+$foregroundWindow = [MenureNativeInput]::GetForegroundWindow()
+[uint32]$foregroundProcessId = 0
+[MenureNativeInput]::GetWindowThreadProcessId(
+    $foregroundWindow,
+    [ref]$foregroundProcessId
+) | Out-Null
+if ($foregroundProcessId -ne $ProcessId) {
+    throw (
+        "PID $ProcessId did not become the foreground owner " +
+        "(SetForegroundWindow=$setForeground)."
+    )
+}
 if (-not [MenureNativeInput]::SetCursorPos($point.X, $point.Y)) {
     throw 'SetCursorPos failed.'
 }
 
+[MenureNativeInput]::mouse_event(
+    0x0001,
+    0,
+    0,
+    0,
+    [UIntPtr]::Zero
+)
+Start-Sleep -Milliseconds 1000
 [MenureNativeInput]::mouse_event(
     0x0002,
     0,
@@ -99,6 +169,7 @@ if (-not [MenureNativeInput]::SetCursorPos($point.X, $point.Y)) {
     0,
     [UIntPtr]::Zero
 )
+Start-Sleep -Milliseconds 250
 [MenureNativeInput]::mouse_event(
     0x0004,
     0,
@@ -114,5 +185,6 @@ if (-not [MenureNativeInput]::SetCursorPos($point.X, $point.Y)) {
     client_y = [double]$ClientY
     screen_x = $point.X
     screen_y = $point.Y
+    foreground_process_id = $foregroundProcessId
     capture_method = 'queried live control rect center + exact-PID Windows client click'
 } | ConvertTo-Json -Compress
