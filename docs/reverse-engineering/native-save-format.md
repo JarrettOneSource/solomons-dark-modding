@@ -324,8 +324,10 @@ and lets the next run consume the same participant-private profile state.
 ### Skills, books, class, and loadout
 
 G6's dedicated progression campaign was not landed at the source revision of
-the G10 capture, so this document does not invent G6 field meanings. The
-already-landed
+the G10 capture, so the recording did not infer field meanings from an empty
+skill book. The now-landed
+[`native progression and per-skill effects`](native-progression-and-skills.md#persistence-boundary)
+document supplies those meanings and the per-actor boundary. The earlier
 [`Skill Concentration and Discipline`](../re/skills-concentration-discipline.md#persistence-and-lifecycle)
 analysis establishes the current persistence boundary:
 
@@ -701,6 +703,6 @@ These boundaries are deliberately opaque rather than speculative:
 - The deployed website save service and final P6 database/concurrency policy.
   The launcher client's expected HTTP seam is documented, but no website
   feature was built or published here.
-- Any G6-specific progression fields beyond the landed serializer boundary
-  cited above. If G6 lands later, its field semantics should be linked here;
-  G10's byte offsets and round-trip preservation do not need to be re-derived.
+- A nonempty permanent skill-book save specimen. G6 now supplies the runtime
+  field semantics and serializer boundary cited above; G10's byte offsets and
+  round-trip preservation do not need to be re-derived.

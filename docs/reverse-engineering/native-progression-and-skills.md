@@ -734,9 +734,14 @@ flags; they are not independent durable skill data.
 | a fresh Create generation after the multiplayer match lifecycle resets | starts a fresh base progression; raw element/discipline may be preselected for convenience, but prior learned ranks are not retained merely by that preselection |
 
 G10 owns the on-disk save/account codec, slot migration, and cross-process
-restore contract. G6 does not duplicate or guess that format. Until G10 lands,
-"durable" here means the native participant/profile lifecycle proven by G8 and
-the native serializers, not a promise about a browser save-file schema.
+restore contract. Its
+[`Skills, books, class, and loadout`](native-save-format.md#skills-books-class-and-loadout)
+section locates this durable subset in the resumable `gamestate`/Region object
+graph, while its
+[`Browser implementation contract`](native-save-format.md#browser-implementation-contract)
+defines the browser codec and migration boundary. G6 does not duplicate that
+format: "durable" here means the participant/profile lifecycle proven by G8
+and mapped to bytes by G10.
 
 ## Golden recording and implementation contract
 
@@ -788,6 +793,8 @@ using this order:
 - **Retail behavior after the level-75 table overrun is intentionally not
   probed.** Native code can read beyond the 76-entry threshold table. The
   browser contract is the explicit safe clamp at level 75 and 10,000,000 XP.
-- **The disk/account save representation remains G10 territory.** No G10
-  artifact had landed in this checkout, so this document stops at the proven
-  native participant/profile boundary rather than guessing a file format.
+- **G10 did not capture a nonempty permanent skill book.** Its native container,
+  lifecycle, byte preservation, and browser migration contract are complete in
+  [`native-save-format.md`](native-save-format.md); the runtime meanings and
+  serializer boundary are complete here. Do not invent a second save codec or
+  infer additional per-skill save fields from the empty specimen.
