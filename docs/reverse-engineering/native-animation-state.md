@@ -417,7 +417,7 @@ actor-address candidates, output collisions, a missing pipe/process, and
 partial frame sequences. The committed fixture contains:
 
 - contiguous wizard `idle`, `idle -> walk -> idle`, a stock Skeleton-driven
-  `idle -> hit_overlay -> idle`,
+  `idle -> hit_overlay -> idle` whose isolated hit decays without refresh,
   target-pinned native input producing
   `idle -> cast_pose_0 -> cast_pose_1 -> cast_pose_8 -> cast_pose_7 -> idle`,
   and full terminal-counter sequences;

@@ -1307,11 +1307,33 @@ def main() -> int:
             hit_precondition = None
             if scenario["name"] == "skeleton":
                 hit_precondition = arm_magic_shield_hit_witness(session)
+                hit_precondition["escape_after_render_frames"] = 4
+                hit_precondition["escape_position"] = [
+                    lane["boundary_start_x"],
+                    lane["boundary_start_y"],
+                ]
             combat_raw = capture_sequence(
                 session,
                 raw_directory,
                 f"{scenario['name']}-combat",
                 int(scenario["capture_frames"]),
+                (
+                    f"""    local player = assert(sd.player.get_state())
+    local actor = assert(tonumber(player.actor_address))
+    assert(sd.debug.write_float(
+      actor + assert(sd.debug.layout_offset('actor_position_x')),
+      {lane["boundary_start_x"]:.9f}))
+    assert(sd.debug.write_float(
+      actor + assert(sd.debug.layout_offset('actor_position_y')),
+      {lane["boundary_start_y"]:.9f}))
+    local rebind_ok, rebind_error = sd.world.rebind_actor(actor)
+    assert(rebind_ok, 'player rebind failed: ' .. tostring(rebind_error or ''))"""
+                    if scenario["name"] == "skeleton"
+                    else ""
+                ),
+                action_after_captured_frames=(
+                    4 if scenario["name"] == "skeleton" else 0
+                ),
             )
             actor_address = int(enemy["actor_address"])
             combat_rows = distill_enemy_frames(combat_raw, actor_address)

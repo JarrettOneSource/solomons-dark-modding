@@ -498,6 +498,18 @@ def test_native_animation_frame_programs_and_tick_anchor_are_pinned() -> str:
         )
 
     hit = wizard["idle_hit_overlay_idle"]
+    hit_trigger = hit.get("trigger")
+    if (
+        not isinstance(hit_trigger, dict)
+        or hit_trigger.get("method")
+        != "existing typed-write probe seeds only shield capacity; a stock Skeleton hit drives the retail +0x1D0 pulse"
+        or hit_trigger.get("escape_after_render_frames") != 4
+        or not isinstance(hit_trigger.get("escape_position"), list)
+        or len(hit_trigger["escape_position"]) != 2
+    ):
+        raise StaticReTestFailure(
+            "wizard hit golden no longer isolates one stock hit before measuring the native decay"
+        )
     hit_edges = [
         (edge["from"], edge["to"])
         for edge in hit.get("transitions", [])
