@@ -19,6 +19,21 @@ $layoutRoot = Join-Path $fixtureRoot "menu-layouts"
 $transitionLayoutRoot = Join-Path $fixtureRoot "menu-transition-layouts"
 $referenceRoot = Join-Path $fixtureRoot "menu-reference-captures"
 $confirmationRoot = Join-Path $fixtureRoot "menu-animation-confirmations"
+$overlayReferencePath = Join-Path $root (
+    "tests\fixtures\webgame\menu-overlay-reference.json"
+)
+if (-not (Test-Path -LiteralPath $overlayReferencePath -PathType Leaf)) {
+    throw "The machine-derived native-menu overlay reference is missing."
+}
+$overlayReference = Get-Content -LiteralPath $overlayReferencePath -Raw |
+    ConvertFrom-Json
+if (
+    [string]$overlayReference.schema -cne
+        "solomon-dark-native-menu-overlay-reference-v1" -or
+    @($overlayReference.art_element_id_suffixes).Count -eq 0
+) {
+    throw "The machine-derived native-menu overlay reference is malformed."
+}
 if ([string]::IsNullOrWhiteSpace($OutputPath)) {
     $OutputPath = Join-Path $fixtureRoot "menu-goldens.json"
 }
@@ -52,6 +67,43 @@ function Get-NativeMenuStructuralSummary {
             )
         }
         return Get-Content -LiteralPath $outputPath -Raw | ConvertFrom-Json
+    } finally {
+        if (Test-Path -LiteralPath $temporaryDirectory -PathType Container) {
+            Remove-Item -LiteralPath $temporaryDirectory -Recurse -Force
+        }
+    }
+}
+
+function Assert-NativeMenuGoldenOverlayHygiene {
+    param(
+        [Parameter(Mandatory = $true)][object]$Layout,
+        [Parameter(Mandatory = $true)][string]$Witness
+    )
+
+    $classifier = Join-Path $root "tools\native_menu_settlement_v2.py"
+    $temporaryDirectory = Join-Path ([IO.Path]::GetTempPath()) (
+        "sdmod-menu-golden-overlay-" + [Guid]::NewGuid().ToString("N")
+    )
+    [IO.Directory]::CreateDirectory($temporaryDirectory) | Out-Null
+    $layoutPath = Join-Path $temporaryDirectory "layout.json"
+    try {
+        [IO.File]::WriteAllText(
+            $layoutPath,
+            (($Layout | ConvertTo-Json -Depth 100) + [Environment]::NewLine),
+            [Text.UTF8Encoding]::new($false)
+        )
+        $result = @(
+            & py.exe -3 $classifier check-overlay `
+                --layout $layoutPath `
+                --reference $overlayReferencePath 2>&1
+        )
+        if ($LASTEXITCODE -ne 0) {
+            throw (
+                "STOP: $Witness intersects the beta-dialog overlay " +
+                "reference: " +
+                (($result | ForEach-Object { [string]$_ }) -join "`n")
+            )
+        }
     } finally {
         if (Test-Path -LiteralPath $temporaryDirectory -PathType Container) {
             Remove-Item -LiteralPath $temporaryDirectory -Recurse -Force
@@ -158,7 +210,7 @@ foreach ($file in $layoutFiles) {
         [string]$source.source_tree_sha -notmatch '^[0-9a-f]{40}$' -or
         [string]$source.game_executable_sha256 -notmatch '^[0-9a-f]{64}$' -or
         [string]$source.loader_dll_sha256 -notmatch '^[0-9a-f]{64}$' -or
-        [string]$settlement.settlement_spec -cne "2.1" -or
+        [string]$settlement.settlement_spec -cne "2.2" -or
         [string]$settlement.structural_element_order -cne
             "draw_order_then_element_id" -or
         [int]$settlement.consecutive_structural_samples -lt 40 -or
@@ -171,6 +223,9 @@ foreach ($file in $layoutFiles) {
     ) {
         throw "Capture provenance is incomplete in $($file.FullName)."
     }
+    Assert-NativeMenuGoldenOverlayHygiene `
+        -Layout $fixture.layout `
+        -Witness "standalone '$($file.BaseName)'"
     $fixtureStructural = Get-NativeMenuStructuralSummary -Layout $fixture.layout
     if (
         [string]$fixtureStructural.structural_sha256 -ne
@@ -276,7 +331,7 @@ foreach ($file in $transitionLayoutFiles) {
         [string]$source.source_tree_sha -notmatch '^[0-9a-f]{40}$' -or
         [string]$source.game_executable_sha256 -notmatch '^[0-9a-f]{64}$' -or
         [string]$source.loader_dll_sha256 -notmatch '^[0-9a-f]{64}$' -or
-        [string]$settlement.settlement_spec -cne "2.1" -or
+        [string]$settlement.settlement_spec -cne "2.2" -or
         [string]$settlement.structural_element_order -cne
             "draw_order_then_element_id" -or
         [int]$settlement.consecutive_structural_samples -lt 40 -or
@@ -287,6 +342,9 @@ foreach ($file in $transitionLayoutFiles) {
     ) {
         throw "Transition-only standalone provenance is incomplete: hub"
     }
+    Assert-NativeMenuGoldenOverlayHygiene `
+        -Layout $fixture.layout `
+        -Witness "transition-only standalone 'hub'"
     $fixtureStructural = Get-NativeMenuStructuralSummary -Layout $fixture.layout
     if (
         [string]$fixtureStructural.structural_sha256 -ne
@@ -468,14 +526,14 @@ foreach ($edgeId in $edgeIds) {
         [string]$edgeSource.source_tree_sha -notmatch '^[0-9a-f]{40}$' -or
         [string]$edgeSource.game_executable_sha256 -notmatch '^[0-9a-f]{64}$' -or
         [string]$edgeSource.loader_dll_sha256 -notmatch '^[0-9a-f]{64}$' -or
-        [string]$edgeSettlement.source.settlement_spec -cne "2.1" -or
+        [string]$edgeSettlement.source.settlement_spec -cne "2.2" -or
         [string]$edgeSettlement.source.structural_element_order -cne
             "draw_order_then_element_id" -or
         [int]$edgeSettlement.source.consecutive_structural_samples -lt 40 -or
         [int]$edgeSettlement.source.animated_id_set_sample_count -lt 40 -or
         [int]$edgeSettlement.source.stable_span_milliseconds -lt 2000 -or
         [double]$edgeSettlement.source.animated_fraction -gt 0.30 -or
-        [string]$edgeSettlement.destination.settlement_spec -cne "2.1" -or
+        [string]$edgeSettlement.destination.settlement_spec -cne "2.2" -or
         [string]$edgeSettlement.destination.structural_element_order -cne
             "draw_order_then_element_id" -or
         [int]$edgeSettlement.destination.consecutive_structural_samples -lt 40 -or
@@ -487,6 +545,12 @@ foreach ($edgeId in $edgeIds) {
     ) {
         throw "Navigation edge has incomplete settled provenance: $edgeId"
     }
+    Assert-NativeMenuGoldenOverlayHygiene `
+        -Layout $recorded.before.layout `
+        -Witness "navigation source '$edgeId'"
+    Assert-NativeMenuGoldenOverlayHygiene `
+        -Layout $recorded.after.layout `
+        -Witness "navigation destination '$edgeId'"
     if (
         [string]$recorded.before.frame_sha256 -notmatch '^[0-9a-f]{64}$' -or
         [string]$recorded.after.frame_sha256 -notmatch '^[0-9a-f]{64}$'
@@ -591,7 +655,7 @@ $golden = [ordered]@{
         gap = "G11"
         generated_from_live_capture_at_utc = $latestCapture.ToString("o")
         capture_method = (
-            "Settlement v2.1 structural native UI capture, measured animated " +
+            "Settlement v2.2 structural native UI capture, measured animated " +
             "geometry anchors/envelopes, native Sprite/text hooks, live D3D9 " +
             "frames, exact-process input, canonical draw-order/id comparison, " +
             "and fresh-instance animation confirmation"
@@ -604,6 +668,15 @@ $golden = [ordered]@{
                     -Algorithm SHA256
             ).Hash.ToLowerInvariant()
             bytes = $navigationItem.Length
+        }
+        overlay_reference = [ordered]@{
+            fixture = "menu-overlay-reference.json"
+            sha256 = (
+                Get-FileHash `
+                    -LiteralPath $overlayReferencePath `
+                    -Algorithm SHA256
+            ).Hash.ToLowerInvariant()
+            bytes = (Get-Item -LiteralPath $overlayReferencePath).Length
         }
         screen_count = $layouts.Count
         edge_count = $edges.Count

@@ -19,9 +19,14 @@ from native_menu_settlement_v2 import (
     MAXIMUM_ANIMATED_FRACTION,
     MINIMUM_SAMPLES,
     MINIMUM_SPAN_MILLISECONDS,
+    OVERLAY_REFERENCE_SCHEMA,
     SettlementV2Error,
+    assert_overlay_hygiene,
+    build_overlay_contamination_override,
     canonical_bytes,
+    element_art_id_suffix,
     structural_layout_bytes,
+    validate_overlay_reference,
 )
 
 
@@ -653,7 +658,7 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
         r"left_order < right_order.*?"
         r"tostring\(left\.id or ''\) < tostring\(right\.id or ''\).*?"
         r"structure\[#structure \+ 1\]\s*=\s*core\(element\)",
-        "the live Settlement v2.1 probe no longer canonicalizes only its "
+        "the live Settlement v2.2 probe no longer canonicalizes only its "
         "structural hash by draw_order then element id",
     )
     _require_regex(
@@ -821,7 +826,7 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
         r"\[string\]\$Classification\.structural_element_order.*?"
         r"consecutive_structural_samples.*?structural_sha256",
         "native-loader/loading import no longer reclassifies the complete raw "
-        "sample stream or carry Settlement v2.1 canonical ordering into its "
+        "sample stream or carry Settlement v2.2 canonical ordering into its "
         "fixture header",
     )
     for surface, source in (
@@ -856,7 +861,7 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
 
     return (
         "standalone, transition, native-loader, and loading-screen capture paths "
-        "apply Settlement v2.1, confirm animation from a fresh exact process, and "
+        "apply Settlement v2.2, confirm animation from a fresh exact process, and "
         "derive commit/tree/exact-binary provenance without operator overrides"
     )
 
@@ -921,7 +926,7 @@ def test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired() -> str:
         r"def canonical_structural_layout\(.*?"
         r"result\[\"elements\"\]\s*=\s*_canonical_elements\(elements\).*?"
         r"def structural_layout_bytes\(.*?canonical_structural_layout\(",
-        "Settlement v2.1 cross-instance comparison no longer sorts elements "
+        "Settlement v2.2 cross-instance comparison no longer sorts elements "
         "by draw_order then native element id",
     )
     _require_regex(
@@ -929,11 +934,11 @@ def test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired() -> str:
         r"def _assert_non_geometry_stable\(.*?"
         r"if set\(order\) != set\(anchor_order\):.*?"
         r"element membership varied .*?within the settled window",
-        "Settlement v2.1 again treats instance-arbitrary raw list position as "
+        "Settlement v2.2 again treats instance-arbitrary raw list position as "
         "structural state",
     )
     return (
-        "Settlement v2.1 classification, guardrails, canonical structural "
+        "Settlement v2.2 classification, guardrails, canonical structural "
         "ordering, fixture shaping, and fresh-instance animated-ID confirmation "
         "are behavior-tested by the CI unit module"
     )
@@ -979,10 +984,14 @@ def test_native_menu_landed_population_override_is_fail_closed() -> str:
     _require_regex(
         attacher,
         r"landed_path\s*=\s*\(.*?primary_path\.name.*?"
+        r"successful\.append\(\s*\(\s*\"landed_population_override\".*?"
         r"build_population_phase_override\(.*?"
-        r"header\[\"landed_population_override\"\]\s*=\s*override",
+        r"if len\(successful\) != 1:.*?"
+        r"field, override\s*=\s*successful\[0\].*?"
+        r"header\[field\]\s*=\s*override",
         "the landed override attacher no longer derives its old/new proof from "
-        "the uniquely named landed fixture and two raw traces",
+        "the uniquely named landed fixture and two raw traces or refuses "
+        "ambiguous override resolution",
     )
     forbidden_override_options = (
         "--landed-generation",
@@ -1010,8 +1019,10 @@ def test_native_menu_landed_population_override_is_fail_closed() -> str:
     _require_regex(
         promoter,
         r"if structural_bit_match:.*?"
-        r"landed_population_override.*?matching landed .*?structure.*?"
-        r"else:\s*override\s*=\s*validate_population_override\(",
+        r"if declared_override_fields:.*?matching landed structure.*?"
+        r"else:.*?if len\(declared_override_fields\) != 1:.*?"
+        r"override_kind == \"landed_population_override\":.*?"
+        r"validate_population_override\(",
         "menu promotion can bypass or falsely declare the Settlement v2.1 "
         "landed population override",
     )
@@ -1019,6 +1030,144 @@ def test_native_menu_landed_population_override_is_fail_closed() -> str:
         "Settlement v2.1 landed overrides are machine-derived from two exact "
         "population traces, require canonical structural agreement and a "
         "generation change, and reject any difference surviving settlement"
+    )
+
+
+def test_native_menu_overlay_contamination_override_is_fail_closed() -> str:
+    assert_module_runs_in_ci("test_native_menu_settlement_v2")
+    classifier = _read("tools/native_menu_settlement_v2.py")
+    reference_builder = _read("tools/build_native_menu_overlay_reference.py")
+    attacher = _read("tools/attach_native_menu_landed_override.py")
+    promoter = _read("tools/promote_native_menu_recapture.py")
+    support = _read("scripts/NativeMenuCaptureSupport.ps1")
+    importer = _read("scripts/Import-NativeMenuSpecialCaptures.ps1")
+    aggregate_builder = _read("scripts/Build-NativeMenuGoldens.ps1")
+
+    _require_regex(
+        classifier,
+        r"def build_overlay_contamination_override\(.*?"
+        r"assert_canonical_structure_matches\(primary_layout, confirmation_layout\).*?"
+        r"if landed_only_suffixes != reference_suffixes:.*?"
+        r"does not .*?exactly equal the overlay reference set",
+        "Settlement v2.2 overlay correction no longer requires canonical "
+        "second-instance agreement and exact overlay-reference set equality",
+    )
+    _require_regex(
+        classifier,
+        r"for difference in landed_only:.*?"
+        r"for payload in \(.*?primary_phases.*?confirmation_phases.*?"
+        r"primary_settled.*?confirmation_settled.*?\).*?"
+        r"appears in a fresh population phase or.*?settled window.*?"
+        r"generation difference lacks.*?two-instance population witnesses",
+        "Settlement v2.2 overlay correction no longer proves every removed "
+        "member absent and its generation change witnessed in both traces",
+    )
+    _require_regex(
+        classifier,
+        r"removed_below\s*=\s*sum\(order < landed_order for order in removed_orders\).*?"
+        r"expected_order\s*=\s*landed_order - removed_below.*?"
+        r"draw-order recompaction arithmetic .*?failed.*?"
+        r"landed minus overlay leaves residual.*?structural differences",
+        "Settlement v2.2 overlay correction no longer proves exact draw-order "
+        "recompaction and zero residual structural differences",
+    )
+    _require_regex(
+        reference_builder,
+        r"def build_reference\(.*?"
+        r"derive_overlay_reference\(overlay_layout, clean_layout\).*?"
+        r"\"overlay_capture\": evidence_receipt\(.*?"
+        r"\"clean_capture\": evidence_receipt\(.*?"
+        r"validate_overlay_reference\(reference\)",
+        "the beta-dialog reference is no longer derived from two hashed live "
+        "captures",
+    )
+    forbidden_reference_options = (
+        "--art-element-id-suffix",
+        "--overlay-only-element",
+        "--game-executable-sha256",
+        "--loader-dll-sha256",
+        "--base-commit-sha",
+    )
+    smuggled = [
+        option for option in forbidden_reference_options if option in reference_builder
+    ]
+    if smuggled:
+        raise StaticReTestFailure(
+            "the overlay reference builder accepts operator-supplied set or "
+            f"provenance values: {smuggled}"
+        )
+    _require_regex(
+        attacher,
+        r"menu-overlay-reference\.json.*?"
+        r"validate_evidence_receipt\(.*?overlay_capture.*?"
+        r"validate_evidence_receipt\(.*?clean_capture.*?"
+        r"build_overlay_contamination_override\(.*?"
+        r"if len\(successful\) != 1:.*?absent or ambiguous",
+        "the landed override attacher no longer hashes the fixed reference "
+        "evidence, derives v2.2, and refuses ambiguous override paths",
+    )
+    _require_regex(
+        promoter,
+        r"def validate_overlay_override\(.*?"
+        r"build_overlay_contamination_override\(.*?"
+        r"canonical_bytes\(declared\) != canonical_bytes\(expected\).*?"
+        r"derived exactly from the reference and both fresh traces",
+        "menu promotion no longer re-derives the exact declared Settlement "
+        "v2.2 overlay proof from the committed reference and both traces",
+    )
+    _require_regex(
+        promoter,
+        r"assert_overlay_hygiene\(layout, overlay_reference\).*?"
+        r"assert_overlay_hygiene\(confirmation_layout, overlay_reference\).*?"
+        r"assert_overlay_hygiene\(before_layout, overlay_reference\).*?"
+        r"assert_overlay_hygiene\(destination_layout, overlay_reference\)",
+        "menu promotion no longer rejects beta-dialog contamination in every "
+        "standalone, confirmation, source, and destination surface",
+    )
+    _require_regex(
+        promoter,
+        r"source_structural_match\s*=\s*structurally_matches\(.*?"
+        r"landed\[\"before\"\]\[\"layout\"\].*?"
+        r"source_frame_match\s*=.*?frame_sha256.*?"
+        r"source_bit_match\s*=.*?source_signature_match.*?"
+        r"source_structural_match.*?source_frame_match.*?"
+        r"if not source_bit_match:.*?if len\(override_matches\) != 1:",
+        "menu promotion no longer requires every transition source to bit-match "
+        "its landed semantic/frame truth or one unique approved correction",
+    )
+    _require_regex(
+        support,
+        r"foreach \(\$phase in \$structuralPhases\) \{\s*"
+        r"Assert-NativeMenuOverlayHygiene.*?-Layout \$phase\.payload",
+        "the live recorder checks only the final layout and can silently accept "
+        "overlay contamination from an earlier sampled population phase",
+    )
+    _require_regex(
+        importer,
+        r"function Assert-SpecialCaptureSampleOverlayHygiene.*?"
+        r"check-overlay-samples.*?"
+        r"Assert-SpecialCaptureSampleOverlayHygiene.*?"
+        r"-Samples @\(\$loaderClassifierSamples\).*?"
+        r"Assert-SpecialCaptureSampleOverlayHygiene.*?"
+        r"-Samples @\(\$loadingClassifierSamples\)",
+        "native-loader/loading import no longer overlay-gates every raw sample",
+    )
+    for path, source in (
+        ("NativeMenuCaptureSupport.ps1", support),
+        ("Import-NativeMenuSpecialCaptures.ps1", importer),
+        ("Build-NativeMenuGoldens.ps1", aggregate_builder),
+    ):
+        _require_regex(
+            source,
+            r"tests[\\/]fixtures[\\/]webgame[\\/]menu-overlay-reference\.json.*?"
+            r"check-overlay.*?--reference",
+            f"{path} no longer binds overlay hygiene to the fixed, "
+            "machine-derived committed reference",
+        )
+    return (
+        "Settlement v2.2 derives one hashed beta-overlay reference, accepts "
+        "only an exact absent set with mechanical draw-order recompaction and "
+        "no residual differences, and hygiene-gates every capture surface"
     )
 
 
@@ -1042,9 +1191,9 @@ def _animated_ids_for_layout(
 def _assert_settlement_v2_layout(
     layout: dict[str, Any], settlement: dict[str, Any], witness: str
 ) -> list[str]:
-    if settlement.get("settlement_spec") != "2.1":
+    if settlement.get("settlement_spec") != "2.2":
         raise StaticReTestFailure(
-            f"{witness} does not identify the Settlement v2.1 discipline"
+            f"{witness} does not identify the Settlement v2.2 discipline"
         )
     if settlement.get("structural_element_order") != (
         "draw_order_then_element_id"
@@ -1457,11 +1606,359 @@ def _assert_landed_population_override(
     return True
 
 
+def _assert_landed_overlay_override(
+    header: dict[str, Any],
+    layout: dict[str, Any],
+    witness: str,
+    overlay_reference: dict[str, Any],
+    overlay_reference_path: Path,
+) -> bool:
+    override = header.get("landed_overlay_override")
+    if override is None:
+        return False
+    if not isinstance(override, dict):
+        raise StaticReTestFailure(
+            f"{witness} landed overlay override is not an object"
+        )
+    if override.get("rule") != (
+        "Settlement v2.2 landed beta-overlay contamination override"
+    ):
+        raise StaticReTestFailure(
+            f"{witness} does not name the narrow Settlement v2.2 overlay rule"
+        )
+    if override.get("canonical_order") != "draw_order_then_element_id":
+        raise StaticReTestFailure(
+            f"{witness} overlay override makes raw list position contractual"
+        )
+
+    receipt = override.get("overlay_reference")
+    if not isinstance(receipt, dict):
+        raise StaticReTestFailure(
+            f"{witness} overlay override lost its committed reference receipt"
+        )
+    if receipt.get("fixture") != (
+        "tests/fixtures/webgame/menu-overlay-reference.json"
+    ):
+        raise StaticReTestFailure(
+            f"{witness} overlay override names a different reference fixture"
+        )
+    assert_recorded_hash_matches_file(
+        receipt.get("sha256"),
+        overlay_reference_path,
+        f"{witness} overlay reference",
+    )
+    if receipt.get("bytes") != overlay_reference_path.stat().st_size:
+        raise StaticReTestFailure(
+            f"{witness} overlay override records a false reference byte count"
+        )
+    for capture_label in ("overlay_capture", "clean_capture"):
+        if receipt.get(capture_label) != overlay_reference["header"].get(
+            capture_label
+        ):
+            raise StaticReTestFailure(
+                f"{witness} overlay override changed its {capture_label} evidence receipt"
+            )
+
+    elements = layout.get("elements")
+    if not isinstance(elements, list) or not elements:
+        raise StaticReTestFailure(
+            f"{witness} overlay override did not reach settled menu elements"
+        )
+    current_by_id = {element.get("id"): element for element in elements}
+    if len(current_by_id) != len(elements) or None in current_by_id:
+        raise StaticReTestFailure(
+            f"{witness} overlay override cannot resolve unique surviving element IDs"
+        )
+    settled_generation = layout.get("generation")
+    if override.get("settled_generation") != settled_generation:
+        raise StaticReTestFailure(
+            f"{witness} overlay override records a false settled generation"
+        )
+    if override.get("landed_generation") == settled_generation:
+        raise StaticReTestFailure(
+            f"{witness} overlay override has no witnessed generation change"
+        )
+    if override.get("settled_element_count") != len(elements):
+        raise StaticReTestFailure(
+            f"{witness} overlay override records a false settled element census"
+        )
+    animated_ids = _animated_ids_for_layout(layout, witness)
+    structural_sha = hashlib.sha256(
+        structural_layout_bytes(layout, animated_ids)
+    ).hexdigest()
+    for field in (
+        "canonical_structural_sha256",
+        "confirmation_canonical_structural_sha256",
+        "recompacted_structural_sha256",
+    ):
+        if override.get(field) != structural_sha:
+            raise StaticReTestFailure(
+                f"{witness} overlay override records a false {field}"
+            )
+
+    differences = override.get("structural_differences")
+    if not isinstance(differences, list) or not differences:
+        raise StaticReTestFailure(
+            f"{witness} overlay override enumerates no structural differences"
+        )
+    identities = [
+        (
+            difference.get("kind"),
+            difference.get("element_id"),
+            difference.get("field"),
+        )
+        for difference in differences
+        if isinstance(difference, dict)
+    ]
+    if len(identities) != len(differences) or len(identities) != len(
+        set(identities)
+    ):
+        raise StaticReTestFailure(
+            f"{witness} overlay override has ambiguous structural differences"
+        )
+    generation_differences = [
+        difference
+        for difference in differences
+        if difference.get("kind") == "layout_field"
+        and difference.get("field") == "generation"
+    ]
+    if len(generation_differences) != 1 or generation_differences[0].get(
+        "settled_value"
+    ) != settled_generation:
+        raise StaticReTestFailure(
+            f"{witness} overlay override does not enumerate its exact generation change"
+        )
+    landed_only = [
+        difference
+        for difference in differences
+        if difference.get("kind") == "landed_only_element"
+    ]
+    if not landed_only:
+        raise StaticReTestFailure(
+            f"{witness} overlay override removed no beta-dialog members"
+        )
+    landed_only_ids: list[str] = []
+    landed_only_suffixes: list[str] = []
+    removed_orders: list[float] = []
+    for difference in landed_only:
+        element_id = difference.get("element_id")
+        value = difference.get("landed_value")
+        if (
+            not isinstance(element_id, str)
+            or not isinstance(value, dict)
+            or value.get("id") != element_id
+            or difference.get("settled_value") is not None
+            or element_id in current_by_id
+        ):
+            raise StaticReTestFailure(
+                f"{witness} falsely identifies overlay member {element_id!r}"
+            )
+        try:
+            suffix = element_art_id_suffix(value)
+        except SettlementV2Error as error:
+            raise StaticReTestFailure(
+                f"{witness} removed a non-art overlay candidate {element_id!r}"
+            ) from error
+        order = value.get("draw_order")
+        if isinstance(order, bool) or not isinstance(order, (int, float)):
+            raise StaticReTestFailure(
+                f"{witness} overlay member {element_id!r} has no numeric draw order"
+            )
+        landed_only_ids.append(element_id)
+        landed_only_suffixes.append(suffix)
+        removed_orders.append(float(order))
+    reference_suffixes = overlay_reference["art_element_id_suffixes"]
+    if sorted(landed_only_suffixes) != reference_suffixes:
+        raise StaticReTestFailure(
+            f"{witness} landed-only set does not exactly equal the overlay reference"
+        )
+    if override.get("overlay_art_id_suffixes") != reference_suffixes:
+        raise StaticReTestFailure(
+            f"{witness} overlay proof records a different art-ID suffix set"
+        )
+    if override.get("landed_element_count") != len(elements) + len(landed_only):
+        raise StaticReTestFailure(
+            f"{witness} overlay census is not settled plus removed overlay"
+        )
+
+    for difference in differences:
+        kind = difference.get("kind")
+        if difference.get("landed_value") == difference.get("settled_value"):
+            raise StaticReTestFailure(
+                f"{witness} overlay proof records an equal-valued difference"
+            )
+        if kind == "layout_field":
+            if difference is not generation_differences[0]:
+                raise StaticReTestFailure(
+                    f"{witness} overlay proof has a residual layout-field difference"
+                )
+        elif kind == "landed_only_element":
+            continue
+        elif kind == "element_field":
+            element_id = difference.get("element_id")
+            if difference.get("field") != "draw_order" or element_id not in current_by_id:
+                raise StaticReTestFailure(
+                    f"{witness} overlay proof has a residual non-draw-order difference"
+                )
+            if current_by_id[element_id].get("draw_order") != difference.get(
+                "settled_value"
+            ):
+                raise StaticReTestFailure(
+                    f"{witness} overlay proof records a false settled draw order"
+                )
+        else:
+            raise StaticReTestFailure(
+                f"{witness} overlay proof contains unsupported difference kind {kind!r}"
+            )
+
+    absence = override.get("overlay_member_absence")
+    if not isinstance(absence, list) or len(absence) != len(landed_only_ids):
+        raise StaticReTestFailure(
+            f"{witness} overlay proof did not cover every removed member's absence"
+        )
+    absence_by_id = {
+        row.get("element_id"): row for row in absence if isinstance(row, dict)
+    }
+    if set(absence_by_id) != set(landed_only_ids) or len(absence_by_id) != len(
+        absence
+    ):
+        raise StaticReTestFailure(
+            f"{witness} overlay absence proof is incomplete or ambiguous"
+        )
+    suffix_by_id = dict(zip(landed_only_ids, landed_only_suffixes))
+    for element_id, row in absence_by_id.items():
+        if row.get("art_id_suffix") != suffix_by_id[element_id]:
+            raise StaticReTestFailure(
+                f"{witness} overlay absence proof changed {element_id}'s suffix"
+            )
+        for field, minimum in (
+            ("primary_population_absence_phases", 1),
+            ("confirmation_population_absence_phases", 1),
+            ("primary_settled_absence_samples", MINIMUM_SAMPLES),
+            ("confirmation_settled_absence_samples", MINIMUM_SAMPLES),
+        ):
+            if row.get(field, 0) < minimum:
+                raise StaticReTestFailure(
+                    f"{witness} overlay member {element_id} lacks {field} proof"
+                )
+
+    witnesses = override.get("generation_population_witnesses")
+    if not isinstance(witnesses, dict):
+        raise StaticReTestFailure(
+            f"{witness} overlay generation change has no two-instance witnesses"
+        )
+    for field in ("primary_phase_indexes", "confirmation_phase_indexes"):
+        indexes = witnesses.get(field)
+        if not isinstance(indexes, list) or not indexes or not all(
+            isinstance(index, int) and index >= 0 for index in indexes
+        ):
+            raise StaticReTestFailure(
+                f"{witness} overlay generation change lacks {field}"
+            )
+
+    recompaction = override.get("draw_order_recompaction")
+    if not isinstance(recompaction, list) or len(recompaction) != len(elements):
+        raise StaticReTestFailure(
+            f"{witness} overlay recompaction did not reach every surviving member"
+        )
+    recompaction_by_id = {
+        row.get("element_id"): row
+        for row in recompaction
+        if isinstance(row, dict)
+    }
+    if set(recompaction_by_id) != set(current_by_id) or len(
+        recompaction_by_id
+    ) != len(recompaction):
+        raise StaticReTestFailure(
+            f"{witness} overlay recompaction is incomplete or ambiguous"
+        )
+    for element_id, row in recompaction_by_id.items():
+        landed_order = row.get("landed_draw_order")
+        settled_order = row.get("settled_draw_order")
+        if isinstance(landed_order, bool) or not isinstance(
+            landed_order, (int, float)
+        ):
+            raise StaticReTestFailure(
+                f"{witness} overlay recompaction lost {element_id}'s landed order"
+            )
+        removed_below = sum(order < float(landed_order) for order in removed_orders)
+        if (
+            row.get("removed_overlay_draws_below") != removed_below
+            or float(landed_order) - removed_below != settled_order
+            or current_by_id[element_id].get("draw_order") != settled_order
+        ):
+            raise StaticReTestFailure(
+                f"{witness} overlay draw-order recompaction arithmetic is false "
+                f"for {element_id}"
+            )
+
+    for trace_label in ("primary_population_trace", "confirmation_population_trace"):
+        trace = override.get(trace_label)
+        if not isinstance(trace, dict):
+            raise StaticReTestFailure(
+                f"{witness} overlay override has no {trace_label} provenance"
+            )
+        if (
+            not isinstance(trace.get("evidence_path"), str)
+            or not trace["evidence_path"]
+            or not re.fullmatch(r"[0-9a-f]{64}", str(trace.get("sha256")))
+            or trace.get("bytes", 0) <= 0
+            or not isinstance(trace.get("edge_id"), str)
+            or not trace["edge_id"]
+            or trace.get("side") != "destination"
+            or not isinstance(trace.get("element_count_trace"), list)
+            or not trace["element_count_trace"]
+            or len(trace.get("generation_trace", []))
+            != len(trace["element_count_trace"])
+            or len(trace.get("phase_observations", []))
+            != len(trace["element_count_trace"])
+            or trace.get("settled_sample_count", 0) < MINIMUM_SAMPLES
+        ):
+            raise StaticReTestFailure(
+                f"{witness} overlay override lost exact {trace_label} evidence"
+            )
+    return True
+
+
 def test_native_menu_settled_destinations_equal_standalones() -> str:
     golden = _json("tests/fixtures/webgame/menu-goldens.json")
     if golden.get("schema") != "solomon-dark-menu-goldens-v2":
         raise StaticReTestFailure(
             "settled destination contract did not reach a Settlement v2 aggregate"
+        )
+    overlay_reference_path = (
+        ROOT / "tests/fixtures/webgame/menu-overlay-reference.json"
+    )
+    overlay_reference = _json(
+        "tests/fixtures/webgame/menu-overlay-reference.json"
+    )
+    if not isinstance(overlay_reference, dict) or overlay_reference.get(
+        "schema"
+    ) != OVERLAY_REFERENCE_SCHEMA:
+        raise StaticReTestFailure(
+            "settled menu contract did not reach the machine-derived overlay reference"
+        )
+    try:
+        validate_overlay_reference(overlay_reference)
+    except SettlementV2Error as error:
+        raise StaticReTestFailure(
+            f"settled menu overlay reference is invalid: {error}"
+        ) from error
+    overlay_receipt = golden.get("header", {}).get("overlay_reference")
+    if not isinstance(overlay_receipt, dict) or overlay_receipt.get(
+        "fixture"
+    ) != "menu-overlay-reference.json":
+        raise StaticReTestFailure(
+            "settled menu aggregate lost its committed overlay-reference receipt"
+        )
+    assert_recorded_hash_matches_file(
+        overlay_receipt.get("sha256"),
+        overlay_reference_path,
+        "settled menu aggregate overlay reference",
+    )
+    if overlay_receipt.get("bytes") != overlay_reference_path.stat().st_size:
+        raise StaticReTestFailure(
+            "settled menu aggregate records a false overlay-reference byte count"
         )
     edges = golden["navigation_graph"]["edges"]
     edge_ids = [edge["id"] for edge in edges]
@@ -1500,7 +1997,8 @@ def test_native_menu_settled_destinations_equal_standalones() -> str:
     fixture_root = ROOT / "tests/fixtures/webgame"
 
     provenance_sources: list[dict[str, Any]] = []
-    override_fixtures: list[str] = []
+    population_override_fixtures: list[str] = []
+    overlay_override_fixtures: list[str] = []
     for entry in layout_entries:
         fixture = entry["fixture"]
         standalone = _json(f"tests/fixtures/webgame/{fixture}")
@@ -1536,14 +2034,36 @@ def test_native_menu_settled_destinations_equal_standalones() -> str:
         animated_ids = _assert_settlement_v2_layout(
             entry["layout"], header["settlement"], f"standalone {fixture}"
         )
+        try:
+            assert_overlay_hygiene(entry["layout"], overlay_reference)
+        except SettlementV2Error as error:
+            raise StaticReTestFailure(
+                f"standalone {fixture} failed overlay hygiene: {error}"
+            ) from error
         _assert_animation_confirmation(header, animated_ids, fixture)
-        if _assert_landed_population_override(header, entry["layout"], fixture):
-            override_fixtures.append(fixture)
+        population_override = _assert_landed_population_override(
+            header, entry["layout"], fixture
+        )
+        overlay_override = _assert_landed_overlay_override(
+            header,
+            entry["layout"],
+            fixture,
+            overlay_reference,
+            overlay_reference_path,
+        )
+        if population_override and overlay_override:
+            raise StaticReTestFailure(
+                f"{fixture} ambiguously declares both landed override paths"
+            )
+        if population_override:
+            population_override_fixtures.append(fixture)
+        if overlay_override:
+            overlay_override_fixtures.append(fixture)
         provenance_sources.append(header["source"])
 
-    if "menu-layouts/create-element.json" not in override_fixtures:
+    if "menu-layouts/create-element.json" not in overlay_override_fixtures:
         raise StaticReTestFailure(
-            "settled menu override sweep did not reach the accepted transient "
+            "settled menu override sweep did not reach the accepted beta-overlay "
             "create-element standalone witness"
         )
 
@@ -1564,6 +2084,13 @@ def test_native_menu_settled_destinations_equal_standalones() -> str:
             edge["after"]["settlement"],
             f"{edge_id}.destination",
         )
+        try:
+            assert_overlay_hygiene(edge["before"]["layout"], overlay_reference)
+            assert_overlay_hygiene(edge["after"]["layout"], overlay_reference)
+        except SettlementV2Error as error:
+            raise StaticReTestFailure(
+                f"{edge_id} failed transition overlay hygiene: {error}"
+            ) from error
         if edge["before"].get("animated_element_ids") != before_ids:
             raise StaticReTestFailure(
                 f"{edge_id}.source endpoint summary changed its animated ID set"
@@ -1684,7 +2211,8 @@ def test_native_menu_settled_destinations_equal_standalones() -> str:
     return (
         "all 39 transition destinations structurally byte-match their explicit "
         "settled standalone fixtures with equal animated ID sets, committed "
-        "reference hashes, fresh-instance confirmation, and resolvable provenance"
+        "reference hashes, beta-overlay hygiene, fresh-instance confirmation, "
+        "and resolvable provenance"
     )
 
 

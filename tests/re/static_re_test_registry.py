@@ -130,6 +130,7 @@ from static_re_native_menu_shell_contracts import (
     test_designed_menu_focus_model_consumes_g14_intents,
     test_native_menu_live_transition_graph_is_pinned,
     test_native_menu_landed_population_override_is_fail_closed,
+    test_native_menu_overlay_contamination_override_is_fail_closed,
     test_native_menu_recorders_settle_and_derive_provenance,
     test_native_menu_screen_census_and_live_layouts_are_pinned,
     test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired,
@@ -1170,6 +1171,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native menu landed population override is fail closed",
         test_native_menu_landed_population_override_is_fail_closed,
+    ),
+    (
+        "Native menu overlay contamination override is fail closed",
+        test_native_menu_overlay_contamination_override_is_fail_closed,
     ),
     (
         "Native menu live transition graph is pinned",

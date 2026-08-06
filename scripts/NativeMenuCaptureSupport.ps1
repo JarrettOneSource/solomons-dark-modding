@@ -125,6 +125,12 @@ function New-NativeMenuCaptureContext {
     if (-not (Test-Path -LiteralPath $settlementClassifier -PathType Leaf)) {
         throw "BROKEN: the Settlement v2 classifier is missing from the capture tree."
     }
+    $overlayReference = Join-Path $Root (
+        "tests\fixtures\webgame\menu-overlay-reference.json"
+    )
+    if (-not (Test-Path -LiteralPath $overlayReference -PathType Leaf)) {
+        throw "BROKEN: the machine-derived native-menu overlay reference is missing."
+    }
     $startupLog = Join-Path $instanceRoot (
         "stage\.sdmod\logs\solomondarkmodloader.log"
     )
@@ -185,8 +191,47 @@ function New-NativeMenuCaptureContext {
         PipeName = "SolomonDarkModLoader_LuaExec_$Instance"
         LuaExecClient = $luaExecClient
         SettlementClassifier = $settlementClassifier
+        OverlayReference = $overlayReference
         StartupLog = $startupLog
         Source = $source
+    }
+}
+
+function Assert-NativeMenuOverlayHygiene {
+    param(
+        [Parameter(Mandatory = $true)][object]$Context,
+        [Parameter(Mandatory = $true)][object]$Layout
+    )
+
+    $temporaryDirectory = Join-Path ([IO.Path]::GetTempPath()) (
+        "sdmod-menu-overlay-hygiene-" + [Guid]::NewGuid().ToString("N")
+    )
+    [IO.Directory]::CreateDirectory($temporaryDirectory) | Out-Null
+    $layoutPath = Join-Path $temporaryDirectory "layout.json"
+    try {
+        [IO.File]::WriteAllText(
+            $layoutPath,
+            (($Layout | ConvertTo-Json -Depth 100) + [Environment]::NewLine),
+            [Text.UTF8Encoding]::new($false)
+        )
+        $result = @(
+            & py.exe -3 $Context.SettlementClassifier check-overlay `
+                --layout $layoutPath `
+                --reference $Context.OverlayReference 2>&1
+        )
+        if ($LASTEXITCODE -ne 0) {
+            $message = (
+                ($result | ForEach-Object { [string]$_ }) -join "`n"
+            ).Trim()
+            if ([string]::IsNullOrWhiteSpace($message)) {
+                $message = "STOP: native-menu overlay hygiene failed without diagnostics."
+            }
+            throw $message
+        }
+    } finally {
+        if (Test-Path -LiteralPath $temporaryDirectory -PathType Container) {
+            Remove-Item -LiteralPath $temporaryDirectory -Recurse -Force
+        }
     }
 }
 
@@ -746,6 +791,11 @@ function Wait-NativeMenuLayoutSettlement {
             foreach ($phaseHash in $structuralPhaseOrder) {
                 $structuralPhases.Add($structuralPhaseByHash[$phaseHash])
             }
+            foreach ($phase in $structuralPhases) {
+                Assert-NativeMenuOverlayHygiene `
+                    -Context $Context `
+                    -Layout $phase.payload
+            }
             $summary = [ordered]@{
                 settlement_spec = [string]$classification.settlement_spec
                 criterion = [string]$classification.criterion
@@ -893,6 +943,9 @@ function Get-SettledNativeMenuObservation {
         }
 
         $layout = $settled.Layout
+        Assert-NativeMenuOverlayHygiene `
+            -Context $Context `
+            -Layout $layout
         return [pscustomobject]@{
             semantic_surface = $settled.AnchorProbe.SemanticSurface
             semantic_generation = $settled.AnchorProbe.SemanticGeneration

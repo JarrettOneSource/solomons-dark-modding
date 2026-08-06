@@ -4,10 +4,15 @@ import copy
 import unittest
 
 from tools.native_menu_settlement_v2 import (
+    OVERLAY_REFERENCE_SCHEMA,
     SettlementV2Error,
+    assert_overlay_hygiene,
+    assert_overlay_sample_hygiene,
     assert_confirmation_matches,
+    build_overlay_contamination_override,
     build_population_phase_override,
     classify_window,
+    derive_overlay_reference,
     find_settled_window,
     structural_layout_bytes,
     validate_declared_settlement,
@@ -108,6 +113,80 @@ def _population_override_inputs() -> tuple[
         confirmation_layout,
         primary_trace,
         confirmation_trace,
+    )
+
+
+def _overlay_reference(elements: list[dict[str, object]]) -> dict[str, object]:
+    suffixes = sorted(
+        str(element["id"]).split(".art.", 1)[1] for element in elements
+    )
+    return {
+        "schema": OVERLAY_REFERENCE_SCHEMA,
+        "header": {
+            "overlay_capture": {
+                "evidence_path": "raw-v4/overlay.json",
+                "sha256": "1" * 64,
+                "bytes": 100,
+            },
+            "clean_capture": {
+                "evidence_path": "raw-v4/clean.json",
+                "sha256": "2" * 64,
+                "bytes": 90,
+            },
+        },
+        "art_element_id_suffixes": suffixes,
+        "overlay_only_art_elements": copy.deepcopy(elements),
+    }
+
+
+def _overlay_override_inputs() -> tuple[
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+]:
+    primary_samples = _samples()
+    confirmation_samples = _reordered_samples()
+    primary_layout = classify_window(primary_samples)["layout"]
+    confirmation_layout = classify_window(confirmation_samples)["layout"]
+    overlay_elements = [_element(100), _element(101)]
+    overlay_elements[0]["draw_order"] = 0
+    overlay_elements[1]["draw_order"] = 1
+    landed = copy.deepcopy(primary_samples[0]["payload"])
+    landed["generation"] = 6
+    for element in landed["elements"]:  # type: ignore[index]
+        element["draw_order"] += len(overlay_elements)
+    landed["elements"] = [  # type: ignore[index]
+        *copy.deepcopy(overlay_elements),
+        *landed["elements"],  # type: ignore[index]
+    ]
+    primary_population = copy.deepcopy(primary_samples[0]["payload"])
+    primary_population["generation"] = 6
+    confirmation_population = copy.deepcopy(primary_population)
+    confirmation_population["elements"] = list(  # type: ignore[index]
+        reversed(confirmation_population["elements"])  # type: ignore[index]
+    )
+    primary_trace = {
+        "structural_phases": [
+            {"payload": primary_population, "observations": 1},
+        ],
+        "settled_window_samples": primary_samples,
+    }
+    confirmation_trace = {
+        "structural_phases": [
+            {"payload": confirmation_population, "observations": 1},
+        ],
+        "settled_window_samples": confirmation_samples,
+    }
+    return (
+        landed,
+        primary_layout,
+        confirmation_layout,
+        primary_trace,
+        confirmation_trace,
+        _overlay_reference(overlay_elements),
     )
 
 
@@ -331,6 +410,117 @@ class NativeMenuSettlementV2Tests(unittest.TestCase):
             vanished["confirmation_population_phase_indexes"],
             [0],
         )
+
+    def test_overlay_override_derives_exact_removal_and_recompaction(self) -> None:
+        override = build_overlay_contamination_override(
+            *_overlay_override_inputs()
+        )
+
+        self.assertEqual(
+            override["rule"],
+            "Settlement v2.2 landed beta-overlay contamination override",
+        )
+        self.assertEqual(override["landed_generation"], 6)
+        self.assertEqual(override["settled_generation"], 7)
+        self.assertEqual(override["landed_element_count"], 12)
+        self.assertEqual(override["settled_element_count"], 10)
+        self.assertEqual(
+            override["overlay_art_id_suffixes"],
+            ["item_100.1", "item_101.1"],
+        )
+        self.assertEqual(len(override["overlay_member_absence"]), 2)
+        self.assertEqual(len(override["draw_order_recompaction"]), 10)
+
+    def test_overlay_override_requires_exact_reference_set(self) -> None:
+        inputs = list(_overlay_override_inputs())
+        landed = copy.deepcopy(inputs[0])
+        outside = _element(102)
+        outside["draw_order"] = 2
+        landed["elements"].append(outside)
+        inputs[0] = landed
+
+        with self.assertRaisesRegex(
+            SettlementV2Error,
+            "landed overlay override: landed-only art-ID suffix set does not "
+            "exactly equal the overlay reference set",
+        ):
+            build_overlay_contamination_override(*inputs)
+
+    def test_overlay_override_rejects_bad_draw_order_recompaction(self) -> None:
+        inputs = list(_overlay_override_inputs())
+        primary = copy.deepcopy(inputs[1])
+        primary["elements"][3]["draw_order"] += 1
+        inputs[1] = primary
+        confirmation = copy.deepcopy(inputs[2])
+        matching_id = primary["elements"][3]["id"]
+        for element in confirmation["elements"]:
+            if element["id"] == matching_id:
+                element["draw_order"] += 1
+        inputs[2] = confirmation
+
+        with self.assertRaisesRegex(
+            SettlementV2Error,
+            "landed overlay override: draw-order recompaction arithmetic "
+            "failed for surviving member",
+        ):
+            build_overlay_contamination_override(*inputs)
+
+    def test_overlay_override_rejects_residual_field_difference(self) -> None:
+        inputs = list(_overlay_override_inputs())
+        primary = copy.deepcopy(inputs[1])
+        primary["elements"][3]["text"] = "residual"
+        inputs[1] = primary
+        confirmation = copy.deepcopy(inputs[2])
+        matching_id = primary["elements"][3]["id"]
+        for element in confirmation["elements"]:
+            if element["id"] == matching_id:
+                element["text"] = "residual"
+        inputs[2] = confirmation
+
+        with self.assertRaisesRegex(
+            SettlementV2Error,
+            "landed overlay override: residual non-draw_order difference "
+            "remains",
+        ):
+            build_overlay_contamination_override(*inputs)
+
+    def test_overlay_hygiene_rejects_contaminated_non_overlay_screen(self) -> None:
+        layout = copy.deepcopy(_samples()[0]["payload"])
+        overlay = _element(100)
+        layout["elements"].append(overlay)
+
+        with self.assertRaisesRegex(
+            SettlementV2Error,
+            "overlay hygiene contract: non-overlay screen 'screen' "
+            "intersects the beta-dialog reference art-ID set: item_100.1",
+        ):
+            assert_overlay_hygiene(layout, _overlay_reference([overlay]))
+
+    def test_overlay_hygiene_allows_the_overlay_reference_screen(self) -> None:
+        overlay = _element(100)
+        layout = {
+            "generation": 2,
+            "screen_id": "beta_notice",
+            "screen_title": "Beta Notice",
+            "capture_method": "native",
+            "elements": [overlay],
+        }
+
+        assert_overlay_hygiene(layout, _overlay_reference([overlay]))
+
+    def test_overlay_hygiene_rejects_a_transient_contaminated_sample(self) -> None:
+        samples = _samples()
+        overlay = _element(100)
+        samples[3]["payload"]["elements"].append(overlay)
+
+        with self.assertRaisesRegex(
+            SettlementV2Error,
+            "overlay hygiene contract: sample 3 is contaminated",
+        ):
+            assert_overlay_sample_hygiene(
+                samples,
+                _overlay_reference([overlay]),
+            )
 
     def test_structural_comparison_ignores_only_measured_animation(self) -> None:
         candidate = classify_window(_samples())["layout"]

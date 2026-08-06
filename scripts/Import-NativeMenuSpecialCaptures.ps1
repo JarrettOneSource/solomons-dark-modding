@@ -17,6 +17,12 @@ $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).ProviderPath
 $fixtureRoot = [IO.Path]::GetFullPath($OutputRoot)
 $layoutRoot = Join-Path $fixtureRoot "menu-layouts"
 $referenceRoot = Join-Path $fixtureRoot "menu-reference-captures"
+$overlayReferencePath = Join-Path $root (
+    "tests\fixtures\webgame\menu-overlay-reference.json"
+)
+if (-not (Test-Path -LiteralPath $overlayReferencePath -PathType Leaf)) {
+    throw "The machine-derived native-menu overlay reference is missing."
+}
 [IO.Directory]::CreateDirectory($layoutRoot) | Out-Null
 [IO.Directory]::CreateDirectory($referenceRoot) | Out-Null
 
@@ -291,6 +297,73 @@ function ConvertTo-SettlementSummaryV2 {
     }
 }
 
+function Assert-SpecialCaptureOverlayHygiene {
+    param(
+        [Parameter(Mandatory = $true)][object]$Layout,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+
+    $classifierPath = Join-Path $root "tools\native_menu_settlement_v2.py"
+    $temporaryDirectory = Join-Path ([IO.Path]::GetTempPath()) (
+        "sdmod-special-overlay-hygiene-" + [Guid]::NewGuid().ToString("N")
+    )
+    [IO.Directory]::CreateDirectory($temporaryDirectory) | Out-Null
+    $layoutPath = Join-Path $temporaryDirectory "layout.json"
+    try {
+        Write-Utf8Json $Layout $layoutPath
+        $result = @(
+            & py.exe -3 $classifierPath check-overlay `
+                --layout $layoutPath `
+                --reference $overlayReferencePath 2>&1
+        )
+        if ($LASTEXITCODE -ne 0) {
+            $message = (
+                ($result | ForEach-Object { [string]$_ }) -join "`n"
+            ).Trim()
+            throw "STOP: '$Label' overlay hygiene failed: $message"
+        }
+    } finally {
+        if (Test-Path -LiteralPath $temporaryDirectory -PathType Container) {
+            Remove-Item -LiteralPath $temporaryDirectory -Recurse -Force
+        }
+    }
+}
+
+function Assert-SpecialCaptureSampleOverlayHygiene {
+    param(
+        [Parameter(Mandatory = $true)][object[]]$Samples,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+
+    if ($Samples.Count -eq 0) {
+        throw "BROKEN: '$Label' overlay hygiene reached no capture samples."
+    }
+    $classifierPath = Join-Path $root "tools\native_menu_settlement_v2.py"
+    $temporaryDirectory = Join-Path ([IO.Path]::GetTempPath()) (
+        "sdmod-special-overlay-samples-" + [Guid]::NewGuid().ToString("N")
+    )
+    [IO.Directory]::CreateDirectory($temporaryDirectory) | Out-Null
+    $samplesPath = Join-Path $temporaryDirectory "samples.json"
+    try {
+        Write-Utf8Json @($Samples) $samplesPath
+        $result = @(
+            & py.exe -3 $classifierPath check-overlay-samples `
+                --input $samplesPath `
+                --reference $overlayReferencePath 2>&1
+        )
+        if ($LASTEXITCODE -ne 0) {
+            $message = (
+                ($result | ForEach-Object { [string]$_ }) -join "`n"
+            ).Trim()
+            throw "STOP: '$Label' sample-stream overlay hygiene failed: $message"
+        }
+    } finally {
+        if (Test-Path -LiteralPath $temporaryDirectory -PathType Container) {
+            Remove-Item -LiteralPath $temporaryDirectory -Recurse -Force
+        }
+    }
+}
+
 $loaderCaptureItem = Get-Item -LiteralPath $LoaderCapturePath
 $loader = Get-Content -LiteralPath $loaderCaptureItem.FullName -Raw |
     ConvertFrom-Json
@@ -335,8 +408,14 @@ foreach ($sample in $loaderSamples) {
         }
     })
 }
+Assert-SpecialCaptureSampleOverlayHygiene `
+    -Samples @($loaderClassifierSamples) `
+    -Label "native_loader"
 $loaderSettled = Find-SettledCaptureSampleV2 `
     -Samples @($loaderClassifierSamples) `
+    -Label "native_loader"
+Assert-SpecialCaptureOverlayHygiene `
+    -Layout $loaderSettled.layout `
     -Label "native_loader"
 Assert-RecordedSettlementMatches `
     -Recorded $loader.settlement `
@@ -451,8 +530,14 @@ foreach ($sample in $loadingSamples) {
         }
     })
 }
+Assert-SpecialCaptureSampleOverlayHygiene `
+    -Samples @($loadingClassifierSamples) `
+    -Label "loading_screen"
 $loadingSettled = Find-SettledCaptureSampleV2 `
     -Samples @($loadingClassifierSamples) `
+    -Label "loading_screen"
+Assert-SpecialCaptureOverlayHygiene `
+    -Layout $loadingSettled.layout `
     -Label "loading_screen"
 Assert-RecordedSettlementMatches `
     -Recorded $loadingRecording.settlement `

@@ -13,11 +13,14 @@ from typing import Any
 
 from native_menu_settlement_v2 import (
     SettlementV2Error,
+    assert_overlay_hygiene,
     assert_confirmation_matches,
+    build_overlay_contamination_override,
     build_population_phase_override,
     canonical_bytes,
     structural_layout_bytes,
     validate_declared_settlement,
+    validate_overlay_reference,
 )
 
 
@@ -121,6 +124,7 @@ def validate_settlement_fixture(
     evidence_root: Path,
     fixture_path: Path,
     fixture: dict[str, Any],
+    overlay_reference: dict[str, Any],
 ) -> tuple[Path, dict[str, Any]]:
     if fixture.get("schema") != "solomon-dark-native-menu-layout-v2":
         raise PromotionError(f"{fixture_path} does not use the Settlement v2 schema")
@@ -131,8 +135,8 @@ def validate_settlement_fixture(
     settlement = header.get("settlement")
     if not isinstance(settlement, dict):
         raise PromotionError(f"{fixture_path} has no Settlement v2 measurement")
-    if settlement.get("settlement_spec") != "2.1":
-        raise PromotionError(f"{fixture_path} does not identify Settlement v2.1")
+    if settlement.get("settlement_spec") != "2.2":
+        raise PromotionError(f"{fixture_path} does not identify Settlement v2.2")
     if settlement.get("structural_element_order") != (
         "draw_order_then_element_id"
     ):
@@ -188,7 +192,9 @@ def validate_settlement_fixture(
     if not isinstance(confirmation_layout, dict):
         raise PromotionError(f"{fixture_path} confirmation has no measured second layout")
     try:
+        assert_overlay_hygiene(layout, overlay_reference)
         assert_confirmation_matches(layout, confirmation_layout)
+        assert_overlay_hygiene(confirmation_layout, overlay_reference)
     except SettlementV2Error as error:
         raise PromotionError(f"{fixture_path}: {error}") from error
     confirmation_structural_sha = hashlib.sha256(
@@ -333,6 +339,119 @@ def validate_population_override(
     return expected
 
 
+def resolve_overlay_reference(
+    repo_root: Path,
+    evidence_root: Path,
+) -> tuple[Path, dict[str, Any]]:
+    path = repo_root / "tests/fixtures/webgame/menu-overlay-reference.json"
+    if not path.is_file():
+        raise PromotionError("committed native-menu overlay reference is missing")
+    reference = read_json(path)
+    try:
+        validate_overlay_reference(reference)
+    except SettlementV2Error as error:
+        raise PromotionError(f"{path}: {error}") from error
+    root = evidence_root.resolve()
+    for label in ("overlay_capture", "clean_capture"):
+        receipt = reference["header"][label]
+        evidence_path = (root / receipt["evidence_path"]).resolve()
+        if not evidence_path.is_relative_to(root) or not evidence_path.is_file():
+            raise PromotionError(f"overlay reference {label} evidence is absent")
+        if evidence_path.stat().st_size != receipt["bytes"]:
+            raise PromotionError(
+                f"overlay reference {label} evidence byte count is false"
+            )
+        if file_sha256(evidence_path) != receipt["sha256"]:
+            raise PromotionError(
+                f"overlay reference {label} evidence hash is false"
+            )
+    return path, reference
+
+
+def validate_overlay_override(
+    evidence_root: Path,
+    fixture_path: Path,
+    header: dict[str, Any],
+    landed_layout: dict[str, Any],
+    candidate_layout: dict[str, Any],
+    confirmation_layout: dict[str, Any],
+    overlay_reference_path: Path,
+    overlay_reference: dict[str, Any],
+) -> dict[str, Any]:
+    declared = header.get("landed_overlay_override")
+    if not isinstance(declared, dict):
+        raise PromotionError(
+            f"STOP: standalone {fixture_path.name} differs from landed structure "
+            "without a Settlement v2.2 overlay-contamination override"
+        )
+    reference_receipt = declared.get("overlay_reference")
+    if not isinstance(reference_receipt, dict):
+        raise PromotionError(f"{fixture_path} overlay override has no reference")
+    expected_reference_receipt = {
+        "fixture": "tests/fixtures/webgame/menu-overlay-reference.json",
+        "sha256": file_sha256(overlay_reference_path),
+        "bytes": overlay_reference_path.stat().st_size,
+        "overlay_capture": overlay_reference["header"]["overlay_capture"],
+        "clean_capture": overlay_reference["header"]["clean_capture"],
+    }
+    if canonical_bytes(reference_receipt) != canonical_bytes(
+        expected_reference_receipt
+    ):
+        raise PromotionError(
+            f"{fixture_path} overlay reference receipt is not machine-derived"
+        )
+    primary_reference = declared.get("primary_population_trace")
+    confirmation_reference = declared.get("confirmation_population_trace")
+    if not isinstance(primary_reference, dict) or not isinstance(
+        confirmation_reference, dict
+    ):
+        raise PromotionError(
+            f"{fixture_path} overlay override has no two trace references"
+        )
+    primary_trace = resolve_population_trace(
+        evidence_root,
+        primary_reference,
+        candidate_layout,
+        header["source"],
+        f"{fixture_path}.primary",
+    )
+    confirmation_source = header["animation_confirmation"]["source"]
+    confirmation_trace = resolve_population_trace(
+        evidence_root,
+        confirmation_reference,
+        confirmation_layout,
+        confirmation_source,
+        f"{fixture_path}.confirmation",
+    )
+    try:
+        expected = build_overlay_contamination_override(
+            landed_layout,
+            candidate_layout,
+            confirmation_layout,
+            primary_trace,
+            confirmation_trace,
+            overlay_reference,
+        )
+    except SettlementV2Error as error:
+        raise PromotionError(f"{fixture_path}: {error}") from error
+    reference_keys = {"evidence_path", "sha256", "bytes", "edge_id", "side"}
+    expected["primary_population_trace"] = {
+        **{key: primary_reference.get(key) for key in reference_keys},
+        **expected["primary_population_trace"],
+    }
+    expected["confirmation_population_trace"] = {
+        **{key: confirmation_reference.get(key) for key in reference_keys},
+        **expected["confirmation_population_trace"],
+    }
+    expected["overlay_reference"] = expected_reference_receipt
+    if canonical_bytes(declared) != canonical_bytes(expected):
+        raise PromotionError(
+            f"{fixture_path} records an overlay override that was not "
+            "derived exactly from the reference and both fresh traces"
+        )
+    return expected
+
+
 def endpoint_source_signature(endpoint: dict[str, Any]) -> dict[str, Any]:
     fields = (
         "semantic_surface",
@@ -378,7 +497,15 @@ def animated_geometry_report(
 def atomic_copy(source: Path, destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_name(destination.name + ".menufix.tmp")
-    shutil.copyfile(source, temporary)
+    if source.suffix.lower() == ".json":
+        data = source.read_bytes()
+        if b"\r" in data.replace(b"\r\n", b""):
+            raise PromotionError(
+                f"refusing ambiguous lone carriage return in {source}"
+            )
+        temporary.write_bytes(data.replace(b"\r\n", b"\n"))
+    else:
+        shutil.copyfile(source, temporary)
     os.replace(temporary, destination)
 
 
@@ -390,6 +517,10 @@ def validate_and_promote(
     dry_run: bool,
 ) -> dict[str, Any]:
     landed_root = repo_root / "tests/fixtures/webgame"
+    overlay_reference_path, overlay_reference = resolve_overlay_reference(
+        repo_root,
+        evidence_root,
+    )
     landed_golden = read_json(landed_root / "menu-goldens.json")
     candidate_golden_path = candidate_root / "menu-goldens.json"
     candidate_golden = read_json(candidate_golden_path)
@@ -435,6 +566,7 @@ def validate_and_promote(
             evidence_root,
             candidate_layouts[name],
             candidate_fixture,
+            overlay_reference,
         )
         candidate_layout = candidate_fixture["layout"]
         candidate_ids = animated_ids(candidate_layout)
@@ -444,27 +576,58 @@ def validate_and_promote(
             candidate_ids,
         )
         override = None
+        override_kind = None
+        declared_override_fields = {
+            field
+            for field in (
+                "landed_population_override",
+                "landed_overlay_override",
+            )
+            if field in candidate_fixture["header"]
+        }
         if structural_bit_match:
-            if "landed_population_override" in candidate_fixture["header"]:
+            if declared_override_fields:
                 raise PromotionError(
-                    f"{name} declares a population override despite matching landed "
-                    "structure"
+                    f"{name} declares {sorted(declared_override_fields)} despite "
+                    "matching landed structure"
                 )
         else:
-            override = validate_population_override(
-                evidence_root,
-                candidate_layouts[name],
-                candidate_fixture["header"],
-                landed_entry["layout"],
-                candidate_layout,
-                confirmation_layout,
-            )
-            override_by_layout[name] = override
+            if len(declared_override_fields) != 1:
+                raise PromotionError(
+                    f"STOP: {name} has {len(declared_override_fields)} landed "
+                    "override paths; exactly one must be machine-derived"
+                )
+            override_kind = next(iter(declared_override_fields))
+            if override_kind == "landed_population_override":
+                override = validate_population_override(
+                    evidence_root,
+                    candidate_layouts[name],
+                    candidate_fixture["header"],
+                    landed_entry["layout"],
+                    candidate_layout,
+                    confirmation_layout,
+                )
+            else:
+                override = validate_overlay_override(
+                    evidence_root,
+                    candidate_layouts[name],
+                    candidate_fixture["header"],
+                    landed_entry["layout"],
+                    candidate_layout,
+                    confirmation_layout,
+                    overlay_reference_path,
+                    overlay_reference,
+                )
+            override_by_layout[name] = {
+                "kind": override_kind,
+                "proof": override,
+            }
         standalone_results.append(
             {
                 "layout": name,
                 "structural_bit_match": structural_bit_match,
-                "landed_population_override": override,
+                "landed_override_kind": override_kind,
+                "landed_override": override,
                 "animated_element_ids": candidate_ids,
                 "animated_geometry": animated_geometry_report(
                     candidate_layout,
@@ -481,6 +644,7 @@ def validate_and_promote(
         evidence_root,
         candidate_transition_layouts["hub.json"],
         hub_fixture,
+        overlay_reference,
     )
 
     raw = candidate_golden["header"]["raw_recording"]
@@ -520,11 +684,30 @@ def validate_and_promote(
         before_layout = edge["before"].get("layout")
         if not isinstance(before_layout, dict):
             raise PromotionError(f"STOP: transition source {edge_id} has no v2 layout")
+        try:
+            assert_overlay_hygiene(before_layout, overlay_reference)
+        except SettlementV2Error as error:
+            raise PromotionError(f"{edge_id} source: {error}") from error
         before_ids = animated_ids(before_layout)
         source_signature_match = endpoint_source_signature(
             edge["before"]
         ) == endpoint_source_signature(landed["before"])
-        if not source_signature_match:
+        source_structural_match = structurally_matches(
+            before_layout,
+            landed["before"]["layout"],
+            before_ids,
+        )
+        source_frame_match = (
+            bool(before_ids)
+            or edge["before"].get("frame_sha256")
+            == landed["before"].get("frame_sha256")
+        )
+        source_bit_match = (
+            source_signature_match
+            and source_structural_match
+            and source_frame_match
+        )
+        if not source_bit_match:
             override_matches = [
                 name
                 for name in override_by_layout
@@ -546,36 +729,29 @@ def validate_and_promote(
                 {
                     "edge": edge_id,
                     "standalone": override_matches[0],
-                    "old": endpoint_source_signature(landed["before"]),
-                    "new": endpoint_source_signature(edge["before"]),
+                    "old": {
+                        **endpoint_source_signature(landed["before"]),
+                        "frame_sha256": landed["before"].get("frame_sha256"),
+                    },
+                    "new": {
+                        **endpoint_source_signature(edge["before"]),
+                        "frame_sha256": edge["before"].get("frame_sha256"),
+                    },
+                    "signature_bit_match": source_signature_match,
+                    "structural_bit_match": source_structural_match,
+                    "frame_bit_match_or_animated": source_frame_match,
                 }
             )
-        else:
-            if not before_ids:
-                if edge["before"].get("frame_sha256") != landed["before"].get(
-                    "frame_sha256"
-                ):
-                    raise PromotionError(
-                        f"STOP: non-animated transition source {edge_id} did not "
-                        "bit-match the landed frame"
-                    )
-            else:
-                source_matches = [
-                    name
-                    for name, entry in landed_by_name.items()
-                    if structurally_matches(before_layout, entry["layout"], before_ids)
-                ]
-                if len(source_matches) != 1:
-                    raise PromotionError(
-                        f"STOP: animated transition source {edge_id} has "
-                        f"{len(source_matches)} landed structural matches: {source_matches}"
-                    )
         fixture_name = edge.get("destination_layout_fixture")
         if fixture_name not in candidate_standalones:
             raise PromotionError(
                 f"STOP: transition destination {edge_id} has no unique standalone"
             )
         destination_layout = edge["after"]["layout"]
+        try:
+            assert_overlay_hygiene(destination_layout, overlay_reference)
+        except SettlementV2Error as error:
+            raise PromotionError(f"{edge_id} destination: {error}") from error
         standalone_layout = candidate_standalones[fixture_name]["layout"]
         destination_ids = animated_ids(destination_layout)
         standalone_ids = animated_ids(standalone_layout)
@@ -668,6 +844,15 @@ def validate_and_promote(
         "success": True,
         "dry_run": dry_run,
         "standalones": standalone_results,
+        "landed_overlay_correction_count": sum(
+            result["landed_override_kind"] == "landed_overlay_override"
+            for result in standalone_results
+        ),
+        "landed_overlay_corrected_screens": [
+            result["layout"]
+            for result in standalone_results
+            if result["landed_override_kind"] == "landed_overlay_override"
+        ],
         "hub_settle_latency_milliseconds": hub_fixture["header"]["settlement"][
             "settle_latency_milliseconds"
         ],

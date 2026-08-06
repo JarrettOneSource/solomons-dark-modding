@@ -15,6 +15,9 @@ from typing import Any, Iterable
 MINIMUM_SAMPLES = 40
 MINIMUM_SPAN_MILLISECONDS = 2_000
 MAXIMUM_ANIMATED_FRACTION = 0.30
+SETTLEMENT_SPEC = "2.2"
+OVERLAY_REFERENCE_SCHEMA = "solomon-dark-native-menu-overlay-reference-v1"
+_INTENTIONAL_OVERLAY_SCREEN_IDS = {"beta_notice"}
 
 _GEOMETRY_FIELDS = {"rect", "unclipped_rect"}
 _COMPACT_POPULATION_ELEMENT_FIELDS = (
@@ -65,6 +68,153 @@ def _element_id(element: dict[str, Any]) -> str:
             "structural settlement contract: every sampled element needs a non-empty id"
         )
     return value
+
+
+def element_art_id_suffix(element: dict[str, Any]) -> str:
+    """Return the draw-unique suffix after the screen-local `.art.` prefix."""
+    element_id = _element_id(element)
+    if element.get("kind") != "art" or ".art." not in element_id:
+        raise SettlementV2Error(
+            "overlay reference contract: element "
+            f"'{element_id}' is not a screen-tagged art draw"
+        )
+    suffix = element_id.split(".art.", 1)[1]
+    if not suffix:
+        raise SettlementV2Error(
+            "overlay reference contract: element "
+            f"'{element_id}' has an empty art-ID suffix"
+        )
+    return suffix
+
+
+def validate_overlay_reference(reference: dict[str, Any]) -> list[str]:
+    if reference.get("schema") != OVERLAY_REFERENCE_SCHEMA:
+        raise SettlementV2Error(
+            "overlay reference contract: reference schema is not recognized"
+        )
+    suffixes = reference.get("art_element_id_suffixes")
+    elements = reference.get("overlay_only_art_elements")
+    if (
+        not isinstance(suffixes, list)
+        or not suffixes
+        or not all(isinstance(value, str) and value for value in suffixes)
+        or suffixes != sorted(suffixes)
+        or len(suffixes) != len(set(suffixes))
+    ):
+        raise SettlementV2Error(
+            "overlay reference contract: art-ID suffix set must be a "
+            "non-empty sorted unique string list"
+        )
+    if not isinstance(elements, list) or not all(
+        isinstance(value, dict) for value in elements
+    ):
+        raise SettlementV2Error(
+            "overlay reference contract: overlay-only art elements are absent"
+        )
+    measured = sorted(element_art_id_suffix(value) for value in elements)
+    if measured != suffixes:
+        raise SettlementV2Error(
+            "overlay reference contract: recorded suffix set does not equal "
+            "the overlay-only art element set"
+        )
+    header = reference.get("header")
+    if not isinstance(header, dict):
+        raise SettlementV2Error(
+            "overlay reference contract: reference header is absent"
+        )
+    for label in ("overlay_capture", "clean_capture"):
+        capture = header.get(label)
+        if (
+            not isinstance(capture, dict)
+            or not isinstance(capture.get("evidence_path"), str)
+            or not capture["evidence_path"]
+            or not isinstance(capture.get("bytes"), int)
+            or capture["bytes"] <= 0
+            or not isinstance(capture.get("sha256"), str)
+            or len(capture["sha256"]) != 64
+            or any(character not in "0123456789abcdef" for character in capture["sha256"])
+        ):
+            raise SettlementV2Error(
+                f"overlay reference contract: {label} evidence receipt is incomplete"
+            )
+    return suffixes
+
+
+def derive_overlay_reference(
+    overlay_layout: dict[str, Any], clean_layout: dict[str, Any]
+) -> dict[str, Any]:
+    """Derive the independently captured overlay-only art draw set."""
+    _, clean_by_id = _elements_by_id(clean_layout)
+    _, overlay_by_id = _elements_by_id(overlay_layout)
+    overlay_only = [
+        copy.deepcopy(element)
+        for element_id, element in overlay_by_id.items()
+        if element_id not in clean_by_id and element.get("kind") == "art"
+    ]
+    overlay_only = _canonical_elements(overlay_only)
+    suffixes = sorted(element_art_id_suffix(element) for element in overlay_only)
+    if not suffixes:
+        raise SettlementV2Error(
+            "overlay reference contract: pre-dismissal capture has no "
+            "overlay-only art draws"
+        )
+    if len(suffixes) != len(set(suffixes)):
+        raise SettlementV2Error(
+            "overlay reference contract: overlay-only art-ID suffixes are ambiguous"
+        )
+    return {
+        "art_element_id_suffixes": suffixes,
+        "overlay_only_art_elements": overlay_only,
+    }
+
+
+def overlay_intersections(
+    layout: dict[str, Any], reference: dict[str, Any]
+) -> list[str]:
+    reference_suffixes = set(validate_overlay_reference(reference))
+    _, elements = _elements_by_id(layout)
+    return sorted(
+        suffix
+        for element in elements.values()
+        if element.get("kind") == "art" and ".art." in _element_id(element)
+        for suffix in [element_art_id_suffix(element)]
+        if suffix in reference_suffixes
+    )
+
+
+def assert_overlay_hygiene(
+    layout: dict[str, Any], reference: dict[str, Any]
+) -> None:
+    intersections = overlay_intersections(layout, reference)
+    screen_id = str(layout.get("screen_id", ""))
+    if intersections and screen_id not in _INTENTIONAL_OVERLAY_SCREEN_IDS:
+        raise SettlementV2Error(
+            "overlay hygiene contract: non-overlay screen "
+            f"'{screen_id}' intersects the beta-dialog reference art-ID set: "
+            + ", ".join(intersections)
+        )
+
+
+def assert_overlay_sample_hygiene(
+    samples: list[dict[str, Any]], reference: dict[str, Any]
+) -> None:
+    if not samples:
+        raise SettlementV2Error(
+            "overlay hygiene contract: sample sweep reached no capture payloads"
+        )
+    for index, sample in enumerate(samples):
+        payload = sample.get("payload") if isinstance(sample, dict) else None
+        if not isinstance(payload, dict):
+            raise SettlementV2Error(
+                "overlay hygiene contract: sample "
+                f"{index} has no semantic payload"
+            )
+        try:
+            assert_overlay_hygiene(payload, reference)
+        except SettlementV2Error as error:
+            raise SettlementV2Error(
+                f"overlay hygiene contract: sample {index} is contaminated: {error}"
+            ) from error
 
 
 def _elements_by_id(
@@ -521,7 +671,7 @@ def classify_window(
     )
     structural = structural_layout(layout, animated_ids)
     return {
-        "settlement_spec": "2.1",
+        "settlement_spec": SETTLEMENT_SPEC,
         "criterion": (
             "at least 40 consecutive samples spanning at least 2 seconds with "
             "byte-identical structural payloads and an identical measured "
@@ -954,6 +1104,295 @@ def build_population_phase_override(
     }
 
 
+def build_overlay_contamination_override(
+    landed_layout: dict[str, Any],
+    primary_layout: dict[str, Any],
+    confirmation_layout: dict[str, Any],
+    primary_trace: dict[str, Any],
+    confirmation_trace: dict[str, Any],
+    overlay_reference: dict[str, Any],
+) -> dict[str, Any]:
+    """Derive the narrow Settlement v2.2 beta-overlay correction."""
+    assert_canonical_structure_matches(primary_layout, confirmation_layout)
+    reference_suffixes = validate_overlay_reference(overlay_reference)
+    primary_ids = primary_layout.get("animated_element_ids", [])
+    differences = structural_differences(
+        landed_layout,
+        primary_layout,
+        primary_ids,
+    )
+    if not differences:
+        raise SettlementV2Error(
+            "landed overlay override: candidate already matches landed structure"
+        )
+
+    landed_only = [
+        difference
+        for difference in differences
+        if difference["kind"] == "landed_only_element"
+    ]
+    if not landed_only:
+        raise SettlementV2Error(
+            "landed overlay override: mismatch contains no removable overlay members"
+        )
+    landed_only_suffixes: list[str] = []
+    for difference in landed_only:
+        value = difference.get("landed_value")
+        if not isinstance(value, dict):
+            raise SettlementV2Error(
+                "landed overlay override: landed-only member has no element value"
+            )
+        try:
+            landed_only_suffixes.append(element_art_id_suffix(value))
+        except SettlementV2Error as error:
+            raise SettlementV2Error(
+                "landed overlay override: landed-only member "
+                f"'{difference['element_id']}' is outside the overlay art set"
+            ) from error
+    landed_only_suffixes.sort()
+    if landed_only_suffixes != reference_suffixes:
+        outside = sorted(set(landed_only_suffixes) - set(reference_suffixes))
+        missing = sorted(set(reference_suffixes) - set(landed_only_suffixes))
+        raise SettlementV2Error(
+            "landed overlay override: landed-only art-ID suffix set does not "
+            "exactly equal the overlay reference set; "
+            f"outside={outside} missing={missing}"
+        )
+
+    generation_differences = [
+        difference
+        for difference in differences
+        if difference["kind"] == "layout_field"
+        and difference.get("field") == "generation"
+    ]
+    if len(generation_differences) != 1:
+        raise SettlementV2Error(
+            "landed overlay override: exactly one generation difference is required"
+        )
+    for difference in differences:
+        allowed = (
+            difference is generation_differences[0]
+            or difference["kind"] == "landed_only_element"
+            or (
+                difference["kind"] == "element_field"
+                and difference.get("field") == "draw_order"
+            )
+        )
+        if not allowed:
+            raise SettlementV2Error(
+                "landed overlay override: residual non-draw_order difference "
+                f"remains at {_difference_label(difference)}"
+            )
+
+    primary_phases, primary_settled, primary_phase_entries = _trace_payloads(
+        primary_trace,
+        "primary",
+    )
+    confirmation_phases, confirmation_settled, confirmation_phase_entries = (
+        _trace_payloads(
+            confirmation_trace,
+            "confirmation",
+        )
+    )
+    absence_proof: list[dict[str, Any]] = []
+    for difference in landed_only:
+        element_id = difference["element_id"]
+        if any(
+            _element_for_id(payload, element_id) is not None
+            for payload in (
+                *primary_phases,
+                *confirmation_phases,
+                *primary_settled,
+                *confirmation_settled,
+            )
+        ):
+            raise SettlementV2Error(
+                "landed overlay override: overlay member "
+                f"'{element_id}' appears in a fresh population phase or "
+                "settled window"
+            )
+        absence_proof.append(
+            {
+                "element_id": element_id,
+                "art_id_suffix": element_art_id_suffix(
+                    difference["landed_value"]
+                ),
+                "primary_population_absence_phases": len(primary_phases),
+                "confirmation_population_absence_phases": len(
+                    confirmation_phases
+                ),
+                "primary_settled_absence_samples": len(primary_settled),
+                "confirmation_settled_absence_samples": len(
+                    confirmation_settled
+                ),
+            }
+        )
+
+    generation_difference = generation_differences[0]
+    primary_generation_witnesses = _population_witness_indexes(
+        generation_difference,
+        primary_phases,
+    )
+    confirmation_generation_witnesses = _population_witness_indexes(
+        generation_difference,
+        confirmation_phases,
+    )
+    if not primary_generation_witnesses or not confirmation_generation_witnesses:
+        raise SettlementV2Error(
+            "landed overlay override: generation difference lacks "
+            "two-instance population witnesses"
+        )
+
+    landed_structural = structural_layout(landed_layout, primary_ids)
+    settled_structural = structural_layout(primary_layout, primary_ids)
+    landed_top = {
+        key: copy.deepcopy(value)
+        for key, value in landed_structural.items()
+        if key not in {"elements", "generation"}
+    }
+    settled_top = {
+        key: copy.deepcopy(value)
+        for key, value in settled_structural.items()
+        if key not in {"elements", "generation"}
+    }
+    if canonical_bytes(landed_top) != canonical_bytes(settled_top):
+        difference = _first_difference(settled_top, landed_top)
+        raise SettlementV2Error(
+            "landed overlay override: residual non-draw_order layout "
+            f"difference remains at '{difference}'"
+        )
+
+    _, landed_by_id = _elements_by_id(landed_structural)
+    _, settled_by_id = _elements_by_id(settled_structural)
+    removed_ids = {difference["element_id"] for difference in landed_only}
+    if set(landed_by_id) - removed_ids != set(settled_by_id):
+        raise SettlementV2Error(
+            "landed overlay override: landed minus overlay does not equal "
+            "the settled member set"
+        )
+    if len(landed_by_id) != len(settled_by_id) + len(removed_ids):
+        raise SettlementV2Error(
+            "landed overlay override: overlay removal does not explain the "
+            "landed and settled element censuses"
+        )
+
+    removed_orders = []
+    for element_id in removed_ids:
+        removed_element = landed_by_id[element_id]
+        removed_orders.append(_canonical_element_key(removed_element)[0])
+    recompaction_proof: list[dict[str, Any]] = []
+    recompacted_elements: list[dict[str, Any]] = []
+    for element_id in sorted(settled_by_id):
+        landed_element = landed_by_id[element_id]
+        settled_element = settled_by_id[element_id]
+        landed_remainder = {
+            key: copy.deepcopy(value)
+            for key, value in landed_element.items()
+            if key != "draw_order"
+        }
+        settled_remainder = {
+            key: copy.deepcopy(value)
+            for key, value in settled_element.items()
+            if key != "draw_order"
+        }
+        if canonical_bytes(landed_remainder) != canonical_bytes(
+            settled_remainder
+        ):
+            difference = _first_difference(
+                settled_remainder,
+                landed_remainder,
+            )
+            raise SettlementV2Error(
+                "landed overlay override: residual non-draw_order field "
+                f"difference for surviving member '{element_id}' at "
+                f"'{difference}'"
+            )
+        landed_order = _canonical_element_key(landed_element)[0]
+        settled_order = _canonical_element_key(settled_element)[0]
+        removed_below = sum(order < landed_order for order in removed_orders)
+        expected_order = landed_order - removed_below
+        if expected_order != settled_order:
+            raise SettlementV2Error(
+                "landed overlay override: draw-order recompaction arithmetic "
+                f"failed for surviving member '{element_id}': "
+                f"landed={landed_order:g} removed_below={removed_below} "
+                f"expected={expected_order:g} settled={settled_order:g}"
+            )
+        recompacted = copy.deepcopy(landed_element)
+        recompacted["draw_order"] = settled_element["draw_order"]
+        recompacted_elements.append(recompacted)
+        recompaction_proof.append(
+            {
+                "element_id": element_id,
+                "landed_draw_order": landed_element["draw_order"],
+                "removed_overlay_draws_below": removed_below,
+                "settled_draw_order": settled_element["draw_order"],
+            }
+        )
+
+    recompacted_layout = copy.deepcopy(landed_structural)
+    recompacted_layout["generation"] = settled_structural.get("generation")
+    recompacted_layout["elements"] = recompacted_elements
+    if structural_layout_bytes(
+        recompacted_layout,
+        primary_ids,
+    ) != structural_layout_bytes(primary_layout, primary_ids):
+        raise SettlementV2Error(
+            "landed overlay override: landed minus overlay leaves residual "
+            "structural differences after recompaction"
+        )
+
+    validate_declared_settlement(
+        primary_layout,
+        primary_trace["settled_window_samples"],
+    )
+    validate_declared_settlement(
+        confirmation_layout,
+        confirmation_trace["settled_window_samples"],
+    )
+
+    return {
+        "rule": "Settlement v2.2 landed beta-overlay contamination override",
+        "canonical_order": "draw_order_then_element_id",
+        "landed_generation": landed_layout.get("generation"),
+        "landed_element_count": len(landed_by_id),
+        "settled_generation": primary_layout.get("generation"),
+        "settled_element_count": len(settled_by_id),
+        "canonical_structural_sha256": canonical_structural_sha256(
+            primary_layout,
+            primary_ids,
+        ),
+        "confirmation_canonical_structural_sha256": (
+            canonical_structural_sha256(
+                confirmation_layout,
+                confirmation_layout.get("animated_element_ids", []),
+            )
+        ),
+        "overlay_art_id_suffixes": reference_suffixes,
+        "overlay_member_absence": absence_proof,
+        "generation_population_witnesses": {
+            "primary_phase_indexes": primary_generation_witnesses,
+            "confirmation_phase_indexes": confirmation_generation_witnesses,
+        },
+        "draw_order_recompaction": recompaction_proof,
+        "recompacted_structural_sha256": canonical_structural_sha256(
+            recompacted_layout,
+            primary_ids,
+        ),
+        "structural_differences": copy.deepcopy(differences),
+        "primary_population_trace": _population_trace_summary(
+            primary_trace,
+            primary_phases,
+            primary_phase_entries,
+        ),
+        "confirmation_population_trace": _population_trace_summary(
+            confirmation_trace,
+            confirmation_phases,
+            confirmation_phase_entries,
+        ),
+    }
+
+
 def _read_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -1001,6 +1440,28 @@ def _summarize_layout_command(input_path: Path, output_path: Path) -> None:
     )
 
 
+def _check_overlay_command(layout_path: Path, reference_path: Path) -> None:
+    layout = _read_json(layout_path)
+    reference = _read_json(reference_path)
+    if not isinstance(layout, dict):
+        raise SettlementV2Error("overlay hygiene layout input must be an object")
+    if not isinstance(reference, dict):
+        raise SettlementV2Error("overlay hygiene reference input must be an object")
+    assert_overlay_hygiene(layout, reference)
+
+
+def _check_overlay_samples_command(
+    input_path: Path, reference_path: Path
+) -> None:
+    samples = _read_json(input_path)
+    reference = _read_json(reference_path)
+    if not isinstance(samples, list):
+        raise SettlementV2Error("overlay hygiene sample input must be a list")
+    if not isinstance(reference, dict):
+        raise SettlementV2Error("overlay hygiene reference input must be an object")
+    assert_overlay_sample_hygiene(samples, reference)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1013,6 +1474,12 @@ def main() -> int:
     summary_parser = subparsers.add_parser("summarize-layout")
     summary_parser.add_argument("--input", type=Path, required=True)
     summary_parser.add_argument("--output", type=Path, required=True)
+    overlay_parser = subparsers.add_parser("check-overlay")
+    overlay_parser.add_argument("--layout", type=Path, required=True)
+    overlay_parser.add_argument("--reference", type=Path, required=True)
+    overlay_samples_parser = subparsers.add_parser("check-overlay-samples")
+    overlay_samples_parser.add_argument("--input", type=Path, required=True)
+    overlay_samples_parser.add_argument("--reference", type=Path, required=True)
     args = parser.parse_args()
     try:
         if args.command == "classify":
@@ -1021,6 +1488,10 @@ def main() -> int:
             _find_command(args.input, args.output)
         elif args.command == "summarize-layout":
             _summarize_layout_command(args.input, args.output)
+        elif args.command == "check-overlay":
+            _check_overlay_command(args.layout, args.reference)
+        elif args.command == "check-overlay-samples":
+            _check_overlay_samples_command(args.input, args.reference)
     except SettlementV2Error as error:
         parser.exit(2, f"STOP: {error}\n")
     return 0

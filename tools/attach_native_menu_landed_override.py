@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Derive and attach one Settlement v2.1 landed population override."""
+"""Derive and attach one unambiguous Settlement v2.1/v2.2 override."""
 
 from __future__ import annotations
 
@@ -12,8 +12,10 @@ from typing import Any
 
 from native_menu_settlement_v2 import (
     SettlementV2Error,
+    build_overlay_contamination_override,
     build_population_phase_override,
     structural_layout_bytes,
+    validate_overlay_reference,
 )
 
 
@@ -48,6 +50,24 @@ def relative_evidence_path(path: Path, evidence_root: Path) -> str:
         raise SettlementV2Error(
             f"population trace {path} is outside evidence root {evidence_root}"
         ) from error
+
+
+def validate_evidence_receipt(
+    evidence_root: Path,
+    receipt: dict[str, Any],
+    label: str,
+) -> None:
+    relative = receipt.get("evidence_path")
+    if not isinstance(relative, str) or not relative:
+        raise SettlementV2Error(f"{label} has no evidence path")
+    root = evidence_root.resolve()
+    path = (root / relative).resolve()
+    if not path.is_relative_to(root) or not path.is_file():
+        raise SettlementV2Error(f"{label} evidence escapes or is absent")
+    if path.stat().st_size != receipt.get("bytes"):
+        raise SettlementV2Error(f"{label} evidence byte count is false")
+    if file_sha256(path) != receipt.get("sha256"):
+        raise SettlementV2Error(f"{label} evidence hash is false")
 
 
 def unique_edge(navigation: dict[str, Any], edge_id: str) -> dict[str, Any]:
@@ -147,9 +167,15 @@ def attach(
         for value in (header, layout, confirmation_header, confirmation_layout)
     ):
         raise SettlementV2Error("override inputs have incomplete fixture objects")
-    if "landed_population_override" in header:
+    override_fields = {
+        "landed_population_override",
+        "landed_overlay_override",
+    }
+    declared_override_fields = sorted(override_fields & set(header))
+    if declared_override_fields:
         raise SettlementV2Error(
-            "primary fixture already has a landed override; refusing ambiguity"
+            "primary fixture already has a landed override; refusing ambiguity: "
+            + ", ".join(declared_override_fields)
         )
     animation_confirmation = header.get("animation_confirmation")
     if not isinstance(animation_confirmation, dict):
@@ -196,13 +222,71 @@ def attach(
         confirmation_header["label"],
         evidence_root,
     )
-    override = build_population_phase_override(
-        landed_layout,
-        layout,
-        confirmation_layout,
-        primary_trace,
-        confirmation_trace,
+    overlay_reference_path = (
+        repo_root
+        / "tests/fixtures/webgame/menu-overlay-reference.json"
     )
+    if not overlay_reference_path.is_file():
+        raise SettlementV2Error(
+            "the committed native-menu overlay reference is missing"
+        )
+    overlay_reference = read_object(overlay_reference_path)
+    validate_overlay_reference(overlay_reference)
+    overlay_header = overlay_reference["header"]
+    validate_evidence_receipt(
+        evidence_root,
+        overlay_header["overlay_capture"],
+        "overlay reference capture",
+    )
+    validate_evidence_receipt(
+        evidence_root,
+        overlay_header["clean_capture"],
+        "overlay clean capture",
+    )
+
+    successful: list[tuple[str, dict[str, Any]]] = []
+    failures: list[str] = []
+    try:
+        successful.append(
+            (
+                "landed_population_override",
+                build_population_phase_override(
+                    landed_layout,
+                    layout,
+                    confirmation_layout,
+                    primary_trace,
+                    confirmation_trace,
+                ),
+            )
+        )
+    except SettlementV2Error as error:
+        failures.append(f"population={error}")
+    try:
+        overlay_override = build_overlay_contamination_override(
+            landed_layout,
+            layout,
+            confirmation_layout,
+            primary_trace,
+            confirmation_trace,
+            overlay_reference,
+        )
+        overlay_override["overlay_reference"] = {
+            "fixture": "tests/fixtures/webgame/menu-overlay-reference.json",
+            "sha256": file_sha256(overlay_reference_path),
+            "bytes": overlay_reference_path.stat().st_size,
+            "overlay_capture": overlay_header["overlay_capture"],
+            "clean_capture": overlay_header["clean_capture"],
+        }
+        successful.append(("landed_overlay_override", overlay_override))
+    except SettlementV2Error as error:
+        failures.append(f"overlay={error}")
+    if len(successful) != 1:
+        raise SettlementV2Error(
+            "landed override resolution is absent or ambiguous: "
+            f"successes={[name for name, _ in successful]} "
+            + "; ".join(failures)
+        )
+    field, override = successful[0]
     override["primary_population_trace"] = {
         **primary_reference,
         **override["primary_population_trace"],
@@ -211,7 +295,7 @@ def attach(
         **confirmation_reference,
         **override["confirmation_population_trace"],
     }
-    header["landed_population_override"] = override
+    header[field] = override
     write_atomically(primary_path, primary)
 
 
