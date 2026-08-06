@@ -415,13 +415,6 @@ if sampler == nil then
     value = value:gsub('\t', '\\t')
     return '"' .. value .. '"'
   end
-  local function number(value)
-    value = tonumber(value) or 0
-    if value ~= value or value == math.huge or value == -math.huge then
-      error('population trace contains a non-finite number')
-    end
-    return string.format('%.6f', value)
-  end
   local function boolean(value)
     return value and 'true' or 'false'
   end
@@ -437,6 +430,20 @@ if sampler == nil then
       ',"visible":', boolean(element.visible),
       ',"interactive":', boolean(element.interactive),
       ',"draw_order":', tostring(element.draw_order or 0)
+    })
+  end
+  local function compact(element)
+    return table.concat({
+      '[', quote(element.id),
+      ',', quote(element.kind),
+      ',', quote(element.text),
+      ',', quote(element.action_id),
+      ',', quote(element.art_id),
+      ',', quote(element.font_id),
+      ',', quote(element.text_style),
+      ',', boolean(element.visible),
+      ',', boolean(element.interactive),
+      ',', tostring(element.draw_order or 0), ']'
     })
   end
   sd.events.on('runtime.tick', function(event)
@@ -467,13 +474,7 @@ if sampler == nil then
       end
       local payload_elements = {}
       for index, element in ipairs(snapshot.elements or {}) do
-        payload_elements[index] = core(element) .. table.concat({
-          ',"rect":[', number(element.left), ',', number(element.top), ',',
-            number(element.right), ',', number(element.bottom), ']',
-          ',"unclipped_rect":[', number(element.unclipped_left), ',',
-            number(element.unclipped_top), ',', number(element.unclipped_right),
-            ',', number(element.unclipped_bottom), ']}'
-        })
+        payload_elements[index] = compact(element)
       end
       local prefix = table.concat({
         '{"generation":', tostring(snapshot.generation or 0),
@@ -575,6 +576,7 @@ for index, phase in ipairs(sampler.phases or {}) do
     ',"last_seen_milliseconds":',
       tostring(phase.last_seen_milliseconds or 0),
     ',"observations":', tostring(phase.observations or 0),
+    ',"payload_encoding":"structural-element-arrays-v1"',
     ',"payload":', phase.payload_json, '}'
   })
 end

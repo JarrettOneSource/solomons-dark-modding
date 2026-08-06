@@ -17,6 +17,18 @@ MINIMUM_SPAN_MILLISECONDS = 2_000
 MAXIMUM_ANIMATED_FRACTION = 0.30
 
 _GEOMETRY_FIELDS = {"rect", "unclipped_rect"}
+_COMPACT_POPULATION_ELEMENT_FIELDS = (
+    "id",
+    "kind",
+    "text",
+    "action_id",
+    "art_id",
+    "font_id",
+    "text_style",
+    "visible",
+    "interactive",
+    "draw_order",
+)
 _ANIMATION_FIXTURE_FIELDS = {
     "animated_geometry",
     "anchor_rect",
@@ -690,6 +702,38 @@ def _trace_payloads(
             raise SettlementV2Error(
                 "landed population override: "
                 f"{label} population phase {index} has no payload"
+            )
+        encoding = phase.get("payload_encoding")
+        if encoding == "structural-element-arrays-v1":
+            compact_elements = payload.get("elements")
+            if not isinstance(compact_elements, list):
+                raise SettlementV2Error(
+                    "landed population override: "
+                    f"{label} compact phase {index} has no elements"
+                )
+            expanded_elements: list[dict[str, Any]] = []
+            for element_index, compact in enumerate(compact_elements):
+                if (
+                    not isinstance(compact, list)
+                    or len(compact) != len(_COMPACT_POPULATION_ELEMENT_FIELDS)
+                ):
+                    raise SettlementV2Error(
+                        "landed population override: "
+                        f"{label} compact phase {index} element "
+                        f"{element_index} has the wrong field census"
+                    )
+                expanded_elements.append(
+                    dict(zip(_COMPACT_POPULATION_ELEMENT_FIELDS, compact))
+                )
+            payload = {
+                **copy.deepcopy(payload),
+                "elements": expanded_elements,
+            }
+        elif encoding is not None:
+            raise SettlementV2Error(
+                "landed population override: "
+                f"{label} phase {index} uses unknown payload encoding "
+                f"{encoding!r}"
             )
         phase_payloads.append(payload)
     settled_payloads: list[dict[str, Any]] = []

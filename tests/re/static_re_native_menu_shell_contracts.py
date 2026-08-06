@@ -665,6 +665,7 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
         r"tostring\(left\.id or ''\) < tostring\(right\.id or ''\).*?"
         r"if #state\.phases >= 128 then.*?"
         r"function Stop-NativeMenuPopulationSampler.*?"
+        r"payload_encoding.*?structural-element-arrays-v1.*?"
         r"observed no destination phase",
         "the transition recorder no longer captures bounded, canonical, "
         "runtime-tick population phases or fails closed when none are runnable",
@@ -969,7 +970,9 @@ def test_native_menu_landed_population_override_is_fail_closed() -> str:
         classifier,
         r"high_cadence_phases\s*=\s*trace\.get\("
         r"\"high_cadence_structural_phases\", \[\]\).*?"
-        r"phases\s*=\s*\[\*high_cadence_phases, \*polled_phases\]",
+        r"phases\s*=\s*\[\*high_cadence_phases, \*polled_phases\].*?"
+        r"encoding == \"structural-element-arrays-v1\".*?"
+        r"dict\(zip\(_COMPACT_POPULATION_ELEMENT_FIELDS, compact\)\)",
         "Settlement v2.1 override proof no longer consumes the high-cadence "
         "dispatch phases that can witness pre-poll population members",
     )

@@ -288,9 +288,27 @@ class NativeMenuSettlementV2Tests(unittest.TestCase):
 
     def test_population_override_uses_high_cadence_dispatch_phases(self) -> None:
         inputs = list(_population_override_inputs())
+        compact_fields = (
+            "id",
+            "kind",
+            "text",
+            "action_id",
+            "art_id",
+            "font_id",
+            "text_style",
+            "visible",
+            "interactive",
+            "draw_order",
+        )
         for trace_index in (3, 4):
             trace = copy.deepcopy(inputs[trace_index])
             high_cadence = copy.deepcopy(trace["structural_phases"])
+            for phase in high_cadence:
+                phase["payload_encoding"] = "structural-element-arrays-v1"
+                phase["payload"]["elements"] = [
+                    [element[field] for field in compact_fields]
+                    for element in phase["payload"]["elements"]
+                ]
             trace["high_cadence_structural_phases"] = high_cadence
             trace["structural_phases"][0]["payload"]["elements"] = [
                 element
