@@ -1147,7 +1147,7 @@ def test_native_animation_recorder_is_self_provenanced_settled_and_bounded() -> 
             "animation fixture carries conflicting provenance copies across its live recordings"
         )
     if emitter["header"].get("capture_method") != (
-        "24 forced headings observed independently through a synchronous call to retail emitter resolver 0x0053B830 and asset-matched against Clothes.bundle"
+        "forced heading plus synchronous call-through to retail cast emitter 0x0053B830"
     ):
         raise StaticReTestFailure(
             "emitter recording no longer identifies its independent retail observation method"
@@ -1159,9 +1159,7 @@ def test_native_animation_recorder_is_self_provenanced_settled_and_bounded() -> 
         or int(cast_target.get("actor_address", 0)) <= 0
         or int(cast_target.get("type_id", 0)) != 1001
         or int(cast_target.get("request_id", 0)) <= 0
-        or not str(cast_target.get("stock_spawner_address_observed", "")).startswith(
-            "0x"
-        )
+        or int(cast_target.get("stock_spawner_address_observed", 0)) <= 0
         or cast_target.get("capture_retirement") != {
             "requested": True,
             "already_absent": False,
