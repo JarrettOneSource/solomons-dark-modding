@@ -667,6 +667,7 @@ def main() -> int:
             require(initial_events, "startup produced zero dispatch events; tap is broken, not busy")
             require(all(not event["engine_enabled"] for event in initial_events), "startup dispatch crossed an enabled audio engine")
             natural_witnesses.extend(event for event in initial_events if event["caller_in_game_image"])
+            clear_dispatch_events(session)
 
             native_sim.start_quiet_testrun(session)
             enabled, scene_events = read_dispatch_events(session)
