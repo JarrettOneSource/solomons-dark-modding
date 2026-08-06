@@ -31,6 +31,10 @@ $context = New-NativeMenuCaptureContext `
 
 $primaryItemPath = [IO.Path]::GetFullPath($PrimaryFixturePath)
 $outputItemPath = [IO.Path]::GetFullPath($OutputPath)
+$confirmationBasename = [IO.Path]::GetFileNameWithoutExtension($outputItemPath)
+if ([string]::IsNullOrWhiteSpace($confirmationBasename)) {
+    throw "OutputPath does not derive a confirmation basename."
+}
 if (Test-Path -LiteralPath $outputItemPath) {
     throw "Animation confirmation '$outputItemPath' already exists; refusing ambiguity."
 }
@@ -69,7 +73,7 @@ $frameDirectory = Join-Path (
     Split-Path -Parent $outputItemPath
 ) "frames"
 [IO.Directory]::CreateDirectory($frameDirectory) | Out-Null
-$frameItemPath = Join-Path $frameDirectory "$ScreenId.confirmation.bmp"
+$frameItemPath = Join-Path $frameDirectory "$confirmationBasename.bmp"
 $tempDirectory = Join-Path ([IO.Path]::GetTempPath()) (
     "sdmod-menu-confirmation-" + [Guid]::NewGuid().ToString("N")
 )

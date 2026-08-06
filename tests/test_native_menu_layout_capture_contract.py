@@ -213,6 +213,11 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             standalone,
             "standalone fixtures must be produced by the settlement gate",
         )
+        self.assertIn(
+            '"$fixtureBasename.settlement.json"',
+            standalone,
+            "same-screen settings variants must not overwrite raw traces",
+        )
         self.assertRegex(
             transition,
             r"(?s)\$before\s*=\s*Get-SettledNativeMenuObservation.*"
@@ -233,6 +238,11 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             "Get-SettledNativeMenuObservation",
             confirmation,
             "fresh-instance animation confirmation must use Settlement v2",
+        )
+        self.assertIn(
+            '"$confirmationBasename.bmp"',
+            confirmation,
+            "same-screen settings confirmations must not overwrite frames",
         )
         self.assertIn(
             "primary.header.process_id -eq $ProcessId",

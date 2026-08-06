@@ -31,12 +31,16 @@ $context = New-NativeMenuCaptureContext `
 
 $outputItemPath = [IO.Path]::GetFullPath($OutputPath)
 $referenceItemPath = [IO.Path]::GetFullPath($ReferencePngPath)
+$fixtureBasename = [IO.Path]::GetFileNameWithoutExtension($outputItemPath)
+if ([string]::IsNullOrWhiteSpace($fixtureBasename)) {
+    throw "OutputPath does not derive a fixture basename."
+}
 $traceDirectory = Join-Path (
     Split-Path -Parent (Split-Path -Parent $outputItemPath)
 ) "menu-settlement-traces"
 $traceItemPath = Join-Path (
     $traceDirectory
-) "$ScreenId.settlement.json"
+) "$fixtureBasename.settlement.json"
 [IO.Directory]::CreateDirectory(
     $traceDirectory
 ) | Out-Null
