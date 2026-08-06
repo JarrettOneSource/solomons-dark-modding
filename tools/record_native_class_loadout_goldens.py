@@ -539,29 +539,50 @@ $bindings = @(
     return value
 
 
-def loaded_loader_module(process_id: int) -> dict[str, Any]:
-    script = f"""
-$targetPid = {process_id}
-$process = Get-Process -Id $targetPid -ErrorAction Stop
-$modules = @(
-  $process.Modules |
-    Where-Object {{ $_.ModuleName -ieq 'SolomonDarkModLoader.dll' }} |
-    ForEach-Object {{ $_.FileName }}
-)
-[ordered]@{{ pid = $targetPid; module_paths = @($modules) }} |
-  ConvertTo-Json -Depth 3 -Compress
-""".strip()
-    value = _powershell_json(script)
-    paths = value.get("module_paths") or []
-    if isinstance(paths, str):
-        paths = [paths]
+def loaded_loader_from_startup_log(
+    launch: Mapping[str, Any],
+    pipe_name: str,
+) -> dict[str, Any]:
+    log_path = Path(str(launch.get("startupLogPath", "")))
+    require(log_path.is_file(), f"live loader published no startup log: {log_path}")
+    lines = log_path.read_text(encoding="utf-8-sig", errors="replace").splitlines()
+    attached = [line for line in lines if line.endswith("SolomonDarkModLoader attached.")]
+    release = [line for line in lines if line.endswith("Build flavor: Release.")]
+    module_lines = [line for line in lines if "] Module path: " in line]
+    pipe_lines = [
+        line
+        for line in lines
+        if line.endswith(
+            f"[lua-exec-pipe] server started. name=\\\\.\\pipe\\{pipe_name}"
+        )
+    ]
     require(
-        len(paths) == 1,
-        f"loaded loader module lookup is ambiguous for PID {process_id}: {paths}",
+        len(attached) == 1,
+        f"live loader attachment receipt is ambiguous: {len(attached)} candidates",
     )
-    path = Path(paths[0])
+    require(
+        len(release) == 1,
+        f"live Release-build receipt is ambiguous: {len(release)} candidates",
+    )
+    require(
+        len(module_lines) == 1,
+        f"live loader module-path receipt is ambiguous: {len(module_lines)} candidates",
+    )
+    require(
+        len(pipe_lines) == 1,
+        f"live lua-exec server receipt is ambiguous: {len(pipe_lines)} candidates",
+    )
+    path = Path(module_lines[0].split("] Module path: ", 1)[1])
     require(path.is_file(), f"loaded loader module is not readable: {path}")
-    return {"path": str(path), "sha256": sha256_file(path)}
+    return {
+        "evidence_source": "live injected loader startup log",
+        "path": str(path),
+        "sha256": sha256_file(path),
+        "startup_log_path": str(log_path),
+        "attachment_receipt": attached[0],
+        "release_receipt": release[0],
+        "lua_exec_receipt": pipe_lines[0],
+    }
 
 
 def launch_instance(
@@ -571,7 +592,7 @@ def launch_instance(
     game_directory: Path,
 ) -> tuple[dict[str, Any], Path, Path]:
     class_key = str(definition["class_key"])
-    instance = f"load-{index:02d}-{class_key}"
+    instance = f"load-gold-{index:02d}-{class_key}"
     result_path = evidence_directory / "launch" / f"{class_key}.json"
     log_path = evidence_directory / "launch" / f"{class_key}.log"
     result_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1548,7 +1569,7 @@ def capture_one_class(
     game_directory: Path,
 ) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
     class_key = str(definition["class_key"])
-    instance = f"load-{index:02d}-{class_key}"
+    instance = f"load-gold-{index:02d}-{class_key}"
     expected_executable = ROOT / "runtime" / "instances" / instance / "stage" / "SolomonDark.exe"
     before = process_and_port_probe(expected_executable)
     require(
@@ -1582,8 +1603,7 @@ def capture_one_class(
         receipt["owned_processes_before"] = ledger.inspect()
         pipe_name = str(launch["luaPipe"])
         receipt["lua_readiness"] = wait_for_lua_runnable(pipe_name, ledger)
-        process_id = int(launch["processId"])
-        loaded_module = loaded_loader_module(process_id)
+        loaded_module = loaded_loader_from_startup_log(launch, pipe_name)
         require(
             loaded_module["sha256"] == sha256_file(STAGED_LOADER),
             f"{class_key} live process loaded a different loader DLL",
@@ -1686,6 +1706,13 @@ def capture_one_class(
                     ]
                 )
         receipt["cleanup"] = ledger.stop() if ledger.snapshot() else []
+        if launch is not None:
+            startup_log = Path(str(launch.get("startupLogPath", "")))
+            if startup_log.is_file():
+                receipt["startup_log_final"] = {
+                    "path": str(startup_log),
+                    "sha256": sha256_file(startup_log),
+                }
         after = process_and_port_probe(expected_executable)
         receipt["after_cleanup"] = after
         receipt["finished_at_utc"] = utc_now()
