@@ -407,13 +407,18 @@ there is no CLI provenance override. Float tolerance is `1e-4` world units
 for x87/float32 serialization and `0.001` screen pixels, both far below an
 observed movement or art step.
 
-Before capture, the recorder performs two independent structural settle gates:
-at least 40 byte-identical actor-set samples spanning at least two seconds.
-It refuses duplicate actor-address candidates, output collisions, a missing
-pipe/process, and partial frame sequences. The committed fixture contains:
+Before each asynchronously populated actor surface is captured, the recorder
+runs a structural settle gate made of two independent captures, each with at
+least 40 byte-identical actor-set samples spanning at least two seconds. This
+includes the real Skeleton target used to make the stock cast-input path
+deterministic; that target is pinned only through the existing native-input
+seam and is retired before family capture. The recorder refuses duplicate
+actor-address candidates, output collisions, a missing pipe/process, and
+partial frame sequences. The committed fixture contains:
 
 - contiguous wizard `idle`, `idle -> walk -> idle`, a stock Skeleton-driven
   `idle -> hit_overlay -> idle`,
+  target-pinned native input producing
   `idle -> cast_pose_0 -> cast_pose_1 -> cast_pose_8 -> cast_pose_7 -> idle`,
   and full terminal-counter sequences;
 - live Skeleton, Skeleton Archer, and Skeleton Mage action progress around

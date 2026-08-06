@@ -980,6 +980,10 @@ def test_native_animation_recorder_is_self_provenanced_settled_and_bounded() -> 
             "windows_sha256(GAME_BINARY)",
             "windows_sha256(LOADER)",
             "windows_sha256(STAGED_LOADER)",
+            'settle_actor_surface(\n            session, "wizard cast target"\n        )',
+            "for attempt in range(1, 9):",
+            "sd.input.hold_mouse_left_frames(24)",
+            "sd.input.pin_manual_primary_target(target)",
             "len(matches) <= 1",
             "values.get(\"found\") in {\"0\", \"1\"}",
         ),
@@ -1137,7 +1141,26 @@ def test_native_animation_recorder_is_self_provenanced_settled_and_bounded() -> 
             "emitter recording no longer identifies its independent retail observation method"
         )
 
+    cast_target = wizard[2].get("target_receipt")
+    if (
+        not isinstance(cast_target, dict)
+        or int(cast_target.get("actor_address", 0)) <= 0
+        or int(cast_target.get("type_id", 0)) != 1001
+        or int(cast_target.get("request_id", 0)) <= 0
+        or not str(cast_target.get("stock_spawner_address_observed", "")).startswith(
+            "0x"
+        )
+        or cast_target.get("capture_retirement") != {
+            "requested": True,
+            "already_absent": False,
+        }
+    ):
+        raise StaticReTestFailure(
+            "wizard cast golden no longer proves a settled live Skeleton target and its retirement"
+        )
+
     settle_gates = [golden.get("settle_gate")]
+    settle_gates.append(wizard[2].get("settle_gate"))
     settle_gates += [capture.get("settle_gate") for capture in skeleton]
     settle_gates += [
         capture.get("spawn_receipt", {})
@@ -1145,9 +1168,9 @@ def test_native_animation_recorder_is_self_provenanced_settled_and_bounded() -> 
         .get("settle_gate")
         for capture in skeleton
     ]
-    if len(settle_gates) != 7 or any(not isinstance(gate, dict) for gate in settle_gates):
+    if len(settle_gates) != 8 or any(not isinstance(gate, dict) for gate in settle_gates):
         raise StaticReTestFailure(
-            "animation fixture no longer records every initial, combat, and death structural settle gate"
+            "animation fixture no longer records every initial, cast-target, combat, and death structural settle gate"
         )
     for gate_index, gate in enumerate(settle_gates):
         captures = gate.get("captures")

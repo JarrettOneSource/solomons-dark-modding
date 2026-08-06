@@ -1159,28 +1159,44 @@ def main() -> int:
             """    assert(sd.input.set_native_control_allowance_frames(120))
     assert(sd.input.hold_movement_frames(1.0, 0.0, 12))""",
         )
+        place_player(session, lane["free_x"], lane["free_y"])
+        cast_target, cast_target_spawner = spawn_enemy(
+            session,
+            type_id=0x3E9,
+            x=lane["free_x"] + 120.0,
+            y=lane["free_y"],
+        )
+        cast_target_address = int(cast_target["actor_address"])
+        cast_target_priming_retirement = retire_priming_enemies(
+            session, cast_target_address
+        )
+        cast_target_settle = settle_actor_surface(
+            session, "wizard cast target"
+        )
         cast_raw: list[dict[str, Any]] | None = None
         cast_attempts: list[dict[str, Any]] = []
-        for attempt in range(1, 4):
+        for attempt in range(1, 9):
             candidate = capture_sequence(
                 session,
                 raw_directory,
                 f"wizard-cast-attempt-{attempt}",
                 100,
-                """    if sd.input.clear_mouse_left ~= nil then
+                f"""    if sd.input.clear_mouse_left ~= nil then
       assert(sd.input.clear_mouse_left())
     end
     local player = assert(sd.player.get_state())
     local actor = assert(tonumber(player.actor_address))
-    local x = assert(sd.debug.read_float(actor + assert(sd.debug.layout_offset('actor_position_x'))))
-    local y = assert(sd.debug.read_float(actor + assert(sd.debug.layout_offset('actor_position_y'))))
+    local target = {cast_target_address}
+    local target_x = assert(sd.debug.read_float(target + assert(sd.debug.layout_offset('actor_position_x'))))
+    local target_y = assert(sd.debug.read_float(target + assert(sd.debug.layout_offset('actor_position_y'))))
     assert(sd.debug.write_float(actor + assert(sd.debug.layout_offset('actor_heading')), 90.0))
-    assert(sd.debug.write_float(actor + assert(sd.debug.layout_offset('actor_aim_target_x')), x + 320.0))
-    assert(sd.debug.write_float(actor + assert(sd.debug.layout_offset('actor_aim_target_y')), y))
+    assert(sd.debug.write_float(actor + assert(sd.debug.layout_offset('actor_aim_target_x')), target_x))
+    assert(sd.debug.write_float(actor + assert(sd.debug.layout_offset('actor_aim_target_y')), target_y))
     assert(sd.debug.write_u32(actor + assert(sd.debug.layout_offset('actor_aim_target_aux0')), 0))
     assert(sd.debug.write_u32(actor + assert(sd.debug.layout_offset('actor_aim_target_aux1')), 0))
     assert(sd.input.set_native_control_allowance_frames(180))
-    assert(sd.input.hold_mouse_left_frames(24))""",
+    assert(sd.input.hold_mouse_left_frames(24))
+    assert(sd.input.pin_manual_primary_target(target))""",
             )
             candidate_fixed_ticks = distill_player_fixed_ticks(candidate)
             candidate_banks = [
@@ -1201,7 +1217,10 @@ def main() -> int:
                 break
         require(
             cast_raw is not None,
-            f"three stock casts did not expose the complete 1,8,7 pose branch: {cast_attempts}",
+            f"eight target-pinned stock casts did not expose the complete 1,8,7 pose branch: {cast_attempts}",
+        )
+        cast_target_retirement = retire_enemy_if_present(
+            session, cast_target_address
         )
         wizard_captures = []
         for name, raw in (
@@ -1246,17 +1265,28 @@ def main() -> int:
                     and observed_states[-1] == "idle",
                     f"wizard StaffCast1 capture omitted its ordered pose transition and return to idle: {observed_states}",
                 )
-            wizard_captures.append(
-                {
-                    "name": name,
-                    "header": header,
-                    "camera_reference": raw[0]["camera"],
-                    "frames": rows,
-                    "fixed_tick_frames": fixed_tick_rows,
-                    "transitions": transitions,
-                    "attempts": cast_attempts if name == "idle_cast_idle" else None,
+            capture = {
+                "name": name,
+                "header": header,
+                "camera_reference": raw[0]["camera"],
+                "frames": rows,
+                "fixed_tick_frames": fixed_tick_rows,
+                "transitions": transitions,
+                "attempts": cast_attempts if name == "idle_cast_idle" else None,
+            }
+            if name == "idle_cast_idle":
+                capture["settle_gate"] = cast_target_settle
+                capture["target_receipt"] = {
+                    "actor_address": cast_target_address,
+                    "type_id": cast_target["type_id"],
+                    "request_id": cast_target["request_id"],
+                    "stock_spawner_address_observed": cast_target_spawner[
+                        "observed_spawner_address"
+                    ],
+                    "priming_retirement": cast_target_priming_retirement,
+                    "capture_retirement": cast_target_retirement,
                 }
-            )
+            wizard_captures.append(capture)
 
         skeleton_captures: list[dict[str, Any]] = []
         wizard_hit_capture: dict[str, Any] | None = None
