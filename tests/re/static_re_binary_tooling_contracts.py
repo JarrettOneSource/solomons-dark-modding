@@ -1768,6 +1768,10 @@ RECORDED_CAPTURE_SHAS: dict[str, tuple[str, int]] = {
     "2bc3ab13f3d05e26238954e5264c3a86967bd1d4": ("commit", 9),
     # G13 session-flow golden: one clean recorder SHA in both section headers.
     "3c49c4eef6d4b91fe40b58cad99678e119007d84": ("commit", 2),
+    # G4 animation goldens: one clean capture commit/tree pair repeated in the
+    # top-level header and each of the nine recording headers.
+    "d4c22e0560e0e12aba14c40787909c96cead4030": ("commit", 10),
+    "17b06f96dc49cdd67648f674c90b0ee6815fe863": ("tree", 10),
     # loadre class/loadout golden: one clean base in the fixture header.
     "c36f0a81721fa5d3dc2edda65f3347354974b2f0": ("commit", 1),
     # G1 movement and RNG goldens, and the tree that commit points at.
