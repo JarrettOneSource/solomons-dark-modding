@@ -692,6 +692,7 @@ def main() -> int:
                 and event["requested_track"] == "combat"
             ]
             require(len(wave_start_music) == 1, f"natural wave-start music witness is ambiguous: {len(wave_start_music)} matches")
+            natural_witnesses = [menu_music[0], wave_start_music[0]]
 
             clear_dispatch_events(session)
             marker = dispatch_probe(session, request(0, "play_gain", "harness-marker"))
