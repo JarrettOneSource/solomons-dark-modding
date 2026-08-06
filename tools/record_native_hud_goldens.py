@@ -566,17 +566,18 @@ def validate_settle_capture(
 
     first, end, digest = accepted
     settled = frames[first:end]
+    geometries = [geometry_payload(frame) for frame in settled]
     draw_count = len(settled[0].get("draws") or [])
     require(draw_count > 0, f"{label} settled without a real HUD draw witness")
     animated: list[dict[str, Any]] = []
     for draw_order in range(draw_count):
         rects = [
-            list(frame["draws"][draw_order]["resolved_screen_rect"])
-            for frame in settled
+            list(geometry["draws"][draw_order]["resolved_screen_rect"])
+            for geometry in geometries
         ]
         clipped = [
-            list(frame["draws"][draw_order]["clipped_screen_rect"])
-            for frame in settled
+            list(geometry["draws"][draw_order]["clipped_screen_rect"])
+            for geometry in geometries
         ]
         if any(rect != rects[0] for rect in rects[1:]) or any(
             rect != clipped[0] for rect in clipped[1:]

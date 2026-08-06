@@ -721,7 +721,7 @@ def test_native_hud_recorder_is_self_provenanced_settled_and_visual_diffable() -
                 f"{scenario_name} would lose one of its two independent settle-gated captures"
             )
         signatures: list[str] = []
-        animated_sets: list[list[dict[str, Any]]] = []
+        animated_sets: list[list[int]] = []
         for capture in captures:
             settle = capture.get("settle_gate", {})
             if (
@@ -740,7 +740,26 @@ def test_native_hud_recorder_is_self_provenanced_settled_and_visual_diffable() -
                     f"{scenario_name} would lose its settled structural signature"
                 )
             signatures.append(signature)
-            animated_sets.append(settle.get("animated_draws", []))
+            animated_draws = settle.get("animated_draws")
+            if not isinstance(animated_draws, list):
+                raise StaticReTestFailure(
+                    f"{scenario_name} would lose its measured animated-element set"
+                )
+            for animated_draw in animated_draws:
+                if (
+                    not isinstance(animated_draw, dict)
+                    or not isinstance(animated_draw.get("draw_order"), int)
+                    or not isinstance(animated_draw.get("anchor_rect"), list)
+                    or len(animated_draw["anchor_rect"]) != 4
+                    or not isinstance(animated_draw.get("envelope"), list)
+                    or len(animated_draw["envelope"]) != 4
+                ):
+                    raise StaticReTestFailure(
+                        f"{scenario_name} would lose an animated element's identity, anchor rect, or motion envelope"
+                    )
+            animated_sets.append(
+                [int(animated_draw["draw_order"]) for animated_draw in animated_draws]
+            )
             representative = capture.get("representative")
             if not isinstance(representative, dict) or not representative.get("draws"):
                 raise StaticReTestFailure(
@@ -827,12 +846,13 @@ def test_native_hud_recorder_is_self_provenanced_settled_and_visual_diffable() -
         raise StaticReTestFailure(
             "HUD settle gate would stop separating structural fields from rect-only animation"
         )
-    if "def require_one(rows: list[Any], claim: str)" not in recorder or (
-        "lookup is ambiguous" not in recorder
-    ):
-        raise StaticReTestFailure(
-            "HUD recorder could silently choose between duplicate native candidates"
-        )
+    _require_regex(
+        recorder,
+        r"^def require_one\(rows: list\[Any\], claim: str\) -> Any:\n"
+        r"^    require\(len\(rows\) == 1, f\"\{claim\} lookup is ambiguous: found \{len\(rows\)\} candidates\"\)\n"
+        r"^    return rows\[0\]$",
+        "HUD recorder could silently choose between duplicate native candidates",
+    )
 
     coordinator = _read(SCENE_CAPTURE_PATH)
     hooks = _read(SCENE_CAPTURE_HOOKS_PATH)

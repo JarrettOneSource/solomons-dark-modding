@@ -1775,6 +1775,9 @@ RECORDED_CAPTURE_SHAS: dict[str, tuple[str, int]] = {
     # top-level header and each of the nine recording headers.
     "d4c22e0560e0e12aba14c40787909c96cead4030": ("commit", 10),
     "17b06f96dc49cdd67648f674c90b0ee6815fe863": ("tree", 10),
+    # G9 retail HUD golden: one clean recorder commit/tree pair.
+    "2686eaf9fb55b8c8d5aa3e5d95cba88c3045a91d": ("commit", 1),
+    "6b58f4db1ba8ce5c5018d6278940efb6f9a6dff3": ("tree", 1),
     # loadre class/loadout golden: one clean base in the fixture header.
     "c36f0a81721fa5d3dc2edda65f3347354974b2f0": ("commit", 1),
     # G5 audio dispatch golden: one clean capture commit/tree pair.

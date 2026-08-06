@@ -156,6 +156,20 @@ def dirty_provenance(payload: dict) -> None:
     payload["header"]["worktree_dirty_at_capture_start"] = True
 
 
+def change_animated_identity(payload: dict) -> None:
+    captures = payload["scenarios"]["damaged_health"]["independent_captures"]
+    if len(captures) != 2:
+        raise RuntimeError(
+            "mutation setup cannot resolve both damaged-health captures"
+        )
+    animated = captures[1]["settle_gate"]["animated_draws"]
+    if not animated:
+        raise RuntimeError(
+            "mutation setup cannot reach a damaged-health animated witness"
+        )
+    animated[0]["draw_order"] = 99
+
+
 MUTATIONS = (
     Mutation(
         "semantic census count",
@@ -242,6 +256,13 @@ MUTATIONS = (
         "published HUD golden would come from an uncommitted source tree",
     ),
     Mutation(
+        "independently reproduced animated set",
+        "test_native_hud_recorder_is_self_provenanced_settled_and_visual_diffable",
+        contracts.GOLDEN_PATH,
+        edit_json(change_animated_identity),
+        "damaged_health would not reproduce its structure and animated set independently",
+    ),
+    Mutation(
         "40-sample settle floor",
         "test_native_hud_recorder_is_self_provenanced_settled_and_visual_diffable",
         contracts.RECORDER_PATH,
@@ -263,7 +284,10 @@ MUTATIONS = (
         "duplicate lookup refusal",
         "test_native_hud_recorder_is_self_provenanced_settled_and_visual_diffable",
         contracts.RECORDER_PATH,
-        replace_once("lookup is ambiguous", "lookup silently selected the first candidate"),
+        replace_once(
+            '    require(len(rows) == 1, f"{claim} lookup is ambiguous: found {len(rows)} candidates")',
+            '    require(len(rows) >= 1, f"{claim} lookup is ambiguous: found {len(rows)} candidates")',
+        ),
         "HUD recorder could silently choose between duplicate native candidates",
     ),
     Mutation(
