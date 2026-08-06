@@ -87,8 +87,9 @@ if (Test-Path -LiteralPath $outputItemPath -PathType Leaf) {
         schema = "solomon-dark-native-menu-navigation-v2"
         header = [ordered]@{
             capture_method = (
-            "Settlement v2.4 raw-window structural native UI semantics + measured " +
+                "Settlement v2.4 raw-window structural native UI semantics + measured " +
                 "animated geometry + exact-process action/key/click dispatch " +
+                "+ completed semantic-action lifecycle " +
                 "+ same-call D3D9 frame hashes + canonical draw-order/id " +
                 "cross-capture comparison"
             )
@@ -146,6 +147,23 @@ local ok, request = sd.ui.activate_action([=[$ActionId]=], [=[$SurfaceId]=])
 if not ok then error(tostring(request)) end
 return tostring(request)
 "@).Text
+        $requestId = 0
+        if (-not [int]::TryParse(
+            $dispatchResult,
+            [Globalization.NumberStyles]::None,
+            [Globalization.CultureInfo]::InvariantCulture,
+            [ref]$requestId
+        ) -or $requestId -le 0) {
+            throw (
+                "BROKEN: semantic action '$ActionId' returned invalid " +
+                "request id '$dispatchResult'."
+            )
+        }
+        Wait-NativeMenuActionDispatch `
+            -Context $context `
+            -RequestId $requestId `
+            -ActionId $ActionId |
+            Out-Null
     } elseif ($PSCmdlet.ParameterSetName -eq "Key") {
         $dispatchResult = (Invoke-NativeMenuLua `
             -Context $context `

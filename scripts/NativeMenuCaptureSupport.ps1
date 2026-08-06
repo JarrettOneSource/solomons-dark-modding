@@ -8,6 +8,8 @@ $script:NativeMenuExtendedMinimumMilliseconds = 60000
 $script:NativeMenuExtendedSpanMultiplier = 10
 $script:NativeMenuExtendedMinimumSamples = 200
 $script:NativeMenuPopulationPhaseLimit = 4096
+$script:NativeMenuActionDispatchTimeoutMilliseconds = 15000
+$script:NativeMenuActionDispatchPollMilliseconds = 50
 
 function Get-NativeMenuStringSha256 {
     param([Parameter(Mandatory = $true)][string]$Value)
@@ -282,6 +284,77 @@ function Invoke-NativeMenuLua {
         return [pscustomobject]@{ Status = "busy"; Text = $text }
     }
     throw "BROKEN: Lua exec failed while the owned process remained alive: $text"
+}
+
+function Wait-NativeMenuActionDispatch {
+    param(
+        [Parameter(Mandatory = $true)][object]$Context,
+        [Parameter(Mandatory = $true)][int]$RequestId,
+        [Parameter(Mandatory = $true)][string]$ActionId
+    )
+
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    $lastStatus = "not_ready"
+    while ($clock.ElapsedMilliseconds -le
+        $script:NativeMenuActionDispatchTimeoutMilliseconds) {
+        $result = Invoke-NativeMenuLua `
+            -Context $Context `
+            -AllowBusy `
+            -LuaCode @"
+local function quote(value)
+  value = tostring(value or '')
+  value = value:gsub('\\', '\\\\')
+  value = value:gsub('"', '\\"')
+  value = value:gsub('\n', '\\n')
+  value = value:gsub('\r', '\\r')
+  value = value:gsub('\t', '\\t')
+  return '"' .. value .. '"'
+end
+local dispatch = sd.ui.get_action_dispatch($RequestId)
+if type(dispatch) ~= 'table' then
+  return '{"status":"not_ready","error_message":""}'
+end
+return table.concat({
+  '{"status":', quote(dispatch.status),
+  ',"error_message":', quote(dispatch.error_message), '}'
+})
+"@
+        if ($result.Status -eq "busy") {
+            $lastStatus = "pipe_busy"
+        } else {
+            try {
+                $dispatch = $result.Text | ConvertFrom-Json
+            } catch {
+                throw (
+                    "BROKEN: native-menu action dispatch '$ActionId' returned " +
+                    "invalid lifecycle JSON."
+                )
+            }
+            $lastStatus = [string]$dispatch.status
+            if ($lastStatus -ceq "dispatched") {
+                return $dispatch
+            }
+            if ($lastStatus -ceq "failed") {
+                throw (
+                    "BROKEN: native-menu action dispatch '$ActionId' failed: " +
+                    [string]$dispatch.error_message
+                )
+            }
+            if ($lastStatus -notin @("not_ready", "queued", "dispatching")) {
+                throw (
+                    "BROKEN: native-menu action dispatch '$ActionId' reported " +
+                    "unknown status '$lastStatus'."
+                )
+            }
+        }
+        Start-Sleep -Milliseconds `
+            $script:NativeMenuActionDispatchPollMilliseconds
+    }
+    throw (
+        "BROKEN: native-menu action dispatch '$ActionId' never became " +
+        "runnable within $script:NativeMenuActionDispatchTimeoutMilliseconds " +
+        "milliseconds; last_status='$lastStatus'."
+    )
 }
 
 function Get-NativeMenuLayoutProbe {

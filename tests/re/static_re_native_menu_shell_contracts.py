@@ -699,6 +699,28 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
     )
     _require_regex(
         support,
+        r"\$script:NativeMenuActionDispatchTimeoutMilliseconds\s*=\s*15000.*?"
+        r"function Wait-NativeMenuActionDispatch.*?"
+        r"sd\.ui\.get_action_dispatch\(\$RequestId\).*?"
+        r"\$lastStatus -ceq \"dispatched\".*?"
+        r"\$lastStatus -ceq \"failed\".*?"
+        r"never became.*?runnable",
+        "native-menu semantic actions no longer distinguish a queued or busy "
+        "request from a dispatched request and a terminal dispatch failure",
+    )
+    _require_regex(
+        transition_recorder,
+        r"sd\.ui\.activate_action.*?"
+        r"Wait-NativeMenuActionDispatch\s*`\s*"
+        r"-Context \$context\s*`\s*"
+        r"-RequestId \$requestId\s*`\s*"
+        r"-ActionId \$ActionId.*?"
+        r"\$after\s*=\s*Get-SettledNativeMenuObservation",
+        "native-menu transition endpoints can settle before their queued "
+        "semantic action actually dispatches",
+    )
+    _require_regex(
+        support,
         r"function Test-NativeMenuFrameMatchesSettlement.*?"
         r"foreach \(\$geometryName in @\(\"rect\", \"unclipped_rect\"\)\).*?"
         r"\$expectedGeometry\.Count -ne 4.*?"
