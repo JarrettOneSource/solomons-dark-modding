@@ -7,6 +7,20 @@ const nodeGlobals = {
   process: "readonly",
 };
 
+const browserGlobals = {
+  document: "readonly",
+  fetch: "readonly",
+  HTMLCanvasElement: "readonly",
+  Image: "readonly",
+  navigator: "readonly",
+  OffscreenCanvas: "readonly",
+  performance: "readonly",
+  requestAnimationFrame: "readonly",
+  URL: "readonly",
+  URLSearchParams: "readonly",
+  window: "readonly",
+};
+
 export default tseslint.config(
   {
     ignores: ["dist/**", "node_modules/**", "assets/fixtures/**"],
@@ -39,6 +53,12 @@ export default tseslint.config(
         "error",
         { allowNumber: true },
       ],
+    },
+  },
+  {
+    files: ["client/**/*.ts", "input/**/*.ts"],
+    languageOptions: {
+      globals: browserGlobals,
     },
   },
   {

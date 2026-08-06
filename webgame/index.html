@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:,">
+    <title>Solomon's Dark</title>
+    <style>
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: #000;
+      }
+
+      #game-shell {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: min(100vw, calc(100vh * 16 / 9));
+        height: min(100vh, calc(100vw * 9 / 16));
+        transform: translate(-50%, -50%);
+      }
+
+      #game-canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      #text-inputs {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+
+      #text-inputs input {
+        position: absolute;
+        box-sizing: border-box;
+        pointer-events: auto;
+        border: 1px solid #d6bd6c;
+        outline: none;
+        background: rgb(5 5 5 / 88%);
+        color: #f2e5c7;
+        padding: 0 8px;
+        font-family: Georgia, serif;
+        text-align: left;
+      }
+
+      #text-inputs input:focus {
+        border-color: #fff0a0;
+        box-shadow: 0 0 8px #fff0a0;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="game-shell">
+      <canvas id="game-canvas" width="1600" height="900"></canvas>
+      <div id="text-inputs"></div>
+    </main>
+    <script type="module" src="/client/app.ts"></script>
+  </body>
+</html>

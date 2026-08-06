@@ -51,6 +51,14 @@ from static_re_webgame_asset_contracts import (
     test_webgame_asset_manifest_schema_and_provenance_are_pinned,
     test_webgame_workspace_battery_is_strict_ratcheted_and_ci_wired,
 )
+from static_re_webgame_shell_contracts import (
+    test_webgame_shell_architecture_keeps_devices_inside_input,
+    test_webgame_shell_boot_capture_performance_and_ci_are_wired,
+    test_webgame_shell_controller_traversal_covers_live_graph,
+    test_webgame_shell_manifest_renderer_and_layout_replay_are_strict,
+    test_webgame_shell_twin_stick_and_focus_follow_landed_contracts,
+    test_webgame_shell_visual_waiver_is_exact_two_directional_and_self_expiring,
+)
 from static_re_native_hub_economy_contracts import (
     test_native_hub_dig_and_run_boundary_fields_are_pinned,
     test_native_hub_entity_census_and_interactions_are_pinned,
@@ -882,6 +890,30 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Webgame workspace battery is strict, ratcheted, and CI-wired",
         test_webgame_workspace_battery_is_strict_ratcheted_and_ci_wired,
+    ),
+    (
+        "Webgame shell architecture keeps devices inside input",
+        test_webgame_shell_architecture_keeps_devices_inside_input,
+    ),
+    (
+        "Webgame shell twin-stick and focus follow landed contracts",
+        test_webgame_shell_twin_stick_and_focus_follow_landed_contracts,
+    ),
+    (
+        "Webgame shell manifest renderer and layout replay are strict",
+        test_webgame_shell_manifest_renderer_and_layout_replay_are_strict,
+    ),
+    (
+        "Webgame shell controller traversal covers live graph",
+        test_webgame_shell_controller_traversal_covers_live_graph,
+    ),
+    (
+        "Webgame shell visual waiver is exact, two-directional, and self-expiring",
+        test_webgame_shell_visual_waiver_is_exact_two_directional_and_self_expiring,
+    ),
+    (
+        "Webgame shell boot capture performance and CI are wired",
+        test_webgame_shell_boot_capture_performance_and_ci_are_wired,
     ),
     (
         "Native hub entity census and interactions are pinned",

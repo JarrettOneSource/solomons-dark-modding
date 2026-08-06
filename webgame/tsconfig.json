@@ -3,8 +3,9 @@
     "target": "ES2023",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "lib": ["ES2023"],
-    "types": ["node", "vitest/globals"],
+    "resolveJsonModule": true,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node", "vite/client", "vitest/globals"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
@@ -19,5 +20,12 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["assets/**/*.ts"]
+  "include": [
+    "assets/**/*.ts",
+    "client/**/*.ts",
+    "conformance/**/*.ts",
+    "input/**/*.ts",
+    "scripts/**/*.ts",
+    "vite.config.ts"
+  ]
 }

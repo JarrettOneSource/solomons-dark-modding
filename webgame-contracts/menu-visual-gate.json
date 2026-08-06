@@ -1,0 +1,91 @@
+{
+  "schema": "solomon-dark-menu-visual-gate-v1",
+  "pixel_rule": "Human side-by-side review at 1600x900 requires the same assetpack art at exact G11 positions; font rasterization may differ.",
+  "reviewed_pass_fixtures": [
+    "menu-layouts/beta-notice.json",
+    "menu-layouts/control-scheme-picker.json",
+    "menu-layouts/create-discipline.json",
+    "menu-layouts/create-element.json",
+    "menu-layouts/dark-cloud-browser.json",
+    "menu-layouts/dark-cloud-menu.json",
+    "menu-layouts/dark-cloud-my-levels.json",
+    "menu-layouts/dark-cloud-online-levels.json",
+    "menu-layouts/dark-cloud-options.json",
+    "menu-layouts/dark-cloud-recent.json",
+    "menu-layouts/dark-cloud-sort.json",
+    "menu-layouts/loading-screen.json",
+    "menu-layouts/main-menu-root.json",
+    "menu-layouts/map-picker.json",
+    "menu-layouts/native-loader.json",
+    "menu-layouts/pause-menu.json",
+    "menu-layouts/profile-save-select.json",
+    "menu-layouts/skill-picker.json"
+  ],
+  "reviewed_divergent_fixtures": [
+    "menu-layouts/controls.json",
+    "menu-layouts/dark-cloud-login-settings.json",
+    "menu-layouts/dark-cloud-search.json",
+    "menu-layouts/dark-cloud-settings.json",
+    "menu-layouts/game-over.json",
+    "menu-layouts/game-settings-dark-cloud.json",
+    "menu-layouts/game-settings-gameplay.json",
+    "menu-layouts/game-settings-title.json",
+    "menu-layouts/hall-of-fame.json",
+    "menu-layouts/performance.json"
+  ],
+  "waiver": {
+    "decision": "ATC 2026-08-05 evening",
+    "entries": [
+      {
+        "fixture": "menu-layouts/controls.json",
+        "required_marker": "stale controls omitted",
+        "corrective": "menufix task #97"
+      },
+      {
+        "fixture": "menu-layouts/dark-cloud-login-settings.json",
+        "required_marker": "stale controls omitted",
+        "corrective": "menufix task #97"
+      },
+      {
+        "fixture": "menu-layouts/dark-cloud-search.json",
+        "required_marker": "stale controls omitted",
+        "corrective": "menufix task #97"
+      },
+      {
+        "fixture": "menu-layouts/dark-cloud-settings.json",
+        "required_marker": "stale controls omitted",
+        "corrective": "menufix task #97"
+      },
+      {
+        "fixture": "menu-layouts/game-over.json",
+        "required_marker": "stale controls omitted",
+        "corrective": "menufix task #97"
+      },
+      {
+        "fixture": "menu-layouts/game-settings-dark-cloud.json",
+        "required_marker": "stale controls omitted",
+        "corrective": "menufix task #97"
+      },
+      {
+        "fixture": "menu-layouts/game-settings-gameplay.json",
+        "required_marker": "stale controls omitted",
+        "corrective": "menufix task #97"
+      },
+      {
+        "fixture": "menu-layouts/game-settings-title.json",
+        "required_marker": "stale controls omitted",
+        "corrective": "menufix task #97"
+      },
+      {
+        "fixture": "menu-layouts/hall-of-fame.json",
+        "required_marker": "stale controls omitted",
+        "corrective": "menufix task #97"
+      },
+      {
+        "fixture": "menu-layouts/performance.json",
+        "required_marker": "stale controls omitted",
+        "corrective": "menufix task #97"
+      }
+    ]
+  }
+}

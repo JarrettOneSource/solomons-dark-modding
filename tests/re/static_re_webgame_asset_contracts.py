@@ -642,6 +642,11 @@ def test_webgame_workspace_battery_is_strict_ratcheted_and_ci_wired() -> str:
     expected_scripts = {
         "assets:build": "tsx assets/cli.ts",
         "assets:goldens": "tsx assets/generate-goldens.ts",
+        "build": "vite build",
+        "capture:evidence": "tsx scripts/capture-shell.ts",
+        "conformance": "tsx conformance/run-layout-replay.ts",
+        "controller-traversal": "tsx conformance/run-controller-traversal.ts",
+        "dev": "vite",
         "lint": "eslint . --max-warnings 0 && node scripts/check-quality-floor.mjs lint",
         "typecheck": "tsc --noEmit && node scripts/check-quality-floor.mjs typecheck",
         "test": "node scripts/run-unit-tests.mjs",
@@ -680,10 +685,10 @@ def test_webgame_workspace_battery_is_strict_ratcheted_and_ci_wired() -> str:
             "webgame TypeScript strictness lost required option(s): " + ", ".join(missing_strict)
         )
     expected_floors = {
-        "lintFiles": 21,
-        "typecheckedFiles": 18,
-        "unitTestFiles": 6,
-        "unitTests": 14,
+        "lintFiles": 45,
+        "typecheckedFiles": 42,
+        "unitTestFiles": 12,
+        "unitTests": 58,
     }
     if floors != expected_floors:
         raise StaticReTestFailure(
@@ -745,4 +750,4 @@ def test_webgame_workspace_battery_is_strict_ratcheted_and_ci_wired() -> str:
         raise StaticReTestFailure(
             "CI runs the real webgame decoder test before installing its Pillow dependency"
         )
-    return "strict TypeScript and locked npm tooling run in five CI steps at floors 21/18/6/14"
+    return "strict TypeScript and locked npm tooling run with shell gates at floors 45/42/12/58"

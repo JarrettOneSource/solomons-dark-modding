@@ -39,6 +39,12 @@ jobs:
         run: npm --prefix webgame run typecheck
       - name: Test webgame workspace
         run: npm --prefix webgame test
+      - name: Build browser shell
+        run: npm --prefix webgame run build
+      - name: Replay G11 browser-shell layouts
+        run: npm --prefix webgame run conformance
+      - name: Traverse browser shell with synthetic gamepad
+        run: npm --prefix webgame run controller-traversal
       - name: Test repository identity contract
         # Push events only: a pull_request build checks out a synthetic
         # merge commit that GitHub itself authors, which is not a project
