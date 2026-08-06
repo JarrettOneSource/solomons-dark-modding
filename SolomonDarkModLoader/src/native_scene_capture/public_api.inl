@@ -115,18 +115,9 @@ bool InitializeNativeSceneCapture(std::string* error_message) {
         return false;
     }
     if (g_scene_capture.surface == CaptureSurface::Hud) {
-        uintptr_t device_pointer_global = 0;
-        if (!TryGetNativeSceneLayoutValue(
-                "d3d9_device_pointer_global", &device_pointer_global)) {
-            *error_message =
-                "native HUD capture layout is missing d3d9_device_pointer_global";
-            RemoveNativeSceneCaptureHooks();
-            g_scene_capture.status = "failed";
-            g_scene_capture.error_message = *error_message;
-            return false;
-        }
-        device_pointer_global = ProcessMemory::Instance()
-            .ResolveGameAddressOrZero(device_pointer_global);
+        constexpr uintptr_t kD3d9DevicePointerGlobalAddress = 0x00B401E8;
+        const auto device_pointer_global = ProcessMemory::Instance()
+            .ResolveGameAddressOrZero(kD3d9DevicePointerGlobalAddress);
         if (device_pointer_global == 0 ||
             !InstallD3d9FrameHook(
                 device_pointer_global,

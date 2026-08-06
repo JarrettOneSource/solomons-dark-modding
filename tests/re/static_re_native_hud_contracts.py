@@ -15,6 +15,7 @@ from static_re_contract_support import ROOT, StaticReTestFailure
 DOC_PATH = ROOT / "docs/reverse-engineering/native-hud.md"
 GOLDEN_PATH = ROOT / "tests/fixtures/webgame/hud-goldens.json"
 RECORDER_PATH = ROOT / "tools/record_native_hud_goldens.py"
+SHARED_SOLO_RECORDER_PATH = ROOT / "tools/record_native_sim_goldens.py"
 HUD_HOOK_PATH = (
     ROOT
     / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/gameplay_hud_hooks.inl"
@@ -837,6 +838,7 @@ def test_native_hud_recorder_is_self_provenanced_settled_and_visual_diffable() -
     hooks = _read(SCENE_CAPTURE_HOOKS_PATH)
     observation = _read(SCENE_CAPTURE_OBSERVATION_PATH)
     public_api = _read(SCENE_CAPTURE_PUBLIC_API_PATH)
+    shared_solo_recorder = _read(SHARED_SOLO_RECORDER_PATH)
     if (
         '"SDMOD_NATIVE_SCENE_CAPTURE_DIRECTORY"' not in coordinator
         or '"SDMOD_NATIVE_SCENE_CAPTURE_SURFACE"' not in coordinator
@@ -861,5 +863,21 @@ def test_native_hud_recorder_is_self_provenanced_settled_and_visual_diffable() -
     ):
         raise StaticReTestFailure(
             "native HUD observation seam would treat hook existence as end-to-end runnability"
+        )
+    if (
+        "kD3d9DevicePointerGlobalAddress = 0x00B401E8" not in public_api
+        or ".ResolveGameAddressOrZero(kD3d9DevicePointerGlobalAddress)"
+        not in public_api
+    ):
+        raise StaticReTestFailure(
+            "native HUD EndScene boundary would resolve the wrong retail D3D9 device global"
+        )
+    if (
+        "terminal_output = (stderr.strip() or stdout.strip())[-4000:]"
+        not in shared_solo_recorder
+        or "terminal_output or 'no terminal output'" not in shared_solo_recorder
+    ):
+        raise StaticReTestFailure(
+            "HUD launch failures would hide the terminal setup error needed to distinguish broken from busy"
         )
     return "native HUD recorder is live, self-provenanced, settle-gated, bounded, and visual-diffable"

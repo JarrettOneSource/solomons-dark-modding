@@ -266,6 +266,26 @@ MUTATIONS = (
         replace_once("lookup is ambiguous", "lookup silently selected the first candidate"),
         "HUD recorder could silently choose between duplicate native candidates",
     ),
+    Mutation(
+        "retail D3D9 EndScene global",
+        "test_native_hud_recorder_is_self_provenanced_settled_and_visual_diffable",
+        contracts.SCENE_CAPTURE_PUBLIC_API_PATH,
+        replace_once(
+            "kD3d9DevicePointerGlobalAddress = 0x00B401E8",
+            "kD3d9DevicePointerGlobalAddress = 0x00B401EC",
+        ),
+        "native HUD EndScene boundary would resolve the wrong retail D3D9 device global",
+    ),
+    Mutation(
+        "terminal launch failure evidence",
+        "test_native_hud_recorder_is_self_provenanced_settled_and_visual_diffable",
+        contracts.SHARED_SOLO_RECORDER_PATH,
+        replace_once(
+            "terminal_output = (stderr.strip() or stdout.strip())[-4000:]",
+            "terminal_output = 'launcher failed'",
+        ),
+        "HUD launch failures would hide the terminal setup error needed to distinguish broken from busy",
+    ),
 )
 
 

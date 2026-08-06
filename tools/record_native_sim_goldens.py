@@ -284,16 +284,19 @@ class OwnedSoloSession:
                 cwd=ROOT,
                 env=environment,
                 text=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
             )
             deadline = time.monotonic() + 180.0
             while time.monotonic() < deadline and not result_path.is_file():
                 return_code = wrapper.poll()
                 if return_code is not None:
+                    stdout, stderr = wrapper.communicate(timeout=5.0)
+                    terminal_output = (stderr.strip() or stdout.strip())[-4000:]
                     require(
                         return_code == 0,
-                        f"solo launcher exited with {return_code}",
+                        f"solo launcher exited with {return_code}: "
+                        f"{terminal_output or 'no terminal output'}",
                     )
                     break
                 time.sleep(0.1)
