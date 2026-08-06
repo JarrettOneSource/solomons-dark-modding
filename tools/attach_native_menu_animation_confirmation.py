@@ -66,12 +66,18 @@ def attach(primary_path: Path, confirmation_path: Path, evidence_path: Path) -> 
             "animated-ID confirmation must use the same machine-derived provenance"
         )
     assert_confirmation_matches(primary["layout"], confirmation["layout"])
-    structural_sha = hashlib.sha256(
+    primary_structural_sha = hashlib.sha256(
         structural_layout_bytes(primary["layout"])
     ).hexdigest()
-    if structural_sha != primary_header["settlement"]["structural_sha256"]:
+    confirmation_structural_sha = hashlib.sha256(
+        structural_layout_bytes(confirmation["layout"])
+    ).hexdigest()
+    if primary_structural_sha != primary_header["settlement"]["structural_sha256"]:
         raise SettlementV2Error("primary fixture records a false structural hash")
-    if structural_sha != confirmation_header["settlement"]["structural_sha256"]:
+    if (
+        confirmation_structural_sha
+        != confirmation_header["settlement"]["structural_sha256"]
+    ):
         raise SettlementV2Error("confirmation fixture records a false structural hash")
     if evidence_path.exists():
         raise SettlementV2Error(
@@ -98,7 +104,7 @@ def attach(primary_path: Path, confirmation_path: Path, evidence_path: Path) -> 
         },
         "settlement": confirmation_header["settlement"],
         "animated_element_ids": confirmation["layout"]["animated_element_ids"],
-        "structural_sha256": structural_sha,
+        "structural_sha256": confirmation_structural_sha,
         "confirmation_layout": confirmation["layout"],
     }
     write_atomically(evidence_path, confirmation_evidence)
@@ -111,7 +117,7 @@ def attach(primary_path: Path, confirmation_path: Path, evidence_path: Path) -> 
         "instance": confirmation_header["instance"],
         "process_id": confirmation_header["process_id"],
         "source": confirmation_header["source"],
-        "structural_sha256": structural_sha,
+        "confirmation_structural_sha256": confirmation_structural_sha,
         "animated_element_ids_sha256": hashlib.sha256(
             canonical_bytes(ids)
         ).hexdigest(),

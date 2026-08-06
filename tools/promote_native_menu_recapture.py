@@ -182,8 +182,17 @@ def validate_settlement_fixture(
         assert_confirmation_matches(layout, confirmation_layout)
     except SettlementV2Error as error:
         raise PromotionError(f"{fixture_path}: {error}") from error
-    if confirmation.get("structural_sha256") != structural_sha:
-        raise PromotionError(f"{fixture_path} confirmation structural hash is false")
+    confirmation_structural_sha = hashlib.sha256(
+        structural_layout_bytes(confirmation_layout)
+    ).hexdigest()
+    if (
+        confirmation.get("confirmation_structural_sha256")
+        != confirmation_structural_sha
+    ):
+        raise PromotionError(
+            f"{fixture_path} confirmation records a false second-capture "
+            "structural hash"
+        )
     expected_ids_sha = hashlib.sha256(canonical_bytes(ids)).hexdigest()
     if confirmation.get("animated_element_ids_sha256") != expected_ids_sha:
         raise PromotionError(f"{fixture_path} confirmation animated-id hash is false")
@@ -371,15 +380,6 @@ def validate_and_promote(
         if not isinstance(before_layout, dict):
             raise PromotionError(f"STOP: transition source {edge_id} has no v2 layout")
         before_ids = animated_ids(before_layout)
-        if not structurally_matches(
-            before_layout,
-            landed["before"]["layout"],
-            before_ids,
-        ):
-            raise PromotionError(
-                f"STOP: transition source {edge_id} differs from its landed "
-                "structural payload outside measured animated geometry"
-            )
         if not before_ids:
             if edge["before"].get("frame_sha256") != landed["before"].get(
                 "frame_sha256"
@@ -387,6 +387,17 @@ def validate_and_promote(
                 raise PromotionError(
                     f"STOP: non-animated transition source {edge_id} did not "
                     "bit-match the landed frame"
+                )
+        else:
+            source_matches = [
+                name
+                for name, entry in landed_by_name.items()
+                if structurally_matches(before_layout, entry["layout"], before_ids)
+            ]
+            if len(source_matches) != 1:
+                raise PromotionError(
+                    f"STOP: animated transition source {edge_id} has "
+                    f"{len(source_matches)} landed structural matches: {source_matches}"
                 )
         fixture_name = edge.get("destination_layout_fixture")
         if fixture_name not in candidate_standalones:

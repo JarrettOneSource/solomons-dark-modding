@@ -107,15 +107,6 @@ if ($primaryIdsJson -cne $confirmationIdsJson) {
         "primary=$primaryIdsJson confirmation=$confirmationIdsJson"
     )
 }
-if (
-    [string]$primary.header.settlement.structural_sha256 -ne
-    [string]$observation.settlement.structural_sha256
-) {
-    throw (
-        "STOP: fresh confirmation structural mismatch for '$ScreenId'; " +
-        "animation-independent menu structure did not reproduce."
-    )
-}
 
 $capturedAtUtc = [DateTime]::UtcNow.ToString("o")
 $frameItem = Get-Item -LiteralPath $frameItemPath
@@ -166,7 +157,9 @@ $confirmationHeader = [pscustomobject][ordered]@{
     instance = $Instance
     process_id = $ProcessId
     source = $context.Source
-    structural_sha256 = [string]$observation.settlement.structural_sha256
+    confirmation_structural_sha256 = (
+        [string]$observation.settlement.structural_sha256
+    )
     animated_element_ids_sha256 = Get-NativeMenuStringSha256 $confirmationIdsJson
 }
 $primary.header | Add-Member `

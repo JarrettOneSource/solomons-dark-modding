@@ -489,13 +489,6 @@ def assert_confirmation_matches(
             "animated ID confirmation mismatch: fresh captures classified "
             f"primary={primary_ids} confirmation={confirmation_ids}"
         )
-    if structural_layout_bytes(primary_layout, primary_ids) != (
-        structural_layout_bytes(confirmation_layout, confirmation_ids)
-    ):
-        raise SettlementV2Error(
-            "fresh confirmation structural mismatch: animation-independent "
-            "menu structure did not reproduce"
-        )
 
 
 def _read_json(path: Path) -> Any:

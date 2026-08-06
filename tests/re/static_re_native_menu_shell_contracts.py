@@ -683,10 +683,9 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
         r"primarySourceJson\s+-cne\s+\$confirmationSourceJson.*?"
         r"Get-SettledNativeMenuObservation.*?"
         r"primaryIdsJson\s+-cne\s+\$confirmationIdsJson.*?"
-        r"fresh confirmation structural mismatch.*?"
         r"settlement\s*=\s*\$observation\.settlement",
         "animation confirmation no longer proves a fresh instance/process, "
-        "identical machine provenance, animated ID set, and structural payload",
+        "identical machine provenance, and animated ID set",
     )
 
     _require_regex(
@@ -851,15 +850,21 @@ def test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired() -> str:
         classifier,
         r"def assert_confirmation_matches\(.*?"
         r"if primary_ids != confirmation_ids:.*?"
-        r"animated ID confirmation mismatch.*?"
-        r"structural_layout_bytes\(primary_layout, primary_ids\).*?"
-        r"fresh confirmation structural mismatch",
+        r"animated ID confirmation mismatch",
         "fresh-instance confirmation no longer requires exactly equal measured "
-        "animated ID sets and structural payloads",
+        "animated ID sets",
     )
+    confirmation_body = classifier.partition(
+        "def assert_confirmation_matches("
+    )[2].partition("\ndef _read_json(")[0]
+    if not confirmation_body or "structural_layout_bytes" in confirmation_body:
+        raise StaticReTestFailure(
+            "fresh-instance confirmation widened ATC's animated-ID-set rule "
+            "into an undeclared cross-instance structural-equality rule"
+        )
     return (
         "Settlement v2 classification, guardrails, fixture shaping, and fresh-"
-        "instance confirmation are behavior-tested by the CI unit module"
+        "instance animated-ID confirmation are behavior-tested by the CI unit module"
     )
 
 
@@ -1075,11 +1080,13 @@ def _assert_animation_confirmation(
         raise StaticReTestFailure(
             f"{witness} animation confirmation changed machine provenance"
         )
-    if confirmation.get("structural_sha256") != header["settlement"].get(
-        "structural_sha256"
+    if not re.fullmatch(
+        r"[0-9a-f]{64}",
+        str(confirmation.get("confirmation_structural_sha256")),
     ):
         raise StaticReTestFailure(
-            f"{witness} animation confirmation changed the structural payload"
+            f"{witness} animation confirmation lost its independently measured "
+            "second-capture structural hash"
         )
     if confirmation.get("animated_element_ids_sha256") != hashlib.sha256(
         canonical_bytes(animated_ids)

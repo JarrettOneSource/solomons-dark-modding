@@ -188,8 +188,8 @@ foreach ($file in $layoutFiles) {
         [string]::IsNullOrWhiteSpace([string]$confirmation.instance) -or
         [int]$confirmation.process_id -eq [int]$fixture.header.process_id -or
         [string]$confirmation.sha256 -notmatch '^[0-9a-f]{64}$' -or
-        [string]$confirmation.structural_sha256 -ne
-            [string]$settlement.structural_sha256 -or
+        [string]$confirmation.confirmation_structural_sha256 -notmatch
+            '^[0-9a-f]{64}$' -or
         -not (Test-Path -LiteralPath $confirmationPath -PathType Leaf) -or
         [long]$confirmation.bytes -ne
             (Get-Item -LiteralPath $confirmationPath).Length -or
@@ -286,8 +286,8 @@ foreach ($file in $transitionLayoutFiles) {
     if (
         [int]$confirmation.process_id -eq [int]$fixture.header.process_id -or
         [string]$confirmation.sha256 -notmatch '^[0-9a-f]{64}$' -or
-        [string]$confirmation.structural_sha256 -ne
-            [string]$settlement.structural_sha256 -or
+        [string]$confirmation.confirmation_structural_sha256 -notmatch
+            '^[0-9a-f]{64}$' -or
         -not (Test-Path -LiteralPath $confirmationPath -PathType Leaf) -or
         [string]$confirmation.sha256 -ne (
             Get-FileHash -LiteralPath $confirmationPath -Algorithm SHA256

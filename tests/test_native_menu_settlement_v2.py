@@ -128,6 +128,13 @@ class NativeMenuSettlementV2Tests(unittest.TestCase):
         ):
             assert_confirmation_matches(primary, confirmation)
 
+    def test_fresh_confirmation_does_not_widen_beyond_animated_ids(self) -> None:
+        primary = classify_window(_samples())["layout"]
+        confirmation = copy.deepcopy(primary)
+        confirmation["elements"] = list(reversed(confirmation["elements"]))
+
+        assert_confirmation_matches(primary, confirmation)
+
     def test_structural_comparison_ignores_only_measured_animation(self) -> None:
         candidate = classify_window(_samples())["layout"]
         landed = copy.deepcopy(candidate)
