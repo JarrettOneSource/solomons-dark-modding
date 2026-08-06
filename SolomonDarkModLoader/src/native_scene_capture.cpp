@@ -37,6 +37,8 @@ namespace {
 constexpr const char* kLayoutSection = "native_scene_capture";
 constexpr const char* kCaptureDirectoryEnvironment =
     "SDMOD_NATIVE_SCENE_CAPTURE_DIRECTORY";
+constexpr const char* kCaptureSurfaceEnvironment =
+    "SDMOD_NATIVE_SCENE_CAPTURE_SURFACE";
 constexpr const char* kInstanceEnvironment = "SDMOD_LUA_EXEC_PIPE_NAME";
 constexpr std::size_t kMaximumDrawsPerFrame = 32768;
 constexpr std::size_t kMaximumFixedTickAnimationSamples = 4096;
@@ -47,6 +49,10 @@ constexpr std::size_t kNativeSpriteLogicalWidthOffset = 0x94;
 constexpr std::size_t kNativeSpriteLogicalHeightOffset = 0x98;
 constexpr std::size_t kRendererBaseXOffset = 0x68;
 constexpr std::size_t kRendererBaseYOffset = 0x6C;
+constexpr std::size_t kRendererClipXOffset = 0x30;
+constexpr std::size_t kRendererClipYOffset = 0x34;
+constexpr std::size_t kRendererClipWidthOffset = 0x38;
+constexpr std::size_t kRendererClipHeightOffset = 0x3C;
 constexpr std::size_t kRendererRedOffset = 0x1EC;
 constexpr std::size_t kRendererGreenOffset = 0x1F0;
 constexpr std::size_t kRendererBlueOffset = 0x1F4;
@@ -105,6 +111,11 @@ enum class CapturePhase {
     PreQueue,
     SortedQueue,
     PostQueue,
+};
+
+enum class CaptureSurface {
+    Scene,
+    Hud,
 };
 
 struct CameraCapture {
@@ -169,6 +180,83 @@ struct DrawCapture {
     float object_world_y = 0.0f;
 };
 
+struct ExactTextCapture {
+    std::string text;
+    std::uintptr_t caller_preferred_address = 0;
+    std::uint32_t first_draw_order = 0;
+    std::uint32_t draw_count = 0;
+    std::array<float, 4> screen_rect = {};
+};
+
+struct PendingExactTextCapture {
+    std::string text;
+    std::uintptr_t caller_address = 0;
+    std::size_t first_draw_index = 0;
+};
+
+struct HudAllyBarCapture {
+    ResolvedNativeArt glyph;
+    float health_ratio = 0.0f;
+};
+
+struct HudStripCapture {
+    ResolvedNativeArt art;
+    std::uint32_t first_draw_order = 0;
+    std::uint32_t draw_count = 0;
+    float x = 0.0f;
+    float y = 0.0f;
+    float width = 0.0f;
+};
+
+struct HudSlotCapture {
+    std::uint32_t draw_order = 0;
+    std::uintptr_t object_address = 0;
+    std::int32_t kind_id = 0;
+    std::array<float, 4> rect = {};
+    std::uint8_t selection_flag = 0;
+    std::int32_t skill_id = -1;
+    std::uint32_t item_value = 0;
+    float presentation_value = 0.0f;
+    std::int32_t count = 0;
+    std::uint8_t input_slot = 0;
+    bool cooldown_available = false;
+    float cooldown_current = 0.0f;
+    float cooldown_capacity = 0.0f;
+};
+
+struct HudCapture {
+    bool available = false;
+    bool world_available = false;
+    std::uintptr_t gameplay_address = 0;
+    std::uintptr_t actor_address = 0;
+    std::uintptr_t progression_address = 0;
+    std::uint64_t simulation_tick = 0;
+    bool local_dead = false;
+    bool score_indicator_visible = false;
+    bool vitals_and_slots_visible = false;
+    bool level_up_choice_active = false;
+    bool featured_enemy_available = false;
+    float hp = 0.0f;
+    float max_hp = 0.0f;
+    float magic_shield_current = 0.0f;
+    float magic_shield_maximum = 0.0f;
+    float mp = 0.0f;
+    float max_mp = 0.0f;
+    float mana_reserve = 0.0f;
+    std::int32_t xp = 0;
+    std::int32_t level = 0;
+    std::int32_t gold = 0;
+    std::int32_t wave = 0;
+    std::uint8_t persistent_status_flags = 0;
+    std::uint8_t transient_status_flags = 0;
+    std::int32_t poison_remaining_ticks = 0;
+    std::int32_t webbed_remaining_ticks = 0;
+    std::int32_t damage_x4_remaining_ticks = 0;
+    std::vector<HudAllyBarCapture> ally_bars;
+    std::vector<HudStripCapture> strips;
+    std::vector<HudSlotCapture> slots;
+};
+
 struct ActorAnimationCapture {
     SDModSceneActorState actor;
     float heading = 0.0f;
@@ -202,6 +290,7 @@ struct PendingSpriteDraw {
 
 struct SceneFrameCapture {
     std::string label;
+    CaptureSurface surface = CaptureSurface::Scene;
     std::string scene_kind;
     std::string instance;
     uintptr_t region = 0;
@@ -216,6 +305,8 @@ struct SceneFrameCapture {
     bool actors_available = false;
     std::vector<ActorAnimationCapture> actors;
     CameraCapture camera;
+    HudCapture hud;
+    std::vector<ExactTextCapture> exact_text;
     std::vector<SortCapture> insertions;
     std::vector<uintptr_t> insertion_objects;
     std::vector<DrawCapture> draws;
@@ -244,11 +335,19 @@ using NativeClearFn = void(__thiscall*)(
     float blue,
     float alpha);
 using NativeObjectRenderFn = void(__thiscall*)(void* object);
+using NativeHudRenderFn = void(__thiscall*)(void* gameplay);
+using NativeHudSlotRenderFn = void(__thiscall*)(void* slot);
+using NativeHudStripRenderFn = void(__thiscall*)(
+    void* sprite,
+    float x,
+    float y,
+    float width);
 
 struct NativeSceneCaptureState {
     bool requested = false;
     bool initialized = false;
     bool frame_active = false;
+    CaptureSurface surface = CaptureSurface::Scene;
     CapturePhase phase = CapturePhase::PreQueue;
     std::filesystem::path directory;
     std::string status = "unavailable";
@@ -262,6 +361,10 @@ struct NativeSceneCaptureState {
     uintptr_t runtime_image_base = 0;
     uintptr_t native_renderer_global = 0;
     std::size_t native_renderer_draw_state_offset = 0;
+    uintptr_t last_region = 0;
+    uintptr_t hud_gameplay_global = 0;
+    bool last_camera_available = false;
+    CameraCapture last_camera;
     std::array<X86Hook, 5> fixed_region_hooks;
     X86Hook render_queue_insert_hook;
     X86Hook mesh_draw_hook;
@@ -269,6 +372,10 @@ struct NativeSceneCaptureState {
     X86Hook clear_hook;
     X86Hook road_render_hook;
     X86Hook terrain_render_hook;
+    X86Hook hud_render_hook;
+    X86Hook hud_slot_render_hook;
+    X86Hook hud_strip_render_hook;
+    bool hud_end_scene_callback_registered = false;
     std::unordered_map<uintptr_t, std::vector<std::string>> art_by_address;
     std::unordered_map<std::string, std::vector<std::string>>
         art_by_signature;
@@ -288,6 +395,8 @@ struct MeshObjectContext {
 };
 
 thread_local std::vector<MeshObjectContext> g_scene_capture_mesh_objects;
+thread_local std::vector<PendingExactTextCapture>
+    g_pending_exact_text_captures;
 
 constexpr std::array<uintptr_t, 5> kFixedRegionRenderPreferredAddresses = {
     0x0051EB60,
@@ -306,6 +415,9 @@ constexpr std::array<const char*, 5> kFixedRegionNames = {
 };
 
 void FailActiveSceneCapture(std::string message);
+bool WriteNativeSceneCaptureFile(std::string* error_message);
+void FinalizeActiveNativeSceneCapture();
+void BeginHudFrameCapture(void* gameplay);
 
 #include "native_scene_capture/atlas_resolver.inl"
 #include "native_scene_capture/animation_observation.inl"

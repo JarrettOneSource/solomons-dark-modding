@@ -268,6 +268,28 @@ bool TryReadRendererBase(float* x, float* y) {
         std::isfinite(*x) && std::isfinite(*y);
 }
 
+bool TryReadRendererClipRect(std::array<float, 4>* rect) {
+    if (rect == nullptr) {
+        return false;
+    }
+    const auto draw_state = TryGetNativeRendererDrawState();
+    float x = 0.0f;
+    float y = 0.0f;
+    float width = 0.0f;
+    float height = 0.0f;
+    if (!TryReadRuntimeField(draw_state, kRendererClipXOffset, &x) ||
+        !TryReadRuntimeField(draw_state, kRendererClipYOffset, &y) ||
+        !TryReadRuntimeField(draw_state, kRendererClipWidthOffset, &width) ||
+        !TryReadRuntimeField(draw_state, kRendererClipHeightOffset, &height) ||
+        !std::isfinite(x) || !std::isfinite(y) ||
+        !std::isfinite(width) || !std::isfinite(height) ||
+        width < 0.0f || height < 0.0f) {
+        return false;
+    }
+    *rect = {x, y, x + width, y + height};
+    return true;
+}
+
 std::array<float, 4> ReadRendererTint() {
     std::array<float, 4> tint = {1.0f, 1.0f, 1.0f, 1.0f};
     const auto draw_state = TryGetNativeRendererDrawState();

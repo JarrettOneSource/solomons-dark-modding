@@ -23,6 +23,34 @@ bool InitializeNativeSceneCapture(std::string* error_message) {
         return false;
     }
 
+    char surface_value[16] = {};
+    const auto surface_length = GetEnvironmentVariableA(
+        kCaptureSurfaceEnvironment,
+        surface_value,
+        static_cast<DWORD>(sizeof(surface_value)));
+    if (surface_length == 0) {
+        g_scene_capture.surface = CaptureSurface::Scene;
+    } else if (surface_length >= sizeof(surface_value)) {
+        *error_message =
+            "native scene capture surface exceeds its 15-character bound";
+        g_scene_capture.status = "failed";
+        g_scene_capture.error_message = *error_message;
+        return false;
+    } else {
+        const std::string_view surface(surface_value, surface_length);
+        if (surface == "scene") {
+            g_scene_capture.surface = CaptureSurface::Scene;
+        } else if (surface == "hud") {
+            g_scene_capture.surface = CaptureSurface::Hud;
+        } else {
+            *error_message =
+                "native scene capture surface must be exactly scene or hud";
+            g_scene_capture.status = "failed";
+            g_scene_capture.error_message = *error_message;
+            return false;
+        }
+    }
+
     char directory_value[32768] = {};
     const auto directory_length = GetEnvironmentVariableA(
         kCaptureDirectoryEnvironment,
@@ -86,13 +114,43 @@ bool InitializeNativeSceneCapture(std::string* error_message) {
         g_scene_capture.error_message = *error_message;
         return false;
     }
+    if (g_scene_capture.surface == CaptureSurface::Hud) {
+        uintptr_t device_pointer_global = 0;
+        if (!TryGetNativeSceneLayoutValue(
+                "d3d9_device_pointer_global", &device_pointer_global)) {
+            *error_message =
+                "native HUD capture layout is missing d3d9_device_pointer_global";
+            RemoveNativeSceneCaptureHooks();
+            g_scene_capture.status = "failed";
+            g_scene_capture.error_message = *error_message;
+            return false;
+        }
+        device_pointer_global = ProcessMemory::Instance()
+            .ResolveGameAddressOrZero(device_pointer_global);
+        if (device_pointer_global == 0 ||
+            !InstallD3d9FrameHook(
+                device_pointer_global,
+                &OnNativeHudEndScene,
+                error_message)) {
+            if (error_message->empty()) {
+                *error_message =
+                    "native HUD capture could not register its EndScene boundary";
+            }
+            RemoveNativeSceneCaptureHooks();
+            g_scene_capture.status = "failed";
+            g_scene_capture.error_message = *error_message;
+            return false;
+        }
+        g_scene_capture.hud_end_scene_callback_registered = true;
+    }
 
     g_scene_capture.initialized = true;
     g_scene_capture.status = "idle";
     g_scene_capture.error_message.clear();
     Log(
-        "Native scene capture initialized. directory=" +
-        g_scene_capture.directory.string());
+        "Native scene capture initialized. surface=" +
+        std::string(CaptureSurfaceLabel(g_scene_capture.surface)) +
+        " directory=" + g_scene_capture.directory.string());
     return true;
 }
 
@@ -102,6 +160,7 @@ void ShutdownNativeSceneCapture() {
     g_scene_capture_callers.clear();
     g_scene_capture_objects.clear();
     g_scene_capture_mesh_objects.clear();
+    g_pending_exact_text_captures.clear();
     g_scene_capture = NativeSceneCaptureState{};
 }
 
@@ -109,19 +168,6 @@ bool QueueNativeSceneCapture(
     std::string_view label,
     std::string* error_message) {
     return QueueNativeSceneCaptureSequence(label, 1, error_message);
-}
-
-std::string NativeSceneSequenceLabel(
-    std::string_view base_label,
-    std::uint32_t frame_index,
-    std::uint32_t frame_count) {
-    if (frame_count == 1) {
-        return std::string(base_label);
-    }
-    std::ostringstream stream;
-    stream << base_label << "-frame-" << std::setw(4)
-           << std::setfill('0') << frame_index;
-    return stream.str();
 }
 
 bool QueueNativeSceneCaptureSequence(
@@ -224,6 +270,7 @@ bool TryGetNativeSceneCaptureStatus(NativeSceneCaptureStatus* status) {
     status->requested = g_scene_capture.requested;
     status->initialized = g_scene_capture.initialized;
     status->state = g_scene_capture.status;
+    status->surface = CaptureSurfaceLabel(g_scene_capture.surface);
     status->label = g_scene_capture.pending_label.empty()
         ? g_scene_capture.active_label
         : g_scene_capture.pending_label;
@@ -302,51 +349,24 @@ void NativeSceneCaptureObservePlayerFixedTick(
 }
 
 void NativeSceneCaptureBeginFrame(void* region, const char* scene_kind) {
+    if (g_scene_capture.surface == CaptureSurface::Hud) {
+        return;
+    }
     BeginSceneFrameCapture(region, scene_kind);
 }
 
 void NativeSceneCaptureEndFrame(void* region) {
+    if (g_scene_capture.surface == CaptureSurface::Hud) {
+        ObserveHudCameraBoundary(region);
+        return;
+    }
     if (!g_scene_capture.initialized || region == nullptr ||
         g_scene_capture.frame.region != reinterpret_cast<uintptr_t>(region)) {
         return;
     }
-    if (!g_scene_capture.frame_active) {
-        g_pending_sprite_draws.clear();
-        g_scene_capture_callers.clear();
-        g_scene_capture_objects.clear();
-        g_scene_capture_mesh_objects.clear();
-        return;
-    }
-
     g_scene_capture.frame.camera = ReadCameraCapture(
         g_scene_capture.frame.region);
-    if (g_scene_capture.frame.draws.empty()) {
-        FailActiveSceneCapture(
-            "native scene capture reached the scene end without observing a draw");
-    } else {
-        std::string write_error;
-        if (WriteNativeSceneCaptureFile(&write_error)) {
-            ++g_scene_capture.captured_frame_count;
-            g_scene_capture.error_message.clear();
-            g_scene_capture.frame_active = false;
-            if (g_scene_capture.captured_frame_count <
-                g_scene_capture.requested_frame_count) {
-                g_scene_capture.pending_label = NativeSceneSequenceLabel(
-                    g_scene_capture.sequence_base_label,
-                    g_scene_capture.captured_frame_count,
-                    g_scene_capture.requested_frame_count);
-                g_scene_capture.status = "armed";
-            } else {
-                g_scene_capture.status = "complete";
-            }
-        } else {
-            FailActiveSceneCapture(std::move(write_error));
-        }
-    }
-    g_pending_sprite_draws.clear();
-    g_scene_capture_callers.clear();
-    g_scene_capture_objects.clear();
-    g_scene_capture_mesh_objects.clear();
+    FinalizeActiveNativeSceneCapture();
 }
 
 void NativeSceneCaptureBeginSortedQueue(void* queue, int pass) {
@@ -420,4 +440,63 @@ void NativeSceneCaptureEndSpriteDraw() {
     if (g_scene_capture.frame_active && !g_pending_sprite_draws.empty()) {
         g_pending_sprite_draws.pop_back();
     }
+}
+
+void NativeSceneCaptureBeginExactText(
+    std::string_view text,
+    std::uintptr_t caller_address) {
+    if (!g_scene_capture.frame_active) {
+        return;
+    }
+    if (text.size() > 4096) {
+        FailActiveSceneCapture(
+            "native scene capture exact-text run exceeded its 4096-byte bound");
+        return;
+    }
+    PendingExactTextCapture capture;
+    capture.text.assign(text.begin(), text.end());
+    capture.caller_address = caller_address;
+    capture.first_draw_index = g_scene_capture.frame.draws.size();
+    g_pending_exact_text_captures.push_back(std::move(capture));
+}
+
+void NativeSceneCaptureEndExactText() {
+    if (!g_scene_capture.frame_active ||
+        g_pending_exact_text_captures.empty()) {
+        return;
+    }
+    auto pending = std::move(g_pending_exact_text_captures.back());
+    g_pending_exact_text_captures.pop_back();
+    ExactTextCapture capture;
+    capture.text = std::move(pending.text);
+    capture.caller_preferred_address =
+        PreferredAddress(pending.caller_address);
+    capture.first_draw_order = static_cast<std::uint32_t>(
+        pending.first_draw_index);
+    const auto end = g_scene_capture.frame.draws.size();
+    capture.draw_count = static_cast<std::uint32_t>(
+        end - pending.first_draw_index);
+    if (capture.draw_count != 0) {
+        capture.screen_rect = {
+            (std::numeric_limits<float>::max)(),
+            (std::numeric_limits<float>::max)(),
+            (std::numeric_limits<float>::lowest)(),
+            (std::numeric_limits<float>::lowest)(),
+        };
+        for (std::size_t index = pending.first_draw_index;
+             index < end;
+             ++index) {
+            const auto& rect =
+                g_scene_capture.frame.draws[index].screen_rect;
+            capture.screen_rect[0] =
+                (std::min)(capture.screen_rect[0], rect[0]);
+            capture.screen_rect[1] =
+                (std::min)(capture.screen_rect[1], rect[1]);
+            capture.screen_rect[2] =
+                (std::max)(capture.screen_rect[2], rect[2]);
+            capture.screen_rect[3] =
+                (std::max)(capture.screen_rect[3], rect[3]);
+        }
+    }
+    g_scene_capture.frame.exact_text.push_back(std::move(capture));
 }

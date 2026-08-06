@@ -13,6 +13,9 @@ void __fastcall HookExactTextRender(
     const auto caller_address = reinterpret_cast<uintptr_t>(_ReturnAddress());
     const auto widget_pointer = CaptureCallerWidgetPointer();
 
+    NativeSceneCaptureBeginExactText(
+        text != nullptr ? std::string_view(text) : std::string_view{},
+        caller_address);
     BeginExactTextRenderCapture(self, arg2, caller_address, widget_pointer, arg9, arg10, text);
 
     const auto original = GetX86HookTrampoline<ExactTextRenderFn>(g_debug_ui_overlay_state.exact_text_render_hook);
@@ -21,6 +24,7 @@ void __fastcall HookExactTextRender(
     }
 
     EndExactTextRenderCapture();
+    NativeSceneCaptureEndExactText();
 }
 
 void __fastcall HookDarkCloudBrowserExactTextRender(
@@ -46,6 +50,9 @@ void __fastcall HookDarkCloudBrowserExactTextRender(
     }
 
     const auto widget_pointer = CaptureCallerWidgetPointer();
+    NativeSceneCaptureBeginExactText(
+        text != nullptr ? std::string_view(text) : std::string_view{},
+        caller_address);
     BeginExactTextRenderCapture(self, arg2, caller_address, widget_pointer, arg9, arg10, text);
 
     const auto original =
@@ -55,6 +62,7 @@ void __fastcall HookDarkCloudBrowserExactTextRender(
     }
 
     EndExactTextRenderCapture();
+    NativeSceneCaptureEndExactText();
 }
 
 void __fastcall HookGlyphDrawHelper(void* self, void* /*unused_edx*/, float arg2, float arg3) {

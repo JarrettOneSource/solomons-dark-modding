@@ -127,6 +127,9 @@ int LuaDebugGetNativeSceneCaptureStatus(lua_State* state) {
     lua_setfield(state, -2, "initialized");
     lua_pushlstring(state, status.state.c_str(), status.state.size());
     lua_setfield(state, -2, "state");
+    lua_pushlstring(
+        state, status.surface.c_str(), status.surface.size());
+    lua_setfield(state, -2, "surface");
     lua_pushlstring(state, status.label.c_str(), status.label.size());
     lua_setfield(state, -2, "label");
     lua_pushlstring(

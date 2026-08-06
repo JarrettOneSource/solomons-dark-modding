@@ -158,6 +158,8 @@ class OwnedSoloSession:
         participant_id: str,
         test_blank_boneyard: bool,
         headless: bool = True,
+        quick_start_element: str = "fire",
+        quick_start_discipline: str = "mind",
     ) -> None:
         self.instance = instance
         self.ports = ports
@@ -165,6 +167,8 @@ class OwnedSoloSession:
         self.participant_id = participant_id
         self.test_blank_boneyard = test_blank_boneyard
         self.headless = headless
+        self.quick_start_element = quick_start_element
+        self.quick_start_discipline = quick_start_discipline
         self.pipe_name = f"SolomonDarkModLoader_LuaExec_{instance}"
         self.runtime_root = RUNTIME_ROOT
         self.process_ids: list[int] = []
@@ -233,7 +237,10 @@ class OwnedSoloSession:
             "-Instance",
             self.instance,
             "-Preset",
-            "map_create_fire_mind_hub",
+            (
+                f"map_create_{self.quick_start_element}_"
+                f"{self.quick_start_discipline}_hub"
+            ),
             "-RuntimeRoot",
             local_sync.path_for_powershell(self.runtime_root),
             "-LocalPort",
@@ -251,9 +258,9 @@ class OwnedSoloSession:
             "-FreshInstall",
             "-QuickStart",
             "-QuickStartElement",
-            "fire",
+            self.quick_start_element,
             "-QuickStartDiscipline",
-            "mind",
+            self.quick_start_discipline,
             "-ExactModIds",
             self.mod_id,
             "-LuaExecTargetModId",

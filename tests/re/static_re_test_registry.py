@@ -60,6 +60,12 @@ from static_re_native_scene_composition_contracts import (
     test_native_scene_physical_layer_list_is_pinned,
     test_native_scene_world_sort_key_and_ties_are_pinned,
 )
+from static_re_native_hud_contracts import (
+    test_native_hud_element_census_and_rects_are_pinned,
+    test_native_hud_fill_cooldown_charge_and_notification_behavior_are_pinned,
+    test_native_hud_recorder_is_self_provenanced_settled_and_visual_diffable,
+    test_native_hud_visibility_scaling_and_multiplayer_are_pinned,
+)
 from static_re_webgame_asset_contracts import (
     test_webgame_asset_double_build_and_weight_report_are_pinned,
     test_webgame_asset_fixture_covers_native_families_and_golden_references,
@@ -950,6 +956,22 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native scene decor determinism path is pinned",
         test_native_scene_decor_determinism_path_is_pinned,
+    ),
+    (
+        "Native HUD element census and rects are pinned",
+        test_native_hud_element_census_and_rects_are_pinned,
+    ),
+    (
+        "Native HUD fills, cooldown, charge, and notifications are pinned",
+        test_native_hud_fill_cooldown_charge_and_notification_behavior_are_pinned,
+    ),
+    (
+        "Native HUD visibility, scaling, and multiplayer are pinned",
+        test_native_hud_visibility_scaling_and_multiplayer_are_pinned,
+    ),
+    (
+        "Native HUD recorder is self-provenanced, settled, and visual-diffable",
+        test_native_hud_recorder_is_self_provenanced_settled_and_visual_diffable,
     ),
     (
         "Webgame asset manifest schema and provenance are pinned",

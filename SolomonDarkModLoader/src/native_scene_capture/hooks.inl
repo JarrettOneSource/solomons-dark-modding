@@ -7,9 +7,111 @@ void __fastcall HookFixedRegionRender(
     if (original == nullptr) {
         return;
     }
-    BeginSceneFrameCapture(self, kFixedRegionNames[Index]);
+    NativeSceneCaptureBeginFrame(self, kFixedRegionNames[Index]);
     original(self);
     NativeSceneCaptureEndFrame(self);
+}
+
+void __fastcall HookNativeHudRender(
+    void* self,
+    void* /*unused_edx*/) {
+    const auto original = GetX86HookTrampoline<NativeHudRenderFn>(
+        g_scene_capture.hud_render_hook);
+    if (original == nullptr) {
+        FailActiveSceneCapture(
+            "native HUD capture lost the retail HUD render trampoline");
+        return;
+    }
+    BeginHudFrameCapture(self);
+    original(self);
+    if (g_scene_capture.frame_active &&
+        g_scene_capture.frame.surface == CaptureSurface::Hud &&
+        g_scene_capture.frame.hud.gameplay_address !=
+            reinterpret_cast<uintptr_t>(self)) {
+        FailActiveSceneCapture(
+            "native HUD capture crossed gameplay objects during one render boundary");
+    }
+}
+
+void OnNativeHudEndScene(IDirect3DDevice9* /*device*/) {
+    if (g_scene_capture.frame_active &&
+        g_scene_capture.frame.surface == CaptureSurface::Hud) {
+        FinalizeActiveNativeSceneCapture();
+    }
+}
+
+void __fastcall HookNativeHudSlotRender(
+    void* self,
+    void* /*unused_edx*/) {
+    if (g_scene_capture.frame_active &&
+        g_scene_capture.frame.surface == CaptureSurface::Hud) {
+        if (g_scene_capture.frame.hud.slots.size() >= 64) {
+            FailActiveSceneCapture(
+                "native HUD capture exceeded its 64 rendered-slot bound");
+        } else {
+            HudSlotCapture capture;
+            capture.draw_order = static_cast<std::uint32_t>(
+                g_scene_capture.frame.draws.size());
+            std::string slot_error;
+            if (CaptureHudSlotState(self, &capture, &slot_error)) {
+                g_scene_capture.frame.hud.slots.push_back(
+                    std::move(capture));
+            } else {
+                FailActiveSceneCapture(std::move(slot_error));
+            }
+        }
+    }
+    const auto original = GetX86HookTrampoline<NativeHudSlotRenderFn>(
+        g_scene_capture.hud_slot_render_hook);
+    if (original != nullptr) {
+        original(self);
+    }
+}
+
+void __fastcall HookNativeHudStripRender(
+    void* sprite,
+    void* /*unused_edx*/,
+    float x,
+    float y,
+    float width) {
+    const auto original = GetX86HookTrampoline<NativeHudStripRenderFn>(
+        g_scene_capture.hud_strip_render_hook);
+    if (original == nullptr) {
+        FailActiveSceneCapture(
+            "native HUD capture lost the retail strip-render trampoline");
+        return;
+    }
+
+    const bool capturing =
+        g_scene_capture.frame_active &&
+        g_scene_capture.frame.surface == CaptureSurface::Hud;
+    const auto first_draw = g_scene_capture.frame.draws.size();
+    original(sprite, x, y, width);
+    if (!capturing || !g_scene_capture.frame_active ||
+        g_scene_capture.frame.surface != CaptureSurface::Hud) {
+        return;
+    }
+    if (g_scene_capture.frame.hud.strips.size() >= 32) {
+        FailActiveSceneCapture(
+            "native HUD capture exceeded its 32 rendered-strip bound");
+        return;
+    }
+    if (!std::isfinite(x) || !std::isfinite(y) ||
+        !std::isfinite(width) || width < 0.0f) {
+        FailActiveSceneCapture(
+            "native HUD capture observed invalid strip geometry");
+        return;
+    }
+    HudStripCapture capture;
+    capture.art = ResolveNativeSceneArt(
+        reinterpret_cast<uintptr_t>(sprite));
+    capture.first_draw_order = static_cast<std::uint32_t>(first_draw);
+    capture.draw_count = static_cast<std::uint32_t>(
+        g_scene_capture.frame.draws.size() - first_draw);
+    capture.x = x;
+    capture.y = y;
+    capture.width = width;
+    g_scene_capture.frame.hud.strips.push_back(std::move(capture));
 }
 
 void __fastcall HookSceneRenderQueueInsert(
@@ -118,6 +220,13 @@ void __fastcall HookNativeSceneTerrainRender(
 }
 
 void RemoveNativeSceneCaptureHooks() {
+    if (g_scene_capture.hud_end_scene_callback_registered) {
+        RemoveD3d9FrameCallback(&OnNativeHudEndScene);
+        g_scene_capture.hud_end_scene_callback_registered = false;
+    }
+    RemoveX86Hook(&g_scene_capture.hud_strip_render_hook);
+    RemoveX86Hook(&g_scene_capture.hud_slot_render_hook);
+    RemoveX86Hook(&g_scene_capture.hud_render_hook);
     RemoveX86Hook(&g_scene_capture.terrain_render_hook);
     RemoveX86Hook(&g_scene_capture.road_render_hook);
     RemoveX86Hook(&g_scene_capture.clear_hook);
@@ -138,6 +247,13 @@ bool TryGetNativeSceneLayoutValue(
 }
 
 bool InstallNativeSceneCaptureHooks(std::string* error_message) {
+    // These retail 0w0e addresses belong only to the opt-in G9 observation
+    // surface. Keeping them local avoids adding HUD-only keys to the shared
+    // binary-layout file whose exact bytes are provenance for older goldens.
+    constexpr uintptr_t kHudRenderAddress = 0x005D2520;
+    constexpr uintptr_t kHudSlotRenderAddress = 0x005D3E10;
+    constexpr uintptr_t kHudStripRenderAddress = 0x00415230;
+    constexpr uintptr_t kGameplayGlobalAddress = 0x0081C264;
     constexpr std::array<const char*, 5> kFixedRegionLayoutKeys = {
         "courtyard_render",
         "mortuary_render",
@@ -162,6 +278,10 @@ bool InstallNativeSceneCaptureHooks(std::string* error_message) {
     uintptr_t terrain_render = 0;
     uintptr_t native_renderer_global = 0;
     uintptr_t native_renderer_draw_state_offset = 0;
+    uintptr_t hud_render = kHudRenderAddress;
+    uintptr_t hud_slot_render = kHudSlotRenderAddress;
+    uintptr_t hud_strip_render = kHudStripRenderAddress;
+    uintptr_t gameplay_global = kGameplayGlobalAddress;
     for (std::size_t index = 0; index < fixed_region_targets.size(); ++index) {
         if (!TryGetNativeSceneLayoutValue(
                 kFixedRegionLayoutKeys[index],
@@ -194,7 +314,6 @@ bool InstallNativeSceneCaptureHooks(std::string* error_message) {
         }
         return false;
     }
-
     auto& memory = ProcessMemory::Instance();
     for (auto& target : fixed_region_targets) {
         target = memory.ResolveGameAddressOrZero(target);
@@ -209,8 +328,17 @@ bool InstallNativeSceneCaptureHooks(std::string* error_message) {
     terrain_render = memory.ResolveGameAddressOrZero(terrain_render);
     native_renderer_global =
         memory.ResolveGameAddressOrZero(native_renderer_global);
+    if (g_scene_capture.surface == CaptureSurface::Hud) {
+        hud_render = memory.ResolveGameAddressOrZero(hud_render);
+        hud_slot_render =
+            memory.ResolveGameAddressOrZero(hud_slot_render);
+        hud_strip_render =
+            memory.ResolveGameAddressOrZero(hud_strip_render);
+        gameplay_global =
+            memory.ResolveGameAddressOrZero(gameplay_global);
+    }
 
-    const std::array<uintptr_t, 11> executable_targets = {
+    std::vector<uintptr_t> executable_targets = {
         fixed_region_targets[0],
         fixed_region_targets[1],
         fixed_region_targets[2],
@@ -223,6 +351,11 @@ bool InstallNativeSceneCaptureHooks(std::string* error_message) {
         road_render,
         terrain_render,
     };
+    if (g_scene_capture.surface == CaptureSurface::Hud) {
+        executable_targets.push_back(hud_render);
+        executable_targets.push_back(hud_slot_render);
+        executable_targets.push_back(hud_strip_render);
+    }
     if (std::any_of(
             executable_targets.begin(),
             executable_targets.end(),
@@ -231,7 +364,11 @@ bool InstallNativeSceneCaptureHooks(std::string* error_message) {
             }) ||
         native_renderer_global == 0 ||
         !memory.IsReadableRange(
-            native_renderer_global, sizeof(uintptr_t))) {
+            native_renderer_global, sizeof(uintptr_t)) ||
+        (g_scene_capture.surface == CaptureSurface::Hud &&
+         (gameplay_global == 0 ||
+          !memory.IsReadableRange(
+              gameplay_global, sizeof(uintptr_t))))) {
         if (error_message != nullptr) {
             *error_message =
                 "native scene capture targets failed executable/readable validation";
@@ -242,6 +379,7 @@ bool InstallNativeSceneCaptureHooks(std::string* error_message) {
     g_scene_capture.native_renderer_global = native_renderer_global;
     g_scene_capture.native_renderer_draw_state_offset =
         static_cast<std::size_t>(native_renderer_draw_state_offset);
+    g_scene_capture.hud_gameplay_global = gameplay_global;
 
     struct SceneHookInstall {
         uintptr_t target = 0;
@@ -250,7 +388,7 @@ bool InstallNativeSceneCaptureHooks(std::string* error_message) {
         const char* claim = nullptr;
     };
     std::vector<SceneHookInstall> hooks;
-    hooks.reserve(11);
+    hooks.reserve(14);
     for (std::size_t index = 0; index < fixed_region_targets.size(); ++index) {
         hooks.push_back(SceneHookInstall{
             fixed_region_targets[index],
@@ -295,6 +433,26 @@ bool InstallNativeSceneCaptureHooks(std::string* error_message) {
         &g_scene_capture.terrain_render_hook,
         "terrain_render",
     });
+    if (g_scene_capture.surface == CaptureSurface::Hud) {
+        hooks.push_back(SceneHookInstall{
+            hud_render,
+            reinterpret_cast<void*>(&HookNativeHudRender),
+            &g_scene_capture.hud_render_hook,
+            "hud_render",
+        });
+        hooks.push_back(SceneHookInstall{
+            hud_slot_render,
+            reinterpret_cast<void*>(&HookNativeHudSlotRender),
+            &g_scene_capture.hud_slot_render_hook,
+            "hud_slot_render",
+        });
+        hooks.push_back(SceneHookInstall{
+            hud_strip_render,
+            reinterpret_cast<void*>(&HookNativeHudStripRender),
+            &g_scene_capture.hud_strip_render_hook,
+            "hud_strip_render",
+        });
+    }
 
     for (const auto& hook : hooks) {
         std::string hook_error;

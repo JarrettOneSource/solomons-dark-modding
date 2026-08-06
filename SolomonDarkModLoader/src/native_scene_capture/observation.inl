@@ -10,6 +10,29 @@ const char* CapturePhaseLabel(CapturePhase phase) {
     return "unknown";
 }
 
+const char* CaptureSurfaceLabel(CaptureSurface surface) {
+    switch (surface) {
+        case CaptureSurface::Scene:
+            return "scene";
+        case CaptureSurface::Hud:
+            return "hud";
+    }
+    return "unknown";
+}
+
+std::string NativeSceneSequenceLabel(
+    std::string_view base_label,
+    std::uint32_t frame_index,
+    std::uint32_t frame_count) {
+    if (frame_count == 1) {
+        return std::string(base_label);
+    }
+    std::ostringstream stream;
+    stream << base_label << "-frame-" << std::setw(4)
+           << std::setfill('0') << frame_index;
+    return stream.str();
+}
+
 uintptr_t EffectiveCallerAddress(uintptr_t immediate_caller) {
     return g_scene_capture_callers.empty()
         ? immediate_caller
@@ -53,6 +76,41 @@ CameraCapture ReadCameraCapture(uintptr_t region) {
     return camera;
 }
 
+bool IsRunnableCameraCapture(const CameraCapture& camera) {
+    return std::isfinite(camera.scale) && camera.scale > 0.0f &&
+        std::all_of(
+            camera.primary_view.begin(),
+            camera.primary_view.end(),
+            [](float value) { return std::isfinite(value); }) &&
+        camera.primary_view[2] > 0.0f &&
+        camera.primary_view[3] > 0.0f;
+}
+
+void ObserveHudCameraBoundary(void* region) {
+    if (g_scene_capture.surface != CaptureSurface::Hud || region == nullptr) {
+        return;
+    }
+    const auto region_address = reinterpret_cast<uintptr_t>(region);
+    const auto camera = ReadCameraCapture(region_address);
+    g_scene_capture.last_region = region_address;
+    g_scene_capture.last_camera = camera;
+    g_scene_capture.last_camera_available = IsRunnableCameraCapture(camera);
+    if (g_scene_capture.status != "armed") {
+        return;
+    }
+    uintptr_t gameplay = 0;
+    if (!g_scene_capture.last_camera_available ||
+        g_scene_capture.hud_gameplay_global == 0 ||
+        !ProcessMemory::Instance().TryReadValue(
+            g_scene_capture.hud_gameplay_global, &gameplay) ||
+        gameplay == 0) {
+        FailActiveSceneCapture(
+            "native HUD capture reached the scene-overlay boundary without a runnable gameplay object");
+        return;
+    }
+    BeginHudFrameCapture(reinterpret_cast<void*>(gameplay));
+}
+
 std::string ReadCaptureInstanceName() {
     char value[512] = {};
     const auto length = GetEnvironmentVariableA(
@@ -88,12 +146,21 @@ std::array<float, 4> ClipScreenRect(
     const float viewport_bottom =
         g_scene_capture.frame.camera.primary_view[3] *
         g_scene_capture.frame.camera.scale;
-    return {
+    std::array<float, 4> clipped = {
         (std::max)(rect[0], 0.0f),
         (std::max)(rect[1], 0.0f),
         (std::min)(rect[2], viewport_right),
         (std::min)(rect[3], viewport_bottom),
     };
+    std::array<float, 4> renderer_clip = {};
+    if (g_scene_capture.frame.surface == CaptureSurface::Hud &&
+        TryReadRendererClipRect(&renderer_clip)) {
+        clipped[0] = (std::max)(clipped[0], renderer_clip[0]);
+        clipped[1] = (std::max)(clipped[1], renderer_clip[1]);
+        clipped[2] = (std::min)(clipped[2], renderer_clip[2]);
+        clipped[3] = (std::min)(clipped[3], renderer_clip[3]);
+    }
+    return clipped;
 }
 
 bool AddressInRange(
@@ -143,6 +210,9 @@ bool CoversMostOfViewport(const DrawCapture& draw) {
 }
 
 std::string ClassifySceneRole(const DrawCapture& draw) {
+    if (g_scene_capture.frame.surface == CaptureSurface::Hud) {
+        return "screen-overlay";
+    }
     if (draw.draw_kind == "clear") {
         return "framebuffer-clear";
     }
@@ -172,6 +242,9 @@ std::string ClassifySceneRole(const DrawCapture& draw) {
 }
 
 std::string ClassifySceneLayer(const DrawCapture& draw) {
+    if (g_scene_capture.frame.surface == CaptureSurface::Hud) {
+        return "screen-overlay";
+    }
     if (draw.draw_kind == "clear") {
         return "framebuffer-clear";
     }
@@ -303,6 +376,9 @@ void ScaleLogicalQuadToScreenPixels(DrawCapture* draw) {
     if (draw == nullptr || draw->layer == "framebuffer-clear") {
         return;
     }
+    if (g_scene_capture.frame.surface == CaptureSurface::Hud) {
+        return;
+    }
     const auto scale = g_scene_capture.frame.camera.scale;
     if (!std::isfinite(scale) || scale <= 0.0f) {
         return;
@@ -353,6 +429,293 @@ void AppendDrawCapture(DrawCapture draw) {
         static_cast<std::uint32_t>(g_scene_capture.frame.draws.size());
     CompleteDrawCapture(&draw);
     g_scene_capture.frame.draws.push_back(std::move(draw));
+}
+
+bool CaptureHudFrameState(
+    uintptr_t gameplay_address,
+    std::string* error_message) {
+    auto& frame = g_scene_capture.frame;
+    auto& hud = frame.hud;
+    hud = HudCapture{};
+    hud.gameplay_address = gameplay_address;
+
+    SDModPlayerState player;
+    if (!TryGetPlayerState(&player) || !player.valid ||
+        player.actor_address == 0 || player.progression_address == 0) {
+        if (error_message != nullptr) {
+            *error_message =
+                "native HUD capture reached the retail renderer without a runnable local player state";
+        }
+        return false;
+    }
+    frame.player = player;
+    frame.player_available = true;
+    hud.available = true;
+    hud.actor_address = player.actor_address;
+    hud.progression_address = player.progression_address;
+    hud.simulation_tick = player.local_player_tick_count;
+    hud.hp = player.hp;
+    hud.max_hp = player.max_hp;
+    hud.mp = player.mp;
+    hud.max_mp = player.max_mp;
+    hud.xp = player.xp;
+    hud.level = player.level;
+    hud.gold = player.gold;
+    hud.persistent_status_flags = player.persistent_status_flags;
+    hud.transient_status_flags = player.transient_status_flags;
+    hud.poison_remaining_ticks = player.poison_remaining_ticks;
+    hud.webbed_remaining_ticks = player.webbed_remaining_ticks;
+    hud.damage_x4_remaining_ticks = player.damage_x4_remaining_ticks;
+
+    std::uint8_t dead = 0;
+    std::uint8_t score_visible = 0;
+    std::uint8_t vitals_visible = 0;
+    std::int32_t pending_choice_a = 0;
+    std::int32_t pending_choice_b = 0;
+    uintptr_t featured_enemy = 0;
+    std::int32_t ally_count = 0;
+    std::int32_t ally_capacity = 0;
+    uintptr_t ally_rows = 0;
+    if (!TryReadRuntimeField(player.actor_address, 0x160, &dead) ||
+        !TryReadRuntimeField(
+            player.actor_address, 0x1C4, &hud.magic_shield_current) ||
+        !TryReadRuntimeField(
+            player.actor_address, 0x1C8, &hud.magic_shield_maximum) ||
+        !TryReadRuntimeField(
+            player.progression_address, 0x740, &hud.mana_reserve) ||
+        !TryReadRuntimeField(gameplay_address, 0x1AC3, &score_visible) ||
+        !TryReadRuntimeField(gameplay_address, 0x1AC4, &vitals_visible) ||
+        !TryReadRuntimeField(
+            player.progression_address, 0x44, &pending_choice_a) ||
+        !TryReadRuntimeField(
+            player.progression_address, 0x48, &pending_choice_b) ||
+        !TryReadRuntimeField(
+            gameplay_address, 0x1C2C, &featured_enemy) ||
+        !TryReadRuntimeField(gameplay_address, 0x1C14, &ally_rows) ||
+        !TryReadRuntimeField(gameplay_address, 0x1C18, &ally_capacity) ||
+        !TryReadRuntimeField(gameplay_address, 0x1C20, &ally_count)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "native HUD capture could not read the retail HUD state at its render boundary";
+        }
+        return false;
+    }
+    const std::array<float, 4> finite_hud_values = {
+        hud.magic_shield_current,
+        hud.magic_shield_maximum,
+        hud.mana_reserve,
+        hud.mp,
+    };
+    if (!std::all_of(
+            finite_hud_values.begin(),
+            finite_hud_values.end(),
+            [](float value) { return std::isfinite(value); })) {
+        if (error_message != nullptr) {
+            *error_message =
+                "native HUD capture observed non-finite retail vitals or charge state";
+        }
+        return false;
+    }
+    hud.local_dead = dead != 0;
+    hud.score_indicator_visible = score_visible != 0;
+    hud.vitals_and_slots_visible = vitals_visible != 0;
+    hud.level_up_choice_active = pending_choice_a + pending_choice_b != 0;
+    hud.featured_enemy_available = featured_enemy != 0;
+
+    SDModWorldState world;
+    if (TryGetWorldState(&world) && world.valid) {
+        hud.world_available = true;
+        hud.wave = world.wave;
+    }
+
+    if (ally_count < 0 || ally_count > 32 || ally_capacity < ally_count ||
+        (ally_count > 0 && ally_rows == 0)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "native HUD capture observed an invalid ally-bar vector instead of guessing its rows";
+        }
+        return false;
+    }
+    hud.ally_bars.reserve(static_cast<std::size_t>(ally_count));
+    for (std::int32_t index = 0; index < ally_count; ++index) {
+        uintptr_t glyph = 0;
+        float health_ratio = 0.0f;
+        const auto row = ally_rows + static_cast<uintptr_t>(index) * 8;
+        if (!ProcessMemory::Instance().TryReadValue(row, &glyph) ||
+            !ProcessMemory::Instance().TryReadValue(
+                row + sizeof(std::uint32_t), &health_ratio) ||
+            glyph == 0 || !std::isfinite(health_ratio)) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "native HUD capture could not resolve every stock ally-bar row";
+            }
+            return false;
+        }
+        HudAllyBarCapture ally;
+        ally.glyph = ResolveNativeSceneArt(glyph);
+        ally.health_ratio = health_ratio;
+        hud.ally_bars.push_back(std::move(ally));
+    }
+    return true;
+}
+
+bool CaptureHudSlotState(
+    void* slot,
+    HudSlotCapture* capture,
+    std::string* error_message) {
+    if (slot == nullptr || capture == nullptr) {
+        return false;
+    }
+    const auto address = reinterpret_cast<uintptr_t>(slot);
+    float x = 0.0f;
+    float y = 0.0f;
+    float width = 0.0f;
+    float height = 0.0f;
+    if (!TryReadRuntimeField(address, 0xB4, &capture->kind_id) ||
+        !TryReadRuntimeField(address, 0x14, &x) ||
+        !TryReadRuntimeField(address, 0x18, &y) ||
+        !TryReadRuntimeField(address, 0x1C, &width) ||
+        !TryReadRuntimeField(address, 0x20, &height) ||
+        !TryReadRuntimeField(address, 0x78, &capture->selection_flag) ||
+        !TryReadRuntimeField(address, 0xB8, &capture->skill_id) ||
+        !TryReadRuntimeField(address, 0xBC, &capture->item_value) ||
+        !TryReadRuntimeField(address, 0xC0, &capture->presentation_value) ||
+        !TryReadRuntimeField(address, 0xE4, &capture->count) ||
+        !TryReadRuntimeField(address, 0xE8, &capture->input_slot) ||
+        !std::isfinite(x) || !std::isfinite(y) ||
+        !std::isfinite(width) || !std::isfinite(height) ||
+        !std::isfinite(capture->presentation_value)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "native HUD capture could not read a rendered belt-slot state";
+        }
+        return false;
+    }
+    capture->object_address = address;
+    capture->rect = {x, y, x + width, y + height};
+    if (capture->kind_id != 0x1B67 || capture->skill_id < 0) {
+        return true;
+    }
+
+    const auto progression = g_scene_capture.frame.hud.progression_address;
+    uintptr_t entries = 0;
+    std::int32_t entry_count = 0;
+    if (progression == 0 ||
+        !TryReadRuntimeField(progression, 0x20, &entries) ||
+        !TryReadRuntimeField(progression, 0x24, &entry_count) ||
+        capture->skill_id >= entry_count || entries == 0) {
+        if (error_message != nullptr) {
+            *error_message =
+                "native HUD capture could not resolve the rendered skill slot in the progression table";
+        }
+        return false;
+    }
+    const auto entry = entries +
+        static_cast<uintptr_t>(capture->skill_id) * 0x70;
+    if (!TryReadRuntimeField(
+            entry, 0x64, &capture->cooldown_current) ||
+        !TryReadRuntimeField(
+            entry, 0x68, &capture->cooldown_capacity) ||
+        !std::isfinite(capture->cooldown_current) ||
+        !std::isfinite(capture->cooldown_capacity)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "native HUD capture could not read the rendered skill cooldown pair";
+        }
+        return false;
+    }
+    capture->cooldown_available = true;
+    return true;
+}
+
+void BeginHudFrameCapture(void* gameplay) {
+    if (!g_scene_capture.initialized ||
+        g_scene_capture.surface != CaptureSurface::Hud ||
+        g_scene_capture.status != "armed" || gameplay == nullptr) {
+        return;
+    }
+    if (!g_scene_capture.last_camera_available ||
+        g_scene_capture.last_region == 0) {
+        FailActiveSceneCapture(
+            "native HUD capture reached the HUD renderer before a runnable scene camera boundary");
+        return;
+    }
+
+    g_scene_capture.frame = SceneFrameCapture{};
+    auto& frame = g_scene_capture.frame;
+    frame.label = g_scene_capture.pending_label;
+    frame.surface = CaptureSurface::Hud;
+    frame.scene_kind = "gameplay_hud";
+    frame.instance = ReadCaptureInstanceName();
+    frame.region = g_scene_capture.last_region;
+    frame.sequence_index = g_scene_capture.captured_frame_count;
+    frame.render_observed_ms = GetTickCount64();
+    frame.player_fixed_tick_animation.swap(
+        g_scene_capture.pending_player_fixed_tick_animation);
+    frame.camera = g_scene_capture.last_camera;
+    std::string state_error;
+    if (!CaptureHudFrameState(
+            reinterpret_cast<uintptr_t>(gameplay), &state_error)) {
+        FailActiveSceneCapture(std::move(state_error));
+        return;
+    }
+
+    g_scene_capture.active_label = g_scene_capture.pending_label;
+    g_scene_capture.pending_label.clear();
+    g_scene_capture.status = "capturing";
+    g_scene_capture.error_message.clear();
+    g_scene_capture.frame_active = true;
+    g_scene_capture.phase = CapturePhase::PostQueue;
+    g_pending_sprite_draws.clear();
+    g_scene_capture_callers.clear();
+    g_scene_capture_objects.clear();
+    g_scene_capture_mesh_objects.clear();
+    g_pending_exact_text_captures.clear();
+}
+
+void FinalizeActiveNativeSceneCapture() {
+    if (!g_scene_capture.frame_active) {
+        g_pending_sprite_draws.clear();
+        g_scene_capture_callers.clear();
+        g_scene_capture_objects.clear();
+        g_scene_capture_mesh_objects.clear();
+        g_pending_exact_text_captures.clear();
+        return;
+    }
+    if (!g_pending_exact_text_captures.empty()) {
+        FailActiveSceneCapture(
+            "native scene capture observed an imbalanced exact-text render stack");
+    } else if (g_scene_capture.frame.draws.empty()) {
+        g_scene_capture.pending_label = g_scene_capture.frame.label;
+        g_scene_capture.active_label.clear();
+        g_scene_capture.frame_active = false;
+        g_scene_capture.status = "armed";
+        g_scene_capture.error_message.clear();
+    } else {
+        std::string write_error;
+        if (WriteNativeSceneCaptureFile(&write_error)) {
+            ++g_scene_capture.captured_frame_count;
+            g_scene_capture.error_message.clear();
+            g_scene_capture.frame_active = false;
+            if (g_scene_capture.captured_frame_count <
+                g_scene_capture.requested_frame_count) {
+                g_scene_capture.pending_label = NativeSceneSequenceLabel(
+                    g_scene_capture.sequence_base_label,
+                    g_scene_capture.captured_frame_count,
+                    g_scene_capture.requested_frame_count);
+                g_scene_capture.status = "armed";
+            } else {
+                g_scene_capture.status = "complete";
+            }
+        } else {
+            FailActiveSceneCapture(std::move(write_error));
+        }
+    }
+    g_pending_sprite_draws.clear();
+    g_scene_capture_callers.clear();
+    g_scene_capture_objects.clear();
+    g_scene_capture_mesh_objects.clear();
+    g_pending_exact_text_captures.clear();
 }
 
 ResolvedNativeArt MakeSyntheticArt(
@@ -520,6 +883,7 @@ void BeginSceneFrameCapture(void* region, const char* scene_kind) {
         return;
     }
     g_scene_capture.frame = SceneFrameCapture{};
+    g_scene_capture.frame.surface = CaptureSurface::Scene;
     g_scene_capture.frame.label = g_scene_capture.pending_label;
     g_scene_capture.frame.scene_kind = scene_kind;
     g_scene_capture.frame.instance = ReadCaptureInstanceName();

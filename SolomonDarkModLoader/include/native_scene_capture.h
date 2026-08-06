@@ -10,6 +10,7 @@ struct NativeSceneCaptureStatus {
     bool requested = false;
     bool initialized = false;
     std::string state;
+    std::string surface;
     std::string label;
     std::string output_path;
     std::string error_message;
@@ -54,5 +55,9 @@ void NativeSceneCaptureObserveTexturedQuad(
     const float* texture_vertices,
     std::uintptr_t caller_address);
 void NativeSceneCaptureEndSpriteDraw();
+void NativeSceneCaptureBeginExactText(
+    std::string_view text,
+    std::uintptr_t caller_address);
+void NativeSceneCaptureEndExactText();
 
 }  // namespace sdmod

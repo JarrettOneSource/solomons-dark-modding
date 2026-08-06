@@ -73,6 +73,169 @@ void WriteStringArray(
     stream << ']';
 }
 
+void WriteResolvedNativeArt(
+    std::ostream& stream,
+    const ResolvedNativeArt& art) {
+    stream << "{\"id\":\"" << EscapeSceneJson(art.id)
+           << "\",\"atlas\":\"" << EscapeSceneJson(art.atlas)
+           << "\",\"index\":";
+    if (art.sprite_index >= 0) {
+        stream << art.sprite_index;
+    } else {
+        stream << "null";
+    }
+    stream << ",\"texture_handle\":" << art.texture_handle
+           << ",\"resolution\":\""
+           << EscapeSceneJson(art.resolution)
+           << "\",\"candidates\":";
+    WriteStringArray(stream, art.candidates);
+    stream << '}';
+}
+
+void WriteHudCapture(
+    std::ostream& stream,
+    const HudCapture& hud) {
+    if (!hud.available) {
+        stream << "null";
+        return;
+    }
+    stream << "{\"gameplay_address\":" << hud.gameplay_address
+           << ",\"actor_address\":" << hud.actor_address
+           << ",\"progression_address\":" << hud.progression_address
+           << ",\"simulation_tick\":" << hud.simulation_tick
+           << ",\"local_dead\":"
+           << (hud.local_dead ? "true" : "false")
+           << ",\"visibility\":{\"score_indicator\":"
+           << (hud.score_indicator_visible ? "true" : "false")
+           << ",\"vitals_and_slots\":"
+           << (hud.vitals_and_slots_visible ? "true" : "false")
+           << ",\"level_up_choice\":"
+           << (hud.level_up_choice_active ? "true" : "false")
+           << ",\"featured_enemy\":"
+           << (hud.featured_enemy_available ? "true" : "false")
+           << "},\"health\":{\"current\":";
+    WriteFloat(stream, hud.hp);
+    stream << ",\"maximum\":";
+    WriteFloat(stream, hud.max_hp);
+    stream << ",\"magic_shield_current\":";
+    WriteFloat(stream, hud.magic_shield_current);
+    stream << ",\"magic_shield_maximum\":";
+    WriteFloat(stream, hud.magic_shield_maximum);
+    stream << "},\"mana\":{\"current\":";
+    WriteFloat(stream, hud.mp);
+    stream << ",\"maximum\":";
+    WriteFloat(stream, hud.max_mp);
+    stream << ",\"reserve\":";
+    WriteFloat(stream, hud.mana_reserve);
+    stream << "},\"progression\":{\"xp\":" << hud.xp
+           << ",\"level\":" << hud.level
+           << ",\"gold\":" << hud.gold
+           << ",\"wave\":";
+    if (hud.world_available) {
+        stream << hud.wave;
+    } else {
+        stream << "null";
+    }
+    stream << "},\"status\":{\"persistent_flags\":"
+           << static_cast<unsigned int>(hud.persistent_status_flags)
+           << ",\"transient_flags\":"
+           << static_cast<unsigned int>(hud.transient_status_flags)
+           << ",\"poison_remaining_ticks\":"
+           << hud.poison_remaining_ticks
+           << ",\"webbed_remaining_ticks\":"
+           << hud.webbed_remaining_ticks
+           << ",\"damage_x4_remaining_ticks\":"
+           << hud.damage_x4_remaining_ticks
+           << "},\"ally_bars\":[";
+    for (std::size_t index = 0; index < hud.ally_bars.size(); ++index) {
+        if (index != 0) {
+            stream << ',';
+        }
+        stream << "{\"glyph\":";
+        WriteResolvedNativeArt(stream, hud.ally_bars[index].glyph);
+        stream << ",\"health_ratio\":";
+        WriteFloat(stream, hud.ally_bars[index].health_ratio);
+        stream << '}';
+    }
+    stream << "],\"strips\":[";
+    for (std::size_t index = 0; index < hud.strips.size(); ++index) {
+        if (index != 0) {
+            stream << ',';
+        }
+        const auto& strip = hud.strips[index];
+        stream << "{\"art\":";
+        WriteResolvedNativeArt(stream, strip.art);
+        stream << ",\"first_draw_order\":" << strip.first_draw_order
+               << ",\"draw_count\":" << strip.draw_count
+               << ",\"x\":";
+        WriteFloat(stream, strip.x);
+        stream << ",\"y\":";
+        WriteFloat(stream, strip.y);
+        stream << ",\"width\":";
+        WriteFloat(stream, strip.width);
+        stream << '}';
+    }
+    stream << "],\"slots\":[";
+    for (std::size_t index = 0; index < hud.slots.size(); ++index) {
+        if (index != 0) {
+            stream << ',';
+        }
+        const auto& slot = hud.slots[index];
+        stream << "{\"draw_order\":" << slot.draw_order
+               << ",\"object_address\":" << slot.object_address
+               << ",\"kind_id\":" << slot.kind_id
+               << ",\"logical_rect\":";
+        WriteFloatArray(stream, slot.rect);
+        stream << ",\"selection_flag\":"
+               << static_cast<unsigned int>(slot.selection_flag)
+               << ",\"skill_id\":" << slot.skill_id
+               << ",\"item_value\":" << slot.item_value
+               << ",\"presentation_value\":";
+        WriteFloat(stream, slot.presentation_value);
+        stream << ",\"count\":" << slot.count
+               << ",\"input_slot\":"
+               << static_cast<unsigned int>(slot.input_slot)
+               << ",\"cooldown\":";
+        if (slot.cooldown_available) {
+            stream << "{\"current\":";
+            WriteFloat(stream, slot.cooldown_current);
+            stream << ",\"capacity\":";
+            WriteFloat(stream, slot.cooldown_capacity);
+            stream << '}';
+        } else {
+            stream << "null";
+        }
+        stream << '}';
+    }
+    stream << "]}";
+}
+
+void WriteExactTextCaptures(
+    std::ostream& stream,
+    const std::vector<ExactTextCapture>& captures) {
+    stream << '[';
+    for (std::size_t index = 0; index < captures.size(); ++index) {
+        if (index != 0) {
+            stream << ',';
+        }
+        const auto& capture = captures[index];
+        stream << "{\"text\":\"" << EscapeSceneJson(capture.text)
+               << "\",\"caller\":\"0x" << std::hex
+               << std::uppercase << capture.caller_preferred_address
+               << std::dec << "\",\"first_draw_order\":"
+               << capture.first_draw_order
+               << ",\"draw_count\":" << capture.draw_count
+               << ",\"screen_rect\":";
+        if (capture.draw_count == 0) {
+            stream << "null";
+        } else {
+            WriteFloatArray(stream, capture.screen_rect);
+        }
+        stream << '}';
+    }
+    stream << ']';
+}
+
 void WriteHexBytes(
     std::ostream& stream,
     const std::vector<std::uint8_t>& values) {
@@ -373,7 +536,13 @@ bool WriteNativeSceneCaptureFile(std::string* error_message) {
     const auto& frame = g_scene_capture.frame;
     stream << "{\n"
            << "  \"schema\": \"solomon-dark-native-scene-capture-v1\",\n"
-           << "  \"capture_method\": \"native Region render + queue insertion/flush + Glyph/TextQuad + mesh/quad hooks\",\n"
+           << "  \"capture_method\": \""
+           << (frame.surface == CaptureSurface::Hud
+                   ? "native Gameplay HUD render + belt slot + exact text + Glyph/TextQuad/quad hooks"
+                   : "native Region render + queue insertion/flush + Glyph/TextQuad + mesh/quad hooks")
+           << "\",\n"
+           << "  \"surface\": \""
+           << CaptureSurfaceLabel(frame.surface) << "\",\n"
            << "  \"instance\": \"" << EscapeSceneJson(frame.instance)
            << "\",\n"
            << "  \"label\": \"" << EscapeSceneJson(frame.label)
@@ -386,6 +555,10 @@ bool WriteNativeSceneCaptureFile(std::string* error_message) {
     WritePlayerFixedTickAnimationCaptures(stream, frame);
     stream << ",\n  \"tracked_enemy_animation\": ";
     WriteActorAnimationCaptures(stream, frame);
+    stream << ",\n  \"hud_state\": ";
+    WriteHudCapture(stream, frame.hud);
+    stream << ",\n  \"exact_text\": ";
+    WriteExactTextCaptures(stream, frame.exact_text);
     stream << ",\n"
            << "  \"scene\": {\"kind\": \""
            << EscapeSceneJson(frame.scene_kind) << "\"},\n"
