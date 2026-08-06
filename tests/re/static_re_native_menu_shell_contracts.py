@@ -590,7 +590,10 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
     motion_recorder = recorders[
         "scripts/Observe-NativeMenuMotionCapability.ps1"
     ]
-    importer = recorders["scripts/Import-NativeMenuSpecialCaptures.ps1"]
+    importer_launcher = recorders[
+        "scripts/Import-NativeMenuSpecialCaptures.ps1"
+    ]
+    importer = _read("tools/import_native_menu_special_captures_v25.py")
     support = _read("scripts/NativeMenuCaptureSupport.ps1")
     loader_capture = _read(
         "SolomonDarkModLoader/src/debug_ui_overlay/"
@@ -619,12 +622,12 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
     )
     _require_regex(
         support,
-        r"\$stableWindow\.Count\s+-ge\s+"
+        r"\$candidateSamples\.Count\s+-ge\s+"
         r"\$script:NativeMenuSettleConsecutiveSamples\s+-and\s+"
-        r"\$stableSpan\s+-ge\s+"
+        r"\$candidateSpan\s+-ge\s+"
         r"\$script:NativeMenuSettleMinimumSpanMilliseconds",
-        "native-menu Settlement v2 constants are declared but no longer gate "
-        "the same candidate window",
+        "native-menu Settlement v2.5 constants are declared but no longer "
+        "gate the rolling candidate stream",
     )
     _require_regex(
         support,
@@ -637,23 +640,25 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
     _require_regex(
         support,
         r"\$classification\s*=\s*Invoke-NativeMenuSettlementClassifier\s+`"
-        r"\s*-Context \$Context\s+`\s*-Samples @\(\$stableWindow\).*?"
+        r"\s*-Context \$Context\s+`\s*-Samples @\(\$candidateSamples\).*?"
+        r"\$stableStartIndex\s*=\s*\[int\]"
+        r"\$classification\.stable_start_index.*?"
+        r"\$stableEndIndex\s*=\s*\[int\]"
+        r"\$classification\.stable_end_index.*?"
         r"animated_element_ids\s*=\s*@\(\s*"
         r"\$classification\.animated_element_ids\s*\)",
-        "native-menu settlement reaches its measured animation classifier but "
-        "no longer carries that exact classification into the accepted result",
+        "native-menu settlement no longer selects and carries the exact "
+        "v2.5-classified rolling window into the accepted result",
     )
     _require_regex(
         support,
         r"catch \{\s*"
         r"\$classificationError\s*=\s*\[string\]\$_\.Exception\.Message.*?"
-        r"animated geometry cap exceeded:.*?"
-        r"\$stableWindow\.Clear\(\).*?"
-        r"\$stableWindow\.Add\(\[ordered\]@\{.*?"
+        r"if \(\$classificationError -match '\^BROKEN:'\).*?throw.*?"
+        r"\$lastRejectedCandidate\s*=\s*\$classificationError.*?"
         r"last_rejected_candidate='\$lastRejectedCandidate'",
-        "a population-positioning window above the animation cap no longer "
-        "gets rejected and remeasured until a compliant window or the bounded "
-        "STOP names the last rejected candidate",
+        "a rejected v2.5 lifecycle candidate no longer keeps measuring until "
+        "a compliant window or the bounded STOP names the exact rejection",
     )
     _require_regex(
         support,
@@ -722,21 +727,22 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
     _require_regex(
         support,
         r"function Test-NativeMenuFrameMatchesSettlement.*?"
-        r"foreach \(\$geometryName in @\(\"rect\", \"unclipped_rect\"\)\).*?"
-        r"\$expectedGeometry\.Count -ne 4.*?"
-        r"for \(\$coordinate = 0; \$coordinate -lt 4;.*?"
-        r"\[double\]\$frameGeometry\[\$coordinate\] -ne\s*"
-        r"\[double\]\$expectedGeometry\[\$coordinate\]",
-        "same-call frame validation again compares JSON number formatting "
-        "instead of exact numeric non-animated geometry",
+        r"\$FrameProbe\.SemanticSurface -cne.*?"
+        r"\$Settlement\.AnchorProbe\.SemanticSurface.*?"
+        r"\$FrameProbe\.SemanticGeneration -ne.*?"
+        r"\$Settlement\.AnchorProbe\.SemanticGeneration.*?"
+        r"FrameProbe\.SemanticPayload\.generation -ne.*?"
+        r"Settlement\.Layout\.generation",
+        "post-window frame capture is no longer bound to the same semantic "
+        "surface and both measured generations",
     )
     _require_regex(
         support,
-        r"throw \(\s*\"STOP: '\$ScreenId' never settled to 40 consecutive "
-        r"structurally \".*?\"byte-identical payloads with one measured "
-        r"animated ID set spanning \"",
-        "a native-menu surface that never satisfies Settlement v2 is no longer "
-        "a STOP finding",
+        r"throw \(\s*\"STOP: '\$ScreenId' never satisfied Settlement v2\.5 "
+        r"across at least \".*?\"40 samples spanning two seconds within 60 "
+        r"seconds\. \"",
+        "a native-menu surface that never satisfies Settlement v2.5 is no "
+        "longer a bounded STOP finding",
     )
     _require_regex(
         layout_recorder,
@@ -767,12 +773,14 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
         r"primary\.header\.process_id\s+-eq\s+\$ProcessId.*?"
         r"primarySourceJson\s+-cne\s+\$confirmationSourceJson.*?"
         r"Get-SettledNativeMenuObservation.*?"
-        r"\$rawSetsMatch\s*=\s*\$primaryIdsJson\s+-ceq\s+"
+        r"\$rawSetsMatchNoncontractual\s*=\s*\$primaryIdsJson\s+-ceq\s+"
         r"\$confirmationIdsJson.*?"
         r"settlement\s*=\s*\$observation\.settlement.*?"
-        r"requires_extended_observation\s*=\s*\(-not \$rawSetsMatch\)",
+        r"raw_sets_match_noncontractual\s*=\s*"
+        r"\$rawSetsMatchNoncontractual.*?"
+        r"requires_campaign_resolution\s*=\s*\$true",
         "animation confirmation no longer proves a fresh instance/process, "
-        "identical machine provenance, or preserves raw-set disagreement for v2.3",
+        "identical machine provenance, or labels raw-set equality noncontractual",
     )
     if "animated ID confirmation mismatch" in confirmation_recorder:
         raise StaticReTestFailure(
@@ -870,42 +878,78 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
     )
     _require_regex(
         importer,
-        r"\$baseCommitSha\s*=\s*Invoke-CaptureGit "
-        r"@\(\"rev-parse\", \"HEAD\"\).*?"
-        r"\$gameExecutableSha256\s*=\s*\(\s*Get-FileHash "
-        r"-LiteralPath \$nativeExecutable.*?"
-        r"\$loaderDllSha256\s*=\s*\(\s*Get-FileHash "
-        r"-LiteralPath \$injectedLoader.*?"
-        r"compatibility\.compatibility\.loader\.sha256\s+-ne\s*"
-        r"\$loaderDllSha256",
+        r"def derive_git_provenance\(.*?"
+        r"git_text\(repo_root, \"rev-parse\", \"HEAD\"\).*?"
+        r"git_text\(repo_root, \"rev-parse\", \"HEAD\^\{tree\}\"\).*?"
+        r"git_text\(repo_root, \"status\", \"--porcelain\", "
+        r"\"--untracked-files=no\"\).*?"
+        r"def derive_binary_source\(.*?"
+        r"\"SolomonDark\.exe\".*?\"SolomonDarkModLoader\.dll\".*?"
+        r"game_hash = sha256_file\(executable\).*?"
+        r"loader_hash = sha256_file\(loader\).*?"
+        r"game_entry\.get\(\"sha256\"\) != game_hash.*?"
+        r"loader_entry\.get\(\"sha256\"\) != loader_hash",
         "special menu capture import no longer derives its own Git and binary "
         "provenance",
     )
     _require_regex(
         importer,
-        r"py\.exe -3 \$classifierPath find\s+`\s*"
-        r"--input \$inputPath\s+`\s*--output \$outputPath.*?"
-        r"settlement_spec\s*=\s*"
-        r"\[string\]\$Classification\.settlement_spec.*?"
-        r"structural_element_order\s*=\s*\(.*?"
-        r"\[string\]\$Classification\.structural_element_order.*?"
-        r"consecutive_structural_samples.*?structural_sha256",
-        "native-loader/loading import no longer reclassifies the complete raw "
-        "sample stream or carry Settlement v2.2 canonical ordering into its "
-        "fixture header",
+        r"primary_classification = find_ambient_settled_window\(primary_samples\).*?"
+        r"confirmation_classification = "
+        r"find_ambient_settled_window\(confirmation_samples\).*?"
+        r"validate_recorded_settlement\(.*?primary.*?"
+        r"validate_recorded_settlement\(.*?confirmation",
+        "native-loader/loading import no longer reclassifies and revalidates "
+        "both complete fresh-instance sample streams",
     )
     _require_regex(
         importer,
-        r"function Write-SpecialSettlementTrace.*?"
-        r"if \(\$settledWindow\.Count -lt 40\).*?"
-        r"schema\s*=\s*\"solomon-dark-native-menu-settlement-trace-v2\".*?"
-        r"settled_window_samples\s*=\s*\$settledWindow.*?"
-        r"loaderFixture\.header\.settlement_trace\s*=\s*"
-        r"Write-SpecialSettlementTrace.*?"
-        r"loadingFixture\.header\.settlement_trace\s*=\s*"
-        r"Write-SpecialSettlementTrace",
+        r"def settlement_summary\(.*?"
+        r"\"settlement_spec\".*?\"structural_element_order\".*?"
+        r"\"consecutive_structural_samples\".*?\"structural_sha256\"",
+        "native-loader/loading import carries no v2.5 canonical-order receipt "
+        "from its reclassified sample streams into fixture headers",
+    )
+    _require_regex(
+        importer,
+        r"def settled_samples\(.*?len\(result\) < 40.*?"
+        r"def write_trace\(.*?"
+        r"solomon-dark-native-menu-settlement-trace-v3.*?"
+        r"\"settled_window_samples\": copy\.deepcopy\(window\).*?"
+        r"def confirmation_value\(.*?"
+        r"solomon-dark-native-menu-animation-confirmation-v4.*?"
+        r"\"settled_window_samples\": copy\.deepcopy\(window\).*?"
+        r"def import_surface\(.*?"
+        r"primary_header\[\"settlement_trace\"\] = write_trace\(.*?"
+        r"confirmation = confirmation_value\(.*?"
+        r"primary_header\[\"animation_confirmation\"\]",
         "native loader/loading import no longer emits real standardized raw "
-        "windows for v2.3 campaign-wide motion resolution",
+        "windows and paired confirmations for campaign-wide v2.5 resolution",
+    )
+    _require_regex(
+        importer,
+        r"def assert_independent_pair\(.*?"
+        r"primary\[\"instance\"\] == confirmation\[\"instance\"\].*?"
+        r"primary\[\"process_id\"\] == confirmation\[\"process_id\"\].*?"
+        r"canonical_bytes\(primary\[\"source\"\]\) != "
+        r"canonical_bytes\(confirmation\[\"source\"\]\).*?"
+        r"assert_independent_pair\(primary_header, confirmation_header, label\).*?"
+        r"label=\"native_loader\".*?label=\"loading_screen\"",
+        "native loader/loading import no longer requires two independent "
+        "fresh instances with identical machine-derived provenance per surface",
+    )
+    _require_regex(
+        importer_launcher,
+        r"\$LoaderPrimaryCapturePath.*?\$LoaderConfirmationCapturePath.*?"
+        r"\$LoadingPrimaryCapturePath.*?\$LoadingConfirmationCapturePath.*?"
+        r"import PIL; print\('native-menu-special-import-ready'\).*?"
+        r"& py\.exe -3 \$importer.*?"
+        r"--loader-primary \$LoaderPrimaryCapturePath.*?"
+        r"--loader-confirmation \$LoaderConfirmationCapturePath.*?"
+        r"--loading-primary \$LoadingPrimaryCapturePath.*?"
+        r"--loading-confirmation \$LoadingConfirmationCapturePath",
+        "the special-capture launcher no longer proves its real importer runs "
+        "or supplies both required fresh-instance pairs",
     )
     for surface, source in (
         ("native_loader", loader_capture),
@@ -939,7 +983,7 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
 
     return (
         "standalone, transition, native-loader, and loading-screen capture paths "
-        "apply Settlement v2.3, preserve fresh-instance raw measurements, "
+        "apply Settlement v2.5, preserve fresh-instance raw measurements, "
         "derive long corroboration from the stationary window, and "
         "derive commit/tree/exact-binary provenance without operator overrides"
     )
@@ -947,105 +991,111 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
 
 def test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired() -> str:
     assert_module_runs_in_ci("test_native_menu_settlement_v2")
-    classifier = _read("tools/native_menu_settlement_v2.py")
+    assert_module_runs_in_ci("test_native_menu_ambient_lifecycle")
+    classifier = _read("tools/native_menu_ambient_lifecycle.py")
+    unit_tests = _read("tests/test_native_menu_ambient_lifecycle.py")
     _require_regex(
         classifier,
+        r"SETTLEMENT_SPEC\s*=\s*\"2\.5\".*?"
         r"MINIMUM_SAMPLES\s*=\s*40\b.*?"
         r"MINIMUM_SPAN_MILLISECONDS\s*=\s*2_000\b.*?"
+        r"MAXIMUM_AMBIENT_FRACTION\s*=\s*0\.40\b.*?"
         r"MAXIMUM_ANIMATED_FRACTION\s*=\s*0\.30\b.*?"
-        r"EXTENDED_OBSERVATION_MINIMUM_MILLISECONDS\s*=\s*60_000\b.*?"
-        r"EXTENDED_OBSERVATION_SETTLE_SPAN_MULTIPLIER\s*=\s*10\b.*?"
         r"EXTENDED_OBSERVATION_MINIMUM_SAMPLES\s*=\s*200\b.*?"
-        r"SETTLEMENT_SPEC\s*=\s*\"2\.4\"",
-        "Settlement v2 sample/span/animated-cap constants drifted from the "
-        "amended menu capture and corroboration definition",
+        r"EXTENDED_OBSERVATION_MINIMUM_MILLISECONDS\s*=\s*60_000\b",
+        "Settlement v2.5 sample, span, lifecycle-cap, and corroboration "
+        "constants drifted from the authorized definition",
     )
     _require_regex(
         classifier,
-        r"for payload in typed_payloads\[1:\]:\s*"
-        r"_assert_non_geometry_stable\(anchor_payload, payload\).*?"
-        r"animated_ids\s*=\s*\[.*?"
-        r"len\(set\(geometries\[element_id\]\)\)\s*>\s*1",
-        "Settlement v2 no longer derives animation only after every "
-        "non-geometry field and element membership stay fixed",
+        r"def _measure_window\(.*?"
+        r"member_class\s*=\s*\"full_presence\".*?"
+        r"member_class\s*=\s*\(\s*"
+        r"\"one_way_spawn_candidate\" if one_way_spawn else \"ephemeral\".*?"
+        r"member_class\s*=\s*\"visibility_cycling\".*?"
+        r"member_class\s*=\s*\"animated\"",
+        "Settlement v2.5 no longer machine-measures full, one-way, ephemeral, "
+        "visibility-cycling, and rect-animation classes",
     )
     _require_regex(
         classifier,
-        r"if animated_fraction > maximum_animated_fraction:.*?"
-        r"raise SettlementV2Error\(\s*\"animated geometry cap exceeded:",
-        "Settlement v2 no longer stops when measured animation exceeds 30 "
-        "percent of a screen",
+        r"if not _pure_art\(anchor\):.*?"
+        r"membership churn on.*?text/control member.*?not classifiable.*?"
+        r"if not _pure_art\(anchor\):.*?"
+        r"visible variance on.*?text/control member.*?not classifiable",
+        "Settlement v2.5 art-only guard no longer stops membership churn and "
+        "visibility variance on text or controls",
     )
     _require_regex(
         classifier,
-        r"element\[\"animated_geometry\"\]\s*=\s*True.*?"
-        r"element\[\"anchor_rect\"\].*?"
-        r"element\[\"anchor_unclipped_rect\"\].*?"
-        r"element\[\"envelope\"\]\s*=\s*\{.*?"
-        r"\"sample_count\": len\(rects\)",
-        "Settlement v2 fixtures no longer preserve an honest first-sample "
-        "anchor and measured motion envelope",
+        r"def _core_counter_for_measurements\(.*?"
+        r"common &= counter.*?"
+        r"cross-instance structural core inequality.*?"
+        r"def _project_core_sequence\(.*?"
+        r"structural core member disappeared.*?"
+        r"structural core relative-order.*?flip",
+        "Settlement v2.5 no longer intersects cross-instance semantic cores "
+        "and rejects a missing member or relative-order flip",
     )
     _require_regex(
         classifier,
-        r"def resolve_motion_capability\(.*?"
-        r"all_measured_sets\s*=\s*\[\*raw_id_sets\].*?"
-        r"resolved_ids\s*=\s*sorted\(set\(\)\.union\(\*all_measured_sets\)\).*?"
-        r"pair_disputed\s*=\s*members\[0\]\[1\]\.symmetric_difference"
-        r"\(members\[1\]\[1\]\).*?"
-        r"motion capability resolution requires extended observation.*?"
-        r"phantom animated classification.*?"
-        r"resolved animated geometry cap exceeded",
-        "Settlement v2.3 no longer resolves screen-member motion by asymmetric "
-        "union, corroborates a stationary side, rejects phantoms, and reapplies the cap",
+        r"motion capability resolution requires extended-observation.*?evidence.*?"
+        r"varying_capabilities\s*=.*?"
+        r"member\[\"capability_signature\"\] not in varying_capabilities.*?"
+        r"phantom animated.*?zero events",
+        "Settlement v2.5 no longer applies asymmetric motion capability, "
+        "requires stationary-side corroboration, and rejects phantom classes",
     )
     _require_regex(
         classifier,
-        r"def classify_extended_observation\(.*?"
-        r"max\(\s*EXTENDED_OBSERVATION_MINIMUM_MILLISECONDS,.*?"
-        r"if len\(samples\) < minimum_samples:.*?"
-        r"events\s*=\s*_motion_events\(samples\).*?"
-        r"motion_events\": events",
-        "Settlement v2.3 extended observations no longer prove duration/sample "
-        "floors and retain the exact timestamped change census",
+        r"def _core_bands\(.*?"
+        r"lower_id\s*=.*?\"bottom\".*?"
+        r"upper_id\s*=\s*\"top\".*?"
+        r"crossed structural-core bands.*?"
+        r"draw_order_semantics\": \"structural_core_relative_sequence\"",
+        "Settlement v2.5 no longer excludes absolute draw ordinals while "
+        "pinning core-relative sequence and ambient draw bands",
     )
     _require_regex(
         classifier,
-        r"def validate_resolved_motion_capability\(.*?"
-        r"phantom\s*=\s*sorted\(set\(declared_ids\) - set\(expected_ids\)\).*?"
-        r"future\s*=\s*sorted\(set\(expected_ids\) - set\(declared_ids\)\).*?"
-        r"future motion drift: member",
-        "Settlement v2.3 can no longer distinguish neither phantom flags nor "
-        "later motion by a member pinned stationary",
+        r"ephemeral family lacks.*?bidirectional spawn and despawn.*?"
+        r"ambient_fraction\s*=\s*ambient_units / peak_census.*?"
+        r"if ambient_fraction > maximum_ambient_fraction:.*?"
+        r"ambient lifecycle cap exceeded.*?exceeds 40%",
+        "Settlement v2.5 no longer enforces the semantic 40-percent cap and "
+        "family-wide bidirectional ephemeral witness",
     )
     _require_regex(
         classifier,
-        r"def _canonical_element_key\(.*?"
-        r"return float\(draw_order\), element_id.*?"
-        r"def canonical_structural_layout\(.*?"
-        r"result\[\"elements\"\]\s*=\s*_canonical_elements\(elements\).*?"
-        r"def structural_layout_bytes\(.*?canonical_structural_layout\(",
-        "Settlement v2.2 cross-instance comparison no longer sorts elements "
-        "by draw_order then native element id",
+        r"\"anchor_semantics\": "
+        r"\"first_observation_first_present_sample\".*?"
+        r"\"anchor_payload\": _semantic_payload\(class_elements\[0\]\).*?"
+        r"\"union_spatial_envelope\": _union_envelope\(class_elements\).*?"
+        r"\"dominant_phase_payload\": _semantic_payload\(dominant\)",
+        "Settlement v2.5 fixture shaping no longer retains honest anchors, "
+        "union envelopes, and dominant lifecycle phases",
     )
     _require_regex(
-        classifier,
-        r"def _assert_non_geometry_stable\(.*?"
-        r"if set\(order\) != set\(anchor_order\):.*?"
-        r"element membership varied .*?within the settled window",
-        "Settlement v2.2 again treats instance-arbitrary raw list position as "
-        "structural state",
+        unit_tests,
+        r"def test_churn_on_control_member_is_not_classifiable\(.*?"
+        r"def test_visible_variance_on_control_member_is_not_classifiable\(.*?"
+        r"def test_core_relative_order_flip_trips\(.*?"
+        r"def test_cross_instance_core_byte_inequality_trips\(.*?"
+        r"def test_ambient_fraction_above_forty_percent_stops\(.*?"
+        r"def test_declared_phantom_ambient_class_is_a_recorder_defect\(",
+        "Settlement v2.5 named guardrails lost their direct behavior tests",
     )
     return (
-        "Settlement v2.3 classification, guardrails, canonical structural "
-        "ordering, fixture shaping, motion asymmetry, corroboration, and drift "
-        "are behavior-tested by the CI unit module"
+        "Settlement v2.5 ambient classification, reproduced core, relative "
+        "draw order, anchors/envelopes, asymmetry, caps, and guardrails are "
+        "behavior-tested by the CI unit module"
     )
 
 
 def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> str:
     assert_module_runs_in_ci("test_native_menu_settlement_v2")
-    resolver = _read("tools/resolve_native_menu_motion_campaign.py")
+    assert_module_runs_in_ci("test_native_menu_ambient_lifecycle")
+    resolver = _read("tools/resolve_native_menu_ambient_campaign.py")
     promoter = _read("tools/promote_native_menu_recapture.py")
     confirmation = _read("scripts/Confirm-NativeMenuLayoutAnimation.ps1")
 
@@ -1067,50 +1117,52 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
     _require_regex(
         resolver,
         r"def collect_standalones\(.*?"
-        r"if not fixture_paths:.*?standalone sweep reached no candidate fixtures.*?"
-        r"if layout_id in fixtures:.*?ambiguous.*?"
+        r"if not paths:.*?standalone fixture sweep reached no candidate content.*?"
+        r"if layout_id in fixtures:.*?standalone fixture id.*?ambiguous.*?"
         r"def collect_navigation\(.*?"
-        r"set\(primary_by_id\) != set\(confirmation_by_id\).*?"
-        r"edge census is absent or ambiguous",
-        "motion-capability resolution no longer proves it reached real "
+        r"set\(by_label\[\"primary\"\]\) != "
+        r"set\(by_label\[\"confirmation\"\]\).*?"
+        r"navigation edge censuses differ",
+        "ambient-lifecycle resolution no longer proves it reached real "
         "standalones or refuses duplicate/missing screen and edge candidates",
     )
     _require_regex(
         resolver,
-        r"pair_id\s*=\s*f\"standalone:\{layout_id\}\".*?"
-        r"pair_id\s*=\s*f\"edge:\{edge_id\}:\{side\}\".*?"
-        r"resolve_motion_capability\(.*?"
-        r"if len\(resolved_by_index\) != len\(observations\):.*?"
-        r"did not reach every campaign observation",
-        "screen motion resolution no longer pairs every standalone and every "
-        "edge endpoint across two fresh recordings before normalization",
+        r"primary_identity\s*=\s*_identity\(.*?"
+        r"confirmation_identity\s*=\s*_identity\(.*?"
+        r"if primary_identity == confirmation_identity:.*?"
+        r"did not use an independent fresh instance.*?"
+        r"resolution\s*=\s*resolve_ambient_lifecycle\(reached\)",
+        "screen lifecycle resolution no longer requires independent standalone "
+        "instances and resolves every reached window together",
     )
     _require_regex(
         resolver,
-        r"endpoint\[\"layout\"\]\s*=\s*normalized\[\"layout\"\].*?"
-        r"endpoint\[\"motion_capability\"\]\s*=\s*proofs\[layout_id\].*?"
+        r"fixture\[\"layout\"\]\s*=\s*copy\.deepcopy\(layouts\[layout_id\]\).*?"
+        r"endpoint\[\"layout\"\]\s*=\s*copy\.deepcopy\(layouts\[layout_id\]\).*?"
         r"if verify:.*?"
-        r"resolved candidate .*? is not the machine-derived v2\.4 result.*?"
-        r"resolved navigation is not the machine-derived v2\.4 result",
-        "the v2.3 resolver no longer applies one screen classification to every "
+        r"resolved candidate .*? is not the machine-derived v2\.5 result.*?"
+        r"resolved navigation is not the machine-derived v2\.5 result",
+        "the v2.5 resolver no longer applies one screen classification to every "
         "fixture/endpoint or verifies the derived artifacts byte-for-byte",
     )
     _require_regex(
         promoter,
-        r"motion_capability_resolution.*?settlement_spec.*?2\.4.*?"
+        r"ambient_lifecycle_resolution.*?settlement_spec.*?2\.5.*?"
         r"resolve_campaign\(.*?False,\s*True,",
-        "menu promotion can bypass re-derivation of the complete v2.3 campaign",
+        "menu promotion can bypass re-derivation of the complete v2.5 campaign",
     )
     _require_regex(
         confirmation,
-        r"\$rawSetsMatch\s*=.*?"
-        r"requires_extended_observation\s*=\s*\(-not \$rawSetsMatch\)",
-        "fresh confirmation no longer preserves a raw-set mismatch for the "
-        "mandatory stationary-side observation",
+        r"\$rawSetsMatchNoncontractual\s*=.*?"
+        r"raw_sets_match_noncontractual\s*=\s*\$rawSetsMatchNoncontractual.*?"
+        r"requires_campaign_resolution\s*=\s*\$true",
+        "fresh confirmation again treats window-local raw IDs as contractual "
+        "instead of deferring to campaign-wide v2.5 resolution",
     )
     return (
-        "Settlement v2.3 resolves one motion-capability set across every paired "
-        "standalone/edge observation, refuses ambiguity and operator provenance, "
+        "Settlement v2.5 resolves one structural core and lifecycle map across "
+        "every standalone/edge observation, refuses ambiguity and provenance overrides, "
         "and promotion re-derives the complete campaign"
     )
 
@@ -1211,8 +1263,9 @@ def test_native_menu_overlay_contamination_override_is_fail_closed() -> str:
     attacher = _read("tools/attach_native_menu_landed_override.py")
     promoter = _read("tools/promote_native_menu_recapture.py")
     support = _read("scripts/NativeMenuCaptureSupport.ps1")
-    importer = _read("scripts/Import-NativeMenuSpecialCaptures.ps1")
-    aggregate_builder = _read("scripts/Build-NativeMenuGoldens.ps1")
+    importer = _read("tools/import_native_menu_special_captures_v25.py")
+    aggregate_builder = _read("tools/build_native_menu_goldens_v25.py")
+    aggregate_launcher = _read("scripts/Build-NativeMenuGoldens.ps1")
     unit_tests = _read("tests/test_native_menu_settlement_v2.py")
 
     _require_regex(
@@ -1260,7 +1313,8 @@ def test_native_menu_overlay_contamination_override_is_fail_closed() -> str:
         r"def test_overlay_override_rejects_residual_draw_beyond_reference\(.*?"
         r"semantic-multiset difference leaves.*?residual draws or fields.*?"
         r"def test_overlay_override_rejects_noncanonical_reordinalization\(.*?"
-        r"_noncanonical.*?residual draws or fields",
+        r"_noncanonical.*?deterministic reordinalization produced.*?"
+        r"noncanonical survivor ordinal",
         "the v2.4 unit mutations no longer trip residual semantic draws and "
         "non-canonical survivor ordinals by their named claims",
     )
@@ -1356,30 +1410,121 @@ def test_native_menu_overlay_contamination_override_is_fail_closed() -> str:
     )
     _require_regex(
         importer,
-        r"function Assert-SpecialCaptureSampleOverlayHygiene.*?"
-        r"check-overlay-samples.*?"
-        r"Assert-SpecialCaptureSampleOverlayHygiene.*?"
-        r"-Samples @\(\$loaderClassifierSamples\).*?"
-        r"Assert-SpecialCaptureSampleOverlayHygiene.*?"
-        r"-Samples @\(\$loadingClassifierSamples\)",
+        r"def assert_overlay_sample_hygiene\(.*?"
+        r"schema == OVERLAY_REFERENCE_SCHEMA_V24.*?"
+        r"assert_overlay_sample_hygiene_v24\(samples, reference\).*?"
+        r"schema == OVERLAY_REFERENCE_SCHEMA_V25.*?"
+        r"for index, sample in enumerate\(samples\).*?"
+        r"assert_overlay_hygiene_v25\(payload, reference\).*?"
+        r"assert_overlay_sample_hygiene\(primary_samples, overlay_reference.*?"
+        r"assert_overlay_sample_hygiene\(\s*confirmation_samples, "
+        r"overlay_reference",
         "native-loader/loading import no longer overlay-gates every raw sample",
     )
-    for path, source in (
-        ("NativeMenuCaptureSupport.ps1", support),
-        ("Import-NativeMenuSpecialCaptures.ps1", importer),
-        ("Build-NativeMenuGoldens.ps1", aggregate_builder),
-    ):
-        _require_regex(
-            source,
-            r"tests[\\/]fixtures[\\/]webgame[\\/]menu-overlay-reference\.json.*?"
-            r"check-overlay.*?--reference",
-            f"{path} no longer binds overlay hygiene to the fixed, "
-            "machine-derived committed reference",
-        )
+    _require_regex(
+        support,
+        r"tests[\\/]fixtures[\\/]webgame[\\/]menu-overlay-reference\.json.*?"
+        r"check-overlay.*?--reference",
+        "NativeMenuCaptureSupport.ps1 no longer binds overlay hygiene to the "
+        "machine-derived committed reference",
+    )
+    _require_regex(
+        importer,
+        r"repo_root / \"tests\" / \"fixtures\" / \"webgame\" / "
+        r"\"menu-overlay-reference\.json\".*?"
+        r"overlay_reference=overlay_reference.*?label=\"native_loader\".*?"
+        r"overlay_reference=overlay_reference.*?label=\"loading_screen\"",
+        "the paired special importer no longer binds both surfaces to the "
+        "machine-derived committed overlay reference",
+    )
+    _require_regex(
+        aggregate_builder,
+        r"menu-overlay-reference\.json.*?"
+        r"overlay\.get\(\"schema\"\) != OVERLAY_REFERENCE_SCHEMA.*?"
+        r"assert_overlay_hygiene\(fixture\[\"layout\"\], overlay\).*?"
+        r"for side, observed in.*?source.*?destination.*?"
+        r"assert_overlay_hygiene\(observed\[\"layout\"\], overlay\)",
+        "the Settlement v2.5 aggregate can accept derived beta-dialog "
+        "contamination in a standalone, transition source, or transition "
+        "destination",
+    )
+    _require_regex(
+        aggregate_launcher,
+        r"tools[\\/]build_native_menu_goldens_v25\.py.*?"
+        r"Test-Path -LiteralPath \$builder -PathType Leaf.*?"
+        r"& py\.exe -3 \$builder.*?"
+        r"--fixture-root \$fixtureRoot.*?"
+        r"--navigation-recording \$navigationPath.*?"
+        r"--output \$outputPath",
+        "Build-NativeMenuGoldens.ps1 no longer launches the fixed Settlement "
+        "v2.5 aggregate implementation over the resolved fixture corpus",
+    )
     return (
         "Settlement v2.4 derives one hashed beta-overlay semantic multiset, "
         "accepts only exact zero-residual subtraction with deterministic "
         "reordinalization, and hygiene-gates every capture surface"
+    )
+
+
+def test_native_menu_ambient_overlay_derivation_is_fail_closed() -> str:
+    assert_module_runs_in_ci("test_native_menu_ambient_lifecycle")
+    derivation = _read("tools/native_menu_overlay_v25.py")
+    regression = _read("tools/verify_native_menu_ambient_v6_regression.py")
+    unit_tests = _read("tests/test_native_menu_ambient_lifecycle.py")
+
+    _require_regex(
+        derivation,
+        r"def derive_overlay_reference\(.*?"
+        r"missing_title\s*=\s*main_title - beta_title.*?"
+        r"extra_title\s*=\s*beta_title - main_title.*?"
+        r"title-core member is missing from.*?beta_notice.*?"
+        r"beta_notice leaves a title-side residual",
+        "Settlement v2.5 overlay derivation no longer proves the complete "
+        "main-menu title core embeds without a title-side residual",
+    )
+    _require_regex(
+        derivation,
+        r"main_residual\s*=\s*main_draws - beta_draws.*?"
+        r"main_menu_root art core does not embed.*?"
+        r"derived\s*=\s*beta_draws - main_draws.*?"
+        r"derived != create_counter or derived != pause_counter.*?"
+        r"does .*?not equal the proven Create and pause correction multisets",
+        "Settlement v2.5 overlay reference no longer derives an exact semantic "
+        "difference and corroborates it against both accepted corrections",
+    )
+    _require_regex(
+        derivation,
+        r"def overlay_semantic_multiset_is_present\(.*?"
+        r"return not bool\(required - observed\).*?"
+        r"def assert_overlay_hygiene\(.*?"
+        r"contains the complete.*?derived beta-dialog semantic multiset",
+        "Settlement v2.5 overlay hygiene regressed from complete sub-multiset "
+        "matching to unsafe suffix intersection",
+    )
+    _require_regex(
+        regression,
+        r"def _stable_ui_counter\(.*?"
+        r"dialog UI block is not sample-stable.*?"
+        r"if primary_ui != confirmation_ui:.*?"
+        r"independent dialog UI blocks differ.*?"
+        r"if core_ui != primary_ui:.*?"
+        r"complete dialog UI block did not enter",
+        "the mandatory sealed-v6 regression no longer proves both traces settle "
+        "with the complete dialog UI block in their reproduced core",
+    )
+    _require_regex(
+        unit_tests,
+        r"def test_overlay_derivation_trips_when_title_core_member_is_missing\(.*?"
+        r"def test_overlay_corroboration_trips_on_one_perturbed_draw\(.*?"
+        r"def test_derived_overlay_hygiene_refuses_complete_multiset\(.*?"
+        r"def test_derived_overlay_hygiene_accepts_partial_suffix_sharing\(",
+        "Settlement v2.5 overlay derivation and hygiene lost their named "
+        "missing-title, perturbed-corroboration, complete, or partial tests",
+    )
+    return (
+        "Settlement v2.5 derives the beta-dialog semantic multiset from settled "
+        "cores, corroborates Create and pause, and keeps complete-sub-multiset "
+        "hygiene without the pause suffix false positive"
     )
 
 

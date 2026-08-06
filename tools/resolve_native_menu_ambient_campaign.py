@@ -1,0 +1,770 @@
+#!/usr/bin/env python3
+"""Resolve a complete native-menu campaign under Settlement v2.5."""
+
+from __future__ import annotations
+
+import argparse
+import copy
+import hashlib
+import json
+import os
+import re
+from pathlib import Path
+from typing import Any
+
+if __package__:
+    from .native_menu_ambient_lifecycle import (
+        AmbientLifecycleError,
+        canonical_bytes,
+        classify_ambient_window,
+        resolve_ambient_lifecycle,
+        sha256_json,
+    )
+else:
+    from native_menu_ambient_lifecycle import (  # type: ignore[no-redef]
+        AmbientLifecycleError,
+        canonical_bytes,
+        classify_ambient_window,
+        resolve_ambient_lifecycle,
+        sha256_json,
+    )
+
+
+class CampaignResolutionError(RuntimeError):
+    """The campaign inputs do not prove one unambiguous v2.5 result."""
+
+
+def read_object(path: Path) -> dict[str, Any]:
+    value = json.loads(path.read_text(encoding="utf-8-sig"))
+    if not isinstance(value, dict):
+        raise CampaignResolutionError(f"{path} is not a JSON object")
+    return value
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def evidence_receipt(path: Path, evidence_root: Path) -> dict[str, Any]:
+    resolved = path.resolve()
+    root = evidence_root.resolve()
+    if not resolved.is_relative_to(root):
+        raise CampaignResolutionError(
+            f"evidence path escapes the campaign root: {path}"
+        )
+    return {
+        "evidence_path": resolved.relative_to(root).as_posix(),
+        "sha256": file_sha256(resolved),
+        "bytes": resolved.stat().st_size,
+    }
+
+
+def resolve_unique_evidence(
+    evidence_root: Path, adjacent: Path, filename: str
+) -> Path:
+    if not filename:
+        raise CampaignResolutionError("evidence lookup received an empty filename")
+    conventional = (adjacent / filename).resolve()
+    if conventional.is_file():
+        return conventional
+    candidates = {
+        path.resolve() for path in evidence_root.rglob(filename) if path.is_file()
+    }
+    if len(candidates) != 1:
+        raise CampaignResolutionError(
+            f"evidence lookup for {filename!r} is absent or ambiguous: "
+            f"{sorted(str(path) for path in candidates)}"
+        )
+    return candidates.pop()
+
+
+def validate_receipt(path: Path, receipt: dict[str, Any], label: str) -> None:
+    if path.stat().st_size != receipt.get("bytes"):
+        raise CampaignResolutionError(f"{label} records a false evidence byte count")
+    if file_sha256(path) != receipt.get("sha256"):
+        raise CampaignResolutionError(f"{label} records a false evidence SHA-256")
+
+
+def write_atomically(path: Path, value: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".menufix.tmp")
+    temporary.write_text(
+        json.dumps(value, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    os.replace(temporary, path)
+
+
+def _source(header: dict[str, Any], label: str) -> dict[str, Any]:
+    source = header.get("source")
+    if not isinstance(source, dict):
+        raise CampaignResolutionError(
+            f"{label} has no machine-derived source provenance"
+        )
+    required = {
+        "base_commit_sha": 40,
+        "source_tree_sha": 40,
+        "game_executable_sha256": 64,
+        "loader_dll_sha256": 64,
+    }
+    for field, length in required.items():
+        value = source.get(field)
+        if (
+            not isinstance(value, str)
+            or len(value) != length
+            or any(character not in "0123456789abcdef" for character in value)
+        ):
+            raise CampaignResolutionError(
+                f"{label} has invalid machine-derived provenance field '{field}'"
+            )
+    return source
+
+
+def _identity(header: dict[str, Any], label: str) -> tuple[str, int]:
+    instance = header.get("instance")
+    process_id = header.get("process_id")
+    if (
+        not isinstance(instance, str)
+        or not instance
+        or isinstance(process_id, bool)
+        or not isinstance(process_id, int)
+        or process_id <= 0
+    ):
+        raise CampaignResolutionError(
+            f"{label} has no exact fresh-instance/process identity"
+        )
+    return instance, process_id
+
+
+def _settled_samples(trace: dict[str, Any], label: str) -> list[dict[str, Any]]:
+    samples = trace.get("settled_window_samples")
+    if not isinstance(samples, list) or not samples:
+        raise CampaignResolutionError(f"{label} has no settled-window samples")
+    if not all(isinstance(sample, dict) for sample in samples):
+        raise CampaignResolutionError(
+            f"{label} settled window contains a non-object sample"
+        )
+    return samples
+
+
+def _screen_id(samples: list[dict[str, Any]], label: str) -> str:
+    payload = samples[0].get("payload")
+    screen_id = payload.get("screen_id") if isinstance(payload, dict) else None
+    if not isinstance(screen_id, str) or not screen_id:
+        raise CampaignResolutionError(f"{label} has no sampled native screen id")
+    return screen_id
+
+
+def _observation(
+    header: dict[str, Any],
+    samples: list[dict[str, Any]],
+    evidence: dict[str, Any],
+    label: str,
+    *,
+    kind: str = "settled_window",
+) -> dict[str, Any]:
+    instance, process_id = _identity(header, label)
+    try:
+        if kind == "settled_window":
+            classify_ambient_window(samples, label=label)
+    except AmbientLifecycleError as error:
+        raise CampaignResolutionError(f"{label}: {error}") from error
+    return {
+        "label": label,
+        "kind": kind,
+        "instance": instance,
+        "process_id": process_id,
+        "samples": samples,
+        "evidence": evidence,
+    }
+
+
+def _logical_key(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")
+
+
+def _resolve_layout_id(
+    logical_name: str,
+    native_screen_id: str,
+    fixtures: dict[str, dict[str, Any]],
+) -> str:
+    candidates = [
+        layout_id
+        for layout_id, record in fixtures.items()
+        if _logical_key(layout_id) == _logical_key(logical_name)
+        or record["native_screen_id"] == native_screen_id
+    ]
+    if len(candidates) != 1:
+        raise CampaignResolutionError(
+            f"navigation endpoint '{logical_name}' screen '{native_screen_id}' "
+            f"does not resolve one standalone fixture: {sorted(candidates)}"
+        )
+    return candidates[0]
+
+
+def collect_standalones(
+    candidate_root: Path, evidence_root: Path
+) -> tuple[dict[str, dict[str, Any]], dict[str, list[dict[str, Any]]]]:
+    paths = sorted((candidate_root / "menu-layouts").glob("*.json"))
+    paths += sorted((candidate_root / "menu-transition-layouts").glob("*.json"))
+    if not paths:
+        raise CampaignResolutionError(
+            "standalone fixture sweep reached no candidate content"
+        )
+    fixtures: dict[str, dict[str, Any]] = {}
+    observations: dict[str, list[dict[str, Any]]] = {}
+    for path in paths:
+        fixture = read_object(path)
+        if fixture.get("schema") not in {
+            "solomon-dark-native-menu-layout-v2",
+            "solomon-dark-native-menu-layout-v3",
+        }:
+            raise CampaignResolutionError(f"{path} is not a native-menu layout")
+        header = fixture.get("header")
+        if not isinstance(header, dict):
+            raise CampaignResolutionError(f"{path} has no capture header")
+        source = _source(header, str(path))
+        raw_receipt = header.get("settlement_trace", header.get("raw_recording"))
+        if not isinstance(raw_receipt, dict):
+            raise CampaignResolutionError(f"{path} has no raw settlement receipt")
+        raw_path = resolve_unique_evidence(
+            evidence_root,
+            candidate_root / "menu-settlement-traces",
+            str(raw_receipt.get("evidence_filename", "")),
+        )
+        validate_receipt(raw_path, raw_receipt, str(path))
+        raw_trace = read_object(raw_path)
+        primary_samples = _settled_samples(raw_trace, str(raw_path))
+        layout_id = path.stem
+        if layout_id in fixtures:
+            raise CampaignResolutionError(
+                f"standalone fixture id '{layout_id}' is ambiguous"
+            )
+        native_screen_id = _screen_id(primary_samples, str(raw_path))
+
+        confirmation_receipt = header.get("animation_confirmation")
+        if not isinstance(confirmation_receipt, dict):
+            raise CampaignResolutionError(
+                f"{path} has no independent fresh-instance confirmation"
+            )
+        confirmation_path = resolve_unique_evidence(
+            evidence_root,
+            candidate_root / "menu-animation-confirmations",
+            str(confirmation_receipt.get("evidence_filename", "")),
+        )
+        validate_receipt(
+            confirmation_path, confirmation_receipt, f"{path} confirmation"
+        )
+        confirmation = read_object(confirmation_path)
+        confirmation_header = confirmation.get("header")
+        if not isinstance(confirmation_header, dict):
+            raise CampaignResolutionError(
+                f"{confirmation_path} has no confirmation header"
+            )
+        confirmation_samples = _settled_samples(
+            confirmation, str(confirmation_path)
+        )
+        if _screen_id(confirmation_samples, str(confirmation_path)) != native_screen_id:
+            raise CampaignResolutionError(f"{path} confirmation changed native screen")
+        if canonical_bytes(source) != canonical_bytes(
+            _source(confirmation_header, str(confirmation_path))
+        ):
+            raise CampaignResolutionError(f"{path} confirmation changed provenance")
+        primary_identity = _identity(header, str(path))
+        confirmation_identity = _identity(
+            confirmation_header, str(confirmation_path)
+        )
+        if primary_identity == confirmation_identity:
+            raise CampaignResolutionError(
+                f"{path} confirmation did not use an independent fresh instance"
+            )
+        primary_observation = _observation(
+            header,
+            primary_samples,
+            evidence_receipt(raw_path, evidence_root),
+            f"standalone:{layout_id}:primary",
+        )
+        confirmation_observation = _observation(
+            confirmation_header,
+            confirmation_samples,
+            evidence_receipt(confirmation_path, evidence_root),
+            f"standalone:{layout_id}:confirmation",
+        )
+        fixtures[layout_id] = {
+            "path": path,
+            "value": fixture,
+            "header": header,
+            "source": source,
+            "native_screen_id": native_screen_id,
+            "primary_observation": primary_observation,
+            "confirmation_observation": confirmation_observation,
+            "confirmation_path": confirmation_path,
+        }
+        observations[layout_id] = [
+            primary_observation,
+            confirmation_observation,
+        ]
+    return fixtures, observations
+
+
+def collect_navigation(
+    primary_path: Path,
+    confirmation_path: Path,
+    evidence_root: Path,
+    fixtures: dict[str, dict[str, Any]],
+    observations: dict[str, list[dict[str, Any]]],
+) -> tuple[dict[str, Any], dict[tuple[str, str], str]]:
+    recordings = {
+        "primary": read_object(primary_path),
+        "confirmation": read_object(confirmation_path),
+    }
+    paths = {"primary": primary_path, "confirmation": confirmation_path}
+    by_label: dict[str, dict[str, dict[str, Any]]] = {}
+    for label, recording in recordings.items():
+        if recording.get("schema") != "solomon-dark-native-menu-navigation-v2":
+            raise CampaignResolutionError(
+                f"{label} navigation schema is not recognized"
+            )
+        edges = recording.get("edges")
+        if not isinstance(edges, list) or not edges:
+            raise CampaignResolutionError(f"{label} navigation has no edges")
+        edge_map = {
+            str(edge.get("id")): edge
+            for edge in edges
+            if isinstance(edge, dict) and isinstance(edge.get("id"), str)
+        }
+        if len(edge_map) != len(edges):
+            raise CampaignResolutionError(
+                f"{label} navigation edge ids are absent or ambiguous"
+            )
+        by_label[label] = edge_map
+    if set(by_label["primary"]) != set(by_label["confirmation"]):
+        raise CampaignResolutionError(
+            "primary and confirmation navigation edge censuses differ"
+        )
+
+    endpoint_layouts: dict[tuple[str, str], str] = {}
+    for edge_id in sorted(by_label["primary"]):
+        for side, endpoint_key, logical_field in (
+            ("source", "before", "source"),
+            ("destination", "after", "destination"),
+        ):
+            resolved_ids: set[str] = set()
+            for label in ("primary", "confirmation"):
+                edge = by_label[label][edge_id]
+                header = edge.get("header")
+                endpoint = edge.get(endpoint_key)
+                if not isinstance(header, dict) or not isinstance(endpoint, dict):
+                    raise CampaignResolutionError(
+                        f"edge {edge_id} {label} {side} is incomplete"
+                    )
+                _source(header, f"edge {edge_id} {label}")
+                trace = endpoint.get("settlement_trace")
+                if not isinstance(trace, dict):
+                    raise CampaignResolutionError(
+                        f"edge {edge_id} {label} {side} has no settlement trace"
+                    )
+                samples = _settled_samples(
+                    trace, f"edge {edge_id} {label} {side}"
+                )
+                native_screen_id = _screen_id(
+                    samples, f"edge {edge_id} {label} {side}"
+                )
+                logical_name = edge.get(logical_field)
+                if not isinstance(logical_name, str) or not logical_name:
+                    raise CampaignResolutionError(
+                        f"edge {edge_id} has no logical {side} screen name"
+                    )
+                layout_id = _resolve_layout_id(
+                    logical_name, native_screen_id, fixtures
+                )
+                if canonical_bytes(_source(header, str(paths[label]))) != canonical_bytes(
+                    fixtures[layout_id]["source"]
+                ):
+                    raise CampaignResolutionError(
+                        f"edge {edge_id} {label} {side} changed capture provenance"
+                    )
+                resolved_ids.add(layout_id)
+                observations[layout_id].append(
+                    _observation(
+                        header,
+                        samples,
+                        evidence_receipt(paths[label], evidence_root),
+                        f"edge:{edge_id}:{side}:{label}",
+                    )
+                )
+            if len(resolved_ids) != 1:
+                raise CampaignResolutionError(
+                    f"edge {edge_id} independent {side} captures resolve different layouts"
+                )
+            endpoint_layouts[(edge_id, endpoint_key)] = resolved_ids.pop()
+    return recordings["primary"], endpoint_layouts
+
+
+def collect_extended(
+    observation_root: Path,
+    evidence_root: Path,
+    fixtures: dict[str, dict[str, Any]],
+    observations: dict[str, list[dict[str, Any]]],
+) -> int:
+    if not observation_root.exists():
+        return 0
+    fixture_by_filename = {
+        record["path"].name: layout_id for layout_id, record in fixtures.items()
+    }
+    confirmation_by_filename = {
+        record["confirmation_path"].name: layout_id
+        for layout_id, record in fixtures.items()
+    }
+    count = 0
+    witnessed: set[tuple[str, int, str]] = set()
+    for path in sorted(observation_root.rglob("*.json")):
+        value = read_object(path)
+        if value.get("schema") != (
+            "solomon-dark-native-menu-motion-capability-observation-v1"
+        ):
+            continue
+        header = value.get("header")
+        samples = value.get("samples")
+        if not isinstance(header, dict) or not isinstance(samples, list):
+            raise CampaignResolutionError(f"extended observation {path} is incomplete")
+        instance, process_id = _identity(header, str(path))
+        baseline = header.get("baseline")
+        if not isinstance(baseline, dict):
+            raise CampaignResolutionError(
+                f"extended observation {path} has no baseline receipt"
+            )
+        filename = baseline.get("evidence_filename")
+        selector = baseline.get("selector")
+        if not isinstance(filename, str) or not isinstance(selector, dict):
+            raise CampaignResolutionError(
+                f"extended observation {path} baseline is incomplete"
+            )
+        schema = selector.get("schema")
+        if schema in {
+            "solomon-dark-native-menu-layout-v2",
+            "solomon-dark-native-menu-layout-v3",
+        }:
+            layout_id = fixture_by_filename.get(filename)
+        elif schema in {
+            "solomon-dark-native-menu-animation-confirmation-v2",
+            "solomon-dark-native-menu-animation-confirmation-v3",
+            "solomon-dark-native-menu-animation-confirmation-v4",
+        }:
+            layout_id = confirmation_by_filename.get(filename)
+        else:
+            layout_id = None
+        if layout_id is None:
+            screen = header.get("label")
+            matching = [
+                candidate
+                for candidate, record in fixtures.items()
+                if record["native_screen_id"] == screen
+            ]
+            if len(matching) != 1:
+                raise CampaignResolutionError(
+                    f"extended observation {path} does not resolve one screen"
+                )
+            layout_id = matching[0]
+        witness = (instance, process_id, layout_id)
+        if witness in witnessed:
+            raise CampaignResolutionError(
+                f"extended observation identity is ambiguous: {witness}"
+            )
+        witnessed.add(witness)
+        observations[layout_id].append(
+            _observation(
+                header,
+                samples,
+                evidence_receipt(path, evidence_root),
+                f"extended:{layout_id}:{instance}:{process_id}",
+                kind="extended_observation",
+            )
+        )
+        count += 1
+    return count
+
+
+def resolved_layout(resolution: dict[str, Any]) -> dict[str, Any]:
+    layout = copy.deepcopy(resolution["structural_core"])
+    for field in (
+        "settlement_spec",
+        "structural_core_sha256",
+        "structural_core_element_count",
+        "animated_element_ids",
+        "visibility_cycling_element_ids",
+        "ambient_persistent_element_ids",
+        "classification_map",
+        "ambient_family_art_ids",
+        "ambient_members",
+        "ephemeral_family",
+        "ambient_semantic_member_count",
+        "peak_element_count",
+        "ambient_fraction",
+    ):
+        layout[field] = copy.deepcopy(resolution[field])
+    return layout
+
+
+def settlement_summary(
+    observation: dict[str, Any], resolution: dict[str, Any]
+) -> dict[str, Any]:
+    classified = classify_ambient_window(
+        observation["samples"], label=observation["label"]
+    )
+    return {
+        "settlement_spec": "2.5",
+        "criterion": classified["criterion"],
+        "settle_latency_milliseconds": classified[
+            "settle_latency_milliseconds"
+        ],
+        "stable_span_milliseconds": classified["stable_span_milliseconds"],
+        "consecutive_structural_samples": classified[
+            "consecutive_structural_samples"
+        ],
+        "minimum_element_count": classified["minimum_element_count"],
+        "peak_element_count": classified["element_count"],
+        "raw_window_structural_sha256": classified["structural_sha256"],
+        "resolved_structural_core_sha256": resolution[
+            "structural_core_sha256"
+        ],
+        "resolved_classification_map_sha256": sha256_json(
+            resolution["classification_map"]
+        ),
+        "ambient_fraction": resolution["ambient_fraction"],
+    }
+
+
+def resolve_campaign(
+    candidate_root: Path,
+    evidence_root: Path,
+    primary_navigation_path: Path,
+    confirmation_navigation_path: Path,
+    motion_observation_root: Path,
+    resolved_navigation_output: Path,
+    audit_output: Path,
+    apply: bool,
+    verify: bool = False,
+) -> dict[str, Any]:
+    if apply and verify:
+        raise CampaignResolutionError(
+            "ambient campaign cannot apply and verify simultaneously"
+        )
+    evidence_resolved = evidence_root.resolve()
+    motion_resolved = motion_observation_root.resolve()
+    if not motion_resolved.is_relative_to(evidence_resolved):
+        raise CampaignResolutionError(
+            "motion observation directory escapes the evidence root"
+        )
+    fixtures, observations = collect_standalones(candidate_root, evidence_root)
+    primary_navigation, endpoint_layouts = collect_navigation(
+        primary_navigation_path,
+        confirmation_navigation_path,
+        evidence_root,
+        fixtures,
+        observations,
+    )
+    extended_count = collect_extended(
+        motion_observation_root, evidence_root, fixtures, observations
+    )
+
+    resolutions: dict[str, dict[str, Any]] = {}
+    layouts: dict[str, dict[str, Any]] = {}
+    screen_audit: list[dict[str, Any]] = []
+    for layout_id in sorted(fixtures):
+        reached = observations.get(layout_id)
+        if not reached:
+            raise CampaignResolutionError(
+                f"standalone fixture '{layout_id}' was never reached"
+            )
+        try:
+            resolution = resolve_ambient_lifecycle(reached)
+        except AmbientLifecycleError as error:
+            raise CampaignResolutionError(
+                f"STOP: screen '{layout_id}': {error}"
+            ) from error
+        resolutions[layout_id] = resolution
+        layouts[layout_id] = resolved_layout(resolution)
+        screen_audit.append(
+            {
+                "layout_id": layout_id,
+                "native_screen_id": fixtures[layout_id]["native_screen_id"],
+                "settled_observation_count": sum(
+                    observation["kind"] == "settled_window"
+                    for observation in reached
+                ),
+                "extended_observation_count": sum(
+                    observation["kind"] == "extended_observation"
+                    for observation in reached
+                ),
+                "structural_core_element_count": resolution[
+                    "structural_core_element_count"
+                ],
+                "structural_core_sha256": resolution[
+                    "structural_core_sha256"
+                ],
+                "animated_element_ids": resolution["animated_element_ids"],
+                "ambient_family_art_ids": resolution[
+                    "ambient_family_art_ids"
+                ],
+                "ambient_fraction": resolution["ambient_fraction"],
+            }
+        )
+
+    candidate_updates: dict[Path, dict[str, Any]] = {}
+    for layout_id, record in fixtures.items():
+        fixture = copy.deepcopy(record["value"])
+        fixture["schema"] = "solomon-dark-native-menu-layout-v3"
+        fixture["layout"] = copy.deepcopy(layouts[layout_id])
+        fixture["header"]["settlement"] = settlement_summary(
+            record["primary_observation"], resolutions[layout_id]
+        )
+        fixture["header"]["ambient_lifecycle"] = {
+            "resolution_sha256": sha256_json(resolutions[layout_id]),
+            "independent_instances": sorted(
+                {
+                    (
+                        observation["instance"],
+                        observation["process_id"],
+                    )
+                    for observation in observations[layout_id]
+                    if observation["kind"] == "settled_window"
+                }
+            ),
+            "observation_receipts": [
+                copy.deepcopy(observation["evidence"])
+                for observation in observations[layout_id]
+            ],
+        }
+        candidate_updates[record["path"]] = fixture
+
+    resolved_navigation = copy.deepcopy(primary_navigation)
+    edge_by_id = {
+        str(edge.get("id")): edge
+        for edge in resolved_navigation.get("edges", [])
+        if isinstance(edge, dict)
+    }
+    if len(edge_by_id) != len(resolved_navigation.get("edges", [])):
+        raise CampaignResolutionError("resolved navigation edge ids are ambiguous")
+    for (edge_id, endpoint_key), layout_id in endpoint_layouts.items():
+        edge = edge_by_id[edge_id]
+        endpoint = edge[endpoint_key]
+        label = "source" if endpoint_key == "before" else "destination"
+        matching_observations = [
+            observation
+            for observation in observations[layout_id]
+            if observation["label"] == f"edge:{edge_id}:{label}:primary"
+        ]
+        if len(matching_observations) != 1:
+            raise CampaignResolutionError(
+                f"edge {edge_id} {label} primary observation is absent or ambiguous"
+            )
+        endpoint["layout"] = copy.deepcopy(layouts[layout_id])
+        endpoint["settlement"] = settlement_summary(
+            matching_observations[0], resolutions[layout_id]
+        )
+        endpoint["animated_element_ids"] = copy.deepcopy(
+            resolutions[layout_id]["animated_element_ids"]
+        )
+        endpoint["element_count"] = resolutions[layout_id][
+            "structural_core_element_count"
+        ]
+        endpoint["layout_id"] = layout_id
+    for edge in edge_by_id.values():
+        edge["header"]["settlement"] = {
+            "source": copy.deepcopy(edge["before"]["settlement"]),
+            "destination": copy.deepcopy(edge["after"]["settlement"]),
+        }
+    resolved_navigation.setdefault("header", {})["ambient_lifecycle_resolution"] = {
+        "settlement_spec": "2.5",
+        "primary_raw_recording": evidence_receipt(
+            primary_navigation_path, evidence_root
+        ),
+        "confirmation_raw_recording": evidence_receipt(
+            confirmation_navigation_path, evidence_root
+        ),
+        "motion_observation_directory": motion_resolved.relative_to(
+            evidence_resolved
+        ).as_posix(),
+        "screen_count": len(resolutions),
+    }
+
+    audit = {
+        "schema": "solomon-dark-native-menu-ambient-lifecycle-audit-v1",
+        "settlement_spec": "2.5",
+        "applied": apply,
+        "standalone_fixture_count": len(fixtures),
+        "navigation_edge_count": len(edge_by_id),
+        "settled_observation_count": sum(
+            observation["kind"] == "settled_window"
+            for reached in observations.values()
+            for observation in reached
+        ),
+        "extended_observation_count": extended_count,
+        "screens": screen_audit,
+        "outputs": {
+            "resolved_navigation": str(resolved_navigation_output),
+            "candidate_fixtures": [str(path) for path in sorted(candidate_updates)],
+        },
+    }
+    if apply:
+        for path, value in candidate_updates.items():
+            write_atomically(path, value)
+        write_atomically(resolved_navigation_output, resolved_navigation)
+        write_atomically(audit_output, audit)
+    if verify:
+        for path, expected in candidate_updates.items():
+            if canonical_bytes(read_object(path)) != canonical_bytes(expected):
+                raise CampaignResolutionError(
+                    f"resolved candidate {path} is not the machine-derived v2.5 result"
+                )
+        if not resolved_navigation_output.is_file() or canonical_bytes(
+            read_object(resolved_navigation_output)
+        ) != canonical_bytes(resolved_navigation):
+            raise CampaignResolutionError(
+                "resolved navigation is not the machine-derived v2.5 result"
+            )
+    return audit
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--candidate-root", type=Path, required=True)
+    parser.add_argument("--evidence-root", type=Path, required=True)
+    parser.add_argument("--primary-navigation", type=Path, required=True)
+    parser.add_argument("--confirmation-navigation", type=Path, required=True)
+    parser.add_argument("--motion-observation-root", type=Path, required=True)
+    parser.add_argument("--resolved-navigation-output", type=Path, required=True)
+    parser.add_argument("--audit-output", type=Path, required=True)
+    parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--verify", action="store_true")
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    try:
+        result = resolve_campaign(
+            args.candidate_root.resolve(),
+            args.evidence_root.resolve(),
+            args.primary_navigation.resolve(),
+            args.confirmation_navigation.resolve(),
+            args.motion_observation_root.resolve(),
+            args.resolved_navigation_output.resolve(),
+            args.audit_output.resolve(),
+            args.apply,
+            args.verify,
+        )
+    except CampaignResolutionError as error:
+        print(json.dumps({"success": False, "error": str(error)}))
+        return 1
+    print(json.dumps({"success": True, **result}, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

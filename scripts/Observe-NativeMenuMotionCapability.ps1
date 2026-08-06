@@ -50,7 +50,10 @@ $baselineSettlement = $null
 $baselineLayout = $null
 $baselineSelector = [ordered]@{ schema = [string]$baseline.schema }
 switch ([string]$baseline.schema) {
-    "solomon-dark-native-menu-layout-v2" {
+    { $_ -in @(
+        "solomon-dark-native-menu-layout-v2",
+        "solomon-dark-native-menu-layout-v3"
+    ) } {
         if (-not [string]::IsNullOrWhiteSpace($EdgeId)) {
             throw "BROKEN: EdgeId cannot select inside a standalone baseline."
         }
@@ -60,7 +63,8 @@ switch ([string]$baseline.schema) {
     }
     { $_ -in @(
         "solomon-dark-native-menu-animation-confirmation-v2",
-        "solomon-dark-native-menu-animation-confirmation-v3"
+        "solomon-dark-native-menu-animation-confirmation-v3",
+        "solomon-dark-native-menu-animation-confirmation-v4"
     ) } {
         if (-not [string]::IsNullOrWhiteSpace($EdgeId)) {
             throw "BROKEN: EdgeId cannot select inside a confirmation baseline."
@@ -167,6 +171,8 @@ while (
     $samples.Add([ordered]@{
         elapsed_milliseconds = [long]$clock.ElapsedMilliseconds
         captured_at_milliseconds = [uint64]$probe.CapturedAtMilliseconds
+        semantic_surface = $probe.SemanticSurface
+        semantic_generation = $probe.SemanticGeneration
         payload = $probe.SemanticPayload
     })
     Start-Sleep -Milliseconds 250

@@ -6,6 +6,7 @@ import type { AssetManifest } from "../assets/types.js";
 import { ManifestAssets } from "../client/manifest-assets.js";
 import { parseMenuCatalog } from "../client/menu-catalog.js";
 import { buildRenderPlan, G12_LAYER_ORDER } from "../client/render-plan.js";
+import { verifyMenuBaseline } from "./menu-baseline.js";
 
 // The golden contains decimal coordinates, but replay never rescales them
 // before comparison. IEEE-754 parses the same JSON numeral identically on both
@@ -15,6 +16,7 @@ const POSITION_EPSILON = 0;
 
 const repository = path.resolve(import.meta.dirname, "..", "..");
 const goldenPath = path.join(repository, "tests", "fixtures", "webgame", "menu-goldens.json");
+const menuBaselinePath = path.join(repository, "webgame-contracts", "menu-baseline.json");
 const assetGoldenPath = path.join(
   repository,
   "webgame",
@@ -123,9 +125,34 @@ function exactCoordinate(actual: number, expected: number, claim: string): void 
 
 async function main(): Promise<void> {
   const embedded = JSON.parse(await readFile(goldenPath, "utf8")) as unknown;
-  const catalog = parseMenuCatalog(embedded);
   const root = object(embedded, "G11 embedded golden");
   const wrappers = array(root.layouts, "G11 embedded layouts");
+  const canonicalFixtures = new Set(
+    wrappers.map((value) => String(object(value, "G11 embedded layout wrapper").fixture)),
+  );
+  const baseline = await verifyMenuBaseline(
+    JSON.parse(await readFile(menuBaselinePath, "utf8")) as unknown,
+    repository,
+    canonicalFixtures,
+  );
+  const baselineEmbedded = structuredClone(root);
+  const baselineWrappers = array(
+    baselineEmbedded.layouts,
+    "G11 baseline embedded layouts",
+  );
+  for (const wrapperValue of baselineWrappers) {
+    const wrapper = object(wrapperValue, "G11 baseline layout wrapper");
+    const fixture = String(wrapper.fixture);
+    const receipt = baseline.snapshots.get(fixture);
+    assert(receipt !== undefined, `${fixture} has no verified baseline snapshot`);
+    const snapshot = object(
+      JSON.parse(await readFile(path.join(repository, receipt.snapshot), "utf8")) as unknown,
+      `${fixture} baseline snapshot`,
+    );
+    wrapper.header = snapshot.header;
+    wrapper.layout = snapshot.layout;
+  }
+  const catalog = parseMenuCatalog(baselineEmbedded);
   const assetGolden = object(
     JSON.parse(await readFile(assetGoldenPath, "utf8")) as unknown,
     "assetpack golden",
@@ -157,6 +184,12 @@ async function main(): Promise<void> {
       wrapper.layout,
       `${fixture} standalone layout diverges from the embedded G11 recording`,
     );
+    const receipt = baseline.snapshots.get(fixture);
+    assert(receipt !== undefined, `${fixture} lost its verified baseline receipt`);
+    const snapshot = object(
+      JSON.parse(await readFile(path.join(repository, receipt.snapshot), "utf8")) as unknown,
+      `${fixture} baseline snapshot`,
+    );
     const layoutId = path.basename(fixture, ".json");
     const layout = catalog.layouts.get(layoutId);
     assert(layout !== undefined, `${layoutId} did not enter the replay catalog`);
@@ -166,7 +199,7 @@ async function main(): Promise<void> {
       G12_LAYER_ORDER,
       `${layoutId} did not retain the five-pass G12 composition order`,
     );
-    const rawLayout = object(wrapper.layout, `${layoutId} embedded layout`);
+    const rawLayout = object(snapshot.layout, `${layoutId} baseline layout`);
     const rawElements = array(rawLayout.elements, `${layoutId} embedded elements`);
     assert.equal(
       plan.elements.length,
@@ -215,6 +248,8 @@ async function main(): Promise<void> {
     `screens=${catalog.layouts.size}/28`,
     `elements=${elementCount}`,
     `art_references=${artCount}`,
+    `baseline_snapshots=${baseline.snapshots.size}/28`,
+    `pending_shellfix=${baseline.pendingShellfix.size}/28`,
     `position_epsilon=${POSITION_EPSILON} (same JSON numerals, no pre-assert scaling)`,
     "safe_area_1280x800=1280x720+40px_top+40px_bottom",
   ].join("\n") + "\n";

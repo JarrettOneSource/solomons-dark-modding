@@ -1,0 +1,374 @@
+{
+  "schema": "solomon-dark-menu-baseline-v1",
+  "corrective": "shellfix task #101",
+  "baseline_snapshot_count": 28,
+  "pending_shellfix_count": 28,
+  "baseline_snapshots": [
+    {
+      "fixture": "menu-layouts/beta-notice.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/beta-notice.json",
+      "sha256": "3079989caa69579ea0d4eebf863fb3f26a86a24be40eff4459263f735d6f6042",
+      "bytes": 165992,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/control-scheme-picker.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/control-scheme-picker.json",
+      "sha256": "0ca9c1eb2004e4c07ee4d48628ccbc42b27ff118a786ccd12b2b5a23e3180b58",
+      "bytes": 8735,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/controls.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/controls.json",
+      "sha256": "0684f577292d191165dafa059eb626a52b467b165b18e126fb2a261ed4f2fd1a",
+      "bytes": 46568,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/create-discipline.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/create-discipline.json",
+      "sha256": "37cf978409cadcceba49c03e3ee4cd06feece8eb5774e08dad6eaa00ca71db56",
+      "bytes": 67813,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/create-element.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/create-element.json",
+      "sha256": "83a5301856952dcf885a52d50001e1c5e9e98ff78ee6929d8d3b3fca487676a2",
+      "bytes": 67670,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/dark-cloud-browser.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/dark-cloud-browser.json",
+      "sha256": "24b8ad31cb35b8d8cd4ef9527777572256b9f8c9e2d5e8d39e877bcd9f7a96b2",
+      "bytes": 146648,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/dark-cloud-login-settings.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/dark-cloud-login-settings.json",
+      "sha256": "1844ec5571122e4fed8fa0f15c7ebdc1a6ee3200ef5ee347b3d6d1034799a25a",
+      "bytes": 142553,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/dark-cloud-menu.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/dark-cloud-menu.json",
+      "sha256": "ce7840aaa7b34185ec4345132a7b5704765130878a42e0b9a4c31b285bc2af94",
+      "bytes": 157330,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/dark-cloud-my-levels.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/dark-cloud-my-levels.json",
+      "sha256": "50030bb28a018a621ff40080e0366821505a72ec24d9743406f7b44bab3371fc",
+      "bytes": 140825,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/dark-cloud-online-levels.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/dark-cloud-online-levels.json",
+      "sha256": "61590730b3e20d32ee77dde1d8ad12fc4b6cb5fd2e8c3c0d6396e74f31d23b16",
+      "bytes": 147248,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/dark-cloud-options.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/dark-cloud-options.json",
+      "sha256": "526881ea2946db3fd9bcaf26543fceda351e955190d917cbbfe82c2006f7576a",
+      "bytes": 155376,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/dark-cloud-recent.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/dark-cloud-recent.json",
+      "sha256": "c7ddae01f4debf8d948e0d68a35b625c45b8409ac0bf2c3da2ef34c45b355967",
+      "bytes": 146548,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/dark-cloud-search.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/dark-cloud-search.json",
+      "sha256": "1af0160eff69d47433b4dcb44a542e3bb9888587ce069d934a1efea6b1f8c843",
+      "bytes": 143311,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/dark-cloud-settings.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/dark-cloud-settings.json",
+      "sha256": "992453b07293525b48de059b3bc29e0c3010505a9840495a7977523cb44803f4",
+      "bytes": 46931,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/dark-cloud-sort.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/dark-cloud-sort.json",
+      "sha256": "b8727e72c0874e43136f9996bd54376a02d8fde2ca03cbaf5aea08fc93f24be8",
+      "bytes": 155048,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/game-over.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/game-over.json",
+      "sha256": "189d460b1c3e61487abadabe996b224f56baa3ff0374f5a15a1ab3d58e8d6dd2",
+      "bytes": 4206,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/game-settings-dark-cloud.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/game-settings-dark-cloud.json",
+      "sha256": "73732db0a3687479667aae816227456941fd9d30c5063afe586cd3fb1a446bf9",
+      "bytes": 127719,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/game-settings-gameplay.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/game-settings-gameplay.json",
+      "sha256": "fe27915bee5364b1ca8bb9cb4922ce99aeefe2d16be5c5e6b9582f8519a29439",
+      "bytes": 55476,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/game-settings-title.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/game-settings-title.json",
+      "sha256": "22e26ab5568b80c77cb7ccde2dbeed9ae25098026c5687b2f189795fc3a3a7f5",
+      "bytes": 181969,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/hall-of-fame.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/hall-of-fame.json",
+      "sha256": "4d657306692a4b4cb107fd815308913bfaa1df53c1e0bea5f43b6c47ebaaea1b",
+      "bytes": 76181,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/loading-screen.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/loading-screen.json",
+      "sha256": "3cf436e3b1c8d11fd6da831e19a3241daa1cef8e47c2ec7a79b3b84733d76b8b",
+      "bytes": 11433,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/main-menu-root.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/main-menu-root.json",
+      "sha256": "c2d296d678773c2e291b2cabc115871e3d624cca8a8bd98da1ee7c44ca04a42b",
+      "bytes": 170269,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/map-picker.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/map-picker.json",
+      "sha256": "cca51909f8a58a7edbe22eab16be1f156daab56902348a8a6aebe3aef4047bc8",
+      "bytes": 18844,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/native-loader.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/native-loader.json",
+      "sha256": "0688ae736d0ec542b137ac80a8664dc91746ab3ac097b443c653d9ba26c1526b",
+      "bytes": 7450,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/pause-menu.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/pause-menu.json",
+      "sha256": "f8407307ea4b12ffe0d519bc7bc16215879ca761fbac51144941bb951c22faca",
+      "bytes": 68601,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/performance.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/performance.json",
+      "sha256": "344b967e458092bf00af290fb088edcd4a5bf1315806983e93c11b6b3303313c",
+      "bytes": 58539,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/profile-save-select.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/profile-save-select.json",
+      "sha256": "31fcb5ea0025a2dcdc9658d71549367d784f8a5d78699eeb277ff228cc2b01fc",
+      "bytes": 168411,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/skill-picker.json",
+      "snapshot": "webgame-contracts/baseline-snapshots/menu-layouts/skill-picker.json",
+      "sha256": "24c27be90449a3344203f4e80c55be181573dcda9ff58c43c30012185ebd4559",
+      "bytes": 70378,
+      "corrective": "shellfix task #101"
+    }
+  ],
+  "pending_shellfix": [
+    {
+      "fixture": "menu-layouts/beta-notice.json",
+      "sha256": "3079989caa69579ea0d4eebf863fb3f26a86a24be40eff4459263f735d6f6042",
+      "bytes": 165992,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/control-scheme-picker.json",
+      "sha256": "0ca9c1eb2004e4c07ee4d48628ccbc42b27ff118a786ccd12b2b5a23e3180b58",
+      "bytes": 8735,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/controls.json",
+      "sha256": "0684f577292d191165dafa059eb626a52b467b165b18e126fb2a261ed4f2fd1a",
+      "bytes": 46568,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/create-discipline.json",
+      "sha256": "37cf978409cadcceba49c03e3ee4cd06feece8eb5774e08dad6eaa00ca71db56",
+      "bytes": 67813,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/create-element.json",
+      "sha256": "83a5301856952dcf885a52d50001e1c5e9e98ff78ee6929d8d3b3fca487676a2",
+      "bytes": 67670,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/dark-cloud-browser.json",
+      "sha256": "24b8ad31cb35b8d8cd4ef9527777572256b9f8c9e2d5e8d39e877bcd9f7a96b2",
+      "bytes": 146648,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/dark-cloud-login-settings.json",
+      "sha256": "1844ec5571122e4fed8fa0f15c7ebdc1a6ee3200ef5ee347b3d6d1034799a25a",
+      "bytes": 142553,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/dark-cloud-menu.json",
+      "sha256": "ce7840aaa7b34185ec4345132a7b5704765130878a42e0b9a4c31b285bc2af94",
+      "bytes": 157330,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/dark-cloud-my-levels.json",
+      "sha256": "50030bb28a018a621ff40080e0366821505a72ec24d9743406f7b44bab3371fc",
+      "bytes": 140825,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/dark-cloud-online-levels.json",
+      "sha256": "61590730b3e20d32ee77dde1d8ad12fc4b6cb5fd2e8c3c0d6396e74f31d23b16",
+      "bytes": 147248,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/dark-cloud-options.json",
+      "sha256": "526881ea2946db3fd9bcaf26543fceda351e955190d917cbbfe82c2006f7576a",
+      "bytes": 155376,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/dark-cloud-recent.json",
+      "sha256": "c7ddae01f4debf8d948e0d68a35b625c45b8409ac0bf2c3da2ef34c45b355967",
+      "bytes": 146548,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/dark-cloud-search.json",
+      "sha256": "1af0160eff69d47433b4dcb44a542e3bb9888587ce069d934a1efea6b1f8c843",
+      "bytes": 143311,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/dark-cloud-settings.json",
+      "sha256": "992453b07293525b48de059b3bc29e0c3010505a9840495a7977523cb44803f4",
+      "bytes": 46931,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/dark-cloud-sort.json",
+      "sha256": "b8727e72c0874e43136f9996bd54376a02d8fde2ca03cbaf5aea08fc93f24be8",
+      "bytes": 155048,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/game-over.json",
+      "sha256": "189d460b1c3e61487abadabe996b224f56baa3ff0374f5a15a1ab3d58e8d6dd2",
+      "bytes": 4206,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/game-settings-dark-cloud.json",
+      "sha256": "73732db0a3687479667aae816227456941fd9d30c5063afe586cd3fb1a446bf9",
+      "bytes": 127719,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/game-settings-gameplay.json",
+      "sha256": "fe27915bee5364b1ca8bb9cb4922ce99aeefe2d16be5c5e6b9582f8519a29439",
+      "bytes": 55476,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/game-settings-title.json",
+      "sha256": "22e26ab5568b80c77cb7ccde2dbeed9ae25098026c5687b2f189795fc3a3a7f5",
+      "bytes": 181969,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/hall-of-fame.json",
+      "sha256": "4d657306692a4b4cb107fd815308913bfaa1df53c1e0bea5f43b6c47ebaaea1b",
+      "bytes": 76181,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/loading-screen.json",
+      "sha256": "3cf436e3b1c8d11fd6da831e19a3241daa1cef8e47c2ec7a79b3b84733d76b8b",
+      "bytes": 11433,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/main-menu-root.json",
+      "sha256": "c2d296d678773c2e291b2cabc115871e3d624cca8a8bd98da1ee7c44ca04a42b",
+      "bytes": 170269,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/map-picker.json",
+      "sha256": "cca51909f8a58a7edbe22eab16be1f156daab56902348a8a6aebe3aef4047bc8",
+      "bytes": 18844,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/native-loader.json",
+      "sha256": "0688ae736d0ec542b137ac80a8664dc91746ab3ac097b443c653d9ba26c1526b",
+      "bytes": 7450,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/pause-menu.json",
+      "sha256": "f8407307ea4b12ffe0d519bc7bc16215879ca761fbac51144941bb951c22faca",
+      "bytes": 68601,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/performance.json",
+      "sha256": "344b967e458092bf00af290fb088edcd4a5bf1315806983e93c11b6b3303313c",
+      "bytes": 58539,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/profile-save-select.json",
+      "sha256": "31fcb5ea0025a2dcdc9658d71549367d784f8a5d78699eeb277ff228cc2b01fc",
+      "bytes": 168411,
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-layouts/skill-picker.json",
+      "sha256": "24c27be90449a3344203f4e80c55be181573dcda9ff58c43c30012185ebd4559",
+      "bytes": 70378,
+      "corrective": "shellfix task #101"
+    }
+  ]
+}

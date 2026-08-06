@@ -122,12 +122,12 @@ $primaryIdsJson = ConvertTo-Json -InputObject @($primaryIds | Sort-Object) -Comp
 $confirmationIdsJson = ConvertTo-Json `
     -InputObject @($confirmationIds | Sort-Object) `
     -Compress
-$rawSetsMatch = $primaryIdsJson -ceq $confirmationIdsJson
+$rawSetsMatchNoncontractual = $primaryIdsJson -ceq $confirmationIdsJson
 
 $capturedAtUtc = [DateTime]::UtcNow.ToString("o")
 $frameItem = Get-Item -LiteralPath $frameItemPath
 $confirmation = [ordered]@{
-    schema = "solomon-dark-native-menu-animation-confirmation-v3"
+    schema = "solomon-dark-native-menu-animation-confirmation-v4"
     header = [ordered]@{
         label = $ScreenId
         instance = $Instance
@@ -147,8 +147,8 @@ $confirmation = [ordered]@{
     settlement = $observation.settlement
     animated_element_ids = @($observation.animated_element_ids)
     raw_primary_animated_element_ids = @($primaryIds)
-    raw_sets_match = $rawSetsMatch
-    requires_extended_observation = (-not $rawSetsMatch)
+    raw_sets_match_noncontractual = $rawSetsMatchNoncontractual
+    requires_campaign_resolution = $true
     structural_sha256 = [string]$observation.settlement.structural_sha256
     confirmation_layout = $observation.layout
     structural_phases = @(
@@ -182,8 +182,8 @@ $confirmationHeader = [pscustomobject][ordered]@{
     animated_element_ids_sha256 = Get-NativeMenuStringSha256 $confirmationIdsJson
     raw_primary_animated_element_ids = @($primaryIds)
     raw_confirmation_animated_element_ids = @($confirmationIds)
-    raw_sets_match = $rawSetsMatch
-    requires_extended_observation = (-not $rawSetsMatch)
+    raw_sets_match_noncontractual = $rawSetsMatchNoncontractual
+    requires_campaign_resolution = $true
 }
 $primary.header | Add-Member `
     -NotePropertyName animation_confirmation `
@@ -198,8 +198,8 @@ $primary.header | Add-Member `
     success = $true
     screen = $ScreenId
     animated_elements = @($observation.animated_element_ids).Count
-    raw_sets_match = $rawSetsMatch
-    requires_extended_observation = (-not $rawSetsMatch)
+    raw_sets_match_noncontractual = $rawSetsMatchNoncontractual
+    requires_campaign_resolution = $true
     structural_sha256 = [string]$observation.settlement.structural_sha256
     output = $outputItemPath
     primary_fixture = $primaryItemPath

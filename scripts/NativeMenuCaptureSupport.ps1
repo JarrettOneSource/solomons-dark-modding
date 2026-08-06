@@ -784,7 +784,7 @@ function Invoke-NativeMenuSettlementClassifier {
             [Text.UTF8Encoding]::new($false)
         )
         $classifierOutput = @(
-            & py.exe -3 $Context.SettlementClassifier classify `
+            & py.exe -3 $Context.SettlementClassifier find `
                 --input $inputPath `
                 --output $outputPath 2>&1
         )
@@ -793,12 +793,12 @@ function Invoke-NativeMenuSettlementClassifier {
                 ($classifierOutput | ForEach-Object { [string]$_ }) -join "`n"
             ).Trim()
             if ([string]::IsNullOrWhiteSpace($message)) {
-                $message = "Settlement v2 classifier exited without diagnostics."
+                $message = "Settlement v2.5 classifier exited without diagnostics."
             }
             throw $message
         }
         if (-not (Test-Path -LiteralPath $outputPath -PathType Leaf)) {
-            throw "BROKEN: Settlement v2 classifier produced no result."
+            throw "BROKEN: Settlement v2.5 classifier produced no result."
         }
         return Get-Content -LiteralPath $outputPath -Raw | ConvertFrom-Json
     } finally {
@@ -862,8 +862,6 @@ function Wait-NativeMenuLayoutSettlement {
         [Parameter(Mandatory = $true)][Diagnostics.Stopwatch]$LatencyClock
     )
 
-    $stableStructureJson = ""
-    $stableStartMilliseconds = 0L
     $sampleCount = 0
     $busyCount = 0
     $notReadyCount = 0
@@ -871,8 +869,8 @@ function Wait-NativeMenuLayoutSettlement {
     $lastRejectedCandidate = ""
     $structuralPhaseOrder = [Collections.Generic.List[string]]::new()
     $structuralPhaseByHash = @{}
-    $stableWindow = [Collections.Generic.List[object]]::new()
-    $windowAnchorProbe = $null
+    $candidateSamples = [Collections.Generic.List[object]]::new()
+    $candidateProbes = [Collections.Generic.List[object]]::new()
 
     while ($LatencyClock.ElapsedMilliseconds -le
         $script:NativeMenuSettleTimeoutMilliseconds) {
@@ -909,50 +907,73 @@ function Wait-NativeMenuLayoutSettlement {
             $entry["observations"] = [int]$entry["observations"] + 1
         }
 
-        if ($probe.NonGeometryJson -cne $stableStructureJson) {
-            $stableStructureJson = $probe.NonGeometryJson
-            $stableStartMilliseconds = $elapsed
-            $stableWindow.Clear()
-            $windowAnchorProbe = $probe
-        }
-        $stableWindow.Add([ordered]@{
+        $candidateSamples.Add([ordered]@{
             elapsed_milliseconds = $elapsed
             captured_at_milliseconds = $probe.CapturedAtMilliseconds
+            semantic_surface = $probe.SemanticSurface
+            semantic_generation = $probe.SemanticGeneration
             payload = $probe.SemanticPayload
         })
-        $stableSpan = $elapsed - $stableStartMilliseconds
+        $candidateProbes.Add($probe)
+        $candidateSpan = if ($candidateSamples.Count -gt 1) {
+            $elapsed - [long]$candidateSamples[0].elapsed_milliseconds
+        } else {
+            0L
+        }
         if (
-            $stableWindow.Count -ge $script:NativeMenuSettleConsecutiveSamples -and
-            $stableSpan -ge $script:NativeMenuSettleMinimumSpanMilliseconds
+            $candidateSamples.Count -ge $script:NativeMenuSettleConsecutiveSamples -and
+            $candidateSpan -ge $script:NativeMenuSettleMinimumSpanMilliseconds
         ) {
             try {
                 $classification = Invoke-NativeMenuSettlementClassifier `
                     -Context $Context `
-                    -Samples @($stableWindow)
+                    -Samples @($candidateSamples)
             } catch {
                 $classificationError = [string]$_.Exception.Message
-                if ($classificationError -notmatch
-                    'animated geometry cap exceeded:') {
+                if ($classificationError -match '^BROKEN:') {
                     throw
                 }
-                # A structurally stable transition can still be moving into
-                # place. Reject that candidate window and measure a fresh one;
-                # a screen that keeps exceeding the cap reaches the bounded
-                # STOP below instead of being mislabeled as decoration.
+                # A rejected candidate is not settlement. Keep measuring until
+                # the bounded STOP so transient population, lifecycle churn,
+                # and a genuinely invalid surface remain distinguishable.
                 $lastRejectedCandidate = $classificationError
-                $stableStartMilliseconds = $elapsed
-                $stableWindow.Clear()
-                $stableWindow.Add([ordered]@{
-                    elapsed_milliseconds = $elapsed
-                    captured_at_milliseconds = $probe.CapturedAtMilliseconds
-                    payload = $probe.SemanticPayload
-                })
-                $windowAnchorProbe = $probe
                 Start-Sleep -Milliseconds (
                     $script:NativeMenuSettlePollMilliseconds
                 )
                 continue
             }
+            $stableStartIndex = [int]$classification.stable_start_index
+            $stableEndIndex = [int]$classification.stable_end_index
+            if (
+                $stableStartIndex -lt 0 -or
+                $stableEndIndex -lt $stableStartIndex -or
+                $stableEndIndex -ge $candidateSamples.Count
+            ) {
+                throw (
+                    "BROKEN: Settlement v2.5 classifier returned an invalid " +
+                    "selected-window index range."
+                )
+            }
+            $stableWindow = [Collections.Generic.List[object]]::new()
+            for (
+                $stableIndex = $stableStartIndex;
+                $stableIndex -le $stableEndIndex;
+                $stableIndex += 1
+            ) {
+                $stableWindow.Add($candidateSamples[$stableIndex])
+            }
+            if (
+                $stableWindow.Count -lt $script:NativeMenuSettleConsecutiveSamples -or
+                ([long]$stableWindow[$stableWindow.Count - 1].elapsed_milliseconds -
+                    [long]$stableWindow[0].elapsed_milliseconds) -lt
+                    $script:NativeMenuSettleMinimumSpanMilliseconds
+            ) {
+                throw (
+                    "BROKEN: Settlement v2.5 classifier selected a window " +
+                    "below the recorder's 40-sample/two-second floor."
+                )
+            }
+            $windowAnchorProbe = $candidateProbes[$stableStartIndex]
             $structuralPhases = [Collections.Generic.List[object]]::new()
             foreach ($phaseHash in $structuralPhaseOrder) {
                 $structuralPhases.Add($structuralPhaseByHash[$phaseHash])
@@ -988,18 +1009,30 @@ function Wait-NativeMenuLayoutSettlement {
                 animated_element_ids = @(
                     $classification.animated_element_ids
                 )
+                visibility_cycling_element_ids = @(
+                    $classification.visibility_cycling_element_ids
+                )
+                ephemeral_art_ids = @($classification.ephemeral_art_ids)
                 animated_element_count = (
                     [int]$classification.animated_element_count
                 )
+                minimum_element_count = (
+                    [int]$classification.minimum_element_count
+                )
                 element_count = [int]$classification.element_count
                 animated_fraction = [double]$classification.animated_fraction
+                stable_start_index = $stableStartIndex
+                stable_end_index = $stableEndIndex
             }
             return [pscustomobject]@{
                 AnchorProbe = $windowAnchorProbe
                 Summary = $summary
                 Layout = $classification.layout
                 AnimatedElementIds = @($classification.animated_element_ids)
-                NonGeometryJson = $stableStructureJson
+                VisibilityCyclingElementIds = @(
+                    $classification.visibility_cycling_element_ids
+                )
+                EphemeralArtIds = @($classification.ephemeral_art_ids)
                 StructuralPhases = $structuralPhases
                 SettledWindowSamples = @($stableWindow)
             }
@@ -1008,9 +1041,8 @@ function Wait-NativeMenuLayoutSettlement {
     }
 
     throw (
-        "STOP: '$ScreenId' never settled to 40 consecutive structurally " +
-        "byte-identical payloads with one measured animated ID set spanning " +
-        "at least 2 seconds within 60 seconds. " +
+        "STOP: '$ScreenId' never satisfied Settlement v2.5 across at least " +
+        "40 samples spanning two seconds within 60 seconds. " +
         "samples=$sampleCount busy=$busyCount not_ready=$notReadyCount " +
         "last_unavailable='$lastUnavailable' " +
         "last_rejected_candidate='$lastRejectedCandidate'"
@@ -1025,50 +1057,22 @@ function Test-NativeMenuFrameMatchesSettlement {
 
     if (
         $FrameProbe.Status -ne "ready" -or
-        $FrameProbe.NonGeometryJson -cne $Settlement.NonGeometryJson
+        $FrameProbe.SemanticSurface -cne
+            $Settlement.AnchorProbe.SemanticSurface -or
+        $FrameProbe.SemanticGeneration -ne
+            $Settlement.AnchorProbe.SemanticGeneration -or
+        [string]$FrameProbe.SemanticPayload.screen_id -cne
+            [string]$Settlement.Layout.screen_id -or
+        [uint64]$FrameProbe.SemanticPayload.generation -ne
+            [uint64]$Settlement.Layout.generation
     ) {
         return $false
     }
-    $animated = @{}
-    foreach ($elementId in @($Settlement.AnimatedElementIds)) {
-        $animated[[string]$elementId] = $true
-    }
-    $frameById = @{}
-    foreach ($element in @($FrameProbe.SemanticPayload.elements)) {
-        $elementId = [string]$element.id
-        if ($frameById.ContainsKey($elementId)) {
-            throw "BROKEN: settled frame contains ambiguous duplicate element '$elementId'."
-        }
-        $frameById[$elementId] = $element
-    }
-    foreach ($element in @($Settlement.Layout.elements)) {
-        $elementId = [string]$element.id
-        if (-not $frameById.ContainsKey($elementId)) {
-            return $false
-        }
-        if ($animated.ContainsKey($elementId)) {
-            continue
-        }
-        $frameElement = $frameById[$elementId]
-        foreach ($geometryName in @("rect", "unclipped_rect")) {
-            $expectedGeometry = @($element.$geometryName)
-            $frameGeometry = @($frameElement.$geometryName)
-            if (
-                $expectedGeometry.Count -ne 4 -or
-                $frameGeometry.Count -ne 4
-            ) {
-                return $false
-            }
-            for ($coordinate = 0; $coordinate -lt 4; $coordinate += 1) {
-                if (
-                    [double]$frameGeometry[$coordinate] -ne
-                    [double]$expectedGeometry[$coordinate]
-                ) {
-                    return $false
-                }
-            }
-        }
-    }
+    # Absolute draw ordinals, ambient membership, visibility phases, and
+    # animated geometry may all change after the selected window.  The frame
+    # is therefore paired to the measured semantic surface and generations;
+    # the campaign resolver, not a single post-window frame, contracts the
+    # reproduced structural core.
     return $true
 }
 
@@ -1119,6 +1123,10 @@ function Get-SettledNativeMenuObservation {
             layout_generation = [uint64]$layout.generation
             element_count = @($layout.elements).Count
             animated_element_ids = @($settled.AnimatedElementIds)
+            visibility_cycling_element_ids = @(
+                $settled.VisibilityCyclingElementIds
+            )
+            ephemeral_art_ids = @($settled.EphemeralArtIds)
             capture_method = [string]$layout.capture_method
             frame_sha256 = (
                 Get-FileHash -LiteralPath $FramePath -Algorithm SHA256

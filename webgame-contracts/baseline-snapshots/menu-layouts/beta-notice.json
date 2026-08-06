@@ -1,0 +1,2710 @@
+{
+    "schema":  "solomon-dark-native-menu-layout-v1",
+    "header":  {
+                   "instance":  "men-title",
+                   "process_id":  16140,
+                   "capture_commit":  "f9cac8783e72e7423a2d952987fa169fa84f3dcb",
+                   "native_exe_sha256":  "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+                   "loader_dll_sha256":  "f21d10e327e576ce2aed02a0626507143a9104c181d6694e2111d102433b52ec",
+                   "captured_at_utc":  "2026-08-05T07:17:52.1804642Z",
+                   "capture_method":  "live native UI tree + exact text/font hooks + native Sprite draw hooks",
+                   "reference_capture":  "../menu-reference-captures/beta-notice.png"
+               },
+    "layout":  {
+                   "generation":  13,
+                   "captured_at_milliseconds":  1147514562,
+                   "screen_id":  "beta_notice",
+                   "screen_title":  "Dialog",
+                   "capture_method":  "live native UI tree + exact text/font hooks + native Sprite draw hooks",
+                   "elements":  [
+                                    {
+                                        "id":  "beta_notice.art.title_0.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.0",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  16,
+                                        "rect":  [
+                                                     0.000000,
+                                                     0.000000,
+                                                     649.394470,
+                                                     553.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -649.394470,
+                                                               0.000000,
+                                                               649.394470,
+                                                               553.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_1.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.1",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  23,
+                                        "rect":  [
+                                                     0.000000,
+                                                     0.000000,
+                                                     566.721802,
+                                                     553.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -732.067139,
+                                                               0.000000,
+                                                               566.721802,
+                                                               553.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_2.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.2",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  20,
+                                        "rect":  [
+                                                     0.000000,
+                                                     0.000000,
+                                                     161.374969,
+                                                     553.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -1137.413940,
+                                                               0.000000,
+                                                               161.374969,
+                                                               553.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_2.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.2",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  21,
+                                        "rect":  [
+                                                     161.374939,
+                                                     0.000000,
+                                                     1460.163818,
+                                                     553.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               161.374939,
+                                                               0.000000,
+                                                               1460.163818,
+                                                               553.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_9.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.9",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  87,
+                                        "rect":  [
+                                                     435.500000,
+                                                     0.000000,
+                                                     1264.500000,
+                                                     395.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               435.500000,
+                                                               0.000000,
+                                                               1264.500000,
+                                                               395.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_1.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.1",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  24,
+                                        "rect":  [
+                                                     566.721863,
+                                                     0.000000,
+                                                     1600.000000,
+                                                     553.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               566.721863,
+                                                               0.000000,
+                                                               1865.510742,
+                                                               553.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_0.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.0",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  17,
+                                        "rect":  [
+                                                     649.394470,
+                                                     0.000000,
+                                                     1600.000000,
+                                                     553.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               649.394470,
+                                                               0.000000,
+                                                               1948.183350,
+                                                               553.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_2.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.2",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  22,
+                                        "rect":  [
+                                                     1460.163818,
+                                                     0.000000,
+                                                     1600.000000,
+                                                     553.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1460.163818,
+                                                               0.000000,
+                                                               2758.952881,
+                                                               553.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_1.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.1",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  false,
+                                        "interactive":  false,
+                                        "draw_order":  25,
+                                        "rect":  [
+                                                     1865.510742,
+                                                     0.000000,
+                                                     1600.000000,
+                                                     553.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1865.510742,
+                                                               0.000000,
+                                                               3164.299805,
+                                                               553.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_0.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.0",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  false,
+                                        "interactive":  false,
+                                        "draw_order":  18,
+                                        "rect":  [
+                                                     1948.183350,
+                                                     0.000000,
+                                                     1600.000000,
+                                                     553.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1948.183350,
+                                                               0.000000,
+                                                               3246.972412,
+                                                               553.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_6.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.6",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  19,
+                                        "rect":  [
+                                                     1208.000000,
+                                                     5.500000,
+                                                     1592.000000,
+                                                     389.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1208.000000,
+                                                               5.500000,
+                                                               1592.000000,
+                                                               389.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_18.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.18",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  9,
+                                        "rect":  [
+                                                     669.000000,
+                                                     50.999992,
+                                                     931.000000,
+                                                     118.000015
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               669.000000,
+                                                               50.999992,
+                                                               931.000000,
+                                                               118.000015
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_107.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.107",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  1,
+                                        "rect":  [
+                                                     516.500000,
+                                                     99.500000,
+                                                     601.500000,
+                                                     188.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               516.500000,
+                                                               99.500000,
+                                                               601.500000,
+                                                               188.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_108.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.108",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  2,
+                                        "rect":  [
+                                                     998.500000,
+                                                     99.500000,
+                                                     1083.500000,
+                                                     188.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               998.500000,
+                                                               99.500000,
+                                                               1083.500000,
+                                                               188.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_17.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  5,
+                                        "rect":  [
+                                                     535.000000,
+                                                     117.000000,
+                                                     615.000000,
+                                                     200.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               535.000000,
+                                                               117.000000,
+                                                               615.000000,
+                                                               200.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_17.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  6,
+                                        "rect":  [
+                                                     985.000000,
+                                                     117.000000,
+                                                     1065.000000,
+                                                     200.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               985.000000,
+                                                               117.000000,
+                                                               1065.000000,
+                                                               200.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_13.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.13",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  85,
+                                        "rect":  [
+                                                     0.000000,
+                                                     308.000000,
+                                                     326.000000,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -40.000000,
+                                                               308.000000,
+                                                               326.000000,
+                                                               960.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_14.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.14",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  86,
+                                        "rect":  [
+                                                     0.000000,
+                                                     308.000000,
+                                                     326.000000,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -40.000000,
+                                                               308.000000,
+                                                               326.000000,
+                                                               960.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_3.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.3",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  83,
+                                        "rect":  [
+                                                     48.000000,
+                                                     406.000000,
+                                                     256.000000,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               48.000000,
+                                                               406.000000,
+                                                               256.000000,
+                                                               904.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_54.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  91,
+                                        "rect":  [
+                                                     667.500000,
+                                                     415.000000,
+                                                     737.500000,
+                                                     500.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               667.500000,
+                                                               415.000000,
+                                                               737.500000,
+                                                               500.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_54.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  92,
+                                        "rect":  [
+                                                     962.500000,
+                                                     415.000000,
+                                                     1032.500000,
+                                                     500.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               962.500000,
+                                                               415.000000,
+                                                               1032.500000,
+                                                               500.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_101.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.101",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  90,
+                                        "rect":  [
+                                                     673.500000,
+                                                     421.000000,
+                                                     1026.000000,
+                                                     490.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               673.500000,
+                                                               421.000000,
+                                                               1026.500000,
+                                                               490.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_18.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.18",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  88,
+                                        "rect":  [
+                                                     599.500000,
+                                                     440.000000,
+                                                     666.500000,
+                                                     702.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               599.500000,
+                                                               440.000000,
+                                                               666.500000,
+                                                               702.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_18.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.18",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  89,
+                                        "rect":  [
+                                                     1033.500000,
+                                                     440.000000,
+                                                     1100.500000,
+                                                     702.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1033.500000,
+                                                               440.000000,
+                                                               1100.500000,
+                                                               702.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_16.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.16",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  38,
+                                        "rect":  [
+                                                     307.986816,
+                                                     442.189331,
+                                                     376.333099,
+                                                     558.831787
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               307.986816,
+                                                               442.189331,
+                                                               376.333099,
+                                                               558.831787
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_16.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.16",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  53,
+                                        "rect":  [
+                                                     1264.308350,
+                                                     442.470093,
+                                                     1330.217773,
+                                                     558.216431
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1264.308350,
+                                                               442.470093,
+                                                               1330.217773,
+                                                               558.216431
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_16.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.16",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  false,
+                                        "interactive":  false,
+                                        "draw_order":  31,
+                                        "rect":  [
+                                                     0.000000,
+                                                     442.788757,
+                                                     -37.832844,
+                                                     557.638489
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -101.432457,
+                                                               442.788757,
+                                                               -37.832844,
+                                                               557.638489
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_16.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.16",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  47,
+                                        "rect":  [
+                                                     900.119019,
+                                                     444.771790,
+                                                     953.458313,
+                                                     555.129456
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               900.119019,
+                                                               444.771790,
+                                                               953.458313,
+                                                               555.129456
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_16.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.16",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  67,
+                                        "rect":  [
+                                                     911.078796,
+                                                     460.360291,
+                                                     1041.950073,
+                                                     720.849609
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               911.078796,
+                                                               460.360291,
+                                                               1041.950073,
+                                                               720.849609
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_22.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.22",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  44,
+                                        "rect":  [
+                                                     660.610046,
+                                                     474.498749,
+                                                     731.285522,
+                                                     559.477600
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               660.610046,
+                                                               474.498749,
+                                                               731.285522,
+                                                               559.477600
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_22.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.22",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  59,
+                                        "rect":  [
+                                                     1599.788208,
+                                                     476.367859,
+                                                     1600.000000,
+                                                     556.968994
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1599.788208,
+                                                               476.367859,
+                                                               1664.464600,
+                                                               556.968994
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_22.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.22",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  37,
+                                        "rect":  [
+                                                     257.214447,
+                                                     476.788788,
+                                                     320.732422,
+                                                     556.517517
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               257.214447,
+                                                               476.788788,
+                                                               320.732422,
+                                                               556.517517
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_21.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.21",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  58,
+                                        "rect":  [
+                                                     1529.701294,
+                                                     477.558838,
+                                                     1600.000000,
+                                                     556.965393
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1529.701294,
+                                                               477.558838,
+                                                               1600.098267,
+                                                               556.965393
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_21.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.21",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  43,
+                                        "rect":  [
+                                                     592.767700,
+                                                     477.804443,
+                                                     662.554688,
+                                                     556.686951
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               592.767700,
+                                                               477.804443,
+                                                               662.554688,
+                                                               556.686951
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_21.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.21",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  36,
+                                        "rect":  [
+                                                     178.638626,
+                                                     478.424805,
+                                                     246.919632,
+                                                     556.007751
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               178.638626,
+                                                               478.424805,
+                                                               246.919632,
+                                                               556.007751
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_19.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.19",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  56,
+                                        "rect":  [
+                                                     1420.375732,
+                                                     490.487976,
+                                                     1478.481445,
+                                                     559.082947
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1420.375732,
+                                                               490.487976,
+                                                               1478.481445,
+                                                               559.082947
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_19.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.19",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  41,
+                                        "rect":  [
+                                                     480.529419,
+                                                     490.830444,
+                                                     537.403992,
+                                                     558.540283
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               480.529419,
+                                                               490.830444,
+                                                               537.403992,
+                                                               558.540283
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_54.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  94,
+                                        "rect":  [
+                                                     667.500000,
+                                                     491.000000,
+                                                     737.500000,
+                                                     576.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               667.500000,
+                                                               491.000000,
+                                                               737.500000,
+                                                               576.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_54.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  95,
+                                        "rect":  [
+                                                     962.500000,
+                                                     491.000000,
+                                                     1032.500000,
+                                                     576.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               962.500000,
+                                                               491.000000,
+                                                               1032.500000,
+                                                               576.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_19.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.19",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  50,
+                                        "rect":  [
+                                                     1059.217651,
+                                                     491.289612,
+                                                     1114.560669,
+                                                     557.878845
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1059.217651,
+                                                               491.289612,
+                                                               1114.560669,
+                                                               557.878845
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_23.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.23",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  45,
+                                        "rect":  [
+                                                     746.365845,
+                                                     491.758606,
+                                                     814.548950,
+                                                     559.437866
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               746.365845,
+                                                               491.758606,
+                                                               814.548950,
+                                                               559.437866
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_19.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.19",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  34,
+                                        "rect":  [
+                                                     74.569412,
+                                                     491.911011,
+                                                     128.075989,
+                                                     557.130310
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               74.569412,
+                                                               491.911011,
+                                                               128.075989,
+                                                               557.130310
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_19.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.19",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  false,
+                                        "interactive":  false,
+                                        "draw_order":  29,
+                                        "rect":  [
+                                                     0.000000,
+                                                     492.625916,
+                                                     -150.052124,
+                                                     556.265076
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -201.482651,
+                                                               492.625916,
+                                                               -150.052124,
+                                                               556.265076
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_20.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.20",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  42,
+                                        "rect":  [
+                                                     542.216248,
+                                                     492.676880,
+                                                     593.123840,
+                                                     558.396179
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               542.216248,
+                                                               492.676880,
+                                                               593.123840,
+                                                               558.396179
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_20.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.20",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  35,
+                                        "rect":  [
+                                                     119.626999,
+                                                     492.712067,
+                                                     170.156586,
+                                                     558.202698
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               119.626999,
+                                                               492.712067,
+                                                               170.156586,
+                                                               558.202698
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_18.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.18",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  55,
+                                        "rect":  [
+                                                     1376.805664,
+                                                     493.072021,
+                                                     1422.371582,
+                                                     557.900513
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1376.805664,
+                                                               493.072021,
+                                                               1422.371582,
+                                                               557.900513
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_23.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.23",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  false,
+                                        "interactive":  false,
+                                        "draw_order":  60,
+                                        "rect":  [
+                                                     1668.574585,
+                                                     494.031647,
+                                                     1600.000000,
+                                                     556.649597
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1668.574585,
+                                                               494.031647,
+                                                               1731.758545,
+                                                               556.649597
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_18.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.18",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  40,
+                                        "rect":  [
+                                                     444.610962,
+                                                     494.544098,
+                                                     483.573273,
+                                                     555.824402
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               444.610962,
+                                                               494.544098,
+                                                               483.573273,
+                                                               555.824402
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_20.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.20",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  51,
+                                        "rect":  [
+                                                     1119.495972,
+                                                     494.706421,
+                                                     1162.962280,
+                                                     555.626587
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1119.495972,
+                                                               494.706421,
+                                                               1162.962280,
+                                                               555.626587
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_18.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.18",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  33,
+                                        "rect":  [
+                                                     30.452734,
+                                                     494.739075,
+                                                     68.695099,
+                                                     555.599792
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               30.452734,
+                                                               494.739075,
+                                                               68.695099,
+                                                               555.599792
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_20.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.20",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  false,
+                                        "interactive":  false,
+                                        "draw_order":  30,
+                                        "rect":  [
+                                                     0.000000,
+                                                     494.842560,
+                                                     -106.093056,
+                                                     555.464233
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -149.123642,
+                                                               494.842560,
+                                                               -106.093056,
+                                                               555.464233
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_18.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.18",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  49,
+                                        "rect":  [
+                                                     1020.667603,
+                                                     494.921631,
+                                                     1058.235962,
+                                                     555.384216
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1020.667603,
+                                                               494.921631,
+                                                               1058.235962,
+                                                               555.384216
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_20.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.20",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  57,
+                                        "rect":  [
+                                                     1482.989746,
+                                                     495.102905,
+                                                     1525.255371,
+                                                     555.196655
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1482.989746,
+                                                               495.102905,
+                                                               1525.255371,
+                                                               555.196655
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_101.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.101",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  93,
+                                        "rect":  [
+                                                     673.500000,
+                                                     497.000000,
+                                                     1026.000000,
+                                                     566.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               673.500000,
+                                                               497.000000,
+                                                               1026.500000,
+                                                               566.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_17.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  54,
+                                        "rect":  [
+                                                     1327.582275,
+                                                     501.674133,
+                                                     1376.577637,
+                                                     556.530334
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1327.582275,
+                                                               501.674133,
+                                                               1376.577637,
+                                                               556.530334
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_17.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  39,
+                                        "rect":  [
+                                                     389.612671,
+                                                     502.084595,
+                                                     437.596375,
+                                                     556.065918
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               389.612671,
+                                                               502.084595,
+                                                               437.596375,
+                                                               556.065918
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_17.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  48,
+                                        "rect":  [
+                                                     965.764465,
+                                                     502.573090,
+                                                     1012.582397,
+                                                     555.539795
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               965.764465,
+                                                               502.573090,
+                                                               1012.582397,
+                                                               555.539795
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_17.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  32,
+                                        "rect":  [
+                                                     0.000000,
+                                                     502.852020,
+                                                     21.176744,
+                                                     555.250732
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -24.991695,
+                                                               502.852020,
+                                                               21.176744,
+                                                               555.250732
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_24.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.24",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  46,
+                                        "rect":  [
+                                                     813.264221,
+                                                     518.085022,
+                                                     892.132629,
+                                                     557.474487
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               813.264221,
+                                                               518.085022,
+                                                               892.132629,
+                                                               557.474487
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_24.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.24",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  52,
+                                        "rect":  [
+                                                     1176.158691,
+                                                     519.250732,
+                                                     1254.054688,
+                                                     556.264771
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1176.158691,
+                                                               519.250732,
+                                                               1254.054688,
+                                                               556.264771
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_5.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.5",
+                                        "font_id":  "",
+                                        "text_style":  "centered",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  28,
+                                        "rect":  [
+                                                     0.000000,
+                                                     521.500000,
+                                                     451.146973,
+                                                     552.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -572.853027,
+                                                               521.500000,
+                                                               451.146973,
+                                                               552.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_5.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.5",
+                                        "font_id":  "",
+                                        "text_style":  "centered",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  27,
+                                        "rect":  [
+                                                     451.146973,
+                                                     521.500000,
+                                                     1475.146973,
+                                                     552.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               451.146973,
+                                                               521.500000,
+                                                               1475.146973,
+                                                               552.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_5.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.5",
+                                        "font_id":  "",
+                                        "text_style":  "centered",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  26,
+                                        "rect":  [
+                                                     1475.146973,
+                                                     521.500000,
+                                                     1600.000000,
+                                                     552.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1475.146973,
+                                                               521.500000,
+                                                               2499.146973,
+                                                               552.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_22.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.22",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  64,
+                                        "rect":  [
+                                                     297.555298,
+                                                     530.304993,
+                                                     465.684448,
+                                                     730.851624
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               297.555298,
+                                                               530.304993,
+                                                               465.684448,
+                                                               730.851624
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_8.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.8",
+                                        "font_id":  "",
+                                        "text_style":  "centered",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  84,
+                                        "rect":  [
+                                                     50.000000,
+                                                     530.514954,
+                                                     221.000000,
+                                                     560.514954
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               50.000000,
+                                                               530.514954,
+                                                               221.000000,
+                                                               560.514954
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_21.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.21",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  72,
+                                        "rect":  [
+                                                     1556.769653,
+                                                     534.346741,
+                                                     1600.000000,
+                                                     728.511230
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1556.769653,
+                                                               534.346741,
+                                                               1731.490234,
+                                                               728.511230
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_21.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.21",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  63,
+                                        "rect":  [
+                                                     142.610840,
+                                                     540.369812,
+                                                     301.825043,
+                                                     721.303040
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               142.610840,
+                                                               540.369812,
+                                                               301.825043,
+                                                               721.303040
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_54.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  97,
+                                        "rect":  [
+                                                     667.500000,
+                                                     567.000000,
+                                                     737.500000,
+                                                     652.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               667.500000,
+                                                               567.000000,
+                                                               737.500000,
+                                                               652.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_54.6",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  98,
+                                        "rect":  [
+                                                     962.500000,
+                                                     567.000000,
+                                                     1032.500000,
+                                                     652.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               962.500000,
+                                                               567.000000,
+                                                               1032.500000,
+                                                               652.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_19.6",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.19",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  70,
+                                        "rect":  [
+                                                     1296.949219,
+                                                     568.740234,
+                                                     1431.541382,
+                                                     728.088684
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1296.949219,
+                                                               568.740234,
+                                                               1431.541382,
+                                                               728.088684
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_101.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.101",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  96,
+                                        "rect":  [
+                                                     673.500000,
+                                                     573.000000,
+                                                     1026.000000,
+                                                     642.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               673.500000,
+                                                               573.000000,
+                                                               1026.500000,
+                                                               642.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_23.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.23",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  65,
+                                        "rect":  [
+                                                     500.951813,
+                                                     576.049744,
+                                                     649.830444,
+                                                     723.624268
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               500.951813,
+                                                               576.049744,
+                                                               649.830444,
+                                                               723.624268
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_20.6",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.20",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  false,
+                                        "interactive":  false,
+                                        "draw_order":  61,
+                                        "rect":  [
+                                                     0.000000,
+                                                     577.641785,
+                                                     -1.339684,
+                                                     721.219482
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -104.869400,
+                                                               577.641785,
+                                                               -1.339684,
+                                                               721.219482
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_20.7",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.20",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  62,
+                                        "rect":  [
+                                                     20.640423,
+                                                     577.800110,
+                                                     123.667358,
+                                                     721.038208
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               20.640423,
+                                                               577.800110,
+                                                               123.667358,
+                                                               721.038208
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_20.8",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.20",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  71,
+                                        "rect":  [
+                                                     1455.558960,
+                                                     578.257141,
+                                                     1557.158569,
+                                                     720.525696
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1455.558960,
+                                                               578.257141,
+                                                               1557.158569,
+                                                               720.525696
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_18.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.18",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  69,
+                                        "rect":  [
+                                                     1204.363770,
+                                                     578.884705,
+                                                     1291.790771,
+                                                     719.825806
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1204.363770,
+                                                               578.884705,
+                                                               1291.790771,
+                                                               719.825806
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_17.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  68,
+                                        "rect":  [
+                                                     1070.018921,
+                                                     595.813538,
+                                                     1181.297485,
+                                                     721.176636
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1070.018921,
+                                                               595.813538,
+                                                               1181.297485,
+                                                               721.176636
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_22.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.22",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  78,
+                                        "rect":  [
+                                                     1151.791992,
+                                                     621.593811,
+                                                     1392.401855,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1151.791992,
+                                                               621.593811,
+                                                               1392.401855,
+                                                               919.716614
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_21.6",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.21",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  77,
+                                        "rect":  [
+                                                     826.357666,
+                                                     628.796997,
+                                                     1080.166138,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               826.357666,
+                                                               628.796997,
+                                                               1080.166138,
+                                                               916.243713
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_24.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.24",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  66,
+                                        "rect":  [
+                                                     680.388123,
+                                                     635.957581,
+                                                     861.825684,
+                                                     721.569885
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               680.388123,
+                                                               635.957581,
+                                                               861.825684,
+                                                               721.569885
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_54.7",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  14,
+                                        "rect":  [
+                                                     696.000000,
+                                                     637.500000,
+                                                     766.000000,
+                                                     722.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               696.000000,
+                                                               637.500000,
+                                                               766.000000,
+                                                               722.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_54.8",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  15,
+                                        "rect":  [
+                                                     834.000000,
+                                                     637.500000,
+                                                     904.000000,
+                                                     722.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               834.000000,
+                                                               637.500000,
+                                                               904.000000,
+                                                               722.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_54.9",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  100,
+                                        "rect":  [
+                                                     667.500000,
+                                                     643.000000,
+                                                     737.500000,
+                                                     728.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               667.500000,
+                                                               643.000000,
+                                                               737.500000,
+                                                               728.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_54.10",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  101,
+                                        "rect":  [
+                                                     962.500000,
+                                                     643.000000,
+                                                     1032.500000,
+                                                     728.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               962.500000,
+                                                               643.000000,
+                                                               1032.500000,
+                                                               728.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_101.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.101",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  13,
+                                        "rect":  [
+                                                     702.000000,
+                                                     643.500000,
+                                                     898.000000,
+                                                     712.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               623.500000,
+                                                               643.500000,
+                                                               976.500000,
+                                                               712.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_101.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.101",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  99,
+                                        "rect":  [
+                                                     673.500000,
+                                                     649.000000,
+                                                     1026.000000,
+                                                     718.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               673.500000,
+                                                               649.000000,
+                                                               1026.500000,
+                                                               718.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_20.9",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.20",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  76,
+                                        "rect":  [
+                                                     573.694763,
+                                                     682.538940,
+                                                     759.289124,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               573.694763,
+                                                               682.538940,
+                                                               759.289124,
+                                                               922.864990
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_19.7",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.19",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  73,
+                                        "rect":  [
+                                                     0.000000,
+                                                     683.350891,
+                                                     90.544342,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -95.001778,
+                                                               683.350891,
+                                                               90.544342,
+                                                               914.354919
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_18.6",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.18",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  74,
+                                        "rect":  [
+                                                     129.546936,
+                                                     684.057251,
+                                                     295.868500,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               129.546936,
+                                                               684.057251,
+                                                               295.868500,
+                                                               921.389771
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_19.8",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.19",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  75,
+                                        "rect":  [
+                                                     366.394623,
+                                                     684.192383,
+                                                     549.781494,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               366.394623,
+                                                               684.192383,
+                                                               549.781494,
+                                                               913.520081
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_23.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.23",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  79,
+                                        "rect":  [
+                                                     1431.205566,
+                                                     691.627319,
+                                                     1600.000000,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1431.205566,
+                                                               691.627319,
+                                                               1654.339355,
+                                                               912.593262
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_17.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  7,
+                                        "rect":  [
+                                                     535.000000,
+                                                     700.000000,
+                                                     615.000000,
+                                                     783.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               535.000000,
+                                                               700.000000,
+                                                               615.000000,
+                                                               783.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_17.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  8,
+                                        "rect":  [
+                                                     985.000000,
+                                                     700.000000,
+                                                     1065.000000,
+                                                     783.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               985.000000,
+                                                               700.000000,
+                                                               1065.000000,
+                                                               783.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_109.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.109",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  3,
+                                        "rect":  [
+                                                     516.500000,
+                                                     711.500000,
+                                                     601.500000,
+                                                     800.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               516.500000,
+                                                               711.500000,
+                                                               601.500000,
+                                                               800.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_110.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.110",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  4,
+                                        "rect":  [
+                                                     998.500000,
+                                                     711.500000,
+                                                     1083.500000,
+                                                     800.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               998.500000,
+                                                               711.500000,
+                                                               1083.500000,
+                                                               800.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_8.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.8",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  10,
+                                        "rect":  [
+                                                     775.500000,
+                                                     782.000000,
+                                                     824.500000,
+                                                     894.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               775.500000,
+                                                               782.000000,
+                                                               824.500000,
+                                                               894.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_8.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.8",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  11,
+                                        "rect":  [
+                                                     706.625000,
+                                                     783.000000,
+                                                     743.375000,
+                                                     867.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               706.625000,
+                                                               783.000000,
+                                                               743.375000,
+                                                               867.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_8.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.8",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  12,
+                                        "rect":  [
+                                                     856.625000,
+                                                     783.000000,
+                                                     893.375000,
+                                                     867.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               856.625000,
+                                                               783.000000,
+                                                               893.375000,
+                                                               867.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_53.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.53",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  103,
+                                        "rect":  [
+                                                     1474.000000,
+                                                     828.000000,
+                                                     1501.000000,
+                                                     890.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1474.000000,
+                                                               828.000000,
+                                                               1501.000000,
+                                                               890.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_53.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.53",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  104,
+                                        "rect":  [
+                                                     1559.000000,
+                                                     828.000000,
+                                                     1586.000000,
+                                                     890.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1559.000000,
+                                                               828.000000,
+                                                               1586.000000,
+                                                               890.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_4.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.4",
+                                        "font_id":  "",
+                                        "text_style":  "centered",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  80,
+                                        "rect":  [
+                                                     0.000000,
+                                                     829.000000,
+                                                     150.068970,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -873.931030,
+                                                               829.000000,
+                                                               150.068970,
+                                                               900.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_4.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.4",
+                                        "font_id":  "",
+                                        "text_style":  "centered",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  81,
+                                        "rect":  [
+                                                     150.068970,
+                                                     829.000000,
+                                                     1174.068970,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               150.068970,
+                                                               829.000000,
+                                                               1174.068970,
+                                                               900.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.title_4.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.4",
+                                        "font_id":  "",
+                                        "text_style":  "centered",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  82,
+                                        "rect":  [
+                                                     1174.068970,
+                                                     829.000000,
+                                                     1600.000000,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1174.068970,
+                                                               829.000000,
+                                                               2198.068848,
+                                                               900.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.art.ui_103.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.103",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  102,
+                                        "rect":  [
+                                                     1480.000000,
+                                                     834.000000,
+                                                     1580.000000,
+                                                     886.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1397.500000,
+                                                               834.000000,
+                                                               1662.500000,
+                                                               886.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.control.dialog_primary.1",
+                                        "kind":  "control",
+                                        "text":  "OK",
+                                        "action_id":  "dialog.primary",
+                                        "art_id":  "",
+                                        "font_id":  "",
+                                        "text_style":  "",
+                                        "visible":  true,
+                                        "interactive":  true,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     702.000000,
+                                                     643.500000,
+                                                     898.000000,
+                                                     712.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               702.000000,
+                                                               643.500000,
+                                                               898.000000,
+                                                               712.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.text.beta_version_v_0_72.1",
+                                        "kind":  "text",
+                                        "text":  "BETA VERSION V.0.72",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "",
+                                        "text_style":  "",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     580.000000,
+                                                     162.000000,
+                                                     1020.000000,
+                                                     738.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               580.000000,
+                                                               162.000000,
+                                                               1020.000000,
+                                                               738.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.text.play.1",
+                                        "kind":  "text",
+                                        "text":  "PLAY",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "Fonts.308-349",
+                                        "text_style":  "native_atlas_text:Fonts.308-349",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     792.000000,
+                                                     442.000000,
+                                                     911.000000,
+                                                     472.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               792.000000,
+                                                               442.000000,
+                                                               911.000000,
+                                                               472.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.text.explore_the.1",
+                                        "kind":  "text",
+                                        "text":  "explore the",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "Fonts.216-307",
+                                        "text_style":  "native_atlas_text:Fonts.216-307",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     792.000000,
+                                                     513.000000,
+                                                     929.000000,
+                                                     530.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               792.000000,
+                                                               513.000000,
+                                                               929.000000,
+                                                               530.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.text.dark_cloud.1",
+                                        "kind":  "text",
+                                        "text":  "DARK CLOUD",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "Fonts.216-307",
+                                        "text_style":  "native_atlas_text:Fonts.216-307",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     788.000000,
+                                                     531.000000,
+                                                     940.000000,
+                                                     550.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               788.000000,
+                                                               531.000000,
+                                                               940.000000,
+                                                               550.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.text.settings.1",
+                                        "kind":  "text",
+                                        "text":  "SETTINGS",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "Fonts.216-307",
+                                        "text_style":  "native_atlas_text:Fonts.216-307",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     790.000000,
+                                                     599.000000,
+                                                     917.000000,
+                                                     619.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               790.000000,
+                                                               599.000000,
+                                                               917.000000,
+                                                               619.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.text.hall_of_fame.1",
+                                        "kind":  "text",
+                                        "text":  "HALL of FAME",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "Fonts.216-307",
+                                        "text_style":  "native_atlas_text:Fonts.216-307",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     793.000000,
+                                                     675.000000,
+                                                     947.000000,
+                                                     695.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               793.000000,
+                                                               675.000000,
+                                                               947.000000,
+                                                               695.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "beta_notice.text.quit.1",
+                                        "kind":  "text",
+                                        "text":  "quit",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "Fonts.216-307",
+                                        "text_style":  "native_atlas_text:Fonts.216-307",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     1503.000000,
+                                                     853.000000,
+                                                     1558.000000,
+                                                     871.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1503.000000,
+                                                               853.000000,
+                                                               1558.000000,
+                                                               871.000000
+                                                           ]
+                                    }
+                                ]
+               }
+}

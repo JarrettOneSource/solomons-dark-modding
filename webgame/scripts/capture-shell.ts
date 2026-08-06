@@ -8,9 +8,11 @@ import process from "node:process";
 import { chromium, type Browser, type Page } from "playwright-core";
 
 import menuGoldenJson from "../../tests/fixtures/webgame/menu-goldens.json" with { type: "json" };
+import menuBaselineJson from "../../webgame-contracts/menu-baseline.json" with { type: "json" };
 import menuVisualGateJson from "../../webgame-contracts/menu-visual-gate.json" with { type: "json" };
 import { ManifestAssets } from "../client/manifest-assets.js";
 import { parseMenuCatalog } from "../client/menu-catalog.js";
+import { verifyMenuBaseline } from "../conformance/menu-baseline.js";
 import { validateMenuVisualGate } from "../conformance/menu-visual-gate.js";
 
 interface ProcessIdentity {
@@ -225,7 +227,12 @@ async function makeSideBySide(
 async function main(): Promise<void> {
   const assetRoot = requireConfiguration();
   const catalog = parseMenuCatalog(menuGoldenJson);
-  const visualGate = validateMenuVisualGate(menuVisualGateJson, catalog);
+  const baseline = await verifyMenuBaseline(
+    menuBaselineJson,
+    REPO_ROOT,
+    new Set([...catalog.layouts.values()].map((layout) => layout.fixture)),
+  );
+  const visualGate = validateMenuVisualGate(menuVisualGateJson, catalog, baseline);
   const rawManifest = JSON.parse(await readFile(path.join(assetRoot, "asset-manifest.json"), "utf8")) as unknown;
   const manifestAssets = new ManifestAssets(rawManifest);
   const allowedImagePaths = new Set(
@@ -492,9 +499,9 @@ async function main(): Promise<void> {
         referenceSha256,
         renderedSha256,
         sideBySideSha256,
-        disposition: visualGate.waivedDivergentFixtures.includes(layout.fixture)
-          ? "waived_stale_g11"
-          : "pixel_plausible_pass",
+        disposition: visualGate.reviewedDivergentFixtures.includes(layout.fixture)
+          ? "reviewed_divergent_against_baseline_snapshot"
+          : "reviewed_pass_against_baseline_snapshot",
       };
     }));
     await context.close();

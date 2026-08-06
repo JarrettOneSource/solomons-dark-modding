@@ -1,0 +1,195 @@
+{
+    "schema":  "solomon-dark-native-menu-layout-v1",
+    "header":  {
+                   "instance":  "men-load2",
+                   "process_id":  34424,
+                   "capture_commit":  "933fdd99f0bf85ef06b9ef04c25990bff79966f4",
+                   "native_exe_sha256":  "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+                   "loader_dll_sha256":  "",
+                   "captured_at_utc":  "2026-08-05T08:03:17.4953158Z",
+                   "capture_method":  "live D3D9 render geometry and backbuffer capture",
+                   "source_json_sha256":  "fff36727f59b6142df1ca5ce6b8e631fe760cc4df272d975dc2790aa50fa5c49",
+                   "source_frame_sha256":  "2ff86a41172fc293941dfccb5ac821442406a6d3209efae85e90994b7dcd18cf",
+                   "reference_capture":  "../menu-reference-captures/loading-screen.png"
+               },
+    "layout":  {
+                   "generation":  1,
+                   "captured_at_milliseconds":  0,
+                   "screen_id":  "loading_screen",
+                   "screen_title":  "Gathering the coven...",
+                   "capture_method":  "live D3D9 render geometry and backbuffer capture",
+                   "stage_id":  "materializing_participants",
+                   "progress":  0.92,
+                   "viewport":  [
+                                    0,
+                                    0,
+                                    1600,
+                                    900
+                                ],
+                   "source_crop":  [
+                                       0.0000,
+                                       0.0000,
+                                       1.0000,
+                                       1.0000
+                                   ],
+                   "elements":  [
+                                    {
+                                        "id":  "loading.background",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Wizards_dire_BG",
+                                        "font_id":  "",
+                                        "text_style":  "art",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  1,
+                                        "rect":  [
+                                                     -0.5000,
+                                                     -0.5000,
+                                                     1599.5000,
+                                                     899.5000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -0.5000,
+                                                               -0.5000,
+                                                               1599.5000,
+                                                               899.5000
+                                                           ],
+                                        "source_size":  [
+                                                            1920,
+                                                            1080
+                                                        ]
+                                    },
+                                    {
+                                        "id":  "loading.bottom_scrim",
+                                        "kind":  "gradient_scrim",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "",
+                                        "text_style":  "gradient_scrim",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  2,
+                                        "rect":  [
+                                                     -0.5000,
+                                                     737.5000,
+                                                     1599.5000,
+                                                     899.5000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -0.5000,
+                                                               737.5000,
+                                                               1599.5000,
+                                                               899.5000
+                                                           ],
+                                        "color_top":  "#00000000",
+                                        "color_bottom":  "#B3000000"
+                                    },
+                                    {
+                                        "id":  "loading.progress_border",
+                                        "kind":  "progress_border",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "",
+                                        "text_style":  "progress_border",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  3,
+                                        "rect":  [
+                                                     318.5000,
+                                                     831.0000,
+                                                     1280.5000,
+                                                     841.0000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               318.5000,
+                                                               831.0000,
+                                                               1280.5000,
+                                                               841.0000
+                                                           ],
+                                        "color":  "#E669522A"
+                                    },
+                                    {
+                                        "id":  "loading.progress_track",
+                                        "kind":  "progress_track",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "",
+                                        "text_style":  "progress_track",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  4,
+                                        "rect":  [
+                                                     319.5000,
+                                                     832.0000,
+                                                     1279.5000,
+                                                     840.0000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               319.5000,
+                                                               832.0000,
+                                                               1279.5000,
+                                                               840.0000
+                                                           ],
+                                        "color":  "#EB14110D"
+                                    },
+                                    {
+                                        "id":  "loading.progress_fill",
+                                        "kind":  "progress_fill",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "",
+                                        "text_style":  "progress_fill",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  5,
+                                        "rect":  [
+                                                     319.5000,
+                                                     832.0000,
+                                                     1202.7001,
+                                                     840.0000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               319.5000,
+                                                               832.0000,
+                                                               1202.7001,
+                                                               840.0000
+                                                           ],
+                                        "color":  "#FFCAA14D"
+                                    },
+                                    {
+                                        "id":  "loading.loading_label",
+                                        "kind":  "text",
+                                        "text":  "Gathering the coven...",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "Segoe UI",
+                                        "text_style":  "text",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  6,
+                                        "rect":  [
+                                                     693.2500,
+                                                     793.3333,
+                                                     905.7500,
+                                                     820.0000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               693.2500,
+                                                               793.3333,
+                                                               905.7500,
+                                                               820.0000
+                                                           ],
+                                        "color":  "#FFF2E5C7",
+                                        "font_height":  -24,
+                                        "font_weight":  600,
+                                        "scale":  0.8333
+                                    }
+                                ]
+               }
+}

@@ -1,0 +1,142 @@
+{
+    "schema":  "solomon-dark-native-menu-layout-v1",
+    "header":  {
+                   "instance":  "men-title",
+                   "process_id":  19752,
+                   "capture_commit":  "f9cac8783e72e7423a2d952987fa169fa84f3dcb",
+                   "native_exe_sha256":  "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+                   "loader_dll_sha256":  "f21d10e327e576ce2aed02a0626507143a9104c181d6694e2111d102433b52ec",
+                   "captured_at_utc":  "2026-08-05T06:59:15.1618896Z",
+                   "capture_method":  "live native UI tree + exact text/font hooks + native Sprite draw hooks",
+                   "reference_capture":  "../menu-reference-captures/control-scheme-picker.png"
+               },
+    "layout":  {
+                   "generation":  2,
+                   "captured_at_milliseconds":  1146397171,
+                   "screen_id":  "control_scheme_picker",
+                   "screen_title":  "Control Scheme Picker",
+                   "capture_method":  "live native UI tree + exact text/font hooks + native Sprite draw hooks",
+                   "elements":  [
+                                    {
+                                        "id":  "control_scheme_picker.art.controls_1.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Controls.1",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  false,
+                                        "interactive":  false,
+                                        "draw_order":  3,
+                                        "rect":  [
+                                                     0.000000,
+                                                     0.000000,
+                                                     -9826.000000,
+                                                     -9850.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -10171.000000,
+                                                               -10146.500000,
+                                                               -9826.000000,
+                                                               -9850.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "control_scheme_picker.art.controls_0.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Controls.0",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  1,
+                                        "rect":  [
+                                                     477.500000,
+                                                     290.000000,
+                                                     722.500000,
+                                                     610.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               477.500000,
+                                                               290.000000,
+                                                               722.500000,
+                                                               610.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "control_scheme_picker.art.controls_2.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Controls.2",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  2,
+                                        "rect":  [
+                                                     850.500000,
+                                                     324.000000,
+                                                     1149.500000,
+                                                     576.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               850.500000,
+                                                               324.000000,
+                                                               1149.500000,
+                                                               576.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "control_scheme_picker.control.control_scheme_picker_select_wasd.1",
+                                        "kind":  "control",
+                                        "text":  "WASD + MOUSE",
+                                        "action_id":  "control_scheme_picker.select_wasd",
+                                        "art_id":  "",
+                                        "font_id":  "",
+                                        "text_style":  "",
+                                        "visible":  true,
+                                        "interactive":  true,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     850.500000,
+                                                     324.000000,
+                                                     1149.500000,
+                                                     576.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               850.500000,
+                                                               324.000000,
+                                                               1149.500000,
+                                                               576.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "control_scheme_picker.text.select_a_control_scheme.1",
+                                        "kind":  "text",
+                                        "text":  "SELECT A CONTROL SCHEME",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "Fonts.308-349",
+                                        "text_style":  "native_atlas_text:Fonts.308-349",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     751.000000,
+                                                     21.000000,
+                                                     1127.000000,
+                                                     52.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               751.000000,
+                                                               21.000000,
+                                                               1127.000000,
+                                                               52.000000
+                                                           ]
+                                    }
+                                ]
+               }
+}

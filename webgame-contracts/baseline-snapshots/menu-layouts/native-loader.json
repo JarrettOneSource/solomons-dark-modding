@@ -1,0 +1,125 @@
+{
+    "schema":  "solomon-dark-native-menu-layout-v1",
+    "header":  {
+                   "instance":  "men-boot1",
+                   "process_id":  24016,
+                   "capture_commit":  "d28f98a190d69662c8e6e691484b4d4e0dc939b9",
+                   "native_exe_sha256":  "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+                   "loader_dll_sha256":  "",
+                   "captured_at_utc":  "2026-08-05T04:45:13.2275140Z",
+                   "capture_method":  "MyLoader render detour + live loader globals + native Sprite draw hooks + D3D9 backbuffer",
+                   "source_json_sha256":  "fef7eca75f96dbfc565afbb8e235881194b5d55b1eaba421f0533fd3016a606b",
+                   "source_frame_sha256":  "b554e95a49eb027468c02360f001cdf0ac6f4e7f2f58768c0aba14e1402c79c1",
+                   "reference_capture":  "../menu-reference-captures/native-loader.png"
+               },
+    "layout":  {
+                   "generation":  1,
+                   "captured_at_milliseconds":  0,
+                   "screen_id":  "native_loader",
+                   "screen_title":  "Raptisoft loader",
+                   "capture_method":  "MyLoader render detour + live loader globals + native Sprite draw hooks + D3D9 backbuffer",
+                   "elapsed_milliseconds":  0,
+                   "progress_numerator":  7,
+                   "progress_denominator":  7,
+                   "progress":  1,
+                   "complete":  false,
+                   "elements":  [
+                                    {
+                                        "id":  "native_loader.art.loader_2.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Loader.2",
+                                        "font_id":  "",
+                                        "text_style":  "centered",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  1,
+                                        "rect":  [
+                                                     601.000000,
+                                                     302.500000,
+                                                     989.000000,
+                                                     529.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               601.000000,
+                                                               302.500000,
+                                                               989.000000,
+                                                               529.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "native_loader.art.loader_1.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Loader.1",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  2,
+                                        "rect":  [
+                                                     685.000000,
+                                                     553.000000,
+                                                     915.000000,
+                                                     607.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               685.000000,
+                                                               553.000000,
+                                                               915.000000,
+                                                               607.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "native_loader.art.loader_0.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Loader.0",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  3,
+                                        "rect":  [
+                                                     704.000000,
+                                                     572.000000,
+                                                     896.000000,
+                                                     590.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               704.000000,
+                                                               572.000000,
+                                                               896.000000,
+                                                               590.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "native_loader.art.loader_3.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Loader.3",
+                                        "font_id":  "",
+                                        "text_style":  "centered",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  4,
+                                        "rect":  [
+                                                     679.000000,
+                                                     541.000000,
+                                                     923.000000,
+                                                     559.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               679.000000,
+                                                               541.000000,
+                                                               923.000000,
+                                                               559.000000
+                                                           ]
+                                    }
+                                ]
+               }
+}

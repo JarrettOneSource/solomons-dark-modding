@@ -1,0 +1,1150 @@
+{
+    "schema":  "solomon-dark-native-menu-layout-v1",
+    "header":  {
+                   "instance":  "men-title",
+                   "process_id":  15160,
+                   "capture_commit":  "48a54aaf485e671e605cbf301441380f6538846f",
+                   "native_exe_sha256":  "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+                   "loader_dll_sha256":  "54d5056a1da5e03a8ea943de5301f8401797a7045845d7ba11f308743dfdb160",
+                   "captured_at_utc":  "2026-08-05T06:30:55.1544422Z",
+                   "capture_method":  "live native UI tree + exact text/font hooks + native Sprite draw hooks + exact live-navigation screen tag (stale semantics omitted)",
+                   "reference_capture":  "../menu-reference-captures/skill-picker.png"
+               },
+    "layout":  {
+                   "generation":  3794,
+                   "captured_at_milliseconds":  1144697453,
+                   "screen_id":  "skill_picker",
+                   "screen_title":  "",
+                   "capture_method":  "live native UI tree + exact text/font hooks + native Sprite draw hooks + exact live-navigation screen tag (stale semantics omitted)",
+                   "elements":  [
+                                    {
+                                        "id":  "skill_picker.art.ui_3.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.3",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  17,
+                                        "rect":  [
+                                                     484.176331,
+                                                     0.000000,
+                                                     914.936035,
+                                                     158.658997
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               484.176331,
+                                                               -105.373047,
+                                                               914.936035,
+                                                               158.658997
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.ui_3.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.3",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  18,
+                                        "rect":  [
+                                                     811.037109,
+                                                     0.000000,
+                                                     1245.632812,
+                                                     261.631287
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               811.037109,
+                                                               -102.396484,
+                                                               1245.632812,
+                                                               261.631287
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.ui_3.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.3",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  24,
+                                        "rect":  [
+                                                     247.603271,
+                                                     4.367859,
+                                                     611.630615,
+                                                     438.963684
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               247.603271,
+                                                               4.367859,
+                                                               611.630615,
+                                                               438.963684
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.ui_42.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.42",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  11,
+                                        "rect":  [
+                                                     9.500000,
+                                                     8.500000,
+                                                     40.500000,
+                                                     41.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               9.500000,
+                                                               8.500000,
+                                                               40.500000,
+                                                               41.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.skills_43.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Skills.43",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  10,
+                                        "rect":  [
+                                                     784.250000,
+                                                     9.750000,
+                                                     815.750000,
+                                                     41.250000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               784.250000,
+                                                               9.750000,
+                                                               815.750000,
+                                                               41.250000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.levelpicker_0.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "LevelPicker.0",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  12,
+                                        "rect":  [
+                                                     1505.000000,
+                                                     55.000000,
+                                                     1600.000000,
+                                                     148.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1505.000000,
+                                                               55.000000,
+                                                               1600.000000,
+                                                               148.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.ui_62.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.62",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  25,
+                                        "rect":  [
+                                                     555.672119,
+                                                     105.672134,
+                                                     1044.327881,
+                                                     594.327881
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               555.672119,
+                                                               105.672134,
+                                                               1044.327881,
+                                                               594.327881
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.ui_3.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.3",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  19,
+                                        "rect":  [
+                                                     1091.341187,
+                                                     134.176605,
+                                                     1355.373047,
+                                                     564.936279
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1091.341187,
+                                                               134.176605,
+                                                               1355.373047,
+                                                               564.936279
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.levelpicker_6.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "LevelPicker.6",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  13,
+                                        "rect":  [
+                                                     1505.000000,
+                                                     148.000000,
+                                                     1600.000000,
+                                                     241.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1505.000000,
+                                                               148.000000,
+                                                               1600.000000,
+                                                               241.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.ui_37.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.37",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  32,
+                                        "rect":  [
+                                                     593.500000,
+                                                     182.000000,
+                                                     1006.500000,
+                                                     257.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               593.500000,
+                                                               182.000000,
+                                                               1006.500000,
+                                                               257.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.levelpicker_4.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "LevelPicker.4",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  14,
+                                        "rect":  [
+                                                     1505.000000,
+                                                     241.000000,
+                                                     1600.000000,
+                                                     334.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1505.000000,
+                                                               241.000000,
+                                                               1600.000000,
+                                                               334.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.ui_107.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.107",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  27,
+                                        "rect":  [
+                                                     464.500000,
+                                                     265.000000,
+                                                     549.500000,
+                                                     354.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               464.500000,
+                                                               265.000000,
+                                                               549.500000,
+                                                               354.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.ui_108.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.108",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  28,
+                                        "rect":  [
+                                                     1050.500000,
+                                                     265.000000,
+                                                     1135.500000,
+                                                     354.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1050.500000,
+                                                               265.000000,
+                                                               1135.500000,
+                                                               354.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.ui_62.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.62",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  26,
+                                        "rect":  [
+                                                     555.672119,
+                                                     305.672119,
+                                                     1044.327881,
+                                                     794.327881
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               555.672119,
+                                                               305.672119,
+                                                               1044.327881,
+                                                               794.327881
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.levelpicker_5.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "LevelPicker.5",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  15,
+                                        "rect":  [
+                                                     1505.000000,
+                                                     334.000000,
+                                                     1600.000000,
+                                                     427.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1505.000000,
+                                                               334.000000,
+                                                               1600.000000,
+                                                               427.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.ui_3.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.3",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  23,
+                                        "rect":  [
+                                                     244.626831,
+                                                     335.064697,
+                                                     508.659546,
+                                                     765.824585
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               244.626831,
+                                                               335.064697,
+                                                               508.659546,
+                                                               765.824585
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.skills_5.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Skills.5",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  35,
+                                        "rect":  [
+                                                     556.500000,
+                                                     338.500000,
+                                                     643.500000,
+                                                     426.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               556.500000,
+                                                               338.500000,
+                                                               643.500000,
+                                                               426.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.skills_5.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Skills.5",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  40,
+                                        "rect":  [
+                                                     756.500000,
+                                                     338.500000,
+                                                     843.500000,
+                                                     426.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               756.500000,
+                                                               338.500000,
+                                                               843.500000,
+                                                               426.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.skills_5.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Skills.5",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  45,
+                                        "rect":  [
+                                                     956.500000,
+                                                     338.500000,
+                                                     1043.500000,
+                                                     426.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               956.500000,
+                                                               338.500000,
+                                                               1043.500000,
+                                                               426.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.skills_13.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Skills.13",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  33,
+                                        "rect":  [
+                                                     561.474976,
+                                                     343.975006,
+                                                     638.525024,
+                                                     421.024994
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               561.474976,
+                                                               343.975006,
+                                                               638.525024,
+                                                               421.024994
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.skills_13.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Skills.13",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  38,
+                                        "rect":  [
+                                                     761.474976,
+                                                     343.975006,
+                                                     838.525024,
+                                                     421.024994
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               761.474976,
+                                                               343.975006,
+                                                               838.525024,
+                                                               421.024994
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.skills_13.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Skills.13",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  43,
+                                        "rect":  [
+                                                     961.474976,
+                                                     343.975006,
+                                                     1038.525024,
+                                                     421.024994
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               961.474976,
+                                                               343.975006,
+                                                               1038.525024,
+                                                               421.024994
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.skills_164.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Skills.164",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  34,
+                                        "rect":  [
+                                                     567.224976,
+                                                     349.725006,
+                                                     632.775024,
+                                                     415.274994
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               567.224976,
+                                                               349.725006,
+                                                               632.775024,
+                                                               415.274994
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.skills_164.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Skills.164",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  39,
+                                        "rect":  [
+                                                     767.224976,
+                                                     349.725006,
+                                                     832.775024,
+                                                     415.274994
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               767.224976,
+                                                               349.725006,
+                                                               832.775024,
+                                                               415.274994
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.skills_164.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Skills.164",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  44,
+                                        "rect":  [
+                                                     967.224976,
+                                                     349.725006,
+                                                     1032.775024,
+                                                     415.274994
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               967.224976,
+                                                               349.725006,
+                                                               1032.775024,
+                                                               415.274994
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.skills_83.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Skills.83",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  47,
+                                        "rect":  [
+                                                     978.500000,
+                                                     361.000000,
+                                                     1021.500000,
+                                                     404.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               978.500000,
+                                                               361.000000,
+                                                               1021.500000,
+                                                               404.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.skills_43.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Skills.43",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  42,
+                                        "rect":  [
+                                                     779.000000,
+                                                     361.500000,
+                                                     821.000000,
+                                                     403.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               779.000000,
+                                                               361.500000,
+                                                               821.000000,
+                                                               403.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.skills_84.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Skills.84",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  37,
+                                        "rect":  [
+                                                     579.000000,
+                                                     362.500000,
+                                                     621.000000,
+                                                     402.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               579.000000,
+                                                               362.500000,
+                                                               621.000000,
+                                                               402.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.skills_83.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Skills.83",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  46,
+                                        "rect":  [
+                                                     982.500000,
+                                                     365.000000,
+                                                     1025.500000,
+                                                     408.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               982.500000,
+                                                               365.000000,
+                                                               1025.500000,
+                                                               408.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.skills_43.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Skills.43",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  41,
+                                        "rect":  [
+                                                     783.000000,
+                                                     365.500000,
+                                                     825.000000,
+                                                     407.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               783.000000,
+                                                               365.500000,
+                                                               825.000000,
+                                                               407.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.skills_84.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Skills.84",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  36,
+                                        "rect":  [
+                                                     583.000000,
+                                                     366.500000,
+                                                     625.000000,
+                                                     406.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               583.000000,
+                                                               366.500000,
+                                                               625.000000,
+                                                               406.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.ui_28.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.28",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  1,
+                                        "rect":  [
+                                                     720.317322,
+                                                     426.920807,
+                                                     795.682678,
+                                                     504.079193
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               720.317322,
+                                                               426.920807,
+                                                               795.682678,
+                                                               504.079193
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.levelpicker_2.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "LevelPicker.2",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  16,
+                                        "rect":  [
+                                                     1505.000000,
+                                                     427.000000,
+                                                     1600.000000,
+                                                     520.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1505.000000,
+                                                               427.000000,
+                                                               1600.000000,
+                                                               520.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.ui_3.6",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.3",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  20,
+                                        "rect":  [
+                                                     988.368530,
+                                                     461.037323,
+                                                     1352.396484,
+                                                     895.633057
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               988.368530,
+                                                               461.037323,
+                                                               1352.396484,
+                                                               895.633057
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.ui_109.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.109",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  29,
+                                        "rect":  [
+                                                     464.500000,
+                                                     546.000000,
+                                                     549.500000,
+                                                     635.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               464.500000,
+                                                               546.000000,
+                                                               549.500000,
+                                                               635.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.ui_110.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.110",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  30,
+                                        "rect":  [
+                                                     1050.500000,
+                                                     546.000000,
+                                                     1135.500000,
+                                                     635.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1050.500000,
+                                                               546.000000,
+                                                               1135.500000,
+                                                               635.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.ui_59.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.59",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  31,
+                                        "rect":  [
+                                                     594.000000,
+                                                     622.500000,
+                                                     1006.000000,
+                                                     682.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               594.000000,
+                                                               622.500000,
+                                                               1006.000000,
+                                                               682.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.ui_3.7",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.3",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  22,
+                                        "rect":  [
+                                                     354.366760,
+                                                     638.368286,
+                                                     788.962402,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               354.366760,
+                                                               638.368286,
+                                                               788.962402,
+                                                               1002.396423
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.ui_3.8",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.3",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  21,
+                                        "rect":  [
+                                                     685.063477,
+                                                     741.341370,
+                                                     1115.823120,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               685.063477,
+                                                               741.341370,
+                                                               1115.823120,
+                                                               1005.372986
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.ui_51.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.51",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  6,
+                                        "rect":  [
+                                                     806.500000,
+                                                     823.000000,
+                                                     872.500000,
+                                                     889.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               806.500000,
+                                                               823.000000,
+                                                               872.500000,
+                                                               889.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.ui_47.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.47",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  3,
+                                        "rect":  [
+                                                     730.500000,
+                                                     825.000000,
+                                                     788.500000,
+                                                     887.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               730.500000,
+                                                               825.000000,
+                                                               788.500000,
+                                                               887.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.ui_48.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.48",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  5,
+                                        "rect":  [
+                                                     810.500000,
+                                                     825.000000,
+                                                     868.500000,
+                                                     887.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               810.500000,
+                                                               825.000000,
+                                                               868.500000,
+                                                               887.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.ui_82.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.82",
+                                        "font_id":  "",
+                                        "text_style":  "centered",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  9,
+                                        "rect":  [
+                                                     794.500000,
+                                                     829.000000,
+                                                     806.500000,
+                                                     885.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               794.500000,
+                                                               829.000000,
+                                                               806.500000,
+                                                               885.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.ui_47.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.47",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  2,
+                                        "rect":  [
+                                                     735.500000,
+                                                     830.000000,
+                                                     793.500000,
+                                                     892.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               735.500000,
+                                                               830.000000,
+                                                               793.500000,
+                                                               892.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.ui_48.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.48",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  4,
+                                        "rect":  [
+                                                     815.500000,
+                                                     830.000000,
+                                                     873.500000,
+                                                     892.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               815.500000,
+                                                               830.000000,
+                                                               873.500000,
+                                                               892.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.skills_48.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Skills.48",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  7,
+                                        "rect":  [
+                                                     480.500000,
+                                                     838.000000,
+                                                     508.500000,
+                                                     880.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               480.500000,
+                                                               838.000000,
+                                                               508.500000,
+                                                               880.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "skill_picker.art.ui_100.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.100",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  8,
+                                        "rect":  [
+                                                     483.500000,
+                                                     877.000000,
+                                                     505.500000,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               483.500000,
+                                                               877.000000,
+                                                               505.500000,
+                                                               908.000000
+                                                           ]
+                                    }
+                                ]
+               }
+}

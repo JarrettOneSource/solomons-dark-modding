@@ -689,8 +689,8 @@ class NativeMenuSettlementV2Tests(unittest.TestCase):
 
         with self.assertRaisesRegex(
             SettlementV2Error,
-            "landed overlay override: semantic-multiset difference leaves "
-            "residual draws or fields",
+            "landed overlay override: deterministic reordinalization produced "
+            "a noncanonical survivor ordinal",
         ):
             with patch.object(
                 settlement_v2,
@@ -948,6 +948,8 @@ class NativeMenuSettlementV2Tests(unittest.TestCase):
                         "edges": [
                             {
                                 "id": "screen_to_screen",
+                                "source": "screen",
+                                "destination": "screen",
                                 "header": {
                                     "instance": instance,
                                     "process_id": process_id,
@@ -975,11 +977,21 @@ class NativeMenuSettlementV2Tests(unittest.TestCase):
 
             self.assertEqual(result["standalone_fixture_count"], 1)
             promoted = json.loads(fixture_path.read_text(encoding="utf-8"))
-            proof = promoted["header"]["motion_capability"]
-            self.assertEqual(proof["layout_id"], "screen")
-            self.assertEqual(proof["envelope_sample_count"], 240)
             self.assertEqual(
-                promoted["layout"]["elements"][0]["envelope"]["sample_count"],
+                promoted["schema"], "solomon-dark-native-menu-layout-v3"
+            )
+            self.assertEqual(
+                promoted["header"]["settlement"]["settlement_spec"], "2.5"
+            )
+            self.assertEqual(promoted["layout"]["structural_core_element_count"], 9)
+            self.assertEqual(len(promoted["layout"]["animated_element_ids"]), 1)
+            animated = next(
+                member
+                for member in promoted["layout"]["ambient_members"]
+                if "animated" in member["member_classes"]
+            )
+            self.assertEqual(
+                animated["union_spatial_envelope"]["sample_count"],
                 240,
             )
             resolve_campaign(

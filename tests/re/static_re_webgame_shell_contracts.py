@@ -39,6 +39,8 @@ CI = ROOT / ".github/workflows/lua-authoring-contracts.yml"
 VISUAL_GATE = ROOT / "webgame-contracts/menu-visual-gate.json"
 VISUAL_GATE_SOURCE = WEBGAME / "conformance/menu-visual-gate.ts"
 VISUAL_GATE_TEST = WEBGAME / "conformance/menu-visual-gate.test.ts"
+MENU_BASELINE = ROOT / "webgame-contracts/menu-baseline.json"
+MENU_BASELINE_SOURCE = WEBGAME / "conformance/menu-baseline.ts"
 KNOWN_ISSUES = ROOT / "docs/browser-rebuild-known-issues.md"
 MENU_LAYOUTS = ROOT / "tests/fixtures/webgame/menu-layouts"
 
@@ -388,45 +390,54 @@ def test_webgame_shell_controller_traversal_covers_live_graph() -> str:
 
 
 def test_webgame_shell_visual_waiver_is_exact_two_directional_and_self_expiring() -> str:
-    gate = _read_json(VISUAL_GATE, "enumerated G11 visual waiver contract is absent or malformed")
+    gate = _read_json(VISUAL_GATE, "G11 baseline-bound visual gate is absent or malformed")
+    baseline = _read_json(MENU_BASELINE, "G11 shellfix baseline manifest is absent or malformed")
     menu = _read_json(MENU_GOLDEN, "landed G11 menu golden is absent or malformed")
-    source = _read_text(VISUAL_GATE_SOURCE, "runtime G11 visual waiver validation is absent")
-    unit = _read_text(VISUAL_GATE_TEST, "G11 visual waiver mutation unit tests are absent")
+    gate_source = _read_text(VISUAL_GATE_SOURCE, "runtime G11 visual gate validation is absent")
+    baseline_source = _read_text(MENU_BASELINE_SOURCE, "runtime G11 baseline receipt validation is absent")
+    unit = _read_text(VISUAL_GATE_TEST, "G11 baseline visual-gate mutation tests are absent")
     capture = _read_text(CAPTURE, "browser-shell visual evidence runner is absent")
+    replay = _read_text(LAYOUT_REPLAY, "T2 G11 baseline replay runner is absent")
     known_issues = _read_text(KNOWN_ISSUES, "webgame known-issues note is absent")
 
-    expected_waived = {
-        "menu-layouts/controls.json",
-        "menu-layouts/dark-cloud-login-settings.json",
-        "menu-layouts/dark-cloud-search.json",
-        "menu-layouts/dark-cloud-settings.json",
-        "menu-layouts/game-over.json",
-        "menu-layouts/game-settings-dark-cloud.json",
-        "menu-layouts/game-settings-gameplay.json",
-        "menu-layouts/game-settings-title.json",
-        "menu-layouts/hall-of-fame.json",
-        "menu-layouts/performance.json",
-    }
-    expected_root_keys = {
-        "schema",
-        "pixel_rule",
-        "reviewed_pass_fixtures",
-        "reviewed_divergent_fixtures",
-        "waiver",
-    }
-    if set(gate) != expected_root_keys:
-        raise StaticReTestFailure(
-            "menu visual gate gained an unreviewed field that could smuggle extra tolerance"
-        )
-    if gate.get("schema") != "solomon-dark-menu-visual-gate-v1":
-        raise StaticReTestFailure("menu visual gate lost its versioned schema")
     pixel_rule = (
         "Human side-by-side review at 1600x900 requires the same assetpack art "
         "at exact G11 positions; font rasterization may differ."
     )
+    if set(gate) != {
+        "schema",
+        "pixel_rule",
+        "reviewed_pass_snapshots",
+        "reviewed_divergent_snapshots",
+        "pending_shellfix",
+    }:
+        raise StaticReTestFailure(
+            "menu visual gate gained an unreviewed field that could smuggle extra tolerance"
+        )
+    if gate.get("schema") != "solomon-dark-menu-visual-gate-v2":
+        raise StaticReTestFailure("menu visual gate lost its baseline-snapshot schema")
     if gate.get("pixel_rule") != pixel_rule:
         raise StaticReTestFailure(
             "menu visual gate loosened the original same-art exact-position rule"
+        )
+    if set(baseline) != {
+        "schema",
+        "corrective",
+        "baseline_snapshot_count",
+        "pending_shellfix_count",
+        "baseline_snapshots",
+        "pending_shellfix",
+    }:
+        raise StaticReTestFailure(
+            "menu baseline manifest gained an unaudited field that could weaken shell isolation"
+        )
+    if baseline.get("schema") != "solomon-dark-menu-baseline-v1":
+        raise StaticReTestFailure("menu baseline manifest lost its versioned schema")
+    if baseline.get("corrective") != "shellfix task #101":
+        raise StaticReTestFailure("menu baseline manifest lost shellfix task #101 ownership")
+    if baseline.get("baseline_snapshot_count") != 28 or baseline.get("pending_shellfix_count") != 28:
+        raise StaticReTestFailure(
+            "menu baseline manifest census must remain exactly 28 snapshots and 28 pending fixtures"
         )
 
     census = menu.get("screen_census")
@@ -438,228 +449,160 @@ def test_webgame_shell_visual_waiver_is_exact_two_directional_and_self_expiring(
         or "game-over" not in census
     ):
         raise StaticReTestFailure(
-            "visual waiver audit did not reach the exact G11 census witnesses"
+            "menu baseline audit did not reach the exact G11 census witnesses"
         )
     if not isinstance(wrappers, list) or len(wrappers) != 28:
         raise StaticReTestFailure(
-            "visual waiver audit did not reach all 28 embedded layout records"
+            "menu baseline audit did not reach all 28 embedded layout records"
         )
     embedded_by_fixture: dict[str, dict[str, Any]] = {}
     for wrapper in wrappers:
         if not isinstance(wrapper, dict):
             raise StaticReTestFailure(
-                "visual waiver audit encountered a malformed embedded layout wrapper"
+                "menu baseline audit encountered a malformed embedded layout wrapper"
             )
         fixture = wrapper.get("fixture")
         layout = wrapper.get("layout")
         if not isinstance(fixture, str) or not isinstance(layout, dict):
             raise StaticReTestFailure(
-                "visual waiver audit cannot resolve an embedded fixture to its layout"
+                "menu baseline audit cannot resolve an embedded fixture to its layout"
             )
         if fixture in embedded_by_fixture:
             raise StaticReTestFailure(
-                f"visual waiver audit refuses duplicate embedded fixture candidate {fixture}"
+                f"menu baseline audit refuses duplicate embedded fixture candidate {fixture}"
             )
         embedded_by_fixture[fixture] = wrapper
-    if len(embedded_by_fixture) != 28:
+    canonical = set(embedded_by_fixture)
+    if len(canonical) != 28 or "menu-layouts/beta-notice.json" not in canonical:
         raise StaticReTestFailure(
-            "visual waiver audit no longer has one unambiguous wrapper per G11 layout"
+            "menu baseline audit no longer has one unambiguous wrapper per G11 layout"
         )
 
-    divergent = gate.get("reviewed_divergent_fixtures")
-    passed = gate.get("reviewed_pass_fixtures")
-    if not isinstance(divergent, list) or any(not isinstance(item, str) for item in divergent):
-        raise StaticReTestFailure(
-            "menu visual gate no longer names divergent fixtures explicitly"
-        )
-    if len(divergent) != len(set(divergent)) or set(divergent) != expected_waived:
-        extra = sorted(set(divergent) - expected_waived)
-        missing = sorted(expected_waived - set(divergent))
-        if extra:
-            raise StaticReTestFailure(f"unwaived visual divergence: {extra[0]}")
-        raise StaticReTestFailure(
-            "menu visual gate no longer enumerates exactly the ten ATC-waived fixtures: "
-            + ", ".join(missing)
-        )
-    if not isinstance(passed, list) or any(not isinstance(item, str) for item in passed):
-        raise StaticReTestFailure(
-            "menu visual gate no longer names the ordinary pixel-plausible passes"
-        )
-    passed_set = set(passed)
-    canonical_set = set(embedded_by_fixture)
-    if (
-        len(passed) != 18
-        or len(passed_set) != 18
-        or passed_set & expected_waived
-        or passed_set | expected_waived != canonical_set
-    ):
-        raise StaticReTestFailure(
-            "menu visual gate no longer partitions the exact census into 18 unchanged passes and 10 waivers"
-        )
+    def indexed(rows: Any, label: str) -> dict[str, dict[str, Any]]:
+        if not isinstance(rows, list) or len(rows) != 28:
+            raise StaticReTestFailure(f"{label} must enumerate exactly 28 G11 fixtures")
+        result: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            if not isinstance(row, dict) or not isinstance(row.get("fixture"), str):
+                raise StaticReTestFailure(f"{label} contains an unresolvable fixture receipt")
+            fixture = row["fixture"]
+            if fixture in result:
+                raise StaticReTestFailure(f"{label} refuses ambiguous duplicate {fixture}")
+            result[fixture] = row
+        if set(result) != canonical:
+            raise StaticReTestFailure(f"{label} no longer covers the exact 28-fixture G11 census")
+        return result
 
-    waiver = gate.get("waiver")
-    if not isinstance(waiver, dict) or set(waiver) != {"decision", "entries"}:
-        raise StaticReTestFailure(
-            "menu visual waiver gained scope beyond its ATC decision and enumerated entries"
+    snapshots = indexed(baseline.get("baseline_snapshots"), "menu baseline snapshots")
+    pending_manifest = indexed(baseline.get("pending_shellfix"), "menu baseline pending_shellfix")
+    if "menu-layouts/native-loader.json" not in snapshots:
+        raise StaticReTestFailure("menu baseline hash sweep did not reach the native-loader witness")
+    for fixture in sorted(canonical):
+        snapshot = snapshots[fixture]
+        pending = pending_manifest[fixture]
+        expected_snapshot = f"webgame-contracts/baseline-snapshots/{fixture}"
+        if snapshot.get("snapshot") != expected_snapshot:
+            raise StaticReTestFailure(
+                f"menu baseline snapshot path does not derive exactly from {fixture}"
+            )
+        if snapshot.get("corrective") != "shellfix task #101" or pending.get("corrective") != "shellfix task #101":
+            raise StaticReTestFailure(f"menu baseline entry {fixture} lost shellfix task #101 ownership")
+        snapshot_file = ROOT / expected_snapshot
+        fixture_file = ROOT / "tests/fixtures/webgame" / fixture
+        if snapshot.get("bytes") != snapshot_file.stat().st_size:
+            raise StaticReTestFailure(f"menu baseline snapshot {fixture} byte count mismatch")
+        if pending.get("bytes") != fixture_file.stat().st_size:
+            raise StaticReTestFailure(f"menu pending_shellfix fixture {fixture} byte count mismatch")
+        assert_recorded_hash_matches_file(
+            snapshot.get("sha256"), snapshot_file, f"menu baseline snapshot {fixture}"
         )
-    if waiver.get("decision") != "ATC 2026-08-05 evening":
-        raise StaticReTestFailure("menu visual waiver lost the governing ATC decision")
-    entries = waiver.get("entries")
-    if not isinstance(entries, list) or len(entries) != 10:
-        raise StaticReTestFailure(
-            "menu visual waiver no longer has exactly ten fixture-specific entries"
+        assert_recorded_hash_matches_file(
+            pending.get("sha256"), fixture_file, f"menu pending_shellfix fixture {fixture}"
         )
-    entries_by_fixture: dict[str, dict[str, Any]] = {}
-    for entry in entries:
-        if not isinstance(entry, dict) or set(entry) != {
-            "fixture",
-            "required_marker",
-            "corrective",
-        }:
+        standalone = _read_json(fixture_file, f"cannot parse standalone G11 fixture {fixture}")
+        if standalone.get("header") != embedded_by_fixture[fixture].get("header") or standalone.get("layout") != embedded_by_fixture[fixture].get("layout"):
             raise StaticReTestFailure(
-                "a menu visual waiver entry can no longer be audited as fixture, marker, and corrective"
-            )
-        fixture = entry.get("fixture")
-        if not isinstance(fixture, str):
-            raise StaticReTestFailure(
-                "a menu visual waiver entry no longer names its fixture"
-            )
-        if fixture in entries_by_fixture:
-            raise StaticReTestFailure(
-                f"menu visual waiver refuses duplicate candidate {fixture}"
-            )
-        entries_by_fixture[fixture] = entry
-    if set(entries_by_fixture) != expected_waived:
-        unwaived = sorted(expected_waived - set(entries_by_fixture))
-        if unwaived:
-            raise StaticReTestFailure(f"unwaived visual divergence: {unwaived[0]}")
-        raise StaticReTestFailure(
-            "menu visual waiver contains a fixture outside the exact ten-screen decision"
-        )
-
-    for fixture, entry in entries_by_fixture.items():
-        if entry.get("required_marker") != "stale controls omitted":
-            raise StaticReTestFailure(
-                f"visual waiver does not cite the literal stale marker: {fixture}"
-            )
-        if entry.get("corrective") != "menufix task #97":
-            raise StaticReTestFailure(
-                f"visual waiver does not point {fixture} to menufix task #97"
-            )
-        standalone = _read_json(
-            ROOT / "tests/fixtures/webgame" / fixture,
-            f"visual waiver cannot read listed fixture {fixture}",
-        )
-        standalone_layout = standalone.get("layout")
-        if not isinstance(standalone_layout, dict):
-            raise StaticReTestFailure(
-                f"visual waiver cannot inspect capture provenance for {fixture}"
-            )
-        embedded_layout = embedded_by_fixture[fixture].get("layout")
-        if not isinstance(embedded_layout, dict):
-            raise StaticReTestFailure(
-                f"visual waiver cannot inspect embedded capture provenance for {fixture}"
-            )
-        standalone_method = standalone_layout.get("capture_method")
-        embedded_method = embedded_layout.get("capture_method")
-        if standalone_method != embedded_method:
-            raise StaticReTestFailure(
-                f"standalone and embedded capture provenance disagree for waived fixture {fixture}"
-            )
-        if (
-            not isinstance(standalone_method, str)
-            or "stale controls omitted" not in standalone_method
-        ):
-            raise StaticReTestFailure(
-                f'illegal stale visual waiver: {fixture} no longer bears literal marker "stale controls omitted"; delete the waiver and pass full visual match'
+                f"standalone and embedded G11 recordings disagree for {fixture}"
             )
 
-    for fixture in passed_set:
-        layout = embedded_by_fixture[fixture].get("layout")
-        if not isinstance(layout, dict):
-            raise StaticReTestFailure(
-                f"ordinary visual review cannot inspect capture provenance for {fixture}"
-            )
-        method = layout.get("capture_method")
-        if not isinstance(method, str) or "stale controls omitted" in method:
-            raise StaticReTestFailure(f"unwaived stale visual fixture: {fixture}")
+    reviewed_pass = gate.get("reviewed_pass_snapshots")
+    reviewed_divergent = gate.get("reviewed_divergent_snapshots")
+    pending_visual = gate.get("pending_shellfix")
+    if not isinstance(reviewed_pass, list) or len(reviewed_pass) != 18:
+        raise StaticReTestFailure("menu visual gate must preserve exactly 18 pass baseline attestations")
+    if not isinstance(reviewed_divergent, list) or len(reviewed_divergent) != 10:
+        raise StaticReTestFailure("menu visual gate must preserve exactly 10 divergent baseline attestations")
+    if not isinstance(pending_visual, list) or len(pending_visual) != 28:
+        raise StaticReTestFailure("menu visual gate pending_shellfix census must remain exactly 28")
+
+    def visual_index(rows: list[Any], label: str) -> dict[str, dict[str, Any]]:
+        result: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            if not isinstance(row, dict) or not isinstance(row.get("fixture"), str):
+                raise StaticReTestFailure(f"{label} contains an unresolvable fixture record")
+            fixture = row["fixture"]
+            if fixture in result:
+                raise StaticReTestFailure(f"{label} refuses ambiguous duplicate {fixture}")
+            result[fixture] = row
+        return result
+
+    passed_by_fixture = visual_index(reviewed_pass, "menu visual pass snapshots")
+    divergent_by_fixture = visual_index(reviewed_divergent, "menu visual divergent snapshots")
+    pending_by_fixture = visual_index(pending_visual, "menu visual pending_shellfix")
+    if set(passed_by_fixture) & set(divergent_by_fixture) or set(passed_by_fixture) | set(divergent_by_fixture) != canonical:
+        raise StaticReTestFailure(
+            "menu visual gate no longer partitions the exact census into 18 pass and 10 divergent baseline attestations"
+        )
+    if set(pending_by_fixture) != canonical:
+        raise StaticReTestFailure("menu visual pending_shellfix no longer covers the exact G11 census")
+    for fixture, row in {**passed_by_fixture, **divergent_by_fixture}.items():
+        if row.get("corrective") != "shellfix task #101":
+            raise StaticReTestFailure(f"menu visual review {fixture} lost shellfix task #101 ownership")
+        if row.get("baseline_snapshot_sha256") != snapshots[fixture].get("sha256"):
+            raise StaticReTestFailure(f"menu visual review {fixture} is not bound to its baseline snapshot hash")
+    for fixture, row in pending_by_fixture.items():
+        if row.get("corrective") != "shellfix task #101":
+            raise StaticReTestFailure(f"menu visual pending entry {fixture} lost shellfix task #101 ownership")
+        if row.get("settled_fixture_sha256") != pending_manifest[fixture].get("sha256"):
+            raise StaticReTestFailure(f"menu visual pending entry {fixture} pins the wrong settled fixture hash")
 
     for fixture, wrapper in embedded_by_fixture.items():
         reference_capture = wrapper.get("reference_capture")
         reference_sha256 = wrapper.get("reference_sha256")
         if not isinstance(reference_capture, str) or not isinstance(reference_sha256, str):
-            raise StaticReTestFailure(
-                f"visual review cannot bind {fixture} to its committed reference capture"
-            )
+            raise StaticReTestFailure(f"visual review cannot bind {fixture} to its committed reference capture")
         assert_recorded_hash_matches_file(
             reference_sha256,
             ROOT / "tests/fixtures/webgame" / reference_capture,
             f"G11 visual reference for {fixture}",
         )
 
-    source_claims = (
-        (
-            "unwaived visual divergence: ${fixture}",
-            "runtime visual gate no longer names an eleventh divergent fixture",
-        ),
-        (
-            "illegal stale visual waiver: ${entry.fixture} no longer bears literal marker",
-            "runtime visual gate no longer self-expires a corrected fixture waiver",
-        ),
-        (
-            "menu visual gate changed the original pixel-plausibility rule or added tolerance",
-            "runtime visual gate no longer rejects extra visual tolerance",
-        ),
+    claims = (
+        (baseline_source, "menu baseline manifest census must remain exactly 28 snapshots and 28 pending fixtures", "runtime baseline gate no longer enforces the exact manifest census"),
+        (baseline_source, "menu baseline snapshot ${fixture}", "runtime baseline gate no longer checks each committed snapshot receipt"),
+        (baseline_source, "menu pending_shellfix fixture ${fixture}", "runtime baseline gate no longer checks each settled fixture receipt"),
+        (gate_source, "menu visual gate pending_shellfix census must remain exactly 28", "runtime visual gate no longer enforces the pending-shell census"),
+        (gate_source, "is not bound to its baseline snapshot hash", "runtime visual gate no longer binds reviews to snapshot bytes"),
+        (gate_source, "pins the wrong settled fixture hash", "runtime visual gate no longer pins pending settled bytes"),
+        (gate_source, "menu visual gate changed the original pixel-plausibility rule or added tolerance", "runtime visual gate no longer rejects extra visual tolerance"),
+        (unit, "rejects a dropped pending_shellfix entry", "unit mutation no longer exercises the pending-shell census"),
+        (unit, "pinned to the wrong settled fixture hash", "unit mutation no longer exercises a wrong pending hash"),
+        (capture, "verifyMenuBaseline(", "live capture no longer verifies the shellfix baseline receipts"),
+        (capture, "validateMenuVisualGate(menuVisualGateJson, catalog, baseline)", "live capture no longer applies the baseline-bound visual gate"),
+        (capture, "visualGate: { ...visualGate, artifacts: visualArtifacts }", "live capture no longer records all visual dispositions and artifact hashes"),
+        (capture, "referenceSha256 !== layout.referenceSha256", "live visual evidence no longer binds each comparison to its committed reference"),
+        (replay, "const baseline = await verifyMenuBaseline(", "T2 replay no longer verifies the baseline manifest"),
+        (replay, "const catalog = parseMenuCatalog(baselineEmbedded);", "T2 replay no longer compares the shell to exact baseline bytes"),
+        (replay, "standalone layout diverges from the embedded G11 recording", "T2 replay no longer checks settled standalone and embedded copies agree"),
     )
-    for token, consequence in source_claims:
-        if token not in source:
+    for text, token, consequence in claims:
+        if token not in text:
             raise StaticReTestFailure(consequence)
-    unit_claims = (
-        (
-            "rejects an eleventh, unlisted visual divergence by fixture name",
-            "unit mutation no longer exercises the unlisted-divergence direction",
-        ),
-        (
-            "scratch recapture loses the stale marker",
-            "unit mutation no longer exercises the corrected-listed-fixture direction",
-        ),
-    )
-    for token, consequence in unit_claims:
-        if token not in unit:
-            raise StaticReTestFailure(consequence)
-    capture_claims = (
-        (
-            "validateMenuVisualGate(menuVisualGateJson, catalog)",
-            "live capture no longer applies the enumerated visual gate",
-        ),
-        (
-            "visualGate: { ...visualGate, artifacts: visualArtifacts }",
-            "live capture no longer records all visual dispositions and artifact hashes",
-        ),
-        (
-            "referenceSha256 !== layout.referenceSha256",
-            "live visual evidence no longer binds each comparison to its committed reference",
-        ),
-    )
-    for token, consequence in capture_claims:
-        if token not in capture:
-            raise StaticReTestFailure(consequence)
-
-    documented = set(
-        re.findall(r"^- `([a-z0-9-]+)`$", known_issues, flags=re.MULTILINE)
-    )
-    if documented != {Path(fixture).stem for fixture in expected_waived}:
-        raise StaticReTestFailure(
-            "webgame known-issues note no longer lists exactly the ten waived screen names"
-        )
-    if (
-        "menufix task #97" not in known_issues
-        or "Never\nreconstruct missing geometry from a PNG" not in known_issues
-    ):
-        raise StaticReTestFailure(
-            "webgame known-issues note no longer names the corrective or forbids PNG-derived geometry"
-        )
-    return "exactly ten marker-backed G11 divergences are waived toward menufix task #97; 18 screens retain the original pixel rule and both waiver directions fail closed"
+    if "stale controls omitted" in json.dumps(gate) or '"waiver"' in json.dumps(gate):
+        raise StaticReTestFailure("deleted stale visual-waiver machinery reappeared in the v2 gate")
+    if "shellfix task #101" not in known_issues:
+        raise StaticReTestFailure("webgame known-issues note no longer assigns the shell interregnum to task #101")
+    return "all 28 pre-menufix layout snapshots and settled pending fixtures are hash-pinned; T2 and the visual gate remain exact against snapshot bytes until shellfix task #101"
 
 
 def test_webgame_shell_boot_capture_performance_and_ci_are_wired() -> str:

@@ -1,0 +1,70 @@
+{
+    "schema":  "solomon-dark-native-menu-layout-v1",
+    "header":  {
+                   "instance":  "men-title",
+                   "process_id":  16140,
+                   "capture_commit":  "f9cac8783e72e7423a2d952987fa169fa84f3dcb",
+                   "native_exe_sha256":  "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+                   "loader_dll_sha256":  "f21d10e327e576ce2aed02a0626507143a9104c181d6694e2111d102433b52ec",
+                   "captured_at_utc":  "2026-08-05T07:48:52.1691144Z",
+                   "capture_method":  "live native UI tree + exact text/font hooks + native Sprite draw hooks + exact live-navigation screen tag (stale controls omitted)",
+                   "reference_capture":  "../menu-reference-captures/game-over.png"
+               },
+    "layout":  {
+                   "generation":  3409,
+                   "captured_at_milliseconds":  1149374609,
+                   "screen_id":  "game_over",
+                   "screen_title":  "",
+                   "capture_method":  "live native UI tree + exact text/font hooks + native Sprite draw hooks + exact live-navigation screen tag (stale controls omitted)",
+                   "elements":  [
+                                    {
+                                        "id":  "game_over.art.gameover_0.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "GameOver.0",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  1,
+                                        "rect":  [
+                                                     646.500000,
+                                                     215.500000,
+                                                     953.500000,
+                                                     334.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               646.500000,
+                                                               215.500000,
+                                                               953.500000,
+                                                               334.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "game_over.art.gameover_1.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "GameOver.1",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  2,
+                                        "rect":  [
+                                                     647.000000,
+                                                     515.000000,
+                                                     953.000000,
+                                                     635.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               647.000000,
+                                                               515.000000,
+                                                               953.000000,
+                                                               635.000000
+                                                           ]
+                                    }
+                                ]
+               }
+}

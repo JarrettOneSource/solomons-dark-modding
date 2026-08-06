@@ -131,6 +131,7 @@ from static_re_native_menu_shell_contracts import (
     test_native_menu_live_transition_graph_is_pinned,
     test_native_menu_landed_population_override_is_fail_closed,
     test_native_menu_motion_capability_campaign_resolution_is_fail_closed,
+    test_native_menu_ambient_overlay_derivation_is_fail_closed,
     test_native_menu_overlay_contamination_override_is_fail_closed,
     test_native_menu_recorders_settle_and_derive_provenance,
     test_native_menu_screen_census_and_live_layouts_are_pinned,
@@ -1180,6 +1181,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native menu overlay contamination override is fail closed",
         test_native_menu_overlay_contamination_override_is_fail_closed,
+    ),
+    (
+        "Native menu ambient overlay derivation is fail closed",
+        test_native_menu_ambient_overlay_derivation_is_fail_closed,
     ),
     (
         "Native menu live transition graph is pinned",

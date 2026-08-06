@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from collections.abc import Iterator
 from contextlib import AbstractContextManager, contextmanager
@@ -144,6 +145,36 @@ def corrected_controls_copies() -> Iterator[None]:
             "corrected-controls mutation did not reach both recording copies: "
             + ", ".join(missing)
         )
+
+
+PERTURBED_SNAPSHOT = (
+    contracts.ROOT
+    / "webgame-contracts/baseline-snapshots/menu-layouts/beta-notice.json"
+)
+_PERTURBED_SNAPSHOT_ORIGINAL = PERTURBED_SNAPSHOT.read_bytes()
+if not _PERTURBED_SNAPSHOT_ORIGINAL.startswith(b"{"):
+    raise RuntimeError("snapshot-byte mutation lost its beta-notice JSON witness")
+_PERTURBED_SNAPSHOT_BYTES = b"[" + _PERTURBED_SNAPSHOT_ORIGINAL[1:]
+_PERTURBED_SNAPSHOT_ACTUAL = hashlib.sha256(_PERTURBED_SNAPSHOT_BYTES).hexdigest()
+_PERTURBED_SNAPSHOT_RECORDED = next(
+    entry["sha256"]
+    for entry in json.loads(contracts.MENU_BASELINE.read_text(encoding="utf-8"))["baseline_snapshots"]
+    if entry["fixture"] == "menu-layouts/beta-notice.json"
+)
+
+
+@contextmanager
+def perturbed_baseline_snapshot_byte() -> Iterator[None]:
+    """Perturb one committed snapshot byte and restore it even if the trip fails."""
+    if PERTURBED_SNAPSHOT.read_bytes() != _PERTURBED_SNAPSHOT_ORIGINAL:
+        raise RuntimeError("snapshot-byte mutation refuses an already changed beta-notice snapshot")
+    PERTURBED_SNAPSHOT.write_bytes(_PERTURBED_SNAPSHOT_BYTES)
+    try:
+        yield
+    finally:
+        PERTURBED_SNAPSHOT.write_bytes(_PERTURBED_SNAPSHOT_ORIGINAL)
+    if PERTURBED_SNAPSHOT.read_bytes() != _PERTURBED_SNAPSHOT_ORIGINAL:
+        raise RuntimeError("snapshot-byte mutation failed to restore beta-notice exactly")
 
 
 ARCHITECTURE = "test_webgame_shell_architecture_keeps_devices_inside_input"
@@ -1063,6 +1094,200 @@ MUTATIONS: tuple[Mutation, ...] = (
 )
 
 
+INTERREGNUM_VISUAL_MUTATIONS: tuple[Mutation, ...] = (
+    TextMutation(
+        "visual.no-extra-tolerance-field",
+        VISUAL,
+        contracts.VISUAL_GATE,
+        '{\n  "schema":',
+        '{\n  "epsilon": 1,\n  "schema":',
+        "menu visual gate gained an unreviewed field that could smuggle extra tolerance",
+    ),
+    TextMutation(
+        "visual.baseline-schema",
+        VISUAL,
+        contracts.VISUAL_GATE,
+        "solomon-dark-menu-visual-gate-v2",
+        "solomon-dark-menu-visual-gate-v3",
+        "menu visual gate lost its baseline-snapshot schema",
+    ),
+    TextMutation(
+        "visual.original-pixel-rule",
+        VISUAL,
+        contracts.VISUAL_GATE,
+        "requires the same assetpack art at exact G11 positions",
+        "allows similar assetpack art near G11 positions",
+        "menu visual gate loosened the original same-art exact-position rule",
+    ),
+    TextMutation(
+        "baseline.no-extra-field",
+        VISUAL,
+        contracts.MENU_BASELINE,
+        '{\n  "schema":',
+        '{\n  "epsilon": 1,\n  "schema":',
+        "menu baseline manifest gained an unaudited field that could weaken shell isolation",
+    ),
+    TextMutation(
+        "baseline.versioned-schema",
+        VISUAL,
+        contracts.MENU_BASELINE,
+        "solomon-dark-menu-baseline-v1",
+        "solomon-dark-menu-baseline-v2",
+        "menu baseline manifest lost its versioned schema",
+    ),
+    TextMutation(
+        "baseline.shellfix-owner",
+        VISUAL,
+        contracts.MENU_BASELINE,
+        '"corrective": "shellfix task #101",',
+        '"corrective": "menufix task #97",',
+        "menu baseline manifest lost shellfix task #101 ownership",
+    ),
+    TextMutation(
+        "baseline.exact-census",
+        VISUAL,
+        contracts.MENU_BASELINE,
+        '"baseline_snapshot_count": 28,\n  "pending_shellfix_count": 28',
+        '"baseline_snapshot_count": 28,\n  "pending_shellfix_count": 27',
+        "menu baseline manifest census must remain exactly 28 snapshots and 28 pending fixtures",
+    ),
+    SpecialMutation(
+        "baseline.snapshot-byte-hash",
+        VISUAL,
+        perturbed_baseline_snapshot_byte,
+        "menu baseline snapshot menu-layouts/beta-notice.json does not match its file: "
+        f"recorded {_PERTURBED_SNAPSHOT_RECORDED[:16]}, beta-notice.json hashes to {_PERTURBED_SNAPSHOT_ACTUAL[:16]}",
+    ),
+    TextMutation(
+        "baseline.snapshot-path",
+        VISUAL,
+        contracts.MENU_BASELINE,
+        "webgame-contracts/baseline-snapshots/menu-layouts/beta-notice.json",
+        "webgame-contracts/baseline-snapshots/menu-layouts/controls.json",
+        "menu baseline snapshot path does not derive exactly from menu-layouts/beta-notice.json",
+    ),
+    TextMutation(
+        "baseline.drop-pending-entry",
+        VISUAL,
+        contracts.MENU_BASELINE,
+        '    {\n      "fixture": "menu-layouts/beta-notice.json",\n      "sha256": "3079989caa69579ea0d4eebf863fb3f26a86a24be40eff4459263f735d6f6042",\n      "bytes": 165992,\n      "corrective": "shellfix task #101"\n    },\n',
+        "",
+        "menu baseline pending_shellfix must enumerate exactly 28 G11 fixtures",
+    ),
+    TextMutation(
+        "baseline.pending-wrong-hash",
+        VISUAL,
+        contracts.MENU_BASELINE,
+        '"pending_shellfix": [\n    {\n      "fixture": "menu-layouts/beta-notice.json",\n      "sha256": "3079989caa69579ea0d4eebf863fb3f26a86a24be40eff4459263f735d6f6042"',
+        '"pending_shellfix": [\n    {\n      "fixture": "menu-layouts/beta-notice.json",\n      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"',
+        "menu pending_shellfix fixture menu-layouts/beta-notice.json does not match its file: recorded 0000000000000000, beta-notice.json hashes to 3079989caa69579e",
+    ),
+    TextMutation(
+        "visual.drop-pending-entry",
+        VISUAL,
+        contracts.VISUAL_GATE,
+        '    {\n      "fixture": "menu-layouts/beta-notice.json",\n      "settled_fixture_sha256": "3079989caa69579ea0d4eebf863fb3f26a86a24be40eff4459263f735d6f6042",\n      "corrective": "shellfix task #101"\n    },\n',
+        "",
+        "menu visual gate pending_shellfix census must remain exactly 28",
+    ),
+    TextMutation(
+        "visual.pending-wrong-hash",
+        VISUAL,
+        contracts.VISUAL_GATE,
+        '"pending_shellfix": [\n    {\n      "fixture": "menu-layouts/beta-notice.json",\n      "settled_fixture_sha256": "3079989caa69579ea0d4eebf863fb3f26a86a24be40eff4459263f735d6f6042"',
+        '"pending_shellfix": [\n    {\n      "fixture": "menu-layouts/beta-notice.json",\n      "settled_fixture_sha256": "0000000000000000000000000000000000000000000000000000000000000000"',
+        "menu visual pending entry menu-layouts/beta-notice.json pins the wrong settled fixture hash",
+    ),
+    TextMutation(
+        "visual.review-wrong-baseline-hash",
+        VISUAL,
+        contracts.VISUAL_GATE,
+        '"fixture": "menu-layouts/beta-notice.json",\n      "baseline_snapshot_sha256": "3079989caa69579ea0d4eebf863fb3f26a86a24be40eff4459263f735d6f6042"',
+        '"fixture": "menu-layouts/beta-notice.json",\n      "baseline_snapshot_sha256": "0000000000000000000000000000000000000000000000000000000000000000"',
+        "menu visual review menu-layouts/beta-notice.json is not bound to its baseline snapshot hash",
+    ),
+    TextMutation(
+        "visual.standalone-embedded-pair",
+        VISUAL,
+        contracts.ROOT / "tests/fixtures/webgame/menu-layouts/controls.json",
+        '"layout":  {',
+        '"mutant_layout":  {',
+        "standalone and embedded G11 recordings disagree for menu-layouts/controls.json",
+    ),
+    TextMutation(
+        "visual.runtime-snapshot-receipt",
+        VISUAL,
+        contracts.MENU_BASELINE_SOURCE,
+        "menu baseline snapshot ${fixture}",
+        "unchecked baseline snapshot ${fixture}",
+        "runtime baseline gate no longer checks each committed snapshot receipt",
+    ),
+    TextMutation(
+        "visual.runtime-pending-receipt",
+        VISUAL,
+        contracts.MENU_BASELINE_SOURCE,
+        "menu pending_shellfix fixture ${fixture}",
+        "unchecked pending fixture ${fixture}",
+        "runtime baseline gate no longer checks each settled fixture receipt",
+    ),
+    TextMutation(
+        "visual.unit-pending-census",
+        VISUAL,
+        contracts.VISUAL_GATE_TEST,
+        "rejects a dropped pending_shellfix entry",
+        "accepts a dropped pending_shellfix entry",
+        "unit mutation no longer exercises the pending-shell census",
+    ),
+    TextMutation(
+        "visual.capture-verifies-baseline",
+        VISUAL,
+        contracts.CAPTURE,
+        "verifyMenuBaseline(",
+        "bypassMenuBaseline(",
+        "live capture no longer verifies the shellfix baseline receipts",
+    ),
+    TextMutation(
+        "visual.capture-applies-gate",
+        VISUAL,
+        contracts.CAPTURE,
+        "validateMenuVisualGate(menuVisualGateJson, catalog, baseline)",
+        "bypassMenuVisualGate(menuVisualGateJson, catalog, baseline)",
+        "live capture no longer applies the baseline-bound visual gate",
+    ),
+    TextMutation(
+        "visual.replay-verifies-baseline",
+        VISUAL,
+        contracts.LAYOUT_REPLAY,
+        "const baseline = await verifyMenuBaseline(",
+        "const baseline = await bypassMenuBaseline(",
+        "T2 replay no longer verifies the baseline manifest",
+    ),
+    TextMutation(
+        "visual.replay-uses-snapshot-catalog",
+        VISUAL,
+        contracts.LAYOUT_REPLAY,
+        "const catalog = parseMenuCatalog(baselineEmbedded);",
+        "const catalog = parseMenuCatalog(root);",
+        "T2 replay no longer compares the shell to exact baseline bytes",
+    ),
+    TextMutation(
+        "visual.docs-shellfix-owner",
+        VISUAL,
+        contracts.KNOWN_ISSUES,
+        "shellfix task #101",
+        "future shell correction",
+        "webgame known-issues note no longer assigns the shell interregnum to task #101",
+        True,
+    ),
+)
+
+# The v1 stale-waiver mutation table remains in source as reviewable history, but
+# v2 deletes that machinery. Execute only the current baseline-interregnum claims.
+MUTATIONS = tuple(
+    mutation for mutation in MUTATIONS if not mutation.claim.startswith("visual.")
+) + INTERREGNUM_VISUAL_MUTATIONS
+
+
 def run_mutation(mutation: Mutation) -> MutationResult:
     contract = getattr(contracts, mutation.contract)
     clear_contract_bytecode()
@@ -1097,21 +1322,34 @@ def run_mutation(mutation: Mutation) -> MutationResult:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", type=Path, help="Write the complete mutation table as JSON")
+    parser.add_argument("--log", type=Path, help="Write the exact mutation transcript")
     args = parser.parse_args()
     results: list[MutationResult] = []
+    transcript: list[str] = []
     for index, mutation in enumerate(MUTATIONS, start=1):
         result = run_mutation(mutation)
         results.append(result)
-        print(
+        line = (
             f"PASS {index:02d}/{len(MUTATIONS)} {result.claim}: "
             f"{result.observed_message} [green before/after]"
         )
+        transcript.append(line)
+        print(line)
     if args.json is not None:
         args.json.write_text(
             json.dumps([asdict(result) for result in results], indent=2) + "\n",
             encoding="utf-8",
         )
-    print(f"{len(results)}/{len(MUTATIONS)} shell contract mutations tripped the named claim")
+    summary = (
+        f"{len(results)}/{len(MUTATIONS)} shell contract mutations tripped the named claim"
+    )
+    transcript.append(summary)
+    if args.log is not None:
+        args.log.parent.mkdir(parents=True, exist_ok=True)
+        temporary = args.log.with_name(args.log.name + ".menufix.tmp")
+        temporary.write_text("\n".join(transcript) + "\n", encoding="utf-8")
+        temporary.replace(args.log)
+    print(summary)
     return 0
 
 

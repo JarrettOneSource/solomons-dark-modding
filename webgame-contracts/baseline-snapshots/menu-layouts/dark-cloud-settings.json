@@ -1,0 +1,766 @@
+{
+    "schema":  "solomon-dark-native-menu-layout-v1",
+    "header":  {
+                   "instance":  "men-title",
+                   "process_id":  16140,
+                   "capture_commit":  "f9cac8783e72e7423a2d952987fa169fa84f3dcb",
+                   "native_exe_sha256":  "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+                   "loader_dll_sha256":  "f21d10e327e576ce2aed02a0626507143a9104c181d6694e2111d102433b52ec",
+                   "captured_at_utc":  "2026-08-05T07:14:41.9805862Z",
+                   "capture_method":  "live native UI tree + exact text/font hooks + native Sprite draw hooks + exact live-navigation screen tag (stale controls omitted)",
+                   "reference_capture":  "../menu-reference-captures/dark-cloud-settings.png"
+               },
+    "layout":  {
+                   "generation":  8,
+                   "captured_at_milliseconds":  1147324390,
+                   "screen_id":  "dark_cloud_settings",
+                   "screen_title":  "",
+                   "capture_method":  "live native UI tree + exact text/font hooks + native Sprite draw hooks + exact live-navigation screen tag (stale controls omitted)",
+                   "elements":  [
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_42.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.42",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  25,
+                                        "rect":  [
+                                                     9.500000,
+                                                     8.500000,
+                                                     40.500000,
+                                                     41.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               9.500000,
+                                                               8.500000,
+                                                               40.500000,
+                                                               41.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.skills_43.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Skills.43",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  24,
+                                        "rect":  [
+                                                     784.250000,
+                                                     9.750000,
+                                                     815.750000,
+                                                     41.250000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               784.250000,
+                                                               9.750000,
+                                                               815.750000,
+                                                               41.250000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_18.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.18",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  9,
+                                        "rect":  [
+                                                     669.000000,
+                                                     50.999992,
+                                                     931.000000,
+                                                     118.000015
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               669.000000,
+                                                               50.999992,
+                                                               931.000000,
+                                                               118.000015
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_17.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  26,
+                                        "rect":  [
+                                                     490.000000,
+                                                     90.000000,
+                                                     570.000000,
+                                                     173.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               490.000000,
+                                                               90.000000,
+                                                               570.000000,
+                                                               173.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_17.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  27,
+                                        "rect":  [
+                                                     1030.000000,
+                                                     90.000000,
+                                                     1110.000000,
+                                                     173.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1030.000000,
+                                                               90.000000,
+                                                               1110.000000,
+                                                               173.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_107.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.107",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  1,
+                                        "rect":  [
+                                                     516.500000,
+                                                     99.500000,
+                                                     601.500000,
+                                                     188.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               516.500000,
+                                                               99.500000,
+                                                               601.500000,
+                                                               188.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_108.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.108",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  2,
+                                        "rect":  [
+                                                     998.500000,
+                                                     99.500000,
+                                                     1083.500000,
+                                                     188.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               998.500000,
+                                                               99.500000,
+                                                               1083.500000,
+                                                               188.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_17.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  5,
+                                        "rect":  [
+                                                     535.000000,
+                                                     117.000000,
+                                                     615.000000,
+                                                     200.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               535.000000,
+                                                               117.000000,
+                                                               615.000000,
+                                                               200.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_17.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  6,
+                                        "rect":  [
+                                                     985.000000,
+                                                     117.000000,
+                                                     1065.000000,
+                                                     200.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               985.000000,
+                                                               117.000000,
+                                                               1065.000000,
+                                                               200.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_18.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.18",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  30,
+                                        "rect":  [
+                                                     421.000000,
+                                                     319.000000,
+                                                     488.000000,
+                                                     581.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               421.000000,
+                                                               319.000000,
+                                                               488.000000,
+                                                               581.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_18.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.18",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  31,
+                                        "rect":  [
+                                                     1112.000000,
+                                                     319.000000,
+                                                     1179.000000,
+                                                     581.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1112.000000,
+                                                               319.000000,
+                                                               1179.000000,
+                                                               581.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_28.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.28",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  16,
+                                        "rect":  [
+                                                     720.317322,
+                                                     426.920807,
+                                                     795.682678,
+                                                     504.079193
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               720.317322,
+                                                               426.920807,
+                                                               795.682678,
+                                                               504.079193
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_54.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  14,
+                                        "rect":  [
+                                                     696.000000,
+                                                     637.500000,
+                                                     766.000000,
+                                                     722.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               696.000000,
+                                                               637.500000,
+                                                               766.000000,
+                                                               722.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_54.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  15,
+                                        "rect":  [
+                                                     834.000000,
+                                                     637.500000,
+                                                     904.000000,
+                                                     722.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               834.000000,
+                                                               637.500000,
+                                                               904.000000,
+                                                               722.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_101.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.101",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  13,
+                                        "rect":  [
+                                                     702.000000,
+                                                     643.500000,
+                                                     898.000000,
+                                                     712.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               623.500000,
+                                                               643.500000,
+                                                               976.500000,
+                                                               712.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_17.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  7,
+                                        "rect":  [
+                                                     535.000000,
+                                                     700.000000,
+                                                     615.000000,
+                                                     783.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               535.000000,
+                                                               700.000000,
+                                                               615.000000,
+                                                               783.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_17.6",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  8,
+                                        "rect":  [
+                                                     985.000000,
+                                                     700.000000,
+                                                     1065.000000,
+                                                     783.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               985.000000,
+                                                               700.000000,
+                                                               1065.000000,
+                                                               783.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_109.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.109",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  3,
+                                        "rect":  [
+                                                     516.500000,
+                                                     711.500000,
+                                                     601.500000,
+                                                     800.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               516.500000,
+                                                               711.500000,
+                                                               601.500000,
+                                                               800.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_110.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.110",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  4,
+                                        "rect":  [
+                                                     998.500000,
+                                                     711.500000,
+                                                     1083.500000,
+                                                     800.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               998.500000,
+                                                               711.500000,
+                                                               1083.500000,
+                                                               800.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_17.7",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  28,
+                                        "rect":  [
+                                                     490.000000,
+                                                     727.000000,
+                                                     570.000000,
+                                                     810.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               490.000000,
+                                                               727.000000,
+                                                               570.000000,
+                                                               810.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_17.8",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  29,
+                                        "rect":  [
+                                                     1030.000000,
+                                                     727.000000,
+                                                     1110.000000,
+                                                     810.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1030.000000,
+                                                               727.000000,
+                                                               1110.000000,
+                                                               810.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_8.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.8",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  10,
+                                        "rect":  [
+                                                     775.500000,
+                                                     782.000000,
+                                                     824.500000,
+                                                     894.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               775.500000,
+                                                               782.000000,
+                                                               824.500000,
+                                                               894.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_8.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.8",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  11,
+                                        "rect":  [
+                                                     706.625000,
+                                                     783.000000,
+                                                     743.375000,
+                                                     867.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               706.625000,
+                                                               783.000000,
+                                                               743.375000,
+                                                               867.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_8.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.8",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  12,
+                                        "rect":  [
+                                                     856.625000,
+                                                     783.000000,
+                                                     893.375000,
+                                                     867.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               856.625000,
+                                                               783.000000,
+                                                               893.375000,
+                                                               867.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_47.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.47",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  18,
+                                        "rect":  [
+                                                     730.500000,
+                                                     825.000000,
+                                                     788.500000,
+                                                     887.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               730.500000,
+                                                               825.000000,
+                                                               788.500000,
+                                                               887.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_48.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.48",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  20,
+                                        "rect":  [
+                                                     810.500000,
+                                                     825.000000,
+                                                     868.500000,
+                                                     887.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               810.500000,
+                                                               825.000000,
+                                                               868.500000,
+                                                               887.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_82.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.82",
+                                        "font_id":  "",
+                                        "text_style":  "centered",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  23,
+                                        "rect":  [
+                                                     794.500000,
+                                                     829.000000,
+                                                     806.500000,
+                                                     885.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               794.500000,
+                                                               829.000000,
+                                                               806.500000,
+                                                               885.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_47.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.47",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  17,
+                                        "rect":  [
+                                                     735.500000,
+                                                     830.000000,
+                                                     793.500000,
+                                                     892.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               735.500000,
+                                                               830.000000,
+                                                               793.500000,
+                                                               892.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_48.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.48",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  19,
+                                        "rect":  [
+                                                     815.500000,
+                                                     830.000000,
+                                                     873.500000,
+                                                     892.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               815.500000,
+                                                               830.000000,
+                                                               873.500000,
+                                                               892.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.skills_48.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Skills.48",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  21,
+                                        "rect":  [
+                                                     480.500000,
+                                                     838.000000,
+                                                     508.500000,
+                                                     880.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               480.500000,
+                                                               838.000000,
+                                                               508.500000,
+                                                               880.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "dark_cloud_settings.art.ui_100.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.100",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  22,
+                                        "rect":  [
+                                                     483.500000,
+                                                     877.000000,
+                                                     505.500000,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               483.500000,
+                                                               877.000000,
+                                                               505.500000,
+                                                               908.000000
+                                                           ]
+                                    }
+                                ]
+               }
+}

@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import os
 import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +25,19 @@ from native_menu_settlement_v2 import (
     validate_overlay_reference,
 )
 from resolve_native_menu_motion_campaign import ResolutionError, resolve_campaign
+from native_menu_ambient_lifecycle import sha256_json as ambient_sha256_json
+from native_menu_landed_diagnosis_v25 import (
+    LandedDiagnosisError,
+    diagnose_landed_layout,
+    diagnosis_prereference_residual,
+    semantic_overlay_corroboration,
+)
+from native_menu_overlay_v25 import (
+    OverlayV25Error,
+    assert_overlay_hygiene as assert_overlay_hygiene_v25,
+    derive_overlay_reference,
+)
+from build_menu_baseline_interregnum import BaselineBuildError, build as build_menu_baseline
 
 
 class PromotionError(RuntimeError):
@@ -531,7 +546,7 @@ def atomic_copy(source: Path, destination: Path) -> None:
     os.replace(temporary, destination)
 
 
-def validate_and_promote(
+def validate_and_promote_v24_legacy(
     repo_root: Path,
     candidate_root: Path,
     evidence_root: Path,
@@ -942,6 +957,681 @@ def validate_and_promote(
         "transition_destinations_structurally_match_standalones": len(candidate_edges),
         "destination_changes": destination_changes,
         "promoted_files": [str(destination) for _, destination in promotion_pairs],
+    }
+
+
+def _receipt_path_v25(
+    evidence_root: Path,
+    adjacent: Path,
+    receipt: dict[str, Any],
+    label: str,
+) -> Path:
+    relative = receipt.get("evidence_path")
+    if isinstance(relative, str) and relative:
+        root = evidence_root.resolve()
+        path = (root / relative).resolve()
+        if not path.is_relative_to(root) or not path.is_file():
+            raise PromotionError(f"{label} evidence escapes or is absent")
+    else:
+        filename = receipt.get("evidence_filename")
+        if not isinstance(filename, str) or not filename:
+            raise PromotionError(f"{label} has no evidence path or filename")
+        path = resolve_evidence_file(evidence_root, adjacent, filename)
+    if path.stat().st_size != receipt.get("bytes"):
+        raise PromotionError(f"{label} records a false evidence byte count")
+    if file_sha256(path) != receipt.get("sha256"):
+        raise PromotionError(f"{label} records a false evidence SHA-256")
+    return path
+
+
+def _validate_source_v25(repo_root: Path, source: Any, label: str) -> dict[str, Any]:
+    if not isinstance(source, dict):
+        raise PromotionError(f"{label} has no machine-derived provenance")
+    required = {
+        "base_commit_sha": 40,
+        "source_tree_sha": 40,
+        "game_executable_sha256": 64,
+        "loader_dll_sha256": 64,
+    }
+    for field, length in required.items():
+        value = source.get(field)
+        if (
+            not isinstance(value, str)
+            or len(value) != length
+            or any(character not in "0123456789abcdef" for character in value)
+        ):
+            raise PromotionError(
+                f"{label} has invalid machine-derived provenance field '{field}'"
+            )
+    try:
+        committed_tree = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo_root),
+                "rev-parse",
+                f"{source['base_commit_sha']}^{{tree}}",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    except subprocess.CalledProcessError as error:
+        raise PromotionError(
+            f"{label} base commit is not an object in the promotion repository"
+        ) from error
+    if committed_tree != source["source_tree_sha"]:
+        raise PromotionError(
+            f"{label} source tree does not belong to its machine-derived base commit"
+        )
+    return source
+
+
+def _structural_core_v25(layout: dict[str, Any]) -> dict[str, Any]:
+    fields = (
+        "generation",
+        "screen_id",
+        "screen_title",
+        "capture_method",
+        "draw_order_semantics",
+        "elements",
+    )
+    if any(field not in layout for field in fields):
+        raise PromotionError("Settlement v2.5 layout has an incomplete structural core")
+    return {field: copy.deepcopy(layout[field]) for field in fields}
+
+
+def _settled_samples_v25(trace: dict[str, Any], label: str) -> list[dict[str, Any]]:
+    samples = trace.get("settled_window_samples")
+    if (
+        not isinstance(samples, list)
+        or len(samples) < 40
+        or not all(isinstance(sample, dict) for sample in samples)
+    ):
+        raise PromotionError(f"{label} has no 40-sample settled window")
+    return samples
+
+
+def validate_settlement_fixture_v25(
+    repo_root: Path,
+    evidence_root: Path,
+    fixture_path: Path,
+    fixture: dict[str, Any],
+) -> dict[str, Any]:
+    if fixture.get("schema") != "solomon-dark-native-menu-layout-v3":
+        raise PromotionError(f"{fixture_path} does not use Settlement v2.5 schema v3")
+    header = fixture.get("header")
+    layout = fixture.get("layout")
+    if not isinstance(header, dict) or not isinstance(layout, dict):
+        raise PromotionError(f"{fixture_path} has no v2.5 header/layout")
+    if header.get("recorded_live") is not True:
+        raise PromotionError(f"{fixture_path} is not marked as a live recording")
+    source = _validate_source_v25(repo_root, header.get("source"), str(fixture_path))
+    settlement = header.get("settlement")
+    if not isinstance(settlement, dict) or settlement.get("settlement_spec") != "2.5":
+        raise PromotionError(f"{fixture_path} does not identify Settlement v2.5")
+    if settlement.get("consecutive_structural_samples", 0) < 40:
+        raise PromotionError(f"{fixture_path} lacks 40 consecutive structural samples")
+    if settlement.get("stable_span_milliseconds", 0) < 2_000:
+        raise PromotionError(f"{fixture_path} lacks a two-second structural window")
+    if settlement.get("settle_latency_milliseconds", 0) < 2_000:
+        raise PromotionError(f"{fixture_path} records an impossible settle latency")
+    if layout.get("settlement_spec") != "2.5":
+        raise PromotionError(f"{fixture_path} layout lost its v2.5 classification")
+    core = _structural_core_v25(layout)
+    core_sha256 = ambient_sha256_json(core)
+    if layout.get("structural_core_sha256") != core_sha256:
+        raise PromotionError(f"{fixture_path} layout records a false structural-core hash")
+    if settlement.get("resolved_structural_core_sha256") != core_sha256:
+        raise PromotionError(f"{fixture_path} header records a false structural-core hash")
+    elements = core["elements"]
+    if (
+        not isinstance(elements, list)
+        or not elements
+        or layout.get("structural_core_element_count") != len(elements)
+    ):
+        raise PromotionError(f"{fixture_path} structural-core census is false")
+    classification = layout.get("classification_map")
+    ambient_members = layout.get("ambient_members")
+    if not isinstance(classification, dict) or not isinstance(ambient_members, list):
+        raise PromotionError(f"{fixture_path} lost its v2.5 ambient classification map")
+    member_ids = [member.get("id") for member in ambient_members if isinstance(member, dict)]
+    if len(member_ids) != len(ambient_members) or len(member_ids) != len(set(member_ids)):
+        raise PromotionError(f"{fixture_path} ambient member identities are absent or ambiguous")
+    if set(classification) != set(member_ids):
+        raise PromotionError(f"{fixture_path} ambient member map and classification map disagree")
+    allowed_classes = {
+        "animated",
+        "visibility_cycling",
+        "ephemeral",
+        "ambient_persistent",
+    }
+    for member_id, classes in classification.items():
+        if (
+            not isinstance(classes, list)
+            or not classes
+            or not all(isinstance(value, str) for value in classes)
+            or not set(classes) <= allowed_classes
+        ):
+            raise PromotionError(
+                f"{fixture_path} ambient member '{member_id}' has an unauthorized class"
+            )
+    ambient_count = layout.get("ambient_semantic_member_count")
+    peak_count = layout.get("peak_element_count")
+    if (
+        isinstance(ambient_count, bool)
+        or not isinstance(ambient_count, int)
+        or ambient_count != len(ambient_members)
+        or isinstance(peak_count, bool)
+        or not isinstance(peak_count, int)
+        or peak_count <= 0
+    ):
+        raise PromotionError(f"{fixture_path} ambient/peak census is false")
+    expected_fraction = ambient_count / peak_count
+    if layout.get("ambient_fraction") != expected_fraction or expected_fraction > 0.40:
+        raise PromotionError(f"{fixture_path} violates the 40 percent ambient cap")
+    if settlement.get("ambient_fraction") != expected_fraction:
+        raise PromotionError(f"{fixture_path} header records a false ambient fraction")
+    lifecycle = header.get("ambient_lifecycle")
+    if (
+        not isinstance(lifecycle, dict)
+        or not isinstance(lifecycle.get("resolution_sha256"), str)
+        or len(lifecycle["resolution_sha256"]) != 64
+        or not isinstance(lifecycle.get("observation_receipts"), list)
+        or len(lifecycle["observation_receipts"]) < 2
+        or not isinstance(lifecycle.get("independent_instances"), list)
+        or len(lifecycle["independent_instances"]) < 2
+    ):
+        raise PromotionError(f"{fixture_path} has no two-instance v2.5 resolution receipt")
+
+    raw_receipt = header.get("settlement_trace", header.get("raw_recording"))
+    if not isinstance(raw_receipt, dict):
+        raise PromotionError(f"{fixture_path} has no raw settlement receipt")
+    raw_path = _receipt_path_v25(
+        evidence_root,
+        fixture_path.parent,
+        raw_receipt,
+        f"{fixture_path} primary trace",
+    )
+    raw_trace = read_json(raw_path)
+    primary_samples = _settled_samples_v25(raw_trace, f"{fixture_path} primary trace")
+
+    confirmation_receipt = header.get("animation_confirmation")
+    if not isinstance(confirmation_receipt, dict):
+        raise PromotionError(f"{fixture_path} has no fresh-instance confirmation receipt")
+    confirmation_path = _receipt_path_v25(
+        evidence_root,
+        fixture_path.parent,
+        confirmation_receipt,
+        f"{fixture_path} confirmation",
+    )
+    confirmation_trace = read_json(confirmation_path)
+    confirmation_header = confirmation_trace.get("header")
+    if not isinstance(confirmation_header, dict):
+        raise PromotionError(f"{fixture_path} confirmation has no capture header")
+    confirmation_source = _validate_source_v25(
+        repo_root,
+        confirmation_header.get("source"),
+        f"{fixture_path} confirmation",
+    )
+    if canonical_bytes(source) != canonical_bytes(confirmation_source):
+        raise PromotionError(f"{fixture_path} confirmation changed capture provenance")
+    primary_identity = (header.get("instance"), header.get("process_id"))
+    confirmation_identity = (
+        confirmation_header.get("instance"),
+        confirmation_header.get("process_id"),
+    )
+    if (
+        not isinstance(primary_identity[0], str)
+        or not isinstance(primary_identity[1], int)
+        or not isinstance(confirmation_identity[0], str)
+        or not isinstance(confirmation_identity[1], int)
+        or primary_identity == confirmation_identity
+    ):
+        raise PromotionError(f"{fixture_path} did not use two fresh instance/PID identities")
+    confirmation_samples = _settled_samples_v25(
+        confirmation_trace, f"{fixture_path} confirmation"
+    )
+    return {
+        "fixture": fixture,
+        "header": header,
+        "layout": layout,
+        "primary_trace": raw_trace,
+        "confirmation_trace": confirmation_trace,
+        "primary_samples": primary_samples,
+        "confirmation_samples": confirmation_samples,
+        "primary_trace_path": raw_path,
+        "confirmation_trace_path": confirmation_path,
+    }
+
+
+def _resolved_navigation_inputs_v25(
+    evidence_root: Path, navigation_path: Path, navigation: dict[str, Any]
+) -> tuple[Path, Path, Path]:
+    resolution = navigation.get("header", {}).get("ambient_lifecycle_resolution")
+    if not isinstance(resolution, dict) or resolution.get("settlement_spec") != "2.5":
+        raise PromotionError(
+            "candidate navigation has no machine-derived ambient_lifecycle_resolution for Settlement v2.5"
+        )
+    primary = _receipt_path_v25(
+        evidence_root,
+        navigation_path.parent,
+        resolution.get("primary_raw_recording", {}),
+        "v2.5 primary navigation",
+    )
+    confirmation = _receipt_path_v25(
+        evidence_root,
+        navigation_path.parent,
+        resolution.get("confirmation_raw_recording", {}),
+        "v2.5 confirmation navigation",
+    )
+    relative_motion = resolution.get("motion_observation_directory")
+    if not isinstance(relative_motion, str) or not relative_motion:
+        raise PromotionError("ambient lifecycle resolution lost its motion observation directory")
+    root = evidence_root.resolve()
+    motion_root = (root / relative_motion).resolve()
+    if not motion_root.is_relative_to(root):
+        raise PromotionError("motion observation directory escapes the evidence root")
+    return primary, confirmation, motion_root
+
+
+def _aggregate_wrapper_map(
+    values: Any, expected_fixtures: set[str], label: str
+) -> dict[str, dict[str, Any]]:
+    if not isinstance(values, list):
+        raise PromotionError(f"{label} is not an array")
+    result: dict[str, dict[str, Any]] = {}
+    for value in values:
+        if not isinstance(value, dict) or not isinstance(value.get("fixture"), str):
+            raise PromotionError(f"{label} contains an unresolvable fixture")
+        fixture = value["fixture"]
+        if fixture in result:
+            raise PromotionError(f"{label} refuses ambiguous duplicate {fixture}")
+        result[fixture] = value
+    if set(result) != expected_fixtures:
+        raise PromotionError(
+            f"{label} census differs: missing={sorted(expected_fixtures - set(result))} "
+            f"extra={sorted(set(result) - expected_fixtures)}"
+        )
+    return result
+
+
+def _navigation_endpoint_signature_v25(endpoint: dict[str, Any]) -> dict[str, Any]:
+    return {
+        field: endpoint.get(field)
+        for field in (
+            "semantic_surface",
+            "semantic_generation",
+            "tagged_screen",
+            "layout_generation",
+            "element_count",
+        )
+    }
+
+
+def validate_and_promote(
+    repo_root: Path,
+    candidate_root: Path,
+    evidence_root: Path,
+    navigation_path: Path,
+    dry_run: bool,
+) -> dict[str, Any]:
+    landed_root = repo_root / "tests/fixtures/webgame"
+    landed_golden = read_json(landed_root / "menu-goldens.json")
+    resolved_navigation = read_json(navigation_path)
+    primary_navigation, confirmation_navigation, motion_root = (
+        _resolved_navigation_inputs_v25(
+            evidence_root, navigation_path, resolved_navigation
+        )
+    )
+    try:
+        resolve_campaign(
+            candidate_root,
+            evidence_root,
+            primary_navigation,
+            confirmation_navigation,
+            motion_root,
+            navigation_path,
+            evidence_root / "ambient-resolution-verification-unused.json",
+            False,
+            True,
+        )
+    except (ResolutionError, SettlementV2Error) as error:
+        raise PromotionError(
+            f"candidate Settlement v2.5 campaign did not re-derive: {error}"
+        ) from error
+
+    landed_layout_entries = landed_golden.get("layouts")
+    if not isinstance(landed_layout_entries, list) or len(landed_layout_entries) != 28:
+        raise PromotionError("landed menu corpus no longer has the 28-layout G11 census")
+    layout_names = {
+        Path(entry["fixture"]).name
+        for entry in landed_layout_entries
+        if isinstance(entry, dict) and isinstance(entry.get("fixture"), str)
+    }
+    if len(layout_names) != 28 or "main-menu-root.json" not in layout_names:
+        raise PromotionError("landed menu layout lookup is absent or ambiguous")
+    candidate_layout_paths = require_unique_files(
+        candidate_root / "menu-layouts", "*.json", layout_names
+    )
+    candidate_transition_paths = require_unique_files(
+        candidate_root / "menu-transition-layouts", "*.json", {"hub.json"}
+    )
+    records: dict[str, dict[str, Any]] = {}
+    path_by_layout_id: dict[str, Path] = {}
+    for name, path in {**candidate_layout_paths, **candidate_transition_paths}.items():
+        record = validate_settlement_fixture_v25(
+            repo_root, evidence_root, path, read_json(path)
+        )
+        layout_id = path.stem
+        if layout_id in records:
+            raise PromotionError(f"candidate standalone id '{layout_id}' is ambiguous")
+        records[layout_id] = record
+        path_by_layout_id[layout_id] = path
+    if len(records) != 29 or "hub" not in records:
+        raise PromotionError("candidate standalone sweep did not reach 28 menus plus hub")
+
+    landed_by_layout_id = {
+        Path(entry["fixture"]).stem: entry["layout"]
+        for entry in landed_layout_entries
+    }
+    landed_hub_path = landed_root / "menu-transition-layouts/hub.json"
+    landed_hub = read_json(landed_hub_path)
+    landed_by_layout_id["hub"] = landed_hub["layout"]
+    for witness in ("create-element", "pause-menu", "beta-notice", "main-menu-root"):
+        if witness not in records or witness not in landed_by_layout_id:
+            raise PromotionError(f"overlay derivation did not reach {witness} witness")
+    create_residual, create_ambient = diagnosis_prereference_residual(
+        landed_by_layout_id["create-element"], records["create-element"]["layout"]
+    )
+    pause_residual, pause_ambient = diagnosis_prereference_residual(
+        landed_by_layout_id["pause-menu"], records["pause-menu"]["layout"]
+    )
+    create_corroboration = semantic_overlay_corroboration(create_residual)
+    pause_corroboration = semantic_overlay_corroboration(pause_residual)
+    try:
+        derived_overlay_reference = derive_overlay_reference(
+            records["beta-notice"]["layout"],
+            records["main-menu-root"]["layout"],
+            create_corroboration,
+            pause_corroboration,
+        )
+    except (OverlayV25Error, LandedDiagnosisError) as error:
+        raise PromotionError(f"derived beta-dialog overlay reference: {error}") from error
+    candidate_overlay_path = candidate_root / "menu-overlay-reference.json"
+    if not candidate_overlay_path.is_file():
+        raise PromotionError("candidate derived v2.5 overlay reference is missing")
+    candidate_overlay_reference = read_json(candidate_overlay_path)
+    if canonical_bytes(candidate_overlay_reference) != canonical_bytes(
+        derived_overlay_reference
+    ):
+        raise PromotionError(
+            "candidate overlay reference is not the derived beta_notice-minus-main_menu_root result"
+        )
+
+    for layout_id, record in records.items():
+        try:
+            assert_overlay_hygiene_v25(record["layout"], derived_overlay_reference)
+            for sample in (
+                *record["primary_samples"],
+                *record["confirmation_samples"],
+            ):
+                payload = sample.get("payload")
+                if not isinstance(payload, dict):
+                    raise PromotionError(
+                        f"{layout_id} overlay hygiene reached a sample without payload"
+                    )
+                assert_overlay_hygiene_v25(payload, derived_overlay_reference)
+        except OverlayV25Error as error:
+            raise PromotionError(f"{layout_id}: {error}") from error
+
+    standalone_diagnoses: dict[str, dict[str, Any]] = {}
+    for layout_id in sorted(records):
+        try:
+            standalone_diagnoses[layout_id] = diagnose_landed_layout(
+                landed_by_layout_id[layout_id],
+                records[layout_id]["layout"],
+                records[layout_id]["primary_trace"],
+                records[layout_id]["confirmation_trace"],
+                derived_overlay_reference,
+            )
+        except LandedDiagnosisError as error:
+            raise PromotionError(f"STOP: standalone {layout_id}: {error}") from error
+
+    candidate_golden_path = candidate_root / "menu-goldens.json"
+    candidate_golden = read_json(candidate_golden_path)
+    if candidate_golden.get("schema") != "solomon-dark-menu-goldens-v3":
+        raise PromotionError("candidate aggregate does not use Settlement v2.5 schema v3")
+    expected_layout_fixtures = {
+        f"menu-layouts/{name}" for name in candidate_layout_paths
+    }
+    expected_transition_fixtures = {"menu-transition-layouts/hub.json"}
+    embedded = _aggregate_wrapper_map(
+        candidate_golden.get("layouts"), expected_layout_fixtures, "candidate embedded layouts"
+    )
+    embedded_transition = _aggregate_wrapper_map(
+        candidate_golden.get("transition_endpoint_layouts"),
+        expected_transition_fixtures,
+        "candidate embedded transition layouts",
+    )
+    for fixture_name, wrapper in {**embedded, **embedded_transition}.items():
+        layout_id = Path(fixture_name).stem
+        fixture = records[layout_id]["fixture"]
+        if fixture != {
+            "schema": fixture["schema"],
+            "header": wrapper.get("header"),
+            "layout": wrapper.get("layout"),
+        }:
+            raise PromotionError(
+                f"candidate embedded golden and standalone {fixture_name} disagree"
+            )
+
+    overlay_receipt = candidate_golden.get("header", {}).get("overlay_reference")
+    expected_overlay_receipt = {
+        "fixture": "menu-overlay-reference.json",
+        "sha256": file_sha256(candidate_overlay_path),
+        "bytes": candidate_overlay_path.stat().st_size,
+    }
+    if canonical_bytes(overlay_receipt) != canonical_bytes(expected_overlay_receipt):
+        raise PromotionError("candidate aggregate records a false derived overlay receipt")
+    navigation_receipt = candidate_golden.get("header", {}).get("raw_recording")
+    if not isinstance(navigation_receipt, dict):
+        raise PromotionError("candidate aggregate has no resolved-navigation receipt")
+    if (
+        navigation_receipt.get("sha256") != file_sha256(navigation_path)
+        or navigation_receipt.get("bytes") != navigation_path.stat().st_size
+    ):
+        raise PromotionError("candidate aggregate records a false navigation receipt")
+
+    all_wrappers = {**embedded, **embedded_transition}
+    reference_names: set[str] = set()
+    for fixture_name, wrapper in all_wrappers.items():
+        reference = wrapper.get("reference_capture")
+        reference_sha256 = wrapper.get("reference_sha256")
+        if not isinstance(reference, str) or not isinstance(reference_sha256, str):
+            raise PromotionError(f"{fixture_name} has no committed visual reference receipt")
+        name = Path(reference).name
+        if name in reference_names:
+            raise PromotionError(f"visual reference lookup is ambiguous for {name}")
+        reference_names.add(name)
+        reference_path = candidate_root / "menu-reference-captures" / name
+        if not reference_path.is_file() or file_sha256(reference_path) != reference_sha256:
+            raise PromotionError(f"{fixture_name} visual reference hash is false")
+    candidate_references = require_unique_files(
+        candidate_root / "menu-reference-captures", "*.png", reference_names
+    )
+
+    landed_edges = landed_golden.get("navigation_graph", {}).get("edges")
+    candidate_edges = candidate_golden.get("navigation_graph", {}).get("edges")
+    resolved_edges = resolved_navigation.get("edges")
+    if not all(isinstance(value, list) and value for value in (landed_edges, candidate_edges, resolved_edges)):
+        raise PromotionError("navigation audit did not reach real edge content")
+    old_by_id = {
+        edge.get("id"): edge for edge in landed_edges if isinstance(edge, dict)
+    }
+    candidate_by_id = {
+        edge.get("id"): edge for edge in candidate_edges if isinstance(edge, dict)
+    }
+    resolved_by_id = {
+        edge.get("id"): edge for edge in resolved_edges if isinstance(edge, dict)
+    }
+    if (
+        len(old_by_id) != len(landed_edges)
+        or len(candidate_by_id) != len(candidate_edges)
+        or len(resolved_by_id) != len(resolved_edges)
+        or set(candidate_by_id) != set(old_by_id)
+        or set(resolved_by_id) != set(old_by_id)
+    ):
+        raise PromotionError("candidate navigation edge census is absent, duplicate, or changed")
+    source_audit: list[dict[str, Any]] = []
+    destination_audit: list[dict[str, Any]] = []
+    fixture_for_layout_id = {
+        layout_id: (
+            f"menu-transition-layouts/{path.name}"
+            if path.parent.name == "menu-transition-layouts"
+            else f"menu-layouts/{path.name}"
+        )
+        for layout_id, path in path_by_layout_id.items()
+    }
+    for edge_id in sorted(candidate_by_id):
+        edge = candidate_by_id[edge_id]
+        raw_edge = resolved_by_id[edge_id]
+        old_edge = old_by_id[edge_id]
+        for side in ("before", "after"):
+            endpoint = edge.get(side)
+            raw_endpoint = raw_edge.get(side)
+            if not isinstance(endpoint, dict) or not isinstance(raw_endpoint, dict):
+                raise PromotionError(f"edge {edge_id} {side} is incomplete")
+            layout_id = raw_endpoint.get("layout_id")
+            if not isinstance(layout_id, str) or layout_id not in records:
+                raise PromotionError(f"edge {edge_id} {side} has no unique standalone layout")
+            standalone = records[layout_id]["layout"]
+            if canonical_bytes(raw_endpoint.get("layout")) != canonical_bytes(standalone):
+                raise PromotionError(
+                    f"resolved edge {edge_id} {side} does not equal standalone {layout_id}"
+                )
+            if canonical_bytes(endpoint.get("layout")) != canonical_bytes(standalone):
+                raise PromotionError(
+                    f"aggregate edge {edge_id} {side} does not equal standalone {layout_id}"
+                )
+            if endpoint.get("layout_id") != layout_id:
+                raise PromotionError(f"aggregate edge {edge_id} {side} changed layout identity")
+            try:
+                assert_overlay_hygiene_v25(standalone, derived_overlay_reference)
+            except OverlayV25Error as error:
+                raise PromotionError(f"edge {edge_id} {side}: {error}") from error
+        destination_layout_id = raw_edge["after"]["layout_id"]
+        destination_fixture = fixture_for_layout_id[destination_layout_id]
+        if edge.get("destination_layout_fixture") != destination_fixture:
+            raise PromotionError(
+                f"edge {edge_id} destination fixture does not derive from its standalone"
+            )
+        destination_audit.append(
+            {
+                "edge": edge_id,
+                "standalone_fixture": destination_fixture,
+                "structural_core_sha256": records[destination_layout_id]["layout"][
+                    "structural_core_sha256"
+                ],
+                "classification_map_sha256": ambient_sha256_json(
+                    records[destination_layout_id]["layout"]["classification_map"]
+                ),
+                "settle_latency_milliseconds": edge["after"]["settlement"][
+                    "settle_latency_milliseconds"
+                ],
+                "old_generation": old_edge["after"].get("layout_generation"),
+                "new_generation": edge["after"].get("layout_generation"),
+                "old_element_count": old_edge["after"].get("element_count"),
+                "new_element_count": edge["after"].get("element_count"),
+            }
+        )
+        source_layout_id = raw_edge["before"]["layout_id"]
+        try:
+            source_diagnosis = diagnose_landed_layout(
+                old_edge["before"]["layout"],
+                records[source_layout_id]["layout"],
+                records[source_layout_id]["primary_trace"],
+                records[source_layout_id]["confirmation_trace"],
+                derived_overlay_reference,
+            )
+        except LandedDiagnosisError as error:
+            raise PromotionError(f"STOP: transition source {edge_id}: {error}") from error
+        signature_match = _navigation_endpoint_signature_v25(
+            edge["before"]
+        ) == _navigation_endpoint_signature_v25(old_edge["before"])
+        frame_match = edge["before"].get("frame_sha256") == old_edge["before"].get(
+            "frame_sha256"
+        )
+        if source_diagnosis["status"] == "strict_structural_bit_match" and (
+            not signature_match or not frame_match
+        ):
+            raise PromotionError(
+                f"STOP: strict transition source {edge_id} does not bit-match its landed signature/frame"
+            )
+        source_audit.append(
+            {
+                "edge": edge_id,
+                "layout_id": source_layout_id,
+                "diagnosis": source_diagnosis,
+                "signature_bit_match": signature_match,
+                "frame_bit_match": frame_match,
+            }
+        )
+
+    promotion_pairs: list[tuple[Path, Path]] = [
+        *(
+            (source, landed_root / "menu-layouts" / name)
+            for name, source in candidate_layout_paths.items()
+        ),
+        *(
+            (source, landed_root / "menu-transition-layouts" / name)
+            for name, source in candidate_transition_paths.items()
+        ),
+        *(
+            (source, landed_root / "menu-reference-captures" / name)
+            for name, source in candidate_references.items()
+        ),
+        (candidate_overlay_path, landed_root / "menu-overlay-reference.json"),
+        (candidate_golden_path, landed_root / "menu-goldens.json"),
+    ]
+    if not dry_run:
+        for source, destination in promotion_pairs:
+            atomic_copy(source, destination)
+        try:
+            build_menu_baseline(repo_root, False)
+        except BaselineBuildError as error:
+            raise PromotionError(
+                f"promoted fixtures could not refresh the shellfix baseline receipts: {error}"
+            ) from error
+
+    corrected = {
+        layout_id: diagnosis
+        for layout_id, diagnosis in standalone_diagnoses.items()
+        if diagnosis["status"] == "corrected"
+    }
+    return {
+        "success": True,
+        "dry_run": dry_run,
+        "settlement_spec": "2.5",
+        "standalone_count": len(records),
+        "standalone_diagnoses": standalone_diagnoses,
+        "corrected_screen_count": len(corrected),
+        "corrected_screens": sorted(corrected),
+        "derived_overlay_reference": {
+            "sha256": file_sha256(candidate_overlay_path),
+            "bytes": candidate_overlay_path.stat().st_size,
+            "create_prereference_ambient_dispositions": create_ambient,
+            "pause_prereference_ambient_dispositions": pause_ambient,
+            "semantic_draw_count": derived_overlay_reference[
+                "overlay_semantic_draw_count"
+            ],
+        },
+        "transition_source_count": len(source_audit),
+        "transition_sources": source_audit,
+        "transition_destination_count": len(destination_audit),
+        "transition_destinations_equal_standalones": destination_audit,
+        "promoted_files": [str(destination) for _, destination in promotion_pairs],
+        "shellfix_pending_fixture_count": 28,
     }
 
 

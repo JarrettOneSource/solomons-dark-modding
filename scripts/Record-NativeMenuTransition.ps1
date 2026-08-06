@@ -87,17 +87,17 @@ if (Test-Path -LiteralPath $outputItemPath -PathType Leaf) {
         schema = "solomon-dark-native-menu-navigation-v2"
         header = [ordered]@{
             capture_method = (
-                "Settlement v2.4 raw-window structural native UI semantics + measured " +
-                "animated geometry + exact-process action/key/click dispatch " +
+                "Settlement v2.5 reproduced structural-core native UI semantics + " +
+                "measured ambient lifecycle + exact-process action/key/click dispatch " +
                 "+ completed semantic-action lifecycle " +
                 "+ same-call D3D9 frame hashes + canonical draw-order/id " +
                 "cross-capture comparison"
             )
             settlement_criterion = (
-                "at least 40 consecutive samples spanning at least 2 seconds " +
-                "with byte-identical structural payloads; screen-member motion " +
-                "capability is resolved across fresh-instance pairs after capture; " +
-                "raw element-list position is non-contractual"
+                "at least 40 samples spanning at least 2 seconds with constant " +
+                "surface and generations, a byte-identical projected core, and " +
+                "every non-core member assigned a measured v2.5 lifecycle class; " +
+                "raw list position and absolute draw ordinals are non-contractual"
             )
             recorded_live = $true
             sessions = @()

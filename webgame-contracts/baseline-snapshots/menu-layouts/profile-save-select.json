@@ -1,0 +1,2734 @@
+{
+    "schema":  "solomon-dark-native-menu-layout-v1",
+    "header":  {
+                   "instance":  "men-title",
+                   "process_id":  16140,
+                   "capture_commit":  "f9cac8783e72e7423a2d952987fa169fa84f3dcb",
+                   "native_exe_sha256":  "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+                   "loader_dll_sha256":  "f21d10e327e576ce2aed02a0626507143a9104c181d6694e2111d102433b52ec",
+                   "captured_at_utc":  "2026-08-05T07:19:03.9475437Z",
+                   "capture_method":  "live native UI tree + exact text/font hooks + native Sprite draw hooks",
+                   "reference_capture":  "../menu-reference-captures/profile-save-select.png"
+               },
+    "layout":  {
+                   "generation":  15,
+                   "captured_at_milliseconds":  1147586281,
+                   "screen_id":  "profile_save_select",
+                   "screen_title":  "Main Menu",
+                   "capture_method":  "live native UI tree + exact text/font hooks + native Sprite draw hooks",
+                   "elements":  [
+                                    {
+                                        "id":  "profile_save_select.art.title_0.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.0",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  16,
+                                        "rect":  [
+                                                     0.000000,
+                                                     0.000000,
+                                                     649.394470,
+                                                     553.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -649.394470,
+                                                               0.000000,
+                                                               649.394470,
+                                                               553.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_1.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.1",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  23,
+                                        "rect":  [
+                                                     0.000000,
+                                                     0.000000,
+                                                     66.313416,
+                                                     553.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -1232.475586,
+                                                               0.000000,
+                                                               66.313416,
+                                                               553.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_2.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.2",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  20,
+                                        "rect":  [
+                                                     0.000000,
+                                                     0.000000,
+                                                     260.690308,
+                                                     553.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -1038.098633,
+                                                               0.000000,
+                                                               260.690308,
+                                                               553.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_1.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.1",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  24,
+                                        "rect":  [
+                                                     66.313416,
+                                                     0.000000,
+                                                     1365.102295,
+                                                     553.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               66.313416,
+                                                               0.000000,
+                                                               1365.102295,
+                                                               553.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_2.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.2",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  21,
+                                        "rect":  [
+                                                     260.690308,
+                                                     0.000000,
+                                                     1559.479248,
+                                                     553.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               260.690308,
+                                                               0.000000,
+                                                               1559.479248,
+                                                               553.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_9.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.9",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  86,
+                                        "rect":  [
+                                                     435.500000,
+                                                     0.000000,
+                                                     1264.500000,
+                                                     395.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               435.500000,
+                                                               0.000000,
+                                                               1264.500000,
+                                                               395.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_0.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.0",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  17,
+                                        "rect":  [
+                                                     649.394470,
+                                                     0.000000,
+                                                     1600.000000,
+                                                     553.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               649.394470,
+                                                               0.000000,
+                                                               1948.183350,
+                                                               553.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_1.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.1",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  25,
+                                        "rect":  [
+                                                     1365.102295,
+                                                     0.000000,
+                                                     1600.000000,
+                                                     553.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1365.102295,
+                                                               0.000000,
+                                                               2663.891357,
+                                                               553.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_2.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.2",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  22,
+                                        "rect":  [
+                                                     1559.479248,
+                                                     0.000000,
+                                                     1600.000000,
+                                                     553.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1559.479248,
+                                                               0.000000,
+                                                               2858.268311,
+                                                               553.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_0.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.0",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  false,
+                                        "interactive":  false,
+                                        "draw_order":  18,
+                                        "rect":  [
+                                                     1948.183350,
+                                                     0.000000,
+                                                     1600.000000,
+                                                     553.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1948.183350,
+                                                               0.000000,
+                                                               3246.972412,
+                                                               553.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_6.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.6",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  19,
+                                        "rect":  [
+                                                     1208.000000,
+                                                     5.500000,
+                                                     1592.000000,
+                                                     389.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1208.000000,
+                                                               5.500000,
+                                                               1592.000000,
+                                                               389.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_18.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.18",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  9,
+                                        "rect":  [
+                                                     669.000000,
+                                                     50.999992,
+                                                     931.000000,
+                                                     118.000015
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               669.000000,
+                                                               50.999992,
+                                                               931.000000,
+                                                               118.000015
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_107.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.107",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  1,
+                                        "rect":  [
+                                                     516.500000,
+                                                     99.500000,
+                                                     601.500000,
+                                                     188.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               516.500000,
+                                                               99.500000,
+                                                               601.500000,
+                                                               188.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_108.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.108",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  2,
+                                        "rect":  [
+                                                     998.500000,
+                                                     99.500000,
+                                                     1083.500000,
+                                                     188.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               998.500000,
+                                                               99.500000,
+                                                               1083.500000,
+                                                               188.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_17.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  5,
+                                        "rect":  [
+                                                     535.000000,
+                                                     117.000000,
+                                                     615.000000,
+                                                     200.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               535.000000,
+                                                               117.000000,
+                                                               615.000000,
+                                                               200.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_17.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  6,
+                                        "rect":  [
+                                                     985.000000,
+                                                     117.000000,
+                                                     1065.000000,
+                                                     200.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               985.000000,
+                                                               117.000000,
+                                                               1065.000000,
+                                                               200.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_11.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.11",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  85,
+                                        "rect":  [
+                                                     0.000000,
+                                                     306.000000,
+                                                     326.000000,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -40.000000,
+                                                               306.000000,
+                                                               326.000000,
+                                                               960.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_15.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.15",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  84,
+                                        "rect":  [
+                                                     0.000000,
+                                                     306.000000,
+                                                     326.000000,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -40.000000,
+                                                               306.000000,
+                                                               326.000000,
+                                                               960.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_3.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.3",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  82,
+                                        "rect":  [
+                                                     48.000000,
+                                                     406.000000,
+                                                     256.000000,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               48.000000,
+                                                               406.000000,
+                                                               256.000000,
+                                                               904.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_54.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  90,
+                                        "rect":  [
+                                                     667.500000,
+                                                     415.000000,
+                                                     737.500000,
+                                                     500.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               667.500000,
+                                                               415.000000,
+                                                               737.500000,
+                                                               500.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_54.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  91,
+                                        "rect":  [
+                                                     962.500000,
+                                                     415.000000,
+                                                     1032.500000,
+                                                     500.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               962.500000,
+                                                               415.000000,
+                                                               1032.500000,
+                                                               500.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_101.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.101",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  89,
+                                        "rect":  [
+                                                     673.500000,
+                                                     421.000000,
+                                                     1026.000000,
+                                                     490.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               673.500000,
+                                                               421.000000,
+                                                               1026.500000,
+                                                               490.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_18.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.18",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  87,
+                                        "rect":  [
+                                                     599.500000,
+                                                     440.000000,
+                                                     666.500000,
+                                                     702.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               599.500000,
+                                                               440.000000,
+                                                               666.500000,
+                                                               702.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_18.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.18",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  88,
+                                        "rect":  [
+                                                     1033.500000,
+                                                     440.000000,
+                                                     1100.500000,
+                                                     702.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1033.500000,
+                                                               440.000000,
+                                                               1100.500000,
+                                                               702.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_16.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.16",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  34,
+                                        "rect":  [
+                                                     92.702301,
+                                                     442.189331,
+                                                     161.048584,
+                                                     558.831787
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               92.702301,
+                                                               442.189331,
+                                                               161.048584,
+                                                               558.831787
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_16.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.16",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  49,
+                                        "rect":  [
+                                                     1048.798096,
+                                                     442.470093,
+                                                     1114.707520,
+                                                     558.216431
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1048.798096,
+                                                               442.470093,
+                                                               1114.707520,
+                                                               558.216431
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_16.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.16",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  58,
+                                        "rect":  [
+                                                     1596.576172,
+                                                     444.323303,
+                                                     1600.000000,
+                                                     555.604004
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1596.576172,
+                                                               444.323303,
+                                                               1651.884644,
+                                                               555.604004
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_16.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.16",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  43,
+                                        "rect":  [
+                                                     684.871582,
+                                                     444.771790,
+                                                     738.210876,
+                                                     555.129456
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               684.871582,
+                                                               444.771790,
+                                                               738.210876,
+                                                               555.129456
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_16.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.16",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  63,
+                                        "rect":  [
+                                                     480.583923,
+                                                     460.360291,
+                                                     611.455200,
+                                                     720.849609
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               480.583923,
+                                                               460.360291,
+                                                               611.455200,
+                                                               720.849609
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_22.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.22",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  40,
+                                        "rect":  [
+                                                     445.362640,
+                                                     474.498749,
+                                                     516.038086,
+                                                     559.477600
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               445.362640,
+                                                               474.498749,
+                                                               516.038086,
+                                                               559.477600
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_22.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.22",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  55,
+                                        "rect":  [
+                                                     1384.277954,
+                                                     476.367859,
+                                                     1448.954346,
+                                                     556.968994
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1384.277954,
+                                                               476.367859,
+                                                               1448.954346,
+                                                               556.968994
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_22.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.22",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  33,
+                                        "rect":  [
+                                                     41.910774,
+                                                     476.788788,
+                                                     105.428734,
+                                                     556.517517
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               41.910774,
+                                                               476.788788,
+                                                               105.428734,
+                                                               556.517517
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_21.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.21",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  54,
+                                        "rect":  [
+                                                     1314.191040,
+                                                     477.558838,
+                                                     1384.588013,
+                                                     556.965393
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1314.191040,
+                                                               477.558838,
+                                                               1384.588013,
+                                                               556.965393
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_21.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.21",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  39,
+                                        "rect":  [
+                                                     377.520233,
+                                                     477.804443,
+                                                     447.307251,
+                                                     556.686951
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               377.520233,
+                                                               477.804443,
+                                                               447.307251,
+                                                               556.686951
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_21.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.21",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  32,
+                                        "rect":  [
+                                                     0.000000,
+                                                     478.424805,
+                                                     31.611313,
+                                                     556.007751
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -36.669693,
+                                                               478.424805,
+                                                               31.611313,
+                                                               556.007751
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_19.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.19",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  52,
+                                        "rect":  [
+                                                     1204.865479,
+                                                     490.487976,
+                                                     1262.971191,
+                                                     559.082947
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1204.865479,
+                                                               490.487976,
+                                                               1262.971191,
+                                                               559.082947
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_19.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.19",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  37,
+                                        "rect":  [
+                                                     265.281982,
+                                                     490.830444,
+                                                     322.156525,
+                                                     558.540283
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               265.281982,
+                                                               490.830444,
+                                                               322.156525,
+                                                               558.540283
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_54.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  93,
+                                        "rect":  [
+                                                     667.500000,
+                                                     491.000000,
+                                                     737.500000,
+                                                     576.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               667.500000,
+                                                               491.000000,
+                                                               737.500000,
+                                                               576.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_54.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  94,
+                                        "rect":  [
+                                                     962.500000,
+                                                     491.000000,
+                                                     1032.500000,
+                                                     576.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               962.500000,
+                                                               491.000000,
+                                                               1032.500000,
+                                                               576.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_19.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.19",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  46,
+                                        "rect":  [
+                                                     843.889587,
+                                                     491.289612,
+                                                     899.232605,
+                                                     557.878845
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               843.889587,
+                                                               491.289612,
+                                                               899.232605,
+                                                               557.878845
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_23.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.23",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  41,
+                                        "rect":  [
+                                                     531.118408,
+                                                     491.758606,
+                                                     599.301514,
+                                                     559.437866
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               531.118408,
+                                                               491.758606,
+                                                               599.301514,
+                                                               559.437866
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_19.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.19",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  false,
+                                        "interactive":  false,
+                                        "draw_order":  30,
+                                        "rect":  [
+                                                     0.000000,
+                                                     491.911011,
+                                                     -87.227959,
+                                                     557.130310
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -140.734543,
+                                                               491.911011,
+                                                               -87.227959,
+                                                               557.130310
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_20.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.20",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  38,
+                                        "rect":  [
+                                                     326.968781,
+                                                     492.676880,
+                                                     377.876404,
+                                                     558.396179
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               326.968781,
+                                                               492.676880,
+                                                               377.876404,
+                                                               558.396179
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_20.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.20",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  false,
+                                        "interactive":  false,
+                                        "draw_order":  31,
+                                        "rect":  [
+                                                     0.000000,
+                                                     492.712067,
+                                                     -45.147366,
+                                                     558.202698
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -95.676956,
+                                                               492.712067,
+                                                               -45.147366,
+                                                               558.202698
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_18.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.18",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  51,
+                                        "rect":  [
+                                                     1161.295410,
+                                                     493.072021,
+                                                     1206.861328,
+                                                     557.900513
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1161.295410,
+                                                               493.072021,
+                                                               1206.861328,
+                                                               557.900513
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_23.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.23",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  56,
+                                        "rect":  [
+                                                     1453.064331,
+                                                     494.031647,
+                                                     1516.248291,
+                                                     556.649597
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1453.064331,
+                                                               494.031647,
+                                                               1516.248291,
+                                                               556.649597
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_18.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.18",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  36,
+                                        "rect":  [
+                                                     229.360931,
+                                                     494.544098,
+                                                     268.323212,
+                                                     555.824402
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               229.360931,
+                                                               494.544098,
+                                                               268.323212,
+                                                               555.824402
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_20.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.20",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  47,
+                                        "rect":  [
+                                                     904.106689,
+                                                     494.706421,
+                                                     947.573059,
+                                                     555.626587
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               904.106689,
+                                                               494.706421,
+                                                               947.573059,
+                                                               555.626587
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_18.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.18",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  false,
+                                        "interactive":  false,
+                                        "draw_order":  29,
+                                        "rect":  [
+                                                     0.000000,
+                                                     494.739075,
+                                                     -146.610016,
+                                                     555.599792
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -184.852386,
+                                                               494.739075,
+                                                               -146.610016,
+                                                               555.599792
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_18.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.18",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  45,
+                                        "rect":  [
+                                                     805.400818,
+                                                     494.921631,
+                                                     842.969177,
+                                                     555.384216
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               805.400818,
+                                                               494.921631,
+                                                               842.969177,
+                                                               555.384216
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_20.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.20",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  53,
+                                        "rect":  [
+                                                     1267.479492,
+                                                     495.102905,
+                                                     1309.745117,
+                                                     555.196655
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1267.479492,
+                                                               495.102905,
+                                                               1309.745117,
+                                                               555.196655
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_101.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.101",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  92,
+                                        "rect":  [
+                                                     673.500000,
+                                                     497.000000,
+                                                     1026.000000,
+                                                     566.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               673.500000,
+                                                               497.000000,
+                                                               1026.500000,
+                                                               566.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_17.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  false,
+                                        "interactive":  false,
+                                        "draw_order":  59,
+                                        "rect":  [
+                                                     1651.863159,
+                                                     501.186371,
+                                                     1600.000000,
+                                                     557.113770
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1651.863159,
+                                                               501.186371,
+                                                               1702.105713,
+                                                               557.113770
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_17.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  50,
+                                        "rect":  [
+                                                     1112.072021,
+                                                     501.674133,
+                                                     1161.067383,
+                                                     556.530334
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1112.072021,
+                                                               501.674133,
+                                                               1161.067383,
+                                                               556.530334
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_17.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  35,
+                                        "rect":  [
+                                                     174.347290,
+                                                     502.084595,
+                                                     222.330994,
+                                                     556.065918
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               174.347290,
+                                                               502.084595,
+                                                               222.330994,
+                                                               556.065918
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_17.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  44,
+                                        "rect":  [
+                                                     750.517029,
+                                                     502.573090,
+                                                     797.334961,
+                                                     555.539795
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               750.517029,
+                                                               502.573090,
+                                                               797.334961,
+                                                               555.539795
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_16.6",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.16",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  76,
+                                        "rect":  [
+                                                     1181.601440,
+                                                     504.643494,
+                                                     1386.894653,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1181.601440,
+                                                               504.643494,
+                                                               1386.894653,
+                                                               913.818909
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_24.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.24",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  57,
+                                        "rect":  [
+                                                     1517.666138,
+                                                     515.396729,
+                                                     1598.565796,
+                                                     560.388428
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1517.666138,
+                                                               515.396729,
+                                                               1598.565796,
+                                                               560.388428
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_24.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.24",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  42,
+                                        "rect":  [
+                                                     598.016785,
+                                                     518.085022,
+                                                     676.885193,
+                                                     557.474487
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               598.016785,
+                                                               518.085022,
+                                                               676.885193,
+                                                               557.474487
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_24.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.24",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  48,
+                                        "rect":  [
+                                                     960.677673,
+                                                     519.250732,
+                                                     1038.573730,
+                                                     556.264771
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               960.677673,
+                                                               519.250732,
+                                                               1038.573730,
+                                                               556.264771
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_5.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.5",
+                                        "font_id":  "",
+                                        "text_style":  "centered",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  28,
+                                        "rect":  [
+                                                     0.000000,
+                                                     521.500000,
+                                                     235.859497,
+                                                     552.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -788.140503,
+                                                               521.500000,
+                                                               235.859497,
+                                                               552.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_5.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.5",
+                                        "font_id":  "",
+                                        "text_style":  "centered",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  27,
+                                        "rect":  [
+                                                     235.859497,
+                                                     521.500000,
+                                                     1259.859497,
+                                                     552.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               235.859497,
+                                                               521.500000,
+                                                               1259.859497,
+                                                               552.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_5.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.5",
+                                        "font_id":  "",
+                                        "text_style":  "centered",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  26,
+                                        "rect":  [
+                                                     1259.859497,
+                                                     521.500000,
+                                                     1600.000000,
+                                                     552.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1259.859497,
+                                                               521.500000,
+                                                               2283.859375,
+                                                               552.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_8.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.8",
+                                        "font_id":  "",
+                                        "text_style":  "centered",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  83,
+                                        "rect":  [
+                                                     50.000000,
+                                                     530.292297,
+                                                     221.000000,
+                                                     560.292297
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               50.000000,
+                                                               530.292297,
+                                                               221.000000,
+                                                               560.292297
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_22.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.22",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  60,
+                                        "rect":  [
+                                                     0.000000,
+                                                     530.304993,
+                                                     35.069462,
+                                                     730.851624
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -133.059677,
+                                                               530.304993,
+                                                               35.069462,
+                                                               730.851624
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_21.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.21",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  68,
+                                        "rect":  [
+                                                     1126.274780,
+                                                     534.346741,
+                                                     1300.995361,
+                                                     728.511230
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1126.274780,
+                                                               534.346741,
+                                                               1300.995361,
+                                                               728.511230
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_22.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.22",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  69,
+                                        "rect":  [
+                                                     1325.276001,
+                                                     535.751160,
+                                                     1475.661865,
+                                                     723.425842
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1325.276001,
+                                                               535.751160,
+                                                               1475.661865,
+                                                               723.425842
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_54.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  96,
+                                        "rect":  [
+                                                     667.500000,
+                                                     567.000000,
+                                                     737.500000,
+                                                     652.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               667.500000,
+                                                               567.000000,
+                                                               737.500000,
+                                                               652.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_54.6",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  97,
+                                        "rect":  [
+                                                     962.500000,
+                                                     567.000000,
+                                                     1032.500000,
+                                                     652.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               962.500000,
+                                                               567.000000,
+                                                               1032.500000,
+                                                               652.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_19.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.19",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  66,
+                                        "rect":  [
+                                                     866.454407,
+                                                     568.740234,
+                                                     1001.046509,
+                                                     728.088684
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               866.454407,
+                                                               568.740234,
+                                                               1001.046509,
+                                                               728.088684
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_23.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.23",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  70,
+                                        "rect":  [
+                                                     1488.804688,
+                                                     571.100403,
+                                                     1600.000000,
+                                                     729.821350
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1488.804688,
+                                                               571.100403,
+                                                               1648.690308,
+                                                               729.821350
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_101.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.101",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  95,
+                                        "rect":  [
+                                                     673.500000,
+                                                     573.000000,
+                                                     1026.000000,
+                                                     642.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               673.500000,
+                                                               573.000000,
+                                                               1026.500000,
+                                                               642.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_23.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.23",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  61,
+                                        "rect":  [
+                                                     70.343590,
+                                                     576.049744,
+                                                     219.222260,
+                                                     723.624268
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               70.343590,
+                                                               576.049744,
+                                                               219.222260,
+                                                               723.624268
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_20.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.20",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  67,
+                                        "rect":  [
+                                                     1025.064087,
+                                                     578.257141,
+                                                     1126.663696,
+                                                     720.525696
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1025.064087,
+                                                               578.257141,
+                                                               1126.663696,
+                                                               720.525696
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_18.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.18",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  65,
+                                        "rect":  [
+                                                     773.868835,
+                                                     578.884705,
+                                                     861.295898,
+                                                     719.825806
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               773.868835,
+                                                               578.884705,
+                                                               861.295898,
+                                                               719.825806
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_17.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  64,
+                                        "rect":  [
+                                                     639.524048,
+                                                     595.813538,
+                                                     750.802551,
+                                                     721.176636
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               639.524048,
+                                                               595.813538,
+                                                               750.802551,
+                                                               721.176636
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_22.6",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.22",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  73,
+                                        "rect":  [
+                                                     290.611816,
+                                                     621.593811,
+                                                     531.221680,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               290.611816,
+                                                               621.593811,
+                                                               531.221680,
+                                                               919.716614
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_21.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.21",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  72,
+                                        "rect":  [
+                                                     0.000000,
+                                                     628.796997,
+                                                     218.925674,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -34.882767,
+                                                               628.796997,
+                                                               218.925674,
+                                                               916.243713
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_24.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.24",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  62,
+                                        "rect":  [
+                                                     249.841232,
+                                                     635.957581,
+                                                     431.278778,
+                                                     721.569885
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               249.841232,
+                                                               635.957581,
+                                                               431.278778,
+                                                               721.569885
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_54.7",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  14,
+                                        "rect":  [
+                                                     696.000000,
+                                                     637.500000,
+                                                     766.000000,
+                                                     722.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               696.000000,
+                                                               637.500000,
+                                                               766.000000,
+                                                               722.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_54.8",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  15,
+                                        "rect":  [
+                                                     834.000000,
+                                                     637.500000,
+                                                     904.000000,
+                                                     722.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               834.000000,
+                                                               637.500000,
+                                                               904.000000,
+                                                               722.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_54.9",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  99,
+                                        "rect":  [
+                                                     667.500000,
+                                                     643.000000,
+                                                     737.500000,
+                                                     728.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               667.500000,
+                                                               643.000000,
+                                                               737.500000,
+                                                               728.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_54.10",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.54",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  100,
+                                        "rect":  [
+                                                     962.500000,
+                                                     643.000000,
+                                                     1032.500000,
+                                                     728.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               962.500000,
+                                                               643.000000,
+                                                               1032.500000,
+                                                               728.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_101.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.101",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  13,
+                                        "rect":  [
+                                                     702.000000,
+                                                     643.500000,
+                                                     898.000000,
+                                                     712.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               623.500000,
+                                                               643.500000,
+                                                               976.500000,
+                                                               712.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_101.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.101",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  98,
+                                        "rect":  [
+                                                     673.500000,
+                                                     649.000000,
+                                                     1026.000000,
+                                                     718.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               673.500000,
+                                                               649.000000,
+                                                               1026.500000,
+                                                               718.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_20.6",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.20",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  false,
+                                        "interactive":  false,
+                                        "draw_order":  71,
+                                        "rect":  [
+                                                     0.000000,
+                                                     682.538940,
+                                                     -101.932503,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -287.526855,
+                                                               682.538940,
+                                                               -101.932503,
+                                                               922.864990
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_18.6",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.18",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  false,
+                                        "interactive":  false,
+                                        "draw_order":  78,
+                                        "rect":  [
+                                                     1675.279175,
+                                                     690.702148,
+                                                     1600.000000,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1675.279175,
+                                                               690.702148,
+                                                               1813.149170,
+                                                               912.469299
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_23.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.23",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  74,
+                                        "rect":  [
+                                                     570.110962,
+                                                     691.627319,
+                                                     793.244751,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               570.110962,
+                                                               691.627319,
+                                                               793.244751,
+                                                               912.593262
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_17.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  7,
+                                        "rect":  [
+                                                     535.000000,
+                                                     700.000000,
+                                                     615.000000,
+                                                     783.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               535.000000,
+                                                               700.000000,
+                                                               615.000000,
+                                                               783.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_17.4",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  8,
+                                        "rect":  [
+                                                     985.000000,
+                                                     700.000000,
+                                                     1065.000000,
+                                                     783.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               985.000000,
+                                                               700.000000,
+                                                               1065.000000,
+                                                               783.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_109.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.109",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  3,
+                                        "rect":  [
+                                                     516.500000,
+                                                     711.500000,
+                                                     601.500000,
+                                                     800.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               516.500000,
+                                                               711.500000,
+                                                               601.500000,
+                                                               800.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_110.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.110",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  4,
+                                        "rect":  [
+                                                     998.500000,
+                                                     711.500000,
+                                                     1083.500000,
+                                                     800.500000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               998.500000,
+                                                               711.500000,
+                                                               1083.500000,
+                                                               800.500000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_17.6",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.17",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  77,
+                                        "rect":  [
+                                                     1441.606445,
+                                                     718.180664,
+                                                     1600.000000,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1441.606445,
+                                                               718.180664,
+                                                               1614.658447,
+                                                               913.601196
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_24.5",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.24",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  75,
+                                        "rect":  [
+                                                     850.553406,
+                                                     768.922241,
+                                                     1144.944580,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               850.553406,
+                                                               768.922241,
+                                                               1144.944580,
+                                                               927.285583
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_8.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.8",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  10,
+                                        "rect":  [
+                                                     775.500000,
+                                                     782.000000,
+                                                     824.500000,
+                                                     894.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               775.500000,
+                                                               782.000000,
+                                                               824.500000,
+                                                               894.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_8.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.8",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  11,
+                                        "rect":  [
+                                                     706.625000,
+                                                     783.000000,
+                                                     743.375000,
+                                                     867.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               706.625000,
+                                                               783.000000,
+                                                               743.375000,
+                                                               867.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_8.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.8",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  12,
+                                        "rect":  [
+                                                     856.625000,
+                                                     783.000000,
+                                                     893.375000,
+                                                     867.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               856.625000,
+                                                               783.000000,
+                                                               893.375000,
+                                                               867.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_53.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.53",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  102,
+                                        "rect":  [
+                                                     1474.000000,
+                                                     828.000000,
+                                                     1501.000000,
+                                                     890.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1474.000000,
+                                                               828.000000,
+                                                               1501.000000,
+                                                               890.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_53.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.53",
+                                        "font_id":  "",
+                                        "text_style":  "transform",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  103,
+                                        "rect":  [
+                                                     1559.000000,
+                                                     828.000000,
+                                                     1586.000000,
+                                                     890.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1559.000000,
+                                                               828.000000,
+                                                               1586.000000,
+                                                               890.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_4.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.4",
+                                        "font_id":  "",
+                                        "text_style":  "centered",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  79,
+                                        "rect":  [
+                                                     0.000000,
+                                                     829.000000,
+                                                     691.005737,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               -332.994293,
+                                                               829.000000,
+                                                               691.005737,
+                                                               900.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_4.2",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.4",
+                                        "font_id":  "",
+                                        "text_style":  "centered",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  80,
+                                        "rect":  [
+                                                     691.005737,
+                                                     829.000000,
+                                                     1600.000000,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               691.005737,
+                                                               829.000000,
+                                                               1715.005737,
+                                                               900.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.title_4.3",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "Title.4",
+                                        "font_id":  "",
+                                        "text_style":  "centered",
+                                        "visible":  false,
+                                        "interactive":  false,
+                                        "draw_order":  81,
+                                        "rect":  [
+                                                     1715.005859,
+                                                     829.000000,
+                                                     1600.000000,
+                                                     900.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1715.005859,
+                                                               829.000000,
+                                                               2739.005859,
+                                                               900.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.art.ui_103.1",
+                                        "kind":  "art",
+                                        "text":  "",
+                                        "action_id":  "",
+                                        "art_id":  "UI.103",
+                                        "font_id":  "",
+                                        "text_style":  "position",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  101,
+                                        "rect":  [
+                                                     1480.000000,
+                                                     834.000000,
+                                                     1580.000000,
+                                                     886.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1397.500000,
+                                                               834.000000,
+                                                               1662.500000,
+                                                               886.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.control.main_menu_resume_last_game.1",
+                                        "kind":  "control",
+                                        "text":  "LAST GAME",
+                                        "action_id":  "main_menu.resume_last_game",
+                                        "art_id":  "",
+                                        "font_id":  "",
+                                        "text_style":  "",
+                                        "visible":  true,
+                                        "interactive":  true,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     673.500000,
+                                                     421.000000,
+                                                     1026.500000,
+                                                     490.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               673.500000,
+                                                               421.000000,
+                                                               1026.500000,
+                                                               490.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.control.main_menu_new_game.1",
+                                        "kind":  "control",
+                                        "text":  "NEW GAME",
+                                        "action_id":  "main_menu.new_game",
+                                        "art_id":  "",
+                                        "font_id":  "",
+                                        "text_style":  "",
+                                        "visible":  true,
+                                        "interactive":  true,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     673.500000,
+                                                     497.000000,
+                                                     1026.500000,
+                                                     566.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               673.500000,
+                                                               497.000000,
+                                                               1026.500000,
+                                                               566.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.control.main_menu_hall_of_fame.1",
+                                        "kind":  "control",
+                                        "text":  "HALL OF FAME",
+                                        "action_id":  "main_menu.hall_of_fame",
+                                        "art_id":  "",
+                                        "font_id":  "",
+                                        "text_style":  "",
+                                        "visible":  true,
+                                        "interactive":  true,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     673.500000,
+                                                     573.000000,
+                                                     1026.500000,
+                                                     642.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               673.500000,
+                                                               573.000000,
+                                                               1026.500000,
+                                                               642.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.control.main_menu_back.1",
+                                        "kind":  "control",
+                                        "text":  "BACK",
+                                        "action_id":  "main_menu.back",
+                                        "art_id":  "",
+                                        "font_id":  "",
+                                        "text_style":  "",
+                                        "visible":  true,
+                                        "interactive":  true,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     673.500000,
+                                                     649.000000,
+                                                     1026.500000,
+                                                     718.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               673.500000,
+                                                               649.000000,
+                                                               1026.500000,
+                                                               718.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.text.resume.1",
+                                        "kind":  "text",
+                                        "text":  "resume",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "Fonts.216-307",
+                                        "text_style":  "native_atlas_text:Fonts.216-307",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     801.000000,
+                                                     437.000000,
+                                                     898.000000,
+                                                     454.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               801.000000,
+                                                               437.000000,
+                                                               898.000000,
+                                                               454.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.text.last_game.1",
+                                        "kind":  "text",
+                                        "text":  "LAST GAME",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "Fonts.216-307",
+                                        "text_style":  "native_atlas_text:Fonts.216-307",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     787.000000,
+                                                     454.000000,
+                                                     930.000000,
+                                                     474.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               787.000000,
+                                                               454.000000,
+                                                               930.000000,
+                                                               474.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.text.new_game.1",
+                                        "kind":  "text",
+                                        "text":  "NEW GAME",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "Fonts.216-307",
+                                        "text_style":  "native_atlas_text:Fonts.216-307",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     793.000000,
+                                                     523.000000,
+                                                     928.000000,
+                                                     543.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               793.000000,
+                                                               523.000000,
+                                                               928.000000,
+                                                               543.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.text.back.1",
+                                        "kind":  "text",
+                                        "text":  "BACK",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "Fonts.216-307",
+                                        "text_style":  "native_atlas_text:Fonts.216-307",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     811.000000,
+                                                     676.000000,
+                                                     889.000000,
+                                                     694.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               811.000000,
+                                                               676.000000,
+                                                               889.000000,
+                                                               694.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.text.quit.1",
+                                        "kind":  "text",
+                                        "text":  "quit",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "",
+                                        "text_style":  "",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     1480.000000,
+                                                     834.000000,
+                                                     1580.000000,
+                                                     886.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1480.000000,
+                                                               834.000000,
+                                                               1580.000000,
+                                                               886.000000
+                                                           ]
+                                    },
+                                    {
+                                        "id":  "profile_save_select.text.quit.2",
+                                        "kind":  "text",
+                                        "text":  "quit",
+                                        "action_id":  "",
+                                        "art_id":  "",
+                                        "font_id":  "Fonts.216-307",
+                                        "text_style":  "native_atlas_text:Fonts.216-307",
+                                        "visible":  true,
+                                        "interactive":  false,
+                                        "draw_order":  0,
+                                        "rect":  [
+                                                     1503.000000,
+                                                     853.000000,
+                                                     1558.000000,
+                                                     871.000000
+                                                 ],
+                                        "unclipped_rect":  [
+                                                               1503.000000,
+                                                               853.000000,
+                                                               1558.000000,
+                                                               871.000000
+                                                           ]
+                                    }
+                                ]
+               }
+}

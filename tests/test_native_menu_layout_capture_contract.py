@@ -154,8 +154,10 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         transition = read("scripts/Record-NativeMenuTransition.ps1")
         confirmation = read("scripts/Confirm-NativeMenuLayoutAnimation.ps1")
         motion = read("scripts/Observe-NativeMenuMotionCapability.ps1")
-        resolver = read("tools/resolve_native_menu_motion_campaign.py")
-        importer = read("scripts/Import-NativeMenuSpecialCaptures.ps1")
+        resolver = read("tools/resolve_native_menu_ambient_campaign.py")
+        importer_launcher = read("scripts/Import-NativeMenuSpecialCaptures.ps1")
+        importer = read("tools/import_native_menu_special_captures_v25.py")
+        classifier = read("tools/native_menu_ambient_lifecycle.py")
         self.assertIn(
             "NativeMenuSettleConsecutiveSamples = 40",
             support,
@@ -187,11 +189,17 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             "settlement must carry the measured animated ID set",
         )
         self.assertRegex(
-            support,
-            r"(?s)animated geometry cap exceeded:.*?"
-            r"\$stableWindow\.Clear\(\).*?last_rejected_candidate",
+            classifier,
+            r"(?s)animated geometry cap exceeded:.*?exceeds 30%",
             "a transition-positioning window above the animation cap must be "
-            "rejected and remeasured until a compliant window or bounded STOP",
+            "rejected by the measured classifier",
+        )
+        self.assertRegex(
+            support,
+            r"(?s)catch \{.*?\$lastRejectedCandidate = "
+            r"\$classificationError.*?continue.*?last_rejected_candidate",
+            "a rejected candidate must be remeasured until a compliant window "
+            "or the bounded STOP reports the classifier finding",
         )
         self.assertIn(
             "table.sort(structural_elements",
@@ -203,10 +211,13 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             support,
             "canonical structure must break equal draw-order ties by native id",
         )
-        self.assertIn(
-            "[double]$frameGeometry[$coordinate] -ne",
+        self.assertRegex(
             support,
-            "same-call frame geometry must compare values, not JSON formatting",
+            r"(?s)function Test-NativeMenuFrameMatchesSettlement.*?"
+            r"SemanticSurface.*?SemanticGeneration.*?"
+            r"SemanticPayload\.generation.*?Settlement\.Layout\.generation",
+            "post-window frames must remain on the exact measured semantic "
+            "surface and both generations while ambient geometry keeps moving",
         )
         self.assertIn(
             "Get-SettledNativeMenuObservation",
@@ -250,7 +261,7 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             "animation confirmation must reject process reuse",
         )
         self.assertIn(
-            "$rawSetsMatch = $primaryIdsJson -ceq $confirmationIdsJson",
+            "$rawSetsMatchNoncontractual = $primaryIdsJson -ceq $confirmationIdsJson",
             confirmation,
             "raw-set disagreement must reach screen-level motion resolution",
         )
@@ -281,16 +292,33 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             "the recorder must retain the exact motion-event census",
         )
         self.assertIn(
-            "resolve_motion_capability(",
+            "resolve_ambient_lifecycle(",
             resolver,
             "campaign promotion must resolve one classification per screen member",
         )
-        for recorder in (standalone, transition, confirmation, motion, importer):
+        for recorder in (
+            standalone,
+            transition,
+            confirmation,
+            motion,
+            importer_launcher,
+            importer,
+        ):
             self.assertNotIn(
                 "CaptureCommit",
                 recorder,
                 "operators must not be able to supply capture commit provenance",
             )
+        self.assertIn(
+            'git_text(repo_root, "rev-parse", "HEAD")',
+            importer,
+            "special capture provenance must derive HEAD from its own repo",
+        )
+        self.assertIn(
+            "loader_hash = sha256_file(loader)",
+            importer,
+            "special capture provenance must hash the launcher-side loader",
+        )
         self.assertIn(
             "base_commit_sha = $baseCommitSha",
             support,

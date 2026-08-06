@@ -13,6 +13,33 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Iterable
 
+if __package__:
+    from .native_menu_ambient_lifecycle import (
+        AmbientLifecycleError,
+        classify_ambient_extended_observation,
+        classify_ambient_window,
+        find_ambient_settled_window,
+        resolve_ambient_lifecycle,
+    )
+    from .native_menu_overlay_v25 import (
+        OVERLAY_REFERENCE_SCHEMA as OVERLAY_REFERENCE_SCHEMA_V25,
+        OverlayV25Error,
+        assert_overlay_hygiene as assert_overlay_hygiene_v25,
+    )
+else:
+    from native_menu_ambient_lifecycle import (  # type: ignore[no-redef]
+        AmbientLifecycleError,
+        classify_ambient_extended_observation,
+        classify_ambient_window,
+        find_ambient_settled_window,
+        resolve_ambient_lifecycle,
+    )
+    from native_menu_overlay_v25 import (  # type: ignore[no-redef]
+        OVERLAY_REFERENCE_SCHEMA as OVERLAY_REFERENCE_SCHEMA_V25,
+        OverlayV25Error,
+        assert_overlay_hygiene as assert_overlay_hygiene_v25,
+    )
+
 
 MINIMUM_SAMPLES = 40
 MINIMUM_SPAN_MILLISECONDS = 2_000
@@ -20,7 +47,7 @@ MAXIMUM_ANIMATED_FRACTION = 0.30
 EXTENDED_OBSERVATION_MINIMUM_MILLISECONDS = 60_000
 EXTENDED_OBSERVATION_SETTLE_SPAN_MULTIPLIER = 10
 EXTENDED_OBSERVATION_MINIMUM_SAMPLES = 200
-SETTLEMENT_SPEC = "2.4"
+SETTLEMENT_SPEC = "2.5"
 OVERLAY_REFERENCE_SCHEMA = "solomon-dark-native-menu-overlay-reference-v2"
 _INTENTIONAL_OVERLAY_SCREEN_IDS = {"beta_notice"}
 
@@ -1848,6 +1875,73 @@ def deterministic_reordinalized_layout(
     return result, sorted(normalized_animated), proof
 
 
+def assert_deterministic_reordinalization(
+    captured_layout: dict[str, Any],
+    captured_animated_element_ids: Iterable[str],
+    normalized_layout: dict[str, Any],
+    normalized_animated_element_ids: list[str],
+    proof: list[dict[str, Any]],
+) -> None:
+    """Prove that normalized ordinals are the pure positional function we claim."""
+    captured_animated = set(captured_animated_element_ids)
+    captured_order, captured_by_id = _elements_by_id(captured_layout)
+    expected_elements = [
+        copy.deepcopy(captured_by_id[element_id]) for element_id in captured_order
+    ]
+    expected_elements.sort(key=_reordinalization_key)
+    _, normalized_by_id = _elements_by_id(normalized_layout)
+    expected_proof: list[dict[str, Any]] = []
+    expected_animated: list[str] = []
+    counts: Counter[str] = Counter()
+    art_order = 0
+    screen_token = _slugify_element_token(captured_layout.get("screen_id", ""))
+    for element in expected_elements:
+        if element.get("kind") != "art":
+            continue
+        art_order += 1
+        captured_id = _element_id(element)
+        art_id = element.get("art_id")
+        if not isinstance(art_id, str) or not art_id:
+            raise SettlementV2Error(
+                "overlay reordinalization contract: captured art member "
+                f"'{captured_id}' has no art_id"
+            )
+        base = f"{screen_token}.art.{_slugify_element_token(art_id)}"
+        counts[base] += 1
+        normalized_id = f"{base}.{counts[base]}"
+        normalized = normalized_by_id.get(normalized_id)
+        if normalized is None or normalized.get("draw_order") != art_order:
+            raise SettlementV2Error(
+                "landed overlay override: deterministic reordinalization produced "
+                f"a noncanonical survivor ordinal for '{captured_id}'"
+            )
+        expected_payload = copy.deepcopy(element)
+        expected_payload["id"] = normalized_id
+        expected_payload["draw_order"] = art_order
+        if canonical_bytes(normalized) != canonical_bytes(expected_payload):
+            raise SettlementV2Error(
+                "landed overlay override: deterministic reordinalization changed "
+                f"a survivor field outside positional bookkeeping for '{captured_id}'"
+            )
+        if captured_id in captured_animated:
+            expected_animated.append(normalized_id)
+        expected_proof.append(
+            {
+                "captured_element_id": captured_id,
+                "captured_draw_order": element.get("draw_order"),
+                "normalized_element_id": normalized_id,
+                "normalized_draw_order": art_order,
+            }
+        )
+    if proof != expected_proof or sorted(normalized_animated_element_ids) != sorted(
+        expected_animated
+    ):
+        raise SettlementV2Error(
+            "landed overlay override: deterministic reordinalization proof does "
+            "not describe its canonical survivor ordinals"
+        )
+
+
 def _subtract_overlay_semantic_multiset(
     landed_layout: dict[str, Any],
     overlay_reference: dict[str, Any],
@@ -1976,6 +2070,36 @@ def build_overlay_contamination_override(
     normalized_confirmation, normalized_confirmation_ids, confirmation_reordinalization = (
         deterministic_reordinalized_layout(confirmation_layout, confirmation_ids)
     )
+    for captured, captured_ids, normalized, normalized_ids, proof in (
+        (
+            corrected,
+            primary_ids,
+            normalized_corrected,
+            corrected_ids,
+            corrected_reordinalization,
+        ),
+        (
+            primary_layout,
+            primary_ids,
+            normalized_primary,
+            normalized_primary_ids,
+            primary_reordinalization,
+        ),
+        (
+            confirmation_layout,
+            confirmation_ids,
+            normalized_confirmation,
+            normalized_confirmation_ids,
+            confirmation_reordinalization,
+        ),
+    ):
+        assert_deterministic_reordinalization(
+            captured,
+            captured_ids,
+            normalized,
+            normalized_ids,
+            proof,
+        )
     corrected_bytes = structural_layout_bytes(
         normalized_corrected,
         corrected_ids,
@@ -2095,14 +2219,28 @@ def _classify_command(input_path: Path, output_path: Path) -> None:
     samples = _read_json(input_path)
     if not isinstance(samples, list):
         raise SettlementV2Error("classifier input must be a JSON sample list")
-    _write_json(output_path, classify_window(samples))
+    _write_json(output_path, classify_ambient_window(samples))
 
 
 def _find_command(input_path: Path, output_path: Path) -> None:
     samples = _read_json(input_path)
     if not isinstance(samples, list):
         raise SettlementV2Error("classifier input must be a JSON sample list")
-    _write_json(output_path, find_settled_window(samples))
+    _write_json(output_path, find_ambient_settled_window(samples))
+
+
+def _classify_pair_command(input_path: Path, output_path: Path) -> None:
+    value = _read_json(input_path)
+    if not isinstance(value, dict) or not isinstance(
+        value.get("observations"), list
+    ):
+        raise SettlementV2Error(
+            "ambient pair classifier input must contain an observations list"
+        )
+    _write_json(
+        output_path,
+        resolve_ambient_lifecycle(value["observations"]),
+    )
 
 
 def _classify_extended_command(
@@ -2115,7 +2253,7 @@ def _classify_extended_command(
         )
     _write_json(
         output_path,
-        classify_extended_observation(
+        classify_ambient_extended_observation(
             samples,
             required_span_milliseconds=required_span_milliseconds,
         ),
@@ -2151,7 +2289,10 @@ def _check_overlay_command(layout_path: Path, reference_path: Path) -> None:
         raise SettlementV2Error("overlay hygiene layout input must be an object")
     if not isinstance(reference, dict):
         raise SettlementV2Error("overlay hygiene reference input must be an object")
-    assert_overlay_hygiene(layout, reference)
+    if reference.get("schema") == OVERLAY_REFERENCE_SCHEMA_V25:
+        assert_overlay_hygiene_v25(layout, reference)
+    else:
+        assert_overlay_hygiene(layout, reference)
 
 
 def _check_overlay_samples_command(
@@ -2163,7 +2304,25 @@ def _check_overlay_samples_command(
         raise SettlementV2Error("overlay hygiene sample input must be a list")
     if not isinstance(reference, dict):
         raise SettlementV2Error("overlay hygiene reference input must be an object")
-    assert_overlay_sample_hygiene(samples, reference)
+    if reference.get("schema") == OVERLAY_REFERENCE_SCHEMA_V25:
+        if not samples:
+            raise SettlementV2Error(
+                "overlay hygiene contract: sample sweep reached no capture payloads"
+            )
+        for index, sample in enumerate(samples):
+            payload = sample.get("payload") if isinstance(sample, dict) else None
+            if not isinstance(payload, dict):
+                raise SettlementV2Error(
+                    f"overlay hygiene contract: sample {index} has no semantic payload"
+                )
+            try:
+                assert_overlay_hygiene_v25(payload, reference)
+            except OverlayV25Error as error:
+                raise SettlementV2Error(
+                    f"overlay hygiene contract: sample {index} is contaminated: {error}"
+                ) from error
+    else:
+        assert_overlay_sample_hygiene(samples, reference)
 
 
 def main() -> int:
@@ -2175,6 +2334,9 @@ def main() -> int:
     find_parser = subparsers.add_parser("find")
     find_parser.add_argument("--input", type=Path, required=True)
     find_parser.add_argument("--output", type=Path, required=True)
+    pair_parser = subparsers.add_parser("classify-pair")
+    pair_parser.add_argument("--input", type=Path, required=True)
+    pair_parser.add_argument("--output", type=Path, required=True)
     extended_parser = subparsers.add_parser("classify-extended")
     extended_parser.add_argument("--input", type=Path, required=True)
     extended_parser.add_argument("--output", type=Path, required=True)
@@ -2196,6 +2358,8 @@ def main() -> int:
             _classify_command(args.input, args.output)
         elif args.command == "find":
             _find_command(args.input, args.output)
+        elif args.command == "classify-pair":
+            _classify_pair_command(args.input, args.output)
         elif args.command == "classify-extended":
             _classify_extended_command(
                 args.input,
@@ -2208,7 +2372,7 @@ def main() -> int:
             _check_overlay_command(args.layout, args.reference)
         elif args.command == "check-overlay-samples":
             _check_overlay_samples_command(args.input, args.reference)
-    except SettlementV2Error as error:
+    except (SettlementV2Error, AmbientLifecycleError, OverlayV25Error) as error:
         parser.exit(2, f"STOP: {error}\n")
     return 0
 
