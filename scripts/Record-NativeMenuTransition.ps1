@@ -87,7 +87,7 @@ if (Test-Path -LiteralPath $outputItemPath -PathType Leaf) {
         schema = "solomon-dark-native-menu-navigation-v2"
         header = [ordered]@{
             capture_method = (
-                "Settlement v2.3 raw-window structural native UI semantics + measured " +
+            "Settlement v2.4 raw-window structural native UI semantics + measured " +
                 "animated geometry + exact-process action/key/click dispatch " +
                 "+ same-call D3D9 frame hashes + canonical draw-order/id " +
                 "cross-capture comparison"

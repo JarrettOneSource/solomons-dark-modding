@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Derive and attach one unambiguous Settlement v2.1/v2.2 override."""
+"""Derive and attach one unambiguous Settlement v2.1/v2.4 override."""
 
 from __future__ import annotations
 

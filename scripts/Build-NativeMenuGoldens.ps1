@@ -29,8 +29,8 @@ $overlayReference = Get-Content -LiteralPath $overlayReferencePath -Raw |
     ConvertFrom-Json
 if (
     [string]$overlayReference.schema -cne
-        "solomon-dark-native-menu-overlay-reference-v1" -or
-    @($overlayReference.art_element_id_suffixes).Count -eq 0
+        "solomon-dark-native-menu-overlay-reference-v2" -or
+    @($overlayReference.overlay_semantic_draw_multiset).Count -eq 0
 ) {
     throw "The machine-derived native-menu overlay reference is malformed."
 }
@@ -210,7 +210,7 @@ foreach ($file in $layoutFiles) {
         [string]$source.source_tree_sha -notmatch '^[0-9a-f]{40}$' -or
         [string]$source.game_executable_sha256 -notmatch '^[0-9a-f]{64}$' -or
         [string]$source.loader_dll_sha256 -notmatch '^[0-9a-f]{64}$' -or
-        [string]$settlement.settlement_spec -cne "2.3" -or
+        [string]$settlement.settlement_spec -cne "2.4" -or
         [string]$settlement.structural_element_order -cne
             "draw_order_then_element_id" -or
         [int]$settlement.consecutive_structural_samples -lt 40 -or
@@ -341,7 +341,7 @@ foreach ($file in $transitionLayoutFiles) {
         [string]$source.source_tree_sha -notmatch '^[0-9a-f]{40}$' -or
         [string]$source.game_executable_sha256 -notmatch '^[0-9a-f]{64}$' -or
         [string]$source.loader_dll_sha256 -notmatch '^[0-9a-f]{64}$' -or
-        [string]$settlement.settlement_spec -cne "2.3" -or
+        [string]$settlement.settlement_spec -cne "2.4" -or
         [string]$settlement.structural_element_order -cne
             "draw_order_then_element_id" -or
         [int]$settlement.consecutive_structural_samples -lt 40 -or
@@ -546,14 +546,14 @@ foreach ($edgeId in $edgeIds) {
         [string]$edgeSource.source_tree_sha -notmatch '^[0-9a-f]{40}$' -or
         [string]$edgeSource.game_executable_sha256 -notmatch '^[0-9a-f]{64}$' -or
         [string]$edgeSource.loader_dll_sha256 -notmatch '^[0-9a-f]{64}$' -or
-        [string]$edgeSettlement.source.settlement_spec -cne "2.3" -or
+        [string]$edgeSettlement.source.settlement_spec -cne "2.4" -or
         [string]$edgeSettlement.source.structural_element_order -cne
             "draw_order_then_element_id" -or
         [int]$edgeSettlement.source.consecutive_structural_samples -lt 40 -or
         [int]$edgeSettlement.source.animated_id_set_sample_count -lt 40 -or
         [int]$edgeSettlement.source.stable_span_milliseconds -lt 2000 -or
         [double]$edgeSettlement.source.animated_fraction -gt 0.30 -or
-        [string]$edgeSettlement.destination.settlement_spec -cne "2.3" -or
+        [string]$edgeSettlement.destination.settlement_spec -cne "2.4" -or
         [string]$edgeSettlement.destination.structural_element_order -cne
             "draw_order_then_element_id" -or
         [int]$edgeSettlement.destination.consecutive_structural_samples -lt 40 -or
@@ -675,7 +675,7 @@ $golden = [ordered]@{
         gap = "G11"
         generated_from_live_capture_at_utc = $latestCapture.ToString("o")
         capture_method = (
-            "Settlement v2.3 structural native UI capture, resolved screen-member " +
+        "Settlement v2.4 structural native UI capture, resolved screen-member " +
             "motion capability, measured animated " +
             "geometry anchors/envelopes, native Sprite/text hooks, live D3D9 " +
             "frames, exact-process input, canonical draw-order/id comparison, " +

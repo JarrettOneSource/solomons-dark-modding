@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Derive the beta-dialog overlay art set from two live menu captures."""
+"""Derive the beta-dialog overlay semantic multiset from live captures."""
 
 from __future__ import annotations
 
@@ -151,8 +151,9 @@ def main() -> int:
             {
                 "success": True,
                 "output": str(args.output.resolve()),
-                "art_element_id_suffix_count": len(
-                    reference["art_element_id_suffixes"]
+                "semantic_draw_count": sum(
+                    entry["count"]
+                    for entry in reference["overlay_semantic_draw_multiset"]
                 ),
                 "sha256": sha256(args.output.resolve()),
             }

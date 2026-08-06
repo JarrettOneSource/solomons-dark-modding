@@ -8,6 +8,8 @@ import copy
 import hashlib
 import json
 import math
+import re
+from collections import Counter
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -18,8 +20,8 @@ MAXIMUM_ANIMATED_FRACTION = 0.30
 EXTENDED_OBSERVATION_MINIMUM_MILLISECONDS = 60_000
 EXTENDED_OBSERVATION_SETTLE_SPAN_MULTIPLIER = 10
 EXTENDED_OBSERVATION_MINIMUM_SAMPLES = 200
-SETTLEMENT_SPEC = "2.3"
-OVERLAY_REFERENCE_SCHEMA = "solomon-dark-native-menu-overlay-reference-v1"
+SETTLEMENT_SPEC = "2.4"
+OVERLAY_REFERENCE_SCHEMA = "solomon-dark-native-menu-overlay-reference-v2"
 _INTENTIONAL_OVERLAY_SCREEN_IDS = {"beta_notice"}
 
 _GEOMETRY_FIELDS = {"rect", "unclipped_rect"}
@@ -34,6 +36,8 @@ _COMPACT_POPULATION_ELEMENT_FIELDS = (
     "visible",
     "interactive",
     "draw_order",
+    "rect",
+    "unclipped_rect",
 )
 _ANIMATION_FIXTURE_FIELDS = {
     "animated_geometry",
@@ -90,35 +94,123 @@ def element_art_id_suffix(element: dict[str, Any]) -> str:
     return suffix
 
 
-def validate_overlay_reference(reference: dict[str, Any]) -> list[str]:
+def _overlay_semantic_payload(element: dict[str, Any]) -> dict[str, Any]:
+    """Return draw semantics independent of screen-local positional bookkeeping.
+
+    Element IDs and absolute draw orders are assigned in the context of the
+    underlying screen.  Every other captured field, including both geometry
+    fields, identifies the draw itself.  Draw order and ordinal IDs are
+    regenerated and checked after semantic multiset subtraction.
+    """
+    element_id = _element_id(element)
+    if element.get("kind") != "art":
+        raise SettlementV2Error(
+            "overlay reference contract: semantic overlay member "
+            f"'{element_id}' is not an art draw"
+        )
+    _finite_rect(element, "rect", element_id)
+    _finite_rect(element, "unclipped_rect", element_id)
+    return {
+        key: copy.deepcopy(value)
+        for key, value in element.items()
+        if key not in {"id", "draw_order"}
+        and key not in _ANIMATION_FIXTURE_FIELDS
+    }
+
+
+def _semantic_multiset_entries(
+    elements: Iterable[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    payload_by_signature: dict[bytes, dict[str, Any]] = {}
+    counts: Counter[bytes] = Counter()
+    for element in elements:
+        payload = _overlay_semantic_payload(element)
+        signature = canonical_bytes(payload)
+        payload_by_signature.setdefault(signature, payload)
+        counts[signature] += 1
+    return [
+        {
+            "count": counts[signature],
+            "payload": payload_by_signature[signature],
+        }
+        for signature in sorted(counts)
+    ]
+
+
+def _validated_overlay_counter(
+    reference: dict[str, Any],
+) -> Counter[bytes]:
     if reference.get("schema") != OVERLAY_REFERENCE_SCHEMA:
         raise SettlementV2Error(
             "overlay reference contract: reference schema is not recognized"
         )
-    suffixes = reference.get("art_element_id_suffixes")
-    elements = reference.get("overlay_only_art_elements")
-    if (
-        not isinstance(suffixes, list)
-        or not suffixes
-        or not all(isinstance(value, str) and value for value in suffixes)
-        or suffixes != sorted(suffixes)
-        or len(suffixes) != len(set(suffixes))
-    ):
+    entries = reference.get("overlay_semantic_draw_multiset")
+    if not isinstance(entries, list) or not entries:
         raise SettlementV2Error(
-            "overlay reference contract: art-ID suffix set must be a "
-            "non-empty sorted unique string list"
+            "overlay reference contract: semantic draw multiset is absent"
         )
+    counter: Counter[bytes] = Counter()
+    previous_signature: bytes | None = None
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            raise SettlementV2Error(
+                "overlay reference contract: semantic draw multiset entry "
+                f"{index} is not an object"
+            )
+        count = entry.get("count")
+        payload = entry.get("payload")
+        if (
+            isinstance(count, bool)
+            or not isinstance(count, int)
+            or count <= 0
+            or not isinstance(payload, dict)
+            or not payload
+        ):
+            raise SettlementV2Error(
+                "overlay reference contract: semantic draw multiset entry "
+                f"{index} has no positive count and payload"
+            )
+        if "id" in payload or "draw_order" in payload:
+            raise SettlementV2Error(
+                "overlay reference contract: semantic draw identity contains "
+                "screen-local id or draw_order bookkeeping"
+            )
+        if payload.get("kind") != "art":
+            raise SettlementV2Error(
+                "overlay reference contract: semantic draw multiset contains "
+                "a non-art member"
+            )
+        signature = canonical_bytes(payload)
+        if previous_signature is not None and signature <= previous_signature:
+            raise SettlementV2Error(
+                "overlay reference contract: semantic draw multiset is not "
+                "strictly canonical and duplicate-free"
+            )
+        previous_signature = signature
+        counter[signature] = count
+    return counter
+
+
+def validate_overlay_reference(reference: dict[str, Any]) -> Counter[bytes]:
+    if reference.get("schema") != OVERLAY_REFERENCE_SCHEMA:
+        raise SettlementV2Error(
+            "overlay reference contract: reference schema is not recognized"
+        )
+    counter = _validated_overlay_counter(reference)
+    elements = reference.get("overlay_only_art_elements")
     if not isinstance(elements, list) or not all(
         isinstance(value, dict) for value in elements
     ):
         raise SettlementV2Error(
             "overlay reference contract: overlay-only art elements are absent"
         )
-    measured = sorted(element_art_id_suffix(value) for value in elements)
-    if measured != suffixes:
+    measured = _semantic_multiset_entries(elements)
+    if canonical_bytes(measured) != canonical_bytes(
+        reference["overlay_semantic_draw_multiset"]
+    ):
         raise SettlementV2Error(
-            "overlay reference contract: recorded suffix set does not equal "
-            "the overlay-only art element set"
+            "overlay reference contract: recorded semantic multiset does not "
+            "equal the overlay-only art draw evidence"
         )
     header = reference.get("header")
     if not isinstance(header, dict):
@@ -140,61 +232,101 @@ def validate_overlay_reference(reference: dict[str, Any]) -> list[str]:
             raise SettlementV2Error(
                 f"overlay reference contract: {label} evidence receipt is incomplete"
             )
-    return suffixes
+    if sum(counter.values()) != len(elements):
+        raise SettlementV2Error(
+            "overlay reference contract: semantic multiset census does not "
+            "equal the overlay-only art draw evidence"
+        )
+    return counter
 
 
 def derive_overlay_reference(
     overlay_layout: dict[str, Any], clean_layout: dict[str, Any]
 ) -> dict[str, Any]:
-    """Derive the independently captured overlay-only art draw set."""
+    """Derive the independently captured overlay semantic draw multiset."""
     _, clean_by_id = _elements_by_id(clean_layout)
     _, overlay_by_id = _elements_by_id(overlay_layout)
-    overlay_only = [
-        copy.deepcopy(element)
-        for element_id, element in overlay_by_id.items()
-        if element_id not in clean_by_id and element.get("kind") == "art"
-    ]
+    clean_counter: Counter[bytes] = Counter(
+        canonical_bytes(_overlay_semantic_payload(element))
+        for element in clean_by_id.values()
+        if element.get("kind") == "art"
+    )
+    overlay_groups: dict[bytes, list[dict[str, Any]]] = {}
+    for element in overlay_by_id.values():
+        if element.get("kind") != "art":
+            continue
+        signature = canonical_bytes(_overlay_semantic_payload(element))
+        overlay_groups.setdefault(signature, []).append(element)
+    overlay_counter = Counter(
+        {signature: len(elements) for signature, elements in overlay_groups.items()}
+    )
+    clean_only = clean_counter - overlay_counter
+    if clean_only:
+        raise SettlementV2Error(
+            "overlay reference contract: pre-dismissal capture lost clean-screen "
+            "draw semantics"
+        )
+    difference = overlay_counter - clean_counter
+    overlay_only: list[dict[str, Any]] = []
+    for signature in sorted(difference):
+        candidates = _canonical_elements(overlay_groups[signature])
+        overlay_only.extend(
+            copy.deepcopy(element)
+            for element in candidates[: difference[signature]]
+        )
     overlay_only = _canonical_elements(overlay_only)
-    suffixes = sorted(element_art_id_suffix(element) for element in overlay_only)
-    if not suffixes:
+    if not overlay_only:
         raise SettlementV2Error(
             "overlay reference contract: pre-dismissal capture has no "
             "overlay-only art draws"
         )
-    if len(suffixes) != len(set(suffixes)):
-        raise SettlementV2Error(
-            "overlay reference contract: overlay-only art-ID suffixes are ambiguous"
-        )
     return {
-        "art_element_id_suffixes": suffixes,
+        "overlay_semantic_draw_multiset": _semantic_multiset_entries(
+            overlay_only
+        ),
         "overlay_only_art_elements": overlay_only,
     }
 
 
-def overlay_intersections(
-    layout: dict[str, Any], reference: dict[str, Any]
-) -> list[str]:
-    reference_suffixes = set(validate_overlay_reference(reference))
+def _layout_semantic_counter(layout: dict[str, Any]) -> Counter[bytes]:
     _, elements = _elements_by_id(layout)
-    return sorted(
-        suffix
-        for element in elements.values()
-        if element.get("kind") == "art" and ".art." in _element_id(element)
-        for suffix in [element_art_id_suffix(element)]
-        if suffix in reference_suffixes
-    )
+    signatures: list[bytes] = []
+    for element in elements.values():
+        if element.get("kind") != "art":
+            continue
+        semantic_element = copy.deepcopy(element)
+        if semantic_element.get("animated_geometry") is True:
+            semantic_element["rect"] = copy.deepcopy(
+                semantic_element.get("anchor_rect")
+            )
+            semantic_element["unclipped_rect"] = copy.deepcopy(
+                semantic_element.get("anchor_unclipped_rect")
+            )
+        signatures.append(
+            canonical_bytes(_overlay_semantic_payload(semantic_element))
+        )
+    return Counter(signatures)
+
+
+def overlay_semantic_multiset_is_present(
+    layout: dict[str, Any], reference: dict[str, Any]
+) -> bool:
+    required = validate_overlay_reference(reference)
+    observed = _layout_semantic_counter(layout)
+    return all(observed[signature] >= count for signature, count in required.items())
 
 
 def assert_overlay_hygiene(
     layout: dict[str, Any], reference: dict[str, Any]
 ) -> None:
-    intersections = overlay_intersections(layout, reference)
     screen_id = str(layout.get("screen_id", ""))
-    if intersections and screen_id not in _INTENTIONAL_OVERLAY_SCREEN_IDS:
+    if (
+        screen_id not in _INTENTIONAL_OVERLAY_SCREEN_IDS
+        and overlay_semantic_multiset_is_present(layout, reference)
+    ):
         raise SettlementV2Error(
             "overlay hygiene contract: non-overlay screen "
-            f"'{screen_id}' intersects the beta-dialog reference art-ID set: "
-            + ", ".join(intersections)
+            f"'{screen_id}' contains the complete beta-dialog semantic multiset"
         )
 
 
@@ -1638,6 +1770,126 @@ def build_population_phase_override(
     }
 
 
+def _slugify_element_token(value: Any) -> str:
+    token = re.sub(r"[^a-z0-9]+", "_", str(value).lower()).strip("_")
+    return token or "element"
+
+
+def _reordinalization_key(element: dict[str, Any]) -> tuple[float, bytes, str]:
+    draw_order, element_id = _canonical_element_key(element)
+    remainder = {
+        key: copy.deepcopy(value)
+        for key, value in element.items()
+        if key not in {"id", "draw_order"}
+        and key not in _ANIMATION_FIXTURE_FIELDS
+    }
+    return draw_order, canonical_bytes(remainder), element_id
+
+
+def deterministic_reordinalized_layout(
+    layout: dict[str, Any],
+    animated_element_ids: Iterable[str] | None = None,
+) -> tuple[dict[str, Any], list[str], list[dict[str, Any]]]:
+    """Normalize positional art bookkeeping without treating it as identity."""
+    if animated_element_ids is None:
+        raw_animated = layout.get("animated_element_ids", [])
+    else:
+        raw_animated = list(animated_element_ids)
+    if not isinstance(raw_animated, list) or not all(
+        isinstance(value, str) for value in raw_animated
+    ):
+        raise SettlementV2Error(
+            "overlay reordinalization contract: animated ids are not a string list"
+        )
+    animated = set(raw_animated)
+    order, indexed = _elements_by_id(layout)
+    if not animated.issubset(indexed):
+        raise SettlementV2Error(
+            "overlay reordinalization contract: animated member lookup is ambiguous"
+        )
+    result = copy.deepcopy(layout)
+    elements = [copy.deepcopy(indexed[element_id]) for element_id in order]
+    elements.sort(key=_reordinalization_key)
+    screen_token = _slugify_element_token(layout.get("screen_id", ""))
+    counts: Counter[str] = Counter()
+    normalized_animated: list[str] = []
+    proof: list[dict[str, Any]] = []
+    art_order = 0
+    for element in elements:
+        if element.get("kind") != "art":
+            continue
+        art_order += 1
+        old_id = _element_id(element)
+        art_id = element.get("art_id")
+        if not isinstance(art_id, str) or not art_id:
+            raise SettlementV2Error(
+                "overlay reordinalization contract: art member "
+                f"'{old_id}' has no art_id"
+            )
+        base = f"{screen_token}.art.{_slugify_element_token(art_id)}"
+        counts[base] += 1
+        new_id = f"{base}.{counts[base]}"
+        old_draw_order = element.get("draw_order")
+        element["id"] = new_id
+        element["draw_order"] = art_order
+        if old_id in animated:
+            normalized_animated.append(new_id)
+        proof.append(
+            {
+                "captured_element_id": old_id,
+                "captured_draw_order": old_draw_order,
+                "normalized_element_id": new_id,
+                "normalized_draw_order": art_order,
+            }
+        )
+    result["elements"] = elements
+    if "animated_element_ids" in result:
+        result["animated_element_ids"] = sorted(normalized_animated)
+    return result, sorted(normalized_animated), proof
+
+
+def _subtract_overlay_semantic_multiset(
+    landed_layout: dict[str, Any],
+    overlay_reference: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    required = validate_overlay_reference(overlay_reference)
+    _, landed_by_id = _elements_by_id(landed_layout)
+    groups: dict[bytes, list[dict[str, Any]]] = {}
+    for element in landed_by_id.values():
+        if element.get("kind") != "art":
+            continue
+        signature = canonical_bytes(_overlay_semantic_payload(element))
+        groups.setdefault(signature, []).append(element)
+    removed_ids: set[str] = set()
+    removed: list[dict[str, Any]] = []
+    for signature, count in required.items():
+        candidates = sorted(groups.get(signature, []), key=_reordinalization_key)
+        if len(candidates) < count:
+            raise SettlementV2Error(
+                "landed overlay override: semantic-multiset difference does "
+                "not contain the complete overlay reference"
+            )
+        if len(candidates) > count:
+            raise SettlementV2Error(
+                "landed overlay override: semantic-multiset subtraction is "
+                "ambiguous for duplicate draw semantics"
+            )
+        for element in candidates:
+            removed_ids.add(_element_id(element))
+            removed.append(copy.deepcopy(element))
+    survivors = [
+        copy.deepcopy(element)
+        for element_id, element in landed_by_id.items()
+        if element_id not in removed_ids
+    ]
+    if len(removed) != sum(required.values()):
+        raise SettlementV2Error(
+            "landed overlay override: semantic-multiset subtraction removed "
+            "the wrong draw census"
+        )
+    return survivors, _canonical_elements(removed)
+
+
 def build_overlay_contamination_override(
     landed_layout: dict[str, Any],
     primary_layout: dict[str, Any],
@@ -1646,10 +1898,11 @@ def build_overlay_contamination_override(
     confirmation_trace: dict[str, Any],
     overlay_reference: dict[str, Any],
 ) -> dict[str, Any]:
-    """Derive the narrow Settlement v2.2 beta-overlay correction."""
+    """Derive the narrow Settlement v2.4 beta-overlay correction."""
     assert_canonical_structure_matches(primary_layout, confirmation_layout)
-    reference_suffixes = validate_overlay_reference(overlay_reference)
+    reference_counter = validate_overlay_reference(overlay_reference)
     primary_ids = primary_layout.get("animated_element_ids", [])
+    confirmation_ids = confirmation_layout.get("animated_element_ids", [])
     differences = structural_differences(
         landed_layout,
         primary_layout,
@@ -1659,40 +1912,6 @@ def build_overlay_contamination_override(
         raise SettlementV2Error(
             "landed overlay override: candidate already matches landed structure"
         )
-
-    landed_only = [
-        difference
-        for difference in differences
-        if difference["kind"] == "landed_only_element"
-    ]
-    if not landed_only:
-        raise SettlementV2Error(
-            "landed overlay override: mismatch contains no removable overlay members"
-        )
-    landed_only_suffixes: list[str] = []
-    for difference in landed_only:
-        value = difference.get("landed_value")
-        if not isinstance(value, dict):
-            raise SettlementV2Error(
-                "landed overlay override: landed-only member has no element value"
-            )
-        try:
-            landed_only_suffixes.append(element_art_id_suffix(value))
-        except SettlementV2Error as error:
-            raise SettlementV2Error(
-                "landed overlay override: landed-only member "
-                f"'{difference['element_id']}' is outside the overlay art set"
-            ) from error
-    landed_only_suffixes.sort()
-    if landed_only_suffixes != reference_suffixes:
-        outside = sorted(set(landed_only_suffixes) - set(reference_suffixes))
-        missing = sorted(set(reference_suffixes) - set(landed_only_suffixes))
-        raise SettlementV2Error(
-            "landed overlay override: landed-only art-ID suffix set does not "
-            "exactly equal the overlay reference set; "
-            f"outside={outside} missing={missing}"
-        )
-
     generation_differences = [
         difference
         for difference in differences
@@ -1703,63 +1922,27 @@ def build_overlay_contamination_override(
         raise SettlementV2Error(
             "landed overlay override: exactly one generation difference is required"
         )
-    for difference in differences:
-        allowed = (
-            difference is generation_differences[0]
-            or difference["kind"] == "landed_only_element"
-            or (
-                difference["kind"] == "element_field"
-                and difference.get("field") == "draw_order"
-            )
-        )
-        if not allowed:
-            raise SettlementV2Error(
-                "landed overlay override: residual non-draw_order difference "
-                f"remains at {_difference_label(difference)}"
-            )
 
     primary_phases, primary_settled, primary_phase_entries = _trace_payloads(
         primary_trace,
         "primary",
     )
     confirmation_phases, confirmation_settled, confirmation_phase_entries = (
-        _trace_payloads(
-            confirmation_trace,
-            "confirmation",
-        )
+        _trace_payloads(confirmation_trace, "confirmation")
     )
-    absence_proof: list[dict[str, Any]] = []
-    for difference in landed_only:
-        element_id = difference["element_id"]
-        if any(
-            _element_for_id(payload, element_id) is not None
-            for payload in (
-                *primary_phases,
-                *confirmation_phases,
-                *primary_settled,
-                *confirmation_settled,
-            )
-        ):
-            raise SettlementV2Error(
-                "landed overlay override: overlay member "
-                f"'{element_id}' appears in a fresh population phase or "
-                "settled window"
-            )
-        absence_proof.append(
-            {
-                "element_id": element_id,
-                "art_id_suffix": element_art_id_suffix(
-                    difference["landed_value"]
-                ),
-                "primary_population_absence_phases": len(primary_phases),
-                "confirmation_population_absence_phases": len(
-                    confirmation_phases
-                ),
-                "primary_settled_absence_samples": len(primary_settled),
-                "confirmation_settled_absence_samples": len(
-                    confirmation_settled
-                ),
-            }
+    absence_payloads = (
+        *primary_phases,
+        *confirmation_phases,
+        *primary_settled,
+        *confirmation_settled,
+    )
+    if any(
+        overlay_semantic_multiset_is_present(payload, overlay_reference)
+        for payload in absence_payloads
+    ):
+        raise SettlementV2Error(
+            "landed overlay override: complete overlay semantic multiset "
+            "appears in a fresh population phase or settled window"
         )
 
     generation_difference = generation_differences[0]
@@ -1777,103 +1960,53 @@ def build_overlay_contamination_override(
             "two-instance population witnesses"
         )
 
-    landed_structural = structural_layout(landed_layout, primary_ids)
-    settled_structural = structural_layout(primary_layout, primary_ids)
-    landed_top = {
-        key: copy.deepcopy(value)
-        for key, value in landed_structural.items()
-        if key not in {"elements", "generation"}
-    }
-    settled_top = {
-        key: copy.deepcopy(value)
-        for key, value in settled_structural.items()
-        if key not in {"elements", "generation"}
-    }
-    if canonical_bytes(landed_top) != canonical_bytes(settled_top):
-        difference = _first_difference(settled_top, landed_top)
-        raise SettlementV2Error(
-            "landed overlay override: residual non-draw_order layout "
-            f"difference remains at '{difference}'"
+    survivors, removed = _subtract_overlay_semantic_multiset(
+        landed_layout,
+        overlay_reference,
+    )
+    corrected = copy.deepcopy(landed_layout)
+    corrected["generation"] = primary_layout.get("generation")
+    corrected["elements"] = survivors
+    normalized_corrected, corrected_ids, corrected_reordinalization = (
+        deterministic_reordinalized_layout(corrected, primary_ids)
+    )
+    normalized_primary, normalized_primary_ids, primary_reordinalization = (
+        deterministic_reordinalized_layout(primary_layout, primary_ids)
+    )
+    normalized_confirmation, normalized_confirmation_ids, confirmation_reordinalization = (
+        deterministic_reordinalized_layout(confirmation_layout, confirmation_ids)
+    )
+    corrected_bytes = structural_layout_bytes(
+        normalized_corrected,
+        corrected_ids,
+    )
+    primary_bytes = structural_layout_bytes(
+        normalized_primary,
+        normalized_primary_ids,
+    )
+    confirmation_bytes = structural_layout_bytes(
+        normalized_confirmation,
+        normalized_confirmation_ids,
+    )
+    if corrected_bytes != primary_bytes:
+        difference = _first_difference(
+            canonical_structural_layout(
+                normalized_primary,
+                normalized_primary_ids,
+            ),
+            canonical_structural_layout(
+                normalized_corrected,
+                corrected_ids,
+            ),
         )
-
-    _, landed_by_id = _elements_by_id(landed_structural)
-    _, settled_by_id = _elements_by_id(settled_structural)
-    removed_ids = {difference["element_id"] for difference in landed_only}
-    if set(landed_by_id) - removed_ids != set(settled_by_id):
         raise SettlementV2Error(
-            "landed overlay override: landed minus overlay does not equal "
-            "the settled member set"
+            "landed overlay override: semantic-multiset difference leaves "
+            f"residual draws or fields after deterministic reordinalization at '{difference}'"
         )
-    if len(landed_by_id) != len(settled_by_id) + len(removed_ids):
+    if primary_bytes != confirmation_bytes:
         raise SettlementV2Error(
-            "landed overlay override: overlay removal does not explain the "
-            "landed and settled element censuses"
-        )
-
-    removed_orders = []
-    for element_id in removed_ids:
-        removed_element = landed_by_id[element_id]
-        removed_orders.append(_canonical_element_key(removed_element)[0])
-    recompaction_proof: list[dict[str, Any]] = []
-    recompacted_elements: list[dict[str, Any]] = []
-    for element_id in sorted(settled_by_id):
-        landed_element = landed_by_id[element_id]
-        settled_element = settled_by_id[element_id]
-        landed_remainder = {
-            key: copy.deepcopy(value)
-            for key, value in landed_element.items()
-            if key != "draw_order"
-        }
-        settled_remainder = {
-            key: copy.deepcopy(value)
-            for key, value in settled_element.items()
-            if key != "draw_order"
-        }
-        if canonical_bytes(landed_remainder) != canonical_bytes(
-            settled_remainder
-        ):
-            difference = _first_difference(
-                settled_remainder,
-                landed_remainder,
-            )
-            raise SettlementV2Error(
-                "landed overlay override: residual non-draw_order field "
-                f"difference for surviving member '{element_id}' at "
-                f"'{difference}'"
-            )
-        landed_order = _canonical_element_key(landed_element)[0]
-        settled_order = _canonical_element_key(settled_element)[0]
-        removed_below = sum(order < landed_order for order in removed_orders)
-        expected_order = landed_order - removed_below
-        if expected_order != settled_order:
-            raise SettlementV2Error(
-                "landed overlay override: draw-order recompaction arithmetic "
-                f"failed for surviving member '{element_id}': "
-                f"landed={landed_order:g} removed_below={removed_below} "
-                f"expected={expected_order:g} settled={settled_order:g}"
-            )
-        recompacted = copy.deepcopy(landed_element)
-        recompacted["draw_order"] = settled_element["draw_order"]
-        recompacted_elements.append(recompacted)
-        recompaction_proof.append(
-            {
-                "element_id": element_id,
-                "landed_draw_order": landed_element["draw_order"],
-                "removed_overlay_draws_below": removed_below,
-                "settled_draw_order": settled_element["draw_order"],
-            }
-        )
-
-    recompacted_layout = copy.deepcopy(landed_structural)
-    recompacted_layout["generation"] = settled_structural.get("generation")
-    recompacted_layout["elements"] = recompacted_elements
-    if structural_layout_bytes(
-        recompacted_layout,
-        primary_ids,
-    ) != structural_layout_bytes(primary_layout, primary_ids):
-        raise SettlementV2Error(
-            "landed overlay override: landed minus overlay leaves residual "
-            "structural differences after recompaction"
+            "landed overlay override: independent settled instances disagree "
+            "after deterministic reordinalization"
         )
 
     validate_declared_settlement(
@@ -1884,10 +2017,13 @@ def build_overlay_contamination_override(
         confirmation_layout,
         confirmation_trace["settled_window_samples"],
     )
-
+    _, landed_by_id = _elements_by_id(landed_layout)
+    _, settled_by_id = _elements_by_id(primary_layout)
+    multiset_entries = overlay_reference["overlay_semantic_draw_multiset"]
     return {
-        "rule": "Settlement v2.2 landed beta-overlay contamination override",
-        "canonical_order": "draw_order_then_element_id",
+        "rule": "Settlement v2.4 landed beta-overlay semantic-multiset override",
+        "canonical_order": "draw_order_then_remaining_fields",
+        "ordinal_identity": "screen_local_positional_bookkeeping",
         "landed_generation": landed_layout.get("generation"),
         "landed_element_count": len(landed_by_id),
         "settled_generation": primary_layout.get("generation"),
@@ -1897,22 +2033,39 @@ def build_overlay_contamination_override(
             primary_ids,
         ),
         "confirmation_canonical_structural_sha256": (
-            canonical_structural_sha256(
-                confirmation_layout,
-                confirmation_layout.get("animated_element_ids", []),
-            )
+            canonical_structural_sha256(confirmation_layout, confirmation_ids)
         ),
-        "overlay_art_id_suffixes": reference_suffixes,
-        "overlay_member_absence": absence_proof,
+        "overlay_semantic_draw_count": sum(reference_counter.values()),
+        "overlay_semantic_multiset_sha256": sha256_json(multiset_entries),
+        "removed_overlay_draws": [
+            {
+                "landed_element_id": _element_id(element),
+                "landed_draw_order": element.get("draw_order"),
+                "semantic_draw_sha256": sha256_json(
+                    _overlay_semantic_payload(element)
+                ),
+            }
+            for element in removed
+        ],
+        "overlay_absence": {
+            "primary_population_phases": len(primary_phases),
+            "confirmation_population_phases": len(confirmation_phases),
+            "primary_settled_samples": len(primary_settled),
+            "confirmation_settled_samples": len(confirmation_settled),
+        },
         "generation_population_witnesses": {
             "primary_phase_indexes": primary_generation_witnesses,
             "confirmation_phase_indexes": confirmation_generation_witnesses,
         },
-        "draw_order_recompaction": recompaction_proof,
-        "recompacted_structural_sha256": canonical_structural_sha256(
-            recompacted_layout,
-            primary_ids,
-        ),
+        "deterministic_reordinalization": {
+            "algorithm": "art_draw_order_then_remaining_fields_per_art_id",
+            "corrected_landed": corrected_reordinalization,
+            "settled_primary": primary_reordinalization,
+            "settled_confirmation": confirmation_reordinalization,
+        },
+        "reordinalized_structural_sha256": hashlib.sha256(
+            primary_bytes
+        ).hexdigest(),
         "structural_differences": copy.deepcopy(differences),
         "primary_population_trace": _population_trace_summary(
             primary_trace,

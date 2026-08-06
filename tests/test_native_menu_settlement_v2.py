@@ -6,7 +6,9 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from tools import native_menu_settlement_v2 as settlement_v2
 from tools.native_menu_settlement_v2 import (
     OVERLAY_REFERENCE_SCHEMA,
     SettlementV2Error,
@@ -192,9 +194,22 @@ def _population_override_inputs() -> tuple[
 
 
 def _overlay_reference(elements: list[dict[str, object]]) -> dict[str, object]:
-    suffixes = sorted(
-        str(element["id"]).split(".art.", 1)[1] for element in elements
-    )
+    entries: dict[bytes, dict[str, object]] = {}
+    counts: dict[bytes, int] = {}
+    for element in elements:
+        payload = {
+            key: copy.deepcopy(value)
+            for key, value in element.items()
+            if key not in {"id", "draw_order"}
+        }
+        signature = json.dumps(
+            payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        entries[signature] = payload
+        counts[signature] = counts.get(signature, 0) + 1
     return {
         "schema": OVERLAY_REFERENCE_SCHEMA,
         "header": {
@@ -209,7 +224,10 @@ def _overlay_reference(elements: list[dict[str, object]]) -> dict[str, object]:
                 "bytes": 90,
             },
         },
-        "art_element_id_suffixes": suffixes,
+        "overlay_semantic_draw_multiset": [
+            {"count": counts[signature], "payload": entries[signature]}
+            for signature in sorted(counts)
+        ],
         "overlay_only_art_elements": copy.deepcopy(elements),
     }
 
@@ -578,6 +596,8 @@ class NativeMenuSettlementV2Tests(unittest.TestCase):
             "visible",
             "interactive",
             "draw_order",
+            "rect",
+            "unclipped_rect",
         )
         for trace_index in (3, 4):
             trace = copy.deepcopy(inputs[trace_index])
@@ -618,20 +638,24 @@ class NativeMenuSettlementV2Tests(unittest.TestCase):
 
         self.assertEqual(
             override["rule"],
-            "Settlement v2.2 landed beta-overlay contamination override",
+            "Settlement v2.4 landed beta-overlay semantic-multiset override",
         )
         self.assertEqual(override["landed_generation"], 6)
         self.assertEqual(override["settled_generation"], 7)
         self.assertEqual(override["landed_element_count"], 12)
         self.assertEqual(override["settled_element_count"], 10)
+        self.assertEqual(override["overlay_semantic_draw_count"], 2)
+        self.assertEqual(len(override["removed_overlay_draws"]), 2)
         self.assertEqual(
-            override["overlay_art_id_suffixes"],
-            ["item_100.1", "item_101.1"],
+            len(
+                override["deterministic_reordinalization"][
+                    "corrected_landed"
+                ]
+            ),
+            10,
         )
-        self.assertEqual(len(override["overlay_member_absence"]), 2)
-        self.assertEqual(len(override["draw_order_recompaction"]), 10)
 
-    def test_overlay_override_requires_exact_reference_set(self) -> None:
+    def test_overlay_override_rejects_residual_draw_beyond_reference(self) -> None:
         inputs = list(_overlay_override_inputs())
         landed = copy.deepcopy(inputs[0])
         outside = _element(102)
@@ -641,29 +665,39 @@ class NativeMenuSettlementV2Tests(unittest.TestCase):
 
         with self.assertRaisesRegex(
             SettlementV2Error,
-            "landed overlay override: landed-only art-ID suffix set does not "
-            "exactly equal the overlay reference set",
+            "landed overlay override: semantic-multiset difference leaves "
+            "residual draws or fields",
         ):
             build_overlay_contamination_override(*inputs)
 
-    def test_overlay_override_rejects_bad_draw_order_recompaction(self) -> None:
-        inputs = list(_overlay_override_inputs())
-        primary = copy.deepcopy(inputs[1])
-        primary["elements"][3]["draw_order"] += 1
-        inputs[1] = primary
-        confirmation = copy.deepcopy(inputs[2])
-        matching_id = primary["elements"][3]["id"]
-        for element in confirmation["elements"]:
-            if element["id"] == matching_id:
-                element["draw_order"] += 1
-        inputs[2] = confirmation
+    def test_overlay_override_rejects_noncanonical_reordinalization(self) -> None:
+        calls = 0
+        real_reordinalize = settlement_v2.deterministic_reordinalized_layout
+
+        def perturb_first_normalized_ordinal(*args: object, **kwargs: object):
+            nonlocal calls
+            calls += 1
+            layout, animated_ids, proof = real_reordinalize(*args, **kwargs)
+            if calls == 1:
+                element = next(
+                    value
+                    for value in reversed(layout["elements"])
+                    if value["kind"] == "art" and value["id"] not in animated_ids
+                )
+                element["id"] = str(element["id"]) + "_noncanonical"
+            return layout, animated_ids, proof
 
         with self.assertRaisesRegex(
             SettlementV2Error,
-            "landed overlay override: draw-order recompaction arithmetic "
-            "failed for surviving member",
+            "landed overlay override: semantic-multiset difference leaves "
+            "residual draws or fields",
         ):
-            build_overlay_contamination_override(*inputs)
+            with patch.object(
+                settlement_v2,
+                "deterministic_reordinalized_layout",
+                side_effect=perturb_first_normalized_ordinal,
+            ):
+                build_overlay_contamination_override(*_overlay_override_inputs())
 
     def test_overlay_override_rejects_residual_field_difference(self) -> None:
         inputs = list(_overlay_override_inputs())
@@ -679,39 +713,50 @@ class NativeMenuSettlementV2Tests(unittest.TestCase):
 
         with self.assertRaisesRegex(
             SettlementV2Error,
-            "landed overlay override: residual non-draw_order difference "
-            "remains",
+            "landed overlay override: semantic-multiset difference leaves "
+            "residual draws or fields",
         ):
             build_overlay_contamination_override(*inputs)
 
-    def test_overlay_hygiene_rejects_contaminated_non_overlay_screen(self) -> None:
+    def test_overlay_hygiene_rejects_complete_semantic_multiset(self) -> None:
         layout = copy.deepcopy(_samples()[0]["payload"])
-        overlay = _element(100)
-        layout["elements"].append(overlay)
+        overlay = [_element(100), _element(101)]
+        contaminated = copy.deepcopy(overlay)
+        for index, element in enumerate(contaminated, start=7):
+            element["id"] = f"screen.art.item_{element['art_id']}.{index}"
+            element["draw_order"] = 500 + index
+        layout["elements"].extend(contaminated)
 
         with self.assertRaisesRegex(
             SettlementV2Error,
             "overlay hygiene contract: non-overlay screen 'screen' "
-            "intersects the beta-dialog reference art-ID set: item_100.1",
+            "contains the complete beta-dialog semantic multiset",
         ):
-            assert_overlay_hygiene(layout, _overlay_reference([overlay]))
+            assert_overlay_hygiene(layout, _overlay_reference(overlay))
+
+    def test_overlay_hygiene_accepts_pause_style_partial_shared_suffix_subset(self) -> None:
+        layout = copy.deepcopy(_samples()[0]["payload"])
+        overlay = [_element(100), _element(101)]
+        layout["elements"].append(copy.deepcopy(overlay[0]))
+
+        assert_overlay_hygiene(layout, _overlay_reference(overlay))
 
     def test_overlay_hygiene_allows_the_overlay_reference_screen(self) -> None:
-        overlay = _element(100)
+        overlay = [_element(100), _element(101)]
         layout = {
             "generation": 2,
             "screen_id": "beta_notice",
             "screen_title": "Beta Notice",
             "capture_method": "native",
-            "elements": [overlay],
+            "elements": copy.deepcopy(overlay),
         }
 
-        assert_overlay_hygiene(layout, _overlay_reference([overlay]))
+        assert_overlay_hygiene(layout, _overlay_reference(overlay))
 
     def test_overlay_hygiene_rejects_a_transient_contaminated_sample(self) -> None:
         samples = _samples()
-        overlay = _element(100)
-        samples[3]["payload"]["elements"].append(overlay)
+        overlay = [_element(100), _element(101)]
+        samples[3]["payload"]["elements"].extend(copy.deepcopy(overlay))
 
         with self.assertRaisesRegex(
             SettlementV2Error,
@@ -719,7 +764,7 @@ class NativeMenuSettlementV2Tests(unittest.TestCase):
         ):
             assert_overlay_sample_hygiene(
                 samples,
-                _overlay_reference([overlay]),
+                _overlay_reference(overlay),
             )
 
     def test_structural_comparison_ignores_only_measured_animation(self) -> None:

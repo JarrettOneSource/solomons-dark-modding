@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Resolve Settlement v2.3 motion capability across one complete menu campaign."""
+"""Resolve v2.3 motion capability across one Settlement v2.4 menu campaign."""
 
 from __future__ import annotations
 
@@ -642,7 +642,7 @@ def resolve_campaign(
     resolved_navigation.setdefault("header", {})[
         "motion_capability_resolution"
     ] = {
-        "settlement_spec": "2.3",
+                "settlement_spec": "2.4",
         "primary_raw_recording": evidence_receipt(
             primary_navigation_path, evidence_root
         ),
@@ -659,7 +659,7 @@ def resolve_campaign(
 
     audit = {
         "schema": "solomon-dark-native-menu-motion-capability-audit-v1",
-        "settlement_spec": "2.3",
+            "settlement_spec": "2.4",
         "applied": apply,
         "standalone_fixture_count": len(fixtures),
         "raw_observation_count": len(observations),
@@ -681,13 +681,13 @@ def resolve_campaign(
         for path, expected in candidate_updates.items():
             if canonical_bytes(read_object(path)) != canonical_bytes(expected):
                 raise ResolutionError(
-                    f"resolved candidate {path} is not the machine-derived v2.3 result"
+                f"resolved candidate {path} is not the machine-derived v2.4 result"
                 )
         if not resolved_navigation_output.is_file() or canonical_bytes(
             read_object(resolved_navigation_output)
         ) != canonical_bytes(resolved_navigation):
             raise ResolutionError(
-                "resolved navigation is not the machine-derived v2.3 result"
+            "resolved navigation is not the machine-derived v2.4 result"
             )
     return audit
 

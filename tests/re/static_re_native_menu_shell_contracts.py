@@ -24,7 +24,7 @@ from native_menu_settlement_v2 import (
     assert_overlay_hygiene,
     build_overlay_contamination_override,
     canonical_bytes,
-    element_art_id_suffix,
+    deterministic_reordinalized_layout,
     structural_layout_bytes,
     validate_overlay_reference,
 )
@@ -927,7 +927,7 @@ def test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired() -> str:
         r"EXTENDED_OBSERVATION_MINIMUM_MILLISECONDS\s*=\s*60_000\b.*?"
         r"EXTENDED_OBSERVATION_SETTLE_SPAN_MULTIPLIER\s*=\s*10\b.*?"
         r"EXTENDED_OBSERVATION_MINIMUM_SAMPLES\s*=\s*200\b.*?"
-        r"SETTLEMENT_SPEC\s*=\s*\"2\.3\"",
+        r"SETTLEMENT_SPEC\s*=\s*\"2\.4\"",
         "Settlement v2 sample/span/animated-cap constants drifted from the "
         "amended menu capture and corroboration definition",
     )
@@ -1061,14 +1061,14 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
         r"endpoint\[\"layout\"\]\s*=\s*normalized\[\"layout\"\].*?"
         r"endpoint\[\"motion_capability\"\]\s*=\s*proofs\[layout_id\].*?"
         r"if verify:.*?"
-        r"resolved candidate .*? is not the machine-derived v2\.3 result.*?"
-        r"resolved navigation is not the machine-derived v2\.3 result",
+        r"resolved candidate .*? is not the machine-derived v2\.4 result.*?"
+        r"resolved navigation is not the machine-derived v2\.4 result",
         "the v2.3 resolver no longer applies one screen classification to every "
         "fixture/endpoint or verifies the derived artifacts byte-for-byte",
     )
     _require_regex(
         promoter,
-        r"motion_capability_resolution.*?settlement_spec.*?2\.3.*?"
+        r"motion_capability_resolution.*?settlement_spec.*?2\.4.*?"
         r"resolve_campaign\(.*?False,\s*True,",
         "menu promotion can bypass re-derivation of the complete v2.3 campaign",
     )
@@ -1184,34 +1184,65 @@ def test_native_menu_overlay_contamination_override_is_fail_closed() -> str:
     support = _read("scripts/NativeMenuCaptureSupport.ps1")
     importer = _read("scripts/Import-NativeMenuSpecialCaptures.ps1")
     aggregate_builder = _read("scripts/Build-NativeMenuGoldens.ps1")
+    unit_tests = _read("tests/test_native_menu_settlement_v2.py")
 
     _require_regex(
         classifier,
         r"def build_overlay_contamination_override\(.*?"
         r"assert_canonical_structure_matches\(primary_layout, confirmation_layout\).*?"
-        r"if landed_only_suffixes != reference_suffixes:.*?"
-        r"does not .*?exactly equal the overlay reference set",
-        "Settlement v2.2 overlay correction no longer requires canonical "
-        "second-instance agreement and exact overlay-reference set equality",
+        r"reference_counter = validate_overlay_reference\(overlay_reference\).*?"
+        r"_subtract_overlay_semantic_multiset\(.*?"
+        r"if corrected_bytes != primary_bytes:.*?"
+        r"semantic-multiset difference leaves.*?residual draws or fields",
+        "Settlement v2.4 overlay correction no longer requires canonical "
+        "second-instance agreement and zero-residual semantic subtraction",
     )
     _require_regex(
         classifier,
-        r"for difference in landed_only:.*?"
-        r"for payload in \(.*?primary_phases.*?confirmation_phases.*?"
+        r"absence_payloads = \(.*?primary_phases.*?confirmation_phases.*?"
         r"primary_settled.*?confirmation_settled.*?\).*?"
-        r"appears in a fresh population phase or.*?settled window.*?"
+        r"overlay_semantic_multiset_is_present\(payload, overlay_reference\).*?"
+        r"appears in a fresh population phase or settled window.*?"
         r"generation difference lacks.*?two-instance population witnesses",
-        "Settlement v2.2 overlay correction no longer proves every removed "
-        "member absent and its generation change witnessed in both traces",
+        "Settlement v2.4 overlay correction no longer proves the complete "
+        "semantic multiset absent and its generation change in both traces",
     )
     _require_regex(
         classifier,
-        r"removed_below\s*=\s*sum\(order < landed_order for order in removed_orders\).*?"
-        r"expected_order\s*=\s*landed_order - removed_below.*?"
-        r"draw-order recompaction arithmetic .*?failed.*?"
-        r"landed minus overlay leaves residual.*?structural differences",
-        "Settlement v2.2 overlay correction no longer proves exact draw-order "
-        "recompaction and zero residual structural differences",
+        r"def deterministic_reordinalized_layout\(.*?"
+        r"elements.sort\(key=_reordinalization_key\).*?"
+        r"counts\[base\] \+= 1.*?"
+        r"element\[\"id\"\] = new_id.*?element\[\"draw_order\"\] = art_order.*?"
+        r"normalized_corrected.*?normalized_primary.*?normalized_confirmation",
+        "Settlement v2.4 overlay correction no longer deterministically "
+        "reassigns positional draw orders and per-art ordinals on all views",
+    )
+    _require_regex(
+        classifier,
+        r"def overlay_semantic_multiset_is_present\(.*?"
+        r"all\(observed\[signature\] >= count.*?required.items\(\)\).*?"
+        r"def assert_overlay_hygiene\(.*?"
+        r"contains the complete beta-dialog semantic multiset",
+        "overlay hygiene no longer rejects only a complete semantic "
+        "sub-multiset and may regress to suffix-intersection false positives",
+    )
+    _require_regex(
+        unit_tests,
+        r"def test_overlay_override_rejects_residual_draw_beyond_reference\(.*?"
+        r"semantic-multiset difference leaves.*?residual draws or fields.*?"
+        r"def test_overlay_override_rejects_noncanonical_reordinalization\(.*?"
+        r"_noncanonical.*?residual draws or fields",
+        "the v2.4 unit mutations no longer trip residual semantic draws and "
+        "non-canonical survivor ordinals by their named claims",
+    )
+    _require_regex(
+        unit_tests,
+        r"def test_overlay_hygiene_rejects_complete_semantic_multiset\(.*?"
+        r"assertRaisesRegex\(.*?complete beta-dialog semantic multiset.*?"
+        r"def test_overlay_hygiene_accepts_pause_style_partial_shared_suffix_subset\(.*?"
+        r"elements.*?append\(.*?assert_overlay_hygiene\(",
+        "the overlay hygiene regression no longer rejects a complete dialog "
+        "while accepting pause-style partial atlas sharing",
     )
     _require_regex(
         reference_builder,
@@ -1246,7 +1277,7 @@ def test_native_menu_overlay_contamination_override_is_fail_closed() -> str:
         r"build_overlay_contamination_override\(.*?"
         r"if len\(successful\) != 1:.*?absent or ambiguous",
         "the landed override attacher no longer hashes the fixed reference "
-        "evidence, derives v2.2, and refuses ambiguous override paths",
+        "evidence, derives v2.4, and refuses ambiguous override paths",
     )
     _require_regex(
         promoter,
@@ -1255,7 +1286,7 @@ def test_native_menu_overlay_contamination_override_is_fail_closed() -> str:
         r"canonical_bytes\(declared\) != canonical_bytes\(expected\).*?"
         r"derived exactly from the reference and both fresh traces",
         "menu promotion no longer re-derives the exact declared Settlement "
-        "v2.2 overlay proof from the committed reference and both traces",
+        "v2.4 overlay proof from the committed reference and both traces",
     )
     _require_regex(
         promoter,
@@ -1285,6 +1316,16 @@ def test_native_menu_overlay_contamination_override_is_fail_closed() -> str:
         "overlay contamination from an earlier sampled population phase",
     )
     _require_regex(
+        support,
+        r"local function compact\(element\).*?"
+        r"element\.left.*?element\.top.*?element\.right.*?element\.bottom.*?"
+        r"element\.unclipped_left.*?element\.unclipped_top.*?"
+        r"element\.unclipped_right.*?element\.unclipped_bottom.*?"
+        r"payload_encoding\":\"structural-element-arrays-v1",
+        "high-cadence population evidence no longer carries the full geometry "
+        "needed to prove semantic overlay absence",
+    )
+    _require_regex(
         importer,
         r"function Assert-SpecialCaptureSampleOverlayHygiene.*?"
         r"check-overlay-samples.*?"
@@ -1307,9 +1348,9 @@ def test_native_menu_overlay_contamination_override_is_fail_closed() -> str:
             "machine-derived committed reference",
         )
     return (
-        "Settlement v2.2 derives one hashed beta-overlay reference, accepts "
-        "only an exact absent set with mechanical draw-order recompaction and "
-        "no residual differences, and hygiene-gates every capture surface"
+        "Settlement v2.4 derives one hashed beta-overlay semantic multiset, "
+        "accepts only exact zero-residual subtraction with deterministic "
+        "reordinalization, and hygiene-gates every capture surface"
     )
 
 
@@ -1566,9 +1607,9 @@ def _assert_settlement_v2_layout(
     instance: str,
     process_id: object,
 ) -> list[str]:
-    if settlement.get("settlement_spec") != "2.3":
+    if settlement.get("settlement_spec") != "2.4":
         raise StaticReTestFailure(
-            f"{witness} does not identify the Settlement v2.3 discipline"
+            f"{witness} does not identify the Settlement v2.4 discipline"
         )
     if settlement.get("structural_element_order") != (
         "draw_order_then_element_id"
@@ -2031,14 +2072,18 @@ def _assert_landed_overlay_override(
             f"{witness} landed overlay override is not an object"
         )
     if override.get("rule") != (
-        "Settlement v2.2 landed beta-overlay contamination override"
+        "Settlement v2.4 landed beta-overlay semantic-multiset override"
     ):
         raise StaticReTestFailure(
-            f"{witness} does not name the narrow Settlement v2.2 overlay rule"
+            f"{witness} does not name the narrow Settlement v2.4 overlay rule"
         )
-    if override.get("canonical_order") != "draw_order_then_element_id":
+    if (
+        override.get("canonical_order") != "draw_order_then_remaining_fields"
+        or override.get("ordinal_identity")
+        != "screen_local_positional_bookkeeping"
+    ):
         raise StaticReTestFailure(
-            f"{witness} overlay override makes raw list position contractual"
+            f"{witness} overlay override makes raw list position or ordinal identity contractual"
         )
 
     receipt = override.get("overlay_reference")
@@ -2099,7 +2144,6 @@ def _assert_landed_overlay_override(
     for field in (
         "canonical_structural_sha256",
         "confirmation_canonical_structural_sha256",
-        "recompacted_structural_sha256",
     ):
         if override.get(field) != structural_sha:
             raise StaticReTestFailure(
@@ -2138,119 +2182,103 @@ def _assert_landed_overlay_override(
         raise StaticReTestFailure(
             f"{witness} overlay override does not enumerate its exact generation change"
         )
-    landed_only = [
-        difference
-        for difference in differences
-        if difference.get("kind") == "landed_only_element"
-    ]
-    if not landed_only:
+    reference_entries = overlay_reference.get("overlay_semantic_draw_multiset")
+    if not isinstance(reference_entries, list) or not reference_entries:
         raise StaticReTestFailure(
-            f"{witness} overlay override removed no beta-dialog members"
+            f"{witness} overlay reference has no semantic draw multiset"
         )
-    landed_only_ids: list[str] = []
-    landed_only_suffixes: list[str] = []
-    removed_orders: list[float] = []
-    for difference in landed_only:
-        element_id = difference.get("element_id")
-        value = difference.get("landed_value")
+    reference_hash_counts: dict[str, int] = {}
+    for entry in reference_entries:
+        if not isinstance(entry, dict):
+            raise StaticReTestFailure(
+                f"{witness} overlay semantic multiset contains a non-object entry"
+            )
+        payload = entry.get("payload")
+        count = entry.get("count")
+        if not isinstance(payload, dict) or not isinstance(count, int) or count <= 0:
+            raise StaticReTestFailure(
+                f"{witness} overlay semantic multiset contains an invalid count or payload"
+            )
+        semantic_hash = hashlib.sha256(canonical_bytes(payload)).hexdigest()
+        reference_hash_counts[semantic_hash] = count
+    reference_draw_count = sum(reference_hash_counts.values())
+    if (
+        override.get("overlay_semantic_draw_count") != reference_draw_count
+        or override.get("overlay_semantic_multiset_sha256")
+        != hashlib.sha256(canonical_bytes(reference_entries)).hexdigest()
+    ):
+        raise StaticReTestFailure(
+            f"{witness} overlay proof records a different semantic multiset"
+        )
+    removed = override.get("removed_overlay_draws")
+    if not isinstance(removed, list) or len(removed) != reference_draw_count:
+        raise StaticReTestFailure(
+            f"{witness} overlay proof removed the wrong semantic draw census"
+        )
+    removed_hash_counts: dict[str, int] = {}
+    removed_ids: set[str] = set()
+    for row in removed:
+        if not isinstance(row, dict):
+            raise StaticReTestFailure(
+                f"{witness} overlay removal proof contains a non-object row"
+            )
+        element_id = row.get("landed_element_id")
+        draw_order = row.get("landed_draw_order")
+        semantic_hash = row.get("semantic_draw_sha256")
         if (
             not isinstance(element_id, str)
-            or not isinstance(value, dict)
-            or value.get("id") != element_id
-            or difference.get("settled_value") is not None
-            or element_id in current_by_id
+            or not element_id
+            or element_id in removed_ids
+            or isinstance(draw_order, bool)
+            or not isinstance(draw_order, (int, float))
+            or not re.fullmatch(r"[0-9a-f]{64}", str(semantic_hash))
         ):
             raise StaticReTestFailure(
-                f"{witness} falsely identifies overlay member {element_id!r}"
+                f"{witness} overlay removal proof has ambiguous positional bookkeeping"
             )
-        try:
-            suffix = element_art_id_suffix(value)
-        except SettlementV2Error as error:
-            raise StaticReTestFailure(
-                f"{witness} removed a non-art overlay candidate {element_id!r}"
-            ) from error
-        order = value.get("draw_order")
-        if isinstance(order, bool) or not isinstance(order, (int, float)):
-            raise StaticReTestFailure(
-                f"{witness} overlay member {element_id!r} has no numeric draw order"
-            )
-        landed_only_ids.append(element_id)
-        landed_only_suffixes.append(suffix)
-        removed_orders.append(float(order))
-    reference_suffixes = overlay_reference["art_element_id_suffixes"]
-    if sorted(landed_only_suffixes) != reference_suffixes:
-        raise StaticReTestFailure(
-            f"{witness} landed-only set does not exactly equal the overlay reference"
+        removed_ids.add(element_id)
+        removed_hash_counts[str(semantic_hash)] = (
+            removed_hash_counts.get(str(semantic_hash), 0) + 1
         )
-    if override.get("overlay_art_id_suffixes") != reference_suffixes:
+    if removed_hash_counts != reference_hash_counts:
         raise StaticReTestFailure(
-            f"{witness} overlay proof records a different art-ID suffix set"
+            f"{witness} landed-minus-settled semantic difference is not exactly the overlay multiset"
         )
-    if override.get("landed_element_count") != len(elements) + len(landed_only):
+    if override.get("landed_element_count") != len(elements) + len(removed):
         raise StaticReTestFailure(
-            f"{witness} overlay census is not settled plus removed overlay"
+            f"{witness} overlay census is not settled plus the exact semantic multiset"
         )
 
     for difference in differences:
-        kind = difference.get("kind")
         if difference.get("landed_value") == difference.get("settled_value"):
             raise StaticReTestFailure(
                 f"{witness} overlay proof records an equal-valued difference"
             )
-        if kind == "layout_field":
-            if difference is not generation_differences[0]:
-                raise StaticReTestFailure(
-                    f"{witness} overlay proof has a residual layout-field difference"
-                )
-        elif kind == "landed_only_element":
-            continue
-        elif kind == "element_field":
-            element_id = difference.get("element_id")
-            if difference.get("field") != "draw_order" or element_id not in current_by_id:
-                raise StaticReTestFailure(
-                    f"{witness} overlay proof has a residual non-draw-order difference"
-                )
-            if current_by_id[element_id].get("draw_order") != difference.get(
-                "settled_value"
-            ):
-                raise StaticReTestFailure(
-                    f"{witness} overlay proof records a false settled draw order"
-                )
-        else:
+        if difference.get("kind") not in {
+            "layout_field",
+            "landed_only_element",
+            "settled_only_element",
+            "element_field",
+        }:
             raise StaticReTestFailure(
-                f"{witness} overlay proof contains unsupported difference kind {kind!r}"
+                f"{witness} overlay proof contains an unsupported structural difference"
             )
 
-    absence = override.get("overlay_member_absence")
-    if not isinstance(absence, list) or len(absence) != len(landed_only_ids):
+    absence = override.get("overlay_absence")
+    if not isinstance(absence, dict):
         raise StaticReTestFailure(
-            f"{witness} overlay proof did not cover every removed member's absence"
+            f"{witness} overlay proof has no semantic-multiset absence census"
         )
-    absence_by_id = {
-        row.get("element_id"): row for row in absence if isinstance(row, dict)
-    }
-    if set(absence_by_id) != set(landed_only_ids) or len(absence_by_id) != len(
-        absence
+    for field, minimum in (
+        ("primary_population_phases", 1),
+        ("confirmation_population_phases", 1),
+        ("primary_settled_samples", MINIMUM_SAMPLES),
+        ("confirmation_settled_samples", MINIMUM_SAMPLES),
     ):
-        raise StaticReTestFailure(
-            f"{witness} overlay absence proof is incomplete or ambiguous"
-        )
-    suffix_by_id = dict(zip(landed_only_ids, landed_only_suffixes))
-    for element_id, row in absence_by_id.items():
-        if row.get("art_id_suffix") != suffix_by_id[element_id]:
+        if absence.get(field, 0) < minimum:
             raise StaticReTestFailure(
-                f"{witness} overlay absence proof changed {element_id}'s suffix"
+                f"{witness} overlay semantic multiset lacks {field} absence proof"
             )
-        for field, minimum in (
-            ("primary_population_absence_phases", 1),
-            ("confirmation_population_absence_phases", 1),
-            ("primary_settled_absence_samples", MINIMUM_SAMPLES),
-            ("confirmation_settled_absence_samples", MINIMUM_SAMPLES),
-        ):
-            if row.get(field, 0) < minimum:
-                raise StaticReTestFailure(
-                    f"{witness} overlay member {element_id} lacks {field} proof"
-                )
 
     witnesses = override.get("generation_population_witnesses")
     if not isinstance(witnesses, dict):
@@ -2266,41 +2294,54 @@ def _assert_landed_overlay_override(
                 f"{witness} overlay generation change lacks {field}"
             )
 
-    recompaction = override.get("draw_order_recompaction")
-    if not isinstance(recompaction, list) or len(recompaction) != len(elements):
+    reordinalization = override.get("deterministic_reordinalization")
+    if (
+        not isinstance(reordinalization, dict)
+        or reordinalization.get("algorithm")
+        != "art_draw_order_then_remaining_fields_per_art_id"
+    ):
         raise StaticReTestFailure(
-            f"{witness} overlay recompaction did not reach every surviving member"
+            f"{witness} overlay proof lost its deterministic ordinal algorithm"
         )
-    recompaction_by_id = {
-        row.get("element_id"): row
-        for row in recompaction
-        if isinstance(row, dict)
-    }
-    if set(recompaction_by_id) != set(current_by_id) or len(
-        recompaction_by_id
-    ) != len(recompaction):
+    try:
+        normalized_layout, normalized_ids, expected_primary_proof = (
+            deterministic_reordinalized_layout(layout, animated_ids)
+        )
+    except SettlementV2Error as error:
         raise StaticReTestFailure(
-            f"{witness} overlay recompaction is incomplete or ambiguous"
+            f"{witness} settled layout cannot be deterministically reordinalized: {error}"
+        ) from error
+    if reordinalization.get("settled_primary") != expected_primary_proof:
+        raise StaticReTestFailure(
+            f"{witness} overlay proof records a non-canonical settled survivor ordinal"
         )
-    for element_id, row in recompaction_by_id.items():
-        landed_order = row.get("landed_draw_order")
-        settled_order = row.get("settled_draw_order")
-        if isinstance(landed_order, bool) or not isinstance(
-            landed_order, (int, float)
+    expected_projection = [
+        (row["normalized_element_id"], row["normalized_draw_order"])
+        for row in expected_primary_proof
+    ]
+    for label in ("corrected_landed", "settled_confirmation"):
+        proof = reordinalization.get(label)
+        if not isinstance(proof, list) or not all(
+            isinstance(row, dict) for row in proof
         ):
             raise StaticReTestFailure(
-                f"{witness} overlay recompaction lost {element_id}'s landed order"
+                f"{witness} overlay proof has no {label} reordinalization witness"
             )
-        removed_below = sum(order < float(landed_order) for order in removed_orders)
-        if (
-            row.get("removed_overlay_draws_below") != removed_below
-            or float(landed_order) - removed_below != settled_order
-            or current_by_id[element_id].get("draw_order") != settled_order
-        ):
+        projection = [
+            (row.get("normalized_element_id"), row.get("normalized_draw_order"))
+            for row in proof
+        ]
+        if projection != expected_projection:
             raise StaticReTestFailure(
-                f"{witness} overlay draw-order recompaction arithmetic is false "
-                f"for {element_id}"
+                f"{witness} overlay proof has a non-canonical {label} survivor ordinal"
             )
+    normalized_hash = hashlib.sha256(
+        structural_layout_bytes(normalized_layout, normalized_ids)
+    ).hexdigest()
+    if override.get("reordinalized_structural_sha256") != normalized_hash:
+        raise StaticReTestFailure(
+            f"{witness} overlay proof records a false reordinalized structural hash"
+        )
 
     for trace_label in ("primary_population_trace", "confirmation_population_trace"):
         trace = override.get(trace_label)
@@ -2341,14 +2382,14 @@ def test_native_menu_settled_destinations_equal_standalones() -> str:
     )
     if (
         not isinstance(resolution_header, dict)
-        or resolution_header.get("settlement_spec") != "2.3"
+        or resolution_header.get("settlement_spec") != "2.4"
         or resolution_header.get("screen_count", 0) < len(LAYOUT_IDS) + 1
         or not isinstance(
             resolution_header.get("motion_observation_directory"), str
         )
     ):
         raise StaticReTestFailure(
-            "settled destination contract did not reach the complete v2.3 "
+            "settled destination contract did not reach the complete v2.4 "
             "campaign-resolution receipt"
         )
     for field in ("primary_raw_recording", "confirmation_raw_recording"):

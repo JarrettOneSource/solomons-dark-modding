@@ -491,7 +491,13 @@ if sampler == nil then
       ',', quote(element.text_style),
       ',', boolean(element.visible),
       ',', boolean(element.interactive),
-      ',', tostring(element.draw_order or 0), ']'
+      ',', tostring(element.draw_order or 0),
+      ',[', tostring(element.left or 0), ',', tostring(element.top or 0),
+      ',', tostring(element.right or 0), ',', tostring(element.bottom or 0), ']',
+      ',[', tostring(element.unclipped_left or 0),
+      ',', tostring(element.unclipped_top or 0),
+      ',', tostring(element.unclipped_right or 0),
+      ',', tostring(element.unclipped_bottom or 0), ']]'
     })
   end
   sd.events.on('runtime.tick', function(event)

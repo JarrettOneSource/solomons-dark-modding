@@ -136,8 +136,8 @@ def validate_settlement_fixture(
     settlement = header.get("settlement")
     if not isinstance(settlement, dict):
         raise PromotionError(f"{fixture_path} has no Settlement v2 measurement")
-    if settlement.get("settlement_spec") != "2.3":
-        raise PromotionError(f"{fixture_path} does not identify Settlement v2.3")
+    if settlement.get("settlement_spec") != "2.4":
+        raise PromotionError(f"{fixture_path} does not identify Settlement v2.4")
     if settlement.get("structural_element_order") != (
         "draw_order_then_element_id"
     ):
@@ -404,7 +404,7 @@ def validate_overlay_override(
     if not isinstance(declared, dict):
         raise PromotionError(
             f"STOP: standalone {fixture_path.name} differs from landed structure "
-            "without a Settlement v2.2 overlay-contamination override"
+            "without a Settlement v2.4 overlay-contamination override"
         )
     reference_receipt = declared.get("overlay_reference")
     if not isinstance(reference_receipt, dict):
@@ -545,9 +545,9 @@ def validate_and_promote(
     )
     if not isinstance(resolution_header, dict) or resolution_header.get(
         "settlement_spec"
-    ) != "2.3":
+    ) != "2.4":
         raise PromotionError(
-            "candidate navigation has no machine-derived Settlement v2.3 resolution"
+            "candidate navigation has no machine-derived Settlement v2.4 resolution"
         )
 
     def resolution_evidence_path(field: str) -> Path:
@@ -591,7 +591,7 @@ def validate_and_promote(
         )
     except (ResolutionError, SettlementV2Error) as error:
         raise PromotionError(
-            f"candidate Settlement v2.3 resolution did not re-derive: {error}"
+            f"candidate Settlement v2.4 resolution did not re-derive: {error}"
         ) from error
     overlay_reference_path, overlay_reference = resolve_overlay_reference(
         repo_root,

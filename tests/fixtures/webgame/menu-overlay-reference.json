@@ -1,5 +1,5 @@
 {
-  "schema": "solomon-dark-native-menu-overlay-reference-v1",
+  "schema": "solomon-dark-native-menu-overlay-reference-v2",
   "header": {
     "derivation": "art draws present in the segregated pre-dismissal capture and absent from the settled post-dismissal capture of the same exact underlying screen",
     "underlying_screen": "control_scheme_picker",
@@ -18,22 +18,382 @@
       "bytes": 12727
     }
   },
-  "art_element_id_suffixes": [
-    "ui_101.1",
-    "ui_107.1",
-    "ui_108.1",
-    "ui_109.1",
-    "ui_110.1",
-    "ui_17.1",
-    "ui_17.2",
-    "ui_17.3",
-    "ui_17.4",
-    "ui_18.1",
-    "ui_54.1",
-    "ui_54.2",
-    "ui_8.1",
-    "ui_8.2",
-    "ui_8.3"
+  "overlay_semantic_draw_multiset": [
+    {
+      "count": 1,
+      "payload": {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.101",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          702.0,
+          643.5,
+          898.0,
+          712.0
+        ],
+        "unclipped_rect": [
+          623.5,
+          643.5,
+          976.5,
+          712.5
+        ]
+      }
+    },
+    {
+      "count": 1,
+      "payload": {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.107",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          516.5,
+          99.5,
+          601.5,
+          188.5
+        ],
+        "unclipped_rect": [
+          516.5,
+          99.5,
+          601.5,
+          188.5
+        ]
+      }
+    },
+    {
+      "count": 1,
+      "payload": {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.108",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          998.5,
+          99.5,
+          1083.5,
+          188.5
+        ],
+        "unclipped_rect": [
+          998.5,
+          99.5,
+          1083.5,
+          188.5
+        ]
+      }
+    },
+    {
+      "count": 1,
+      "payload": {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.109",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          516.5,
+          711.5,
+          601.5,
+          800.5
+        ],
+        "unclipped_rect": [
+          516.5,
+          711.5,
+          601.5,
+          800.5
+        ]
+      }
+    },
+    {
+      "count": 1,
+      "payload": {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.110",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          998.5,
+          711.5,
+          1083.5,
+          800.5
+        ],
+        "unclipped_rect": [
+          998.5,
+          711.5,
+          1083.5,
+          800.5
+        ]
+      }
+    },
+    {
+      "count": 1,
+      "payload": {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.17",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          535.0,
+          117.0,
+          615.0,
+          200.0
+        ],
+        "unclipped_rect": [
+          535.0,
+          117.0,
+          615.0,
+          200.0
+        ]
+      }
+    },
+    {
+      "count": 1,
+      "payload": {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.17",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          535.0,
+          700.0,
+          615.0,
+          783.0
+        ],
+        "unclipped_rect": [
+          535.0,
+          700.0,
+          615.0,
+          783.0
+        ]
+      }
+    },
+    {
+      "count": 1,
+      "payload": {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.17",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          985.0,
+          117.0,
+          1065.0,
+          200.0
+        ],
+        "unclipped_rect": [
+          985.0,
+          117.0,
+          1065.0,
+          200.0
+        ]
+      }
+    },
+    {
+      "count": 1,
+      "payload": {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.17",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          985.0,
+          700.0,
+          1065.0,
+          783.0
+        ],
+        "unclipped_rect": [
+          985.0,
+          700.0,
+          1065.0,
+          783.0
+        ]
+      }
+    },
+    {
+      "count": 1,
+      "payload": {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.18",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          669.0,
+          50.999992,
+          931.0,
+          118.000015
+        ],
+        "unclipped_rect": [
+          669.0,
+          50.999992,
+          931.0,
+          118.000015
+        ]
+      }
+    },
+    {
+      "count": 1,
+      "payload": {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.54",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          696.0,
+          637.5,
+          766.0,
+          722.5
+        ],
+        "unclipped_rect": [
+          696.0,
+          637.5,
+          766.0,
+          722.5
+        ]
+      }
+    },
+    {
+      "count": 1,
+      "payload": {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.54",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          834.0,
+          637.5,
+          904.0,
+          722.5
+        ],
+        "unclipped_rect": [
+          834.0,
+          637.5,
+          904.0,
+          722.5
+        ]
+      }
+    },
+    {
+      "count": 1,
+      "payload": {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.8",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          706.625,
+          783.0,
+          743.375,
+          867.0
+        ],
+        "unclipped_rect": [
+          706.625,
+          783.0,
+          743.375,
+          867.0
+        ]
+      }
+    },
+    {
+      "count": 1,
+      "payload": {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.8",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          775.5,
+          782.0,
+          824.5,
+          894.0
+        ],
+        "unclipped_rect": [
+          775.5,
+          782.0,
+          824.5,
+          894.0
+        ]
+      }
+    },
+    {
+      "count": 1,
+      "payload": {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.8",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          856.625,
+          783.0,
+          893.375,
+          867.0
+        ],
+        "unclipped_rect": [
+          856.625,
+          783.0,
+          893.375,
+          867.0
+        ]
+      }
+    }
   ],
   "overlay_only_art_elements": [
     {
