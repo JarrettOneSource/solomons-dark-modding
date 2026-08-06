@@ -200,6 +200,7 @@
     <ClInclude Include="src\native_scene_capture\animation_observation.inl" />
     <ClInclude Include="src\native_scene_capture\generated_atlas_spans.inl" />
     <ClInclude Include="src\native_scene_capture\hooks.inl" />
+    <ClInclude Include="src\native_scene_capture\frame_observation.inl" />
     <ClInclude Include="src\native_scene_capture\observation.inl" />
     <ClInclude Include="src\native_scene_capture\public_api.inl" />
     <ClInclude Include="src\native_scene_capture\serialization.inl" />

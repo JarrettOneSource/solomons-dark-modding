@@ -488,6 +488,9 @@
     <ClInclude Include="src\native_scene_capture\animation_observation.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\native_scene_capture\frame_observation.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\native_scene_capture\observation.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
