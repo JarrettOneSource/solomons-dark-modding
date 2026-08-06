@@ -1512,11 +1512,16 @@ def validate_class_snapshot(
         actual = value["stats"][stat_name]["value"]
         require(actual == expected, f"{class_key} definition did not map {stat_name}: {actual} != {expected}")
     if validate_stock_starter_kit:
+        stat_kinds = {name: kind for name, _, kind in STAT_FIELDS}
         for stat_name, expected_bits in EXPECTED_COMMON_STAT_BITS.items():
-            actual = int(value["stats"][stat_name]["raw_u32"], 0)
+            if stat_kinds[stat_name] == "f32":
+                actual = int(value["stats"][stat_name]["raw_u32"], 0)
+            else:
+                actual = int(value["stats"][stat_name]["value"])
             require(
                 actual == expected_bits,
-                f"{class_key} starting stat {stat_name} changed: 0x{actual:08X} != 0x{expected_bits:08X}",
+                f"{class_key} starting stat {stat_name} changed: "
+                f"0x{actual & 0xFFFFFFFF:08X} != 0x{expected_bits:08X}",
             )
 
     primary = int(mapping["primary_spell"]["value"])
