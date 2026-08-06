@@ -184,7 +184,7 @@ consumer, not an inferred C++ source name.
 | Fortunate Flailing `71` | Read at staff-attack selection time; it does not create a permanent refreshed scalar. |
 | Teleport `48` | Refreshes cooldown cap/current fields at row-relative `+0x1568/+0x1564`. |
 | Phasing `15` | Refreshes cooldown cap/current fields at row-relative `+0x6F8/+0x6F4`. |
-| Regenerate `79` | While toggle `+0x8DE` is active, `0x006614D0` adds `1.5 / tickRate` to current HP `+0x70` per tick. |
+| Regenerate `79` | While toggle `+0x8DE` is active, `0x006614D0` adds `1.5 / tickRate` to current HP `+0x70` per tick. Together with the generic health-regeneration lane below, the exact per-update total is `(1.5 + (+0x9C)/10) / tickRate`, capped at max HP. |
 
 The general progression tick `0x00660220` also decrements timed power-up
 fields `+0x824` (Damage x4) and `+0x828` (treat concentration-dependent
@@ -274,8 +274,9 @@ fields in this block, including Firewalker state `+0x8DC`, so the
 serialization boundary does not need to re-interpret every CFG property.
 
 Toggle bytes `+0x8DC/+0x8DD/+0x8DE` are Firewalker, Mindstar, and Regenerate.
-Each active skill reserves
-`maxMP * mHoard / 100`; the summed absolute MP hoard is stored at `+0x740`.
+Firewalker reserves its scalar `mHoard` as an absolute MP amount (stock value
+50). Mindstar and Regenerate reserve `maxMP * mHoard / 100`. The summed
+absolute MP hoard is stored at actor progression `+0x740`.
 If the hoard exceeds max MP, `0x006639D0` clears the toggles, reserved and
 current mana, and shows “Overloaded Mana!” for the local player.
 
@@ -619,7 +620,7 @@ the payment fails.
 | `12` | Planewalker | `0x00548700` toggles the state. Enabling allocates `Mod_Planewalker (0x1B75)`, writes `mDuration`, attaches it, saves the previous selected spell at wizard `+0x308`, and forces selected spell `80` (Plane Orb). Disabling routes through the modifier-removal helper. |
 | `15` | Phasing | `0x0052A0B0` walks forward along the cast heading in collision-tested increments, accepts the first clear point within 20 probes, updates the wizard position/world membership, and emits the phase traversal effect. No separate cooldown is written by this helper. |
 | `21` | Ring of Fire | Calls `0x0063F920`, which creates the ring's `MovingFire (0x7E6)` segments and final `Shockwave (0x7E7)` from the supplied damage/owner flags. |
-| `23` | Firewalker | Toggles progression byte `+0x8DC`; enabling it creates `Fire_Goodguy (0x7EE)` and disabling it refreshes progression state. The player tick emits the trail while enabled. |
+| `23` | Firewalker | Toggles progression byte `+0x8DC`; enabling it creates `Fire_Goodguy (0x7EE)` and disabling it refreshes progression state. The player tick emits the trail while enabled. Refresh adds the scalar `mHoard=50` as an absolute MP reserve at `+0x740`, not a percentage of max MP. |
 | `27` | Magic Storm | Creates `StormCloud (0x7F0)` at the aimed point, copies caster/world identity, damage range and arc state, and registers the persistent cloud. |
 | `30` | Prismatic Shock | `0x00645540` creates the cast-wave presentation, performs a rectangular hostile query, and allocates/attaches `Mod_Prismatic (0x1B76)` through the contact ABI for every returned target. |
 | `35` | Ring of Ice | `0x00644460` creates three `Anim_Iceblast` bursts, the radial debris field, and `FreezeWave (0x7E8)` with configured damage, owner identity, and optional item-effect flag. |
@@ -627,7 +628,7 @@ the payment fails.
 | `45` | Raise Golem | Enforces the one/two-summon limit, creates `Golem (0x7F4)` at a collision-adjusted point, writes HP and both damage values, and folds learned Iron Golem reflection into the summon; see the detailed summon section above. |
 | `46` | Stoneskin | Constructs `Mod_StoneSkin` directly through `0x006237A0`, writes configured duration, and attaches the reference to the caster; it does not create a world projectile. |
 | `48` | Teleport | Calls `0x00644A00` around the world virtual `+0x12C` relocation query and writes the accepted destination back to the wizard. |
-| `49` | Magic Circle | `0x0063FDE0` creates/index-registers `MagicCircle (0x7EA)` at the aimed point with `mSlow`, color, and ownership state. Every ten ticks the circle attaches `Mod_CircleSlow (0x1B70)` to eligible enemies and boosts local-player healing and mana recovery. |
+| `49` | Magic Circle | `0x0063FDE0` creates/index-registers `MagicCircle (0x7EA)` at the aimed point with `mSlow`, color, and ownership state. Every ten ticks the circle attaches `Mod_CircleSlow (0x1B70)` to eligible enemies. The local player gains `mana_recovery * 2 / game_timing_scale` MP per callback. The HP branch is stock-inert: it computes `HP + health_regeneration * 2 / game_timing_scale`, compares that candidate with current HP instead of max HP, and writes current HP unchanged for ordinary positive regeneration. |
 | `50` | Magic Trap | Creates `MagicTrap (0x7F5)`. It derives an element selector from the current stock primary or weld build, derives base damage from that primary, multiplies it by `mDamage`, and registers the armed trap at the aimed point. |
 | `51` | Dampen | `0x00648DF0` queries hostile magic in a rectangle, removes guided/fire/dark missile actors, disrupts hostile caster actions, and performs the CFG's 50% shield-dispel test; it then starts action mode `21` (`Action_PlayerWizard_CastSpin`) at half normal action damage. |
 | `54` | Magic Shield | Combines Magic Shield `mAbsorb` with Explosive Shield state and calls the wizard's virtual `+0x64` to install/refresh shield state. |

@@ -1,0 +1,2818 @@
+{
+  "actor_layout": {
+    "actor_direct_progression": "actor+0x200",
+    "actor_progression_handle": "actor+0x300",
+    "effective_rank": "row+0x22",
+    "hoarded_mp": "progression+0x740",
+    "hp_current_max": "progression+0x70/+0x74",
+    "level": "progression+0x30",
+    "mp_current_max": "progression+0x7C/+0x80",
+    "next_threshold": "progression+0x3C",
+    "offer_seed": "progression+0x834",
+    "permanent_rank": "row+0x20",
+    "previous_threshold": "progression+0x38",
+    "skill_row_stride": "0x70",
+    "skill_table_count": "progression+0x24",
+    "skill_table_pointer": "progression+0x20",
+    "toggles": "progression+0x8DC/+0x8DD/+0x8DE",
+    "xp": "progression+0x34"
+  },
+  "header": {
+    "audio_disabled": true,
+    "build_loader_sha256": "642879f09136456e79e3a045fe2999598a109eed246aee5a6bee5ae66c46c5c1",
+    "capture": "progression_xp_offers_and_skill_effects",
+    "capture_method": "Owned retail solo instance; stock wave spawner and native death presenter followed by the retail progression XP grant seam with native scaling for each actor reward; native bot level sync/offer/apply seam; actor-private offer seed at progression+0x834; per-actor skill-row writes followed by retail ActorProgressionRefresh; tick-stamped native progression reads.",
+    "captured_utc": "2026-08-06T11:42:36Z",
+    "cleanup": [
+      {
+        "actualPath": "D:\\sd-progre-20260806\\runtime\\progre-live\\instances\\prog-golden\\stage\\SolomonDark.exe",
+        "alreadyExited": false,
+        "expectedPath": "D:\\sd-progre-20260806\\runtime\\progre-live\\instances\\prog-golden\\stage\\SolomonDark.exe",
+        "instance": "prog-golden",
+        "pathMatched": true,
+        "processId": 67872,
+        "role": "prog-golden",
+        "stopped": true
+      }
+    ],
+    "fixture_is_machine_recorded": true,
+    "format": "solomon-dark-native-golden-v1",
+    "game_binary_path": "/mnt/c/Users/User/Documents/GitHub/SB Modding/Solomon Dark/SolomonDarkAbandonware/SolomonDark.exe",
+    "game_binary_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+    "gameplay_rng_setup": {
+      "seed": 20281789,
+      "seed_source": "recorder constant passed to sd.rng.set_seed for arena setup",
+      "stream": "active stock gameplay RNG stream",
+      "used_for_offer_selection": false
+    },
+    "headless": true,
+    "instance": "prog-golden",
+    "launch_executable_path": "D:\\sd-progre-20260806\\runtime\\progre-live\\instances\\prog-golden\\stage\\SolomonDark.exe",
+    "launch_process_id": 67872,
+    "loader_sha256": "642879f09136456e79e3a045fe2999598a109eed246aee5a6bee5ae66c46c5c1",
+    "offer_rng_seed_write": {
+      "actor_private_field": "progression+0x834",
+      "value": 79225
+    },
+    "ports": [
+      52381,
+      52382
+    ],
+    "provenance_derivation": {
+      "cli_overrides_permitted": false,
+      "hashes": "recorder-owned Windows Get-FileHash queries",
+      "source": "recorder-owned Windows git.exe queries"
+    },
+    "source_commit_sha": "8deaa9400cc1df33748976aa0464e8016c11a46b",
+    "source_tree_sha": "a3bc978196605af4ec9b5f6a3be9c0660cd1ae40",
+    "worktree_dirty_at_capture_start": true
+  },
+  "level_ups": [
+    {
+      "after": {
+        "actor_address": 286065448,
+        "actor_plus_0x200": 287280632,
+        "actor_plus_0x300": 287125560,
+        "base_hp": 50.0,
+        "base_mp": 100.0,
+        "game_timing_scale": 100.0,
+        "health_regeneration": 1.0,
+        "hoarded_mp": 0.0,
+        "hp": 50.0,
+        "level": 2,
+        "mana_recovery": 10.0,
+        "max_hp": 50.0,
+        "max_mp": 100.0,
+        "mp": 100.0,
+        "next_threshold": 160.0,
+        "offer_seed": 668402,
+        "previous_threshold": 90.0,
+        "progression_address": 287280632,
+        "skill_table_address": 287496444,
+        "skill_table_count": 83,
+        "skills": {
+          "23": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "56": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "57": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "64": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "79": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          }
+        },
+        "tick": 3868,
+        "toggles": {
+          "firewalker": false,
+          "mindstar": false,
+          "regenerate": false
+        },
+        "xp": 100.0
+      },
+      "before": {
+        "actor_address": 286065448,
+        "actor_plus_0x200": 287280632,
+        "actor_plus_0x300": 287125560,
+        "base_hp": 50.0,
+        "base_mp": 100.0,
+        "game_timing_scale": 100.0,
+        "health_regeneration": 1.0,
+        "hoarded_mp": 0.0,
+        "hp": 50.0,
+        "level": 1,
+        "mana_recovery": 10.0,
+        "max_hp": 50.0,
+        "max_mp": 100.0,
+        "mp": 100.0,
+        "next_threshold": 90.0,
+        "offer_seed": 79225,
+        "previous_threshold": 0.0,
+        "progression_address": 287280632,
+        "skill_table_address": 287496444,
+        "skill_table_count": 83,
+        "skills": {
+          "23": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "56": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "57": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "64": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "79": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          }
+        },
+        "tick": 3862,
+        "toggles": {
+          "firewalker": false,
+          "mindstar": false,
+          "regenerate": false
+        },
+        "xp": 0.0
+      },
+      "offer": {
+        "available": true,
+        "experience": 100,
+        "generation": 1,
+        "level": 2,
+        "options": [
+          {
+            "apply_count": 1,
+            "id": 48,
+            "name": "Teleport"
+          },
+          {
+            "apply_count": 1,
+            "id": 49,
+            "name": "Magic Circle"
+          },
+          {
+            "apply_count": 1,
+            "id": 57,
+            "name": "Channel Mana"
+          }
+        ],
+        "pending": true
+      },
+      "offer_rng": {
+        "builder_mutates_seed_field": false,
+        "builder_reseeds_each_call": true,
+        "seed": 79225,
+        "seed_source": "progression+0x834",
+        "stream": "actor-private level-up offer RNG"
+      },
+      "requested_experience": 100,
+      "requested_level": 2,
+      "selection": {
+        "apply_count": 1,
+        "name": "Teleport",
+        "option_id": 48,
+        "option_index_one_based": 1
+      }
+    },
+    {
+      "after": {
+        "actor_address": 286065448,
+        "actor_plus_0x200": 287280632,
+        "actor_plus_0x300": 287125560,
+        "base_hp": 50.0,
+        "base_mp": 100.0,
+        "game_timing_scale": 100.0,
+        "health_regeneration": 1.0,
+        "hoarded_mp": 0.0,
+        "hp": 50.0,
+        "level": 3,
+        "mana_recovery": 10.0,
+        "max_hp": 50.0,
+        "max_mp": 100.0,
+        "mp": 100.0,
+        "next_threshold": 275.0,
+        "offer_seed": 8542,
+        "previous_threshold": 160.0,
+        "progression_address": 287280632,
+        "skill_table_address": 287496444,
+        "skill_table_count": 83,
+        "skills": {
+          "23": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "56": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "57": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "64": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "79": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          }
+        },
+        "tick": 3878,
+        "toggles": {
+          "firewalker": false,
+          "mindstar": false,
+          "regenerate": false
+        },
+        "xp": 170.0
+      },
+      "before": {
+        "actor_address": 286065448,
+        "actor_plus_0x200": 287280632,
+        "actor_plus_0x300": 287125560,
+        "base_hp": 50.0,
+        "base_mp": 100.0,
+        "game_timing_scale": 100.0,
+        "health_regeneration": 1.0,
+        "hoarded_mp": 0.0,
+        "hp": 50.0,
+        "level": 2,
+        "mana_recovery": 10.0,
+        "max_hp": 50.0,
+        "max_mp": 100.0,
+        "mp": 100.0,
+        "next_threshold": 160.0,
+        "offer_seed": 79225,
+        "previous_threshold": 90.0,
+        "progression_address": 287280632,
+        "skill_table_address": 287496444,
+        "skill_table_count": 83,
+        "skills": {
+          "23": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "56": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "57": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "64": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "79": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          }
+        },
+        "tick": 3872,
+        "toggles": {
+          "firewalker": false,
+          "mindstar": false,
+          "regenerate": false
+        },
+        "xp": 100.0
+      },
+      "offer": {
+        "available": true,
+        "experience": 170,
+        "generation": 2,
+        "level": 3,
+        "options": [
+          {
+            "apply_count": 1,
+            "id": 65,
+            "name": "Enchant Staff"
+          },
+          {
+            "apply_count": 1,
+            "id": 49,
+            "name": "Magic Circle"
+          },
+          {
+            "apply_count": 1,
+            "id": 9,
+            "name": "Smart Missiles"
+          }
+        ],
+        "pending": true
+      },
+      "offer_rng": {
+        "builder_mutates_seed_field": false,
+        "builder_reseeds_each_call": true,
+        "seed": 79225,
+        "seed_source": "progression+0x834",
+        "stream": "actor-private level-up offer RNG"
+      },
+      "requested_experience": 170,
+      "requested_level": 3,
+      "selection": {
+        "apply_count": 1,
+        "name": "Enchant Staff",
+        "option_id": 65,
+        "option_index_one_based": 1
+      }
+    },
+    {
+      "after": {
+        "actor_address": 286065448,
+        "actor_plus_0x200": 287280632,
+        "actor_plus_0x300": 287125560,
+        "base_hp": 50.0,
+        "base_mp": 100.0,
+        "game_timing_scale": 100.0,
+        "health_regeneration": 1.0,
+        "hoarded_mp": 0.0,
+        "hp": 50.0,
+        "level": 4,
+        "mana_recovery": 10.0,
+        "max_hp": 50.0,
+        "max_mp": 100.0,
+        "mp": 100.0,
+        "next_threshold": 390.0,
+        "offer_seed": 799087,
+        "previous_threshold": 275.0,
+        "progression_address": 287280632,
+        "skill_table_address": 287496444,
+        "skill_table_count": 83,
+        "skills": {
+          "23": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "56": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "57": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "64": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "79": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          }
+        },
+        "tick": 3888,
+        "toggles": {
+          "firewalker": false,
+          "mindstar": false,
+          "regenerate": false
+        },
+        "xp": 280.0
+      },
+      "before": {
+        "actor_address": 286065448,
+        "actor_plus_0x200": 287280632,
+        "actor_plus_0x300": 287125560,
+        "base_hp": 50.0,
+        "base_mp": 100.0,
+        "game_timing_scale": 100.0,
+        "health_regeneration": 1.0,
+        "hoarded_mp": 0.0,
+        "hp": 50.0,
+        "level": 3,
+        "mana_recovery": 10.0,
+        "max_hp": 50.0,
+        "max_mp": 100.0,
+        "mp": 100.0,
+        "next_threshold": 275.0,
+        "offer_seed": 79225,
+        "previous_threshold": 160.0,
+        "progression_address": 287280632,
+        "skill_table_address": 287496444,
+        "skill_table_count": 83,
+        "skills": {
+          "23": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "56": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "57": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "64": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "79": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          }
+        },
+        "tick": 3881,
+        "toggles": {
+          "firewalker": false,
+          "mindstar": false,
+          "regenerate": false
+        },
+        "xp": 170.0
+      },
+      "offer": {
+        "available": true,
+        "experience": 280,
+        "generation": 3,
+        "level": 4,
+        "options": [
+          {
+            "apply_count": 1,
+            "id": 49,
+            "name": "Magic Circle"
+          },
+          {
+            "apply_count": 1,
+            "id": 56,
+            "name": "Mana Up"
+          },
+          {
+            "apply_count": 1,
+            "id": 9,
+            "name": "Smart Missiles"
+          }
+        ],
+        "pending": true
+      },
+      "offer_rng": {
+        "builder_mutates_seed_field": false,
+        "builder_reseeds_each_call": true,
+        "seed": 79225,
+        "seed_source": "progression+0x834",
+        "stream": "actor-private level-up offer RNG"
+      },
+      "requested_experience": 280,
+      "requested_level": 4,
+      "selection": {
+        "apply_count": 1,
+        "name": "Magic Circle",
+        "option_id": 49,
+        "option_index_one_based": 1
+      }
+    }
+  ],
+  "offer_rule_rows": [
+    {
+      "category": 4,
+      "forbidden_if_at_least": [],
+      "id": 0,
+      "minimum_player_level": 0,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 0
+    },
+    {
+      "category": 4,
+      "forbidden_if_at_least": [],
+      "id": 1,
+      "minimum_player_level": 0,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 1
+    },
+    {
+      "category": 4,
+      "forbidden_if_at_least": [],
+      "id": 2,
+      "minimum_player_level": 0,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 2
+    },
+    {
+      "category": 4,
+      "forbidden_if_at_least": [],
+      "id": 3,
+      "minimum_player_level": 0,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 3
+    },
+    {
+      "category": 4,
+      "forbidden_if_at_least": [],
+      "id": 4,
+      "minimum_player_level": 0,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 4
+    },
+    {
+      "category": 4,
+      "forbidden_if_at_least": [],
+      "id": 5,
+      "minimum_player_level": 0,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 5
+    },
+    {
+      "category": 4,
+      "forbidden_if_at_least": [],
+      "id": 6,
+      "minimum_player_level": 0,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 6
+    },
+    {
+      "category": 4,
+      "forbidden_if_at_least": [],
+      "id": 7,
+      "minimum_player_level": 0,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 7
+    },
+    {
+      "category": 1,
+      "forbidden_if_at_least": [],
+      "id": 8,
+      "minimum_player_level": 1,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 0
+    },
+    {
+      "category": 0,
+      "forbidden_if_at_least": [],
+      "id": 9,
+      "minimum_player_level": 1,
+      "requires_all": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 8
+        }
+      ],
+      "requires_any": [],
+      "root_id": 0
+    },
+    {
+      "category": 0,
+      "forbidden_if_at_least": [],
+      "id": 10,
+      "minimum_player_level": 1,
+      "requires_all": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 8
+        }
+      ],
+      "requires_any": [],
+      "root_id": 0
+    },
+    {
+      "category": 2,
+      "forbidden_if_at_least": [],
+      "id": 11,
+      "minimum_player_level": 3,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 0
+    },
+    {
+      "category": 2,
+      "forbidden_if_at_least": [],
+      "id": 12,
+      "minimum_player_level": 25,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 0
+    },
+    {
+      "category": 4,
+      "forbidden_if_at_least": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 14
+        }
+      ],
+      "id": 13,
+      "minimum_player_level": 20,
+      "requires_all": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 9
+        }
+      ],
+      "requires_any": [],
+      "root_id": 0
+    },
+    {
+      "category": 4,
+      "forbidden_if_at_least": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 13
+        }
+      ],
+      "id": 14,
+      "minimum_player_level": 20,
+      "requires_all": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 9
+        }
+      ],
+      "requires_any": [],
+      "root_id": 0
+    },
+    {
+      "category": 2,
+      "forbidden_if_at_least": [],
+      "id": 15,
+      "minimum_player_level": 6,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 0
+    },
+    {
+      "category": 1,
+      "forbidden_if_at_least": [],
+      "id": 16,
+      "minimum_player_level": 1,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 1
+    },
+    {
+      "category": 0,
+      "forbidden_if_at_least": [],
+      "id": 17,
+      "minimum_player_level": 1,
+      "requires_all": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 18
+        }
+      ],
+      "requires_any": [],
+      "root_id": 1
+    },
+    {
+      "category": 0,
+      "forbidden_if_at_least": [],
+      "id": 18,
+      "minimum_player_level": 1,
+      "requires_all": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 16
+        }
+      ],
+      "requires_any": [],
+      "root_id": 1
+    },
+    {
+      "category": 4,
+      "forbidden_if_at_least": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 20
+        }
+      ],
+      "id": 19,
+      "minimum_player_level": 20,
+      "requires_all": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 17
+        }
+      ],
+      "requires_any": [],
+      "root_id": 1
+    },
+    {
+      "category": 4,
+      "forbidden_if_at_least": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 19
+        }
+      ],
+      "id": 20,
+      "minimum_player_level": 20,
+      "requires_all": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 17
+        }
+      ],
+      "requires_any": [],
+      "root_id": 1
+    },
+    {
+      "category": 2,
+      "forbidden_if_at_least": [],
+      "id": 21,
+      "minimum_player_level": 4,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 1
+    },
+    {
+      "category": 0,
+      "forbidden_if_at_least": [],
+      "id": 22,
+      "minimum_player_level": 12,
+      "requires_all": [],
+      "requires_any": [
+        16,
+        21,
+        23
+      ],
+      "root_id": 1
+    },
+    {
+      "category": 2,
+      "forbidden_if_at_least": [],
+      "id": 23,
+      "minimum_player_level": 8,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 1
+    },
+    {
+      "category": 1,
+      "forbidden_if_at_least": [],
+      "id": 24,
+      "minimum_player_level": 1,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 2
+    },
+    {
+      "category": 0,
+      "forbidden_if_at_least": [],
+      "id": 25,
+      "minimum_player_level": 1,
+      "requires_all": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 24
+        }
+      ],
+      "requires_any": [],
+      "root_id": 2
+    },
+    {
+      "category": 0,
+      "forbidden_if_at_least": [],
+      "id": 26,
+      "minimum_player_level": 1,
+      "requires_all": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 24
+        }
+      ],
+      "requires_any": [],
+      "root_id": 2
+    },
+    {
+      "category": 2,
+      "forbidden_if_at_least": [],
+      "id": 27,
+      "minimum_player_level": 1,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 2
+    },
+    {
+      "category": 0,
+      "forbidden_if_at_least": [],
+      "id": 28,
+      "minimum_player_level": 12,
+      "requires_all": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 27
+        }
+      ],
+      "requires_any": [],
+      "root_id": 2
+    },
+    {
+      "category": 4,
+      "forbidden_if_at_least": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 31
+        }
+      ],
+      "id": 29,
+      "minimum_player_level": 20,
+      "requires_all": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 25
+        }
+      ],
+      "requires_any": [],
+      "root_id": 2
+    },
+    {
+      "category": 2,
+      "forbidden_if_at_least": [],
+      "id": 30,
+      "minimum_player_level": 12,
+      "requires_all": [],
+      "requires_any": [
+        24,
+        27
+      ],
+      "root_id": 2
+    },
+    {
+      "category": 4,
+      "forbidden_if_at_least": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 29
+        }
+      ],
+      "id": 31,
+      "minimum_player_level": 20,
+      "requires_all": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 25
+        }
+      ],
+      "requires_any": [],
+      "root_id": 2
+    },
+    {
+      "category": 1,
+      "forbidden_if_at_least": [],
+      "id": 32,
+      "minimum_player_level": 1,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 3
+    },
+    {
+      "category": 0,
+      "forbidden_if_at_least": [],
+      "id": 33,
+      "minimum_player_level": 1,
+      "requires_all": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 32
+        }
+      ],
+      "requires_any": [],
+      "root_id": 3
+    },
+    {
+      "category": 0,
+      "forbidden_if_at_least": [],
+      "id": 34,
+      "minimum_player_level": 1,
+      "requires_all": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 32
+        }
+      ],
+      "requires_any": [],
+      "root_id": 3
+    },
+    {
+      "category": 2,
+      "forbidden_if_at_least": [],
+      "id": 35,
+      "minimum_player_level": 1,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 3
+    },
+    {
+      "category": 4,
+      "forbidden_if_at_least": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 37
+        }
+      ],
+      "id": 36,
+      "minimum_player_level": 20,
+      "requires_all": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 33
+        }
+      ],
+      "requires_any": [],
+      "root_id": 3
+    },
+    {
+      "category": 4,
+      "forbidden_if_at_least": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 36
+        }
+      ],
+      "id": 37,
+      "minimum_player_level": 20,
+      "requires_all": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 33
+        }
+      ],
+      "requires_any": [],
+      "root_id": 3
+    },
+    {
+      "category": 0,
+      "forbidden_if_at_least": [],
+      "id": 38,
+      "minimum_player_level": 18,
+      "requires_all": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 34
+        }
+      ],
+      "requires_any": [],
+      "root_id": 3
+    },
+    {
+      "category": 0,
+      "forbidden_if_at_least": [],
+      "id": 39,
+      "minimum_player_level": 16,
+      "requires_all": [],
+      "requires_any": [
+        32,
+        35
+      ],
+      "root_id": 3
+    },
+    {
+      "category": 1,
+      "forbidden_if_at_least": [],
+      "id": 40,
+      "minimum_player_level": 1,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 4
+    },
+    {
+      "category": 2,
+      "forbidden_if_at_least": [],
+      "id": 41,
+      "minimum_player_level": 3,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 4
+    },
+    {
+      "category": 0,
+      "forbidden_if_at_least": [],
+      "id": 42,
+      "minimum_player_level": 1,
+      "requires_all": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 40
+        }
+      ],
+      "requires_any": [],
+      "root_id": 4
+    },
+    {
+      "category": 0,
+      "forbidden_if_at_least": [],
+      "id": 43,
+      "minimum_player_level": 1,
+      "requires_all": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 40
+        }
+      ],
+      "requires_any": [],
+      "root_id": 4
+    },
+    {
+      "category": 4,
+      "forbidden_if_at_least": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 47
+        }
+      ],
+      "id": 44,
+      "minimum_player_level": 20,
+      "requires_all": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 43
+        }
+      ],
+      "requires_any": [],
+      "root_id": 4
+    },
+    {
+      "category": 2,
+      "forbidden_if_at_least": [],
+      "id": 45,
+      "minimum_player_level": 6,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 4
+    },
+    {
+      "category": 2,
+      "forbidden_if_at_least": [],
+      "id": 46,
+      "minimum_player_level": 25,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 4
+    },
+    {
+      "category": 4,
+      "forbidden_if_at_least": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 44
+        }
+      ],
+      "id": 47,
+      "minimum_player_level": 20,
+      "requires_all": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 43
+        }
+      ],
+      "requires_any": [],
+      "root_id": 4
+    },
+    {
+      "category": 2,
+      "forbidden_if_at_least": [],
+      "id": 48,
+      "minimum_player_level": 1,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 7
+    },
+    {
+      "category": 2,
+      "forbidden_if_at_least": [],
+      "id": 49,
+      "minimum_player_level": 1,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 7
+    },
+    {
+      "category": 2,
+      "forbidden_if_at_least": [],
+      "id": 50,
+      "minimum_player_level": 1,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 7
+    },
+    {
+      "category": 2,
+      "forbidden_if_at_least": [],
+      "id": 51,
+      "minimum_player_level": 18,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 7
+    },
+    {
+      "category": 1,
+      "forbidden_if_at_least": [],
+      "id": 52,
+      "minimum_player_level": 1,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 7
+    },
+    {
+      "category": 0,
+      "forbidden_if_at_least": [],
+      "id": 53,
+      "minimum_player_level": 8,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 7
+    },
+    {
+      "category": 2,
+      "forbidden_if_at_least": [],
+      "id": 54,
+      "minimum_player_level": 4,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 7
+    },
+    {
+      "category": 0,
+      "forbidden_if_at_least": [],
+      "id": 55,
+      "minimum_player_level": 10,
+      "requires_all": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 54
+        }
+      ],
+      "requires_any": [],
+      "root_id": 7
+    },
+    {
+      "category": 0,
+      "forbidden_if_at_least": [],
+      "id": 56,
+      "minimum_player_level": 1,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 6
+    },
+    {
+      "category": 3,
+      "forbidden_if_at_least": [],
+      "id": 57,
+      "minimum_player_level": 1,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 6
+    },
+    {
+      "category": 3,
+      "forbidden_if_at_least": [],
+      "id": 58,
+      "minimum_player_level": 8,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 6
+    },
+    {
+      "category": 3,
+      "forbidden_if_at_least": [],
+      "id": 59,
+      "minimum_player_level": 5,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 6
+    },
+    {
+      "category": 3,
+      "forbidden_if_at_least": [],
+      "id": 60,
+      "minimum_player_level": 8,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 6
+    },
+    {
+      "category": 3,
+      "forbidden_if_at_least": [],
+      "id": 61,
+      "minimum_player_level": 25,
+      "requires_all": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 59
+        }
+      ],
+      "requires_any": [],
+      "root_id": 6
+    },
+    {
+      "category": 3,
+      "forbidden_if_at_least": [],
+      "id": 62,
+      "minimum_player_level": 18,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 6
+    },
+    {
+      "category": 3,
+      "forbidden_if_at_least": [],
+      "id": 63,
+      "minimum_player_level": 12,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 6
+    },
+    {
+      "category": 0,
+      "forbidden_if_at_least": [],
+      "id": 64,
+      "minimum_player_level": 1,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 5
+    },
+    {
+      "category": 3,
+      "forbidden_if_at_least": [],
+      "id": 65,
+      "minimum_player_level": 1,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 5
+    },
+    {
+      "category": 3,
+      "forbidden_if_at_least": [],
+      "id": 66,
+      "minimum_player_level": 10,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 5
+    },
+    {
+      "category": 3,
+      "forbidden_if_at_least": [],
+      "id": 67,
+      "minimum_player_level": 1,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 5
+    },
+    {
+      "category": 3,
+      "forbidden_if_at_least": [],
+      "id": 68,
+      "minimum_player_level": 10,
+      "requires_all": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 71
+        }
+      ],
+      "requires_any": [],
+      "root_id": 5
+    },
+    {
+      "category": 3,
+      "forbidden_if_at_least": [],
+      "id": 69,
+      "minimum_player_level": 6,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 5
+    },
+    {
+      "category": 3,
+      "forbidden_if_at_least": [],
+      "id": 70,
+      "minimum_player_level": 25,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 5
+    },
+    {
+      "category": 3,
+      "forbidden_if_at_least": [],
+      "id": 71,
+      "minimum_player_level": 5,
+      "requires_all": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 65
+        }
+      ],
+      "requires_any": [],
+      "root_id": 5
+    },
+    {
+      "category": 2,
+      "forbidden_if_at_least": [],
+      "id": 72,
+      "minimum_player_level": 1,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 2
+    },
+    {
+      "category": 2,
+      "forbidden_if_at_least": [],
+      "id": 73,
+      "minimum_player_level": 5,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 1
+    },
+    {
+      "category": 2,
+      "forbidden_if_at_least": [],
+      "id": 74,
+      "minimum_player_level": 10,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 0
+    },
+    {
+      "category": 0,
+      "forbidden_if_at_least": [],
+      "id": 75,
+      "minimum_player_level": 10,
+      "requires_all": [
+        {
+          "minimum_rank": 1,
+          "skill_id": 45
+        }
+      ],
+      "requires_any": [],
+      "root_id": 4
+    },
+    {
+      "category": 2,
+      "forbidden_if_at_least": [],
+      "id": 76,
+      "minimum_player_level": 10,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 3
+    },
+    {
+      "category": 2,
+      "forbidden_if_at_least": [],
+      "id": 77,
+      "minimum_player_level": 6,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 7
+    },
+    {
+      "category": 2,
+      "forbidden_if_at_least": [],
+      "id": 78,
+      "minimum_player_level": 10,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 6
+    },
+    {
+      "category": 2,
+      "forbidden_if_at_least": [],
+      "id": 79,
+      "minimum_player_level": 10,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": 5
+    },
+    {
+      "category": 0,
+      "forbidden_if_at_least": [],
+      "id": 80,
+      "minimum_player_level": 0,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": -1
+    },
+    {
+      "category": 0,
+      "forbidden_if_at_least": [],
+      "id": 81,
+      "minimum_player_level": 0,
+      "requires_all": [],
+      "requires_any": [],
+      "root_id": -1
+    }
+  ],
+  "participants": {
+    "effect_bot_id": 1152921504606851073,
+    "offer_bot_id": 1152921504606851073
+  },
+  "per_actor_isolation": {
+    "effect_bot_final": {
+      "actor_address": 286064480,
+      "actor_plus_0x200": 287447248,
+      "actor_plus_0x300": 298826472,
+      "base_hp": 50.0,
+      "base_mp": 100.0,
+      "game_timing_scale": 100.0,
+      "health_regeneration": 1.0,
+      "hoarded_mp": 50.0,
+      "hp": 100.0,
+      "level": 1,
+      "mana_recovery": 12.5,
+      "max_hp": 100.0,
+      "max_mp": 200.0,
+      "mp": 200.0,
+      "next_threshold": 90.0,
+      "offer_seed": 506115,
+      "previous_threshold": 0.0,
+      "progression_address": 287447248,
+      "skill_table_address": 286214028,
+      "skill_table_count": 83,
+      "skills": {
+        "23": {
+          "effective_rank": 1,
+          "permanent_rank": 1
+        },
+        "56": {
+          "effective_rank": 1,
+          "permanent_rank": 1
+        },
+        "57": {
+          "effective_rank": 1,
+          "permanent_rank": 1
+        },
+        "64": {
+          "effective_rank": 1,
+          "permanent_rank": 1
+        },
+        "79": {
+          "effective_rank": 0,
+          "permanent_rank": 0
+        }
+      },
+      "tick": 13446,
+      "toggles": {
+        "firewalker": true,
+        "mindstar": false,
+        "regenerate": false
+      },
+      "xp": 0.0
+    },
+    "local_player_after_progression_bot_mutation": {
+      "actor_address": 286143400,
+      "actor_plus_0x200": 286227768,
+      "actor_plus_0x300": 287123016,
+      "base_hp": 50.0,
+      "base_mp": 100.0,
+      "game_timing_scale": 100.0,
+      "health_regeneration": 1.0,
+      "hoarded_mp": 0.0,
+      "hp": 41.014923095703,
+      "level": 1,
+      "mana_recovery": 10.0,
+      "max_hp": 50.0,
+      "max_mp": 100.0,
+      "mp": 75.699989318848,
+      "next_threshold": 90.0,
+      "offer_seed": 418138,
+      "previous_threshold": 0.0,
+      "progression_address": 286227768,
+      "skill_table_address": 286115644,
+      "skill_table_count": 83,
+      "skills": {},
+      "tick": 12511,
+      "toggles": {
+        "firewalker": false,
+        "mindstar": false,
+        "regenerate": false
+      },
+      "xp": 0.0
+    },
+    "local_player_before_progression_bot_mutation": {
+      "actor_address": 286143400,
+      "actor_plus_0x200": 286227768,
+      "actor_plus_0x300": 287123016,
+      "base_hp": 50.0,
+      "base_mp": 100.0,
+      "game_timing_scale": 100.0,
+      "health_regeneration": 1.0,
+      "hoarded_mp": 0.0,
+      "hp": 50.0,
+      "level": 1,
+      "mana_recovery": 10.0,
+      "max_hp": 50.0,
+      "max_mp": 100.0,
+      "mp": 100.0,
+      "next_threshold": 90.0,
+      "offer_seed": 418138,
+      "previous_threshold": 0.0,
+      "progression_address": 286227768,
+      "skill_table_address": 286115644,
+      "skill_table_count": 83,
+      "skills": {},
+      "tick": 12428,
+      "toggles": {
+        "firewalker": false,
+        "mindstar": false,
+        "regenerate": false
+      },
+      "xp": 0.0
+    },
+    "progression_bot_after_effect_mutation": {
+      "actor_address": 286064480,
+      "actor_plus_0x200": 287447248,
+      "actor_plus_0x300": 298826472,
+      "base_hp": 50.0,
+      "base_mp": 100.0,
+      "game_timing_scale": 100.0,
+      "health_regeneration": 1.0,
+      "hoarded_mp": 50.0,
+      "hp": 100.0,
+      "level": 1,
+      "mana_recovery": 12.5,
+      "max_hp": 100.0,
+      "max_mp": 200.0,
+      "mp": 200.0,
+      "next_threshold": 90.0,
+      "offer_seed": 506115,
+      "previous_threshold": 0.0,
+      "progression_address": 287447248,
+      "skill_table_address": 286214028,
+      "skill_table_count": 83,
+      "skills": {
+        "23": {
+          "effective_rank": 1,
+          "permanent_rank": 1
+        },
+        "56": {
+          "effective_rank": 1,
+          "permanent_rank": 1
+        },
+        "57": {
+          "effective_rank": 1,
+          "permanent_rank": 1
+        },
+        "64": {
+          "effective_rank": 1,
+          "permanent_rank": 1
+        },
+        "79": {
+          "effective_rank": 0,
+          "permanent_rank": 0
+        }
+      },
+      "tick": 12512,
+      "toggles": {
+        "firewalker": true,
+        "mindstar": false,
+        "regenerate": false
+      },
+      "xp": 0.0
+    },
+    "progression_bot_before_effect_mutation": {
+      "actor_address": 286064480,
+      "actor_plus_0x200": 287447248,
+      "actor_plus_0x300": 298826472,
+      "base_hp": 50.0,
+      "base_mp": 100.0,
+      "game_timing_scale": 100.0,
+      "health_regeneration": 1.0,
+      "hoarded_mp": 0.0,
+      "hp": 50.0,
+      "level": 1,
+      "mana_recovery": 10.0,
+      "max_hp": 50.0,
+      "max_mp": 100.0,
+      "mp": 100.0,
+      "next_threshold": 90.0,
+      "offer_seed": 506115,
+      "previous_threshold": 0.0,
+      "progression_address": 287447248,
+      "skill_table_address": 286214028,
+      "skill_table_count": 83,
+      "skills": {
+        "23": {
+          "effective_rank": 0,
+          "permanent_rank": 0
+        },
+        "56": {
+          "effective_rank": 0,
+          "permanent_rank": 0
+        },
+        "57": {
+          "effective_rank": 0,
+          "permanent_rank": 0
+        },
+        "64": {
+          "effective_rank": 0,
+          "permanent_rank": 0
+        },
+        "79": {
+          "effective_rank": 0,
+          "permanent_rank": 0
+        }
+      },
+      "tick": 12429,
+      "toggles": {
+        "firewalker": false,
+        "mindstar": false,
+        "regenerate": false
+      },
+      "xp": 0.0
+    }
+  },
+  "skill_effects": [
+    {
+      "after": {
+        "actor_address": 286064480,
+        "actor_plus_0x200": 287447248,
+        "actor_plus_0x300": 298826472,
+        "base_hp": 50.0,
+        "base_mp": 100.0,
+        "game_timing_scale": 100.0,
+        "health_regeneration": 1.0,
+        "hoarded_mp": 0.0,
+        "hp": 50.0,
+        "level": 1,
+        "mana_recovery": 10.0,
+        "max_hp": 50.0,
+        "max_mp": 200.0,
+        "mp": 200.0,
+        "next_threshold": 90.0,
+        "offer_seed": 506115,
+        "previous_threshold": 0.0,
+        "progression_address": 287447248,
+        "skill_table_address": 286214028,
+        "skill_table_count": 83,
+        "skills": {
+          "23": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "56": {
+            "effective_rank": 1,
+            "permanent_rank": 1
+          },
+          "57": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "64": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "79": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          }
+        },
+        "tick": 12432,
+        "toggles": {
+          "firewalker": false,
+          "mindstar": false,
+          "regenerate": false
+        },
+        "xp": 0.0
+      },
+      "before": {
+        "actor_address": 286064480,
+        "actor_plus_0x200": 287447248,
+        "actor_plus_0x300": 298826472,
+        "base_hp": 50.0,
+        "base_mp": 100.0,
+        "game_timing_scale": 100.0,
+        "health_regeneration": 1.0,
+        "hoarded_mp": 0.0,
+        "hp": 50.0,
+        "level": 1,
+        "mana_recovery": 10.0,
+        "max_hp": 50.0,
+        "max_mp": 100.0,
+        "mp": 100.0,
+        "next_threshold": 90.0,
+        "offer_seed": 506115,
+        "previous_threshold": 0.0,
+        "progression_address": 287447248,
+        "skill_table_address": 286214028,
+        "skill_table_count": 83,
+        "skills": {
+          "23": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "56": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "57": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "64": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "79": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          }
+        },
+        "tick": 12430,
+        "toggles": {
+          "firewalker": false,
+          "mindstar": false,
+          "regenerate": false
+        },
+        "xp": 0.0
+      },
+      "formula": "max_mp = base_mp + mValue[1] = base_mp + 100",
+      "name": "Mana Up",
+      "rank": 1,
+      "skill_id": 56,
+      "target": "synthetic_bot_actor",
+      "trigger": "native progression refresh"
+    },
+    {
+      "after": {
+        "actor_address": 286064480,
+        "actor_plus_0x200": 287447248,
+        "actor_plus_0x300": 298826472,
+        "base_hp": 50.0,
+        "base_mp": 100.0,
+        "game_timing_scale": 100.0,
+        "health_regeneration": 1.0,
+        "hoarded_mp": 0.0,
+        "hp": 50.0,
+        "level": 1,
+        "mana_recovery": 12.5,
+        "max_hp": 50.0,
+        "max_mp": 200.0,
+        "mp": 200.0,
+        "next_threshold": 90.0,
+        "offer_seed": 506115,
+        "previous_threshold": 0.0,
+        "progression_address": 287447248,
+        "skill_table_address": 286214028,
+        "skill_table_count": 83,
+        "skills": {
+          "23": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "56": {
+            "effective_rank": 1,
+            "permanent_rank": 1
+          },
+          "57": {
+            "effective_rank": 1,
+            "permanent_rank": 1
+          },
+          "64": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "79": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          }
+        },
+        "tick": 12434,
+        "toggles": {
+          "firewalker": false,
+          "mindstar": false,
+          "regenerate": false
+        },
+        "xp": 0.0
+      },
+      "before": {
+        "actor_address": 286064480,
+        "actor_plus_0x200": 287447248,
+        "actor_plus_0x300": 298826472,
+        "base_hp": 50.0,
+        "base_mp": 100.0,
+        "game_timing_scale": 100.0,
+        "health_regeneration": 1.0,
+        "hoarded_mp": 0.0,
+        "hp": 50.0,
+        "level": 1,
+        "mana_recovery": 10.0,
+        "max_hp": 50.0,
+        "max_mp": 200.0,
+        "mp": 200.0,
+        "next_threshold": 90.0,
+        "offer_seed": 506115,
+        "previous_threshold": 0.0,
+        "progression_address": 287447248,
+        "skill_table_address": 286214028,
+        "skill_table_count": 83,
+        "skills": {
+          "23": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "56": {
+            "effective_rank": 1,
+            "permanent_rank": 1
+          },
+          "57": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "64": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "79": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          }
+        },
+        "tick": 12432,
+        "toggles": {
+          "firewalker": false,
+          "mindstar": false,
+          "regenerate": false
+        },
+        "xp": 0.0
+      },
+      "formula": "mana_recovery = base_recovery * (1 + mValue[1] / 100) = base_recovery * 1.25",
+      "name": "Channel Mana",
+      "rank": 1,
+      "skill_id": 57,
+      "target": "synthetic_bot_actor",
+      "trigger": "native progression refresh"
+    },
+    {
+      "after": {
+        "actor_address": 286064480,
+        "actor_plus_0x200": 287447248,
+        "actor_plus_0x300": 298826472,
+        "base_hp": 50.0,
+        "base_mp": 100.0,
+        "game_timing_scale": 100.0,
+        "health_regeneration": 1.0,
+        "hoarded_mp": 0.0,
+        "hp": 100.0,
+        "level": 1,
+        "mana_recovery": 12.5,
+        "max_hp": 100.0,
+        "max_mp": 200.0,
+        "mp": 200.0,
+        "next_threshold": 90.0,
+        "offer_seed": 506115,
+        "previous_threshold": 0.0,
+        "progression_address": 287447248,
+        "skill_table_address": 286214028,
+        "skill_table_count": 83,
+        "skills": {
+          "23": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "56": {
+            "effective_rank": 1,
+            "permanent_rank": 1
+          },
+          "57": {
+            "effective_rank": 1,
+            "permanent_rank": 1
+          },
+          "64": {
+            "effective_rank": 1,
+            "permanent_rank": 1
+          },
+          "79": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          }
+        },
+        "tick": 12436,
+        "toggles": {
+          "firewalker": false,
+          "mindstar": false,
+          "regenerate": false
+        },
+        "xp": 0.0
+      },
+      "before": {
+        "actor_address": 286064480,
+        "actor_plus_0x200": 287447248,
+        "actor_plus_0x300": 298826472,
+        "base_hp": 50.0,
+        "base_mp": 100.0,
+        "game_timing_scale": 100.0,
+        "health_regeneration": 1.0,
+        "hoarded_mp": 0.0,
+        "hp": 50.0,
+        "level": 1,
+        "mana_recovery": 12.5,
+        "max_hp": 50.0,
+        "max_mp": 200.0,
+        "mp": 200.0,
+        "next_threshold": 90.0,
+        "offer_seed": 506115,
+        "previous_threshold": 0.0,
+        "progression_address": 287447248,
+        "skill_table_address": 286214028,
+        "skill_table_count": 83,
+        "skills": {
+          "23": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "56": {
+            "effective_rank": 1,
+            "permanent_rank": 1
+          },
+          "57": {
+            "effective_rank": 1,
+            "permanent_rank": 1
+          },
+          "64": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "79": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          }
+        },
+        "tick": 12434,
+        "toggles": {
+          "firewalker": false,
+          "mindstar": false,
+          "regenerate": false
+        },
+        "xp": 0.0
+      },
+      "formula": "max_hp = base_hp + mValue[1] = base_hp + 50",
+      "name": "Health Up",
+      "rank": 1,
+      "skill_id": 64,
+      "target": "synthetic_bot_actor",
+      "trigger": "native progression refresh"
+    },
+    {
+      "after": {
+        "actor_address": 286143400,
+        "actor_plus_0x200": 286227768,
+        "actor_plus_0x300": 287123016,
+        "base_hp": 50.0,
+        "base_mp": 100.0,
+        "game_timing_scale": 100.0,
+        "health_regeneration": 1.0,
+        "hoarded_mp": 25.0,
+        "hp": 40.975929260254,
+        "level": 1,
+        "mana_recovery": 10.0,
+        "max_hp": 50.0,
+        "max_mp": 100.0,
+        "mp": 75.0,
+        "next_threshold": 90.0,
+        "offer_seed": 418138,
+        "previous_threshold": 0.0,
+        "progression_address": 286227768,
+        "skill_table_address": 286115644,
+        "skill_table_count": 83,
+        "skills": {
+          "23": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "56": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "57": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "64": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "79": {
+            "effective_rank": 1,
+            "permanent_rank": 1
+          }
+        },
+        "tick": 12502,
+        "toggles": {
+          "firewalker": false,
+          "mindstar": false,
+          "regenerate": true
+        },
+        "xp": 0.0
+      },
+      "armed": {
+        "actor_address": 286143400,
+        "actor_plus_0x200": 286227768,
+        "actor_plus_0x300": 287123016,
+        "base_hp": 50.0,
+        "base_mp": 100.0,
+        "game_timing_scale": 100.0,
+        "health_regeneration": 1.0,
+        "hoarded_mp": 25.0,
+        "hp": 50.014999389648,
+        "level": 1,
+        "mana_recovery": 10.0,
+        "max_hp": 50.0,
+        "max_mp": 100.0,
+        "mp": 75.0,
+        "next_threshold": 90.0,
+        "offer_seed": 418138,
+        "previous_threshold": 0.0,
+        "progression_address": 286227768,
+        "skill_table_address": 286115644,
+        "skill_table_count": 83,
+        "skills": {
+          "23": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "56": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "57": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "64": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "79": {
+            "effective_rank": 1,
+            "permanent_rank": 1
+          }
+        },
+        "tick": 12440,
+        "toggles": {
+          "firewalker": false,
+          "mindstar": false,
+          "regenerate": true
+        },
+        "xp": 0.0
+      },
+      "before": {
+        "actor_address": 286143400,
+        "actor_plus_0x200": 286227768,
+        "actor_plus_0x300": 287123016,
+        "base_hp": 50.0,
+        "base_mp": 100.0,
+        "game_timing_scale": 100.0,
+        "health_regeneration": 1.0,
+        "hoarded_mp": 25.0,
+        "hp": 40.015998840332,
+        "level": 1,
+        "mana_recovery": 10.0,
+        "max_hp": 50.0,
+        "max_mp": 100.0,
+        "mp": 75.0,
+        "next_threshold": 90.0,
+        "offer_seed": 418138,
+        "previous_threshold": 0.0,
+        "progression_address": 286227768,
+        "skill_table_address": 286115644,
+        "skill_table_count": 83,
+        "skills": {
+          "23": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "56": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "57": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "64": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "79": {
+            "effective_rank": 1,
+            "permanent_rank": 1
+          }
+        },
+        "tick": 12442,
+        "toggles": {
+          "firewalker": false,
+          "mindstar": false,
+          "regenerate": true
+        },
+        "xp": 0.0
+      },
+      "expected_hp_per_tick": 0.016,
+      "formula": "hp_delta = native_updates * ((1.5 + health_regeneration / 10) / game_timing_scale), capped at max_hp",
+      "isolated_derived_state_before_refresh": {
+        "actor_address": 286143400,
+        "actor_plus_0x200": 286227768,
+        "actor_plus_0x300": 287123016,
+        "base_hp": 50.0,
+        "base_mp": 100.0,
+        "game_timing_scale": 100.0,
+        "health_regeneration": 1.0,
+        "hoarded_mp": 0.0,
+        "hp": 50.0,
+        "level": 1,
+        "mana_recovery": 10.0,
+        "max_hp": 50.0,
+        "max_mp": 100.0,
+        "mp": 100.0,
+        "next_threshold": 90.0,
+        "offer_seed": 418138,
+        "previous_threshold": 0.0,
+        "progression_address": 286227768,
+        "skill_table_address": 286115644,
+        "skill_table_count": 83,
+        "skills": {
+          "23": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "56": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "57": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "64": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "79": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          }
+        },
+        "tick": 12438,
+        "toggles": {
+          "firewalker": false,
+          "mindstar": false,
+          "regenerate": false
+        },
+        "xp": 0.0
+      },
+      "name": "Regenerate",
+      "observed_hp_delta": 0.9599304199219958,
+      "observed_hp_per_tick": 0.015998840332033262,
+      "observed_tick_delta": 60,
+      "rank": 1,
+      "skill_id": 79,
+      "target": "local_player_actor",
+      "trigger": "specialized progression tick while toggle +0x8DE is active"
+    },
+    {
+      "after": {
+        "actor_address": 286064480,
+        "actor_plus_0x200": 287447248,
+        "actor_plus_0x300": 298826472,
+        "base_hp": 50.0,
+        "base_mp": 100.0,
+        "game_timing_scale": 100.0,
+        "health_regeneration": 1.0,
+        "hoarded_mp": 50.0,
+        "hp": 100.0,
+        "level": 1,
+        "mana_recovery": 12.5,
+        "max_hp": 100.0,
+        "max_mp": 200.0,
+        "mp": 200.0,
+        "next_threshold": 90.0,
+        "offer_seed": 506115,
+        "previous_threshold": 0.0,
+        "progression_address": 287447248,
+        "skill_table_address": 286214028,
+        "skill_table_count": 83,
+        "skills": {
+          "23": {
+            "effective_rank": 1,
+            "permanent_rank": 1
+          },
+          "56": {
+            "effective_rank": 1,
+            "permanent_rank": 1
+          },
+          "57": {
+            "effective_rank": 1,
+            "permanent_rank": 1
+          },
+          "64": {
+            "effective_rank": 1,
+            "permanent_rank": 1
+          },
+          "79": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          }
+        },
+        "tick": 12510,
+        "toggles": {
+          "firewalker": true,
+          "mindstar": false,
+          "regenerate": false
+        },
+        "xp": 0.0
+      },
+      "before": {
+        "actor_address": 286064480,
+        "actor_plus_0x200": 287447248,
+        "actor_plus_0x300": 298826472,
+        "base_hp": 50.0,
+        "base_mp": 100.0,
+        "game_timing_scale": 100.0,
+        "health_regeneration": 1.0,
+        "hoarded_mp": 0.0,
+        "hp": 100.0,
+        "level": 1,
+        "mana_recovery": 12.5,
+        "max_hp": 100.0,
+        "max_mp": 200.0,
+        "mp": 200.0,
+        "next_threshold": 90.0,
+        "offer_seed": 506115,
+        "previous_threshold": 0.0,
+        "progression_address": 287447248,
+        "skill_table_address": 286214028,
+        "skill_table_count": 83,
+        "skills": {
+          "23": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          },
+          "56": {
+            "effective_rank": 1,
+            "permanent_rank": 1
+          },
+          "57": {
+            "effective_rank": 1,
+            "permanent_rank": 1
+          },
+          "64": {
+            "effective_rank": 1,
+            "permanent_rank": 1
+          },
+          "79": {
+            "effective_rank": 0,
+            "permanent_rank": 0
+          }
+        },
+        "tick": 12508,
+        "toggles": {
+          "firewalker": false,
+          "mindstar": false,
+          "regenerate": false
+        },
+        "xp": 0.0
+      },
+      "formula": "actor_hoarded_mp(+0x740) += scalar mHoard = 50 MP; unlike rank-table hoards, Mana Up does not scale Firewalker's reserve",
+      "name": "Firewalker",
+      "rank": 1,
+      "skill_id": 23,
+      "target": "synthetic_bot_actor",
+      "trigger": "toggle + native progression refresh"
+    }
+  ],
+  "stock_match": {
+    "request": {
+      "call_ok": "true",
+      "error": "",
+      "ok": "true"
+    },
+    "seed": {
+      "observed": "20281789",
+      "selected": "20281789"
+    }
+  },
+  "xp_kills": [
+    {
+      "actor_address": 297999808,
+      "after": {
+        "actor_address": 286143400,
+        "actor_plus_0x200": 286227768,
+        "actor_plus_0x300": 287123016,
+        "base_hp": 50.0,
+        "base_mp": 100.0,
+        "game_timing_scale": 100.0,
+        "health_regeneration": 1.0,
+        "hoarded_mp": 0.0,
+        "hp": 5000.0,
+        "level": 1,
+        "mana_recovery": 10.0,
+        "max_hp": 5000.0,
+        "max_mp": 5000.0,
+        "mp": 5000.0,
+        "next_threshold": 90.0,
+        "offer_seed": 418138,
+        "previous_threshold": 0.0,
+        "progression_address": 286227768,
+        "skill_table_address": 286115644,
+        "skill_table_count": 83,
+        "skills": {},
+        "tick": 12598,
+        "toggles": {
+          "firewalker": false,
+          "mindstar": false,
+          "regenerate": false
+        },
+        "xp": 4.25
+      },
+      "after_death_presenter_before_xp_award": {
+        "actor_address": 286143400,
+        "actor_plus_0x200": 286227768,
+        "actor_plus_0x300": 287123016,
+        "base_hp": 50.0,
+        "base_mp": 100.0,
+        "game_timing_scale": 100.0,
+        "health_regeneration": 1.0,
+        "hoarded_mp": 0.0,
+        "hp": 5000.0,
+        "level": 1,
+        "mana_recovery": 10.0,
+        "max_hp": 5000.0,
+        "max_mp": 5000.0,
+        "mp": 5000.0,
+        "next_threshold": 90.0,
+        "offer_seed": 418138,
+        "previous_threshold": 0.0,
+        "progression_address": 286227768,
+        "skill_table_address": 286115644,
+        "skill_table_count": 83,
+        "skills": {},
+        "tick": 12594,
+        "toggles": {
+          "firewalker": false,
+          "mindstar": false,
+          "regenerate": false
+        },
+        "xp": 0.0
+      },
+      "before": {
+        "actor_address": 286143400,
+        "actor_plus_0x200": 286227768,
+        "actor_plus_0x300": 287123016,
+        "base_hp": 50.0,
+        "base_mp": 100.0,
+        "game_timing_scale": 100.0,
+        "health_regeneration": 1.0,
+        "hoarded_mp": 0.0,
+        "hp": 5000.0,
+        "level": 1,
+        "mana_recovery": 10.0,
+        "max_hp": 5000.0,
+        "max_mp": 5000.0,
+        "mp": 5000.0,
+        "next_threshold": 90.0,
+        "offer_seed": 418138,
+        "previous_threshold": 0.0,
+        "progression_address": 286227768,
+        "skill_table_address": 286115644,
+        "skill_table_count": 83,
+        "skills": {},
+        "tick": 12591,
+        "toggles": {
+          "firewalker": false,
+          "mindstar": false,
+          "regenerate": false
+        },
+        "xp": 0.0
+      },
+      "death_callback": {
+        "config_address": 51926464,
+        "original_config_address": 0,
+        "request_serial": 1,
+        "result": {
+          "completed": "true",
+          "error": "",
+          "restored": "true",
+          "seh": "0",
+          "success": "true"
+        }
+      },
+      "family": "Skeleton",
+      "native_actor_reward_at_0x178": 4.25,
+      "native_xp_award": {
+        "apply_native_scaling": true,
+        "request_serial": 1,
+        "requested_amount": 4.25,
+        "result": {
+          "after": "4.25",
+          "before": "0.0",
+          "completed": "true",
+          "error": "",
+          "seh": "0",
+          "success": "true"
+        }
+      },
+      "observed_arena_xp_scalar": 0.425,
+      "observed_xp_gain": 4.25,
+      "spawn": {
+        "actor_address": 297999808,
+        "actor_rng_seed": 9556301,
+        "actor_rng_seed_source": "construction draw from the then-active native stream; level construction may seed that stream from App+0x28 * 0xEF3",
+        "capture_vitals": {
+          "hp": "true",
+          "max": "true",
+          "rng_seed": "9556301"
+        },
+        "network_actor_id": 281474976710657,
+        "request_id": 1,
+        "type_id": 1001,
+        "x": 1782.3927001953,
+        "y": 150.0
+      },
+      "spawner_priming": {
+        "initial_manual_mode": {
+          "active": "false",
+          "ok": "true"
+        },
+        "observed_spawner_address": 287751848,
+        "player_vitals": {
+          "actor": "286143400",
+          "after.anim_drive_state": "0",
+          "after.hp": "5000.0",
+          "after.max_hp": "5000.0",
+          "after.max_mp": "5000.0",
+          "after.mp": "5000.0",
+          "before.hp": "41.019920349121",
+          "before.max_hp": "50.0",
+          "progression": "286227768",
+          "write.hp": "true",
+          "write.max_hp": "true",
+          "write.max_mp": "true",
+          "write.mp": "true"
+        },
+        "start_waves": {
+          "ok": "true"
+        }
+      },
+      "type_id": 1001,
+      "unscaled_family_reward": 10.0
+    },
+    {
+      "actor_address": 287449536,
+      "after": {
+        "actor_address": 286143400,
+        "actor_plus_0x200": 286227768,
+        "actor_plus_0x300": 287123016,
+        "base_hp": 50.0,
+        "base_mp": 100.0,
+        "game_timing_scale": 100.0,
+        "health_regeneration": 1.0,
+        "hoarded_mp": 0.0,
+        "hp": 5000.0,
+        "level": 1,
+        "mana_recovery": 10.0,
+        "max_hp": 5000.0,
+        "max_mp": 5000.0,
+        "mp": 5000.0,
+        "next_threshold": 90.0,
+        "offer_seed": 418138,
+        "previous_threshold": 0.0,
+        "progression_address": 286227768,
+        "skill_table_address": 286115644,
+        "skill_table_count": 83,
+        "skills": {},
+        "tick": 13049,
+        "toggles": {
+          "firewalker": false,
+          "mindstar": false,
+          "regenerate": false
+        },
+        "xp": 5.0999999046326
+      },
+      "after_death_presenter_before_xp_award": {
+        "actor_address": 286143400,
+        "actor_plus_0x200": 286227768,
+        "actor_plus_0x300": 287123016,
+        "base_hp": 50.0,
+        "base_mp": 100.0,
+        "game_timing_scale": 100.0,
+        "health_regeneration": 1.0,
+        "hoarded_mp": 0.0,
+        "hp": 5000.0,
+        "level": 1,
+        "mana_recovery": 10.0,
+        "max_hp": 5000.0,
+        "max_mp": 5000.0,
+        "mp": 5000.0,
+        "next_threshold": 90.0,
+        "offer_seed": 418138,
+        "previous_threshold": 0.0,
+        "progression_address": 286227768,
+        "skill_table_address": 286115644,
+        "skill_table_count": 83,
+        "skills": {},
+        "tick": 13046,
+        "toggles": {
+          "firewalker": false,
+          "mindstar": false,
+          "regenerate": false
+        },
+        "xp": 4.25
+      },
+      "before": {
+        "actor_address": 286143400,
+        "actor_plus_0x200": 286227768,
+        "actor_plus_0x300": 287123016,
+        "base_hp": 50.0,
+        "base_mp": 100.0,
+        "game_timing_scale": 100.0,
+        "health_regeneration": 1.0,
+        "hoarded_mp": 0.0,
+        "hp": 5000.0,
+        "level": 1,
+        "mana_recovery": 10.0,
+        "max_hp": 5000.0,
+        "max_mp": 5000.0,
+        "mp": 5000.0,
+        "next_threshold": 90.0,
+        "offer_seed": 418138,
+        "previous_threshold": 0.0,
+        "progression_address": 286227768,
+        "skill_table_address": 286115644,
+        "skill_table_count": 83,
+        "skills": {},
+        "tick": 13042,
+        "toggles": {
+          "firewalker": false,
+          "mindstar": false,
+          "regenerate": false
+        },
+        "xp": 4.25
+      },
+      "death_callback": {
+        "config_address": 51929584,
+        "original_config_address": 0,
+        "request_serial": 2,
+        "result": {
+          "completed": "true",
+          "error": "",
+          "restored": "true",
+          "seh": "0",
+          "success": "true"
+        }
+      },
+      "family": "Imp",
+      "native_actor_reward_at_0x178": 0.85000002384186,
+      "native_xp_award": {
+        "apply_native_scaling": true,
+        "request_serial": 2,
+        "requested_amount": 0.85000002384186,
+        "result": {
+          "after": "5.0999999046326",
+          "before": "4.25",
+          "completed": "true",
+          "error": "",
+          "seh": "0",
+          "success": "true"
+        }
+      },
+      "observed_arena_xp_scalar": 0.42500001192093,
+      "observed_xp_gain": 0.8499999046326003,
+      "spawn": {
+        "actor_address": 287449536,
+        "actor_rng_seed": 2645235,
+        "actor_rng_seed_source": "construction draw from the then-active native stream; level construction may seed that stream from App+0x28 * 0xEF3",
+        "capture_vitals": {
+          "hp": "true",
+          "max": "true",
+          "rng_seed": "2645235"
+        },
+        "network_actor_id": 281474976710658,
+        "request_id": 2,
+        "type_id": 1004,
+        "x": 1822.3927001953,
+        "y": 150.0
+      },
+      "spawner_priming": {
+        "initial_manual_mode": {
+          "active": "false",
+          "ok": "true"
+        },
+        "observed_spawner_address": 287752248,
+        "player_vitals": {
+          "actor": "286143400",
+          "after.anim_drive_state": "0",
+          "after.hp": "5000.0",
+          "after.max_hp": "5000.0",
+          "after.max_mp": "5000.0",
+          "after.mp": "5000.0",
+          "before.hp": "5000.0",
+          "before.max_hp": "5000.0",
+          "progression": "286227768",
+          "write.hp": "true",
+          "write.max_hp": "true",
+          "write.max_mp": "true",
+          "write.mp": "true"
+        },
+        "start_waves": {
+          "ok": "true"
+        }
+      },
+      "type_id": 1004,
+      "unscaled_family_reward": 2.0
+    },
+    {
+      "actor_address": 287449536,
+      "after": {
+        "actor_address": 286143400,
+        "actor_plus_0x200": 286227768,
+        "actor_plus_0x300": 287123016,
+        "base_hp": 50.0,
+        "base_mp": 100.0,
+        "game_timing_scale": 100.0,
+        "health_regeneration": 1.0,
+        "hoarded_mp": 0.0,
+        "hp": 5000.0,
+        "level": 1,
+        "mana_recovery": 10.0,
+        "max_hp": 5000.0,
+        "max_mp": 5000.0,
+        "mp": 5000.0,
+        "next_threshold": 90.0,
+        "offer_seed": 418138,
+        "previous_threshold": 0.0,
+        "progression_address": 286227768,
+        "skill_table_address": 286115644,
+        "skill_table_count": 83,
+        "skills": {},
+        "tick": 13445,
+        "toggles": {
+          "firewalker": false,
+          "mindstar": false,
+          "regenerate": false
+        },
+        "xp": 6.8000001907349
+      },
+      "after_death_presenter_before_xp_award": {
+        "actor_address": 286143400,
+        "actor_plus_0x200": 286227768,
+        "actor_plus_0x300": 287123016,
+        "base_hp": 50.0,
+        "base_mp": 100.0,
+        "game_timing_scale": 100.0,
+        "health_regeneration": 1.0,
+        "hoarded_mp": 0.0,
+        "hp": 5000.0,
+        "level": 1,
+        "mana_recovery": 10.0,
+        "max_hp": 5000.0,
+        "max_mp": 5000.0,
+        "mp": 5000.0,
+        "next_threshold": 90.0,
+        "offer_seed": 418138,
+        "previous_threshold": 0.0,
+        "progression_address": 286227768,
+        "skill_table_address": 286115644,
+        "skill_table_count": 83,
+        "skills": {},
+        "tick": 13442,
+        "toggles": {
+          "firewalker": false,
+          "mindstar": false,
+          "regenerate": false
+        },
+        "xp": 5.0999999046326
+      },
+      "before": {
+        "actor_address": 286143400,
+        "actor_plus_0x200": 286227768,
+        "actor_plus_0x300": 287123016,
+        "base_hp": 50.0,
+        "base_mp": 100.0,
+        "game_timing_scale": 100.0,
+        "health_regeneration": 1.0,
+        "hoarded_mp": 0.0,
+        "hp": 5000.0,
+        "level": 1,
+        "mana_recovery": 10.0,
+        "max_hp": 5000.0,
+        "max_mp": 5000.0,
+        "mp": 5000.0,
+        "next_threshold": 90.0,
+        "offer_seed": 418138,
+        "previous_threshold": 0.0,
+        "progression_address": 286227768,
+        "skill_table_address": 286115644,
+        "skill_table_count": 83,
+        "skills": {},
+        "tick": 13439,
+        "toggles": {
+          "firewalker": false,
+          "mindstar": false,
+          "regenerate": false
+        },
+        "xp": 5.0999999046326
+      },
+      "death_callback": {
+        "config_address": 51926984,
+        "original_config_address": 0,
+        "request_serial": 3,
+        "result": {
+          "completed": "true",
+          "error": "",
+          "restored": "true",
+          "seh": "0",
+          "success": "true"
+        }
+      },
+      "family": "Wraith",
+      "native_actor_reward_at_0x178": 1.7000000476837,
+      "native_xp_award": {
+        "apply_native_scaling": true,
+        "request_serial": 3,
+        "requested_amount": 1.7000000476837,
+        "result": {
+          "after": "6.8000001907349",
+          "before": "5.0999999046326",
+          "completed": "true",
+          "error": "",
+          "seh": "0",
+          "success": "true"
+        }
+      },
+      "observed_arena_xp_scalar": 0.425000011920925,
+      "observed_xp_gain": 1.7000002861022994,
+      "spawn": {
+        "actor_address": 287449536,
+        "actor_rng_seed": 4318966,
+        "actor_rng_seed_source": "construction draw from the then-active native stream; level construction may seed that stream from App+0x28 * 0xEF3",
+        "capture_vitals": {
+          "hp": "true",
+          "max": "true",
+          "rng_seed": "4318966"
+        },
+        "network_actor_id": 281474976710659,
+        "request_id": 3,
+        "type_id": 1007,
+        "x": 1862.3927001953,
+        "y": 150.0
+      },
+      "spawner_priming": {
+        "initial_manual_mode": {
+          "active": "false",
+          "ok": "true"
+        },
+        "observed_spawner_address": 287753448,
+        "player_vitals": {
+          "actor": "286143400",
+          "after.anim_drive_state": "0",
+          "after.hp": "5000.0",
+          "after.max_hp": "5000.0",
+          "after.max_mp": "5000.0",
+          "after.mp": "5000.0",
+          "before.hp": "5000.0",
+          "before.max_hp": "5000.0",
+          "progression": "286227768",
+          "write.hp": "true",
+          "write.max_hp": "true",
+          "write.max_mp": "true",
+          "write.mp": "true"
+        },
+        "start_waves": {
+          "ok": "true"
+        }
+      },
+      "type_id": 1007,
+      "unscaled_family_reward": 4.0
+    }
+  ]
+}

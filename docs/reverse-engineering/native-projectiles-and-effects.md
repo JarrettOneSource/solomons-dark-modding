@@ -357,8 +357,12 @@ separate effects:
 
 - eligible non-player actors receive `Mod_CircleSlow (0x1B70)`; its value is
   copied from circle `+0x140`;
-- the local player receives the circle's advertised healing and mana-recovery
-  boosts, bounded by the player's current maxima.
+- the local player receives `mana_recovery * 2 / game_timing_scale` MP, capped
+  at max MP; and
+- the advertised HP boost is inert in stock. The callback computes
+  `candidate = HP + health_regeneration * 2 / game_timing_scale`, compares that
+  candidate with current HP instead of max HP, and for ordinary positive
+  regeneration writes current HP unchanged.
 
 The ring renderer `0x005F3CA0` creates `Anim_SpinAwayAdditive` children using
 the color stored at `+0x14C..+0x158`. The circle removes itself when the
@@ -367,14 +371,16 @@ than raw pointers owned by the circle.
 
 ### Magic Trap (`0x7F5`)
 
-`MagicTrap` stores its derived element at `+0x13C`, primary base damage at
-`+0x140`, trap multiplier at `+0x144`, fade-in rate at `+0x148`, animation
-frame at `+0x14C`, age at `+0x150`, and the decaying armed shimmer at `+0x154`.
+`MagicTrap` stores its derived element at `+0x13C`, the full-charge payload
+`primaryBaseDamage * mDamage` at `+0x140`, charge fraction at `+0x144`, charge
+increment at `+0x148`, animation frame at `+0x14C`, age at `+0x150`, and the
+decaying armed shimmer at `+0x154`. Charge is clamped to one; the shipped
+configuration reaches full charge after 800 native ticks.
 `0x00603710` registers it in the world's effect draw list each tick and, for
 the authoritative local group, polls its trigger footprint every 25 ticks.
 
 `0x005F5C80` is the one-shot trigger. It emits the element-colored burst,
-queries group `2`, sets damage to `baseDamage * trapMultiplier`, dispatches to
+queries group `2`, sets damage to `fullChargePayload * charge`, dispatches to
 every actor returned, and removes the trap. The element payload is explicit:
 
 | Trap element selector | Additional native effect |

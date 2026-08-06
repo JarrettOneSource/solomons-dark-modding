@@ -1780,11 +1780,13 @@ RECORDED_CAPTURE_SHAS: dict[str, tuple[str, int]] = {
     "6b58f4db1ba8ce5c5018d6278940efb6f9a6dff3": ("tree", 1),
     # loadre class/loadout golden: one clean base in the fixture header.
     "c36f0a81721fa5d3dc2edda65f3347354974b2f0": ("commit", 1),
-    # G10 save-format goldens: one clean base in the fixture header.
-    "8deaa9400cc1df33748976aa0464e8016c11a46b": ("commit", 1),
+    # G10 save-format and G6 progression goldens share one clean base commit.
+    "8deaa9400cc1df33748976aa0464e8016c11a46b": ("commit", 2),
     # G5 audio dispatch golden: one clean capture commit/tree pair.
     "508c5be780692c8e30a8c68d395b31d27f0866e8": ("commit", 1),
     "0a0a49fedbf242c5be02760a71f4ff9468b4623f": ("tree", 1),
+    # G6 progression golden additionally records that base commit's tree.
+    "a3bc978196605af4ec9b5f6a3be9c0660cd1ae40": ("tree", 1),
     # G1 movement and RNG goldens, and the tree that commit points at.
     "51d81ed3705468b2c96cdd5a072eb2e9b0f8db0b": ("commit", 2),
     "55ea6c0c646df739f3243a01d0cd35c4d6f9b786": ("tree", 2),
@@ -1868,6 +1870,7 @@ COMMIT_TREE_PAIRED_FIXTURES = frozenset(
         "webgame/enemy-behavior-goldens.json",
         "webgame/rng-goldens.json",
         "webgame/audio-event-goldens.json",
+        "webgame/progression-goldens.json",
     }
 )
 

@@ -102,6 +102,13 @@ from static_re_native_loot_selector_contracts import (
     test_native_loot_physics_lifetimes_and_multiplayer_credit_are_pinned,
     test_native_loot_selector_tables_and_decision_traces_are_pinned,
 )
+from static_re_native_progression_contracts import (
+    test_native_progression_actor_layout_and_all_skill_rows_are_pinned,
+    test_native_progression_five_live_effect_formulas_are_pinned,
+    test_native_progression_golden_and_recorder_provenance_are_pinned,
+    test_native_progression_level_curve_and_xp_awards_are_pinned,
+    test_native_progression_offer_pool_selection_and_rng_are_pinned,
+)
 from static_re_native_menu_shell_contracts import (
     test_designed_menu_focus_model_consumes_g14_intents,
     test_native_menu_live_transition_graph_is_pinned,
@@ -1057,6 +1064,26 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native loot physics, lifetimes, and multiplayer credit are pinned",
         test_native_loot_physics_lifetimes_and_multiplayer_credit_are_pinned,
+    ),
+    (
+        "Native progression level curve and XP awards are pinned",
+        test_native_progression_level_curve_and_xp_awards_are_pinned,
+    ),
+    (
+        "Native progression offer pool, selection, and RNG are pinned",
+        test_native_progression_offer_pool_selection_and_rng_are_pinned,
+    ),
+    (
+        "Native progression five live effect formulas are pinned",
+        test_native_progression_five_live_effect_formulas_are_pinned,
+    ),
+    (
+        "Native progression actor layout and all skill rows are pinned",
+        test_native_progression_actor_layout_and_all_skill_rows_are_pinned,
+    ),
+    (
+        "Native progression golden and recorder provenance are pinned",
+        test_native_progression_golden_and_recorder_provenance_are_pinned,
     ),
     (
         "Native menu screen census and live layouts are pinned",
