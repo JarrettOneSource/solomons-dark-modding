@@ -530,9 +530,18 @@ void PresentLoadingScreenFrame() {
         return;
     }
 
-    CaptureLoadingScreenEvidenceFrame(snapshot);
+    LoadingScreenRenderLayout evidence_layout;
+    const bool has_evidence_layout =
+        TryGetLastLoadingScreenRenderLayout(&evidence_layout) &&
+        evidence_layout.sequence == snapshot.sequence &&
+        evidence_layout.stage_id == snapshot.stage_id &&
+        IsProcessClientPresentationViewport(evidence_layout);
+    CaptureLoadingScreenEvidenceFrame(
+        snapshot,
+        has_evidence_layout ? &evidence_layout : nullptr);
     if (!ReadEnvironmentVariable(
              kCaptureDirectoryEnvironment).empty() &&
+        has_evidence_layout &&
         snapshot.stage ==
             LoadingScreenStage::WaitingForParticipants &&
         !g_loading_capture_settled) {
@@ -540,7 +549,9 @@ void PresentLoadingScreenFrame() {
         while (!g_loading_capture_settled &&
                GetTickCount64() <= deadline) {
             Sleep(50);
-            CaptureLoadingScreenEvidenceFrame(snapshot);
+            CaptureLoadingScreenEvidenceFrame(
+                snapshot,
+                &evidence_layout);
         }
         if (!g_loading_capture_settled) {
             Log(

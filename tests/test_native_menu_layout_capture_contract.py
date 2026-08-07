@@ -83,7 +83,8 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             r"(?s)snapshot\.stage\s*==\s*"
             r"LoadingScreenStage::WaitingForParticipants.*?"
             r"while \(!g_loading_capture_settled.*?"
-            r"CaptureLoadingScreenEvidenceFrame\(snapshot\)",
+            r"CaptureLoadingScreenEvidenceFrame\(\s*"
+            r"snapshot,\s*&evidence_layout\)",
             "the real final loading barrier must remain presented until settled",
         )
 

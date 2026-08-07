@@ -726,6 +726,15 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "final barrier or bounds failure as STOP",
     ),
     StaticMutation(
+        "special.loading-pins-client-layout",
+        RECORDER,
+        "SolomonDarkModLoader/src/loading_screen_native_present.cpp",
+        "snapshot,\n                &evidence_layout",
+        "snapshot,\n                nullptr",
+        "loading-screen settlement hold no longer pins the accepted client "
+        "layout against concurrent offscreen last-layout replacement",
+    ),
+    StaticMutation(
         "recorder.blocking-modal-exact-surface",
         RECORDER,
         "scripts/NativeMenuCaptureSupport.ps1",
