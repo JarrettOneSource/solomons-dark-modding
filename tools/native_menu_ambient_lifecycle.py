@@ -526,6 +526,7 @@ def _union_member_ranges(
 
 def _resolve_varying_member_keys(
     measurements: list[dict[str, Any]],
+    ambient_family: set[str],
 ) -> dict[tuple[int, str], str]:
     by_capability: dict[
         str, list[tuple[dict[str, Any], dict[str, Any]]]
@@ -541,8 +542,8 @@ def _resolve_varying_member_keys(
         witnesses = [
             record
             for record in records
-            if record[1]["classification"]
-            in {"animated", "visibility_cycling"}
+            if record[1]["classification"] == "animated"
+            and record[1]["art_id"] not in ambient_family
         ]
         if not witnesses:
             continue
@@ -869,7 +870,9 @@ def resolve_ambient_lifecycle(
         in {"ephemeral", "visibility_cycling", "one_way_spawn_candidate"}
         and member["art_id"]
     }
-    varying_member_keys = _resolve_varying_member_keys(measurements)
+    varying_member_keys = _resolve_varying_member_keys(
+        measurements, ambient_family
+    )
     corroborations: list[dict[str, Any]] = []
     settled_measurements = [
         measurement

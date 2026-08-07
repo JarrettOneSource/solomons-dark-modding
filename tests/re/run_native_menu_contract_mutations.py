@@ -831,6 +831,15 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "demotes a reproduced stable sibling from the structural core",
     ),
     StaticMutation(
+        "v2.5.ambient-art-family-not-motion-slot",
+        CAMPAIGN,
+        "tools/native_menu_ambient_lifecycle.py",
+        'and record[1]["art_id"] not in ambient_family',
+        "and True  # mutation forces ambient title art through member slots",
+        "title-backdrop ambient art is again forced through screen-member "
+        "motion slots instead of retaining authorized art-family identity",
+    ),
+    StaticMutation(
         "v2.5.empty-gameplay-surface-is-constant",
         CLASSIFIER,
         "tools/native_menu_ambient_lifecycle.py",

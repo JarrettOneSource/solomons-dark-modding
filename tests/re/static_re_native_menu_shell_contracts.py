@@ -1102,7 +1102,8 @@ def test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired() -> str:
     )
     _require_regex(
         classifier,
-        r"varying_member_keys\s*=\s*_resolve_varying_member_keys\(measurements\).*?"
+        r"varying_member_keys\s*=\s*_resolve_varying_member_keys\(\s*"
+        r"measurements, ambient_family\s*\).*?"
         r"motion capability resolution requires extended-observation.*?evidence.*?"
         r"classification == \"full_presence\".*?varying_key is None.*?"
         r"phantom animated.*?zero events",
@@ -1290,7 +1291,7 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
         r"def _motion_geometry_compatible\(.*?"
         r"if max\(left_min, right_min\) > min\(left_max, right_max\):\s*"
         r"return False.*?"
-        r"def _resolve_varying_member_keys\(.*?"
+        r"def _resolve_varying_member_keys\(\s*measurements:.*?"
         r"varying-member identity ambiguity.*?"
         r"_core_counter_for_measurements\(\s*"
         r"measurements, ambient_family, varying_member_keys\s*\).*?"
@@ -1298,6 +1299,23 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
         r"varying_member_keys",
         "same-art rect animation again collapses distinct screen members and "
         "demotes a reproduced stable sibling from the structural core",
+    )
+    _require_regex(
+        classifier,
+        r"def _resolve_varying_member_keys\(\s*measurements:.*?"
+        r"ambient_family: set\[str\].*?"
+        r"witnesses\s*=\s*\[.*?"
+        r'record\[1\]\["classification"\] == "animated".*?'
+        r'record\[1\]\["art_id"\] not in ambient_family',
+        "title-backdrop ambient art is again forced through screen-member "
+        "motion slots instead of retaining authorized art-family identity",
+    )
+    _require_regex(
+        classifier,
+        r"ambient_family\s*=\s*\{.*?"
+        r"_resolve_varying_member_keys\(\s*measurements, ambient_family\s*\)",
+        "title-backdrop ambient art is again forced through screen-member "
+        "motion slots instead of retaining authorized art-family identity",
     )
     _require_regex(
         ambient_tests,
