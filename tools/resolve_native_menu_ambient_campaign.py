@@ -260,6 +260,7 @@ def _observation(
     label: str,
     *,
     kind: str = "settled_window",
+    corroboration_anchor: bool = True,
 ) -> dict[str, Any]:
     instance, process_id = _identity(header, label)
     try:
@@ -272,6 +273,9 @@ def _observation(
         "kind": kind,
         "instance": instance,
         "process_id": process_id,
+        "corroboration_anchor": bool(
+            corroboration_anchor and kind == "settled_window"
+        ),
         "samples": samples,
         "evidence": evidence,
     }
@@ -530,6 +534,7 @@ def collect_navigation(
                         samples,
                         evidence_receipt(paths[label], evidence_root),
                         f"edge:{edge_id}:{side}:{label}",
+                        corroboration_anchor=False,
                     )
                 )
             if len(resolved_ids) != 1:

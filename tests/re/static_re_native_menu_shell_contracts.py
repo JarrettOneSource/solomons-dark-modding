@@ -1266,6 +1266,26 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
     )
     _require_regex(
         resolver,
+        r"def _observation\(.*?corroboration_anchor: bool = True.*?"
+        r'"corroboration_anchor": bool\(.*?'
+        r"_observation\(\s*header,\s*samples,\s*"
+        r"evidence_receipt\(paths\[label\], evidence_root\),\s*"
+        r'f"edge:\{edge_id\}:\{side\}:\{label\}",\s*'
+        r"corroboration_anchor=False",
+        "navigation replay windows again multiply the v2.3 extended-observation "
+        "duty after screen classification was anchored to two fresh standalones",
+    )
+    _require_regex(
+        classifier,
+        r"corroboration_anchors\s*=\s*\[.*?"
+        r'measurement\["corroboration_anchor"\].*?'
+        r"requires two fresh standalone.*?corroboration anchors.*?"
+        r'if not quiet_measurement\["corroboration_anchor"\]:\s*continue',
+        "motion-capability resolution no longer requires two fresh standalone "
+        "anchors and their same-instance extended corroboration",
+    )
+    _require_regex(
+        resolver,
         r"RUNTIME_PROVENANCE_FIELDS\s*=\s*\(\s*"
         r'"game_executable_sha256",\s*"loader_dll_sha256",\s*\).*?'
         r"def _assert_runtime_provenance_matches\(.*?"

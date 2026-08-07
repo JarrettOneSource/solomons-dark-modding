@@ -814,6 +814,15 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "each observation while comparing screen identity and structural core",
     ),
     StaticMutation(
+        "v2.3.navigation-replay-corroboration-scope",
+        CAMPAIGN,
+        "tools/resolve_native_menu_ambient_campaign.py",
+        'f"edge:{edge_id}:{side}:{label}",\n                        corroboration_anchor=False,',
+        'f"edge:{edge_id}:{side}:{label}",',
+        "navigation replay windows again multiply the v2.3 extended-observation "
+        "duty after screen classification was anchored to two fresh standalones",
+    ),
+    StaticMutation(
         "v2.5.empty-gameplay-surface-is-constant",
         CLASSIFIER,
         "tools/native_menu_ambient_lifecycle.py",

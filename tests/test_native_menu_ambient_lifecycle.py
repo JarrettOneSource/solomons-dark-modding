@@ -105,6 +105,7 @@ def _observation(
     return {
         "label": instance,
         "kind": "settled_window",
+        "corroboration_anchor": True,
         "instance": instance,
         "process_id": process_id,
         "samples": samples,
@@ -563,6 +564,46 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
                     "kind": "extended_observation",
                     "label": "confirmation-extension",
                 },
+            ]
+        )
+
+        self.assertEqual(len(resolved["animated_element_ids"]), 1)
+        self.assertEqual(len(resolved["motion_capability_corroborations"]), 1)
+
+    def test_navigation_replays_do_not_multiply_corroboration_duty(self) -> None:
+        def moving(sample_index: int) -> list[dict[str, object]]:
+            result = [_art(index) for index in range(5)]
+            offset = sample_index * 0.25
+            result[0]["rect"] = [offset, 20.0, 8.0 + offset, 26.0]
+            result[0]["unclipped_rect"] = list(result[0]["rect"])
+            return result
+
+        navigation_replay = {
+            **_observation(_stable_samples(5), "menufx-navigation", 303),
+            "label": "navigation-replay",
+            "corroboration_anchor": False,
+        }
+        extension = {
+            **_observation(
+                _samples(
+                    lambda _: [_art(index) for index in range(5)],
+                    sample_count=200,
+                    interval_milliseconds=310,
+                ),
+                "menufx-confirmation",
+                202,
+            ),
+            "kind": "extended_observation",
+            "label": "confirmation-extension",
+            "corroboration_anchor": False,
+        }
+
+        resolved = resolve_ambient_lifecycle(
+            [
+                _observation(_samples(moving), "menufx-primary", 101),
+                _observation(_stable_samples(5), "menufx-confirmation", 202),
+                navigation_replay,
+                extension,
             ]
         )
 

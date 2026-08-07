@@ -704,6 +704,10 @@ def resolve_ambient_lifecycle(
         measured["kind"] = kind
         measured["instance"] = instance
         measured["process_id"] = process_id
+        measured["corroboration_anchor"] = bool(
+            observation.get("corroboration_anchor", kind == "settled_window")
+            and kind == "settled_window"
+        )
         evidence = observation.get("evidence")
         if isinstance(evidence, dict):
             measured["evidence"] = copy.deepcopy(evidence)
@@ -739,6 +743,21 @@ def resolve_ambient_lifecycle(
         for measurement in measurements
         if measurement["kind"] == "settled_window"
     ]
+    corroboration_anchors = [
+        measurement
+        for measurement in settled_measurements
+        if measurement["corroboration_anchor"]
+    ]
+    if len(
+        {
+            (measurement["instance"], measurement["process_id"])
+            for measurement in corroboration_anchors
+        }
+    ) < 2:
+        raise AmbientLifecycleError(
+            "motion capability resolution requires two fresh standalone "
+            "corroboration anchors"
+        )
     extended_measurements = [
         measurement
         for measurement in measurements
@@ -766,6 +785,8 @@ def resolve_ambient_lifecycle(
             continue
         for quiet_measurement, quiet_member in capability_records:
             if quiet_member["classification"] != "full_presence":
+                continue
+            if not quiet_measurement["corroboration_anchor"]:
                 continue
             matching_extensions = [
                 measurement
@@ -1173,6 +1194,7 @@ def resolve_ambient_lifecycle(
                 "kind": measurement["kind"],
                 "instance": measurement["instance"],
                 "process_id": measurement["process_id"],
+                "corroboration_anchor": measurement["corroboration_anchor"],
                 "sample_count": measurement["sample_count"],
                 "stable_span_milliseconds": measurement[
                     "stable_span_milliseconds"
