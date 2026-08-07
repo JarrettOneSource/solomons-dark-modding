@@ -171,6 +171,53 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             "and the live expanded rollout on the retained settings owner",
         )
 
+    def test_settings_modal_retains_one_shot_rows_only_for_its_live_owner(self) -> None:
+        state = read("SolomonDarkModLoader/src/debug_ui_overlay.cpp")
+        frame = read(
+            "SolomonDarkModLoader/src/debug_ui_overlay/"
+            "overlay_surface_builders_misc_surfaces.inl"
+        )
+        reset = read(
+            "SolomonDarkModLoader/src/debug_ui_overlay/"
+            "state_actions_activation/resolved_action_activation.inl"
+        )
+        snapshot = read(
+            "SolomonDarkModLoader/src/debug_ui_overlay/"
+            "menu_layout_capture_snapshot_and_hooks.inl"
+        )
+        self.assertIn("retained_settings_elements_owner", state)
+        self.assertIn("retained_settings_exact_text_elements", state)
+        self.assertIn("retained_settings_exact_control_elements", state)
+        self.assertRegex(
+            frame,
+            r"(?s)MergeRetainedSettingsFrameElementsUnlocked.*?"
+            r"settings_render\.tracked_object_ptr.*?"
+            r"retained_settings_elements_owner != settings_owner.*?"
+            r"retained_settings_exact_text_elements\.clear\(\).*?"
+            r"retained_settings_exact_control_elements\.clear\(\).*?"
+            r"source\.surface_id != \"settings\".*?continue;.*?"
+            r"TakeExactTextFrameElements.*?"
+            r"MergeRetainedSettingsFrameElementsUnlocked\(.*?"
+            r"retained_settings_exact_text_elements",
+            "one-shot settings rows must be replayed only while the same live "
+            "settings owner remains selected",
+        )
+        self.assertRegex(
+            reset,
+            r"(?s)RetireUiCaptureBeforeActionDispatch.*?"
+            r"retained_settings_elements_owner = 0.*?"
+            r"retained_settings_exact_text_elements\.clear\(\).*?"
+            r"retained_settings_exact_control_elements\.clear\(\)",
+            "semantic action retirement must invalidate retained settings rows",
+        )
+        self.assertRegex(
+            snapshot,
+            r"(?s)semantic_root.*?GetOverlaySurfaceRootId.*?"
+            r"exact_text_elements.*?source_root.*?"
+            r"source_root != semantic_root.*?continue;",
+            "a selected surface must not inherit hidden exact text from a foreign surface",
+        )
+
     def test_position_draw_capture_survives_the_gameplay_hook_chain(self) -> None:
         header = read("SolomonDarkModLoader/include/debug_ui_overlay.h")
         public_api = read(

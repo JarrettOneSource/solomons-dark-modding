@@ -283,10 +283,74 @@ std::vector<ObservedUiElement> TakeObservedFrameElements() {
     return elements;
 }
 
+void MergeRetainedSettingsFrameElementsUnlocked(
+    std::vector<ObservedUiElement>* frame_elements,
+    std::vector<ObservedUiElement>* retained_elements) {
+    if (frame_elements == nullptr || retained_elements == nullptr) {
+        return;
+    }
+
+    const auto settings_owner =
+        g_debug_ui_overlay_state.settings_render.tracked_object_ptr;
+    if (settings_owner == 0) {
+        g_debug_ui_overlay_state.retained_settings_elements_owner = 0;
+        g_debug_ui_overlay_state.retained_settings_exact_text_elements.clear();
+        g_debug_ui_overlay_state.retained_settings_exact_control_elements.clear();
+        return;
+    }
+
+    if (g_debug_ui_overlay_state.retained_settings_elements_owner != settings_owner) {
+        g_debug_ui_overlay_state.retained_settings_elements_owner = settings_owner;
+        g_debug_ui_overlay_state.retained_settings_exact_text_elements.clear();
+        g_debug_ui_overlay_state.retained_settings_exact_control_elements.clear();
+    }
+
+    const auto same_element = [](
+        const ObservedUiElement& left,
+        const ObservedUiElement& right) {
+        return left.surface_id == right.surface_id &&
+            left.object_ptr == right.object_ptr &&
+            left.caller_address == right.caller_address &&
+            left.label == right.label;
+    };
+
+    for (const auto& source : *frame_elements) {
+        if (source.surface_id != "settings") {
+            continue;
+        }
+        const auto existing = std::find_if(
+            retained_elements->begin(),
+            retained_elements->end(),
+            [&](const ObservedUiElement& retained) {
+                return same_element(retained, source);
+            });
+        if (existing == retained_elements->end()) {
+            retained_elements->push_back(source);
+        } else {
+            *existing = source;
+        }
+    }
+
+    for (const auto& retained : *retained_elements) {
+        const auto already_in_frame = std::any_of(
+            frame_elements->begin(),
+            frame_elements->end(),
+            [&](const ObservedUiElement& source) {
+                return same_element(source, retained);
+            });
+        if (!already_in_frame) {
+            frame_elements->push_back(retained);
+        }
+    }
+}
+
 std::vector<ObservedUiElement> TakeExactTextFrameElements() {
     std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
     auto elements = std::move(g_debug_ui_overlay_state.frame_exact_text_elements);
     g_debug_ui_overlay_state.frame_exact_text_elements.clear();
+    MergeRetainedSettingsFrameElementsUnlocked(
+        &elements,
+        &g_debug_ui_overlay_state.retained_settings_exact_text_elements);
     return elements;
 }
 
@@ -294,6 +358,9 @@ std::vector<ObservedUiElement> TakeExactControlFrameElements() {
     std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
     auto elements = std::move(g_debug_ui_overlay_state.frame_exact_control_elements);
     g_debug_ui_overlay_state.frame_exact_control_elements.clear();
+    MergeRetainedSettingsFrameElementsUnlocked(
+        &elements,
+        &g_debug_ui_overlay_state.retained_settings_exact_control_elements);
     return elements;
 }
 

@@ -558,6 +558,9 @@ void ResetDebugUiOverlayStateUnlocked(DebugUiOverlayState* state) {
     state->frame_elements.clear();
     state->frame_exact_text_elements.clear();
     state->frame_exact_control_elements.clear();
+    state->retained_settings_elements_owner = 0;
+    state->retained_settings_exact_text_elements.clear();
+    state->retained_settings_exact_control_elements.clear();
     state->active_exact_text_renders.clear();
     state->recent_assigned_strings.clear();
     state->recent_assigned_strings_updated_at = 0;

@@ -1118,6 +1118,37 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "panel art plus a live expanded rollout",
     ),
     StaticMutation(
+        "recorder.settings-one-shot-row-retention",
+        SURFACE_AGREEMENT,
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "overlay_surface_builders_misc_surfaces.inl",
+        'if (source.surface_id != "settings") {',
+        'if (source.surface_id == "settings") {',
+        "one-shot settings rows can disappear before settlement or leak from "
+        "a different retained settings owner",
+    ),
+    StaticMutation(
+        "recorder.settings-retired-owner-invalidation",
+        SURFACE_AGREEMENT,
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "state_actions_activation/resolved_action_activation.inl",
+        "g_debug_ui_overlay_state.retained_settings_elements_owner = 0;",
+        "g_debug_ui_overlay_state.retained_settings_elements_owner = "
+        "g_debug_ui_overlay_state.settings_render.tracked_object_ptr;",
+        "semantic action retirement can leave one-shot settings rows attached "
+        "to a retired owner",
+    ),
+    StaticMutation(
+        "recorder.foreign-exact-text-filter",
+        SURFACE_AGREEMENT,
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "menu_layout_capture_snapshot_and_hooks.inl",
+        "source_root != semantic_root &&",
+        "source_root == semantic_root &&",
+        "a selected native menu layout can inherit hidden exact text from a "
+        "foreign semantic surface",
+    ),
+    StaticMutation(
         "recorder.no-provenance-override",
         RECORDER,
         "scripts/Import-NativeMenuSpecialCaptures.ps1",

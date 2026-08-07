@@ -45,6 +45,9 @@ std::string ResolveCapturedLayoutScreenId(
     const auto semantic_root = semantic_elements.empty()
         ? std::string{}
         : GetOverlaySurfaceRootId(semantic_elements.front().surface_id);
+    if (semantic_root == "settings" || semantic_root == "controls") {
+        return semantic_root;
+    }
     if (semantic_root == "dialog" &&
         ContainsObservedText(exact_text_elements, "beta version v.0.72")) {
         return "beta_notice";
@@ -59,8 +62,6 @@ std::string ResolveCapturedLayoutScreenId(
         {"sort levels by", "dark_cloud_sort"},
         {"level options", "dark_cloud_options"},
         {"dark cloud settings", "dark_cloud_settings"},
-        {"customize keyboard", "controls"},
-        {"tweak performance", "performance"},
         {"game over", "game_over"},
     };
     for (const auto& candidate : kTextScreens) {
@@ -175,6 +176,15 @@ void StoreLatestMenuLayoutSnapshotUnlocked(
     }
 
     for (const auto& source : exact_text_elements) {
+        const auto semantic_root = semantic_elements.empty()
+            ? std::string{}
+            : GetOverlaySurfaceRootId(
+                  semantic_elements.front().surface_id);
+        const auto source_root = GetOverlaySurfaceRootId(source.surface_id);
+        if (!semantic_root.empty() && source_root != semantic_root &&
+            !(semantic_root == "controls" && source_root == "settings")) {
+            continue;
+        }
         if (source.label.empty() ||
             source.max_x <= source.min_x ||
             source.max_y <= source.min_y) {
@@ -635,6 +645,9 @@ void ResetMenuLayoutCaptureStateUnlocked(DebugUiOverlayState* state) {
     state->settings_toggle_row_hook = X86Hook{};
     state->menu_layout_capture_enabled = false;
     state->frame_menu_art_elements.clear();
+    state->retained_settings_elements_owner = 0;
+    state->retained_settings_exact_text_elements.clear();
+    state->retained_settings_exact_control_elements.clear();
     state->latest_layout_snapshot = DebugUiLayoutSnapshot{};
     state->layout_snapshots_by_screen.clear();
     g_native_menu_art_by_address.clear();

@@ -526,6 +526,9 @@ struct DebugUiOverlayState {
     std::vector<ObservedUiElement> frame_elements;
     std::vector<ObservedUiElement> frame_exact_text_elements;
     std::vector<ObservedUiElement> frame_exact_control_elements;
+    uintptr_t retained_settings_elements_owner = 0;
+    std::vector<ObservedUiElement> retained_settings_exact_text_elements;
+    std::vector<ObservedUiElement> retained_settings_exact_control_elements;
     std::vector<CapturedMenuArtElement> frame_menu_art_elements;
     std::vector<ExactTextRenderCapture> active_exact_text_renders;
     std::vector<std::string> recent_assigned_strings;

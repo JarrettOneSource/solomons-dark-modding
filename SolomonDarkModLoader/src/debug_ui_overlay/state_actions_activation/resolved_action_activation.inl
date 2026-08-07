@@ -3,6 +3,9 @@ void RetireUiCaptureBeforeActionDispatch() {
     g_debug_ui_overlay_state.frame_elements.clear();
     g_debug_ui_overlay_state.frame_exact_text_elements.clear();
     g_debug_ui_overlay_state.frame_exact_control_elements.clear();
+    g_debug_ui_overlay_state.retained_settings_elements_owner = 0;
+    g_debug_ui_overlay_state.retained_settings_exact_text_elements.clear();
+    g_debug_ui_overlay_state.retained_settings_exact_control_elements.clear();
     g_debug_ui_overlay_state.active_exact_text_renders.clear();
     g_debug_ui_overlay_state.recent_assigned_strings.clear();
     g_debug_ui_overlay_state.recent_assigned_strings_updated_at = 0;

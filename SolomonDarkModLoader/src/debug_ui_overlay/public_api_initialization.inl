@@ -19,6 +19,10 @@ bool InitializeDebugUiOverlay(bool diagnostic_visuals_enabled) {
     g_debug_ui_overlay_state.frame_elements.reserve(config->max_tracked_elements_per_frame);
     g_debug_ui_overlay_state.frame_exact_text_elements.reserve(config->max_tracked_elements_per_frame);
     g_debug_ui_overlay_state.frame_exact_control_elements.reserve(config->max_tracked_elements_per_frame);
+    g_debug_ui_overlay_state.retained_settings_exact_text_elements.reserve(
+        config->max_tracked_elements_per_frame);
+    g_debug_ui_overlay_state.retained_settings_exact_control_elements.reserve(
+        config->max_tracked_elements_per_frame);
     g_debug_ui_overlay_state.frame_menu_art_elements.reserve(
         config->max_tracked_elements_per_frame);
     g_debug_ui_overlay_state.active_exact_text_renders.reserve(16);

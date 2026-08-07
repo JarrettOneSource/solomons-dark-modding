@@ -1131,6 +1131,19 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         "SolomonDarkModLoader/src/debug_ui_overlay/"
         "tracked_surfaces_and_main_menu.inl"
     )
+    overlay_state = _read("SolomonDarkModLoader/src/debug_ui_overlay.cpp")
+    frame_capture = _read(
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "overlay_surface_builders_misc_surfaces.inl"
+    )
+    action_retirement = _read(
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "state_actions_activation/resolved_action_activation.inl"
+    )
+    layout_snapshot = _read(
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "menu_layout_capture_snapshot_and_hooks.inl"
+    )
     support = _read("scripts/NativeMenuCaptureSupport.ps1")
     standalone = _read("scripts/Record-NativeMenuLayout.ps1")
     transition = _read("scripts/Record-NativeMenuTransition.ps1")
@@ -1221,6 +1234,39 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         r"TryIsCustomizeKeyboardRolloutExpanded",
         "Controls classification no longer requires current-frame settings "
         "panel art plus a live expanded rollout",
+    )
+    _require_regex(
+        overlay_state + frame_capture,
+        r"retained_settings_elements_owner.*?"
+        r"retained_settings_exact_text_elements.*?"
+        r"retained_settings_exact_control_elements.*?"
+        r"MergeRetainedSettingsFrameElementsUnlocked.*?"
+        r"settings_render\.tracked_object_ptr.*?"
+        r"retained_settings_elements_owner != settings_owner.*?"
+        r"source\.surface_id != \"settings\".*?continue;.*?"
+        r"TakeExactTextFrameElements.*?"
+        r"MergeRetainedSettingsFrameElementsUnlocked\(.*?"
+        r"retained_settings_exact_text_elements",
+        "one-shot settings rows can disappear before settlement or leak from "
+        "a different retained settings owner",
+    )
+    _require_regex(
+        action_retirement,
+        r"RetireUiCaptureBeforeActionDispatch.*?"
+        r"retained_settings_elements_owner = 0.*?"
+        r"retained_settings_exact_text_elements\.clear\(\).*?"
+        r"retained_settings_exact_control_elements\.clear\(\)",
+        "semantic action retirement can leave one-shot settings rows attached "
+        "to a retired owner",
+    )
+    _require_regex(
+        layout_snapshot,
+        r"for \(const auto& source : exact_text_elements\).*?"
+        r"semantic_root.*?GetOverlaySurfaceRootId.*?"
+        r"source_root.*?GetOverlaySurfaceRootId\(source\.surface_id\).*?"
+        r"source_root != semantic_root.*?continue;",
+        "a selected native menu layout can inherit hidden exact text from a "
+        "foreign semantic surface",
     )
     _require_regex(
         standalone,
