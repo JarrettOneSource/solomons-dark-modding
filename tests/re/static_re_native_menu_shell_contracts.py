@@ -1140,6 +1140,9 @@ def test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired() -> str:
     )
     _require_regex(
         unit_tests,
+        r"def test_extended_baseline_receipt_resolves_exact_recording_bytes\(.*?"
+        r"def test_extended_baseline_receipt_rejects_absent_or_duplicate_bytes\(.*?"
+        r"def test_ambiguous_settings_screen_requires_exact_edge_route\(.*?"
         r"def test_churn_on_control_member_is_not_classifiable\(.*?"
         r"def test_visible_variance_on_control_member_is_not_classifiable\(.*?"
         r"def test_core_relative_order_flip_trips\(.*?"
@@ -1190,6 +1193,54 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
         r"navigation edge censuses differ",
         "ambient-lifecycle resolution no longer proves it reached real "
         "standalones or refuses duplicate/missing screen and edge candidates",
+    )
+    _require_regex(
+        resolver,
+        r"NAVIGATION_ENDPOINT_LAYOUT_IDS\s*=\s*\{.*?"
+        r"\(\"main_to_settings\", \"after\"\): \"game-settings-title\".*?"
+        r"\(\"settings_to_main\", \"before\"\): \"game-settings-title\".*?"
+        r"\(\"dark_cloud_menu_to_settings\", \"after\"\): "
+        r"\"game-settings-dark-cloud\".*?"
+        r"\(\"dark_cloud_settings_done\", \"before\"\): "
+        r"\"game-settings-dark-cloud\".*?"
+        r"\(\"settings_to_hub\", \"before\"\): \"game-settings-gameplay\".*?"
+        r"\(\"pause_to_game_settings\", \"after\"\): "
+        r"\"game-settings-gameplay\".*?"
+        r"\(\"settings_to_controls\", \"before\"\): "
+        r"\"game-settings-gameplay\".*?"
+        r"\(\"controls_to_settings\", \"after\"\): "
+        r"\"game-settings-gameplay\".*?"
+        r"\(\"settings_to_performance\", \"before\"\): "
+        r"\"game-settings-gameplay\".*?"
+        r"\(\"performance_to_settings\", \"after\"\): "
+        r"\"game-settings-gameplay\".*?"
+        r"\(\"settings_to_dark_cloud_settings\", \"before\"\): "
+        r"\"game-settings-gameplay\".*?"
+        r"\(\"dark_cloud_settings_to_settings\", \"after\"\): "
+        r"\"game-settings-gameplay\".*?"
+        r"if explicit_layout_ids != set\(NAVIGATION_ENDPOINT_LAYOUT_IDS\):.*?"
+        r"explicit navigation layout mapping census changed",
+        "ambient-lifecycle resolver no longer refuses the three-way settings "
+        "screen ambiguity with an every-edge explicit route map",
+    )
+    _require_regex(
+        resolver,
+        r"def resolve_baseline_evidence\(.*?"
+        r"if path\.stat\(\)\.st_size != recorded_bytes:.*?"
+        r"if file_sha256\(path\) == recorded_sha256:.*?matches\.append\(.*?"
+        r"if examined == 0:.*?baseline evidence sweep reached no JSON content.*?"
+        r"if len\(matches\) != 1:.*?"
+        r"baseline receipt does not resolve exactly.*?one byte-identical.*?"
+        r"validate_receipt\(baseline_path, receipt, label \+ \" baseline\"\).*?"
+        r"baseline_path, baseline_recording = resolve_baseline_evidence\(.*?"
+        r"if canonical_bytes\(baseline_source\) != "
+        r"canonical_bytes\(motion_source\):.*?"
+        r"baseline provenance does not.*?match the motion observation.*?"
+        r"\"game_executable_sha256\".*?\"loader_dll_sha256\".*?"
+        r"if fixture_source\[field\] != motion_source\[field\]:.*?"
+        r"baseline runtime provenance.*?does not match fixture",
+        "historical motion observations are no longer byte-bound to one copied "
+        "baseline with matching capture and runtime provenance",
     )
     _require_regex(
         resolver,

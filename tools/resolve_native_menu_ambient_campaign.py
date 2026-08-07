@@ -34,6 +34,22 @@ class CampaignResolutionError(RuntimeError):
     """The campaign inputs do not prove one unambiguous v2.5 result."""
 
 
+NAVIGATION_ENDPOINT_LAYOUT_IDS = {
+    ("main_to_settings", "after"): "game-settings-title",
+    ("settings_to_main", "before"): "game-settings-title",
+    ("dark_cloud_menu_to_settings", "after"): "game-settings-dark-cloud",
+    ("dark_cloud_settings_done", "before"): "game-settings-dark-cloud",
+    ("settings_to_hub", "before"): "game-settings-gameplay",
+    ("pause_to_game_settings", "after"): "game-settings-gameplay",
+    ("settings_to_controls", "before"): "game-settings-gameplay",
+    ("controls_to_settings", "after"): "game-settings-gameplay",
+    ("settings_to_performance", "before"): "game-settings-gameplay",
+    ("performance_to_settings", "after"): "game-settings-gameplay",
+    ("settings_to_dark_cloud_settings", "before"): "game-settings-gameplay",
+    ("dark_cloud_settings_to_settings", "after"): "game-settings-gameplay",
+}
+
+
 def read_object(path: Path) -> dict[str, Any]:
     value = json.loads(path.read_text(encoding="utf-8-sig"))
     if not isinstance(value, dict):
@@ -87,6 +103,58 @@ def validate_receipt(path: Path, receipt: dict[str, Any], label: str) -> None:
         raise CampaignResolutionError(f"{label} records a false evidence byte count")
     if file_sha256(path) != receipt.get("sha256"):
         raise CampaignResolutionError(f"{label} records a false evidence SHA-256")
+
+
+def resolve_baseline_evidence(
+    observation_root: Path,
+    receipt: dict[str, Any],
+    label: str,
+) -> tuple[Path, dict[str, Any]]:
+    recorded_sha256 = receipt.get("sha256")
+    recorded_bytes = receipt.get("bytes")
+    selector = receipt.get("selector")
+    if (
+        not isinstance(recorded_sha256, str)
+        or not re.fullmatch(r"[0-9a-f]{64}", recorded_sha256)
+        or isinstance(recorded_bytes, bool)
+        or not isinstance(recorded_bytes, int)
+        or recorded_bytes <= 0
+        or not isinstance(selector, dict)
+        or not isinstance(selector.get("schema"), str)
+    ):
+        raise CampaignResolutionError(
+            f"{label} baseline receipt is incomplete or malformed"
+        )
+
+    examined = 0
+    matches: list[Path] = []
+    for path in sorted(observation_root.rglob("*.json")):
+        if not path.is_file():
+            continue
+        examined += 1
+        if path.stat().st_size != recorded_bytes:
+            continue
+        if file_sha256(path) == recorded_sha256:
+            matches.append(path.resolve())
+    if examined == 0:
+        raise CampaignResolutionError(
+            f"{label} baseline evidence sweep reached no JSON content"
+        )
+    if len(matches) != 1:
+        raise CampaignResolutionError(
+            "extended observation baseline receipt does not resolve exactly "
+            f"one byte-identical evidence file for {label}: "
+            f"{[str(path) for path in matches]}"
+        )
+
+    baseline_path = matches[0]
+    validate_receipt(baseline_path, receipt, label + " baseline")
+    baseline_recording = read_object(baseline_path)
+    if baseline_recording.get("schema") != selector["schema"]:
+        raise CampaignResolutionError(
+            f"{label} baseline selector does not match the byte-identical recording"
+        )
+    return baseline_path, baseline_recording
 
 
 def write_atomically(path: Path, value: dict[str, Any]) -> None:
@@ -159,6 +227,15 @@ def _screen_id(samples: list[dict[str, Any]], label: str) -> str:
     return screen_id
 
 
+def _recording_screen_id(recording: dict[str, Any], label: str) -> str:
+    layout = recording.get("layout")
+    if isinstance(layout, dict):
+        screen_id = layout.get("screen_id")
+        if isinstance(screen_id, str) and screen_id:
+            return screen_id
+    return _screen_id(_settled_samples(recording, label), label)
+
+
 def _observation(
     header: dict[str, Any],
     samples: list[dict[str, Any]],
@@ -191,19 +268,54 @@ def _resolve_layout_id(
     logical_name: str,
     native_screen_id: str,
     fixtures: dict[str, dict[str, Any]],
-) -> str:
-    candidates = [
+    edge_id: str,
+    endpoint_key: str,
+) -> tuple[str, bool]:
+    logical_candidates = [
         layout_id
         for layout_id, record in fixtures.items()
         if _logical_key(layout_id) == _logical_key(logical_name)
-        or record["native_screen_id"] == native_screen_id
     ]
-    if len(candidates) != 1:
+    if len(logical_candidates) > 1:
         raise CampaignResolutionError(
-            f"navigation endpoint '{logical_name}' screen '{native_screen_id}' "
-            f"does not resolve one standalone fixture: {sorted(candidates)}"
+            f"navigation endpoint '{logical_name}' has ambiguous logical fixtures: "
+            f"{sorted(logical_candidates)}"
         )
-    return candidates[0]
+    used_explicit_mapping = False
+    if len(logical_candidates) == 1:
+        layout_id = logical_candidates[0]
+    else:
+        native_candidates = [
+            layout_id
+            for layout_id, record in fixtures.items()
+            if record["native_screen_id"] == native_screen_id
+        ]
+        if len(native_candidates) == 1:
+            layout_id = native_candidates[0]
+        else:
+            mapping_key = (edge_id, endpoint_key)
+            layout_id = NAVIGATION_ENDPOINT_LAYOUT_IDS.get(mapping_key, "")
+            if not layout_id:
+                raise CampaignResolutionError(
+                    f"navigation endpoint '{logical_name}' screen "
+                    f"'{native_screen_id}' is ambiguous without explicit route "
+                    f"mapping for edge '{edge_id}' side '{endpoint_key}': "
+                    f"{sorted(native_candidates)}"
+                )
+            used_explicit_mapping = True
+
+    record = fixtures.get(layout_id)
+    if record is None:
+        raise CampaignResolutionError(
+            f"navigation endpoint route maps to absent fixture '{layout_id}'"
+        )
+    if record["native_screen_id"] != native_screen_id:
+        raise CampaignResolutionError(
+            f"navigation endpoint route maps '{logical_name}' to '{layout_id}', "
+            f"but its native screen is '{record['native_screen_id']}' instead of "
+            f"'{native_screen_id}'"
+        )
+    return layout_id, used_explicit_mapping
 
 
 def collect_standalones(
@@ -348,6 +460,7 @@ def collect_navigation(
         )
 
     endpoint_layouts: dict[tuple[str, str], str] = {}
+    explicit_layout_ids: set[tuple[str, str]] = set()
     for edge_id in sorted(by_label["primary"]):
         for side, endpoint_key, logical_field in (
             ("source", "before", "source"),
@@ -379,9 +492,15 @@ def collect_navigation(
                     raise CampaignResolutionError(
                         f"edge {edge_id} has no logical {side} screen name"
                     )
-                layout_id = _resolve_layout_id(
-                    logical_name, native_screen_id, fixtures
+                layout_id, used_explicit_mapping = _resolve_layout_id(
+                    logical_name,
+                    native_screen_id,
+                    fixtures,
+                    edge_id,
+                    endpoint_key,
                 )
+                if used_explicit_mapping:
+                    explicit_layout_ids.add((edge_id, endpoint_key))
                 if canonical_bytes(_source(header, str(paths[label]))) != canonical_bytes(
                     fixtures[layout_id]["source"]
                 ):
@@ -402,6 +521,12 @@ def collect_navigation(
                     f"edge {edge_id} independent {side} captures resolve different layouts"
                 )
             endpoint_layouts[(edge_id, endpoint_key)] = resolved_ids.pop()
+    if explicit_layout_ids != set(NAVIGATION_ENDPOINT_LAYOUT_IDS):
+        raise CampaignResolutionError(
+            "explicit navigation layout mapping census changed: "
+            f"missing={sorted(set(NAVIGATION_ENDPOINT_LAYOUT_IDS) - explicit_layout_ids)} "
+            f"unexpected={sorted(explicit_layout_ids - set(NAVIGATION_ENDPOINT_LAYOUT_IDS))}"
+        )
     return recordings["primary"], endpoint_layouts
 
 
@@ -433,10 +558,35 @@ def collect_extended(
         if not isinstance(header, dict) or not isinstance(samples, list):
             raise CampaignResolutionError(f"extended observation {path} is incomplete")
         instance, process_id = _identity(header, str(path))
+        motion_source = _source(header, str(path))
         baseline = header.get("baseline")
         if not isinstance(baseline, dict):
             raise CampaignResolutionError(
                 f"extended observation {path} has no baseline receipt"
+            )
+        baseline_path, baseline_recording = resolve_baseline_evidence(
+            observation_root,
+            baseline,
+            str(path),
+        )
+        baseline_header = baseline_recording.get("header")
+        if not isinstance(baseline_header, dict):
+            raise CampaignResolutionError(
+                f"extended observation {path} baseline has no capture header"
+            )
+        baseline_source = _source(baseline_header, str(baseline_path))
+        if canonical_bytes(baseline_source) != canonical_bytes(motion_source):
+            raise CampaignResolutionError(
+                f"extended observation {path} baseline provenance does not "
+                "match the motion observation"
+            )
+        if _identity(baseline_header, str(baseline_path)) != (
+            instance,
+            process_id,
+        ):
+            raise CampaignResolutionError(
+                f"extended observation {path} baseline identity does not match "
+                "the motion observation"
             )
         filename = baseline.get("evidence_filename")
         selector = baseline.get("selector")
@@ -470,21 +620,42 @@ def collect_extended(
                     f"extended observation {path} does not resolve one screen"
                 )
             layout_id = matching[0]
+        sampled_screen = _screen_id(samples, str(path))
+        baseline_screen = _recording_screen_id(
+            baseline_recording, str(baseline_path)
+        )
+        if baseline_screen != sampled_screen:
+            raise CampaignResolutionError(
+                f"extended observation {path} baseline screen '{baseline_screen}' "
+                f"does not match sampled screen '{sampled_screen}'"
+            )
+        fixture_source = fixtures[layout_id]["source"]
+        for field in (
+            "game_executable_sha256",
+            "loader_dll_sha256",
+        ):
+            if fixture_source[field] != motion_source[field]:
+                raise CampaignResolutionError(
+                    f"extended observation {path} baseline runtime provenance "
+                    f"does not match fixture '{layout_id}' field '{field}'"
+                )
         witness = (instance, process_id, layout_id)
         if witness in witnessed:
             raise CampaignResolutionError(
                 f"extended observation identity is ambiguous: {witness}"
             )
         witnessed.add(witness)
-        observations[layout_id].append(
-            _observation(
-                header,
-                samples,
-                evidence_receipt(path, evidence_root),
-                f"extended:{layout_id}:{instance}:{process_id}",
-                kind="extended_observation",
-            )
+        observation = _observation(
+            header,
+            samples,
+            evidence_receipt(path, evidence_root),
+            f"extended:{layout_id}:{instance}:{process_id}",
+            kind="extended_observation",
         )
+        observation["baseline_evidence"] = evidence_receipt(
+            baseline_path, evidence_root
+        )
+        observations[layout_id].append(observation)
         count += 1
     return count
 
@@ -601,6 +772,10 @@ def resolve_campaign(
                     observation["kind"] == "extended_observation"
                     for observation in reached
                 ),
+                "extended_baseline_receipt_count": sum(
+                    "baseline_evidence" in observation
+                    for observation in reached
+                ),
                 "structural_core_element_count": resolution[
                     "structural_core_element_count"
                 ],
@@ -638,6 +813,11 @@ def resolve_campaign(
             "observation_receipts": [
                 copy.deepcopy(observation["evidence"])
                 for observation in observations[layout_id]
+            ],
+            "extended_observation_baseline_receipts": [
+                copy.deepcopy(observation["baseline_evidence"])
+                for observation in observations[layout_id]
+                if "baseline_evidence" in observation
             ],
         }
         candidate_updates[record["path"]] = fixture
@@ -705,6 +885,11 @@ def resolve_campaign(
             for observation in reached
         ),
         "extended_observation_count": extended_count,
+        "extended_baseline_receipt_count": sum(
+            "baseline_evidence" in observation
+            for reached in observations.values()
+            for observation in reached
+        ),
         "screens": screen_audit,
         "outputs": {
             "resolved_navigation": str(resolved_navigation_output),

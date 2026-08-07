@@ -8,6 +8,7 @@ import copy
 import json
 import shutil
 import sys
+import tempfile
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
@@ -26,6 +27,7 @@ from static_re_contract_support import StaticReTestFailure  # noqa: E402
 from tests import test_native_menu_ambient_lifecycle as ambient_cases  # noqa: E402
 from tests import test_native_menu_settlement_v2 as settlement_cases  # noqa: E402
 from tools import native_menu_settlement_v2 as settlement_v2  # noqa: E402
+from tools import resolve_native_menu_ambient_campaign as campaign_resolver  # noqa: E402
 from tools.native_menu_ambient_lifecycle import (  # noqa: E402
     AmbientLifecycleError,
     classify_ambient_window,
@@ -470,9 +472,83 @@ def mutate_old_phantom_motion() -> str:
     return "unreachable"
 
 
+def green_historical_baseline_receipt() -> str:
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        baseline = root / "hub-primary.baseline.json"
+        baseline.write_text(
+            '{"schema":"solomon-dark-native-menu-layout-v2"}\n',
+            encoding="utf-8",
+        )
+        receipt = {
+            "sha256": campaign_resolver.file_sha256(baseline),
+            "bytes": baseline.stat().st_size,
+            "selector": {"schema": "solomon-dark-native-menu-layout-v2"},
+        }
+        resolved, _ = campaign_resolver.resolve_baseline_evidence(
+            root, receipt, "scratch historical motion"
+        )
+        require(resolved == baseline.resolve(), "historical baseline did not resolve")
+    return "green: historical motion resolves one byte-identical baseline recording"
+
+
+def mutate_historical_baseline_receipt() -> str:
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        baseline = root / "hub-primary.baseline.json"
+        baseline.write_text(
+            '{"schema":"solomon-dark-native-menu-layout-v2"}\n',
+            encoding="utf-8",
+        )
+        receipt = {
+            "sha256": "0" * 64,
+            "bytes": baseline.stat().st_size,
+            "selector": {"schema": "solomon-dark-native-menu-layout-v2"},
+        }
+        campaign_resolver.resolve_baseline_evidence(
+            root, receipt, "scratch historical motion"
+        )
+    return "unreachable"
+
+
+def _ambiguous_settings_fixtures() -> dict[str, dict[str, str]]:
+    return {
+        "game-settings-title": {"native_screen_id": "settings"},
+        "game-settings-gameplay": {"native_screen_id": "settings"},
+        "game-settings-dark-cloud": {"native_screen_id": "settings"},
+    }
+
+
+def green_settings_route_resolution() -> str:
+    layout_id, explicit = campaign_resolver._resolve_layout_id(  # noqa: SLF001
+        "settings",
+        "settings",
+        _ambiguous_settings_fixtures(),
+        "main_to_settings",
+        "after",
+    )
+    require(
+        layout_id == "game-settings-title" and explicit,
+        "known settings route did not resolve explicitly",
+    )
+    return "green: three-way settings identity resolves only by exact edge and side"
+
+
+def mutate_ambiguous_settings_route() -> str:
+    campaign_resolver._resolve_layout_id(  # noqa: SLF001
+        "settings",
+        "settings",
+        _ambiguous_settings_fixtures(),
+        "unknown_settings_edge",
+        "before",
+    )
+    return "unreachable"
+
+
 RECORDER = "test_native_menu_recorders_settle_and_derive_provenance"
 OVERLAY = "test_native_menu_overlay_contamination_override_is_fail_closed"
 CLASSIFIER = "test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired"
+CAMPAIGN = "test_native_menu_motion_capability_campaign_resolution_is_fail_closed"
 
 
 BEHAVIOR_MUTATIONS: tuple[BehaviorMutation, ...] = (
@@ -562,6 +638,26 @@ BEHAVIOR_MUTATIONS: tuple[BehaviorMutation, ...] = (
         mutate_missing_extended_evidence,
         "motion capability resolution requires extended-observation evidence for stationary member 'screen.art.item_0.1' in instance 'menufx-confirmation' PID 202",
         (AmbientLifecycleError,),
+    ),
+    BehaviorMutation(
+        "v2.3.historical-baseline-byte-binding",
+        "resolve_baseline_evidence",
+        green_historical_baseline_receipt,
+        mutate_historical_baseline_receipt,
+        "extended observation baseline receipt does not resolve exactly one "
+        "byte-identical evidence file for scratch historical motion: []",
+        (campaign_resolver.CampaignResolutionError,),
+    ),
+    BehaviorMutation(
+        "v2.5.settings-route-ambiguity-refusal",
+        "_resolve_layout_id",
+        green_settings_route_resolution,
+        mutate_ambiguous_settings_route,
+        "navigation endpoint 'settings' screen 'settings' is ambiguous without "
+        "explicit route mapping for edge 'unknown_settings_edge' side 'before': "
+        "['game-settings-dark-cloud', 'game-settings-gameplay', "
+        "'game-settings-title']",
+        (campaign_resolver.CampaignResolutionError,),
     ),
     BehaviorMutation(
         "v2.5.phantom-ambient",
@@ -662,6 +758,42 @@ BEHAVIOR_MUTATIONS: tuple[BehaviorMutation, ...] = (
 
 
 STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
+    StaticMutation(
+        "v2.3.historical-baseline-hash-check",
+        CAMPAIGN,
+        "tools/resolve_native_menu_ambient_campaign.py",
+        "if file_sha256(path) == recorded_sha256:",
+        "if True:  # mutation accepts a same-size baseline with different bytes",
+        "historical motion observations are no longer byte-bound to one copied "
+        "baseline with matching capture and runtime provenance",
+    ),
+    StaticMutation(
+        "v2.3.historical-baseline-provenance-check",
+        CAMPAIGN,
+        "tools/resolve_native_menu_ambient_campaign.py",
+        "if canonical_bytes(baseline_source) != canonical_bytes(motion_source):",
+        "if False and canonical_bytes(baseline_source) != canonical_bytes(motion_source):",
+        "historical motion observations are no longer byte-bound to one copied "
+        "baseline with matching capture and runtime provenance",
+    ),
+    StaticMutation(
+        "v2.5.settings-route-exact-mapping",
+        CAMPAIGN,
+        "tools/resolve_native_menu_ambient_campaign.py",
+        '("main_to_settings", "after"): "game-settings-title",',
+        '("main_to_settings", "after"): "game-settings-gameplay",',
+        "ambient-lifecycle resolver no longer refuses the three-way settings "
+        "screen ambiguity with an every-edge explicit route map",
+    ),
+    StaticMutation(
+        "v2.5.settings-route-complete-census",
+        CAMPAIGN,
+        "tools/resolve_native_menu_ambient_campaign.py",
+        "if explicit_layout_ids != set(NAVIGATION_ENDPOINT_LAYOUT_IDS):",
+        "if False and explicit_layout_ids != set(NAVIGATION_ENDPOINT_LAYOUT_IDS):",
+        "ambient-lifecycle resolver no longer refuses the three-way settings "
+        "screen ambiguity with an every-edge explicit route map",
+    ),
     StaticMutation(
         "v2.5.empty-gameplay-surface-is-constant",
         CLASSIFIER,

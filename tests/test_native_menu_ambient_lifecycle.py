@@ -2,8 +2,17 @@ from __future__ import annotations
 
 import copy
 import json
+import tempfile
 import unittest
 from collections.abc import Callable
+from pathlib import Path
+
+from tools.resolve_native_menu_ambient_campaign import (
+    CampaignResolutionError,
+    _resolve_layout_id,
+    file_sha256,
+    resolve_baseline_evidence,
+)
 
 from tools.native_menu_ambient_lifecycle import (
     AmbientLifecycleError,
@@ -194,6 +203,100 @@ def _trace(
 
 
 class NativeMenuAmbientLifecycleTests(unittest.TestCase):
+    def test_extended_baseline_receipt_resolves_exact_recording_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            baseline_path = root / "hub-primary.baseline.json"
+            baseline_path.write_text(
+                json.dumps(
+                    {
+                        "schema": "solomon-dark-native-menu-layout-v2",
+                        "header": {"label": "hub"},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            receipt = {
+                "sha256": file_sha256(baseline_path),
+                "bytes": baseline_path.stat().st_size,
+                "selector": {
+                    "schema": "solomon-dark-native-menu-layout-v2",
+                },
+            }
+
+            resolved_path, recording = resolve_baseline_evidence(
+                root, receipt, "hub motion"
+            )
+
+            self.assertEqual(resolved_path, baseline_path.resolve())
+            self.assertEqual(
+                recording["schema"], "solomon-dark-native-menu-layout-v2"
+            )
+
+    def test_extended_baseline_receipt_rejects_absent_or_duplicate_bytes(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            baseline_path = root / "hub-primary.baseline.json"
+            baseline_path.write_text(
+                '{"schema":"solomon-dark-native-menu-layout-v2"}\n',
+                encoding="utf-8",
+            )
+            receipt = {
+                "sha256": "0" * 64,
+                "bytes": baseline_path.stat().st_size,
+                "selector": {
+                    "schema": "solomon-dark-native-menu-layout-v2",
+                },
+            }
+            with self.assertRaisesRegex(
+                CampaignResolutionError,
+                "extended observation baseline receipt does not resolve exactly "
+                "one byte-identical evidence file",
+            ):
+                resolve_baseline_evidence(root, receipt, "hub motion")
+
+            receipt["sha256"] = file_sha256(baseline_path)
+            (root / "duplicate.json").write_bytes(baseline_path.read_bytes())
+            with self.assertRaisesRegex(
+                CampaignResolutionError,
+                "extended observation baseline receipt does not resolve exactly "
+                "one byte-identical evidence file",
+            ):
+                resolve_baseline_evidence(root, receipt, "hub motion")
+
+    def test_ambiguous_settings_screen_requires_exact_edge_route(self) -> None:
+        fixtures = {
+            "game-settings-title": {"native_screen_id": "settings"},
+            "game-settings-gameplay": {"native_screen_id": "settings"},
+            "game-settings-dark-cloud": {"native_screen_id": "settings"},
+        }
+
+        layout_id, used_explicit_mapping = _resolve_layout_id(
+            "settings",
+            "settings",
+            fixtures,
+            "main_to_settings",
+            "after",
+        )
+
+        self.assertEqual(layout_id, "game-settings-title")
+        self.assertTrue(used_explicit_mapping)
+        with self.assertRaisesRegex(
+            CampaignResolutionError,
+            "is ambiguous without explicit route mapping for edge "
+            "'unknown_settings_edge' side 'before'",
+        ):
+            _resolve_layout_id(
+                "settings",
+                "settings",
+                fixtures,
+                "unknown_settings_edge",
+                "before",
+            )
+
     def test_non_element_structural_field_variance_stops_settlement(self) -> None:
         samples = _stable_samples()
         samples[20]["payload"]["screen_title"] = "Changed"  # type: ignore[index]
