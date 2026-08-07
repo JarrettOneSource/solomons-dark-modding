@@ -1194,12 +1194,15 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
     )
     _require_regex(
         settings_builder,
-        r"has_settings_exact_evidence\s*=.*?"
-        r"if \(has_settings_exact_evidence\) \{.*?"
+        r"bool HasCurrentSettingsPanelArt\(.*?"
+        r'"ControlPanel\.0".*?"ControlPanel\.8".*?"ControlPanel\.18".*?'
+        r"element\.visible.*?element\.art_id == required_art_id.*?"
+        r"has_current_settings_panel_art\s*=.*?"
+        r"if \(has_current_settings_panel_art\) \{.*?"
         r"TryReadTrackedSettingsRender\(&settings_address\).*?"
         r"else if \(!TryGetActiveSettingsRender\(&settings_address\)\)",
-        "Settings modal classification no longer uses current-frame exact "
-        "evidence to bridge its retained one-shot owner",
+        "Settings modal classification no longer uses its complete "
+        "current-frame panel-art signature to bridge the retained one-shot owner",
     )
     _require_regex(
         settings_tracking,
@@ -1211,12 +1214,13 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
     )
     _require_regex(
         settings_builder,
-        r"has_customize_keyboard_exact_evidence\s*=.*?"
-        r"if \(!has_customize_keyboard_exact_evidence\) \{.*?return \{\};.*?\}.*?"
+        r"TryBuildControlsOverlayRenderElements\(.*?"
+        r"if \(!HasCurrentSettingsPanelArt\(art_elements\)\) \{.*?"
+        r"return \{\};.*?\}.*?"
         r"TryReadTrackedSettingsRender\(&settings_address\).*?"
         r"TryIsCustomizeKeyboardRolloutExpanded",
-        "Controls classification no longer requires current-frame Customize "
-        "Keyboard evidence plus a live expanded rollout",
+        "Controls classification no longer requires current-frame settings "
+        "panel art plus a live expanded rollout",
     )
     _require_regex(
         standalone,

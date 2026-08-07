@@ -132,7 +132,7 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         self.assertIn("capture_current_layout", bindings)
         self.assertIn("sd.ui.capture_current_layout", recorder)
 
-    def test_settings_modal_uses_current_frame_evidence_to_retain_its_owner(self) -> None:
+    def test_settings_modal_uses_current_frame_art_to_retain_its_owner(self) -> None:
         builders = read(
             "SolomonDarkModLoader/src/debug_ui_overlay/"
             "overlay_surface_builders_settings_surfaces.inl"
@@ -152,20 +152,23 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         )
         self.assertRegex(
             builders,
-            r"(?s)has_settings_exact_evidence.*?"
-            r"if \(has_settings_exact_evidence\).*?"
+            r"(?s)HasCurrentSettingsPanelArt.*?"
+            r'"ControlPanel\.0".*?"ControlPanel\.8".*?"ControlPanel\.18".*?'
+            r"has_current_settings_panel_art.*?"
+            r"if \(has_current_settings_panel_art\).*?"
             r"TryReadTrackedSettingsRender\(&settings_address\).*?"
             r"else if \(!TryGetActiveSettingsRender\(&settings_address\)\)",
-            "current-frame settings text must bridge the stock modal's one-shot "
+            "current-frame settings panel art must bridge the stock modal's one-shot "
             "render helper without turning the retained owner into timeless evidence",
         )
         self.assertRegex(
             builders,
-            r"(?s)has_customize_keyboard_exact_evidence.*?"
+            r"(?s)TryBuildControlsOverlayRenderElements\(.*?"
+            r"HasCurrentSettingsPanelArt\(art_elements\).*?"
             r"TryReadTrackedSettingsRender\(&settings_address\).*?"
             r"TryIsCustomizeKeyboardRolloutExpanded",
-            "controls classification must require current-frame Customize Keyboard "
-            "evidence and the live expanded rollout on the retained settings owner",
+            "controls classification must require current-frame settings panel art "
+            "and the live expanded rollout on the retained settings owner",
         )
 
     def test_position_draw_capture_survives_the_gameplay_hook_chain(self) -> None:

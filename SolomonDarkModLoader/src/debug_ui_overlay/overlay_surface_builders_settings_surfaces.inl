@@ -1,6 +1,28 @@
+bool HasCurrentSettingsPanelArt(
+    const std::vector<CapturedMenuArtElement>& art_elements) {
+    constexpr std::string_view kRequiredArtIds[] = {
+        "ControlPanel.0",
+        "ControlPanel.8",
+        "ControlPanel.18",
+    };
+    return std::all_of(
+        std::begin(kRequiredArtIds),
+        std::end(kRequiredArtIds),
+        [&](std::string_view required_art_id) {
+            return std::any_of(
+                art_elements.begin(),
+                art_elements.end(),
+                [&](const CapturedMenuArtElement& element) {
+                    return element.visible &&
+                        element.art_id == required_art_id;
+                });
+        });
+}
+
 std::vector<OverlayRenderElement> TryBuildControlsOverlayRenderElements(
     const std::vector<ObservedUiElement>& exact_text_elements,
-    const std::vector<ObservedUiElement>& exact_control_elements) {
+    const std::vector<ObservedUiElement>& exact_control_elements,
+    const std::vector<CapturedMenuArtElement>& art_elements) {
     (void)exact_control_elements;
 
     const auto* config = TryGetDebugUiOverlayConfig();
@@ -8,17 +30,7 @@ std::vector<OverlayRenderElement> TryBuildControlsOverlayRenderElements(
         return {};
     }
 
-    const auto normalized_customize_label =
-        NormalizeSemanticUiToken("CUSTOMIZE KEYBOARD");
-    const auto has_customize_keyboard_exact_evidence = std::any_of(
-        exact_text_elements.begin(),
-        exact_text_elements.end(),
-        [&](const ObservedUiElement& element) {
-            return element.surface_id == "settings" &&
-                NormalizeSemanticUiToken(element.label) ==
-                    normalized_customize_label;
-        });
-    if (!has_customize_keyboard_exact_evidence) {
+    if (!HasCurrentSettingsPanelArt(art_elements)) {
         return {};
     }
 
@@ -54,6 +66,8 @@ std::vector<OverlayRenderElement> TryBuildControlsOverlayRenderElements(
     }
 
     float customize_label_bottom = panel_top + 96.0f;
+    const auto normalized_customize_label =
+        NormalizeSemanticUiToken("CUSTOMIZE KEYBOARD");
     for (const auto& element : exact_text_elements) {
         if (element.surface_id != "settings" || element.label.empty()) {
             continue;
@@ -137,25 +151,21 @@ std::vector<OverlayRenderElement> TryBuildControlsOverlayRenderElements(
 
 std::vector<OverlayRenderElement> TryBuildSettingsOverlayRenderElements(
     const std::vector<ObservedUiElement>& exact_text_elements,
-    const std::vector<ObservedUiElement>& exact_control_elements) {
+    const std::vector<ObservedUiElement>& exact_control_elements,
+    const std::vector<CapturedMenuArtElement>& art_elements) {
     const auto* config = TryGetDebugUiOverlayConfig();
     if (config == nullptr) {
         return {};
     }
 
-    const auto has_settings_exact_evidence =
-        std::any_of(exact_text_elements.begin(), exact_text_elements.end(), [](const ObservedUiElement& element) {
-            return element.surface_id == "settings";
-        }) ||
-        std::any_of(exact_control_elements.begin(), exact_control_elements.end(), [](const ObservedUiElement& element) {
-            return element.surface_id == "settings";
-        });
+    const auto has_current_settings_panel_art =
+        HasCurrentSettingsPanelArt(art_elements);
 
     uintptr_t settings_address = 0;
-    if (has_settings_exact_evidence) {
-        // Settings_Render is a one-shot modal owner call. Current-frame exact
-        // settings text proves that the retained object still owns the frame;
-        // the panel read below proves that object is still runnable memory.
+    if (has_current_settings_panel_art) {
+        // Settings_Render is a one-shot modal owner call. The complete panel
+        // art signature is captured afresh from this frame; the panel read
+        // below proves that the retained object is still runnable memory.
         if (!TryReadTrackedSettingsRender(&settings_address)) {
             return {};
         }

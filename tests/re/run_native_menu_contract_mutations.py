@@ -1084,14 +1084,14 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "a classifier/tag mismatch can reach the accepted native layout cache",
     ),
     StaticMutation(
-        "recorder.settings-current-frame-owner",
+        "recorder.settings-current-frame-panel-art",
         SURFACE_AGREEMENT,
         "SolomonDarkModLoader/src/debug_ui_overlay/"
         "overlay_surface_builders_settings_surfaces.inl",
-        "if (has_settings_exact_evidence) {",
-        "if (false && has_settings_exact_evidence) {",
-        "Settings modal classification no longer uses current-frame exact "
-        "evidence to bridge its retained one-shot owner",
+        "if (has_current_settings_panel_art) {",
+        "if (false && has_current_settings_panel_art) {",
+        "Settings modal classification no longer uses its complete "
+        "current-frame panel-art signature to bridge the retained one-shot owner",
     ),
     StaticMutation(
         "recorder.settings-idle-owner-retention",
@@ -1112,10 +1112,10 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         SURFACE_AGREEMENT,
         "SolomonDarkModLoader/src/debug_ui_overlay/"
         "overlay_surface_builders_settings_surfaces.inl",
-        "if (!has_customize_keyboard_exact_evidence) {",
-        "if (false && !has_customize_keyboard_exact_evidence) {",
-        "Controls classification no longer requires current-frame Customize "
-        "Keyboard evidence plus a live expanded rollout",
+        "if (!HasCurrentSettingsPanelArt(art_elements)) {",
+        "if (false && !HasCurrentSettingsPanelArt(art_elements)) {",
+        "Controls classification no longer requires current-frame settings "
+        "panel art plus a live expanded rollout",
     ),
     StaticMutation(
         "recorder.no-provenance-override",

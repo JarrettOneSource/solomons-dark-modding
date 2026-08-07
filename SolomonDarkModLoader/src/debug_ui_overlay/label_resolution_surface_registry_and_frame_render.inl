@@ -173,8 +173,8 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
 
     struct { const char* id; std::vector<OverlayRenderElement> elems; } built[] = {
         {"control_scheme_picker", TryBuildControlSchemePickerOverlayRenderElements()},
-        {"controls",           TryBuildControlsOverlayRenderElements(exact_text_elements, exact_control_elements)},
-        {"settings",           TryBuildSettingsOverlayRenderElements(exact_text_elements, exact_control_elements)},
+        {"controls",           TryBuildControlsOverlayRenderElements(exact_text_elements, exact_control_elements, menu_art_elements)},
+        {"settings",           TryBuildSettingsOverlayRenderElements(exact_text_elements, exact_control_elements, menu_art_elements)},
         {"create",             TryBuildCreateOverlayRenderElements()},
         {"dark_cloud_search",  TryBuildDarkCloudSearchOverlayRenderElements(quick_panel_render_elements)},
         {"quick_panel",        std::vector<OverlayRenderElement>(quick_panel_render_elements)},
