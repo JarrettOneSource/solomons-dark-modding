@@ -452,6 +452,28 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
         ):
             classify_ambient_window(samples)
 
+    def test_empty_semantic_surface_is_a_constant_gameplay_surface(self) -> None:
+        samples = _stable_samples(3)
+        for sample in samples:
+            sample["semantic_surface"] = ""
+
+        classified = classify_ambient_window(samples)
+
+        self.assertEqual(
+            classified["window_classification"]["identity"]["semantic_surface"],
+            "",
+        )
+
+    def test_non_string_semantic_surface_is_a_recorder_defect(self) -> None:
+        samples = _stable_samples(3)
+        samples[-1]["semantic_surface"] = None
+
+        with self.assertRaisesRegex(
+            AmbientLifecycleError,
+            "ambient lifecycle recorder defect: sample has no semantic surface",
+        ):
+            classify_ambient_window(samples)
+
     def test_extended_observation_records_motion_and_lifecycle_events(self) -> None:
         def elements(sample_index: int) -> list[dict[str, object]]:
             result = [_art(index) for index in range(5)]

@@ -472,6 +472,7 @@ def mutate_old_phantom_motion() -> str:
 
 RECORDER = "test_native_menu_recorders_settle_and_derive_provenance"
 OVERLAY = "test_native_menu_overlay_contamination_override_is_fail_closed"
+CLASSIFIER = "test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired"
 
 
 BEHAVIOR_MUTATIONS: tuple[BehaviorMutation, ...] = (
@@ -661,6 +662,15 @@ BEHAVIOR_MUTATIONS: tuple[BehaviorMutation, ...] = (
 
 
 STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
+    StaticMutation(
+        "v2.5.empty-gameplay-surface-is-constant",
+        CLASSIFIER,
+        "tools/native_menu_ambient_lifecycle.py",
+        "if not isinstance(semantic_surface, str):",
+        "if not isinstance(semantic_surface, str) or not semantic_surface:",
+        "Settlement v2.5 no longer treats gameplay's empty semantic-surface "
+        "identifier as a constant while rejecting non-string missing state",
+    ),
     StaticMutation(
         "recorder.no-fixed-delay",
         RECORDER,

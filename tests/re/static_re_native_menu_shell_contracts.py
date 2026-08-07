@@ -1017,6 +1017,15 @@ def test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired() -> str:
     )
     _require_regex(
         classifier,
+        r"semantic_surface\s*=\s*sample\.get\("
+        r"\"semantic_surface\", screen_id\).*?"
+        r"if not isinstance\(semantic_surface, str\):.*?"
+        r"sample has no semantic surface",
+        "Settlement v2.5 no longer treats gameplay's empty semantic-surface "
+        "identifier as a constant while rejecting non-string missing state",
+    )
+    _require_regex(
+        classifier,
         r"def _measure_window\(.*?"
         r"member_class\s*=\s*\"full_presence\".*?"
         r"member_class\s*=\s*\(\s*"
@@ -1091,7 +1100,9 @@ def test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired() -> str:
         r"def test_core_relative_order_flip_trips\(.*?"
         r"def test_cross_instance_core_byte_inequality_trips\(.*?"
         r"def test_ambient_fraction_above_forty_percent_stops\(.*?"
-        r"def test_declared_phantom_ambient_class_is_a_recorder_defect\(",
+        r"def test_declared_phantom_ambient_class_is_a_recorder_defect\(.*?"
+        r"def test_empty_semantic_surface_is_a_constant_gameplay_surface\(.*?"
+        r"def test_non_string_semantic_surface_is_a_recorder_defect\(",
         "Settlement v2.5 named guardrails lost their direct behavior tests",
     )
     return (

@@ -180,7 +180,7 @@ def _sample_identity(sample: dict[str, Any]) -> tuple[str, int, int, str]:
     # all v2.5 recorders write the exact semantic values on every sample.
     semantic_surface = sample.get("semantic_surface", screen_id)
     semantic_generation = sample.get("semantic_generation", layout_generation)
-    if not isinstance(semantic_surface, str) or not semantic_surface:
+    if not isinstance(semantic_surface, str):
         raise AmbientLifecycleError(
             "ambient lifecycle recorder defect: sample has no semantic surface"
         )
