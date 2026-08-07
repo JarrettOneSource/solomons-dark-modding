@@ -38,8 +38,8 @@ struct LoadingEvidenceSample {
 
 struct ProcessClientViewport {
     DWORD process_id = 0;
-    LONG width = 0;
-    LONG height = 0;
+    std::uint32_t width = 0;
+    std::uint32_t height = 0;
 };
 
 BOOL CALLBACK FindProcessClientViewport(
@@ -60,8 +60,8 @@ BOOL CALLBACK FindProcessClientViewport(
     if (width <= 0 || height <= 0) {
         return TRUE;
     }
-    target->width = width;
-    target->height = height;
+    target->width = static_cast<std::uint32_t>(width);
+    target->height = static_cast<std::uint32_t>(height);
     return FALSE;
 }
 
