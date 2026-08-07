@@ -359,10 +359,6 @@ void CaptureLoadingScreenEvidenceFrameInternal(
     if (directory_text.empty()) {
         return;
     }
-    if (!IsProcessClientPresentationViewport(layout)) {
-        return;
-    }
-
     if (g_loading_capture_sequence != snapshot.sequence) {
         g_loading_capture_sequence = snapshot.sequence;
         g_loading_capture_started_at = GetTickCount64();
@@ -493,9 +489,31 @@ void CaptureLoadingScreenEvidenceFrame(
         }
         layout = &current_layout;
     }
+    if (!IsProcessClientPresentationViewport(*layout)) {
+        return;
+    }
     CaptureLoadingScreenEvidenceFrameInternal(
         snapshot,
         *layout);
+    if (!ReadEnvironmentVariable(
+             kCaptureDirectoryEnvironment).empty() &&
+        snapshot.stage ==
+            LoadingScreenStage::WaitingForParticipants &&
+        !g_loading_capture_settled) {
+        const auto deadline = GetTickCount64() + 60000;
+        while (!g_loading_capture_settled &&
+               GetTickCount64() <= deadline) {
+            Sleep(50);
+            CaptureLoadingScreenEvidenceFrameInternal(
+                snapshot,
+                *layout);
+        }
+        if (!g_loading_capture_settled) {
+            Log(
+                "STOP: loading screen never satisfied the 40-sample, "
+                "two-second settlement criterion within 60 seconds.");
+        }
+    }
 }
 
 void PresentLoadingScreenFrame() {
@@ -530,35 +548,7 @@ void PresentLoadingScreenFrame() {
         return;
     }
 
-    LoadingScreenRenderLayout evidence_layout;
-    const bool has_evidence_layout =
-        TryGetLastLoadingScreenRenderLayout(&evidence_layout) &&
-        evidence_layout.sequence == snapshot.sequence &&
-        evidence_layout.stage_id == snapshot.stage_id &&
-        IsProcessClientPresentationViewport(evidence_layout);
-    CaptureLoadingScreenEvidenceFrame(
-        snapshot,
-        has_evidence_layout ? &evidence_layout : nullptr);
-    if (!ReadEnvironmentVariable(
-             kCaptureDirectoryEnvironment).empty() &&
-        has_evidence_layout &&
-        snapshot.stage ==
-            LoadingScreenStage::WaitingForParticipants &&
-        !g_loading_capture_settled) {
-        const auto deadline = GetTickCount64() + 60000;
-        while (!g_loading_capture_settled &&
-               GetTickCount64() <= deadline) {
-            Sleep(50);
-            CaptureLoadingScreenEvidenceFrame(
-                snapshot,
-                &evidence_layout);
-        }
-        if (!g_loading_capture_settled) {
-            Log(
-                "STOP: loading screen never satisfied the 40-sample, "
-                "two-second settlement criterion within 60 seconds.");
-        }
-    }
+    CaptureLoadingScreenEvidenceFrame(snapshot);
     const HRESULT present_result =
         device->Present(nullptr, nullptr, nullptr, nullptr);
     g_presenting_loading_frame = false;

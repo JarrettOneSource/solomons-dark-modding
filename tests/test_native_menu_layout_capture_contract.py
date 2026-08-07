@@ -68,14 +68,14 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             "SolomonDarkModLoader/src/loading_screen_native_present.cpp"
         )
         self.assertIn(
-            "IsProcessClientPresentationViewport(layout)",
+            "IsProcessClientPresentationViewport(*layout)",
             source,
             "loading settlement must exclude offscreen viewport samples",
         )
         self.assertRegex(
             source,
-            r"if \(!IsProcessClientPresentationViewport\(layout\)\) \{\s*"
-            r"return;\s*\}\s*if \(g_loading_capture_sequence",
+            r"if \(!IsProcessClientPresentationViewport\(\*layout\)\) \{\s*"
+            r"return;\s*\}\s*CaptureLoadingScreenEvidenceFrameInternal",
             "offscreen loading frames must be rejected before settlement state changes",
         )
         self.assertRegex(
@@ -83,8 +83,8 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             r"(?s)snapshot\.stage\s*==\s*"
             r"LoadingScreenStage::WaitingForParticipants.*?"
             r"while \(!g_loading_capture_settled.*?"
-            r"CaptureLoadingScreenEvidenceFrame\(\s*"
-            r"snapshot,\s*&evidence_layout\)",
+            r"CaptureLoadingScreenEvidenceFrameInternal\(\s*"
+            r"snapshot,\s*\*layout\)",
             "the real final loading barrier must remain presented until settled",
         )
 

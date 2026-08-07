@@ -711,8 +711,8 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "special.loading-client-viewport-only",
         RECORDER,
         "SolomonDarkModLoader/src/loading_screen_native_present.cpp",
-        "if (!IsProcessClientPresentationViewport(layout))",
-        "if (false && !IsProcessClientPresentationViewport(layout))",
+        "if (!IsProcessClientPresentationViewport(*layout))",
+        "if (false && !IsProcessClientPresentationViewport(*layout))",
         "loading-screen capture no longer rejects offscreen render targets "
         "before they can reset settlement",
     ),
@@ -729,8 +729,8 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "special.loading-pins-client-layout",
         RECORDER,
         "SolomonDarkModLoader/src/loading_screen_native_present.cpp",
-        "snapshot,\n                &evidence_layout",
-        "snapshot,\n                nullptr",
+        "snapshot,\n                *layout",
+        "snapshot,\n                current_layout",
         "loading-screen settlement hold no longer pins the accepted client "
         "layout against concurrent offscreen last-layout replacement",
     ),

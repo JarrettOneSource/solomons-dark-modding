@@ -990,18 +990,19 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
     )
     _require_regex(
         loading_capture,
-        r"if \(!IsProcessClientPresentationViewport\(layout\)\) \{\s*"
-        r"return;\s*\}\s*if \(g_loading_capture_sequence",
+        r"if \(!IsProcessClientPresentationViewport\(\*layout\)\) \{\s*"
+        r"return;\s*\}\s*CaptureLoadingScreenEvidenceFrameInternal",
         "loading-screen capture no longer rejects offscreen render targets "
         "before they can reset settlement",
     )
     _require_regex(
         loading_capture,
-        r"TryGetLastLoadingScreenRenderLayout\(&evidence_layout\).*?"
-        r"IsProcessClientPresentationViewport\(evidence_layout\).*?"
-        r"has_evidence_layout.*?"
-        r"CaptureLoadingScreenEvidenceFrame\(\s*"
-        r"snapshot,\s*&evidence_layout\)",
+        r"IsProcessClientPresentationViewport\(\*layout\).*?"
+        r"CaptureLoadingScreenEvidenceFrameInternal\(\s*"
+        r"snapshot,\s*\*layout\).*?"
+        r"while \(!g_loading_capture_settled.*?"
+        r"CaptureLoadingScreenEvidenceFrameInternal\(\s*"
+        r"snapshot,\s*\*layout\)",
         "loading-screen settlement hold no longer pins the accepted client "
         "layout against concurrent offscreen last-layout replacement",
     )
@@ -1011,8 +1012,8 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
         r"LoadingScreenStage::WaitingForParticipants.*?"
         r"deadline\s*=\s*GetTickCount64\(\)\s*\+\s*60000.*?"
         r"while \(!g_loading_capture_settled.*?"
-        r"Sleep\(50\).*?CaptureLoadingScreenEvidenceFrame\(\s*"
-        r"snapshot,\s*&evidence_layout\).*?"
+        r"Sleep\(50\).*?CaptureLoadingScreenEvidenceFrameInternal\(\s*"
+        r"snapshot,\s*\*layout\).*?"
         r"STOP: loading screen never satisfied",
         "loading-screen capture no longer holds and settle-samples the real "
         "final barrier or bounds failure as STOP",
