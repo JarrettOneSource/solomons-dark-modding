@@ -251,12 +251,30 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         for token in (
             "kSettingsScalarRowAddress",
             "kSettingsToggleRowAddress",
+            "kSettingsActionRowAddress",
             "BeginSettingsRowCapture",
             "ObserveActiveSettingsRowBounds",
             "HookSettingsScalarRow",
             "HookSettingsToggleRow",
+            "HookSettingsActionRow",
+            "settings_action_row_hook",
         ):
             self.assertIn(token, source)
+
+        state = read("SolomonDarkModLoader/src/debug_ui_overlay.cpp")
+        self.assertIn("SettingsActionRowFn", state)
+        self.assertIn("settings_action_row_hook", state)
+        self.assertRegex(
+            source,
+            r"(?s)HookSettingsActionRow\(.*?"
+            r"BeginSettingsRowCapture\(.*?primary_label.*?"
+            r"GetX86HookTrampoline<SettingsActionRowFn>.*?"
+            r"original\(\s*self,\s*primary_label,\s*secondary_label,\s*"
+            r"action_context\).*?"
+            r"EndSettingsRowCapture\(\).*?return result;",
+            "two-label settings action rows must retain their live label and glyph "
+            "bounds around the exact native helper invocation",
+        )
 
         text_hooks = read(
             "SolomonDarkModLoader/src/debug_ui_overlay/"

@@ -552,8 +552,11 @@ bool InstallMenuLayoutCaptureHooks(std::string* error_message) {
         kSettingsScalarRowAddress);
     const auto settings_toggle = memory.ResolveGameAddressOrZero(
         kSettingsToggleRowAddress);
+    const auto settings_action = memory.ResolveGameAddressOrZero(
+        kSettingsActionRowAddress);
     if (centered == 0 || transformed == 0 || loader == 0 ||
-        settings_scalar == 0 || settings_toggle == 0) {
+        settings_scalar == 0 || settings_toggle == 0 ||
+        settings_action == 0) {
         if (error_message != nullptr) {
             *error_message =
                 "Could not resolve native menu-layout capture targets.";
@@ -594,6 +597,8 @@ bool InstallMenuLayoutCaptureHooks(std::string* error_message) {
     }
     const auto remove_capture_hooks = []() {
         RemoveX86Hook(
+            &g_debug_ui_overlay_state.settings_action_row_hook);
+        RemoveX86Hook(
             &g_debug_ui_overlay_state.settings_toggle_row_hook);
         RemoveX86Hook(
             &g_debug_ui_overlay_state.settings_scalar_row_hook);
@@ -614,6 +619,12 @@ bool InstallMenuLayoutCaptureHooks(std::string* error_message) {
             reinterpret_cast<void*>(&HookSettingsToggleRow),
             5,
             &g_debug_ui_overlay_state.settings_toggle_row_hook,
+            error_message) ||
+        !InstallSafeX86Hook(
+            reinterpret_cast<void*>(settings_action),
+            reinterpret_cast<void*>(&HookSettingsActionRow),
+            5,
+            &g_debug_ui_overlay_state.settings_action_row_hook,
             error_message)) {
         remove_capture_hooks();
         return false;
@@ -623,6 +634,8 @@ bool InstallMenuLayoutCaptureHooks(std::string* error_message) {
 }
 
 void RemoveMenuLayoutCaptureHooks() {
+    RemoveX86Hook(
+        &g_debug_ui_overlay_state.settings_action_row_hook);
     RemoveX86Hook(
         &g_debug_ui_overlay_state.settings_toggle_row_hook);
     RemoveX86Hook(
@@ -643,6 +656,7 @@ void ResetMenuLayoutCaptureStateUnlocked(DebugUiOverlayState* state) {
     state->native_loader_render_hook = X86Hook{};
     state->settings_scalar_row_hook = X86Hook{};
     state->settings_toggle_row_hook = X86Hook{};
+    state->settings_action_row_hook = X86Hook{};
     state->menu_layout_capture_enabled = false;
     state->frame_menu_art_elements.clear();
     state->retained_settings_elements_owner = 0;

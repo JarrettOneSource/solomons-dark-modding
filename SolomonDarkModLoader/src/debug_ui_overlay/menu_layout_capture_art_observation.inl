@@ -328,6 +328,29 @@ void __fastcall HookSettingsToggleRow(
     EndSettingsRowCapture();
 }
 
+void* __fastcall HookSettingsActionRow(
+    void* self,
+    void* /*unused_edx*/,
+    NativeUiString primary_label,
+    NativeUiString secondary_label,
+    void* action_context) {
+    BeginSettingsRowCapture(
+        primary_label,
+        reinterpret_cast<uintptr_t>(_ReturnAddress()));
+    const auto original = GetX86HookTrampoline<SettingsActionRowFn>(
+        g_debug_ui_overlay_state.settings_action_row_hook);
+    void* result = nullptr;
+    if (original != nullptr) {
+        result = original(
+            self,
+            primary_label,
+            secondary_label,
+            action_context);
+    }
+    EndSettingsRowCapture();
+    return result;
+}
+
 std::vector<CapturedMenuArtElement> TakeCapturedMenuArtFrame() {
     std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
     auto result = std::move(

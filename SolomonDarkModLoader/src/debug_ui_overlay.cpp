@@ -141,6 +141,15 @@ using SettingsValueRowFn = void(__thiscall*)(
     NativeUiString label,
     void* value);
 
+// Settings_Render builds its two selectable navigation rows through a separate
+// helper: two native Strings by value followed by the row's action context.
+// The helper returns the live control it created.
+using SettingsActionRowFn = void*(__thiscall*)(
+    void* self,
+    NativeUiString primary_label,
+    NativeUiString secondary_label,
+    void* action_context);
+
 using UiRenderContextColorFn = void(__thiscall*)(void* self, float red, float green, float blue, float alpha);
 using DarkCloudBrowserTabRenderFn = void(__thiscall*)(void* self, float left, float top, float width);
 using DarkCloudBrowserTextRenderFn = void(__thiscall*)(void* self, NativeUiString text, float x, float y);
@@ -519,6 +528,7 @@ struct DebugUiOverlayState {
     X86Hook native_loader_render_hook;
     X86Hook settings_scalar_row_hook;
     X86Hook settings_toggle_row_hook;
+    X86Hook settings_action_row_hook;
     bool menu_layout_capture_enabled = false;
     FontAtlas font_atlas;
     IDirect3DDevice9* font_device = nullptr;

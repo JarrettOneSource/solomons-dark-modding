@@ -79,6 +79,7 @@ constexpr uintptr_t kNativeSpriteCenteredDrawAddress = 0x004142E0;
 constexpr uintptr_t kNativeSpriteTransformDrawAddress = 0x00414540;
 constexpr uintptr_t kSettingsScalarRowAddress = 0x00436160;
 constexpr uintptr_t kSettingsToggleRowAddress = 0x00435DE0;
+constexpr uintptr_t kSettingsActionRowAddress = 0x004A5B60;
 constexpr uintptr_t kNativeLoaderProgressNumerator = 0x0081F6A8;
 constexpr uintptr_t kNativeLoaderProgressDenominator = 0x0081F6AC;
 constexpr uintptr_t kNativeLoaderCompleteFlag = 0x0081F6B0;

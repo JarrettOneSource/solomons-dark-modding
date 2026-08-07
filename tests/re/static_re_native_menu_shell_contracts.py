@@ -1144,6 +1144,15 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         "SolomonDarkModLoader/src/debug_ui_overlay/"
         "menu_layout_capture_snapshot_and_hooks.inl"
     )
+    menu_capture_state = _read("SolomonDarkModLoader/src/debug_ui_overlay.cpp")
+    menu_capture_resolvers = _read(
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "menu_layout_capture_resolvers.inl"
+    )
+    menu_capture_observers = _read(
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "menu_layout_capture_art_observation.inl"
+    )
     support = _read("scripts/NativeMenuCaptureSupport.ps1")
     standalone = _read("scripts/Record-NativeMenuLayout.ps1")
     transition = _read("scripts/Record-NativeMenuTransition.ps1")
@@ -1267,6 +1276,22 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         r"source_root != semantic_root.*?continue;",
         "a selected native menu layout can inherit hidden exact text from a "
         "foreign semantic surface",
+    )
+    _require_regex(
+        menu_capture_state + menu_capture_resolvers + menu_capture_observers + layout_snapshot,
+        r"SettingsActionRowFn.*?settings_action_row_hook.*?"
+        r"kSettingsActionRowAddress\s*=\s*0x004A5B60.*?"
+        r"HookSettingsActionRow\(.*?"
+        r"BeginSettingsRowCapture\(\s*primary_label.*?"
+        r"GetX86HookTrampoline<SettingsActionRowFn>.*?"
+        r"original\(\s*self,\s*primary_label,\s*secondary_label,\s*"
+        r"action_context\).*?"
+        r"EndSettingsRowCapture\(\).*?return result;.*?"
+        r"InstallSafeX86Hook\(\s*"
+        r"reinterpret_cast<void\*>\(settings_action\).*?"
+        r"HookSettingsActionRow.*?settings_action_row_hook",
+        "the native two-label settings action-row helper can disappear from "
+        "capture, making Customize Keyboard unavailable or geometry-free",
     )
     _require_regex(
         standalone,
