@@ -334,6 +334,8 @@ void* __fastcall HookSettingsActionRow(
     NativeUiString primary_label,
     NativeUiString secondary_label,
     void* action_context) {
+    const auto primary_label_text =
+        ReadSettingsRowCaptureLabel(primary_label);
     BeginSettingsRowCapture(
         primary_label,
         reinterpret_cast<uintptr_t>(_ReturnAddress()));
@@ -346,6 +348,11 @@ void* __fastcall HookSettingsActionRow(
             primary_label,
             secondary_label,
             action_context);
+    }
+    if (result != nullptr && !primary_label_text.empty()) {
+        CacheObservedObjectLabel(
+            reinterpret_cast<uintptr_t>(result),
+            primary_label_text);
     }
     EndSettingsRowCapture();
     return result;

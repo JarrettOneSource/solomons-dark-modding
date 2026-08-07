@@ -271,9 +271,11 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             r"GetX86HookTrampoline<SettingsActionRowFn>.*?"
             r"original\(\s*self,\s*primary_label,\s*secondary_label,\s*"
             r"action_context\).*?"
+            r"CacheObservedObjectLabel\(\s*"
+            r"reinterpret_cast<uintptr_t>\(result\),\s*primary_label_text\).*?"
             r"EndSettingsRowCapture\(\).*?return result;",
-            "two-label settings action rows must retain their live label and glyph "
-            "bounds around the exact native helper invocation",
+            "two-label settings action rows must retain their machine-read label on "
+            "the durable native control returned by the exact helper",
         )
 
         text_hooks = read(

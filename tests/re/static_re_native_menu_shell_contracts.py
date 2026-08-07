@@ -1286,12 +1286,15 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         r"GetX86HookTrampoline<SettingsActionRowFn>.*?"
         r"original\(\s*self,\s*primary_label,\s*secondary_label,\s*"
         r"action_context\).*?"
+        r"CacheObservedObjectLabel\(\s*"
+        r"reinterpret_cast<uintptr_t>\(result\),\s*primary_label_text\).*?"
         r"EndSettingsRowCapture\(\).*?return result;.*?"
         r"InstallSafeX86Hook\(\s*"
         r"reinterpret_cast<void\*>\(settings_action\).*?"
         r"HookSettingsActionRow.*?settings_action_row_hook",
-        "the native two-label settings action-row helper can disappear from "
-        "capture, making Customize Keyboard unavailable or geometry-free",
+        "the native two-label settings action-row constructor can lose the "
+        "machine-read label-to-control binding, making Customize Keyboard "
+        "unavailable or geometry-free",
     )
     _require_regex(
         standalone,
