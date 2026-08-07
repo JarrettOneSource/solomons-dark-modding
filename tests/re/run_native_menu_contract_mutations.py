@@ -688,6 +688,16 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "native-menu Settlement v2 no longer requires 40 samples over at least two seconds",
     ),
     StaticMutation(
+        "recorder.extended-observed-span",
+        RECORDER,
+        "scripts/Observe-NativeMenuMotionCapability.ps1",
+        "$observedSpanMilliseconds -lt $requiredSpanMilliseconds",
+        "$clock.ElapsedMilliseconds -lt $requiredSpanMilliseconds",
+        "the v2.3 corroboration recorder no longer derives 60-second/10x "
+        "duration from the stationary window, measures that span between "
+        "actual samples, and requires at least 200 samples",
+    ),
+    StaticMutation(
         "recorder.blocking-modal-exact-surface",
         RECORDER,
         "scripts/NativeMenuCaptureSupport.ps1",

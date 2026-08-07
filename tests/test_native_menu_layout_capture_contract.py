@@ -310,6 +310,12 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             "extended observation must reach at least 200 runnable samples",
         )
         self.assertIn(
+            "$observedSpanMilliseconds -lt $requiredSpanMilliseconds",
+            motion,
+            "extended observation duration must be measured between actual "
+            "samples rather than from wall-clock startup",
+        )
+        self.assertIn(
             "motion_events = @($classification.motion_events)",
             motion,
             "the recorder must retain the exact motion-event census",

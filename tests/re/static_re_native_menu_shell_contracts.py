@@ -804,12 +804,17 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
         r"\[long\]\$script:NativeMenuExtendedMinimumMilliseconds,\s*"
         r"\[long\]\$script:NativeMenuExtendedSpanMultiplier\s*\*\s*"
         r"\$stableSpanMilliseconds\s*\).*?"
-        r"while \(\s*\$clock\.ElapsedMilliseconds\s+-lt\s*"
+        r"\$observedSpanMilliseconds\s*=\s*0L.*?"
+        r"while \(\s*\$observedSpanMilliseconds\s+-lt\s*"
         r"\$requiredSpanMilliseconds\s+-or\s*\$samples\.Count\s+-lt\s*"
         r"\$script:NativeMenuExtendedMinimumSamples\s*\).*?"
+        r"\$observedSpanMilliseconds\s*=\s*\[long\]\(\s*"
+        r"\$samples\[\$samples\.Count - 1\]\.elapsed_milliseconds\s*-\s*"
+        r"\$samples\[0\]\.elapsed_milliseconds\s*\).*?"
         r"Invoke-NativeMenuExtendedObservationClassifier",
         "the v2.3 corroboration recorder no longer derives 60-second/10x "
-        "duration from the stationary window and requires at least 200 samples",
+        "duration from the stationary window, measures that span between "
+        "actual samples, and requires at least 200 samples",
     )
     _require_regex(
         motion_recorder,

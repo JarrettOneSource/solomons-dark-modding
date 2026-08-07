@@ -137,8 +137,9 @@ $busyCount = 0
 $notReadyCount = 0
 $lastUnavailable = ""
 $clock = [Diagnostics.Stopwatch]::StartNew()
+$observedSpanMilliseconds = 0L
 while (
-    $clock.ElapsedMilliseconds -lt $requiredSpanMilliseconds -or
+    $observedSpanMilliseconds -lt $requiredSpanMilliseconds -or
     $samples.Count -lt $script:NativeMenuExtendedMinimumSamples
 ) {
     if ($clock.ElapsedMilliseconds -gt $deadlineMilliseconds) {
@@ -175,6 +176,12 @@ while (
         semantic_generation = $probe.SemanticGeneration
         payload = $probe.SemanticPayload
     })
+    if ($samples.Count -ge 2) {
+        $observedSpanMilliseconds = [long](
+            $samples[$samples.Count - 1].elapsed_milliseconds -
+            $samples[0].elapsed_milliseconds
+        )
+    }
     Start-Sleep -Milliseconds 250
 }
 $clock.Stop()
