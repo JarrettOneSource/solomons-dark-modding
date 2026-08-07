@@ -225,6 +225,34 @@ def _skill_picker_animated_family_samples(
     return samples
 
 
+def _ambient_rank_crossing_samples(
+    mover_count: int,
+    *,
+    phase: float = 0.0,
+) -> list[dict[str, object]]:
+    def elements(sample_index: int) -> list[dict[str, object]]:
+        core = [_art(index, art_id=f"Core.{index}") for index in range(10)]
+        movers: list[dict[str, object]] = []
+        for index in range(mover_count):
+            mover = _art(100 + index, art_id="Title.spark")
+            mover["id"] = f"screen.art.title_spark.{index + 1}"
+            left = phase + index * 100.0 + sample_index * 10.0
+            mover["rect"] = [left, 100.0, left + 80.0, 120.0]
+            mover["unclipped_rect"] = list(mover["rect"])
+            mover["draw_order"] = 100 + (
+                (index + sample_index // 4) % mover_count
+            )
+            movers.append(mover)
+        cycling = _art(200, art_id="Title.spark")
+        cycling["id"] = "screen.art.title_spark.cycling"
+        cycling["text_style"] = "ambient-cycle"
+        cycling["visible"] = sample_index % 2 == 0
+        cycling["draw_order"] = 200
+        return [*core, *movers, cycling]
+
+    return _samples(elements)
+
+
 def _skill_picker_choice_manifest() -> dict[str, object]:
     return {
         "schema": "solomon-dark-web-asset-manifest-v1",
@@ -1387,6 +1415,15 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
         self.assertTrue(
             all(member["member_classes"] == ["animated"] for member in per_member)
         )
+
+    def test_ambient_family_near_match_does_not_enter_v27_family_gate(self) -> None:
+        resolved = _resolve_pair(
+            _ambient_rank_crossing_samples(3),
+            _ambient_rank_crossing_samples(4, phase=50.0),
+        )
+
+        self.assertEqual(resolved["animated_family_ids"], [])
+        self.assertIn("Title.spark", resolved["ambient_family_art_ids"])
 
     def test_animated_family_declaration_without_crossing_proof_fails(self) -> None:
         observations = [

@@ -749,9 +749,14 @@ def _resolve_animated_family_keys(
         if not crossed_anchors:
             continue
         art_id = anchor_records[0][1]["art_id"]
-        if len(crossed_anchors) != len(anchors) and art_id in ambient_family:
+        if art_id in ambient_family and (
+            len(crossed_anchors) != len(anchors)
+            or len(set(anchor_counts.values())) != 1
+        ):
             # Title-backdrop lifecycle members remain governed by v2.5 unless
-            # both fresh anchors prove the exact v2.7 family trigger.
+            # both fresh anchors prove the complete v2.7 trigger, including
+            # the exact reproduced per-sample family census.  A near match is
+            # ambient lifecycle, not a malformed animated-family collapse.
             continue
         if len(set(anchor_counts.values())) != 1:
             art_counts = {
