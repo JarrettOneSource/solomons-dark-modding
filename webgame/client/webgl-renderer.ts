@@ -133,6 +133,7 @@ function spriteSlice(
   clipped: NativeRect,
   unclipped: NativeRect,
   quarterTurn: boolean,
+  flip: readonly [boolean, boolean],
 ): SpriteSlice | null {
   const [unclippedLeft, unclippedTop, unclippedRight, unclippedBottom] = unclipped;
   const width = unclippedRight - unclippedLeft;
@@ -148,10 +149,20 @@ function spriteSlice(
     return null;
   }
 
-  const x0 = (left - unclippedLeft) / width;
-  const x1 = (right - unclippedLeft) / width;
-  const y0 = (top - unclippedTop) / height;
-  const y1 = (bottom - unclippedTop) / height;
+  // Mirroring reflects the normalized source coordinates before uv assembly, so
+  // it stays exact for clipped sprites and composes with the quarter turn.
+  let x0 = (left - unclippedLeft) / width;
+  let x1 = (right - unclippedLeft) / width;
+  let y0 = (top - unclippedTop) / height;
+  let y1 = (bottom - unclippedTop) / height;
+  if (flip[0]) {
+    x0 = 1 - x0;
+    x1 = 1 - x1;
+  }
+  if (flip[1]) {
+    y0 = 1 - y0;
+    y1 = 1 - y1;
+  }
   const uv = quarterTurn
     ? [y0, 1 - x0, y0, 1 - x1, y1, 1 - x1, y1, 1 - x0] as const
     : [x0, y0, x1, y0, x1, y1, x0, y1] as const;
@@ -306,7 +317,7 @@ export class WebGlShellRenderer {
       Math.abs(Math.log(destinationAspect * sourceAspect))
       < Math.abs(Math.log(destinationAspect / sourceAspect))
     );
-    const slice = spriteSlice(command.rect, command.unclippedRect, quarterTurn);
+    const slice = spriteSlice(command.rect, command.unclippedRect, quarterTurn, command.flip ?? [false, false]);
     if (slice === null) {
       return;
     }
@@ -369,11 +380,12 @@ export class WebGlShellRenderer {
         if (texture === undefined) {
           throw new Error(`assetpack glyph ${glyph.asset.requestedId} was not prepared for ${command.elementId}`);
         }
+        const tint = command.color ?? [0.86, 0.74, 0.42, 1];
         this.#drawQuad(
           [x, top, x + width, bottom],
           [0, 0, 1, 0, 1, 1, 0, 1],
-          [0.86, 0.74, 0.42, 1],
-          [0.86, 0.74, 0.42, 1],
+          tint,
+          tint,
           texture,
         );
       }

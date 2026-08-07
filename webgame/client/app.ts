@@ -3,6 +3,8 @@ import focusModelJson from "../../webgame-contracts/menu-focus-model.json" with 
 import { GamepadProducer } from "../input/gamepad-producer.js";
 import { parseFocusModel } from "../input/focus-model.js";
 import { AmbientTitleLayer } from "./ambient-title.js";
+import { BetaNoticeDialog } from "./beta-dialog.js";
+import { orientNativeChrome } from "./native-orientation.js";
 import type { Intent, Point2 } from "../input/intent.js";
 import { parseIntent } from "../input/intent.js";
 import { KeyboardMouseProducer } from "../input/keyboard-mouse-producer.js";
@@ -85,7 +87,17 @@ async function main(): Promise<void> {
   const renderer = new WebGlShellRenderer(canvas, assets);
   const controller = new ShellController(catalog, focusModel, { store: browserStore() });
   const ambient = new AmbientTitleLayer(assets);
+  const dialog = new BetaNoticeDialog(assets);
   const ambientEpoch = performance.now();
+  // Full ATC-preview presentation chain (superseded by shellfix #101): ambient
+  // Title motion, then the beta-notice dialog reconstruction, then the native
+  // mirror restoration. The conformance harness keeps reading the fixture-pure
+  // activePlan via renderPlan(); only rendering flows through here.
+  const present = (plan: RenderPlan): RenderPlan => orientNativeChrome(
+    dialog.apply(ambient.handles(plan.layoutId)
+      ? ambient.apply(plan, performance.now() - ambientEpoch)
+      : plan),
+  );
 
   const loaderLayout = catalog.layouts.get("native-loader");
   if (loaderLayout === undefined) {
@@ -149,14 +161,14 @@ async function main(): Promise<void> {
       nextPlan = buildOutOfScopePlan(snapshot.surface.message);
     }
     await renderer.prepare(
-      ambient.handles(nextPlan.layoutId) ? ambient.augmentForPrepare(nextPlan) : nextPlan,
+      dialog.apply(ambient.handles(nextPlan.layoutId) ? ambient.augmentForPrepare(nextPlan) : nextPlan),
     );
     if (generation !== renderGeneration) {
       return;
     }
     activePlan = nextPlan;
     inputs.update(snapshot);
-    renderer.render(activePlan);
+    renderer.render(present(activePlan));
   };
   controller.subscribe((snapshot) => {
     renderSettled = installSnapshot(snapshot);
@@ -243,17 +255,17 @@ async function main(): Promise<void> {
     showLayout: async (layoutId, preferredFocus) => {
       controller.showLayoutForConformance(layoutId, preferredFocus);
       await renderSettled;
-      renderer.render(activePlan);
+      renderer.render(present(activePlan));
     },
     showHub: async () => {
       controller.showHubForConformance();
       await renderSettled;
-      renderer.render(activePlan);
+      renderer.render(present(activePlan));
     },
     setEligibility: async (values) => {
       controller.setEligibilityForConformance(values);
       await renderSettled;
-      renderer.render(activePlan);
+      renderer.render(present(activePlan));
     },
     measureFrameTimes,
   };
@@ -268,7 +280,7 @@ async function main(): Promise<void> {
     // with no redundant WebGL uploads. The conformance harness keeps reading
     // the fixture-pure activePlan via renderPlan().
     if (ambient.handles(activePlan.layoutId)) {
-      renderer.render(ambient.apply(activePlan, performance.now() - ambientEpoch));
+      renderer.render(present(activePlan));
     }
     requestAnimationFrame(frame);
   };

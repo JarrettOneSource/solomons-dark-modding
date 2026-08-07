@@ -25,6 +25,10 @@ interface DrawBase {
 export interface SpriteDraw extends DrawBase {
   readonly kind: "sprite";
   readonly asset: ResolvedAsset;
+  // [flip-x, flip-y]. The G11 payload schema has no orientation field, so natively
+  // mirrored placements capture as identical un-flipped draws; the ATC-preview
+  // orientation layer (native-orientation.ts) restores the mirrors at render time.
+  readonly flip?: readonly [boolean, boolean];
 }
 
 export interface SolidDraw extends DrawBase {
@@ -37,6 +41,9 @@ export interface AtlasTextDraw extends DrawBase {
   readonly kind: "atlas-text";
   readonly fontId: string;
   readonly text: string;
+  // Glyph tint; absent means the native menu gold. The beta-notice dialog body is
+  // the one captured surface with white/yellow text (see beta-dialog.ts).
+  readonly color?: readonly [number, number, number, number];
 }
 
 export interface SystemTextDraw extends DrawBase {
