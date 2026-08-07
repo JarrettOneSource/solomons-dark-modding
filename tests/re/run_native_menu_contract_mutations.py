@@ -822,6 +822,15 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "duty after screen classification was anchored to two fresh standalones",
     ),
     StaticMutation(
+        "v2.3.same-art-motion-member-identity",
+        CAMPAIGN,
+        "tools/native_menu_ambient_lifecycle.py",
+        "if max(left_min, right_min) > min(left_max, right_max):",
+        "if False and max(left_min, right_min) > min(left_max, right_max):",
+        "same-art rect animation again collapses distinct screen members and "
+        "demotes a reproduced stable sibling from the structural core",
+    ),
+    StaticMutation(
         "v2.5.empty-gameplay-surface-is-constant",
         CLASSIFIER,
         "tools/native_menu_ambient_lifecycle.py",

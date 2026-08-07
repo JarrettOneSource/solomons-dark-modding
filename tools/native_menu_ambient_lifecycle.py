@@ -488,10 +488,136 @@ def _sorted_elements(payload: dict[str, Any]) -> list[dict[str, Any]]:
     )
 
 
+def _member_envelope_ranges(
+    member: dict[str, Any],
+) -> tuple[tuple[float, float], ...]:
+    ranges: list[tuple[float, float]] = []
+    for field in ("rect", "unclipped_rect"):
+        envelope = member["envelope"][field]
+        for axis in ("x", "y", "width", "height"):
+            ranges.append(
+                (float(envelope[f"min_{axis}"]), float(envelope[f"max_{axis}"]))
+            )
+    return tuple(ranges)
+
+
+def _motion_geometry_compatible(
+    left: tuple[tuple[float, float], ...],
+    right: tuple[tuple[float, float], ...],
+) -> bool:
+    for (left_min, left_max), (right_min, right_max) in zip(left, right):
+        if max(left_min, right_min) > min(left_max, right_max):
+            return False
+    return True
+
+
+def _union_member_ranges(
+    records: list[tuple[dict[str, Any], dict[str, Any]]],
+) -> tuple[tuple[float, float], ...]:
+    all_ranges = [_member_envelope_ranges(member) for _, member in records]
+    return tuple(
+        (
+            min(ranges[index][0] for ranges in all_ranges),
+            max(ranges[index][1] for ranges in all_ranges),
+        )
+        for index in range(len(all_ranges[0]))
+    )
+
+
+def _resolve_varying_member_keys(
+    measurements: list[dict[str, Any]],
+) -> dict[tuple[int, str], str]:
+    by_capability: dict[
+        str, list[tuple[dict[str, Any], dict[str, Any]]]
+    ] = defaultdict(list)
+    for measurement in measurements:
+        for member in measurement["members"]:
+            by_capability[member["capability_signature"]].append(
+                (measurement, member)
+            )
+
+    resolved: dict[tuple[int, str], str] = {}
+    for capability, records in sorted(by_capability.items()):
+        witnesses = [
+            record
+            for record in records
+            if record[1]["classification"]
+            in {"animated", "visibility_cycling"}
+        ]
+        if not witnesses:
+            continue
+        remaining = set(range(len(witnesses)))
+        components: list[list[tuple[dict[str, Any], dict[str, Any]]]] = []
+        while remaining:
+            pending = [remaining.pop()]
+            component_indexes: set[int] = set()
+            while pending:
+                index = pending.pop()
+                if index in component_indexes:
+                    continue
+                component_indexes.add(index)
+                left = _member_envelope_ranges(witnesses[index][1])
+                neighbours = [
+                    candidate
+                    for candidate in list(remaining)
+                    if _motion_geometry_compatible(
+                        left, _member_envelope_ranges(witnesses[candidate][1])
+                    )
+                ]
+                for candidate in neighbours:
+                    remaining.remove(candidate)
+                    pending.append(candidate)
+            components.append([witnesses[index] for index in component_indexes])
+
+        components.sort(key=lambda component: canonical_bytes(_union_member_ranges(component)))
+        for slot, component in enumerate(components, start=1):
+            component_ranges = _union_member_ranges(component)
+            identities = [id(measurement) for measurement, _ in component]
+            if len(identities) != len(set(identities)):
+                raise AmbientLifecycleError(
+                    "varying-member identity ambiguity: one observation contains "
+                    f"multiple compatible witnesses for capability '{capability}'"
+                )
+            key = f"member:{capability}:slot:{slot}"
+            for measurement, member in component:
+                resolved[(id(measurement), member["captured_element_id"])] = key
+
+            for measurement, member in records:
+                record_key = (id(measurement), member["captured_element_id"])
+                if record_key in resolved or member["classification"] != "full_presence":
+                    continue
+                matches = [
+                    candidate
+                    for candidate in components
+                    if _motion_geometry_compatible(
+                        _member_envelope_ranges(member),
+                        _union_member_ranges(candidate),
+                    )
+                ]
+                if len(matches) > 1:
+                    raise AmbientLifecycleError(
+                        "varying-member identity ambiguity: quiet member "
+                        f"'{member['captured_element_id']}' matches multiple motion slots"
+                    )
+                if len(matches) == 1 and matches[0] is component:
+                    occupied = {
+                        resolved.get((id(measurement), other["captured_element_id"]))
+                        for other_measurement, other in records
+                        if other_measurement is measurement
+                    }
+                    if key in occupied:
+                        raise AmbientLifecycleError(
+                            "varying-member identity ambiguity: one observation has "
+                            f"two members in resolved slot '{key}'"
+                        )
+                    resolved[record_key] = key
+    return resolved
+
+
 def _core_counter_for_measurements(
     measurements: list[dict[str, Any]],
     ambient_family: set[str],
-    varying_capabilities: set[str],
+    varying_member_keys: dict[tuple[int, str], str],
 ) -> tuple[Counter[bytes], dict[bytes, dict[str, Any]]]:
     stable_counters: list[Counter[bytes]] = []
     payload_by_signature: dict[bytes, dict[str, Any]] = {}
@@ -501,7 +627,7 @@ def _core_counter_for_measurements(
         for member in measurement["members"]:
             if member["classification"] != "full_presence":
                 continue
-            if member["capability_signature"] in varying_capabilities:
+            if (id(measurement), member["captured_element_id"]) in varying_member_keys:
                 # Motion/toggle capability is asymmetric: one measured event
                 # anywhere makes every quiet observation of the same semantic
                 # member non-core.
@@ -604,6 +730,7 @@ def _core_bands(
     measurements: list[dict[str, Any]],
     core_counter: Counter[bytes],
     core_ids: list[str],
+    varying_member_keys: dict[tuple[int, str], str],
 ) -> dict[str, dict[str, str]]:
     bands: dict[str, set[tuple[str, str]]] = defaultdict(set)
     for measurement in measurements:
@@ -614,8 +741,13 @@ def _core_bands(
             for index, element in enumerate(ordered):
                 if index in core_positions:
                     continue
+                resolved_key = varying_member_keys.get(
+                    (id(measurement), _element_id(element))
+                )
                 art_id = element.get("art_id")
-                if not isinstance(art_id, str) or not art_id:
+                if resolved_key is not None:
+                    band_key = resolved_key
+                elif not isinstance(art_id, str) or not art_id:
                     capability = sha256_json(_capability_payload(element))
                     band_key = f"member:{capability}"
                 else:
@@ -737,6 +869,7 @@ def resolve_ambient_lifecycle(
         in {"ephemeral", "visibility_cycling", "one_way_spawn_candidate"}
         and member["art_id"]
     }
+    varying_member_keys = _resolve_varying_member_keys(measurements)
     corroborations: list[dict[str, Any]] = []
     settled_measurements = [
         measurement
@@ -763,27 +896,32 @@ def resolve_ambient_lifecycle(
         for measurement in measurements
         if measurement["kind"] == "extended_observation"
     ]
-    settled_capabilities = {
-        member["capability_signature"]
+    settled_varying_keys = {
+        varying_member_keys[(id(measurement), member["captured_element_id"])]
         for measurement in settled_measurements
         for member in measurement["members"]
+        if (id(measurement), member["captured_element_id"])
+        in varying_member_keys
     }
-    for capability in sorted(settled_capabilities):
-        capability_records = [
+    for varying_key in sorted(settled_varying_keys):
+        varying_records = [
             (measurement, member)
             for measurement in settled_measurements
             for member in measurement["members"]
-            if member["capability_signature"] == capability
+            if varying_member_keys.get(
+                (id(measurement), member["captured_element_id"])
+            )
+            == varying_key
         ]
-        classes = {member["classification"] for _, member in capability_records}
-        art_ids = {member["art_id"] for _, member in capability_records if member["art_id"]}
+        classes = {member["classification"] for _, member in varying_records}
+        art_ids = {member["art_id"] for _, member in varying_records if member["art_id"]}
         if (
             "animated" not in classes
             or "full_presence" not in classes
             or bool(art_ids & ambient_family)
         ):
             continue
-        for quiet_measurement, quiet_member in capability_records:
+        for quiet_measurement, quiet_member in varying_records:
             if quiet_member["classification"] != "full_presence":
                 continue
             if not quiet_measurement["corroboration_anchor"]:
@@ -794,7 +932,10 @@ def resolve_ambient_lifecycle(
                 if measurement["instance"] == quiet_measurement["instance"]
                 and measurement["process_id"] == quiet_measurement["process_id"]
                 and any(
-                    member["capability_signature"] == capability
+                    varying_member_keys.get(
+                        (id(measurement), member["captured_element_id"])
+                    )
+                    == varying_key
                     for member in measurement["members"]
                 )
             ]
@@ -808,7 +949,7 @@ def resolve_ambient_lifecycle(
                 )
             corroborations.append(
                 {
-                    "capability_signature": capability,
+                    "resolved_member_key": varying_key,
                     "stationary_instance": quiet_measurement["instance"],
                     "stationary_process_id": quiet_measurement["process_id"],
                     "extended_observations": [
@@ -816,14 +957,8 @@ def resolve_ambient_lifecycle(
                     ],
                 }
             )
-    varying_capabilities = {
-        member["capability_signature"]
-        for measurement in measurements
-        for member in measurement["members"]
-        if member["classification"] in {"animated", "visibility_cycling"}
-    }
     core_counter, payload_by_signature = _core_counter_for_measurements(
-        measurements, ambient_family, varying_capabilities
+        measurements, ambient_family, varying_member_keys
     )
     reference_sequence: list[bytes] | None = None
     for measurement in measurements:
@@ -855,7 +990,9 @@ def resolve_ambient_lifecycle(
     core_elements, core_ids = _normalized_core(
         identity["screen_id"], reference_sequence, payload_by_signature
     )
-    bands = _core_bands(measurements, core_counter, core_ids)
+    bands = _core_bands(
+        measurements, core_counter, core_ids, varying_member_keys
+    )
 
     member_classes: dict[str, set[str]] = defaultdict(set)
     event_counts: dict[str, Counter[str]] = defaultdict(Counter)
@@ -864,12 +1001,19 @@ def resolve_ambient_lifecycle(
         remaining_core = core_counter.copy()
         for member in measurement["members"]:
             art_id = member["art_id"]
-            member_key = art_id or f"member:{member['capability_signature']}"
+            varying_key = varying_member_keys.get(
+                (id(measurement), member["captured_element_id"])
+            )
+            member_key = (
+                varying_key
+                or art_id
+                or f"member:{member['capability_signature']}"
+            )
             classification = member["classification"]
             signature = canonical_bytes(member["semantic_payload"])
             in_core = (
                 classification == "full_presence"
-                and member["capability_signature"] not in varying_capabilities
+                and varying_key is None
                 and remaining_core[signature] > 0
             )
             if in_core:
@@ -877,17 +1021,17 @@ def resolve_ambient_lifecycle(
                 continue
             if classification == "one_way_spawn_candidate":
                 classification = "ephemeral"
-            elif classification == "full_presence" and art_id in ambient_family:
-                classification = "ambient_persistent"
-            elif classification == "full_presence":
+            elif classification == "full_presence" and varying_key is not None:
                 # A quiet window cannot demote an animated capability measured
                 # by another instance of the same semantic member.
-                capability = member["capability_signature"]
                 measured_classes = {
                     other["classification"]
                     for other_measurement in measurements
                     for other in other_measurement["members"]
-                    if other["capability_signature"] == capability
+                    if varying_member_keys.get(
+                        (id(other_measurement), other["captured_element_id"])
+                    )
+                    == varying_key
                 }
                 if "animated" in measured_classes:
                     classification = "animated"
@@ -898,6 +1042,13 @@ def resolve_ambient_lifecycle(
                         "cross-instance structural core inequality: non-family quiet "
                         f"member '{member['captured_element_id']}' has no reproduced core"
                     )
+            elif classification == "full_presence" and art_id in ambient_family:
+                classification = "ambient_persistent"
+            elif classification == "full_presence":
+                raise AmbientLifecycleError(
+                    "cross-instance structural core inequality: non-family quiet "
+                    f"member '{member['captured_element_id']}' has no reproduced core"
+                )
             member_classes[member_key].add(classification)
             resolved_records.append(
                 {
@@ -948,7 +1099,21 @@ def resolve_ambient_lifecycle(
     for member_key in sorted(member_classes):
         classes = sorted(member_classes[member_key])
         events = event_counts[member_key]
-        art_id = "" if member_key.startswith("member:") else member_key
+        art_records = [
+            record
+            for record in resolved_records
+            if record["member_key"] == member_key
+        ]
+        record_art_ids = {
+            record["member"]["art_id"]
+            for record in art_records
+            if record["member"]["art_id"]
+        }
+        if len(record_art_ids) > 1:
+            raise AmbientLifecycleError(
+                f"varying-member identity ambiguity: '{member_key}' spans art families"
+            )
+        art_id = next(iter(record_art_ids), "")
         for classification in classes:
             if classification == "animated" and events["rect_change"] == 0:
                 raise AmbientLifecycleError(
@@ -975,11 +1140,6 @@ def resolve_ambient_lifecycle(
                     "ambient lifecycle recorder defect: ambient-persistent family "
                     f"'{art_id}' has no lifecycle capability witness"
                 )
-        art_records = [
-            record
-            for record in resolved_records
-            if record["member_key"] == member_key
-        ]
         elements = [
             element for record in art_records for element in record_elements(record)
         ]
@@ -1054,7 +1214,7 @@ def resolve_ambient_lifecycle(
                 "art_id": art_id,
                 "member_classes": classes,
                 "draw_band": bands[
-                    f"art:{art_id}" if art_id else member_key
+                    member_key if member_key.startswith("member:") else f"art:{art_id}"
                 ],
                 "class_members": class_members,
                 "union_spatial_envelope": _union_envelope(elements),

@@ -621,6 +621,38 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
         self.assertEqual(len(resolved["animated_element_ids"]), 1)
         self.assertEqual(len(resolved["motion_capability_corroborations"]), 1)
 
+    def test_same_art_motion_slot_does_not_demote_stable_sibling(self) -> None:
+        def elements(sample_index: int) -> list[dict[str, object]]:
+            result = [_art(index) for index in range(4)]
+            moving = result[0]
+            stable_sibling = result[1]
+            moving["art_id"] = "UI.shared"
+            stable_sibling["art_id"] = "UI.shared"
+            offset = sample_index * 0.25
+            moving["rect"] = [offset, 20.0, 8.0 + offset, 26.0]
+            moving["unclipped_rect"] = list(moving["rect"])
+            stable_sibling["rect"] = [200.0, 40.0, 208.0, 46.0]
+            stable_sibling["unclipped_rect"] = list(stable_sibling["rect"])
+            return result
+
+        resolved = _resolve_pair(_samples(elements))
+
+        self.assertEqual(len(resolved["animated_element_ids"]), 1)
+        self.assertEqual(
+            sum(
+                element["art_id"] == "UI.shared"
+                for element in resolved["structural_core"]["elements"]
+            ),
+            1,
+        )
+        animated = next(
+            member
+            for member in resolved["ambient_members"]
+            if "animated" in member["member_classes"]
+        )
+        self.assertEqual(animated["art_id"], "UI.shared")
+        self.assertTrue(animated["member_key"].startswith("member:"))
+
     def test_declared_phantom_ambient_class_is_a_recorder_defect(self) -> None:
         observations = [
             _observation(_stable_samples(3), "menufx-primary", 101),

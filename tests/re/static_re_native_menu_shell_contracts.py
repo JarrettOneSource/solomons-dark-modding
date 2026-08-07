@@ -1102,9 +1102,9 @@ def test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired() -> str:
     )
     _require_regex(
         classifier,
+        r"varying_member_keys\s*=\s*_resolve_varying_member_keys\(measurements\).*?"
         r"motion capability resolution requires extended-observation.*?evidence.*?"
-        r"varying_capabilities\s*=.*?"
-        r"member\[\"capability_signature\"\] not in varying_capabilities.*?"
+        r"classification == \"full_presence\".*?varying_key is None.*?"
         r"phantom animated.*?zero events",
         "Settlement v2.5 no longer applies asymmetric motion capability, "
         "requires stationary-side corroboration, and rejects phantom classes",
@@ -1165,6 +1165,7 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
     assert_module_runs_in_ci("test_native_menu_ambient_lifecycle")
     resolver = _read("tools/resolve_native_menu_ambient_campaign.py")
     classifier = _read("tools/native_menu_ambient_lifecycle.py")
+    ambient_tests = _read("tests/test_native_menu_ambient_lifecycle.py")
     promoter = _read("tools/promote_native_menu_recapture.py")
     confirmation = _read("scripts/Confirm-NativeMenuLayoutAnimation.ps1")
 
@@ -1283,6 +1284,29 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
         r'if not quiet_measurement\["corroboration_anchor"\]:\s*continue',
         "motion-capability resolution no longer requires two fresh standalone "
         "anchors and their same-instance extended corroboration",
+    )
+    _require_regex(
+        classifier,
+        r"def _motion_geometry_compatible\(.*?"
+        r"if max\(left_min, right_min\) > min\(left_max, right_max\):\s*"
+        r"return False.*?"
+        r"def _resolve_varying_member_keys\(.*?"
+        r"varying-member identity ambiguity.*?"
+        r"_core_counter_for_measurements\(\s*"
+        r"measurements, ambient_family, varying_member_keys\s*\).*?"
+        r"_core_bands\(\s*measurements, core_counter, core_ids, "
+        r"varying_member_keys",
+        "same-art rect animation again collapses distinct screen members and "
+        "demotes a reproduced stable sibling from the structural core",
+    )
+    _require_regex(
+        ambient_tests,
+        r"class NativeMenuAmbientLifecycleTests\(unittest\.TestCase\):.*?"
+        r"def test_same_art_motion_slot_does_not_demote_stable_sibling\(.*?"
+        r"self\.assertEqual\(len\(resolved\[\"animated_element_ids\"\]\), 1\).*?"
+        r"element\[\"art_id\"\] == \"UI\.shared\"",
+        "the CI behavior suite no longer proves same-art motion capability is "
+        "member-scoped rather than atlas-family scoped",
     )
     _require_regex(
         resolver,
