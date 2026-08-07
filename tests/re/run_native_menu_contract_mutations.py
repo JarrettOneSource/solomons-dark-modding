@@ -678,6 +678,14 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "native-menu Settlement v2 no longer requires 40 samples over at least two seconds",
     ),
     StaticMutation(
+        "recorder.blocking-modal-exact-surface",
+        RECORDER,
+        "scripts/NativeMenuCaptureSupport.ps1",
+        "$dispatch.semantic_surface -ceq",
+        "$dispatch.semantic_surface -cne",
+        "native-menu semantic actions no longer distinguish queued or busy requests, exact-surface blocking modals, completed dispatch, and terminal dispatch failure",
+    ),
+    StaticMutation(
         "recorder.no-provenance-override",
         RECORDER,
         "scripts/Import-NativeMenuSpecialCaptures.ps1",

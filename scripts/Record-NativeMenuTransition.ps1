@@ -162,7 +162,8 @@ return tostring(request)
         Wait-NativeMenuActionDispatch `
             -Context $context `
             -RequestId $requestId `
-            -ActionId $ActionId |
+            -ActionId $ActionId `
+            -ExpectedDestinationSurface $ExpectedDestinationSurface |
             Out-Null
     } elseif ($PSCmdlet.ParameterSetName -eq "Key") {
         $dispatchResult = (Invoke-NativeMenuLua `

@@ -707,11 +707,16 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
         r"\$script:NativeMenuActionDispatchTimeoutMilliseconds\s*=\s*15000.*?"
         r"function Wait-NativeMenuActionDispatch.*?"
         r"sd\.ui\.get_action_dispatch\(\$RequestId\).*?"
+        r"sd\.ui\.get_snapshot\(\).*?"
         r"\$lastStatus -ceq \"dispatched\".*?"
+        r"\$lastStatus -ceq \"dispatching\".*?"
+        r"\$dispatch\.semantic_surface -ceq.*?"
+        r"\$ExpectedDestinationSurface.*?"
         r"\$lastStatus -ceq \"failed\".*?"
         r"never became.*?runnable",
-        "native-menu semantic actions no longer distinguish a queued or busy "
-        "request from a dispatched request and a terminal dispatch failure",
+        "native-menu semantic actions no longer distinguish queued or busy "
+        "requests, exact-surface blocking modals, completed dispatch, and "
+        "terminal dispatch failure",
     )
     _require_regex(
         transition_recorder,
@@ -719,10 +724,11 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
         r"Wait-NativeMenuActionDispatch\s*`\s*"
         r"-Context \$context\s*`\s*"
         r"-RequestId \$requestId\s*`\s*"
-        r"-ActionId \$ActionId.*?"
+        r"-ActionId \$ActionId\s*`\s*"
+        r"-ExpectedDestinationSurface \$ExpectedDestinationSurface.*?"
         r"\$after\s*=\s*Get-SettledNativeMenuObservation",
         "native-menu transition endpoints can settle before their queued "
-        "semantic action actually dispatches",
+        "semantic action dispatches or reaches its exact blocking-modal surface",
     )
     _require_regex(
         support,

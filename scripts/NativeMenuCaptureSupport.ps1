@@ -290,7 +290,8 @@ function Wait-NativeMenuActionDispatch {
     param(
         [Parameter(Mandatory = $true)][object]$Context,
         [Parameter(Mandatory = $true)][int]$RequestId,
-        [Parameter(Mandatory = $true)][string]$ActionId
+        [Parameter(Mandatory = $true)][string]$ActionId,
+        [string]$ExpectedDestinationSurface = ""
     )
 
     $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -311,12 +312,17 @@ local function quote(value)
   return '"' .. value .. '"'
 end
 local dispatch = sd.ui.get_action_dispatch($RequestId)
+local semantic = sd.ui.get_snapshot()
 if type(dispatch) ~= 'table' then
-  return '{"status":"not_ready","error_message":""}'
+  return table.concat({
+    '{"status":"not_ready","error_message":"","semantic_surface":',
+    quote(semantic and semantic.surface_id or ''), '}'
+  })
 end
 return table.concat({
   '{"status":', quote(dispatch.status),
-  ',"error_message":', quote(dispatch.error_message), '}'
+  ',"error_message":', quote(dispatch.error_message),
+  ',"semantic_surface":', quote(semantic and semantic.surface_id or ''), '}'
 })
 "@
         if ($result.Status -eq "busy") {
@@ -332,6 +338,19 @@ return table.concat({
             }
             $lastStatus = [string]$dispatch.status
             if ($lastStatus -ceq "dispatched") {
+                return $dispatch
+            }
+            if (
+                $lastStatus -ceq "dispatching" -and
+                -not [string]::IsNullOrWhiteSpace(
+                    $ExpectedDestinationSurface
+                ) -and
+                [string]$dispatch.semantic_surface -ceq
+                    $ExpectedDestinationSurface
+            ) {
+                # Native modal handlers do not return until the modal closes.
+                # Reaching the caller-pinned destination proves the handler is
+                # runnable without pretending that its lifecycle completed.
                 return $dispatch
             }
             if ($lastStatus -ceq "failed") {

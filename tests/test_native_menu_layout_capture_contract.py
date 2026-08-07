@@ -235,6 +235,21 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             r"\$after\s*=\s*Get-SettledNativeMenuObservation",
             "transition source and destination must both use the settlement gate",
         )
+        self.assertRegex(
+            support,
+            r"(?s)\$lastStatus -ceq \"dispatching\".*?"
+            r"\$ExpectedDestinationSurface.*?"
+            r"\$dispatch\.semantic_surface -ceq.*?"
+            r"\$ExpectedDestinationSurface",
+            "a blocking native modal may proceed only after its exact caller-pinned "
+            "destination surface is measured live",
+        )
+        self.assertIn(
+            "-ExpectedDestinationSurface $ExpectedDestinationSurface",
+            transition,
+            "the transition recorder must bind modal dispatch to the pinned "
+            "destination surface",
+        )
         self.assertNotIn(
             "WaitMilliseconds",
             transition,
