@@ -1164,12 +1164,24 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         SURFACE_AGREEMENT,
         "SolomonDarkModLoader/src/debug_ui_overlay/"
         "overlay_surface_builders_settings_surfaces.inl",
-        "SettingsRolloutPageState::Controls\n    ) {\n        return {};",
-        "SettingsRolloutPageState::Controls ||\n"
-        "        GetSettingsFamilyOverlayArtCacheState().controls.elements.empty()\n"
-        "    ) {\n        return {};",
+        "page_observation.page == SettingsRolloutPageState::Controls;",
+        "page_observation.page == SettingsRolloutPageState::Controls &&\n"
+        "        !GetSettingsFamilyOverlayArtCacheState().controls.elements.empty();",
         "Controls classification can again wait for unrelated one-shot art "
         "after the native Controls page is uniquely at the local origin",
+    ),
+    StaticMutation(
+        "recorder.controls-transition-source-surface",
+        SURFACE_AGREEMENT,
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "overlay_surface_builders_settings_surfaces.inl",
+        "cache_state.last_page == SettingsRolloutPageState::Controls &&\n"
+        "        ShouldRetainSettingsTrackingAcrossMainMenuFallback() &&",
+        "cache_state.last_page != SettingsRolloutPageState::Controls &&\n"
+        "        ShouldRetainSettingsTrackingAcrossMainMenuFallback() &&",
+        "Controls classification no longer requires either the unique live "
+        "native rollout page or its bounded machine-proven transition source, "
+        "plus the machine-measured Back control",
     ),
     StaticMutation(
         "recorder.settings-page-single-active",

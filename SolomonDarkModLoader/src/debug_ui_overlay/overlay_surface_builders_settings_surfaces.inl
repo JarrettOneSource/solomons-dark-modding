@@ -574,10 +574,24 @@ std::vector<OverlayRenderElement> TryBuildControlsOverlayRenderElements(
         settings_address == 0) {
         return {};
     }
-    if (
-        ResolveSettingsRolloutPageForCapture(*config, settings_address) !=
-            SettingsRolloutPageState::Controls
-    ) {
+    SettingsRolloutPageObservation page_observation;
+    const bool page_resolved = TryResolveSettingsRolloutPageState(
+        *config,
+        settings_address,
+        &page_observation);
+    const auto& cache_state = GetSettingsFamilyOverlayArtCacheState();
+    const bool controls_at_origin =
+        page_resolved &&
+        page_observation.page == SettingsRolloutPageState::Controls;
+    const bool controls_transition_source =
+        !page_resolved &&
+        cache_state.settings_address == settings_address &&
+        cache_state.last_page == SettingsRolloutPageState::Controls &&
+        ShouldRetainSettingsTrackingAcrossMainMenuFallback() &&
+        page_observation.settings_page_control != 0 &&
+        page_observation.customize_page_control != 0 &&
+        page_observation.customize_rollout_child_control != 0;
+    if (!controls_at_origin && !controls_transition_source) {
         return {};
     }
 
@@ -589,17 +603,12 @@ std::vector<OverlayRenderElement> TryBuildControlsOverlayRenderElements(
         return {};
     }
 
-    uintptr_t customize_owner_control = 0;
-    uintptr_t rollout_child_control = 0;
-    std::uint8_t rollout_child_enabled = 0xff;
-    if (!TryIsCustomizeKeyboardRolloutExpanded(
-            *config,
-            settings_address,
-            &customize_owner_control,
-            &rollout_child_control,
-            &rollout_child_enabled)) {
-        return {};
-    }
+    const auto customize_owner_control =
+        page_observation.customize_page_control;
+    const auto rollout_child_control =
+        page_observation.customize_rollout_child_control;
+    const auto rollout_child_enabled =
+        page_observation.customize_rollout_child_enabled;
 
     const auto* controls_surface = FindUiSurfaceDefinition("controls");
     if (controls_surface == nullptr || controls_surface->action_ids.empty()) {

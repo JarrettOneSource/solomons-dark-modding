@@ -293,11 +293,21 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         controls_builder = re.search(
             r"(?s)TryBuildControlsOverlayRenderElements\(.*?"
             r"TryReadTrackedSettingsRender\(&settings_address\).*?"
-            r"if \(\s*"
-            r"ResolveSettingsRolloutPageForCapture\(\*config, settings_address\) !=\s*"
-            r"SettingsRolloutPageState::Controls.*?"
-            r"\) \{\s*return \{\};\s*\}.*?"
-            r"TryIsCustomizeKeyboardRolloutExpanded.*?"
+            r"TryResolveSettingsRolloutPageState\(\s*"
+            r"\*config,\s*settings_address,\s*&page_observation\).*?"
+            r"controls_at_origin =\s*page_resolved &&\s*"
+            r"page_observation\.page == SettingsRolloutPageState::Controls.*?;.*?"
+            r"controls_transition_source =\s*!page_resolved &&\s*"
+            r"cache_state\.settings_address == settings_address &&\s*"
+            r"cache_state\.last_page == SettingsRolloutPageState::Controls &&\s*"
+            r"ShouldRetainSettingsTrackingAcrossMainMenuFallback\(\) &&\s*"
+            r"page_observation\.settings_page_control != 0 &&\s*"
+            r"page_observation\.customize_page_control != 0 &&\s*"
+            r"page_observation\.customize_rollout_child_control != 0;.*?"
+            r"if \(!controls_at_origin && !controls_transition_source\) \{\s*"
+            r"return \{\};\s*\}.*?"
+            r"customize_owner_control =\s*"
+            r"page_observation\.customize_page_control;.*?"
             r"TryReadSettingsDoneButtonRect.*?"
             r"back_button\.surface_id = \"controls\";.*?"
             r"back_button\.label = \"BACK\";.*?"
@@ -307,8 +317,9 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         )
         self.assertIsNotNone(
             controls_builder,
-            "Controls classification must require the unique live native rollout "
-            "page and its machine-measured Back control",
+            "Controls classification must require either the unique live native "
+            "rollout page or its bounded machine-proven transition source, plus "
+            "the machine-measured Back control",
         )
         self.assertNotIn(
             "controls.elements",
