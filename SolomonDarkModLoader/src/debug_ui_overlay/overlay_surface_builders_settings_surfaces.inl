@@ -247,6 +247,17 @@ std::vector<CapturedMenuArtElement> ResolveSettingsFamilyMenuArtElements(
             cache_state.transition.settings_address = settings_address;
             cache_state.transition.elements =
                 std::move(transition_overlay);
+            static int s_transition_difference_logs_remaining = 8;
+            if (s_transition_difference_logs_remaining > 0) {
+                --s_transition_difference_logs_remaining;
+                Log(
+                    "Debug UI settings-family measured transition page art "
+                    "as a semantic multiset difference from the live "
+                    "Settings underlay. settings=" +
+                    HexString(settings_address) + " elements=" +
+                    std::to_string(
+                        cache_state.transition.elements.size()));
+            }
         }
 
         const auto* last_cache =
@@ -262,7 +273,8 @@ std::vector<CapturedMenuArtElement> ResolveSettingsFamilyMenuArtElements(
         ? &cache_state.controls
         : &cache_state.settings;
     std::vector<CapturedMenuArtElement> measured_overlay;
-    if (TryExtractSettingsFamilyOverlayArt(
+    if (page_observation.page == SettingsRolloutPageState::Settings &&
+        TryExtractSettingsFamilyOverlayArt(
             current_elements,
             &measured_overlay)) {
         active_cache->settings_address = settings_address;
@@ -283,6 +295,17 @@ std::vector<CapturedMenuArtElement> ResolveSettingsFamilyMenuArtElements(
                 &controls_overlay)) {
             cache_state.transition.settings_address = settings_address;
             cache_state.transition.elements = std::move(controls_overlay);
+            static int s_controls_difference_logs_remaining = 8;
+            if (s_controls_difference_logs_remaining > 0) {
+                --s_controls_difference_logs_remaining;
+                Log(
+                    "Debug UI settings-family measured Controls page art "
+                    "as a semantic multiset difference from the live "
+                    "Settings underlay. settings=" +
+                    HexString(settings_address) + " elements=" +
+                    std::to_string(
+                        cache_state.transition.elements.size()));
+            }
         } else if (
             page_observation.page == SettingsRolloutPageState::Settings
         ) {

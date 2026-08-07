@@ -1119,6 +1119,20 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "include title/partial Settings draws",
     ),
     StaticMutation(
+        "recorder.controls-refuses-settings-panel-cache",
+        SURFACE_AGREEMENT,
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "overlay_surface_builders_settings_surfaces.inl",
+        "if (page_observation.page == "
+        "SettingsRolloutPageState::Settings &&\n"
+        "        TryExtractSettingsFamilyOverlayArt(",
+        "if (page_observation.page != "
+        "SettingsRolloutPageState::Settings &&\n"
+        "        TryExtractSettingsFamilyOverlayArt(",
+        "an outgoing Settings ControlPanel draw can populate the Controls "
+        "destination cache instead of the measured Controls page difference",
+    ),
+    StaticMutation(
         "recorder.controls-current-frame-rollout",
         SURFACE_AGREEMENT,
         "SolomonDarkModLoader/src/debug_ui_overlay/"

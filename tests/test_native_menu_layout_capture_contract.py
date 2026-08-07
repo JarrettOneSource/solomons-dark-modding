@@ -217,6 +217,15 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             "measured destination page",
         )
         self.assertRegex(
+            builders,
+            r"(?s)auto\* active_cache =.*?"
+            r"if \(page_observation\.page == "
+            r"SettingsRolloutPageState::Settings &&\s*"
+            r"TryExtractSettingsFamilyOverlayArt\(",
+            "an outgoing Settings ControlPanel draw must never populate the "
+            "Controls destination cache",
+        )
+        self.assertRegex(
             helpers,
             r"(?s)TryResolveSettingsRolloutPageState.*?"
             r"duplicate GAME SETTINGS roots.*?"

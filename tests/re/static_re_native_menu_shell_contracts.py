@@ -1286,6 +1286,15 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         "page owns the origin",
     )
     _require_regex(
+        settings_builder,
+        r"auto\* active_cache =.*?"
+        r"if \(page_observation\.page == "
+        r"SettingsRolloutPageState::Settings &&\s*"
+        r"TryExtractSettingsFamilyOverlayArt\(",
+        "an outgoing Settings ControlPanel draw can populate the Controls "
+        "destination cache instead of the measured Controls page difference",
+    )
+    _require_regex(
         settings_tracking,
         r"if \(now - g_debug_ui_overlay_state\.settings_render\.captured_at > "
         r"kTrackedSettingsMaximumIdleMs\) \{\s*return false;\s*\}.*?"
