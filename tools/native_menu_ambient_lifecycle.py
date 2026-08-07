@@ -712,18 +712,17 @@ def resolve_ambient_lifecycle(
         raise AmbientLifecycleError(
             "cross-instance structural core contract: two fresh settled instances are required"
         )
-    identities = {
+    screen_identities = {
         (
             measurement["identity"]["semantic_surface"],
-            measurement["identity"]["layout_generation"],
             measurement["identity"]["screen_id"],
         )
         for measurement in measurements
     }
-    if len(identities) != 1:
+    if len(screen_identities) != 1:
         raise AmbientLifecycleError(
             "cross-instance structural core contract: observations do not name "
-            "one semantic surface, screen, and layout generation"
+            "one semantic surface and screen"
         )
 
     ambient_family = {
@@ -823,6 +822,12 @@ def resolve_ambient_lifecycle(
     identity = copy.deepcopy(measurements[0]["identity"])
     identity["semantic_generations"] = sorted(
         {measurement["identity"]["semantic_generation"] for measurement in measurements}
+    )
+    identity["observed_layout_generations"] = sorted(
+        {measurement["identity"]["layout_generation"] for measurement in measurements}
+    )
+    identity["layout_generation_semantics"] = (
+        "standalone primary anchor; path-local counters remain in observation evidence"
     )
     identity.pop("semantic_generation", None)
     identity.pop("identity_source", None)

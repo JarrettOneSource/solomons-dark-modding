@@ -204,6 +204,20 @@ def _trace(
 
 
 class NativeMenuAmbientLifecycleTests(unittest.TestCase):
+    def test_path_local_layout_generations_do_not_change_screen_identity(self) -> None:
+        primary = _stable_samples(3)
+        confirmation = copy.deepcopy(primary)
+        for sample in confirmation:
+            sample["semantic_generation"] = 19
+            sample["payload"]["generation"] = 19
+
+        resolved = _resolve_pair(primary, confirmation)
+
+        self.assertEqual(
+            resolved["identity"]["observed_layout_generations"], [7, 19]
+        )
+        self.assertEqual(resolved["structural_core_element_count"], 3)
+
     def test_runtime_provenance_allows_independent_capture_commits(self) -> None:
         observed = {
             "base_commit_sha": "1" * 40,

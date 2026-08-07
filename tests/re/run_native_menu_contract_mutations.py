@@ -805,6 +805,15 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "loader runtime hashes",
     ),
     StaticMutation(
+        "v2.5.path-local-layout-generation",
+        CAMPAIGN,
+        "tools/native_menu_ambient_lifecycle.py",
+        'measurement["identity"]["semantic_surface"],\n            measurement["identity"]["screen_id"],',
+        'measurement["identity"]["semantic_surface"],\n            measurement["identity"]["layout_generation"],\n            measurement["identity"]["screen_id"],',
+        "Settlement v2.5 no longer keeps path-local generation counters in "
+        "each observation while comparing screen identity and structural core",
+    ),
+    StaticMutation(
         "v2.5.empty-gameplay-surface-is-constant",
         CLASSIFIER,
         "tools/native_menu_ambient_lifecycle.py",

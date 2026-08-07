@@ -1164,6 +1164,7 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
     assert_module_runs_in_ci("test_native_menu_settlement_v2")
     assert_module_runs_in_ci("test_native_menu_ambient_lifecycle")
     resolver = _read("tools/resolve_native_menu_ambient_campaign.py")
+    classifier = _read("tools/native_menu_ambient_lifecycle.py")
     promoter = _read("tools/promote_native_menu_recapture.py")
     confirmation = _read("scripts/Confirm-NativeMenuLayoutAnimation.ps1")
 
@@ -1250,6 +1251,18 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
         r"resolution\s*=\s*resolve_ambient_lifecycle\(reached\)",
         "screen lifecycle resolution no longer requires independent standalone "
         "instances and resolves every reached window together",
+    )
+    _require_regex(
+        classifier,
+        r"screen_identities\s*=\s*\{\s*\(\s*"
+        r'measurement\["identity"\]\["semantic_surface"\],\s*'
+        r'measurement\["identity"\]\["screen_id"\],\s*\).*?'
+        r"if len\(screen_identities\) != 1:.*?"
+        r'identity\["observed_layout_generations"\]\s*=\s*sorted\(.*?'
+        r'measurement\["identity"\]\["layout_generation"\].*?'
+        r'identity\["layout_generation_semantics"\]',
+        "Settlement v2.5 no longer keeps path-local generation counters in "
+        "each observation while comparing screen identity and structural core",
     )
     _require_regex(
         resolver,
