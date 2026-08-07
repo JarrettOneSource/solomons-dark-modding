@@ -40,6 +40,7 @@ struct SettingsFamilyOverlayArtCacheState {
     CachedSettingsFamilyOverlayArt controls;
     CachedSettingsFamilyOverlayArt transition;
     uintptr_t settings_address = 0;
+    ULONGLONG transition_started_at = 0;
     SettingsRolloutPageState last_page =
         SettingsRolloutPageState::Unknown;
     std::vector<CapturedMenuArtElement> settings_underlay;
@@ -48,6 +49,23 @@ struct SettingsFamilyOverlayArtCacheState {
 SettingsFamilyOverlayArtCacheState& GetSettingsFamilyOverlayArtCacheState() {
     static SettingsFamilyOverlayArtCacheState state;
     return state;
+}
+
+void MarkSettingsFamilyPageTransitionPending(
+    SettingsFamilyOverlayArtCacheState* state) {
+    if (state != nullptr && state->transition_started_at == 0) {
+        state->transition_started_at = GetTickCount64();
+    }
+}
+
+bool ShouldRetainSettingsTrackingAcrossMainMenuFallback() {
+    const auto& state = GetSettingsFamilyOverlayArtCacheState();
+    if (state.settings_address == 0 || state.transition_started_at == 0) {
+        return false;
+    }
+    const auto now = GetTickCount64();
+    return now >= state.transition_started_at &&
+        now - state.transition_started_at <= kTrackedSettingsMaximumIdleMs;
 }
 
 SettingsRolloutPageState ResolveSettingsRolloutPageForCapture(
@@ -233,6 +251,9 @@ std::vector<CapturedMenuArtElement> ResolveSettingsFamilyMenuArtElements(
             *config,
             settings_address,
             &page_observation)) {
+        if (cache_state.last_page != SettingsRolloutPageState::Unknown) {
+            MarkSettingsFamilyPageTransitionPending(&cache_state);
+        }
         std::vector<CapturedMenuArtElement> transition_overlay;
         if (TryExtractSettingsFamilyOverlayArt(
                 current_elements,
@@ -283,6 +304,7 @@ std::vector<CapturedMenuArtElement> ResolveSettingsFamilyMenuArtElements(
         active_cache->elements = std::move(measured_overlay);
         cache_state.transition = CachedSettingsFamilyOverlayArt{};
         cache_state.last_page = page_observation.page;
+        cache_state.transition_started_at = 0;
         if (page_observation.page == SettingsRolloutPageState::Settings) {
             cache_state.settings_underlay = current_elements;
         }
@@ -331,7 +353,19 @@ std::vector<CapturedMenuArtElement> ResolveSettingsFamilyMenuArtElements(
                 "origin. settings=" + HexString(settings_address));
         }
     }
+    if (page_observation.page == SettingsRolloutPageState::Controls &&
+        (active_cache->settings_address != settings_address ||
+         active_cache->elements.empty())) {
+        MarkSettingsFamilyPageTransitionPending(&cache_state);
+        const auto* last_cache =
+            cache_state.last_page == SettingsRolloutPageState::Controls
+            ? &cache_state.controls
+            : &cache_state.settings;
+        replay_cached_overlay(*last_cache, settings_address);
+        return current_elements;
+    }
     cache_state.last_page = page_observation.page;
+    cache_state.transition_started_at = 0;
     replay_cached_overlay(*active_cache, settings_address);
     return current_elements;
 }

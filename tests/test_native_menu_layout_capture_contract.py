@@ -240,6 +240,26 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             "the Settings cache instead of becoming Controls transition art",
         )
         self.assertRegex(
+            builders + frame,
+            r"(?s)SettingsFamilyOverlayArtCacheState.*?"
+            r"transition_started_at.*?"
+            r"MarkSettingsFamilyPageTransitionPending.*?"
+            r"ShouldRetainSettingsTrackingAcrossMainMenuFallback.*?"
+            r"now - state\.transition_started_at <= "
+            r"kTrackedSettingsMaximumIdleMs.*?"
+            r"page_observation\.page == SettingsRolloutPageState::Controls &&\s*"
+            r"\(active_cache->settings_address != settings_address \|\|\s*"
+            r"active_cache->elements\.empty\(\)\).*?"
+            r"MarkSettingsFamilyPageTransitionPending\(&cache_state\).*?"
+            r"retain_settings_tracking =.*?"
+            r"std::strcmp\(entry\.surface_id, \"main_menu\"\) == 0 &&\s*"
+            r"ShouldRetainSettingsTrackingAcrossMainMenuFallback\(\).*?"
+            r"if \(entry\.clear_settings_tracking &&\s*"
+            r"!retain_settings_tracking\)",
+            "the main-menu underlay must not retire the Settings owner during "
+            "the bounded unresolved handoff to a measured Controls frame",
+        )
+        self.assertRegex(
             helpers,
             r"(?s)TryResolveSettingsRolloutPageState.*?"
             r"duplicate GAME SETTINGS roots.*?"

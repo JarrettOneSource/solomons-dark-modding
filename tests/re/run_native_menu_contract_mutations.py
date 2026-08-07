@@ -1149,6 +1149,17 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "transition cache and be adopted as Controls art",
     ),
     StaticMutation(
+        "recorder.controls-retains-owner-through-underlay-frame",
+        SURFACE_AGREEMENT,
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "label_resolution_surface_registry_and_frame_render.inl",
+        "if (entry.clear_settings_tracking &&\n"
+        "                !retain_settings_tracking) {",
+        "if (entry.clear_settings_tracking) {",
+        "the main-menu underlay can retire the Settings owner before a visible "
+        "Controls frame supplies its measured destination art",
+    ),
+    StaticMutation(
         "recorder.controls-current-frame-rollout",
         SURFACE_AGREEMENT,
         "SolomonDarkModLoader/src/debug_ui_overlay/"

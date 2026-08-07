@@ -242,12 +242,17 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
             semantic_surface_elements = std::move(built[i].elems);
             elements.clear();
             auto& entry = s_semantic_surface_registry[i];
+            const bool retain_settings_tracking =
+                entry.clear_settings_tracking &&
+                std::strcmp(entry.surface_id, "main_menu") == 0 &&
+                ShouldRetainSettingsTrackingAcrossMainMenuFallback();
 
             std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
             if (entry.clear_main_menu_tracking) {
                 g_debug_ui_overlay_state.tracked_title_main_menu_object = 0;
             }
-            if (entry.clear_settings_tracking) {
+            if (entry.clear_settings_tracking &&
+                !retain_settings_tracking) {
                 g_debug_ui_overlay_state.settings_render.tracked_object_ptr = 0;
             }
             if (diagnostic_visuals_enabled &&

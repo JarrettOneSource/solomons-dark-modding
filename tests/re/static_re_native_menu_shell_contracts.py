@@ -1309,6 +1309,26 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         "transition cache and be adopted as Controls art",
     )
     _require_regex(
+        settings_builder + frame_registry,
+        r"SettingsFamilyOverlayArtCacheState.*?"
+        r"transition_started_at.*?"
+        r"MarkSettingsFamilyPageTransitionPending.*?"
+        r"ShouldRetainSettingsTrackingAcrossMainMenuFallback.*?"
+        r"now - state\.transition_started_at <= "
+        r"kTrackedSettingsMaximumIdleMs.*?"
+        r"page_observation\.page == SettingsRolloutPageState::Controls &&\s*"
+        r"\(active_cache->settings_address != settings_address \|\|\s*"
+        r"active_cache->elements\.empty\(\)\).*?"
+        r"MarkSettingsFamilyPageTransitionPending\(&cache_state\).*?"
+        r"retain_settings_tracking =.*?"
+        r"std::strcmp\(entry\.surface_id, \"main_menu\"\) == 0 &&\s*"
+        r"ShouldRetainSettingsTrackingAcrossMainMenuFallback\(\).*?"
+        r"if \(entry\.clear_settings_tracking &&\s*"
+        r"!retain_settings_tracking\)",
+        "the main-menu underlay can retire the Settings owner before a visible "
+        "Controls frame supplies its measured destination art",
+    )
+    _require_regex(
         settings_tracking,
         r"if \(now - g_debug_ui_overlay_state\.settings_render\.captured_at > "
         r"kTrackedSettingsMaximumIdleMs\) \{\s*return false;\s*\}.*?"
