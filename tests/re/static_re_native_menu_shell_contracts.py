@@ -1115,7 +1115,9 @@ def test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired() -> str:
         r"def _core_bands\(.*?"
         r"lower_id\s*=.*?\"bottom\".*?"
         r"upper_id\s*=\s*\"top\".*?"
-        r"crossed structural-core bands.*?"
+        r"ambient draw-band cross-instance contract.*?"
+        r"lacks two independent.*?instance witnesses.*?"
+        r'"draw_bands": bands\[.*?'
         r"draw_order_semantics\": \"structural_core_relative_sequence\"",
         "Settlement v2.5 no longer excludes absolute draw ordinals while "
         "pinning core-relative sequence and ambient draw bands",

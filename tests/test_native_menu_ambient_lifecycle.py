@@ -144,6 +144,23 @@ def _family_samples(*, perturb_stable: bool = False) -> list[dict[str, object]]:
     return _samples(elements)
 
 
+def _two_band_ephemeral_samples(*, include_upper_band: bool = True) -> list[dict[str, object]]:
+    def elements(sample_index: int) -> list[dict[str, object]]:
+        core = [_art(index) for index in range(3)]
+        for element, draw_order in zip(core, (0, 10, 20), strict=True):
+            element["draw_order"] = draw_order
+        if sample_index % 2:
+            return core
+        particle = _art(10, art_id="Title.spark")
+        particle["id"] = "screen.art.spark.1"
+        particle["draw_order"] = (
+            15 if include_upper_band and sample_index % 4 == 2 else 5
+        )
+        return [*core, particle]
+
+    return _samples(elements)
+
+
 def _multiset_reference(elements: list[dict[str, object]]) -> dict[str, object]:
     counts: dict[bytes, int] = {}
     payloads: dict[bytes, dict[str, object]] = {}
@@ -491,6 +508,27 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
         self.assertTrue(
             resolved["ephemeral_family"]["bidirectional_churn_witnessed"]
         )
+
+    def test_reproduced_multiband_ephemeral_family_pins_exact_band_set(self) -> None:
+        resolved = _resolve_pair(_two_band_ephemeral_samples())
+        family = next(
+            entry
+            for entry in resolved["ambient_members"]
+            if entry["art_id"] == "Title.spark"
+        )
+
+        self.assertEqual(len(family["draw_bands"]), 2)
+
+    def test_one_instance_ambient_band_is_not_contractual(self) -> None:
+        with self.assertRaisesRegex(
+            AmbientLifecycleError,
+            "ambient draw-band cross-instance contract: member family "
+            "'art:Title.spark'.*lacks two independent instance witnesses",
+        ):
+            _resolve_pair(
+                _two_band_ephemeral_samples(),
+                _two_band_ephemeral_samples(include_upper_band=False),
+            )
 
     def test_nonfamily_rect_animation_above_thirty_percent_stops(self) -> None:
         def elements(sample_index: int) -> list[dict[str, object]]:

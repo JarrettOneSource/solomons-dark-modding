@@ -732,11 +732,14 @@ def _core_bands(
     core_counter: Counter[bytes],
     core_ids: list[str],
     varying_member_keys: dict[tuple[int, str], str],
-) -> dict[str, dict[str, str]]:
+) -> dict[str, list[dict[str, str]]]:
     bands: dict[str, set[tuple[str, str]]] = defaultdict(set)
     band_witnesses: dict[str, dict[tuple[str, str], set[str]]] = defaultdict(
         lambda: defaultdict(set)
     )
+    band_identities: dict[
+        str, dict[tuple[str, str], set[tuple[str, int]]]
+    ] = defaultdict(lambda: defaultdict(set))
     for measurement in measurements:
         for sample in measurement["samples"]:
             ordered = _sorted_elements(sample["payload"])
@@ -767,19 +770,23 @@ def _core_bands(
                 band = (lower_id, upper_id)
                 bands[band_key].add(band)
                 band_witnesses[band_key][band].add(measurement["label"])
-    result: dict[str, dict[str, str]] = {}
+                band_identities[band_key][band].add(
+                    (measurement["instance"], measurement["process_id"])
+                )
+    result: dict[str, list[dict[str, str]]] = {}
     for key, values in sorted(bands.items()):
-        if len(values) != 1:
-            details = {
-                f"{lower}->{upper}": sorted(band_witnesses[key][(lower, upper)])
-                for lower, upper in sorted(values)
-            }
-            raise AmbientLifecycleError(
-                "ambient draw-band contract: member family "
-                f"'{key}' crossed structural-core bands: {details}"
-            )
-        lower, upper = next(iter(values))
-        result[key] = {"below": lower, "above": upper}
+        for lower, upper in sorted(values):
+            band = (lower, upper)
+            if len(band_identities[key][band]) < 2:
+                raise AmbientLifecycleError(
+                    "ambient draw-band cross-instance contract: member family "
+                    f"'{key}' band '{lower}->{upper}' lacks two independent "
+                    "instance witnesses: "
+                    f"{sorted(band_witnesses[key][band])}"
+                )
+        result[key] = [
+            {"below": lower, "above": upper} for lower, upper in sorted(values)
+        ]
     return result
 
 
@@ -1225,7 +1232,7 @@ def resolve_ambient_lifecycle(
                 "member_key": member_key,
                 "art_id": art_id,
                 "member_classes": classes,
-                "draw_band": bands[
+                "draw_bands": bands[
                     member_key if member_key.startswith("member:") else f"art:{art_id}"
                 ],
                 "class_members": class_members,

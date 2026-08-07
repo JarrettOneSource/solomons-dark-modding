@@ -178,6 +178,27 @@ def mutate_core_order() -> str:
     return "unreachable"
 
 
+def green_reproduced_ambient_bands() -> str:
+    resolved = ambient_cases._resolve_pair(
+        ambient_cases._two_band_ephemeral_samples()
+    )
+    family = next(
+        entry
+        for entry in resolved["ambient_members"]
+        if entry["art_id"] == "Title.spark"
+    )
+    require(len(family["draw_bands"]) == 2, "ambient band baseline lost one band")
+    return "green: both instances reproduce the exact two-band ambient family"
+
+
+def mutate_one_instance_ambient_band() -> str:
+    ambient_cases._resolve_pair(
+        ambient_cases._two_band_ephemeral_samples(),
+        ambient_cases._two_band_ephemeral_samples(include_upper_band=False),
+    )
+    return "unreachable"
+
+
 def mutate_cross_instance_core() -> str:
     primary = ambient_cases._stable_samples(3)
     confirmation = copy.deepcopy(primary)
@@ -606,6 +627,16 @@ BEHAVIOR_MUTATIONS: tuple[BehaviorMutation, ...] = (
         green_ambient_core,
         mutate_core_order,
         "relative draw sequence contract: structural core relative-order flip in 'menufx-primary' sample 20",
+        (AmbientLifecycleError,),
+    ),
+    BehaviorMutation(
+        "v2.5.ambient-band-cross-instance",
+        "resolve_ambient_lifecycle",
+        green_reproduced_ambient_bands,
+        mutate_one_instance_ambient_band,
+        "ambient draw-band cross-instance contract: member family "
+        "'art:Title.spark' band 'screen.art.ui_1.1->screen.art.ui_2.1' "
+        "lacks two independent instance witnesses: ['menufx-primary']",
         (AmbientLifecycleError,),
     ),
     BehaviorMutation(
