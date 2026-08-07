@@ -686,6 +686,14 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "native-menu semantic actions no longer distinguish queued or busy requests, exact-surface blocking modals, completed dispatch, and terminal dispatch failure",
     ),
     StaticMutation(
+        "recorder.blocking-modal-generation-advance",
+        RECORDER,
+        "scripts/NativeMenuCaptureSupport.ps1",
+        "$dispatch.semantic_generation -ne",
+        "$dispatch.semantic_generation -eq",
+        "native-menu semantic actions no longer distinguish queued or busy requests, exact-surface blocking modals, completed dispatch, and terminal dispatch failure",
+    ),
+    StaticMutation(
         "recorder.no-provenance-override",
         RECORDER,
         "scripts/Import-NativeMenuSpecialCaptures.ps1",

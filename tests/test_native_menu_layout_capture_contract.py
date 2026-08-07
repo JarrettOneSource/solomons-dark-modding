@@ -240,9 +240,17 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             r"(?s)\$lastStatus -ceq \"dispatching\".*?"
             r"\$ExpectedDestinationSurface.*?"
             r"\$dispatch\.semantic_surface -ceq.*?"
-            r"\$ExpectedDestinationSurface",
+            r"\$ExpectedDestinationSurface.*?"
+            r"\$dispatch\.semantic_generation -ne.*?"
+            r"\$SourceSemanticGeneration",
             "a blocking native modal may proceed only after its exact caller-pinned "
-            "destination surface is measured live",
+            "destination surface and a semantic-generation advance are measured live",
+        )
+        self.assertIn(
+            "-SourceSemanticGeneration $before.semantic_generation",
+            transition,
+            "the modal proof must compare against the exact settled source "
+            "semantic generation",
         )
         self.assertIn(
             "-ExpectedDestinationSurface $ExpectedDestinationSurface",

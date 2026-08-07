@@ -712,6 +712,8 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
         r"\$lastStatus -ceq \"dispatching\".*?"
         r"\$dispatch\.semantic_surface -ceq.*?"
         r"\$ExpectedDestinationSurface.*?"
+        r"\$dispatch\.semantic_generation -ne.*?"
+        r"\$SourceSemanticGeneration.*?"
         r"\$lastStatus -ceq \"failed\".*?"
         r"never became.*?runnable",
         "native-menu semantic actions no longer distinguish queued or busy "
@@ -725,6 +727,7 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
         r"-Context \$context\s*`\s*"
         r"-RequestId \$requestId\s*`\s*"
         r"-ActionId \$ActionId\s*`\s*"
+        r"-SourceSemanticGeneration \$before\.semantic_generation\s*`\s*"
         r"-ExpectedDestinationSurface \$ExpectedDestinationSurface.*?"
         r"\$after\s*=\s*Get-SettledNativeMenuObservation",
         "native-menu transition endpoints can settle before their queued "

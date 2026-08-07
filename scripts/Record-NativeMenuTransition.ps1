@@ -163,6 +163,7 @@ return tostring(request)
             -Context $context `
             -RequestId $requestId `
             -ActionId $ActionId `
+            -SourceSemanticGeneration $before.semantic_generation `
             -ExpectedDestinationSurface $ExpectedDestinationSurface |
             Out-Null
     } elseif ($PSCmdlet.ParameterSetName -eq "Key") {

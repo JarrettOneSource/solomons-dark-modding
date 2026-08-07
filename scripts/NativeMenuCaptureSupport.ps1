@@ -291,6 +291,7 @@ function Wait-NativeMenuActionDispatch {
         [Parameter(Mandatory = $true)][object]$Context,
         [Parameter(Mandatory = $true)][int]$RequestId,
         [Parameter(Mandatory = $true)][string]$ActionId,
+        [Parameter(Mandatory = $true)][uint64]$SourceSemanticGeneration,
         [string]$ExpectedDestinationSurface = ""
     )
 
@@ -316,13 +317,17 @@ local semantic = sd.ui.get_snapshot()
 if type(dispatch) ~= 'table' then
   return table.concat({
     '{"status":"not_ready","error_message":"","semantic_surface":',
-    quote(semantic and semantic.surface_id or ''), '}'
+    quote(semantic and semantic.surface_id or ''),
+    ',"semantic_generation":',
+    tostring(semantic and semantic.generation or 0), '}'
   })
 end
 return table.concat({
   '{"status":', quote(dispatch.status),
   ',"error_message":', quote(dispatch.error_message),
-  ',"semantic_surface":', quote(semantic and semantic.surface_id or ''), '}'
+  ',"semantic_surface":', quote(semantic and semantic.surface_id or ''),
+  ',"semantic_generation":',
+  tostring(semantic and semantic.generation or 0), '}'
 })
 "@
         if ($result.Status -eq "busy") {
@@ -346,11 +351,14 @@ return table.concat({
                     $ExpectedDestinationSurface
                 ) -and
                 [string]$dispatch.semantic_surface -ceq
-                    $ExpectedDestinationSurface
+                    $ExpectedDestinationSurface -and
+                [uint64]$dispatch.semantic_generation -ne
+                    $SourceSemanticGeneration
             ) {
                 # Native modal handlers do not return until the modal closes.
-                # Reaching the caller-pinned destination proves the handler is
-                # runnable without pretending that its lifecycle completed.
+                # Reaching the caller-pinned destination after its semantic
+                # generation advances proves the handler is runnable without
+                # pretending that its lifecycle completed.
                 return $dispatch
             }
             if ($lastStatus -ceq "failed") {
