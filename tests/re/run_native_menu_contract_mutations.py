@@ -811,8 +811,8 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "v2.5.settings-route-exact-mapping",
         CAMPAIGN,
         "tools/resolve_native_menu_ambient_campaign.py",
-        '("main_to_settings", "after"): "game-settings-title",',
-        '("main_to_settings", "after"): "game-settings-gameplay",',
+        '("settings_to_controls", "before"): "game-settings-title",',
+        '("settings_to_controls", "before"): "game-settings-gameplay",',
         "ambient-lifecycle resolver no longer refuses the three-way settings "
         "screen ambiguity with an every-edge explicit route map",
     ),

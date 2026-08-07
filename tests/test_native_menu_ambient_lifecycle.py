@@ -371,6 +371,26 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
 
         self.assertEqual(layout_id, "game-settings-title")
         self.assertTrue(used_explicit_mapping)
+
+        controls_source_id, controls_source_explicit = _resolve_layout_id(
+            "settings",
+            "settings",
+            fixtures,
+            "settings_to_controls",
+            "before",
+        )
+        self.assertEqual(controls_source_id, "game-settings-title")
+        self.assertTrue(controls_source_explicit)
+
+        controls_return_id, controls_return_explicit = _resolve_layout_id(
+            "settings",
+            "settings",
+            fixtures,
+            "controls_to_settings",
+            "after",
+        )
+        self.assertEqual(controls_return_id, "game-settings-title")
+        self.assertTrue(controls_return_explicit)
         with self.assertRaisesRegex(
             CampaignResolutionError,
             "is ambiguous without explicit route mapping for edge "
