@@ -880,6 +880,17 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "instance-local slots instead of measured geometry-ranked members",
     ),
     StaticMutation(
+        "v2.3.cross-window-quiet-motion-capability",
+        CAMPAIGN,
+        "tools/native_menu_ambient_lifecycle.py",
+        "if len(geometry_samples) < 2:\n                    continue",
+        "if True:  # mutation discards measured cross-window rect variance\n"
+        "                    continue",
+        "Settlement v2.3 no longer treats rect-only differences across valid "
+        "quiet windows as measured screen-member motion while retaining the "
+        "non-rect and phantom-classification guardrails",
+    ),
+    StaticMutation(
         "v2.5.one-way-decay-is-not-settled",
         CAMPAIGN,
         "tools/native_menu_ambient_lifecycle.py",

@@ -12,6 +12,7 @@ from tools.resolve_native_menu_ambient_campaign import (
     _assert_game_executable_matches,
     _assert_runtime_provenance_matches,
     _resolve_layout_id,
+    collect_supplemental_standalones,
     file_sha256,
     resolve_baseline_evidence,
 )
@@ -354,6 +355,108 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
             ):
                 resolve_baseline_evidence(root, receipt, "hub motion")
 
+    def test_supplemental_settled_pair_uses_exact_hashed_recordings(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = {
+                "base_commit_sha": "1" * 40,
+                "source_tree_sha": "2" * 40,
+                "game_executable_sha256": "3" * 64,
+                "loader_dll_sha256": "4" * 64,
+            }
+
+            def write(path: Path, value: dict[str, object]) -> None:
+                path.write_text(
+                    json.dumps(value, separators=(",", ":")) + "\n",
+                    encoding="utf-8",
+                )
+
+            def receipt(path: Path) -> dict[str, object]:
+                return {
+                    "evidence_path": path.relative_to(root).as_posix(),
+                    "evidence_filename": path.name,
+                    "sha256": file_sha256(path),
+                    "bytes": path.stat().st_size,
+                }
+
+            primary_trace = root / "screen.settlement.json"
+            confirmation = root / "screen.confirmation.json"
+            historical_fixture = root / "screen.json"
+            write(
+                primary_trace,
+                {"settled_window_samples": _stable_samples(5)},
+            )
+            write(
+                confirmation,
+                {
+                    "header": {
+                        "instance": "menufx-history-b",
+                        "process_id": 404,
+                        "source": source,
+                    },
+                    "settled_window_samples": _stable_samples(5),
+                },
+            )
+            write(
+                historical_fixture,
+                {
+                    "schema": "solomon-dark-native-menu-layout-v2",
+                    "header": {
+                        "instance": "menufx-history-a",
+                        "process_id": 303,
+                        "source": source,
+                        "settlement_trace": receipt(primary_trace),
+                        "animation_confirmation": receipt(confirmation),
+                    },
+                },
+            )
+            manifest = root / "supplemental.json"
+            write(
+                manifest,
+                {
+                    "schema": (
+                        "solomon-dark-native-menu-supplemental-settled-pairs-v1"
+                    ),
+                    "pairs": [
+                        {
+                            "pair_id": "screen-history",
+                            "layout_id": "screen",
+                            "primary_fixture": receipt(historical_fixture),
+                            "primary_trace": receipt(primary_trace),
+                            "confirmation": receipt(confirmation),
+                        }
+                    ],
+                },
+            )
+            observations = {
+                "screen": [
+                    _observation(_stable_samples(5), "menufx-current-a", 101),
+                    _observation(_stable_samples(5), "menufx-current-b", 202),
+                ]
+            }
+
+            count = collect_supplemental_standalones(
+                manifest,
+                root,
+                {
+                    "screen": {
+                        "native_screen_id": "screen",
+                        "source": source,
+                    }
+                },
+                observations,
+            )
+
+            self.assertEqual(count, 1)
+            self.assertEqual(len(observations["screen"]), 4)
+            self.assertEqual(
+                [row["label"] for row in observations["screen"][-2:]],
+                [
+                    "supplemental:screen-history:primary",
+                    "supplemental:screen-history:confirmation",
+                ],
+            )
+
     def test_ambiguous_settings_screen_requires_exact_edge_route(self) -> None:
         fixtures = {
             "game-settings-title": {"native_screen_id": "settings"},
@@ -673,6 +776,101 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
 
         self.assertEqual(len(resolved["animated_element_ids"]), 1)
         self.assertEqual(len(resolved["motion_capability_corroborations"]), 1)
+
+    def test_cross_window_rect_variance_proves_motion_capability(self) -> None:
+        def stationary_at(left: float, *, extended: bool = False) -> list[dict[str, object]]:
+            def elements(_: int) -> list[dict[str, object]]:
+                result = [_art(index) for index in range(5)]
+                result[0]["rect"] = [left, 20.0, left + 8.0, 26.0]
+                result[0]["unclipped_rect"] = list(result[0]["rect"])
+                return result
+
+            return _samples(
+                elements,
+                sample_count=200 if extended else 40,
+                interval_milliseconds=310 if extended else 55,
+            )
+
+        primary = _observation(stationary_at(1.0), "menufx-primary", 101)
+        confirmation = _observation(
+            stationary_at(3.0), "menufx-confirmation", 202
+        )
+        primary_extension = {
+            **_observation(
+                stationary_at(1.0, extended=True), "menufx-primary", 101
+            ),
+            "kind": "extended_observation",
+            "label": "primary-extension",
+        }
+        confirmation_extension = {
+            **_observation(
+                stationary_at(3.0, extended=True), "menufx-confirmation", 202
+            ),
+            "kind": "extended_observation",
+            "label": "confirmation-extension",
+        }
+
+        resolved = resolve_ambient_lifecycle(
+            [primary, confirmation, primary_extension, confirmation_extension]
+        )
+
+        self.assertEqual(len(resolved["animated_element_ids"]), 1)
+        animated = next(
+            member
+            for member in resolved["ambient_members"]
+            if "animated" in member["member_classes"]
+        )
+        self.assertEqual(animated["events"]["cross_window_rect_change"], 1)
+        self.assertEqual(len(resolved["motion_capability_corroborations"]), 2)
+
+    def test_cross_window_motion_requires_each_stationary_anchor_extension(self) -> None:
+        primary = _stable_samples(5)
+        confirmation = _stable_samples(5)
+        confirmation[0]["payload"]["elements"][0]["rect"] = [
+            1.0,
+            20.0,
+            9.0,
+            26.0,
+        ]
+        for sample in confirmation:
+            sample["payload"]["elements"][0]["rect"] = [
+                1.0,
+                20.0,
+                9.0,
+                26.0,
+            ]
+            sample["payload"]["elements"][0]["unclipped_rect"] = list(
+                sample["payload"]["elements"][0]["rect"]
+            )
+
+        with self.assertRaisesRegex(
+            AmbientLifecycleError,
+            "motion capability resolution requires extended-observation evidence "
+            "for stationary member 'screen.art.item_0.1' in instance "
+            "'menufx-primary' PID 101",
+        ):
+            resolve_ambient_lifecycle(
+                [
+                    _observation(primary, "menufx-primary", 101),
+                    _observation(confirmation, "menufx-confirmation", 202),
+                ]
+            )
+
+    def test_cross_window_motion_rejects_nonrect_variance(self) -> None:
+        primary = _stable_samples(5)
+        confirmation = _stable_samples(5)
+        for sample in confirmation:
+            element = sample["payload"]["elements"][0]
+            element["rect"] = [1.0, 20.0, 9.0, 26.0]
+            element["unclipped_rect"] = list(element["rect"])
+            element["visible"] = False
+
+        with self.assertRaisesRegex(
+            AmbientLifecycleError,
+            "motion capability guardrail: cross-window member "
+            "'screen.art.item_0.1' varied outside rect/unclipped_rect",
+        ):
+            _resolve_pair(primary, confirmation)
 
     def test_navigation_replays_do_not_multiply_corroboration_duty(self) -> None:
         def moving(sample_index: int) -> list[dict[str, object]]:

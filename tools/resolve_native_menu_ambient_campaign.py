@@ -111,6 +111,24 @@ def validate_receipt(path: Path, receipt: dict[str, Any], label: str) -> None:
         raise CampaignResolutionError(f"{label} records a false evidence SHA-256")
 
 
+def resolve_exact_evidence_receipt(
+    evidence_root: Path, receipt: object, label: str
+) -> Path:
+    if not isinstance(receipt, dict):
+        raise CampaignResolutionError(f"{label} has no exact evidence receipt")
+    relative = receipt.get("evidence_path")
+    if not isinstance(relative, str) or not relative:
+        raise CampaignResolutionError(f"{label} receipt has no evidence path")
+    root = evidence_root.resolve()
+    path = (root / relative).resolve()
+    if not path.is_relative_to(root) or not path.is_file():
+        raise CampaignResolutionError(
+            f"{label} receipt resolves outside the evidence root or is absent"
+        )
+    validate_receipt(path, receipt, label)
+    return path
+
+
 def resolve_baseline_evidence(
     observation_root: Path,
     receipt: dict[str, Any],
@@ -690,6 +708,167 @@ def collect_extended(
     return count
 
 
+def collect_supplemental_standalones(
+    manifest_path: Path | None,
+    evidence_root: Path,
+    fixtures: dict[str, dict[str, Any]],
+    observations: dict[str, list[dict[str, Any]]],
+) -> int:
+    if manifest_path is None:
+        return 0
+    root = evidence_root.resolve()
+    resolved_manifest = manifest_path.resolve()
+    if not resolved_manifest.is_relative_to(root) or not resolved_manifest.is_file():
+        raise CampaignResolutionError(
+            "supplemental settled-pair manifest escapes the evidence root or is absent"
+        )
+    manifest = read_object(resolved_manifest)
+    if manifest.get("schema") != (
+        "solomon-dark-native-menu-supplemental-settled-pairs-v1"
+    ):
+        raise CampaignResolutionError(
+            "supplemental settled-pair manifest schema is not recognized"
+        )
+    pairs = manifest.get("pairs")
+    if not isinstance(pairs, list) or not pairs:
+        raise CampaignResolutionError(
+            "supplemental settled-pair sweep reached no historical pair witness"
+        )
+    pair_ids: set[str] = set()
+    historical_identities: set[tuple[str, int, str]] = set()
+    count = 0
+    for index, pair in enumerate(pairs):
+        if not isinstance(pair, dict):
+            raise CampaignResolutionError(
+                f"supplemental settled pair {index} is not an object"
+            )
+        pair_id = pair.get("pair_id")
+        layout_id = pair.get("layout_id")
+        if not isinstance(pair_id, str) or not pair_id or pair_id in pair_ids:
+            raise CampaignResolutionError(
+                "supplemental settled-pair ids are absent or ambiguous"
+            )
+        pair_ids.add(pair_id)
+        if not isinstance(layout_id, str) or layout_id not in fixtures:
+            raise CampaignResolutionError(
+                f"supplemental pair '{pair_id}' names an absent layout"
+            )
+        fixture_path = resolve_exact_evidence_receipt(
+            root, pair.get("primary_fixture"), f"supplemental pair {pair_id} fixture"
+        )
+        trace_path = resolve_exact_evidence_receipt(
+            root, pair.get("primary_trace"), f"supplemental pair {pair_id} trace"
+        )
+        confirmation_path = resolve_exact_evidence_receipt(
+            root,
+            pair.get("confirmation"),
+            f"supplemental pair {pair_id} confirmation",
+        )
+        historical_fixture = read_object(fixture_path)
+        if historical_fixture.get("schema") not in {
+            "solomon-dark-native-menu-layout-v2",
+            "solomon-dark-native-menu-layout-v3",
+        }:
+            raise CampaignResolutionError(
+                f"supplemental pair '{pair_id}' fixture schema is not recognized"
+            )
+        header = historical_fixture.get("header")
+        if not isinstance(header, dict):
+            raise CampaignResolutionError(
+                f"supplemental pair '{pair_id}' fixture has no header"
+            )
+        raw_receipt = header.get("settlement_trace", header.get("raw_recording"))
+        confirmation_receipt = header.get("animation_confirmation")
+        if not isinstance(raw_receipt, dict) or not isinstance(
+            confirmation_receipt, dict
+        ):
+            raise CampaignResolutionError(
+                f"supplemental pair '{pair_id}' fixture lost its recording receipts"
+            )
+        validate_receipt(trace_path, raw_receipt, f"supplemental pair {pair_id} trace")
+        validate_receipt(
+            confirmation_path,
+            confirmation_receipt,
+            f"supplemental pair {pair_id} confirmation",
+        )
+        if raw_receipt.get("evidence_filename") != trace_path.name or (
+            confirmation_receipt.get("evidence_filename") != confirmation_path.name
+        ):
+            raise CampaignResolutionError(
+                f"supplemental pair '{pair_id}' fixture receipts name different files"
+            )
+        trace = read_object(trace_path)
+        confirmation = read_object(confirmation_path)
+        confirmation_header = confirmation.get("header")
+        if not isinstance(confirmation_header, dict):
+            raise CampaignResolutionError(
+                f"supplemental pair '{pair_id}' confirmation has no header"
+            )
+        primary_samples = _settled_samples(trace, str(trace_path))
+        confirmation_samples = _settled_samples(
+            confirmation, str(confirmation_path)
+        )
+        expected_screen = fixtures[layout_id]["native_screen_id"]
+        if (
+            _screen_id(primary_samples, str(trace_path)) != expected_screen
+            or _screen_id(confirmation_samples, str(confirmation_path))
+            != expected_screen
+        ):
+            raise CampaignResolutionError(
+                f"supplemental pair '{pair_id}' changed native screen"
+            )
+        historical_source = _source(header, str(fixture_path))
+        confirmation_source = _source(confirmation_header, str(confirmation_path))
+        if canonical_bytes(historical_source) != canonical_bytes(confirmation_source):
+            raise CampaignResolutionError(
+                f"supplemental pair '{pair_id}' changed provenance between instances"
+            )
+        _assert_runtime_provenance_matches(
+            historical_source,
+            fixtures[layout_id]["source"],
+            f"supplemental pair {pair_id}",
+        )
+        primary_identity = _identity(header, str(fixture_path))
+        confirmation_identity = _identity(confirmation_header, str(confirmation_path))
+        if primary_identity == confirmation_identity:
+            raise CampaignResolutionError(
+                f"supplemental pair '{pair_id}' did not use independent instances"
+            )
+        existing = {
+            (observation["instance"], observation["process_id"], layout_id)
+            for observation in observations[layout_id]
+        }
+        candidate_identities = {
+            (*primary_identity, layout_id),
+            (*confirmation_identity, layout_id),
+        }
+        if candidate_identities & (existing | historical_identities):
+            raise CampaignResolutionError(
+                f"supplemental pair '{pair_id}' repeats an existing capture identity"
+            )
+        historical_identities.update(candidate_identities)
+        observations[layout_id].extend(
+            [
+                _observation(
+                    header,
+                    primary_samples,
+                    evidence_receipt(trace_path, root),
+                    f"supplemental:{pair_id}:primary",
+                    corroboration_anchor=False,
+                ),
+                _observation(
+                    confirmation_header,
+                    confirmation_samples,
+                    evidence_receipt(confirmation_path, root),
+                    f"supplemental:{pair_id}:confirmation",
+                    corroboration_anchor=False,
+                ),
+            ]
+        )
+        count += 1
+    return count
+
+
 def resolved_layout(resolution: dict[str, Any]) -> dict[str, Any]:
     layout = copy.deepcopy(resolution["structural_core"])
     for field in (
@@ -750,6 +929,7 @@ def resolve_campaign(
     audit_output: Path,
     apply: bool,
     verify: bool = False,
+    supplemental_pair_manifest: Path | None = None,
 ) -> dict[str, Any]:
     if apply and verify:
         raise CampaignResolutionError(
@@ -771,6 +951,9 @@ def resolve_campaign(
     )
     extended_count = collect_extended(
         motion_observation_root, evidence_root, fixtures, observations
+    )
+    supplemental_pair_count = collect_supplemental_standalones(
+        supplemental_pair_manifest, evidence_root, fixtures, observations
     )
 
     resolutions: dict[str, dict[str, Any]] = {}
@@ -804,6 +987,10 @@ def resolve_campaign(
                 ),
                 "extended_baseline_receipt_count": sum(
                     "baseline_evidence" in observation
+                    for observation in reached
+                ),
+                "supplemental_settled_observation_count": sum(
+                    observation["label"].startswith("supplemental:")
                     for observation in reached
                 ),
                 "structural_core_element_count": resolution[
@@ -901,6 +1088,15 @@ def resolve_campaign(
             evidence_resolved
         ).as_posix(),
         "screen_count": len(resolutions),
+        **(
+            {
+                "supplemental_settled_pair_manifest": evidence_receipt(
+                    supplemental_pair_manifest, evidence_root
+                )
+            }
+            if supplemental_pair_manifest is not None
+            else {}
+        ),
     }
 
     audit = {
@@ -915,6 +1111,7 @@ def resolve_campaign(
             for observation in reached
         ),
         "extended_observation_count": extended_count,
+        "supplemental_settled_pair_count": supplemental_pair_count,
         "extended_baseline_receipt_count": sum(
             "baseline_evidence" in observation
             for reached in observations.values()
@@ -953,6 +1150,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--primary-navigation", type=Path, required=True)
     parser.add_argument("--confirmation-navigation", type=Path, required=True)
     parser.add_argument("--motion-observation-root", type=Path, required=True)
+    parser.add_argument("--supplemental-settled-pair-manifest", type=Path)
     parser.add_argument("--resolved-navigation-output", type=Path, required=True)
     parser.add_argument("--audit-output", type=Path, required=True)
     parser.add_argument("--apply", action="store_true")
@@ -973,6 +1171,11 @@ def main() -> int:
             args.audit_output.resolve(),
             args.apply,
             args.verify,
+            (
+                args.supplemental_settled_pair_manifest.resolve()
+                if args.supplemental_settled_pair_manifest is not None
+                else None
+            ),
         )
     except CampaignResolutionError as error:
         print(json.dumps({"success": False, "error": str(error)}))

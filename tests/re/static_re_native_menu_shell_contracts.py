@@ -1174,7 +1174,8 @@ def test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired() -> str:
     )
     _require_regex(
         classifier,
-        r"varying_member_keys\s*=\s*_resolve_varying_member_keys\(\s*"
+        r"varying_member_keys,\s*cross_window_rect_events\s*=\s*"
+        r"_resolve_varying_member_keys\(\s*"
         r"measurements, ambient_family\s*\).*?"
         r"motion capability resolution requires extended-observation.*?evidence.*?"
         r"classification == \"full_presence\".*?varying_key is None.*?"
@@ -1397,6 +1398,32 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
     )
     _require_regex(
         classifier,
+        r"if not witnesses:.*?"
+        r"geometry_samples\s*=\s*\{.*?"
+        r"if len\(geometry_samples\) < 2:\s*continue.*?"
+        r"fixed_payloads\s*=\s*\{.*?"
+        r"field not in GEOMETRY_FIELDS.*?"
+        r"motion capability guardrail: cross-window member.*?"
+        r"cross_window_rect_events\[key\]\s*=\s*"
+        r"len\(geometry_samples\) - 1.*?"
+        r'"motion_witness":\s*\(.*?"cross_window_rect_variance".*?'
+        r'events\["rect_change"\]\s*\+\s*'
+        r'events\["cross_window_rect_change"\]',
+        "Settlement v2.3 no longer treats rect-only differences across valid "
+        "quiet windows as measured screen-member motion while retaining the "
+        "non-rect and phantom-classification guardrails",
+    )
+    _require_regex(
+        ambient_tests,
+        r"def test_cross_window_rect_variance_proves_motion_capability\(.*?"
+        r"cross_window_rect_change.*?"
+        r"def test_cross_window_motion_requires_each_stationary_anchor_extension\(.*?"
+        r"def test_cross_window_motion_rejects_nonrect_variance\(",
+        "the CI behavior suite no longer proves cross-window motion, both "
+        "stationary-anchor corroborations, and non-rect rejection",
+    )
+    _require_regex(
+        classifier,
         r"def find_ambient_settled_window\(.*?"
         r"window_ephemeral_art_ids\s*=\s*sorted\(.*?"
         r"membership_events\s*=\s*\[.*?"
@@ -1446,6 +1473,24 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
         r"changed game executable provenance field",
         "navigation-to-standalone comparison no longer rejects a changed game "
         "binary while allowing independently recorded loader evolution",
+    )
+    _require_regex(
+        resolver,
+        r"def resolve_exact_evidence_receipt\(.*?"
+        r"not path\.is_relative_to\(root\) or not path\.is_file\(\).*?"
+        r"validate_receipt\(path, receipt, label\).*?"
+        r"def collect_supplemental_standalones\(.*?"
+        r"if not isinstance\(pairs, list\) or not pairs:.*?"
+        r"sweep reached no historical pair witness.*?"
+        r"resolve_exact_evidence_receipt\(.*?primary_fixture.*?"
+        r"resolve_exact_evidence_receipt\(.*?primary_trace.*?"
+        r"resolve_exact_evidence_receipt\(.*?confirmation.*?"
+        r"candidate_identities & \(existing \| historical_identities\).*?"
+        r"repeats an existing capture identity.*?"
+        r"collect_supplemental_standalones\(.*?"
+        r'"supplemental_settled_pair_manifest": evidence_receipt',
+        "cross-window motion history is no longer bound to an exact nonempty "
+        "hashed pair manifest with unambiguous independent identities",
     )
     _require_regex(
         resolver,

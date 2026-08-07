@@ -1207,7 +1207,7 @@ def validate_settlement_fixture_v25(
 
 def _resolved_navigation_inputs_v25(
     evidence_root: Path, navigation_path: Path, navigation: dict[str, Any]
-) -> tuple[Path, Path, Path]:
+) -> tuple[Path, Path, Path, Path | None]:
     resolution = navigation.get("header", {}).get("ambient_lifecycle_resolution")
     if not isinstance(resolution, dict) or resolution.get("settlement_spec") != "2.5":
         raise PromotionError(
@@ -1232,7 +1232,18 @@ def _resolved_navigation_inputs_v25(
     motion_root = (root / relative_motion).resolve()
     if not motion_root.is_relative_to(root):
         raise PromotionError("motion observation directory escapes the evidence root")
-    return primary, confirmation, motion_root
+    supplemental_receipt = resolution.get("supplemental_settled_pair_manifest")
+    supplemental = (
+        _receipt_path_v25(
+            evidence_root,
+            navigation_path.parent,
+            supplemental_receipt,
+            "v2.5 supplemental settled-pair manifest",
+        )
+        if isinstance(supplemental_receipt, dict)
+        else None
+    )
+    return primary, confirmation, motion_root, supplemental
 
 
 def _aggregate_wrapper_map(
@@ -1279,7 +1290,7 @@ def validate_and_promote(
     landed_root = repo_root / "tests/fixtures/webgame"
     landed_golden = read_json(landed_root / "menu-goldens.json")
     resolved_navigation = read_json(navigation_path)
-    primary_navigation, confirmation_navigation, motion_root = (
+    primary_navigation, confirmation_navigation, motion_root, supplemental_manifest = (
         _resolved_navigation_inputs_v25(
             evidence_root, navigation_path, resolved_navigation
         )
@@ -1295,6 +1306,7 @@ def validate_and_promote(
             evidence_root / "ambient-resolution-verification-unused.json",
             False,
             True,
+            supplemental_manifest,
         )
     except (ResolutionError, SettlementV2Error) as error:
         raise PromotionError(

@@ -561,7 +561,7 @@ def _varying_member_geometry_ranks(
 def _resolve_varying_member_keys(
     measurements: list[dict[str, Any]],
     ambient_family: set[str],
-) -> dict[tuple[int, str], str]:
+) -> tuple[dict[tuple[int, str], str], dict[str, int]]:
     by_capability: dict[
         str, list[tuple[dict[str, Any], dict[str, Any]]]
     ] = defaultdict(list)
@@ -572,6 +572,7 @@ def _resolve_varying_member_keys(
             )
 
     resolved: dict[tuple[int, str], str] = {}
+    cross_window_rect_events: dict[str, int] = {}
     for capability, records in sorted(by_capability.items()):
         witnesses = [
             record
@@ -579,9 +580,59 @@ def _resolve_varying_member_keys(
             if record[1]["classification"] == "animated"
             and record[1]["art_id"] not in ambient_family
         ]
-        if not witnesses:
-            continue
         geometry_ranks = _varying_member_geometry_ranks(records)
+        if not witnesses:
+            # Motion capability belongs to the semantic screen member, not to
+            # one sampling window.  Two individually quiet windows at
+            # different rectangles are themselves a measured rect event.
+            # Geometry rank keeps repeated, semantically identical art draws
+            # distinct without treating synthetic element ordinals as native
+            # identity.
+            if not geometry_ranks or len(
+                {id(measurement) for measurement, _ in records}
+            ) != len(measurements):
+                continue
+            records_by_rank: dict[
+                int, list[tuple[dict[str, Any], dict[str, Any]]]
+            ] = defaultdict(list)
+            for measurement, member in records:
+                if member["classification"] != "full_presence":
+                    continue
+                rank = geometry_ranks.get(
+                    (id(measurement), member["captured_element_id"])
+                )
+                if rank is not None:
+                    records_by_rank[rank].append((measurement, member))
+            for rank, ranked_records in sorted(records_by_rank.items()):
+                geometry_samples = {
+                    _member_envelope_ranges(member)
+                    for _, member in ranked_records
+                }
+                if len(geometry_samples) < 2:
+                    continue
+                fixed_payloads = {
+                    canonical_bytes(
+                        {
+                            field: value
+                            for field, value in member["semantic_payload"].items()
+                            if field not in GEOMETRY_FIELDS
+                        }
+                    )
+                    for _, member in ranked_records
+                }
+                if len(fixed_payloads) != 1:
+                    raise AmbientLifecycleError(
+                        "motion capability guardrail: cross-window member "
+                        f"'{ranked_records[0][1]['captured_element_id']}' varied "
+                        "outside rect/unclipped_rect"
+                    )
+                key = f"member:{capability}:slot:{rank + 1}"
+                for measurement, member in ranked_records:
+                    resolved[
+                        (id(measurement), member["captured_element_id"])
+                    ] = key
+                cross_window_rect_events[key] = len(geometry_samples) - 1
+            continue
         remaining = set(range(len(witnesses)))
         components: list[list[tuple[dict[str, Any], dict[str, Any]]]] = []
         while remaining:
@@ -698,7 +749,7 @@ def _resolve_varying_member_keys(
                             f"two members in resolved slot '{key}'"
                         )
                     resolved[record_key] = key
-    return resolved
+    return resolved, cross_window_rect_events
 
 
 def _core_counter_for_measurements(
@@ -972,7 +1023,7 @@ def resolve_ambient_lifecycle(
         in {"ephemeral", "visibility_cycling", "one_way_spawn_candidate"}
         and member["art_id"]
     }
-    varying_member_keys = _resolve_varying_member_keys(
+    varying_member_keys, cross_window_rect_events = _resolve_varying_member_keys(
         measurements, ambient_family
     )
     corroborations: list[dict[str, Any]] = []
@@ -1020,10 +1071,10 @@ def resolve_ambient_lifecycle(
         ]
         classes = {member["classification"] for _, member in varying_records}
         art_ids = {member["art_id"] for _, member in varying_records if member["art_id"]}
-        if (
-            "animated" not in classes
-            or "full_presence" not in classes
-            or bool(art_ids & ambient_family)
+        cross_window_motion = varying_key in cross_window_rect_events
+        if bool(art_ids & ambient_family) or not (
+            cross_window_motion
+            or ("animated" in classes and "full_presence" in classes)
         ):
             continue
         for quiet_measurement, quiet_member in varying_records:
@@ -1055,6 +1106,11 @@ def resolve_ambient_lifecycle(
             corroborations.append(
                 {
                     "resolved_member_key": varying_key,
+                    "motion_witness": (
+                        "cross_window_rect_variance"
+                        if cross_window_motion
+                        else "within_window_rect_variance"
+                    ),
                     "stationary_instance": quiet_measurement["instance"],
                     "stationary_process_id": quiet_measurement["process_id"],
                     "extended_observations": [
@@ -1138,7 +1194,10 @@ def resolve_ambient_lifecycle(
                     )
                     == varying_key
                 }
-                if "animated" in measured_classes:
+                if (
+                    "animated" in measured_classes
+                    or varying_key in cross_window_rect_events
+                ):
                     classification = "animated"
                 elif "visibility_cycling" in measured_classes:
                     classification = "visibility_cycling"
@@ -1175,6 +1234,9 @@ def resolve_ambient_lifecycle(
             event_counts[member_key]["rect_change"] += len(
                 member["events"]["geometry"]
             )
+
+    for member_key, event_count in cross_window_rect_events.items():
+        event_counts[member_key]["cross_window_rect_change"] = event_count
 
     ephemeral_art_ids = {
         member_key
@@ -1220,7 +1282,9 @@ def resolve_ambient_lifecycle(
             )
         art_id = next(iter(record_art_ids), "")
         for classification in classes:
-            if classification == "animated" and events["rect_change"] == 0:
+            if classification == "animated" and (
+                events["rect_change"] + events["cross_window_rect_change"] == 0
+            ):
                 raise AmbientLifecycleError(
                     "ambient lifecycle recorder defect: phantom animated "
                     f"classification for art family '{art_id}' has zero events"
@@ -1300,6 +1364,10 @@ def resolve_ambient_lifecycle(
                 )
                 class_events["visible_toggle"] += len(member_events["visible"])
                 class_events["rect_change"] += len(member_events["geometry"])
+            if classification == "animated":
+                class_events["cross_window_rect_change"] = events[
+                    "cross_window_rect_change"
+                ]
             class_members.append(
                 {
                     "classification": classification,
