@@ -1190,6 +1190,19 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "foreign semantic surface",
     ),
     StaticMutation(
+        "recorder.failure-probe-shape",
+        SURFACE_AGREEMENT,
+        "scripts/Record-NativeMenuTransition.ps1",
+        'probe_detail = Get-NativeMenuProbeProperty `\n'
+        '                -Probe $failureProbe `\n'
+        '                -Name "Detail" `\n'
+        '                -Default $diagnosticError',
+        'probe_detail = [string]$failureProbe.Detail',
+        "a navigation failure can again mask its original error by reading "
+        "probe-shape-specific properties or omit its click, measured surface, "
+        "frame receipt, and exact failure class",
+    ),
+    StaticMutation(
         "recorder.no-provenance-override",
         RECORDER,
         "scripts/Import-NativeMenuSpecialCaptures.ps1",

@@ -55,6 +55,23 @@ param(
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = "Stop"
 
+function Get-NativeMenuProbeProperty {
+    param(
+        [AllowNull()][object]$Probe,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [string]$Default = ""
+    )
+
+    if ($null -eq $Probe) {
+        return $Default
+    }
+    $property = $Probe.PSObject.Properties[$Name]
+    if ($null -eq $property -or $null -eq $property.Value) {
+        return $Default
+    }
+    return [string]$property.Value
+}
+
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).ProviderPath
 . (Join-Path $PSScriptRoot "NativeMenuCaptureSupport.ps1")
 $context = New-NativeMenuCaptureContext `
@@ -284,10 +301,18 @@ return 'key'
                     -Algorithm SHA256).Hash.ToLowerInvariant()
             }
         }
+        $failureReason = if (
+            $failureMessage -like
+                "*native-menu capture surface agreement rejected*"
+        ) {
+            "capture_surface_did_not_match_operator_tag"
+        } else {
+            "navigation_transition_failed_before_destination_settlement"
+        }
         $failureRecord = [ordered]@{
             schema = "solomon-dark-native-menu-navigation-rejection-v1"
             status = "REJECTED"
-            named_reason = "capture_surface_did_not_match_operator_tag"
+            named_reason = $failureReason
             edge_id = $EdgeId
             source_screen = $SourceScreen
             intended_destination = $DestinationScreen
@@ -296,26 +321,20 @@ return 'key'
             dispatch_result = $dispatchResult
             click_point = $resolvedClickPoint
             dispatch_measurement = $dispatchMeasurement
-            machine_classified_surface = $(
-                if ($null -ne $failureProbe) {
-                    [string]$failureProbe.SemanticSurface
-                } else { "" }
-            )
-            native_surface = $(
-                if ($null -ne $failureProbe) {
-                    [string]$failureProbe.NativeSurface
-                } else { "" }
-            )
-            probe_status = $(
-                if ($null -ne $failureProbe) {
-                    [string]$failureProbe.Status
-                } else { "broken" }
-            )
-            probe_detail = $(
-                if ($null -ne $failureProbe) {
-                    [string]$failureProbe.Detail
-                } else { $diagnosticError }
-            )
+            machine_classified_surface = Get-NativeMenuProbeProperty `
+                -Probe $failureProbe `
+                -Name "SemanticSurface"
+            native_surface = Get-NativeMenuProbeProperty `
+                -Probe $failureProbe `
+                -Name "NativeSurface"
+            probe_status = Get-NativeMenuProbeProperty `
+                -Probe $failureProbe `
+                -Name "Status" `
+                -Default "broken"
+            probe_detail = Get-NativeMenuProbeProperty `
+                -Probe $failureProbe `
+                -Name "Detail" `
+                -Default $diagnosticError
             failure = $failureMessage
             frame = $frameReceipt
             instance = $Instance

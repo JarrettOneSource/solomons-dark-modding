@@ -1429,16 +1429,25 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
     )
     _require_regex(
         transition,
+        r"function Get-NativeMenuProbeProperty.*?"
+        r"\$Probe\.PSObject\.Properties\[\$Name\].*?"
+        r"if \(\$null -eq \$property -or \$null -eq "
+        r"\$property\.Value\).*?return \$Default.*?"
         r"catch \{\s*\$failureMessage.*?"
         r"Get-NativeMenuLayoutProbe.*?-FramePath \$failureFrame.*?"
-        r"named_reason = "
-        r"\"capture_surface_did_not_match_operator_tag\".*?"
+        r"\$failureReason = if.*?"
+        r"native-menu capture surface agreement rejected.*?"
+        r"capture_surface_did_not_match_operator_tag.*?"
+        r"navigation_transition_failed_before_destination_settlement.*?"
+        r"named_reason = \$failureReason.*?"
         r"click_point = \$resolvedClickPoint.*?"
-        r"machine_classified_surface =.*?"
+        r"machine_classified_surface = Get-NativeMenuProbeProperty.*?"
+        r"probe_detail = Get-NativeMenuProbeProperty.*?"
         r"frame = \$frameReceipt.*?"
         r"Navigation aborted before proceeding",
-        "a wrong navigation destination no longer aborts with its click, "
-        "measured surface, and frame receipt",
+        "a navigation failure can again mask its original error by reading "
+        "probe-shape-specific properties or omit its click, measured surface, "
+        "frame receipt, and exact failure class",
     )
     return (
         "native layout capture refuses relabeling; standalone, confirmation, "
