@@ -446,11 +446,25 @@ bool TryGetActiveSettingsRender(uintptr_t* settings_address) {
     }
 
     if (now - g_debug_ui_overlay_state.settings_render.captured_at > kTrackedSettingsMaximumIdleMs) {
-        g_debug_ui_overlay_state.settings_render.tracked_object_ptr = 0;
         return false;
     }
 
     *settings_address = g_debug_ui_overlay_state.settings_render.tracked_object_ptr;
+    return true;
+}
+
+bool TryReadTrackedSettingsRender(uintptr_t* settings_address) {
+    if (settings_address == nullptr) {
+        return false;
+    }
+
+    std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
+    if (g_debug_ui_overlay_state.settings_render.tracked_object_ptr == 0) {
+        return false;
+    }
+
+    *settings_address =
+        g_debug_ui_overlay_state.settings_render.tracked_object_ptr;
     return true;
 }
 

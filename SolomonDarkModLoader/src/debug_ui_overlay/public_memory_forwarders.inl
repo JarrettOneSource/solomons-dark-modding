@@ -38,6 +38,7 @@ bool TryReadTrackedDarkCloudBrowserModalRootRect(
     float* bottom);
 bool TryGetLiveSettingsRender(uintptr_t* settings_address);
 bool TryGetActiveSettingsRender(uintptr_t* settings_address);
+bool TryReadTrackedSettingsRender(uintptr_t* settings_address);
 bool TryGetActiveMyQuickPanelRender(uintptr_t* quick_panel_address);
 bool TryGetActiveMyQuickPanel(uintptr_t* quick_panel_address);
 bool TryReadTrackedMyQuickPanel(uintptr_t* quick_panel_address);

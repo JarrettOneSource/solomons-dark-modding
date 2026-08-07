@@ -1084,6 +1084,40 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "a classifier/tag mismatch can reach the accepted native layout cache",
     ),
     StaticMutation(
+        "recorder.settings-current-frame-owner",
+        SURFACE_AGREEMENT,
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "overlay_surface_builders_settings_surfaces.inl",
+        "if (has_settings_exact_evidence) {",
+        "if (false && has_settings_exact_evidence) {",
+        "Settings modal classification no longer uses current-frame exact "
+        "evidence to bridge its retained one-shot owner",
+    ),
+    StaticMutation(
+        "recorder.settings-idle-owner-retention",
+        SURFACE_AGREEMENT,
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "tracked_surfaces_and_main_menu.inl",
+        "if (now - g_debug_ui_overlay_state.settings_render.captured_at > "
+        "kTrackedSettingsMaximumIdleMs) {\n        return false;\n    }",
+        "if (now - g_debug_ui_overlay_state.settings_render.captured_at > "
+        "kTrackedSettingsMaximumIdleMs) {\n"
+        "        g_debug_ui_overlay_state.settings_render.tracked_object_ptr = 0;\n"
+        "        return false;\n    }",
+        "the idle settings probe can again erase the retained modal owner "
+        "before current-frame evidence validates it",
+    ),
+    StaticMutation(
+        "recorder.controls-current-frame-rollout",
+        SURFACE_AGREEMENT,
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "overlay_surface_builders_settings_surfaces.inl",
+        "if (!has_customize_keyboard_exact_evidence) {",
+        "if (false && !has_customize_keyboard_exact_evidence) {",
+        "Controls classification no longer requires current-frame Customize "
+        "Keyboard evidence plus a live expanded rollout",
+    ),
+    StaticMutation(
         "recorder.no-provenance-override",
         RECORDER,
         "scripts/Import-NativeMenuSpecialCaptures.ps1",

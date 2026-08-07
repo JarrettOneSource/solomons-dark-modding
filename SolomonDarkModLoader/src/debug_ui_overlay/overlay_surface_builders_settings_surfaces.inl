@@ -8,8 +8,23 @@ std::vector<OverlayRenderElement> TryBuildControlsOverlayRenderElements(
         return {};
     }
 
+    const auto normalized_customize_label =
+        NormalizeSemanticUiToken("CUSTOMIZE KEYBOARD");
+    const auto has_customize_keyboard_exact_evidence = std::any_of(
+        exact_text_elements.begin(),
+        exact_text_elements.end(),
+        [&](const ObservedUiElement& element) {
+            return element.surface_id == "settings" &&
+                NormalizeSemanticUiToken(element.label) ==
+                    normalized_customize_label;
+        });
+    if (!has_customize_keyboard_exact_evidence) {
+        return {};
+    }
+
     uintptr_t settings_address = 0;
-    if (!TryGetActiveSettingsRender(&settings_address) || settings_address == 0) {
+    if (!TryReadTrackedSettingsRender(&settings_address) ||
+        settings_address == 0) {
         return {};
     }
 
@@ -39,7 +54,6 @@ std::vector<OverlayRenderElement> TryBuildControlsOverlayRenderElements(
     }
 
     float customize_label_bottom = panel_top + 96.0f;
-    const auto normalized_customize_label = NormalizeSemanticUiToken("CUSTOMIZE KEYBOARD");
     for (const auto& element : exact_text_elements) {
         if (element.surface_id != "settings" || element.label.empty()) {
             continue;
@@ -138,15 +152,16 @@ std::vector<OverlayRenderElement> TryBuildSettingsOverlayRenderElements(
         });
 
     uintptr_t settings_address = 0;
-    if (!TryGetActiveSettingsRender(&settings_address)) {
+    if (has_settings_exact_evidence) {
+        // Settings_Render is a one-shot modal owner call. Current-frame exact
+        // settings text proves that the retained object still owns the frame;
+        // the panel read below proves that object is still runnable memory.
+        if (!TryReadTrackedSettingsRender(&settings_address)) {
+            return {};
+        }
+    } else if (!TryGetActiveSettingsRender(&settings_address)) {
         return {};
     }
-
-    // The render hook clears active_object_ptr when Settings_Render unwinds,
-    // before EndScene builds the snapshot. A fresh tracked object plus the
-    // existing one-second expiry is the live evidence; requiring a non-zero
-    // render depth here made the stale underlying MainMenu win every frame.
-    (void)has_settings_exact_evidence;
 
     float panel_left = 0.0f;
     float panel_top = 0.0f;

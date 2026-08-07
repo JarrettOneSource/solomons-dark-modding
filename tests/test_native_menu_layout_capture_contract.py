@@ -132,6 +132,42 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         self.assertIn("capture_current_layout", bindings)
         self.assertIn("sd.ui.capture_current_layout", recorder)
 
+    def test_settings_modal_uses_current_frame_evidence_to_retain_its_owner(self) -> None:
+        builders = read(
+            "SolomonDarkModLoader/src/debug_ui_overlay/"
+            "overlay_surface_builders_settings_surfaces.inl"
+        )
+        tracking = read(
+            "SolomonDarkModLoader/src/debug_ui_overlay/"
+            "tracked_surfaces_and_main_menu.inl"
+        )
+        self.assertIn("bool TryReadTrackedSettingsRender(", tracking)
+        self.assertNotRegex(
+            tracking,
+            r"(?s)now - g_debug_ui_overlay_state\.settings_render\.captured_at > "
+            r"kTrackedSettingsMaximumIdleMs\) \{\s*"
+            r"g_debug_ui_overlay_state\.settings_render\.tracked_object_ptr = 0",
+            "the idle probe must not erase the owner before current-frame settings "
+            "evidence can validate it later in the same frame",
+        )
+        self.assertRegex(
+            builders,
+            r"(?s)has_settings_exact_evidence.*?"
+            r"if \(has_settings_exact_evidence\).*?"
+            r"TryReadTrackedSettingsRender\(&settings_address\).*?"
+            r"else if \(!TryGetActiveSettingsRender\(&settings_address\)\)",
+            "current-frame settings text must bridge the stock modal's one-shot "
+            "render helper without turning the retained owner into timeless evidence",
+        )
+        self.assertRegex(
+            builders,
+            r"(?s)has_customize_keyboard_exact_evidence.*?"
+            r"TryReadTrackedSettingsRender\(&settings_address\).*?"
+            r"TryIsCustomizeKeyboardRolloutExpanded",
+            "controls classification must require current-frame Customize Keyboard "
+            "evidence and the live expanded rollout on the retained settings owner",
+        )
+
     def test_position_draw_capture_survives_the_gameplay_hook_chain(self) -> None:
         header = read("SolomonDarkModLoader/include/debug_ui_overlay.h")
         public_api = read(

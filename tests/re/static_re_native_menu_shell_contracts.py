@@ -1123,6 +1123,14 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         "public_api_surface_dispatch.inl"
     )
     bindings = _read("SolomonDarkModLoader/src/lua_engine_bindings_ui.cpp")
+    settings_builder = _read(
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "overlay_surface_builders_settings_surfaces.inl"
+    )
+    settings_tracking = _read(
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "tracked_surfaces_and_main_menu.inl"
+    )
     support = _read("scripts/NativeMenuCaptureSupport.ps1")
     standalone = _read("scripts/Record-NativeMenuLayout.ps1")
     transition = _read("scripts/Record-NativeMenuTransition.ps1")
@@ -1183,6 +1191,32 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         r"throw \[string\]\$probe\.Detail",
         "the live probe can accept a retagged layout or loses the measured "
         "surface on rejection, or a mismatch can age into a timeout",
+    )
+    _require_regex(
+        settings_builder,
+        r"has_settings_exact_evidence\s*=.*?"
+        r"if \(has_settings_exact_evidence\) \{.*?"
+        r"TryReadTrackedSettingsRender\(&settings_address\).*?"
+        r"else if \(!TryGetActiveSettingsRender\(&settings_address\)\)",
+        "Settings modal classification no longer uses current-frame exact "
+        "evidence to bridge its retained one-shot owner",
+    )
+    _require_regex(
+        settings_tracking,
+        r"if \(now - g_debug_ui_overlay_state\.settings_render\.captured_at > "
+        r"kTrackedSettingsMaximumIdleMs\) \{\s*return false;\s*\}.*?"
+        r"bool TryReadTrackedSettingsRender\(uintptr_t\* settings_address\)",
+        "the idle settings probe can again erase the retained modal owner "
+        "before current-frame evidence validates it",
+    )
+    _require_regex(
+        settings_builder,
+        r"has_customize_keyboard_exact_evidence\s*=.*?"
+        r"if \(!has_customize_keyboard_exact_evidence\) \{.*?return \{\};.*?\}.*?"
+        r"TryReadTrackedSettingsRender\(&settings_address\).*?"
+        r"TryIsCustomizeKeyboardRolloutExpanded",
+        "Controls classification no longer requires current-frame Customize "
+        "Keyboard evidence plus a live expanded rollout",
     )
     _require_regex(
         standalone,
