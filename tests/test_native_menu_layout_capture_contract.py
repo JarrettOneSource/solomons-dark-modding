@@ -52,6 +52,32 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             "native-loader-layout.json",
         ):
             self.assertIn(token, source)
+        self.assertIn(
+            "g_native_boot_capture_samples.back().progress >= 1.0",
+            source,
+            "native-loader capture must settle-gate the real full-progress frame",
+        )
+        self.assertIn(
+            "while (!g_native_boot_capture_settled",
+            source,
+            "native-loader capture must not fall back to one fixed-delay frame",
+        )
+
+    def test_loading_capture_rejects_offscreen_render_targets(self) -> None:
+        source = read(
+            "SolomonDarkModLoader/src/loading_screen_native_present.cpp"
+        )
+        self.assertIn(
+            "IsProcessClientPresentationViewport(layout)",
+            source,
+            "loading settlement must exclude offscreen viewport samples",
+        )
+        self.assertRegex(
+            source,
+            r"if \(!IsProcessClientPresentationViewport\(layout\)\) \{\s*"
+            r"return;\s*\}\s*if \(g_loading_capture_sequence",
+            "offscreen loading frames must be rejected before settlement state changes",
+        )
 
     def test_layout_api_retains_transient_screens(self) -> None:
         header = read("SolomonDarkModLoader/include/debug_ui_overlay.h")

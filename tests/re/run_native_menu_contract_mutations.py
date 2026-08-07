@@ -698,6 +698,25 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "actual samples, and requires at least 200 samples",
     ),
     StaticMutation(
+        "special.loader-full-progress-settle-hold",
+        RECORDER,
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "menu_layout_capture_snapshot_and_hooks.inl",
+        "g_native_boot_capture_samples.back().progress >= 1.0",
+        "g_native_boot_capture_samples.back().progress < 1.0",
+        "native-loader capture no longer holds and settle-samples the real "
+        "full-progress render or bounds failure as STOP",
+    ),
+    StaticMutation(
+        "special.loading-client-viewport-only",
+        RECORDER,
+        "SolomonDarkModLoader/src/loading_screen_native_present.cpp",
+        "if (!IsProcessClientPresentationViewport(layout))",
+        "if (false && !IsProcessClientPresentationViewport(layout))",
+        "loading-screen capture no longer rejects offscreen render targets "
+        "before they can reset settlement",
+    ),
+    StaticMutation(
         "recorder.blocking-modal-exact-surface",
         RECORDER,
         "scripts/NativeMenuCaptureSupport.ps1",

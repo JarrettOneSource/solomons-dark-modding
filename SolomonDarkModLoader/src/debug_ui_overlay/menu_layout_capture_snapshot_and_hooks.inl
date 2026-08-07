@@ -479,6 +479,22 @@ void __fastcall HookNativeLoaderRender(
         g_native_loader_render_active = false;
     }
     CaptureNativeLoaderSample();
+    if (!g_native_boot_capture_directory.empty() &&
+        !g_native_boot_capture_settled &&
+        !g_native_boot_capture_samples.empty() &&
+        g_native_boot_capture_samples.back().progress >= 1.0) {
+        const auto deadline = GetTickCount64() + 60000;
+        while (!g_native_boot_capture_settled &&
+               GetTickCount64() <= deadline) {
+            Sleep(50);
+            CaptureNativeLoaderSample();
+        }
+        if (!g_native_boot_capture_settled) {
+            Log(
+                "STOP: native loader never satisfied the 40-sample, "
+                "two-second settlement criterion within 60 seconds.");
+        }
+    }
 }
 
 bool IsTruthyMenuCaptureEnvironment(const char* name) {

@@ -36,6 +36,47 @@ struct LoadingEvidenceSample {
     std::string semantic_json;
 };
 
+struct ProcessClientViewport {
+    DWORD process_id = 0;
+    LONG width = 0;
+    LONG height = 0;
+};
+
+BOOL CALLBACK FindProcessClientViewport(
+    HWND window,
+    LPARAM parameter) {
+    auto* target = reinterpret_cast<ProcessClientViewport*>(parameter);
+    DWORD process_id = 0;
+    GetWindowThreadProcessId(window, &process_id);
+    if (process_id != target->process_id || !IsWindowVisible(window)) {
+        return TRUE;
+    }
+    RECT client{};
+    if (!GetClientRect(window, &client)) {
+        return TRUE;
+    }
+    const auto width = client.right - client.left;
+    const auto height = client.bottom - client.top;
+    if (width <= 0 || height <= 0) {
+        return TRUE;
+    }
+    target->width = width;
+    target->height = height;
+    return FALSE;
+}
+
+bool IsProcessClientPresentationViewport(
+    const LoadingScreenRenderLayout& layout) {
+    ProcessClientViewport viewport;
+    viewport.process_id = GetCurrentProcessId();
+    EnumWindows(
+        &FindProcessClientViewport,
+        reinterpret_cast<LPARAM>(&viewport));
+    return viewport.width > 0 && viewport.height > 0 &&
+        layout.viewport_width == viewport.width &&
+        layout.viewport_height == viewport.height;
+}
+
 std::uint64_t g_loading_capture_sequence = 0;
 std::uint64_t g_loading_capture_started_at = 0;
 std::uint64_t g_loading_stable_started_at = 0;
@@ -316,6 +357,9 @@ void CaptureLoadingScreenEvidenceFrameInternal(
         ReadEnvironmentVariable(
             kCaptureDirectoryEnvironment);
     if (directory_text.empty()) {
+        return;
+    }
+    if (!IsProcessClientPresentationViewport(layout)) {
         return;
     }
 
