@@ -122,48 +122,10 @@ bool TryCaptureCurrentDebugUiLayoutSnapshot(
     }
 
     auto captured = g_debug_ui_overlay_state.latest_layout_snapshot;
-    const auto classification_agrees =
-        captured.screen_id == screen_id ||
-        (screen_id == "profile_save_select" &&
-         captured.screen_id == "main_menu") ||
-        ((screen_id == "beta_notice" ||
-          screen_id == "leave_game_confirmation") &&
-         captured.screen_id == "dialog") ||
-        ((screen_id == "dark_cloud_recent" ||
-          screen_id == "dark_cloud_online_levels" ||
-          screen_id == "dark_cloud_my_levels" ||
-          screen_id == "dark_cloud_multiplayer" ||
-          screen_id == "dark_cloud_search" ||
-          screen_id == "dark_cloud_sort" ||
-          screen_id == "dark_cloud_options" ||
-          screen_id == "dark_cloud_menu") &&
-         captured.screen_id == "dark_cloud_browser");
-    if (!classification_agrees) {
-        captured.elements.erase(
-            std::remove_if(
-                captured.elements.begin(),
-                captured.elements.end(),
-                [](const DebugUiLayoutElement& element) {
-                    return element.kind != "art" &&
-                        element.kind != "text";
-                }),
-            captured.elements.end());
-        captured.screen_title.clear();
-        captured.capture_method +=
-            " + exact live-navigation screen tag (stale controls omitted)";
-    }
-    if (captured.elements.empty()) {
+    if (captured.screen_id != screen_id) {
         return false;
     }
 
-    captured.screen_id = std::string(screen_id);
-    for (auto& element : captured.elements) {
-        const auto separator = element.id.find('.');
-        element.id = captured.screen_id +
-            (separator == std::string::npos
-                ? std::string(".") + element.id
-                : element.id.substr(separator));
-    }
     g_debug_ui_overlay_state.layout_snapshots_by_screen[captured.screen_id] =
         captured;
     *snapshot = std::move(captured);

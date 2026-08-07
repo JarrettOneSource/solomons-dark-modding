@@ -33,7 +33,7 @@ foreach ($inputPath in $inputs) {
     }
 }
 if (-not (Test-Path -LiteralPath $importer -PathType Leaf)) {
-    throw "The Settlement v2.5 special-capture importer is missing."
+    throw "The Settlement v2.9 special-capture importer is missing."
 }
 
 $python = Get-Command py.exe -ErrorAction SilentlyContinue
@@ -46,7 +46,7 @@ $probe = @(
 )
 if ($LASTEXITCODE -ne 0 -or ($probe -join "`n") -notmatch
     "native-menu-special-import-ready") {
-    throw "py.exe exists but cannot run the Settlement v2.5 special importer."
+    throw "py.exe exists but cannot run the Settlement v2.9 special importer."
 }
 
 $result = @(
@@ -60,7 +60,7 @@ $result = @(
 )
 if ($LASTEXITCODE -ne 0) {
     throw (
-        "Settlement v2.5 special-capture import failed: " +
+        "Settlement v2.9 special-capture import failed: " +
         (($result | ForEach-Object { [string]$_ }) -join "`n")
     )
 }

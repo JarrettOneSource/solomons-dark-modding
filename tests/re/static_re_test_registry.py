@@ -128,11 +128,13 @@ from static_re_native_progression_contracts import (
 )
 from static_re_native_menu_shell_contracts import (
     test_designed_menu_focus_model_consumes_g14_intents,
+    test_native_menu_capture_surface_agreement_is_fail_closed,
     test_native_menu_live_transition_graph_is_pinned,
     test_native_menu_landed_population_override_is_fail_closed,
     test_native_menu_motion_capability_campaign_resolution_is_fail_closed,
     test_native_menu_ambient_overlay_derivation_is_fail_closed,
     test_native_menu_overlay_contamination_override_is_fail_closed,
+    test_native_menu_path_dependent_core_fork_is_exact,
     test_native_menu_recorders_settle_and_derive_provenance,
     test_native_menu_screen_census_and_live_layouts_are_pinned,
     test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired,
@@ -1167,12 +1169,20 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_native_menu_recorders_settle_and_derive_provenance,
     ),
     (
+        "Native menu capture surface agreement is fail closed",
+        test_native_menu_capture_surface_agreement_is_fail_closed,
+    ),
+    (
         "Native menu Settlement v2 classifier is strict and CI wired",
         test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired,
     ),
     (
         "Native menu motion capability campaign resolution is fail closed",
         test_native_menu_motion_capability_campaign_resolution_is_fail_closed,
+    ),
+    (
+        "Native menu path-dependent core fork is exact",
+        test_native_menu_path_dependent_core_fork_is_exact,
     ),
     (
         "Native menu landed population override is fail closed",

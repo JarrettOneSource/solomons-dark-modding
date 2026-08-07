@@ -69,6 +69,9 @@ try {
             "'$($observation.tagged_screen)'."
         )
     }
+    Assert-NativeMenuCaptureSurfaceAgreement `
+        -OperatorScreenTag $ScreenId `
+        -MachineClassifiedSurface $observation.semantic_surface
     if ($observation.element_count -eq 0) {
         throw "STOP: the settled live '$ScreenId' layout was empty."
     }

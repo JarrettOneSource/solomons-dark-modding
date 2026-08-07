@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Settlement v2.5 ambient-lifecycle measurement and pair resolution.
+"""Settlement v2.9 ambient-lifecycle measurement and pair resolution.
 
 Raw element ids and absolute draw orders are recorder bookkeeping.  This
 module contracts the semantic core that independent instances reproduce and
@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 
-SETTLEMENT_SPEC = "2.5"
+SETTLEMENT_SPEC = "2.9"
 MINIMUM_SAMPLES = 40
 MINIMUM_SPAN_MILLISECONDS = 2_000
 MAXIMUM_AMBIENT_FRACTION = 0.40
@@ -33,7 +33,7 @@ CAPABILITY_FIELDS = {*BOOKKEEPING_FIELDS, *GEOMETRY_FIELDS, "visible"}
 
 
 class AmbientLifecycleError(ValueError):
-    """A recording does not satisfy Settlement v2.5."""
+    """A recording does not satisfy Settlement v2.9."""
 
 
 def canonical_bytes(value: Any) -> bytes:
@@ -123,6 +123,44 @@ def _capability_payload(element: dict[str, Any]) -> dict[str, Any]:
         for key, value in element.items()
         if key not in CAPABILITY_FIELDS
     }
+
+
+def _animated_family_payload(element: dict[str, Any]) -> dict[str, Any]:
+    """Return the exact non-geometric payload used by v2.7 families."""
+    return {
+        key: copy.deepcopy(value)
+        for key, value in element.items()
+        if key not in {*BOOKKEEPING_FIELDS, *GEOMETRY_FIELDS}
+    }
+
+
+def _choice_slot_payload(element: dict[str, Any]) -> dict[str, Any]:
+    """Return fields that v2.8 requires to reproduce across roster choices."""
+    return {
+        key: copy.deepcopy(value)
+        for key, value in element.items()
+        if key
+        not in {
+            *BOOKKEEPING_FIELDS,
+            *GEOMETRY_FIELDS,
+            "art_id",
+        }
+    }
+
+
+def _atlas_namespace(art_id: Any) -> str:
+    if not isinstance(art_id, str) or "." not in art_id:
+        raise AmbientLifecycleError(
+            "choice-slot atlas-namespace contract: residual art has no "
+            "<atlas>.<entry> identity"
+        )
+    namespace, _, entry = art_id.rpartition(".")
+    if not namespace or not entry:
+        raise AmbientLifecycleError(
+            "choice-slot atlas-namespace contract: residual art has no "
+            "<atlas>.<entry> identity"
+        )
+    return namespace
 
 
 def _pure_art(element: dict[str, Any]) -> bool:
@@ -441,6 +479,10 @@ def _measure_window(
                 "semantic_signature": sha256_json(_semantic_payload(anchor)),
                 "capability_payload": _capability_payload(anchor),
                 "capability_signature": sha256_json(_capability_payload(anchor)),
+                "animated_family_payload": _animated_family_payload(anchor),
+                "animated_family_signature": sha256_json(
+                    _animated_family_payload(anchor)
+                ),
                 "dominant_phase_payload": _semantic_payload(dominant),
                 "on_fraction": visible_true / len(elements),
                 "events": events,
@@ -539,34 +581,373 @@ def _varying_member_geometry_ranks(
 
     result: dict[tuple[int, str], int] = {}
     for values in by_measurement.values():
-        ranked = sorted(
-            values,
-            key=lambda record: (
-                _member_envelope_ranges(record[1])[1],
-                _member_envelope_ranges(record[1])[0],
-                _member_envelope_ranges(record[1])[2:],
-            ),
-        )
-        rank_keys = [_member_envelope_ranges(member) for _, member in ranked]
-        if len(rank_keys) != len(set(rank_keys)):
-            raise AmbientLifecycleError(
-                "varying-member identity ambiguity: geometry-rank collision "
-                "within one observation"
-            )
-        for rank, (measurement, member) in enumerate(ranked):
-            result[(id(measurement), member["captured_element_id"])] = rank
+        result.update(_geometry_ranks_within_observation(values))
     return result
+
+
+def _geometry_ranks_within_observation(
+    records: list[tuple[dict[str, Any], dict[str, Any]]],
+) -> dict[tuple[int, str], int]:
+    ranked = sorted(
+        records,
+        key=lambda record: (
+            _member_envelope_ranges(record[1])[1],
+            _member_envelope_ranges(record[1])[0],
+            _member_envelope_ranges(record[1])[2:],
+        ),
+    )
+    rank_keys = [_member_envelope_ranges(member) for _, member in ranked]
+    if len(rank_keys) != len(set(rank_keys)):
+        raise AmbientLifecycleError(
+            "varying-member identity ambiguity: geometry-rank collision "
+            "within one observation"
+        )
+    return {
+        (id(measurement), member["captured_element_id"]): rank
+        for rank, (measurement, member) in enumerate(ranked)
+    }
+
+
+def _relative_draw_slot_evidence(
+    measurement: dict[str, Any],
+    members: list[dict[str, Any]],
+) -> dict[str, Any]:
+    captured_ids = {member["captured_element_id"] for member in members}
+    if len(captured_ids) != len(members) or len(captured_ids) < 2:
+        raise AmbientLifecycleError(
+            "animated family recorder defect: candidate member ids are not "
+            "distinct and plural"
+        )
+
+    slot_sets: list[tuple[int, ...]] = []
+    slots_by_id: dict[str, list[int]] = {
+        captured_id: [] for captured_id in captured_ids
+    }
+    for sample_index, sample in enumerate(measurement["samples"]):
+        ordered = _sorted_elements(sample["payload"])
+        positions = {
+            _element_id(element): slot for slot, element in enumerate(ordered)
+        }
+        missing = sorted(captured_ids - set(positions))
+        if missing:
+            raise AmbientLifecycleError(
+                "animated family member-count contract: full-presence family "
+                f"member '{missing[0]}' is absent at sample {sample_index}"
+            )
+        slots = tuple(sorted(positions[captured_id] for captured_id in captured_ids))
+        slot_sets.append(slots)
+        for captured_id in captured_ids:
+            slots_by_id[captured_id].append(positions[captured_id])
+
+    constant_slots = slot_sets[0]
+    if any(slots != constant_slots for slots in slot_sets[1:]):
+        raise AmbientLifecycleError(
+            "animated family relative-slot contract: collective draw-slot set "
+            f"changed within '{measurement['label']}'"
+        )
+    ordinal_changes = {
+        captured_id: sum(
+            left != right for left, right in zip(slots, slots[1:])
+        )
+        for captured_id, slots in sorted(slots_by_id.items())
+    }
+    return {
+        "relative_draw_slots": list(constant_slots),
+        "slot_index_semantics": "zero_based_full_relative_draw_sequence",
+        "captured_ordinal_slot_change_counts": ordinal_changes,
+        "captured_ordinal_rotation_event_count": sum(ordinal_changes.values()),
+    }
+
+
+def _crossed_rank_pairs(
+    records: list[tuple[dict[str, Any], dict[str, Any]]],
+    ranks: dict[tuple[int, str], int],
+) -> list[dict[str, Any]]:
+    pairs: list[dict[str, Any]] = []
+    for left_index, (measurement, left) in enumerate(records):
+        left_key = (id(measurement), left["captured_element_id"])
+        for _, right in records[left_index + 1 :]:
+            right_key = (id(measurement), right["captured_element_id"])
+            if ranks.get(left_key) == ranks.get(right_key):
+                continue
+            if not _motion_geometry_compatible(
+                _member_envelope_ranges(left), _member_envelope_ranges(right)
+            ):
+                continue
+            pairs.append(
+                {
+                    "left_captured_element_id": left["captured_element_id"],
+                    "left_geometry_rank": ranks[left_key],
+                    "right_captured_element_id": right["captured_element_id"],
+                    "right_geometry_rank": ranks[right_key],
+                }
+            )
+    return pairs
+
+
+def _resolve_animated_family_keys(
+    measurements: list[dict[str, Any]],
+    ambient_family: set[str],
+) -> tuple[
+    dict[tuple[int, str], str],
+    dict[str, dict[str, Any]],
+]:
+    """Resolve only v2.7 families proven by both fresh-instance crossings."""
+    records_by_signature: dict[
+        str, list[tuple[dict[str, Any], dict[str, Any]]]
+    ] = defaultdict(list)
+    for measurement in measurements:
+        for member in measurement["members"]:
+            if member["kind"] != "art" or not member["art_id"]:
+                continue
+            records_by_signature[member["animated_family_signature"]].append(
+                (measurement, member)
+            )
+
+    anchors = [
+        measurement
+        for measurement in measurements
+        if measurement["kind"] == "settled_window"
+        and measurement["corroboration_anchor"]
+    ]
+    resolved: dict[tuple[int, str], str] = {}
+    definitions: dict[str, dict[str, Any]] = {}
+    for signature, records in sorted(records_by_signature.items()):
+        by_measurement: dict[
+            int, list[tuple[dict[str, Any], dict[str, Any]]]
+        ] = defaultdict(list)
+        for measurement, member in records:
+            by_measurement[id(measurement)].append((measurement, member))
+
+        anchor_records = [
+            record
+            for anchor in anchors
+            for record in by_measurement.get(id(anchor), [])
+        ]
+        anchor_counts = {
+            id(anchor): len(by_measurement.get(id(anchor), [])) for anchor in anchors
+        }
+        if not anchor_counts or min(anchor_counts.values()) < 2:
+            continue
+        if not any(
+            member["classification"] == "animated"
+            for _, member in anchor_records
+        ):
+            continue
+
+        crossing_by_anchor: dict[int, list[dict[str, Any]]] = {}
+        for anchor in anchors:
+            current = by_measurement[id(anchor)]
+            geometry_ranks = _geometry_ranks_within_observation(current)
+            crossing_by_anchor[id(anchor)] = _crossed_rank_pairs(
+                current, geometry_ranks
+            )
+
+        crossed_anchors = [
+            anchor for anchor in anchors if crossing_by_anchor[id(anchor)]
+        ]
+        if not crossed_anchors:
+            continue
+        art_id = anchor_records[0][1]["art_id"]
+        if len(crossed_anchors) != len(anchors) and art_id in ambient_family:
+            # Title-backdrop lifecycle members remain governed by v2.5 unless
+            # both fresh anchors prove the exact v2.7 family trigger.
+            continue
+        if len(set(anchor_counts.values())) != 1:
+            art_counts = {
+                id(anchor): sum(
+                    member["art_id"] == art_id for member in anchor["members"]
+                )
+                for anchor in anchors
+            }
+            consequence = (
+                "non-geometric payload changed between fresh instances"
+                if len(set(art_counts.values())) == 1
+                else "fresh instances disagree on the exact per-sample family census"
+            )
+            raise AmbientLifecycleError(
+                "animated family non-geometric contract: " + consequence
+                if consequence.startswith("non-geometric")
+                else "animated family member-count contract: " + consequence
+            )
+        if len(crossed_anchors) != len(anchors):
+            missing = next(
+                anchor for anchor in anchors if not crossing_by_anchor[id(anchor)]
+            )
+            raise AmbientLifecycleError(
+                "animated family rank-crossing contract: repeated mover "
+                f"crossing was not reproduced in fresh instance "
+                f"'{missing['instance']}' PID {missing['process_id']}"
+            )
+        if any(
+            member["present_samples"] != measurement["sample_count"]
+            or member["absent_samples"] != 0
+            or member["classification"]
+            in {
+                "ephemeral",
+                "one_way_spawn_candidate",
+                "visibility_cycling",
+            }
+            for measurement, member in anchor_records
+        ):
+            raise AmbientLifecycleError(
+                "animated family member-count contract: visibility or membership "
+                "changed inside a fresh-instance family window"
+            )
+        if any(
+            member["classification"] != "animated"
+            for _, member in anchor_records
+        ):
+            raise AmbientLifecycleError(
+                "animated family rank-crossing contract: every fresh-instance "
+                "family member must carry a measured rect event"
+            )
+
+        slot_evidence_by_anchor = {
+            id(anchor): _relative_draw_slot_evidence(
+                anchor,
+                [member for _, member in by_measurement[id(anchor)]],
+            )
+            for anchor in anchors
+        }
+        for anchor in anchors:
+            if (
+                slot_evidence_by_anchor[id(anchor)][
+                    "captured_ordinal_rotation_event_count"
+                ]
+                == 0
+            ):
+                raise AmbientLifecycleError(
+                    "animated family ordinal-rotation contract: captured ordinals "
+                    f"never changed relative draw slot in '{anchor['label']}'"
+                )
+
+        expected_count = next(iter(anchor_counts.values()))
+        for measurement in measurements:
+            signature_count = len(by_measurement.get(id(measurement), []))
+            if signature_count == expected_count:
+                continue
+            same_art_count = sum(
+                member["art_id"] == art_id for member in measurement["members"]
+            )
+            if same_art_count == expected_count:
+                raise AmbientLifecycleError(
+                    "animated family non-geometric contract: family members differ "
+                    f"outside geometry in '{measurement['label']}'"
+                )
+            raise AmbientLifecycleError(
+                "animated family member-count contract: an observation changed "
+                "the exact per-sample family census"
+            )
+
+        slot_witnesses: list[dict[str, Any]] = []
+        slot_sets: set[tuple[int, ...]] = set()
+        all_records: list[tuple[dict[str, Any], dict[str, Any]]] = []
+        for measurement in measurements:
+            current = by_measurement[id(measurement)]
+            if any(
+                member["present_samples"] != measurement["sample_count"]
+                or member["absent_samples"] != 0
+                or member["classification"]
+                not in {"animated", "full_presence"}
+                for _, member in current
+            ):
+                raise AmbientLifecycleError(
+                    "animated family member-count contract: visibility or membership "
+                    f"changed in '{measurement['label']}'"
+                )
+            payloads = {
+                canonical_bytes(member["animated_family_payload"])
+                for _, member in current
+            }
+            if len(payloads) != 1:
+                raise AmbientLifecycleError(
+                    "animated family non-geometric contract: family members differ "
+                    f"outside geometry in '{measurement['label']}'"
+                )
+            slot_evidence = _relative_draw_slot_evidence(
+                measurement, [member for _, member in current]
+            )
+            slot_sets.add(tuple(slot_evidence["relative_draw_slots"]))
+            slot_witnesses.append(
+                {
+                    "observation": measurement["label"],
+                    "instance": measurement["instance"],
+                    "process_id": measurement["process_id"],
+                    **slot_evidence,
+                }
+            )
+            all_records.extend(current)
+        if len(slot_sets) != 1:
+            raise AmbientLifecycleError(
+                "animated family relative-slot contract: collective draw-slot set "
+                "does not reproduce across observations"
+            )
+
+        art_ids = {member["art_id"] for _, member in all_records}
+        payloads = {
+            canonical_bytes(member["animated_family_payload"])
+            for _, member in all_records
+        }
+        if len(art_ids) != 1 or len(payloads) != 1:
+            raise AmbientLifecycleError(
+                "animated family non-geometric contract: resolved family spans "
+                "multiple art ids or payloads"
+            )
+        family_key = f"animated-family:{signature}"
+        if family_key in definitions:
+            raise AmbientLifecycleError(
+                "animated family recorder defect: duplicate family key"
+            )
+        for measurement, member in all_records:
+            record_key = (id(measurement), member["captured_element_id"])
+            if record_key in resolved:
+                raise AmbientLifecycleError(
+                    "animated family recorder defect: one captured member resolved "
+                    "into multiple families"
+                )
+            resolved[record_key] = family_key
+        first_member = all_records[0][1]
+        definitions[family_key] = {
+            "member_key": family_key,
+            "art_id": next(iter(art_ids)),
+            "exact_per_sample_member_count": expected_count,
+            "non_geometric_payload": copy.deepcopy(
+                first_member["animated_family_payload"]
+            ),
+            "non_geometric_payload_sha256": signature,
+            "relative_draw_slots": list(next(iter(slot_sets))),
+            "slot_index_semantics": "zero_based_full_relative_draw_sequence",
+            "fresh_instance_rank_crossing_witnesses": [
+                {
+                    "observation": anchor["label"],
+                    "instance": anchor["instance"],
+                    "process_id": anchor["process_id"],
+                    "crossed_rank_pairs": crossing_by_anchor[id(anchor)],
+                }
+                for anchor in anchors
+            ],
+            "relative_draw_slot_witnesses": slot_witnesses,
+        }
+    return resolved, definitions
 
 
 def _resolve_varying_member_keys(
     measurements: list[dict[str, Any]],
     ambient_family: set[str],
+    animated_family_keys: dict[tuple[int, str], str] | None = None,
 ) -> tuple[dict[tuple[int, str], str], dict[str, int]]:
+    animated_family_keys = animated_family_keys or {}
     by_capability: dict[
         str, list[tuple[dict[str, Any], dict[str, Any]]]
     ] = defaultdict(list)
     for measurement in measurements:
         for member in measurement["members"]:
+            if (
+                id(measurement),
+                member["captured_element_id"],
+            ) in animated_family_keys:
+                continue
             by_capability[member["capability_signature"]].append(
                 (measurement, member)
             )
@@ -752,11 +1133,403 @@ def _resolve_varying_member_keys(
     return resolved, cross_window_rect_events
 
 
+def _asset_manifest_entries(
+    asset_manifest: dict[str, Any] | None,
+) -> dict[str, dict[str, Any]]:
+    if not isinstance(asset_manifest, dict):
+        raise AmbientLifecycleError(
+            "choice-slot asset-manifest contract: roster-dependent residuals "
+            "cannot be classified without the machine-built asset manifest"
+        )
+    if asset_manifest.get("schema") != "solomon-dark-web-asset-manifest-v1":
+        raise AmbientLifecycleError(
+            "choice-slot asset-manifest contract: input does not use the "
+            "renderer manifest schema"
+        )
+    raw_entries = asset_manifest.get("entries")
+    if not isinstance(raw_entries, dict) or not raw_entries:
+        raise AmbientLifecycleError(
+            "choice-slot asset-manifest contract: renderer manifest has no "
+            "sprite entries to verify trim centering"
+        )
+    entries: dict[str, dict[str, Any]] = {}
+    for art_id, value in raw_entries.items():
+        if isinstance(art_id, str) and isinstance(value, dict):
+            entries[art_id] = value
+    if not entries:
+        raise AmbientLifecycleError(
+            "choice-slot asset-manifest contract: renderer manifest has no "
+            "reviewable sprite entries"
+        )
+    return entries
+
+
+def _json_number(value: float) -> int | float:
+    return int(value) if value.is_integer() else value
+
+
+def _choice_geometry_witness(
+    element: dict[str, Any],
+    entries: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    art_id = element.get("art_id")
+    entry = entries.get(art_id) if isinstance(art_id, str) else None
+    logical_size = entry.get("logicalSize") if isinstance(entry, dict) else None
+    if not isinstance(logical_size, dict):
+        raise AmbientLifecycleError(
+            "choice-slot asset-manifest contract: residual art "
+            f"'{art_id}' has no unique logicalSize entry"
+        )
+    width = logical_size.get("width")
+    height = logical_size.get("height")
+    if (
+        isinstance(width, bool)
+        or not isinstance(width, (int, float))
+        or not math.isfinite(float(width))
+        or float(width) <= 0
+        or isinstance(height, bool)
+        or not isinstance(height, (int, float))
+        or not math.isfinite(float(height))
+        or float(height) <= 0
+    ):
+        raise AmbientLifecycleError(
+            "choice-slot asset-manifest contract: residual art "
+            f"'{art_id}' has an invalid logicalSize entry"
+        )
+
+    centers: list[tuple[float, float]] = []
+    for field in ("rect", "unclipped_rect"):
+        left, top, right, bottom = _finite_rect(element, field)
+        observed_width = right - left
+        observed_height = bottom - top
+        if observed_width != float(width) or observed_height != float(height):
+            raise AmbientLifecycleError(
+                "choice-slot manifest trim-centering contract: residual art "
+                f"'{art_id}' {field} is not exactly its manifest logicalSize"
+            )
+        centers.append(((left + right) / 2.0, (top + bottom) / 2.0))
+    if centers[0] != centers[1]:
+        raise AmbientLifecycleError(
+            "choice-slot manifest trim-centering contract: residual art "
+            f"'{art_id}' rect and unclipped_rect do not share one center"
+        )
+    return {
+        "art_id": art_id,
+        "logical_size": {
+            "width": copy.deepcopy(width),
+            "height": copy.deepcopy(height),
+        },
+        "center": {
+            "x": _json_number(centers[0][0]),
+            "y": _json_number(centers[0][1]),
+        },
+    }
+
+
+def _choice_residual_records(
+    measurement: dict[str, Any], residual: Counter[bytes]
+) -> list[dict[str, Any]]:
+    remaining = residual.copy()
+    members = {
+        member["captured_element_id"]: member
+        for member in measurement["members"]
+    }
+    first_ordered = _sorted_elements(measurement["samples"][0]["payload"])
+    records: list[dict[str, Any]] = []
+    for relative_position, element in enumerate(first_ordered, start=1):
+        element_id = _element_id(element)
+        member = members[element_id]
+        signature = canonical_bytes(member["semantic_payload"])
+        if remaining[signature] <= 0:
+            continue
+        if member["classification"] != "full_presence" or not _pure_art(element):
+            raise AmbientLifecycleError(
+                "choice-slot art-only contract: a roster residual is not a "
+                f"full-presence pure art draw ('{element_id}')"
+            )
+
+        observed_positions: list[int] = []
+        observed_payloads: set[bytes] = set()
+        observed_art_ids: set[str] = set()
+        observed_geometry: set[bytes] = set()
+        for sample in measurement["samples"]:
+            ordered = _sorted_elements(sample["payload"])
+            positions = {
+                _element_id(candidate): index
+                for index, candidate in enumerate(ordered, start=1)
+            }
+            indexed = _elements_by_id(sample["payload"])
+            if element_id not in positions or element_id not in indexed:
+                raise AmbientLifecycleError(
+                    "choice-slot presence contract: a full-presence roster draw "
+                    f"'{element_id}' disappeared"
+                )
+            current = indexed[element_id]
+            observed_positions.append(positions[element_id])
+            observed_payloads.add(canonical_bytes(_choice_slot_payload(current)))
+            current_art = current.get("art_id")
+            if not isinstance(current_art, str) or not current_art:
+                raise AmbientLifecycleError(
+                    "choice-slot atlas-namespace contract: roster draw has no art_id"
+                )
+            observed_art_ids.add(current_art)
+            observed_geometry.add(canonical_bytes(_geometry(current)))
+        if len(set(observed_positions)) != 1:
+            raise AmbientLifecycleError(
+                "choice-slot draw-position contract: roster draw changed relative "
+                f"position within '{measurement['label']}'"
+            )
+        if len(observed_payloads) != 1 or len(observed_art_ids) != 1:
+            raise AmbientLifecycleError(
+                "choice-slot payload contract: a roster draw varied outside "
+                "art_id and geometry within one settled window"
+            )
+        if len(observed_geometry) != 1:
+            raise AmbientLifecycleError(
+                "choice-slot geometry contract: roster art moved within one "
+                "settled window instead of remaining a structural choice"
+            )
+        records.append(
+            {
+                "measurement": measurement,
+                "member": member,
+                "element": copy.deepcopy(element),
+                "relative_draw_position": relative_position,
+                "art_id": next(iter(observed_art_ids)),
+                "atlas_namespace": _atlas_namespace(next(iter(observed_art_ids))),
+                "choice_payload": _choice_slot_payload(element),
+            }
+        )
+        remaining[signature] -= 1
+    if any(remaining.values()):
+        raise AmbientLifecycleError(
+            "choice-slot recorder defect: residual structural members could not "
+            "be resolved to unique captured draws"
+        )
+    return records
+
+
+def _resolve_choice_slot_keys(
+    measurements: list[dict[str, Any]],
+    residuals: list[Counter[bytes]],
+    asset_manifest: dict[str, Any] | None,
+) -> tuple[dict[tuple[int, str], str], dict[str, dict[str, Any]]]:
+    """Collapse only v2.8 residuals proven to be manifest-centered choices."""
+    for residual in residuals:
+        for signature, count in residual.items():
+            payload = json.loads(signature.decode("utf-8"))
+            if count and (not isinstance(payload, dict) or not _pure_art(payload)):
+                return {}, {}
+    records_by_measurement: dict[int, list[dict[str, Any]]] = {}
+    for measurement, residual in zip(measurements, residuals, strict=True):
+        records_by_measurement[id(measurement)] = _choice_residual_records(
+            measurement, residual
+        )
+
+    position_sets = {
+        tuple(
+            sorted(
+                record["relative_draw_position"]
+                for record in records_by_measurement[id(measurement)]
+            )
+        )
+        for measurement in measurements
+    }
+    if len(position_sets) != 1:
+        return {}, {}
+    positions = next(iter(position_sets), ())
+    if not positions:
+        raise AmbientLifecycleError(
+            "choice-slot recorder defect: choice resolution was invoked without residuals"
+        )
+
+    by_measurement_position: dict[tuple[int, int], dict[str, Any]] = {}
+    for measurement in measurements:
+        for record in records_by_measurement[id(measurement)]:
+            key = (id(measurement), record["relative_draw_position"])
+            if key in by_measurement_position:
+                raise AmbientLifecycleError(
+                    "choice-slot draw-position contract: two residual draws occupy "
+                    "one relative position"
+                )
+            by_measurement_position[key] = record
+
+    art_vectors: dict[int, tuple[str, ...]] = {}
+    for position in positions:
+        positioned = [
+            by_measurement_position[(id(measurement), position)]
+            for measurement in measurements
+        ]
+        if len(
+            {
+                canonical_bytes(record["choice_payload"])
+                for record in positioned
+            }
+        ) != 1:
+            return {}, {}
+        namespaces = {record["atlas_namespace"] for record in positioned}
+        if len(namespaces) != 1:
+            return {}, {}
+        art_vectors[position] = tuple(record["art_id"] for record in positioned)
+
+    entries = _asset_manifest_entries(asset_manifest)
+    for record in by_measurement_position.values():
+        record["geometry_witness"] = _choice_geometry_witness(
+            record["element"], entries
+        )
+
+    groups: list[list[int]] = []
+    for position in positions:
+        if (
+            not groups
+            or position != groups[-1][-1] + 1
+            or art_vectors[position] != art_vectors[groups[-1][0]]
+        ):
+            groups.append([position])
+        else:
+            groups[-1].append(position)
+
+    primary = next(
+        (
+            measurement
+            for measurement in measurements
+            if measurement["kind"] == "settled_window"
+            and measurement["corroboration_anchor"]
+        ),
+        measurements[0],
+    )
+    resolved: dict[tuple[int, str], str] = {}
+    definitions: dict[str, dict[str, Any]] = {}
+    for group in groups:
+        slot_key = "choice-slot:" + "-".join(str(position) for position in group)
+        anchors: list[tuple[float, float]] = []
+        offset_vectors: list[tuple[tuple[float, float], ...]] = []
+        namespaces: set[str] = set()
+        manifest_sizes: dict[str, dict[str, Any]] = {}
+        roster_evidence: list[dict[str, Any]] = []
+        for measurement in measurements:
+            current = [
+                by_measurement_position[(id(measurement), position)]
+                for position in group
+            ]
+            art_ids = {record["art_id"] for record in current}
+            if len(art_ids) != 1:
+                raise AmbientLifecycleError(
+                    "choice-slot intra-draw contract: one slot uses multiple art "
+                    f"identities in '{measurement['label']}'"
+                )
+            centers = [
+                (
+                    float(record["geometry_witness"]["center"]["x"]),
+                    float(record["geometry_witness"]["center"]["y"]),
+                )
+                for record in current
+            ]
+            anchor = centers[0]
+            offsets = tuple(
+                (center[0] - anchor[0], center[1] - anchor[1])
+                for center in centers
+            )
+            anchors.append(anchor)
+            offset_vectors.append(offsets)
+            namespaces.update(record["atlas_namespace"] for record in current)
+            for record in current:
+                witness = record["geometry_witness"]
+                manifest_sizes[witness["art_id"]] = copy.deepcopy(
+                    witness["logical_size"]
+                )
+                record_key = (
+                    id(measurement),
+                    record["member"]["captured_element_id"],
+                )
+                if record_key in resolved:
+                    raise AmbientLifecycleError(
+                        "choice-slot recorder defect: one captured member resolved "
+                        "into multiple slots"
+                    )
+                resolved[record_key] = slot_key
+            roster_evidence.append(
+                {
+                    "observation": measurement["label"],
+                    "instance": measurement["instance"],
+                    "process_id": measurement["process_id"],
+                    "observed_art_ids": sorted(art_ids),
+                }
+            )
+        if len(set(anchors)) != 1:
+            raise AmbientLifecycleError(
+                "choice-slot anchor contract: per-position anchor differs across "
+                "fresh instances"
+            )
+        if len(set(offset_vectors)) != 1:
+            raise AmbientLifecycleError(
+                "choice-slot inter-draw offset contract: intra-position offset "
+                "vectors differ across fresh instances"
+            )
+        if len(namespaces) != 1:
+            raise AmbientLifecycleError(
+                "choice-slot atlas-namespace contract: one slot spans multiple atlases"
+            )
+
+        primary_records = [
+            by_measurement_position[(id(primary), position)] for position in group
+        ]
+        primary_art_ids = {record["art_id"] for record in primary_records}
+        if len(primary_art_ids) != 1:
+            raise AmbientLifecycleError(
+                "choice-slot exemplar contract: primary instance has no unique "
+                "slot exemplar"
+            )
+        anchor = anchors[0]
+        offsets = offset_vectors[0]
+        definitions[slot_key] = {
+            "member_key": slot_key,
+            "choice_dependent": True,
+            "relative_draw_positions": list(group),
+            "draw_position_semantics": "one_based_full_relative_draw_sequence",
+            "anchor": {
+                "x": _json_number(anchor[0]),
+                "y": _json_number(anchor[1]),
+            },
+            "inter_draw_offset_vectors": [
+                {
+                    "relative_draw_position": position,
+                    "x": _json_number(offset[0]),
+                    "y": _json_number(offset[1]),
+                }
+                for position, offset in zip(group, offsets, strict=True)
+            ],
+            "atlas_namespace": next(iter(namespaces)),
+            "exact_per_sample_member_count": len(group),
+            "exemplar_art_id": next(iter(primary_art_ids)),
+            "exemplar_payloads": [
+                {
+                    "relative_draw_position": record["relative_draw_position"],
+                    "choice_dependent": True,
+                    "payload": copy.deepcopy(record["member"]["semantic_payload"]),
+                }
+                for record in primary_records
+            ],
+            "observed_roster_evidence": roster_evidence,
+            "manifest_logical_sizes": dict(sorted(manifest_sizes.items())),
+            "trim_centering_verified_member_count": len(measurements) * len(group),
+        }
+    return resolved, definitions
+
+
 def _core_counter_for_measurements(
     measurements: list[dict[str, Any]],
     ambient_family: set[str],
     varying_member_keys: dict[tuple[int, str], str],
-) -> tuple[Counter[bytes], dict[bytes, dict[str, Any]]]:
+    animated_family_keys: dict[tuple[int, str], str] | None = None,
+    asset_manifest: dict[str, Any] | None = None,
+) -> tuple[
+    Counter[bytes],
+    dict[bytes, dict[str, Any]],
+    dict[tuple[int, str], str],
+    dict[str, dict[str, Any]],
+]:
+    animated_family_keys = animated_family_keys or {}
     stable_counters: list[Counter[bytes]] = []
     payload_by_signature: dict[bytes, dict[str, Any]] = {}
     family_by_signature: dict[bytes, bool] = {}
@@ -765,7 +1538,8 @@ def _core_counter_for_measurements(
         for member in measurement["members"]:
             if member["classification"] != "full_presence":
                 continue
-            if (id(measurement), member["captured_element_id"]) in varying_member_keys:
+            record_key = (id(measurement), member["captured_element_id"])
+            if record_key in varying_member_keys or record_key in animated_family_keys:
                 # Motion/toggle capability is asymmetric: one measured event
                 # anywhere makes every quiet observation of the same semantic
                 # member non-core.
@@ -785,16 +1559,44 @@ def _core_counter_for_measurements(
     common = stable_counters[0].copy()
     for counter in stable_counters[1:]:
         common &= counter
-    for index, counter in enumerate(stable_counters):
+    non_family_residuals: list[Counter[bytes]] = []
+    for counter in stable_counters:
         residual = counter - common
-        non_family = [
-            signature
-            for signature, count in residual.items()
-            if count and not family_by_signature.get(signature, False)
-        ]
-        if non_family:
-            payload = payload_by_signature[non_family[0]]
-            label = payload.get("action_id") or payload.get("art_id") or payload.get("text")
+        non_family_residuals.append(
+            Counter(
+                {
+                    signature: count
+                    for signature, count in residual.items()
+                    if count and not family_by_signature.get(signature, False)
+                }
+            )
+        )
+    choice_slot_keys: dict[tuple[int, str], str] = {}
+    choice_slot_definitions: dict[str, dict[str, Any]] = {}
+    if any(non_family_residuals):
+        choice_slot_keys, choice_slot_definitions = _resolve_choice_slot_keys(
+            measurements, non_family_residuals, asset_manifest
+        )
+    for index, (measurement, residual) in enumerate(
+        zip(measurements, non_family_residuals, strict=True)
+    ):
+        remaining = residual.copy()
+        for member in measurement["members"]:
+            record_key = (id(measurement), member["captured_element_id"])
+            if record_key not in choice_slot_keys:
+                continue
+            signature = canonical_bytes(member["semantic_payload"])
+            remaining[signature] -= 1
+        unresolved = next(
+            (signature for signature, count in remaining.items() if count), None
+        )
+        if unresolved is not None:
+            payload = payload_by_signature[unresolved]
+            label = (
+                payload.get("action_id")
+                or payload.get("art_id")
+                or payload.get("text")
+            )
             raise AmbientLifecycleError(
                 "cross-instance structural core inequality: non-ambient full-presence "
                 f"member '{label}' differs or is missing in observation {index}"
@@ -803,7 +1605,12 @@ def _core_counter_for_measurements(
         raise AmbientLifecycleError(
             "cross-instance structural core contract: independent instances share no core"
         )
-    return common, payload_by_signature
+    return (
+        common,
+        payload_by_signature,
+        choice_slot_keys,
+        choice_slot_definitions,
+    )
 
 
 def _project_core_sequence(
@@ -852,6 +1659,145 @@ def _normalized_core(
         elements.append(element)
         ids.append(normalized_id)
     return elements, ids
+
+
+def reproduce_standalone_structural_core(
+    primary_samples: list[dict[str, Any]],
+    confirmation_samples: list[dict[str, Any]],
+    *,
+    label: str,
+    authorized_ambient_family: set[str] | None = None,
+) -> dict[str, Any]:
+    """Reproduce one local core from two fresh settled standalone windows.
+
+    This is the v2.5 overlay-derivation seam.  It deliberately precedes the
+    campaign-wide motion-capability union: a member can reproduce as local
+    standalone structure here and still be classified animated in the final
+    screen fixture after another valid entry path records a rect event.
+    """
+    measurements = [
+        _measure_window(primary_samples, label=f"{label}:primary"),
+        _measure_window(confirmation_samples, label=f"{label}:confirmation"),
+    ]
+    identities = {
+        (
+            measurement["identity"]["semantic_surface"],
+            measurement["identity"]["screen_id"],
+        )
+        for measurement in measurements
+    }
+    if len(identities) != 1:
+        raise AmbientLifecycleError(
+            "standalone structural-core reproduction contract: fresh windows "
+            f"do not name one screen for '{label}'"
+        )
+    family_membership_events: dict[str, Counter[str]] = defaultdict(Counter)
+    for measurement in measurements:
+        for member in measurement["members"]:
+            if not member["art_id"]:
+                continue
+            for event in member["events"]["membership"]:
+                family_membership_events[member["art_id"]][event["event"]] += 1
+    bidirectional_families = {
+        art_id
+        for art_id, events in family_membership_events.items()
+        if events["spawn"] > 0 and events["despawn"] > 0
+    }
+    authorized_family = set(authorized_ambient_family or ())
+    if any(
+        member["classification"] == "one_way_spawn_candidate"
+        and member["art_id"] not in bidirectional_families
+        and member["art_id"] not in authorized_family
+        for measurement in measurements
+        for member in measurement["members"]
+    ):
+        raise AmbientLifecycleError(
+            "standalone structural-core reproduction contract: population ramp "
+            f"remains inside a settled window for '{label}'"
+        )
+
+    counters: list[Counter[bytes]] = []
+    payload_by_signature: dict[bytes, dict[str, Any]] = {}
+    ambient_family = authorized_family | {
+        member["art_id"]
+        for measurement in measurements
+        for member in measurement["members"]
+        if (
+            member["classification"] in {"ephemeral", "visibility_cycling"}
+            or (
+                member["classification"] == "one_way_spawn_candidate"
+                and member["art_id"] in bidirectional_families
+            )
+        )
+        and member["art_id"]
+    }
+    for measurement in measurements:
+        counter: Counter[bytes] = Counter()
+        for member in measurement["members"]:
+            if member["classification"] != "full_presence":
+                continue
+            signature = canonical_bytes(member["semantic_payload"])
+            counter[signature] += 1
+            payload_by_signature.setdefault(
+                signature, copy.deepcopy(member["semantic_payload"])
+            )
+        counters.append(counter)
+    common = counters[0] & counters[1]
+    for index, counter in enumerate(counters):
+        residual = counter - common
+        unresolved = next(
+            (
+                signature
+                for signature, count in residual.items()
+                if count
+                and payload_by_signature[signature].get("art_id")
+                not in ambient_family
+            ),
+            None,
+        )
+        if unresolved is not None:
+            payload = payload_by_signature[unresolved]
+            witness = (
+                payload.get("action_id")
+                or payload.get("art_id")
+                or payload.get("text")
+            )
+            raise AmbientLifecycleError(
+                "standalone structural-core reproduction contract: non-ambient "
+                f"member '{witness}' differs in fresh window {index} for '{label}'"
+            )
+    if not common:
+        raise AmbientLifecycleError(
+            "standalone structural-core reproduction contract: fresh windows "
+            f"share no core for '{label}'"
+        )
+
+    reference_sequence: list[bytes] | None = None
+    for measurement in measurements:
+        for sample_index, sample in enumerate(measurement["samples"]):
+            sequence, _ = _project_core_sequence(sample["payload"], common)
+            if reference_sequence is None:
+                reference_sequence = sequence
+            elif sequence != reference_sequence:
+                raise AmbientLifecycleError(
+                    "standalone structural-core reproduction contract: relative "
+                    f"draw order changed in '{label}' sample {sample_index}"
+                )
+    if reference_sequence is None:
+        raise AmbientLifecycleError(
+            "standalone structural-core reproduction contract: no sample sequence "
+            f"was reached for '{label}'"
+        )
+    screen_id = measurements[0]["identity"]["screen_id"]
+    elements, _ = _normalized_core(
+        screen_id, reference_sequence, payload_by_signature
+    )
+    return {
+        "screen_id": screen_id,
+        "draw_order_semantics": "structural_core_relative_sequence",
+        "element_count": len(elements),
+        "elements": elements,
+    }
 
 
 def _union_envelope(elements: list[dict[str, Any]]) -> dict[str, Any]:
@@ -943,6 +1889,7 @@ def resolve_ambient_lifecycle(
     observations: list[dict[str, Any]],
     *,
     maximum_ambient_fraction: float = MAXIMUM_AMBIENT_FRACTION,
+    asset_manifest: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Resolve one screen from two fresh instances and optional extensions."""
     if len(observations) < 2:
@@ -1042,10 +1989,6 @@ def resolve_ambient_lifecycle(
         in {"ephemeral", "visibility_cycling", "one_way_spawn_candidate"}
         and member["art_id"]
     }
-    varying_member_keys, cross_window_rect_events = _resolve_varying_member_keys(
-        measurements, ambient_family
-    )
-    corroborations: list[dict[str, Any]] = []
     settled_measurements = [
         measurement
         for measurement in measurements
@@ -1066,6 +2009,17 @@ def resolve_ambient_lifecycle(
             "motion capability resolution requires two fresh standalone "
             "corroboration anchors"
         )
+    animated_family_keys, animated_family_definitions = (
+        _resolve_animated_family_keys(measurements, ambient_family)
+    )
+    varying_member_keys, cross_window_rect_events = _resolve_varying_member_keys(
+        measurements, ambient_family, animated_family_keys
+    )
+    resolved_ambient_keys = {
+        **varying_member_keys,
+        **animated_family_keys,
+    }
+    corroborations: list[dict[str, Any]] = []
     extended_measurements = [
         measurement
         for measurement in measurements
@@ -1137,8 +2091,17 @@ def resolve_ambient_lifecycle(
                     ],
                 }
             )
-    core_counter, payload_by_signature = _core_counter_for_measurements(
-        measurements, ambient_family, varying_member_keys
+    (
+        core_counter,
+        payload_by_signature,
+        choice_slot_keys,
+        choice_slot_definitions,
+    ) = _core_counter_for_measurements(
+        measurements,
+        ambient_family,
+        varying_member_keys,
+        animated_family_keys,
+        asset_manifest,
     )
     reference_sequence: list[bytes] | None = None
     for measurement in measurements:
@@ -1187,8 +2150,23 @@ def resolve_ambient_lifecycle(
         identity["screen_id"], reference_sequence, payload_by_signature
     )
     bands = _core_bands(
-        measurements, core_counter, core_ids, varying_member_keys
+        measurements,
+        core_counter,
+        core_ids,
+        {**resolved_ambient_keys, **choice_slot_keys},
     )
+    choice_slots: list[dict[str, Any]] = []
+    for index, (_, definition) in enumerate(
+        sorted(
+            choice_slot_definitions.items(),
+            key=lambda item: item[1]["relative_draw_positions"],
+        ),
+        start=1,
+    ):
+        entry = copy.deepcopy(definition)
+        entry["id"] = f"{_slug(identity['screen_id'])}.choice_slot.{index}"
+        entry["draw_bands"] = copy.deepcopy(bands[entry["member_key"]])
+        choice_slots.append(entry)
 
     member_classes: dict[str, set[str]] = defaultdict(set)
     event_counts: dict[str, Counter[str]] = defaultdict(Counter)
@@ -1197,11 +2175,18 @@ def resolve_ambient_lifecycle(
         remaining_core = core_counter.copy()
         for member in measurement["members"]:
             art_id = member["art_id"]
+            choice_slot_key = choice_slot_keys.get(
+                (id(measurement), member["captured_element_id"])
+            )
+            animated_family_key = animated_family_keys.get(
+                (id(measurement), member["captured_element_id"])
+            )
             varying_key = varying_member_keys.get(
                 (id(measurement), member["captured_element_id"])
             )
             member_key = (
-                varying_key
+                animated_family_key
+                or varying_key
                 or art_id
                 or f"member:{member['capability_signature']}"
             )
@@ -1209,13 +2194,18 @@ def resolve_ambient_lifecycle(
             signature = canonical_bytes(member["semantic_payload"])
             in_core = (
                 classification == "full_presence"
+                and animated_family_key is None
                 and varying_key is None
                 and remaining_core[signature] > 0
             )
             if in_core:
                 remaining_core[signature] -= 1
                 continue
-            if classification == "one_way_spawn_candidate":
+            if choice_slot_key is not None:
+                continue
+            if animated_family_key is not None:
+                classification = "animated_family"
+            elif classification == "one_way_spawn_candidate":
                 classification = "ephemeral"
             elif classification == "full_presence" and varying_key is not None:
                 # A quiet window cannot demote an animated capability measured
@@ -1317,7 +2307,7 @@ def resolve_ambient_lifecycle(
             )
         art_id = next(iter(record_art_ids), "")
         for classification in classes:
-            if classification == "animated" and (
+            if classification in {"animated", "animated_family"} and (
                 events["rect_change"] + events["cross_window_rect_change"] == 0
             ):
                 raise AmbientLifecycleError(
@@ -1399,7 +2389,7 @@ def resolve_ambient_lifecycle(
                 )
                 class_events["visible_toggle"] += len(member_events["visible"])
                 class_events["rect_change"] += len(member_events["geometry"])
-            if classification == "animated":
+            if classification in {"animated", "animated_family"}:
                 class_events["cross_window_rect_change"] = events[
                     "cross_window_rect_change"
                 ]
@@ -1416,13 +2406,14 @@ def resolve_ambient_lifecycle(
                     "captured_member_count": len(class_records),
                 }
             )
-        family_entries.append(
-            {
+        entry = {
                 "member_key": member_key,
                 "art_id": art_id,
                 "member_classes": classes,
                 "draw_bands": bands[
-                    member_key if member_key.startswith("member:") else f"art:{art_id}"
+                    member_key
+                    if member_key.startswith(("member:", "animated-family:"))
+                    else f"art:{art_id}"
                 ],
                 "class_members": class_members,
                 "union_spatial_envelope": _union_envelope(elements),
@@ -1434,7 +2425,11 @@ def resolve_ambient_lifecycle(
                 "dominant_visible": visible_true * 2 >= len(elements),
                 "events": dict(events),
             }
-        )
+        if member_key in animated_family_definitions:
+            entry["animated_family"] = copy.deepcopy(
+                animated_family_definitions[member_key]
+            )
+        family_entries.append(entry)
 
     ambient_id_counts: Counter[str] = Counter()
     for entry in family_entries:
@@ -1513,13 +2508,23 @@ def resolve_ambient_lifecycle(
         "ui_structural_core_element_ids": ui_core_ids,
         "ambient_family_art_ids": sorted(ambient_family),
         "classification_map": {
-            entry["id"]: entry["member_classes"]
-            for entry in family_entries
+            **{
+                entry["id"]: entry["member_classes"]
+                for entry in family_entries
+            },
+            **{entry["id"]: ["choice_slot"] for entry in choice_slots},
         },
+        "choice_slot_ids": [entry["id"] for entry in choice_slots],
+        "choice_slots": choice_slots,
         "animated_element_ids": [
             entry["id"]
             for entry in family_entries
-            if "animated" in entry["member_classes"]
+            if set(entry["member_classes"]) & {"animated", "animated_family"}
+        ],
+        "animated_family_ids": [
+            entry["id"]
+            for entry in family_entries
+            if "animated_family" in entry["member_classes"]
         ],
         "visibility_cycling_element_ids": [
             entry["id"]
@@ -1585,9 +2590,23 @@ def resolve_ambient_lifecycle(
 
 
 def validate_ambient_resolution(
-    declared: dict[str, Any], observations: list[dict[str, Any]]
+    declared: dict[str, Any],
+    observations: list[dict[str, Any]],
+    *,
+    asset_manifest: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    expected = resolve_ambient_lifecycle(observations)
+    expected = resolve_ambient_lifecycle(
+        observations, asset_manifest=asset_manifest
+    )
+    declared_family_ids = declared.get("animated_family_ids", [])
+    expected_family_ids = expected["animated_family_ids"]
+    if not isinstance(declared_family_ids, list) or sorted(declared_family_ids) != sorted(
+        expected_family_ids
+    ):
+        raise AmbientLifecycleError(
+            "animated family rank-crossing contract: declared family collapse "
+            "lacks the machine-derived both-instance crossing proof"
+        )
     declared_map = declared.get("classification_map")
     if isinstance(declared_map, dict):
         expected_map = expected["classification_map"]
@@ -1902,7 +2921,7 @@ def find_ambient_settled_window(samples: list[dict[str, Any]]) -> dict[str, Any]
         result["total_semantic_samples"] = end + 1
         return result
     raise AmbientLifecycleError(
-        "capture never reached a Settlement v2.5 window; "
+        "capture never reached a Settlement v2.9 window; "
         f"samples={len(samples)} last_candidate='{last_error}'"
     )
 

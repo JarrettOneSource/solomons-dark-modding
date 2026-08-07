@@ -25,7 +25,10 @@ from native_menu_settlement_v2 import (
     validate_overlay_reference,
 )
 from resolve_native_menu_motion_campaign import ResolutionError, resolve_campaign
-from native_menu_ambient_lifecycle import sha256_json as ambient_sha256_json
+from native_menu_ambient_lifecycle import (
+    reproduce_standalone_structural_core,
+    sha256_json as ambient_sha256_json,
+)
 from native_menu_landed_diagnosis_v25 import (
     LandedDiagnosisError,
     diagnose_landed_layout,
@@ -78,12 +81,37 @@ def resolve_evidence_file(
     fixture_path: Path,
     filename: str,
 ) -> Path:
+    if Path(filename).name != filename:
+        raise PromotionError(
+            f"raw evidence filename must not contain a path: {filename!r}"
+        )
+    adjacent = fixture_path if fixture_path.is_dir() else fixture_path.parent
+    candidate_root = (
+        adjacent.parent
+        if adjacent.name in {"menu-layouts", "menu-transition-layouts"}
+        else adjacent
+    )
+    conventional_candidates = {
+        path.resolve()
+        for path in (
+            adjacent / filename,
+            candidate_root / filename,
+            candidate_root / "menu-settlement-traces" / filename,
+            candidate_root / "menu-animation-confirmations" / filename,
+            candidate_root / "menu-reference-captures" / filename,
+        )
+        if path.is_file()
+    }
+    if len(conventional_candidates) == 1:
+        return conventional_candidates.pop()
+    if len(conventional_candidates) > 1:
+        raise PromotionError(
+            f"raw evidence lookup for {filename!r} is ambiguous inside its "
+            f"candidate root: {sorted(str(path) for path in conventional_candidates)}"
+        )
     candidates = {
         candidate.resolve()
-        for candidate in (
-            fixture_path.parent / filename,
-            *evidence_root.rglob(filename),
-        )
+        for candidate in evidence_root.rglob(filename)
         if candidate.is_file()
     }
     if len(candidates) != 1:
@@ -1037,7 +1065,7 @@ def _structural_core_v25(layout: dict[str, Any]) -> dict[str, Any]:
         "elements",
     )
     if any(field not in layout for field in fields):
-        raise PromotionError("Settlement v2.5 layout has an incomplete structural core")
+        raise PromotionError("Settlement v2.9 layout has an incomplete structural core")
     return {field: copy.deepcopy(layout[field]) for field in fields}
 
 
@@ -1059,25 +1087,25 @@ def validate_settlement_fixture_v25(
     fixture: dict[str, Any],
 ) -> dict[str, Any]:
     if fixture.get("schema") != "solomon-dark-native-menu-layout-v3":
-        raise PromotionError(f"{fixture_path} does not use Settlement v2.5 schema v3")
+        raise PromotionError(f"{fixture_path} does not use Settlement v2.9 schema v3")
     header = fixture.get("header")
     layout = fixture.get("layout")
     if not isinstance(header, dict) or not isinstance(layout, dict):
-        raise PromotionError(f"{fixture_path} has no v2.5 header/layout")
+        raise PromotionError(f"{fixture_path} has no v2.9 header/layout")
     if header.get("recorded_live") is not True:
         raise PromotionError(f"{fixture_path} is not marked as a live recording")
     source = _validate_source_v25(repo_root, header.get("source"), str(fixture_path))
     settlement = header.get("settlement")
-    if not isinstance(settlement, dict) or settlement.get("settlement_spec") != "2.5":
-        raise PromotionError(f"{fixture_path} does not identify Settlement v2.5")
+    if not isinstance(settlement, dict) or settlement.get("settlement_spec") != "2.9":
+        raise PromotionError(f"{fixture_path} does not identify Settlement v2.9")
     if settlement.get("consecutive_structural_samples", 0) < 40:
         raise PromotionError(f"{fixture_path} lacks 40 consecutive structural samples")
     if settlement.get("stable_span_milliseconds", 0) < 2_000:
         raise PromotionError(f"{fixture_path} lacks a two-second structural window")
     if settlement.get("settle_latency_milliseconds", 0) < 2_000:
         raise PromotionError(f"{fixture_path} records an impossible settle latency")
-    if layout.get("settlement_spec") != "2.5":
-        raise PromotionError(f"{fixture_path} layout lost its v2.5 classification")
+    if layout.get("settlement_spec") != "2.9":
+        raise PromotionError(f"{fixture_path} layout lost its v2.9 classification")
     core = _structural_core_v25(layout)
     core_sha256 = ambient_sha256_json(core)
     if layout.get("structural_core_sha256") != core_sha256:
@@ -1093,18 +1121,40 @@ def validate_settlement_fixture_v25(
         raise PromotionError(f"{fixture_path} structural-core census is false")
     classification = layout.get("classification_map")
     ambient_members = layout.get("ambient_members")
-    if not isinstance(classification, dict) or not isinstance(ambient_members, list):
-        raise PromotionError(f"{fixture_path} lost its v2.5 ambient classification map")
+    choice_slots = layout.get("choice_slots")
+    choice_slot_ids = layout.get("choice_slot_ids")
+    if (
+        not isinstance(classification, dict)
+        or not isinstance(ambient_members, list)
+        or not isinstance(choice_slots, list)
+        or not isinstance(choice_slot_ids, list)
+    ):
+        raise PromotionError(f"{fixture_path} lost its v2.9 classification maps")
     member_ids = [member.get("id") for member in ambient_members if isinstance(member, dict)]
     if len(member_ids) != len(ambient_members) or len(member_ids) != len(set(member_ids)):
         raise PromotionError(f"{fixture_path} ambient member identities are absent or ambiguous")
-    if set(classification) != set(member_ids):
-        raise PromotionError(f"{fixture_path} ambient member map and classification map disagree")
+    declared_choice_ids = [
+        slot.get("id") for slot in choice_slots if isinstance(slot, dict)
+    ]
+    if (
+        len(declared_choice_ids) != len(choice_slots)
+        or len(declared_choice_ids) != len(set(declared_choice_ids))
+        or declared_choice_ids != choice_slot_ids
+    ):
+        raise PromotionError(
+            f"{fixture_path} choice-slot identities are absent or ambiguous"
+        )
+    if set(classification) != set(member_ids) | set(choice_slot_ids):
+        raise PromotionError(
+            f"{fixture_path} member maps and classification map disagree"
+        )
     allowed_classes = {
         "animated",
+        "animated_family",
         "visibility_cycling",
         "ephemeral",
         "ambient_persistent",
+        "choice_slot",
     }
     for member_id, classes in classification.items():
         if (
@@ -1115,6 +1165,14 @@ def validate_settlement_fixture_v25(
         ):
             raise PromotionError(
                 f"{fixture_path} ambient member '{member_id}' has an unauthorized class"
+            )
+        if member_id in choice_slot_ids and classes != ["choice_slot"]:
+            raise PromotionError(
+                f"{fixture_path} choice slot '{member_id}' has an unauthorized class"
+            )
+        if member_id in member_ids and "choice_slot" in classes:
+            raise PromotionError(
+                f"{fixture_path} ambient member '{member_id}' was mislabeled as a choice slot"
             )
     ambient_count = layout.get("ambient_semantic_member_count")
     peak_count = layout.get("peak_element_count")
@@ -1142,7 +1200,50 @@ def validate_settlement_fixture_v25(
         or not isinstance(lifecycle.get("independent_instances"), list)
         or len(lifecycle["independent_instances"]) < 2
     ):
-        raise PromotionError(f"{fixture_path} has no two-instance v2.5 resolution receipt")
+        raise PromotionError(f"{fixture_path} has no two-instance v2.9 resolution receipt")
+
+    if choice_slots:
+        choice_header = header.get("choice_slots")
+        if (
+            not isinstance(choice_header, dict)
+            or choice_header.get("settlement_spec") != "2.9"
+            or choice_header.get("promotion")
+            != "reused_stopped_settled_windows_rederived_under_v2.8"
+            or choice_header.get("choice_slot_ids") != choice_slot_ids
+        ):
+            raise PromotionError(
+                f"{fixture_path} choice slots lack their v2.9 promotion provenance"
+            )
+        _receipt_path_v25(
+            evidence_root,
+            fixture_path.parent,
+            choice_header.get("asset_manifest", {}),
+            f"{fixture_path} choice-slot asset manifest",
+        )
+        diagnostic_receipts = choice_header.get("diagnostic_receipts")
+        expected_diagnostics = {
+            "choice_core_stop_audit",
+            "choice_core_resolver_transcript",
+            "choice_core_stop_manifest",
+        }
+        if (
+            not isinstance(diagnostic_receipts, dict)
+            or set(diagnostic_receipts) != expected_diagnostics
+        ):
+            raise PromotionError(
+                f"{fixture_path} choice-slot diagnostic receipt census is incomplete"
+            )
+        for label in sorted(expected_diagnostics):
+            _receipt_path_v25(
+                evidence_root,
+                fixture_path.parent,
+                diagnostic_receipts[label],
+                f"{fixture_path} {label}",
+            )
+    elif "choice_slots" in header:
+        raise PromotionError(
+            f"{fixture_path} carries choice-slot provenance without resolved slots"
+        )
 
     raw_receipt = header.get("settlement_trace", header.get("raw_recording"))
     if not isinstance(raw_receipt, dict):
@@ -1207,23 +1308,23 @@ def validate_settlement_fixture_v25(
 
 def _resolved_navigation_inputs_v25(
     evidence_root: Path, navigation_path: Path, navigation: dict[str, Any]
-) -> tuple[Path, Path, Path, Path | None]:
+) -> tuple[Path, Path, Path, Path | None, Path]:
     resolution = navigation.get("header", {}).get("ambient_lifecycle_resolution")
-    if not isinstance(resolution, dict) or resolution.get("settlement_spec") != "2.5":
+    if not isinstance(resolution, dict) or resolution.get("settlement_spec") != "2.9":
         raise PromotionError(
-            "candidate navigation has no machine-derived ambient_lifecycle_resolution for Settlement v2.5"
+            "candidate navigation has no machine-derived ambient_lifecycle_resolution for Settlement v2.9"
         )
     primary = _receipt_path_v25(
         evidence_root,
         navigation_path.parent,
         resolution.get("primary_raw_recording", {}),
-        "v2.5 primary navigation",
+        "v2.9 primary navigation",
     )
     confirmation = _receipt_path_v25(
         evidence_root,
         navigation_path.parent,
         resolution.get("confirmation_raw_recording", {}),
-        "v2.5 confirmation navigation",
+        "v2.9 confirmation navigation",
     )
     relative_motion = resolution.get("motion_observation_directory")
     if not isinstance(relative_motion, str) or not relative_motion:
@@ -1238,12 +1339,18 @@ def _resolved_navigation_inputs_v25(
             evidence_root,
             navigation_path.parent,
             supplemental_receipt,
-            "v2.5 supplemental settled-pair manifest",
+            "v2.9 supplemental settled-pair manifest",
         )
         if isinstance(supplemental_receipt, dict)
         else None
     )
-    return primary, confirmation, motion_root, supplemental
+    asset_manifest = _receipt_path_v25(
+        evidence_root,
+        navigation_path.parent,
+        resolution.get("choice_slot_asset_manifest", {}),
+        "v2.9 choice-slot asset manifest",
+    )
+    return primary, confirmation, motion_root, supplemental, asset_manifest
 
 
 def _aggregate_wrapper_map(
@@ -1289,11 +1396,18 @@ def validate_and_promote(
 ) -> dict[str, Any]:
     landed_root = repo_root / "tests/fixtures/webgame"
     landed_golden = read_json(landed_root / "menu-goldens.json")
+    order_override_contract = read_json(
+        landed_root / "native-menu-beta-notice-order-v29.json"
+    )
     resolved_navigation = read_json(navigation_path)
-    primary_navigation, confirmation_navigation, motion_root, supplemental_manifest = (
-        _resolved_navigation_inputs_v25(
-            evidence_root, navigation_path, resolved_navigation
-        )
+    (
+        primary_navigation,
+        confirmation_navigation,
+        motion_root,
+        supplemental_manifest,
+        asset_manifest,
+    ) = _resolved_navigation_inputs_v25(
+        evidence_root, navigation_path, resolved_navigation
     )
     try:
         resolve_campaign(
@@ -1307,10 +1421,11 @@ def validate_and_promote(
             False,
             True,
             supplemental_manifest,
+            asset_manifest,
         )
     except (ResolutionError, SettlementV2Error) as error:
         raise PromotionError(
-            f"candidate Settlement v2.5 campaign did not re-derive: {error}"
+            f"candidate Settlement v2.9 campaign did not re-derive: {error}"
         ) from error
 
     landed_layout_entries = landed_golden.get("layouts")
@@ -1327,7 +1442,9 @@ def validate_and_promote(
         candidate_root / "menu-layouts", "*.json", layout_names
     )
     candidate_transition_paths = require_unique_files(
-        candidate_root / "menu-transition-layouts", "*.json", {"hub.json"}
+        candidate_root / "menu-transition-layouts",
+        "*.json",
+        {"hub_new_game.json", "hub_resumed.json"},
     )
     records: dict[str, dict[str, Any]] = {}
     path_by_layout_id: dict[str, Path] = {}
@@ -1340,16 +1457,15 @@ def validate_and_promote(
             raise PromotionError(f"candidate standalone id '{layout_id}' is ambiguous")
         records[layout_id] = record
         path_by_layout_id[layout_id] = path
-    if len(records) != 29 or "hub" not in records:
-        raise PromotionError("candidate standalone sweep did not reach 28 menus plus hub")
+    if len(records) != 30 or not {"hub_new_game", "hub_resumed"} <= set(records):
+        raise PromotionError(
+            "candidate standalone sweep did not reach 28 menus plus two Hub layouts"
+        )
 
     landed_by_layout_id = {
         Path(entry["fixture"]).stem: entry["layout"]
         for entry in landed_layout_entries
     }
-    landed_hub_path = landed_root / "menu-transition-layouts/hub.json"
-    landed_hub = read_json(landed_hub_path)
-    landed_by_layout_id["hub"] = landed_hub["layout"]
     for witness in ("create-element", "pause-menu", "beta-notice", "main-menu-root"):
         if witness not in records or witness not in landed_by_layout_id:
             raise PromotionError(f"overlay derivation did not reach {witness} witness")
@@ -1362,9 +1478,25 @@ def validate_and_promote(
     create_corroboration = semantic_overlay_corroboration(create_residual)
     pause_corroboration = semantic_overlay_corroboration(pause_residual)
     try:
+        beta_standalone_core = reproduce_standalone_structural_core(
+            records["beta-notice"]["primary_samples"],
+            records["beta-notice"]["confirmation_samples"],
+            label="beta_notice",
+            authorized_ambient_family=set(
+                records["beta-notice"]["layout"]["ambient_family_art_ids"]
+            ),
+        )
+        main_standalone_core = reproduce_standalone_structural_core(
+            records["main-menu-root"]["primary_samples"],
+            records["main-menu-root"]["confirmation_samples"],
+            label="main_menu_root",
+            authorized_ambient_family=set(
+                records["main-menu-root"]["layout"]["ambient_family_art_ids"]
+            ),
+        )
         derived_overlay_reference = derive_overlay_reference(
-            records["beta-notice"]["layout"],
-            records["main-menu-root"]["layout"],
+            beta_standalone_core,
+            main_standalone_core,
             create_corroboration,
             pause_corroboration,
         )
@@ -1372,7 +1504,7 @@ def validate_and_promote(
         raise PromotionError(f"derived beta-dialog overlay reference: {error}") from error
     candidate_overlay_path = candidate_root / "menu-overlay-reference.json"
     if not candidate_overlay_path.is_file():
-        raise PromotionError("candidate derived v2.5 overlay reference is missing")
+        raise PromotionError("candidate derived v2.9 overlay reference is missing")
     candidate_overlay_reference = read_json(candidate_overlay_path)
     if canonical_bytes(candidate_overlay_reference) != canonical_bytes(
         derived_overlay_reference
@@ -1399,6 +1531,22 @@ def validate_and_promote(
 
     standalone_diagnoses: dict[str, dict[str, Any]] = {}
     for layout_id in sorted(records):
+        if layout_id not in landed_by_layout_id:
+            fork = records[layout_id]["header"].get("path_dependent_core")
+            if layout_id not in {"hub_new_game", "hub_resumed"} or not isinstance(
+                fork, dict
+            ):
+                raise PromotionError(
+                    f"candidate standalone {layout_id} has no landed comparison"
+                )
+            standalone_diagnoses[layout_id] = {
+                "status": "new_path_dependent_layout",
+                "parent_screen_id": fork.get("parent_screen_id"),
+                "path_qualifier": fork.get("path_qualifier"),
+                "selector": fork.get("selector"),
+                "fork_decision": copy.deepcopy(fork.get("fork_decision")),
+            }
+            continue
         try:
             standalone_diagnoses[layout_id] = diagnose_landed_layout(
                 landed_by_layout_id[layout_id],
@@ -1406,6 +1554,7 @@ def validate_and_promote(
                 records[layout_id]["primary_trace"],
                 records[layout_id]["confirmation_trace"],
                 derived_overlay_reference,
+                order_override_contract,
             )
         except LandedDiagnosisError as error:
             raise PromotionError(f"STOP: standalone {layout_id}: {error}") from error
@@ -1413,11 +1562,14 @@ def validate_and_promote(
     candidate_golden_path = candidate_root / "menu-goldens.json"
     candidate_golden = read_json(candidate_golden_path)
     if candidate_golden.get("schema") != "solomon-dark-menu-goldens-v3":
-        raise PromotionError("candidate aggregate does not use Settlement v2.5 schema v3")
+        raise PromotionError("candidate aggregate does not use Settlement v2.9 schema v3")
     expected_layout_fixtures = {
         f"menu-layouts/{name}" for name in candidate_layout_paths
     }
-    expected_transition_fixtures = {"menu-transition-layouts/hub.json"}
+    expected_transition_fixtures = {
+        "menu-transition-layouts/hub_new_game.json",
+        "menu-transition-layouts/hub_resumed.json",
+    }
     embedded = _aggregate_wrapper_map(
         candidate_golden.get("layouts"), expected_layout_fixtures, "candidate embedded layouts"
     )
@@ -1558,16 +1710,30 @@ def validate_and_promote(
             }
         )
         source_layout_id = raw_edge["before"]["layout_id"]
-        try:
-            source_diagnosis = diagnose_landed_layout(
-                old_edge["before"]["layout"],
-                records[source_layout_id]["layout"],
-                records[source_layout_id]["primary_trace"],
-                records[source_layout_id]["confirmation_trace"],
-                derived_overlay_reference,
-            )
-        except LandedDiagnosisError as error:
-            raise PromotionError(f"STOP: transition source {edge_id}: {error}") from error
+        if source_layout_id in landed_by_layout_id:
+            try:
+                source_diagnosis = diagnose_landed_layout(
+                    landed_by_layout_id[source_layout_id],
+                    records[source_layout_id]["layout"],
+                    records[source_layout_id]["primary_trace"],
+                    records[source_layout_id]["confirmation_trace"],
+                    derived_overlay_reference,
+                    order_override_contract,
+                )
+            except LandedDiagnosisError as error:
+                raise PromotionError(
+                    f"STOP: transition source {edge_id}: {error}"
+                ) from error
+        else:
+            source_diagnosis = {
+                "status": "new_path_dependent_layout",
+                "landed_payload": "not_embedded_in_v1_navigation_aggregate",
+                "fork_decision": copy.deepcopy(
+                    records[source_layout_id]["header"]["path_dependent_core"][
+                        "fork_decision"
+                    ]
+                ),
+            }
         signature_match = _navigation_endpoint_signature_v25(
             edge["before"]
         ) == _navigation_endpoint_signature_v25(old_edge["before"])
@@ -1624,7 +1790,7 @@ def validate_and_promote(
     return {
         "success": True,
         "dry_run": dry_run,
-        "settlement_spec": "2.5",
+        "settlement_spec": "2.9",
         "standalone_count": len(records),
         "standalone_diagnoses": standalone_diagnoses,
         "corrected_screen_count": len(corrected),

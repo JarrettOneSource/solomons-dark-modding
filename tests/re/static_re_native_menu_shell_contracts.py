@@ -759,13 +759,14 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
         r"\$script:NativeMenuActionDispatchTimeoutMilliseconds\s*=\s*15000.*?"
         r"function Wait-NativeMenuActionDispatch.*?"
         r"sd\.ui\.get_action_dispatch\(\$RequestId\).*?"
-        r"sd\.ui\.get_snapshot\(\).*?"
+        r"sd\.ui\.capture_current_layout\("
+        r"\[=\[\$ExpectedDestinationScreen\]=\]\).*?"
         r"\$lastStatus -ceq \"dispatched\".*?"
         r"\$lastStatus -ceq \"dispatching\".*?"
-        r"\$dispatch\.semantic_surface -ceq.*?"
-        r"\$ExpectedDestinationSurface.*?"
-        r"\$dispatch\.semantic_generation -ne.*?"
-        r"\$SourceSemanticGeneration.*?"
+        r"\$dispatch\.classified_surface -ceq.*?"
+        r"\$ExpectedDestinationScreen.*?"
+        r"\$dispatch\.layout_generation -ne.*?"
+        r"\$SourceLayoutGeneration.*?"
         r"\$lastStatus -ceq \"failed\".*?"
         r"never became.*?runnable",
         "native-menu semantic actions no longer distinguish queued or busy "
@@ -779,8 +780,8 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
         r"-Context \$context\s*`\s*"
         r"-RequestId \$requestId\s*`\s*"
         r"-ActionId \$ActionId\s*`\s*"
-        r"-SourceSemanticGeneration \$before\.semantic_generation\s*`\s*"
-        r"-ExpectedDestinationSurface \$ExpectedDestinationSurface.*?"
+        r"-SourceLayoutGeneration \$before\.layout_generation\s*`\s*"
+        r"-ExpectedDestinationScreen \$DestinationScreen.*?"
         r"\$after\s*=\s*Get-SettledNativeMenuObservation",
         "native-menu transition endpoints can settle before their queued "
         "semantic action dispatches or reaches its exact blocking-modal surface",
@@ -799,10 +800,10 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
     )
     _require_regex(
         support,
-        r"throw \(\s*\"STOP: '\$ScreenId' never satisfied Settlement v2\.5 "
+        r"throw \(\s*\"STOP: '\$ScreenId' never satisfied Settlement v2\.9 "
         r"across at least \".*?\"40 samples spanning two seconds within 60 "
         r"seconds\. \"",
-        "a native-menu surface that never satisfies Settlement v2.5 is no "
+        "a native-menu surface that never satisfies Settlement v2.9 is no "
         "longer a bounded STOP finding",
     )
     _require_regex(
@@ -1108,10 +1109,156 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
 
     return (
         "standalone, transition, native-loader, and loading-screen capture paths "
-        "apply Settlement v2.5, preserve fresh-instance raw measurements, "
+        "apply Settlement v2.9, preserve fresh-instance raw measurements, "
         "derive long corroboration from the stationary window, read Dark "
         "Cloud row census from the native browser owner, and "
         "derive commit/tree/exact-binary provenance without operator overrides"
+    )
+
+
+def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
+    assert_module_runs_in_ci("test_native_menu_layout_capture_contract")
+    api = _read(
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "public_api_surface_dispatch.inl"
+    )
+    bindings = _read("SolomonDarkModLoader/src/lua_engine_bindings_ui.cpp")
+    support = _read("scripts/NativeMenuCaptureSupport.ps1")
+    standalone = _read("scripts/Record-NativeMenuLayout.ps1")
+    transition = _read("scripts/Record-NativeMenuTransition.ps1")
+    confirmation = _read("scripts/Confirm-NativeMenuLayoutAnimation.ps1")
+    motion = _read("scripts/Observe-NativeMenuMotionCapability.ps1")
+
+    _require_regex(
+        api,
+        r"auto captured\s*=\s*"
+        r"g_debug_ui_overlay_state\.latest_layout_snapshot;\s*"
+        r"if \(captured\.screen_id != screen_id\) \{\s*"
+        r"return false;\s*\}\s*"
+        r"g_debug_ui_overlay_state\.layout_snapshots_by_screen"
+        r"\[captured\.screen_id\]\s*=\s*captured;",
+        "a classifier/tag mismatch can reach the accepted native layout cache",
+    )
+    for forbidden in (
+        "classification_agrees",
+        "stale controls omitted",
+        "captured.screen_id = std::string(screen_id)",
+    ):
+        if forbidden in api:
+            raise StaticReTestFailure(
+                "the native layout API regained mismatch relabeling or "
+                f"control stripping through {forbidden!r}"
+            )
+    _require_regex(
+        bindings,
+        r"if \(!sdmod::TryCaptureCurrentDebugUiLayoutSnapshot\(.*?"
+        r"lua_pushnil\(state\);.*?"
+        r"TryGetLatestDebugUiLayoutSnapshot\(&classified\).*?"
+        r"lua_setfield\(state, -2, \"classified_screen_id\"\);\s*"
+        r"return 2;",
+        "capture_current_layout no longer returns the measured classifier on "
+        "a refused operator tag",
+    )
+    _require_regex(
+        support,
+        r"function Assert-NativeMenuCaptureSurfaceAgreement\s*\{.*?"
+        r"if \(\$MachineClassifiedSurface -cne "
+        r"\$OperatorScreenTag\) \{\s*throw \(.*?"
+        r"STOP: native-menu capture surface agreement rejected:.*?"
+        r"operator tag '\$OperatorScreenTag' does not equal.*?"
+        r"machine-classified surface '\$MachineClassifiedSurface'\."
+        r".*?\}\s*\}",
+        "the recorder agreement gate no longer names and rejects unequal "
+        "machine surface and operator tag",
+    )
+    _require_regex(
+        support,
+        r"local snapshot, capture_diagnostic\s*=\s*"
+        r"sd\.ui\.capture_current_layout\(\[=\[\$ScreenId\]=\]\).*?"
+        r"__NATIVE_MENU_LAYOUT_SURFACE_MISMATCH__=.*?"
+        r"Status = \"wrong_surface\".*?"
+        r"Assert-NativeMenuCaptureSurfaceAgreement.*?"
+        r"Status = \"ready\".*?"
+        r"if \(\$probe\.Status -eq \"wrong_surface\"\) \{\s*"
+        r"throw \[string\]\$probe\.Detail",
+        "the live probe can accept a retagged layout or loses the measured "
+        "surface on rejection, or a mismatch can age into a timeout",
+    )
+    _require_regex(
+        standalone,
+        r"Get-SettledNativeMenuObservation.*?"
+        r"Assert-NativeMenuCaptureSurfaceAgreement\s*`\s*"
+        r"-OperatorScreenTag \$ScreenId\s*`\s*"
+        r"-MachineClassifiedSurface \$observation\.semantic_surface",
+        "standalone capture can persist a surface that disagrees with its tag",
+    )
+    _require_regex(
+        confirmation,
+        r"Get-SettledNativeMenuObservation.*?"
+        r"Assert-NativeMenuCaptureSurfaceAgreement\s*`\s*"
+        r"-OperatorScreenTag \$ScreenId\s*`\s*"
+        r"-MachineClassifiedSurface \$observation\.semantic_surface",
+        "fresh-instance confirmation can accept a surface/tag disagreement",
+    )
+    _require_regex(
+        motion,
+        r"Get-NativeMenuLayoutProbe.*?"
+        r"Assert-NativeMenuCaptureSurfaceAgreement\s*`\s*"
+        r"-OperatorScreenTag \$ScreenId\s*`\s*"
+        r"-MachineClassifiedSurface \$probe\.SemanticSurface",
+        "extended motion observation can accept a surface/tag disagreement",
+    )
+    _require_regex(
+        transition,
+        r"\$before\s*=\s*Get-SettledNativeMenuObservation.*?"
+        r"-OperatorScreenTag \$SourceScreen.*?"
+        r"-MachineClassifiedSurface \$before\.semantic_surface.*?"
+        r"\$after\s*=\s*Get-SettledNativeMenuObservation.*?"
+        r"-OperatorScreenTag \$DestinationScreen.*?"
+        r"-MachineClassifiedSurface \$after\.semantic_surface",
+        "a navigation edge can proceed without classifier agreement at both "
+        "source and destination",
+    )
+    supplied = _powershell_parameter_names(transition)
+    forbidden_overrides = {
+        "expectedsourcesurface",
+        "expecteddestinationsurface",
+    }
+    if supplied & forbidden_overrides:
+        raise StaticReTestFailure(
+            "navigation surface agreement again depends on an optional "
+            "operator-supplied expectation"
+        )
+    _require_regex(
+        transition,
+        r"ParameterSetName = \"MeasuredClick\".*?"
+        r"\$before\.layout\.elements \| Where-Object.*?"
+        r"\$measuredCandidates\.Count -ne 1.*?refusing ambiguity.*?"
+        r"\$measuredX\s*=.*?\$measuredRect\[0\].*?"
+        r"\$measuredRect\[2\].*?/ 2\.0.*?"
+        r"\$measuredY\s*=.*?\$measuredRect\[1\].*?"
+        r"\$measuredRect\[3\].*?/ 2\.0.*?"
+        r"dispatch_measurement = \$dispatchMeasurement",
+        "the corrected click driver no longer derives and receipts one live "
+        "interactive control rectangle",
+    )
+    _require_regex(
+        transition,
+        r"catch \{\s*\$failureMessage.*?"
+        r"Get-NativeMenuLayoutProbe.*?-FramePath \$failureFrame.*?"
+        r"named_reason = "
+        r"\"capture_surface_did_not_match_operator_tag\".*?"
+        r"click_point = \$resolvedClickPoint.*?"
+        r"machine_classified_surface =.*?"
+        r"frame = \$frameReceipt.*?"
+        r"Navigation aborted before proceeding",
+        "a wrong navigation destination no longer aborts with its click, "
+        "measured surface, and frame receipt",
+    )
+    return (
+        "native layout capture refuses relabeling; standalone, confirmation, "
+        "motion, and both navigation endpoints require exact classifier/tag "
+        "agreement, with live-click receipts and abort diagnostics"
     )
 
 
@@ -1122,14 +1269,14 @@ def test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired() -> str:
     unit_tests = _read("tests/test_native_menu_ambient_lifecycle.py")
     _require_regex(
         classifier,
-        r"SETTLEMENT_SPEC\s*=\s*\"2\.5\".*?"
+        r"SETTLEMENT_SPEC\s*=\s*\"2\.9\".*?"
         r"MINIMUM_SAMPLES\s*=\s*40\b.*?"
         r"MINIMUM_SPAN_MILLISECONDS\s*=\s*2_000\b.*?"
         r"MAXIMUM_AMBIENT_FRACTION\s*=\s*0\.40\b.*?"
         r"MAXIMUM_ANIMATED_FRACTION\s*=\s*0\.30\b.*?"
         r"EXTENDED_OBSERVATION_MINIMUM_SAMPLES\s*=\s*200\b.*?"
         r"EXTENDED_OBSERVATION_MINIMUM_MILLISECONDS\s*=\s*60_000\b",
-        "Settlement v2.5 sample, span, lifecycle-cap, and corroboration "
+        "Settlement v2.9 sample, span, lifecycle-cap, and corroboration "
         "constants drifted from the authorized definition",
     )
     _require_regex(
@@ -1176,7 +1323,7 @@ def test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired() -> str:
         classifier,
         r"varying_member_keys,\s*cross_window_rect_events\s*=\s*"
         r"_resolve_varying_member_keys\(\s*"
-        r"measurements, ambient_family\s*\).*?"
+        r"measurements, ambient_family, animated_family_keys\s*\).*?"
         r"motion capability resolution requires extended-observation.*?evidence.*?"
         r"classification == \"full_presence\".*?varying_key is None.*?"
         r"phantom animated.*?zero events",
@@ -1230,7 +1377,7 @@ def test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired() -> str:
         "Settlement v2.5 named guardrails lost their direct behavior tests",
     )
     return (
-        "Settlement v2.5 ambient classification, reproduced core, relative "
+        "Settlement v2.9 ambient classification, reproduced core, relative "
         "draw order, anchors/envelopes, asymmetry, caps, and guardrails are "
         "behavior-tested by the CI unit module"
     )
@@ -1296,7 +1443,9 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
         r"\"game-settings-gameplay\".*?"
         r"\(\"dark_cloud_settings_to_settings\", \"after\"\): "
         r"\"game-settings-gameplay\".*?"
-        r"if explicit_layout_ids != set\(NAVIGATION_ENDPOINT_LAYOUT_IDS\):.*?"
+        r"applicable_explicit_layout_ids\s*=\s*\{.*?"
+        r"if key\[0\] in by_label\[\"primary\"\].*?"
+        r"if explicit_layout_ids != applicable_explicit_layout_ids:.*?"
         r"explicit navigation layout mapping census changed",
         "ambient-lifecycle resolver no longer refuses the three-way settings "
         "screen ambiguity with an every-edge explicit route map",
@@ -1337,10 +1486,19 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
         r"primary_identity\s*=\s*_identity\(.*?"
         r"confirmation_identity\s*=\s*_identity\(.*?"
         r"if primary_identity == confirmation_identity:.*?"
-        r"did not use an independent fresh instance.*?"
-        r"resolution\s*=\s*resolve_ambient_lifecycle\(reached\)",
+        r"did not use an independent fresh instance",
         "screen lifecycle resolution no longer requires independent standalone "
-        "instances and resolves every reached window together",
+        "instances",
+    )
+    _require_regex(
+        resolver,
+        r"for layout_id in sorted\(fixtures\):\s*"
+        r"reached\s*=\s*observations\.get\(layout_id\).*?"
+        r"if not reached:.*?was never reached.*?"
+        r"resolution\s*=\s*resolve_ambient_lifecycle\(\s*"
+        r"reached, asset_manifest=asset_manifest\s*\)",
+        "screen lifecycle resolution no longer resolves every reached window "
+        "for each named standalone layout",
     )
     _require_regex(
         classifier,
@@ -1387,9 +1545,10 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
         r"def _resolve_varying_member_keys\(\s*measurements:.*?"
         r"varying-member identity ambiguity.*?"
         r"_core_counter_for_measurements\(\s*"
-        r"measurements, ambient_family, varying_member_keys\s*\).*?"
-        r"_core_bands\(\s*measurements, core_counter, core_ids, "
-        r"varying_member_keys",
+        r"measurements,\s*ambient_family,\s*varying_member_keys,\s*"
+        r"animated_family_keys,\s*asset_manifest,?\s*\).*?"
+        r"_core_bands\(\s*measurements,\s*core_counter,\s*core_ids,\s*"
+        r"\{\*\*resolved_ambient_keys, \*\*choice_slot_keys\}",
         "same-art rect animation again collapses distinct screen members and "
         "demotes a reproduced stable sibling from the structural core",
     )
@@ -1456,7 +1615,8 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
     _require_regex(
         classifier,
         r"ambient_family\s*=\s*\{.*?"
-        r"_resolve_varying_member_keys\(\s*measurements, ambient_family\s*\)",
+        r"_resolve_varying_member_keys\(\s*"
+        r"measurements, ambient_family, animated_family_keys\s*\)",
         "title-backdrop ambient art is again forced through screen-member "
         "motion slots instead of retaining authorized art-family identity",
     )
@@ -1518,16 +1678,16 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
         r"fixture\[\"layout\"\]\s*=\s*copy\.deepcopy\(layouts\[layout_id\]\).*?"
         r"endpoint\[\"layout\"\]\s*=\s*copy\.deepcopy\(layouts\[layout_id\]\).*?"
         r"if verify:.*?"
-        r"resolved candidate .*? is not the machine-derived v2\.5 result.*?"
-        r"resolved navigation is not the machine-derived v2\.5 result",
-        "the v2.5 resolver no longer applies one screen classification to every "
+        r"resolved candidate .*? is not the machine-derived v2\.9 result.*?"
+        r"resolved navigation is not the machine-derived v2\.9 result",
+        "the v2.9 resolver no longer applies one screen classification to every "
         "fixture/endpoint or verifies the derived artifacts byte-for-byte",
     )
     _require_regex(
         promoter,
-        r"ambient_lifecycle_resolution.*?settlement_spec.*?2\.5.*?"
+        r"ambient_lifecycle_resolution.*?settlement_spec.*?2\.9.*?"
         r"resolve_campaign\(.*?False,\s*True,",
-        "menu promotion can bypass re-derivation of the complete v2.5 campaign",
+        "menu promotion can bypass re-derivation of the complete v2.9 campaign",
     )
     _require_regex(
         confirmation,
@@ -1535,12 +1695,151 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
         r"raw_sets_match_noncontractual\s*=\s*\$rawSetsMatchNoncontractual.*?"
         r"requires_campaign_resolution\s*=\s*\$true",
         "fresh confirmation again treats window-local raw IDs as contractual "
-        "instead of deferring to campaign-wide v2.5 resolution",
+        "instead of deferring to campaign-wide v2.9 resolution",
     )
     return (
-        "Settlement v2.5 resolves one structural core and lifecycle map across "
+        "Settlement v2.9 resolves one structural core and lifecycle map across "
         "every standalone/edge observation, refuses ambiguity and provenance overrides, "
         "and promotion re-derives the complete campaign"
+    )
+
+
+def test_native_menu_path_dependent_core_fork_is_exact() -> str:
+    assert_module_runs_in_ci("test_native_menu_ambient_lifecycle")
+    resolver = _read("tools/resolve_native_menu_ambient_campaign.py")
+    materializer = _read("tools/materialize_native_menu_path_forks_v26.py")
+    builder = _read("tools/build_native_menu_goldens_v25.py")
+    promoter = _read("tools/promote_native_menu_recapture.py")
+    tests = _read("tests/test_native_menu_ambient_lifecycle.py")
+    specification = _read(
+        "docs/reverse-engineering/native-menu-settlement.md"
+    )
+
+    forbidden_provenance_options = (
+        "--base-commit-sha",
+        "--source-tree-sha",
+        "--game-executable-sha256",
+        "--loader-dll-sha256",
+        "--fork-decision-sha256",
+        "--measured-structural-element-count",
+    )
+    smuggled = [
+        option for option in forbidden_provenance_options if option in materializer
+    ]
+    if smuggled:
+        raise StaticReTestFailure(
+            "path-dependent core materializer accepts operator-supplied "
+            f"provenance or golden values: {smuggled}"
+        )
+    _require_regex(
+        resolver,
+        r'NAVIGATION_ENDPOINT_LAYOUT_IDS\s*=\s*\{.*?'
+        r'\("create_discipline_to_hub", "after"\): "hub_new_game".*?'
+        r'\("hub_to_pause", "before"\): "hub_resumed".*?'
+        r'\("pause_to_hub_resume", "after"\): "hub_resumed".*?'
+        r'\("profile_select_resume_to_hub", "after"\): "hub_resumed".*?'
+        r'\("settings_to_hub", "after"\): "hub_resumed"',
+        "Settlement v2.6 no longer names exactly two Hub layouts and binds "
+        "every Hub navigation endpoint to its deterministic path/session state",
+    )
+    _require_regex(
+        resolver,
+        r'PATH_DEPENDENT_CORE_LAYOUTS\s*=\s*\{.*?'
+        r'"hub_new_game"\s*:\s*\{.*?'
+        r'"parent_screen_id"\s*:\s*"hub".*?'
+        r'"path_qualifier"\s*:\s*"new_game".*?'
+        r'"hub_resumed"\s*:\s*\{.*?'
+        r'"parent_screen_id"\s*:\s*"hub".*?'
+        r'"path_qualifier"\s*:\s*"resumed".*?'
+        r'PATH_DEPENDENT_CORE_ENDPOINTS\s*=\s*\{.*?'
+        r'\("create_discipline_to_hub", "after"\).*?'
+        r'\("hub_to_pause", "before"\).*?'
+        r'\("pause_to_hub_resume", "after"\).*?'
+        r'\("profile_select_resume_to_hub", "after"\).*?'
+        r'\("settings_to_hub", "after"\)',
+        "Settlement v2.6 no longer names exactly two Hub layouts and binds "
+        "every Hub navigation endpoint to its deterministic path/session state",
+    )
+    _require_regex(
+        resolver,
+        r"def validate_path_dependent_core_forks\(.*?"
+        r"if reached_layouts != expected_layouts:.*?"
+        r"path-dependent core contract: Hub variant census changed.*?"
+        r"if observed_bindings != PATH_DEPENDENT_CORE_ENDPOINTS:.*?"
+        r"one or more Hub navigation endpoints.*?remain ambiguous.*?"
+        r"if unexpected_hub_endpoints:.*?"
+        r"Hub navigation endpoint lacks a.*?declared selector.*?"
+        r"if len\(set\(counts\.values\(\)\)\) != len\(counts\):.*?"
+        r"Hub variants do not differ in element census.*?"
+        r"if len\(receipts\) != 1:.*?"
+        r"Hub variants cite different fork audits",
+        "Settlement v2.6 no longer rejects an equal-census, unbound, "
+        "extra-layout, or differently evidenced Hub fork",
+    )
+    _require_regex(
+        materializer,
+        r"def validate_audit\(.*?"
+        r"sample_count.*?< 40.*?"
+        r"stable_span_milliseconds.*?< 2_000.*?"
+        r"non_full_presence_members.*?!= \[\].*?"
+        r"if len\(identities\) != 4:.*?"
+        r"fork lacks four fresh instance witnesses.*?"
+        r"def fork_metadata\(.*?fork_decision.*?audit_receipt",
+        "Hub path-fork fixtures are no longer derived from four settled fresh "
+        "instance witnesses with one exact hashed fork-decision receipt",
+    )
+    _require_regex(
+        materializer,
+        r"def evidence_receipt\(.*?"
+        r"if not resolved\.is_relative_to\(root\):.*?"
+        r'"sha256": sha256_file\(resolved\).*?'
+        r'"bytes": resolved\.stat\(\)\.st_size',
+        "Hub path-fork fixtures no longer hash their exact fork-decision "
+        "artifact inside the campaign evidence root",
+    )
+    _require_regex(
+        builder,
+        r'menu-transition-layouts", 2, "hub_new_game".*?'
+        r'set\(transition_paths\) != \{"hub_new_game", "hub_resumed"\}.*?'
+        r"two authorized Hub layouts.*?"
+        r"if len\(fixtures\) != 30.*?"
+        r"28 menus plus two Hub layouts",
+        "menu-goldens aggregation no longer embeds both authorized Hub "
+        "standalones while preserving the 28 shell-facing layout census",
+    )
+    _require_regex(
+        promoter,
+        r'\{"hub_new_game\.json", "hub_resumed\.json"\}.*?'
+        r"if len\(records\) != 30.*?"
+        r"28 menus plus two Hub layouts.*?"
+        r'"status": "new_path_dependent_layout".*?'
+        r'"fork_decision": copy\.deepcopy',
+        "promotion no longer carries both new Hub path layouts and their fork "
+        "decision without inventing a pre-v2.6 standalone payload",
+    )
+    _require_regex(
+        tests,
+        r"def test_hub_path_dependent_core_routes_are_exact_and_complete\(.*?"
+        r"def test_hub_path_dependent_core_requires_distinct_reproduced_censuses\(.*?"
+        r"def test_hub_path_dependent_core_rejects_an_unbound_endpoint\(",
+        "Settlement v2.6 lost direct behavior tests for exact Hub routing, "
+        "different censuses, and complete endpoint binding",
+    )
+    _require_regex(
+        specification,
+        r"# Native menu settlement specification v2\.9.*?"
+        r"## Path-dependent core.*?Settlement v2\.6.*?"
+        r"two.*?fresh instances.*?"
+        r"deterministic entry path.*?durable session state.*?"
+        r"differ in element census.*?"
+        r"## Changelog.*?v2\.6.*?accepted Hub path-dependent-core STOP",
+        "the versioned settlement specification no longer records the narrow "
+        "path-dependent-core rule and the STOP that caused it",
+    )
+    return (
+        "Settlement v2.6 permits exactly the paired-evidence Hub new-game and "
+        "resumed layouts, exhaustively binds their graph endpoints, and derives "
+        "all provenance and measured censuses"
     )
 
 

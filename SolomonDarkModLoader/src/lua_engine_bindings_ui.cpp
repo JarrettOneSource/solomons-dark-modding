@@ -266,7 +266,17 @@ int LuaUiCaptureCurrentLayout(lua_State* state) {
             screen_id,
             &snapshot)) {
         lua_pushnil(state);
-        return 1;
+        DebugUiLayoutSnapshot classified;
+        lua_createtable(state, 0, 2);
+        lua_pushstring(state, screen_id);
+        lua_setfield(state, -2, "requested_screen_id");
+        if (sdmod::TryGetLatestDebugUiLayoutSnapshot(&classified)) {
+            lua_pushstring(state, classified.screen_id.c_str());
+        } else {
+            lua_pushstring(state, "");
+        }
+        lua_setfield(state, -2, "classified_screen_id");
+        return 2;
     }
 
     lua_createtable(state, 0, 7);

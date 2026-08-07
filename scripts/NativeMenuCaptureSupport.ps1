@@ -26,6 +26,21 @@ function Get-NativeMenuStringSha256 {
     }
 }
 
+function Assert-NativeMenuCaptureSurfaceAgreement {
+    param(
+        [Parameter(Mandatory = $true)][string]$OperatorScreenTag,
+        [Parameter(Mandatory = $true)][string]$MachineClassifiedSurface
+    )
+
+    if ($MachineClassifiedSurface -cne $OperatorScreenTag) {
+        throw (
+            "STOP: native-menu capture surface agreement rejected: " +
+            "operator tag '$OperatorScreenTag' does not equal " +
+            "machine-classified surface '$MachineClassifiedSurface'."
+        )
+    }
+}
+
 function Test-NativeMenuOwnedProcess {
     param(
         [Parameter(Mandatory = $true)][int]$ProcessId,
@@ -292,8 +307,8 @@ function Wait-NativeMenuActionDispatch {
         [Parameter(Mandatory = $true)][object]$Context,
         [Parameter(Mandatory = $true)][int]$RequestId,
         [Parameter(Mandatory = $true)][string]$ActionId,
-        [Parameter(Mandatory = $true)][uint64]$SourceSemanticGeneration,
-        [string]$ExpectedDestinationSurface = ""
+        [Parameter(Mandatory = $true)][uint64]$SourceLayoutGeneration,
+        [Parameter(Mandatory = $true)][string]$ExpectedDestinationScreen
     )
 
     $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -314,21 +329,26 @@ local function quote(value)
   return '"' .. value .. '"'
 end
 local dispatch = sd.ui.get_action_dispatch($RequestId)
-local semantic = sd.ui.get_snapshot()
+local destination, capture_diagnostic =
+  sd.ui.capture_current_layout([=[$ExpectedDestinationScreen]=])
+local classified_surface = type(destination) == 'table' and
+  tostring(destination.screen_id or '') or
+  (type(capture_diagnostic) == 'table' and
+    tostring(capture_diagnostic.classified_screen_id or '') or '')
+local layout_generation = type(destination) == 'table' and
+  tonumber(destination.generation or 0) or 0
 if type(dispatch) ~= 'table' then
   return table.concat({
-    '{"status":"not_ready","error_message":"","semantic_surface":',
-    quote(semantic and semantic.surface_id or ''),
-    ',"semantic_generation":',
-    tostring(semantic and semantic.generation or 0), '}'
+    '{"status":"not_ready","error_message":"","classified_surface":',
+    quote(classified_surface),
+    ',"layout_generation":', tostring(layout_generation), '}'
   })
 end
 return table.concat({
   '{"status":', quote(dispatch.status),
   ',"error_message":', quote(dispatch.error_message),
-  ',"semantic_surface":', quote(semantic and semantic.surface_id or ''),
-  ',"semantic_generation":',
-  tostring(semantic and semantic.generation or 0), '}'
+  ',"classified_surface":', quote(classified_surface),
+  ',"layout_generation":', tostring(layout_generation), '}'
 })
 "@
         if ($result.Status -eq "busy") {
@@ -348,18 +368,15 @@ return table.concat({
             }
             if (
                 $lastStatus -ceq "dispatching" -and
-                -not [string]::IsNullOrWhiteSpace(
-                    $ExpectedDestinationSurface
-                ) -and
-                [string]$dispatch.semantic_surface -ceq
-                    $ExpectedDestinationSurface -and
-                [uint64]$dispatch.semantic_generation -ne
-                    $SourceSemanticGeneration
+                [string]$dispatch.classified_surface -ceq
+                    $ExpectedDestinationScreen -and
+                [uint64]$dispatch.layout_generation -ne
+                    $SourceLayoutGeneration
             ) {
                 # Native modal handlers do not return until the modal closes.
-                # Reaching the caller-pinned destination after its semantic
-                # generation advances proves the handler is runnable without
-                # pretending that its lifecycle completed.
+                # Reaching the caller-pinned machine classification after the
+                # layout generation advances proves the handler is runnable
+                # without pretending that its lifecycle completed.
                 return $dispatch
             }
             if ($lastStatus -ceq "failed") {
@@ -435,9 +452,20 @@ local function core(element)
     ',"draw_order":', tostring(element.draw_order or 0)
   })
 end
+$captureFrame
 local semantic = sd.ui.get_snapshot()
-local snapshot = sd.ui.capture_current_layout([=[$ScreenId]=])
+local snapshot, capture_diagnostic =
+  sd.ui.capture_current_layout([=[$ScreenId]=])
 if type(snapshot) ~= 'table' then
+  local classified = type(capture_diagnostic) == 'table' and
+    tostring(capture_diagnostic.classified_screen_id or '') or ''
+  if classified ~= '' then
+    return table.concat({
+      '__NATIVE_MENU_LAYOUT_SURFACE_MISMATCH__=' .. classified,
+      tostring(semantic and semantic.surface_id or ''),
+      tostring(semantic and semantic.generation or 0)
+    }, '\t')
+  end
   return '__NATIVE_MENU_LAYOUT_NOT_READY__'
 end
 local output = {
@@ -484,10 +512,11 @@ for index, element in ipairs(structural_elements) do
 end
 output[#output + 1] = ']}'
 structure[#structure + 1] = ']}'
-$captureFrame
 return table.concat({
-  '__SURFACE__=' .. tostring(semantic and semantic.surface_id or ''),
-  '__SEMANTIC_GENERATION__=' .. tostring(semantic and semantic.generation or 0),
+  '__SURFACE__=' .. tostring(snapshot.screen_id or ''),
+  '__SEMANTIC_GENERATION__=' .. tostring(snapshot.generation or 0),
+  '__NATIVE_SURFACE__=' .. tostring(semantic and semantic.surface_id or ''),
+  '__NATIVE_GENERATION__=' .. tostring(semantic and semantic.generation or 0),
   '__CAPTURED_AT__=' .. tostring(snapshot.captured_at_milliseconds or 0),
   '__STRUCTURE__=' .. table.concat(structure),
   '__PAYLOAD__=' .. table.concat(output)
@@ -506,31 +535,66 @@ return table.concat({
             Detail = "capture_current_layout returned no current frame"
         }
     }
-    $parts = @($result.Text -split "`r?`n", 5)
+    if ($result.Text.StartsWith(
+        "__NATIVE_MENU_LAYOUT_SURFACE_MISMATCH__="
+    )) {
+        $mismatchFields = @($result.Text.Substring(
+            "__NATIVE_MENU_LAYOUT_SURFACE_MISMATCH__=".Length
+        ) -split "`t", 3)
+        if ($mismatchFields.Count -ne 3) {
+            throw "BROKEN: malformed native-menu surface mismatch diagnostic."
+        }
+        $machineSurface = $mismatchFields[0]
+        try {
+            Assert-NativeMenuCaptureSurfaceAgreement `
+                -OperatorScreenTag $ScreenId `
+                -MachineClassifiedSurface $machineSurface
+        } catch {
+            return [pscustomobject]@{
+                Status = "wrong_surface"
+                Detail = [string]$_.Exception.Message
+                SemanticSurface = $machineSurface
+                NativeSurface = $mismatchFields[1]
+                NativeGeneration = [uint64]$mismatchFields[2]
+            }
+        }
+        throw "BROKEN: a surface mismatch passed the capture agreement gate."
+    }
+    $parts = @($result.Text -split "`r?`n", 7)
     if (
-        $parts.Count -ne 5 -or
+        $parts.Count -ne 7 -or
         -not $parts[0].StartsWith("__SURFACE__=") -or
         -not $parts[1].StartsWith("__SEMANTIC_GENERATION__=") -or
-        -not $parts[2].StartsWith("__CAPTURED_AT__=") -or
-        -not $parts[3].StartsWith("__STRUCTURE__=") -or
-        -not $parts[4].StartsWith("__PAYLOAD__=")
+        -not $parts[2].StartsWith("__NATIVE_SURFACE__=") -or
+        -not $parts[3].StartsWith("__NATIVE_GENERATION__=") -or
+        -not $parts[4].StartsWith("__CAPTURED_AT__=") -or
+        -not $parts[5].StartsWith("__STRUCTURE__=") -or
+        -not $parts[6].StartsWith("__PAYLOAD__=")
     ) {
         throw "BROKEN: malformed native-menu semantic probe: $($result.Text)"
     }
-    $nonGeometryJson = $parts[3].Substring("__STRUCTURE__=".Length)
-    $semanticJson = $parts[4].Substring("__PAYLOAD__=".Length)
+    $nonGeometryJson = $parts[5].Substring("__STRUCTURE__=".Length)
+    $semanticJson = $parts[6].Substring("__PAYLOAD__=".Length)
     try {
         $semanticPayload = $semanticJson | ConvertFrom-Json
     } catch {
         throw "BROKEN: native-menu semantic probe returned invalid JSON: $semanticJson"
     }
+    $machineSurface = $parts[0].Substring("__SURFACE__=".Length)
+    Assert-NativeMenuCaptureSurfaceAgreement `
+        -OperatorScreenTag $ScreenId `
+        -MachineClassifiedSurface $machineSurface
     return [pscustomobject]@{
         Status = "ready"
-        SemanticSurface = $parts[0].Substring("__SURFACE__=".Length)
+        SemanticSurface = $machineSurface
         SemanticGeneration = [uint64]$parts[1].Substring(
             "__SEMANTIC_GENERATION__=".Length
         )
-        CapturedAtMilliseconds = [uint64]$parts[2].Substring(
+        NativeSurface = $parts[2].Substring("__NATIVE_SURFACE__=".Length)
+        NativeGeneration = [uint64]$parts[3].Substring(
+            "__NATIVE_GENERATION__=".Length
+        )
+        CapturedAtMilliseconds = [uint64]$parts[4].Substring(
             "__CAPTURED_AT__=".Length
         )
         NonGeometryJson = $nonGeometryJson
@@ -606,12 +670,6 @@ if sampler == nil then
     local state = rawget(_G, '__sd_native_menu_population_sampler')
     if state == nil or not state.active then return end
     local ok, detail = pcall(function()
-      local semantic = sd.ui.get_snapshot()
-      if state.expected_surface ~= '' and
-          tostring(semantic and semantic.surface_id or '') ~=
-            state.expected_surface then
-        return
-      end
       local snapshot = sd.ui.capture_current_layout(state.screen_id)
       if type(snapshot) ~= 'table' then return end
       local structural_elements = {}
@@ -679,8 +737,7 @@ return 'population-sampler-ready'
 function Start-NativeMenuPopulationSampler {
     param(
         [Parameter(Mandatory = $true)][object]$Context,
-        [Parameter(Mandatory = $true)][string]$ScreenId,
-        [string]$ExpectedSurface = ""
+        [Parameter(Mandatory = $true)][string]$ScreenId
     )
 
     $result = Invoke-NativeMenuLua -Context $Context -LuaCode @"
@@ -693,7 +750,6 @@ sampler.sample_count = 0
 sampler.overflow = false
 sampler.error = ''
 sampler.screen_id = [=[$ScreenId]=]
-sampler.expected_surface = [=[$ExpectedSurface]=]
 sampler.active = true
 return 'population-sampler-armed'
 "@
@@ -821,12 +877,12 @@ function Invoke-NativeMenuSettlementClassifier {
                 ($classifierOutput | ForEach-Object { [string]$_ }) -join "`n"
             ).Trim()
             if ([string]::IsNullOrWhiteSpace($message)) {
-                $message = "Settlement v2.5 classifier exited without diagnostics."
+                $message = "Settlement v2.9 classifier exited without diagnostics."
             }
             throw $message
         }
         if (-not (Test-Path -LiteralPath $outputPath -PathType Leaf)) {
-            throw "BROKEN: Settlement v2.5 classifier produced no result."
+            throw "BROKEN: Settlement v2.9 classifier produced no result."
         }
         return Get-Content -LiteralPath $outputPath -Raw | ConvertFrom-Json
     } finally {
@@ -906,6 +962,9 @@ function Wait-NativeMenuLayoutSettlement {
             -Context $Context `
             -ScreenId $ScreenId
         if ($probe.Status -ne "ready") {
+            if ($probe.Status -eq "wrong_surface") {
+                throw [string]$probe.Detail
+            }
             if ($probe.Status -eq "busy") {
                 $busyCount += 1
             } else {
@@ -940,6 +999,8 @@ function Wait-NativeMenuLayoutSettlement {
             captured_at_milliseconds = $probe.CapturedAtMilliseconds
             semantic_surface = $probe.SemanticSurface
             semantic_generation = $probe.SemanticGeneration
+            native_surface = $probe.NativeSurface
+            native_generation = $probe.NativeGeneration
             payload = $probe.SemanticPayload
         })
         $candidateProbes.Add($probe)
@@ -978,7 +1039,7 @@ function Wait-NativeMenuLayoutSettlement {
                 $stableEndIndex -ge $candidateSamples.Count
             ) {
                 throw (
-                    "BROKEN: Settlement v2.5 classifier returned an invalid " +
+                    "BROKEN: Settlement v2.9 classifier returned an invalid " +
                     "selected-window index range."
                 )
             }
@@ -997,7 +1058,7 @@ function Wait-NativeMenuLayoutSettlement {
                     $script:NativeMenuSettleMinimumSpanMilliseconds
             ) {
                 throw (
-                    "BROKEN: Settlement v2.5 classifier selected a window " +
+                    "BROKEN: Settlement v2.9 classifier selected a window " +
                     "below the recorder's 40-sample/two-second floor."
                 )
             }
@@ -1069,7 +1130,7 @@ function Wait-NativeMenuLayoutSettlement {
     }
 
     throw (
-        "STOP: '$ScreenId' never satisfied Settlement v2.5 across at least " +
+        "STOP: '$ScreenId' never satisfied Settlement v2.9 across at least " +
         "40 samples spanning two seconds within 60 seconds. " +
         "samples=$sampleCount busy=$busyCount not_ready=$notReadyCount " +
         "last_unavailable='$lastUnavailable' " +
@@ -1141,12 +1202,17 @@ function Get-SettledNativeMenuObservation {
         }
 
         $layout = $settled.Layout
+        Assert-NativeMenuCaptureSurfaceAgreement `
+            -OperatorScreenTag $ScreenId `
+            -MachineClassifiedSurface $settled.AnchorProbe.SemanticSurface
         Assert-NativeMenuOverlayHygiene `
             -Context $Context `
             -Layout $layout
         return [pscustomobject]@{
             semantic_surface = $settled.AnchorProbe.SemanticSurface
             semantic_generation = $settled.AnchorProbe.SemanticGeneration
+            native_surface = $settled.AnchorProbe.NativeSurface
+            native_generation = $settled.AnchorProbe.NativeGeneration
             tagged_screen = [string]$layout.screen_id
             layout_generation = [uint64]$layout.generation
             element_count = @($layout.elements).Count

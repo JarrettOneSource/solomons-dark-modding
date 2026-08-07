@@ -24,6 +24,8 @@ SHA, capture method, capture time, and the SHA-256 of the raw live navigation
 recording. It embeds 28 layouts and 39 observed edges. Each layout also exists
 as a smaller JSON file under `tests/fixtures/webgame/menu-layouts/`, and each
 has a matching PNG under `tests/fixtures/webgame/menu-reference-captures/`.
+The settle and classification rules are normative in the
+[`native menu settlement specification v2.6`](native-menu-settlement.md).
 
 Unless a section explicitly says otherwise:
 

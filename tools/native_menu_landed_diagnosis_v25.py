@@ -102,14 +102,12 @@ def _ordered(elements: Iterable[dict[str, Any]], label: str) -> list[dict[str, A
     )
 
 
-def project_structural_core(
+def _project_core_members(
     landed_layout: dict[str, Any], settled_layout: dict[str, Any]
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Return the matched landed core and every unmatched landed member."""
     landed = _ordered(_elements(landed_layout, "landed layout"), "landed layout")
     settled_core = _elements(settled_layout, "settled structural core")
-    expected_sequence = [_signature(element) for element in settled_core]
-    remaining = Counter(expected_sequence)
+    remaining = Counter(_signature(element) for element in settled_core)
     projected: list[dict[str, Any]] = []
     residual: list[dict[str, Any]] = []
     for element in landed:
@@ -127,12 +125,234 @@ def project_structural_core(
             "landed-vs-settled structural core mismatch: reproduced core member "
             f"'{witness}' is missing from the landed layout"
         )
+    return projected, residual
+
+
+def project_structural_core(
+    landed_layout: dict[str, Any], settled_layout: dict[str, Any]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Return the matched landed core and every unmatched landed member."""
+    projected, residual = _project_core_members(landed_layout, settled_layout)
+    settled_core = _elements(settled_layout, "settled structural core")
+    expected_sequence = [_signature(element) for element in settled_core]
     projected_sequence = [_signature(element) for element in projected]
     if projected_sequence != expected_sequence:
         raise LandedDiagnosisError(
             "landed-vs-settled structural core mismatch: core relative draw sequence differs"
         )
     return projected, residual
+
+
+def _lcs_indexes(
+    left: list[bytes], right: list[bytes]
+) -> tuple[set[int], set[int]]:
+    lengths = [[0] * (len(right) + 1) for _ in range(len(left) + 1)]
+    for left_index in range(len(left) - 1, -1, -1):
+        for right_index in range(len(right) - 1, -1, -1):
+            lengths[left_index][right_index] = (
+                1 + lengths[left_index + 1][right_index + 1]
+                if left[left_index] == right[right_index]
+                else max(
+                    lengths[left_index + 1][right_index],
+                    lengths[left_index][right_index + 1],
+                )
+            )
+    left_indexes: set[int] = set()
+    right_indexes: set[int] = set()
+    left_index = right_index = 0
+    while left_index < len(left) and right_index < len(right):
+        if left[left_index] == right[right_index]:
+            left_indexes.add(left_index)
+            right_indexes.add(right_index)
+            left_index += 1
+            right_index += 1
+        elif lengths[left_index + 1][right_index] >= lengths[left_index][right_index + 1]:
+            left_index += 1
+        else:
+            right_index += 1
+    return left_indexes, right_indexes
+
+
+def _require_v29_order_contract(
+    contract: dict[str, Any],
+) -> tuple[list[dict[str, Any]], int, int]:
+    if contract.get("schema") != "solomon-dark-native-menu-beta-notice-order-v29":
+        raise LandedDiagnosisError(
+            "v2.9 beta-notice paint-order correction: generated contract schema is invalid"
+        )
+    if (
+        contract.get("layout_id") != "beta-notice"
+        or contract.get("screen_id") != "beta_notice"
+    ):
+        raise LandedDiagnosisError(
+            "v2.9 beta-notice paint-order correction: contract names another layout"
+        )
+    members = contract.get("moved_members")
+    core_count = contract.get("core_member_count")
+    lcs_count = contract.get("longest_common_subsequence_count")
+    if (
+        not isinstance(members, list)
+        or len(members) != 3
+        or not all(isinstance(member, dict) for member in members)
+        or isinstance(core_count, bool)
+        or not isinstance(core_count, int)
+        or isinstance(lcs_count, bool)
+        or not isinstance(lcs_count, int)
+        or core_count != lcs_count + len(members)
+    ):
+        raise LandedDiagnosisError(
+            "v2.9 beta-notice paint-order correction: generated contract census is invalid"
+        )
+    required_member_fields = {
+        "art_id",
+        "rect",
+        "semantic_sha256",
+        "landed_relative_core_index",
+        "settled_relative_core_index",
+        "native_paint_order",
+        "overlay_reference_member",
+    }
+    if any(required_member_fields - set(member) for member in members):
+        raise LandedDiagnosisError(
+            "v2.9 beta-notice paint-order correction: generated member identity is incomplete"
+        )
+    semantic_hashes = [member["semantic_sha256"] for member in members]
+    if len(set(semantic_hashes)) != len(members) or not all(
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+        for value in semantic_hashes
+    ):
+        raise LandedDiagnosisError(
+            "v2.9 beta-notice paint-order correction: semantic identities are ambiguous"
+        )
+    return members, core_count, lcs_count
+
+
+def _v29_beta_notice_order_projection(
+    landed_layout: dict[str, Any],
+    settled_layout: dict[str, Any],
+    overlay_reference: dict[str, Any],
+    contract: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any] | None]:
+    """Project one core and apply only the generated beta-notice v2.9 rule."""
+    if settled_layout.get("screen_id") != "beta_notice":
+        projected, residual = project_structural_core(landed_layout, settled_layout)
+        return projected, residual, None
+
+    members, core_count, lcs_count = _require_v29_order_contract(contract)
+    settled_core = _elements(settled_layout, "settled structural core")
+    contract_hashes = {member["semantic_sha256"] for member in members}
+    settled_hashes = [hashlib.sha256(_signature(element)).hexdigest() for element in settled_core]
+    if len(settled_core) != core_count or any(
+        settled_hashes.count(semantic_hash) != 1 for semantic_hash in contract_hashes
+    ):
+        raise LandedDiagnosisError(
+            "v2.9 beta-notice paint-order correction: exact core set identity failed"
+        )
+    try:
+        projected, residual = _project_core_members(landed_layout, settled_layout)
+    except LandedDiagnosisError as error:
+        raise LandedDiagnosisError(
+            "v2.9 beta-notice paint-order correction: exact core set identity failed"
+        ) from error
+    if len(projected) != core_count:
+        raise LandedDiagnosisError(
+            "v2.9 beta-notice paint-order correction: exact core set identity failed"
+        )
+
+    projected_signatures = [_signature(element) for element in projected]
+    settled_signatures = [_signature(element) for element in settled_core]
+    if Counter(projected_signatures) != Counter(settled_signatures):
+        raise LandedDiagnosisError(
+            "v2.9 beta-notice paint-order correction: exact core set identity failed"
+        )
+    projected_hashes = [hashlib.sha256(value).hexdigest() for value in projected_signatures]
+    landed_indexes = [projected_hashes.index(member["semantic_sha256"]) for member in members]
+    settled_indexes = [settled_hashes.index(member["semantic_sha256"]) for member in members]
+    expected_landed_indexes = [member["landed_relative_core_index"] for member in members]
+    expected_settled_indexes = [member["settled_relative_core_index"] for member in members]
+    final_indexes = list(range(core_count - len(members), core_count))
+    if landed_indexes != expected_landed_indexes or settled_indexes != expected_settled_indexes:
+        raise LandedDiagnosisError(
+            "v2.9 beta-notice paint-order correction: bounded landed-to-settled positions differ"
+        )
+    if settled_indexes != final_indexes:
+        raise LandedDiagnosisError(
+            "v2.9 beta-notice paint-order correction: exempt trio is not the final structural core group"
+        )
+
+    overlay = _overlay_counter(overlay_reference)
+    ordered_members: list[dict[str, Any]] = []
+    for member, landed_index, settled_index in zip(
+        members, landed_indexes, settled_indexes, strict=True
+    ):
+        landed_element = projected[landed_index]
+        settled_element = settled_core[settled_index]
+        if (
+            member.get("overlay_reference_member") is not True
+            or overlay[_signature(landed_element)] <= 0
+            or landed_element.get("art_id") != member.get("art_id")
+            or landed_element.get("rect") != member.get("rect")
+            or _signature(landed_element) != _signature(settled_element)
+        ):
+            raise LandedDiagnosisError(
+                "v2.9 beta-notice paint-order correction: exempt trio identity or overlay membership differs"
+            )
+        ordered_members.append(
+            {
+                "art_id": member["art_id"],
+                "rect": copy.deepcopy(member["rect"]),
+                "semantic_sha256": member["semantic_sha256"],
+                "landed_relative_core_index": landed_index,
+                "settled_relative_core_index": settled_index,
+                "native_paint_order": member["native_paint_order"],
+                "overlay_reference_member": True,
+            }
+        )
+
+    remaining_projected = [
+        signature
+        for index, signature in enumerate(projected_signatures)
+        if index not in set(landed_indexes)
+    ]
+    remaining_settled = [
+        signature
+        for index, signature in enumerate(settled_signatures)
+        if index not in set(settled_indexes)
+    ]
+    if remaining_projected != remaining_settled:
+        raise LandedDiagnosisError(
+            "v2.9 beta-notice paint-order correction: a non-exempt core member moved"
+        )
+    kept_projected, kept_settled = _lcs_indexes(
+        projected_signatures, settled_signatures
+    )
+    if len(kept_projected) != lcs_count or len(kept_settled) != lcs_count:
+        raise LandedDiagnosisError(
+            "v2.9 beta-notice paint-order correction: remaining-core LCS is not the generated witness"
+        )
+    moved_projected = {
+        index for index in range(core_count) if index not in kept_projected
+    }
+    moved_settled = {
+        index for index in range(core_count) if index not in kept_settled
+    }
+    if moved_projected != set(landed_indexes) or moved_settled != set(settled_indexes):
+        raise LandedDiagnosisError(
+            "v2.9 beta-notice paint-order correction: moved set is not exactly the exempt trio"
+        )
+
+    return projected, residual, {
+        "schema": "solomon-dark-native-menu-core-order-correction-v29",
+        "layout_id": "beta-notice",
+        "reason": "landed_hook_enumeration_order_superseded_by_native_paint_order",
+        "core_member_count": core_count,
+        "longest_common_subsequence_count": lcs_count,
+        "moved_members": ordered_members,
+        "paint_truth": copy.deepcopy(contract.get("paint_truth")),
+        "source_stop_audit": copy.deepcopy(contract.get("source_stop_audit")),
+    }
 
 
 def _rect_inside(rect: Any, envelope: Any) -> bool:
@@ -192,8 +412,79 @@ def _ambient_match(
         key: value for key, value in anchor.items() if key not in ignored
     }:
         return False
-    return _rect_inside(landed.get("rect"), envelope.get("rect")) and _rect_inside(
+    if classification in {"animated", "animated_family"}:
+        # The landed value is one arbitrary old motion frame.  v2.3 pins the
+        # newly measured anchor and union envelope, but does not require that
+        # the old frame happened to fall inside the new observation interval.
+        return True
+    if _rect_inside(landed.get("rect"), envelope.get("rect")) and _rect_inside(
         landed.get("unclipped_rect"), envelope.get("unclipped_rect")
+    ):
+        return True
+    family_envelope = member.get("union_spatial_envelope")
+    return (
+        isinstance(family_envelope, dict)
+        and _rect_inside(landed.get("rect"), family_envelope.get("rect"))
+        and _rect_inside(
+            landed.get("unclipped_rect"),
+            family_envelope.get("unclipped_rect"),
+        )
+    )
+
+
+def _ambient_family_match(
+    landed: dict[str, Any], member: dict[str, Any]
+) -> bool:
+    class_members = member.get("class_members")
+    if not isinstance(class_members, list) or not class_members:
+        raise LandedDiagnosisError(
+            f"settled ambient member '{member.get('id')}' has no class records"
+        )
+    if not all(isinstance(value, dict) for value in class_members):
+        raise LandedDiagnosisError(
+            f"settled ambient member '{member.get('id')}' has a malformed class record"
+        )
+    classes = {
+        str(class_member.get("classification"))
+        for class_member in class_members
+    }
+    ignored = {"rect", "unclipped_rect"}
+    if classes & {"visibility_cycling", "ephemeral"}:
+        ignored.add("visible")
+    landed_static = {
+        key: value for key, value in _semantic(landed).items() if key not in ignored
+    }
+    anchor_statics: set[bytes] = set()
+    for class_member in class_members:
+        anchor = class_member.get("anchor_payload")
+        if not isinstance(anchor, dict):
+            raise LandedDiagnosisError(
+                f"settled ambient member '{member.get('id')}' has no anchor payload"
+            )
+        anchor_statics.add(
+            canonical_bytes(
+                {
+                    key: value
+                    for key, value in anchor.items()
+                    if key not in ignored
+                }
+            )
+        )
+    if len(anchor_statics) != 1 or canonical_bytes(landed_static) not in anchor_statics:
+        return False
+    if "animated" in classes or "animated_family" in classes:
+        # v2.3: an old frozen frame need not lie inside a later finite motion
+        # window.  The member-level class union still pins every non-varying
+        # field, including visibility unless cycling was actually measured.
+        return True
+    family_envelope = member.get("union_spatial_envelope")
+    return (
+        isinstance(family_envelope, dict)
+        and _rect_inside(landed.get("rect"), family_envelope.get("rect"))
+        and _rect_inside(
+            landed.get("unclipped_rect"),
+            family_envelope.get("unclipped_rect"),
+        )
     )
 
 
@@ -226,12 +517,57 @@ def match_ambient_members(
                     element, member, class_member
                 ):
                     candidates.append((member, class_member))
+            if not any(candidate is member for candidate, _ in candidates) and (
+                _ambient_family_match(element, member)
+            ):
+                candidates.extend(
+                    (member, class_member)
+                    for class_member in class_members
+                    if isinstance(class_member, dict)
+                )
         candidate_ids = {str(member.get("id")) for member, _ in candidates}
         if len(candidate_ids) > 1:
-            raise LandedDiagnosisError(
-                "landed ambient lookup is ambiguous for element "
-                f"'{element.get('id')}': {sorted(candidate_ids)}"
-            )
+            exact_candidates = [
+                (member, class_member)
+                for member, class_member in candidates
+                if isinstance(class_member.get("anchor_payload"), dict)
+                and _semantic(element) == class_member["anchor_payload"]
+            ]
+            exact_ids = {
+                str(member.get("id")) for member, _ in exact_candidates
+            }
+            if len(exact_ids) == 1:
+                candidates = exact_candidates
+                candidate_ids = exact_ids
+            else:
+                enveloped_candidates = [
+                    (member, class_member)
+                    for member, class_member in candidates
+                    if isinstance(class_member.get("union_spatial_envelope"), dict)
+                    and _rect_inside(
+                        element.get("rect"),
+                        class_member["union_spatial_envelope"].get("rect"),
+                    )
+                    and _rect_inside(
+                        element.get("unclipped_rect"),
+                        class_member["union_spatial_envelope"].get(
+                            "unclipped_rect"
+                        ),
+                    )
+                ]
+                enveloped_ids = {
+                    str(member.get("id"))
+                    for member, _ in enveloped_candidates
+                }
+                if len(enveloped_ids) == 1:
+                    candidates = enveloped_candidates
+                    candidate_ids = enveloped_ids
+                else:
+                    raise LandedDiagnosisError(
+                        "landed ambient lookup is ambiguous after exact-anchor "
+                        "and unique-envelope resolution for element "
+                        f"'{element.get('id')}': {sorted(candidate_ids)}"
+                    )
         if not candidates:
             unmatched.append(element)
             continue
@@ -266,7 +602,7 @@ def match_ambient_members(
                 member.get("union_spatial_envelope")
             ),
         }
-        if set(classes) == {"animated"}:
+        if set(classes) <= {"animated", "animated_family"}:
             animation.append(disposition)
         else:
             lifecycle.append(disposition)
@@ -458,13 +794,23 @@ def diagnose_landed_layout(
     primary_trace: dict[str, Any],
     confirmation_trace: dict[str, Any],
     overlay_reference: dict[str, Any],
+    order_override_contract: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     for field in ("screen_id", "screen_title"):
         if landed_layout.get(field) != settled_layout.get(field):
             raise LandedDiagnosisError(
                 f"landed-vs-settled mismatch outside authorized classes: layout field '{field}' differs"
             )
-    projected, residual = project_structural_core(landed_layout, settled_layout)
+    if order_override_contract is None:
+        projected, residual = project_structural_core(landed_layout, settled_layout)
+        order_correction = None
+    else:
+        projected, residual, order_correction = _v29_beta_notice_order_projection(
+            landed_layout,
+            settled_layout,
+            overlay_reference,
+            order_override_contract,
+        )
     lifecycle, animation, unmatched = match_ambient_members(residual, settled_layout)
     population, after_population, population_proof = match_population_members(
         unmatched,
@@ -473,22 +819,8 @@ def diagnose_landed_layout(
         primary_trace,
         confirmation_trace,
     )
-    animation_ids = {entry["element_id"] for entry in animation}
-    animation_elements = [
-        element for element in residual if element["id"] in animation_ids
-    ]
-    animation_signatures = Counter(_signature(element) for element in animation_elements)
-    overlay_input: list[dict[str, Any]] = []
-    held_animation: list[dict[str, Any]] = []
-    for element in after_population:
-        signature = _signature(element)
-        if animation_signatures[signature] > 0:
-            animation_signatures[signature] -= 1
-            held_animation.append(element)
-        else:
-            overlay_input.append(element)
     overlay, residual_after_overlay = match_overlay_members(
-        overlay_input, overlay_reference
+        after_population, overlay_reference
     )
     if residual_after_overlay:
         element = residual_after_overlay[0]
@@ -497,11 +829,9 @@ def diagnose_landed_layout(
             f"and animation diagnosis: '{element.get('id')}' / "
             f"'{element.get('art_id') or element.get('action_id') or element.get('text')}'"
         )
-    if len(held_animation) != len(animation):
-        raise LandedDiagnosisError(
-            "landed-vs-settled animation diagnosis did not account for every measured mover"
-        )
-    corrected = bool(lifecycle or population or overlay or animation)
+    corrected = bool(
+        lifecycle or population or overlay or animation or order_correction
+    )
     if not corrected and landed_layout.get("generation") != settled_layout.get("generation"):
         raise LandedDiagnosisError(
             "landed-vs-settled generation changed without an authorized differing member"
@@ -529,5 +859,6 @@ def diagnose_landed_layout(
         "overlay_dispositions": overlay,
         "overlay_reference_sha256": sha256_json(overlay_reference),
         "animated_geometry_dispositions": animation,
+        "core_order_correction": order_correction,
         "all_differing_members_enumerated": True,
     }

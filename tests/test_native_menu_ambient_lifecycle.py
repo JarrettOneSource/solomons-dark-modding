@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import tempfile
 import unittest
 from collections.abc import Callable
 from pathlib import Path
+from unittest import mock
 
 from tools.resolve_native_menu_ambient_campaign import (
     CampaignResolutionError,
+    PATH_DEPENDENT_CORE_ENDPOINTS,
+    PATH_DEPENDENT_CORE_LAYOUTS,
     _assert_game_executable_matches,
     _assert_runtime_provenance_matches,
     _resolve_layout_id,
@@ -16,6 +20,7 @@ from tools.resolve_native_menu_ambient_campaign import (
     collect_supplemental_standalones,
     file_sha256,
     resolve_baseline_evidence,
+    validate_path_dependent_core_forks,
 )
 
 from tools.native_menu_ambient_lifecycle import (
@@ -23,13 +28,17 @@ from tools.native_menu_ambient_lifecycle import (
     classify_ambient_extended_observation,
     classify_ambient_window,
     find_ambient_settled_window,
+    reproduce_standalone_structural_core,
     resolve_ambient_lifecycle,
     validate_ambient_resolution,
 )
 from tools.native_menu_landed_diagnosis_v25 import (
     LandedDiagnosisError,
+    _signature,
+    _v29_beta_notice_order_projection,
     diagnose_landed_layout,
     diagnosis_prereference_residual,
+    match_ambient_members,
     semantic_overlay_corroboration,
 )
 from tools.native_menu_overlay_v25 import (
@@ -119,6 +128,8 @@ def _observation(
 def _resolve_pair(
     primary: list[dict[str, object]],
     confirmation: list[dict[str, object]] | None = None,
+    *,
+    asset_manifest: dict[str, object] | None = None,
 ) -> dict[str, object]:
     return resolve_ambient_lifecycle(
         [
@@ -128,7 +139,8 @@ def _resolve_pair(
                 "menufx-confirmation",
                 202,
             ),
-        ]
+        ],
+        asset_manifest=asset_manifest,
     )
 
 
@@ -179,6 +191,133 @@ def _same_art_disjoint_phase_samples(phase: float) -> list[dict[str, object]]:
         return [*core, *movers]
 
     return _samples(elements)
+
+
+def _skill_picker_animated_family_samples(
+    phase: float = 0.0,
+) -> list[dict[str, object]]:
+    def elements(sample_index: int) -> list[dict[str, object]]:
+        core = [_art(index, art_id=f"Core.{index}") for index in range(31)]
+        movers: list[dict[str, object]] = []
+        for index in range(8):
+            mover = _art(100 + index, art_id="UI.3")
+            mover["id"] = f"skill_picker.art.ui_3.{index + 1}"
+            left = phase + index * 100.0 + sample_index * 10.0
+            mover["rect"] = [left, 100.0, left + 80.0, 120.0]
+            mover["unclipped_rect"] = list(mover["rect"])
+            mover["draw_order"] = 100 + ((index + sample_index // 4) % 8)
+            movers.append(mover)
+        rings: list[dict[str, object]] = []
+        for index, top in enumerate((300.0, 500.0), start=1):
+            ring = _art(200 + index, art_id="UI.62")
+            ring["id"] = f"skill_picker.art.ui_62.{index}"
+            left = 500.0 + phase + sample_index * 0.25
+            ring["rect"] = [left, top, left + 80.0, top + 80.0]
+            ring["unclipped_rect"] = list(ring["rect"])
+            ring["draw_order"] = 200 + index
+            rings.append(ring)
+        return [*core, *movers, *rings]
+
+    samples = _samples(elements)
+    for sample in samples:
+        sample["payload"]["screen_id"] = "skill_picker"  # type: ignore[index]
+        sample["payload"]["generation"] = 8  # type: ignore[index]
+    return samples
+
+
+def _skill_picker_choice_manifest() -> dict[str, object]:
+    return {
+        "schema": "solomon-dark-web-asset-manifest-v1",
+        "entries": {
+            "Skills.48": {"logicalSize": {"width": 28, "height": 42}},
+            "Skills.83": {"logicalSize": {"width": 43, "height": 43}},
+            "Skills.45": {"logicalSize": {"width": 46, "height": 46}},
+            "Skills.92": {"logicalSize": {"width": 41, "height": 46}},
+        },
+    }
+
+
+def _skill_picker_choice_samples(
+    roster: tuple[str, str],
+    *,
+    phase: float = 0.0,
+    first_anchor_delta: tuple[float, float] = (0.0, 0.0),
+    second_draw_offset: tuple[float, float] = (-4.0, -4.0),
+) -> list[dict[str, object]]:
+    logical_sizes = {
+        "Skills.48": (28.0, 42.0),
+        "Skills.83": (43.0, 43.0),
+        "Skills.45": (46.0, 46.0),
+        "Skills.92": (41.0, 46.0),
+    }
+
+    def choice(
+        order: int,
+        art_id: str,
+        anchor: tuple[float, float],
+        offset: tuple[float, float],
+    ) -> dict[str, object]:
+        width, height = logical_sizes[art_id]
+        center_x = anchor[0] + offset[0]
+        center_y = anchor[1] + offset[1]
+        element = _art(order, art_id=art_id)
+        element["id"] = f"skill_picker.art.choice_{order}.1"
+        element["draw_order"] = order
+        element["rect"] = [
+            center_x - width / 2.0,
+            center_y - height / 2.0,
+            center_x + width / 2.0,
+            center_y + height / 2.0,
+        ]
+        element["unclipped_rect"] = list(element["rect"])
+        return element
+
+    def elements(sample_index: int) -> list[dict[str, object]]:
+        result: list[dict[str, object]] = []
+        for order in range(1, 42):
+            if 11 <= order <= 18:
+                index = order - 11
+                mover = _art(100 + index, art_id="UI.3")
+                mover["id"] = f"skill_picker.art.ui_3.{index + 1}"
+                left = phase + index * 100.0 + sample_index * 10.0
+                mover["rect"] = [left, 100.0, left + 80.0, 120.0]
+                mover["unclipped_rect"] = list(mover["rect"])
+                mover["draw_order"] = 11 + ((index + sample_index // 4) % 8)
+                result.append(mover)
+                continue
+            if order in {19, 20}:
+                index = order - 18
+                ring = _art(200 + index, art_id="UI.62")
+                ring["id"] = f"skill_picker.art.ui_62.{index}"
+                top = 300.0 if order == 19 else 500.0
+                left = 500.0 + phase + sample_index * 0.25
+                ring["rect"] = [left, top, left + 80.0, top + 80.0]
+                ring["unclipped_rect"] = list(ring["rect"])
+                ring["draw_order"] = order
+                result.append(ring)
+                continue
+            if order in {30, 31}:
+                anchor = (
+                    604.0 + first_anchor_delta[0],
+                    386.5 + first_anchor_delta[1],
+                )
+                offset = (0.0, 0.0) if order == 30 else second_draw_offset
+                result.append(choice(order, roster[0], anchor, offset))
+                continue
+            if order in {40, 41}:
+                offset = (0.0, 0.0) if order == 40 else (-4.0, -4.0)
+                result.append(choice(order, roster[1], (1004.0, 386.5), offset))
+                continue
+            core = _art(order, art_id=f"Core.{order}")
+            core["draw_order"] = order
+            result.append(core)
+        return result
+
+    samples = _samples(elements, interval_milliseconds=390)
+    for sample in samples:
+        sample["payload"]["screen_id"] = "skill_picker"  # type: ignore[index]
+        sample["payload"]["generation"] = 8  # type: ignore[index]
+    return samples
 
 
 def _multiset_reference(elements: list[dict[str, object]]) -> dict[str, object]:
@@ -240,6 +379,55 @@ def _trace(
         "high_cadence_structural_phases": [],
         "settled_window_samples": copy.deepcopy(settled_samples),
     }
+
+
+def _v29_order_case() -> tuple[
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+]:
+    remaining = [_art(index, art_id=f"Core.{index}") for index in range(4)]
+    trio = [_art(20 + index, art_id=f"UI.dialog.{index}") for index in range(3)]
+    landed_elements = [remaining[0], *trio, *remaining[1:]]
+    for draw_order, element in enumerate(landed_elements):
+        element["draw_order"] = draw_order
+    settled_elements = copy.deepcopy([*remaining, *trio])
+    landed = {
+        "screen_id": "beta_notice",
+        "screen_title": "Beta notice",
+        "generation": 13,
+        "elements": landed_elements,
+    }
+    settled = {
+        "screen_id": "beta_notice",
+        "screen_title": "Beta notice",
+        "generation": 2,
+        "elements": settled_elements,
+        "ambient_members": [],
+    }
+    contract = {
+        "schema": "solomon-dark-native-menu-beta-notice-order-v29",
+        "layout_id": "beta-notice",
+        "screen_id": "beta_notice",
+        "core_member_count": len(settled_elements),
+        "longest_common_subsequence_count": len(remaining),
+        "moved_members": [
+            {
+                "art_id": element["art_id"],
+                "rect": copy.deepcopy(element["rect"]),
+                "semantic_sha256": hashlib.sha256(_signature(element)).hexdigest(),
+                "landed_relative_core_index": index + 1,
+                "settled_relative_core_index": len(remaining) + index,
+                "native_paint_order": 100 + index,
+                "overlay_reference_member": True,
+            }
+            for index, element in enumerate(trio)
+        ],
+        "paint_truth": {"source": "synthetic-test"},
+        "source_stop_audit": {"source": "synthetic-test"},
+    }
+    return landed, settled, _multiset_reference(trio), contract
 
 
 class NativeMenuAmbientLifecycleTests(unittest.TestCase):
@@ -582,6 +770,129 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
                 "unknown_settings_edge",
                 "before",
             )
+
+    def test_hub_path_dependent_core_routes_are_exact_and_complete(self) -> None:
+        fixtures = {
+            layout_id: {"native_screen_id": "hub"}
+            for layout_id in PATH_DEPENDENT_CORE_LAYOUTS
+        }
+        for (edge_id, endpoint), expected_layout_id in (
+            PATH_DEPENDENT_CORE_ENDPOINTS.items()
+        ):
+            layout_id, explicit = _resolve_layout_id(
+                "hub", "hub", fixtures, edge_id, endpoint
+            )
+            self.assertEqual(layout_id, expected_layout_id)
+            self.assertTrue(explicit)
+
+        with self.assertRaisesRegex(
+            CampaignResolutionError,
+            "screen 'hub' is ambiguous without explicit route mapping for edge "
+            "'unknown_hub_edge' side 'after'",
+        ):
+            _resolve_layout_id(
+                "hub", "hub", fixtures, "unknown_hub_edge", "after"
+            )
+
+    def test_hub_path_dependent_core_requires_distinct_reproduced_censuses(
+        self,
+    ) -> None:
+        receipt = {
+            "evidence_path": "raw-final/hub-path-dependent-core-stop-audit.json",
+            "sha256": "1" * 64,
+            "bytes": 101,
+        }
+        fixtures = {
+            layout_id: {
+                "native_screen_id": "hub",
+                "header": {
+                    "path_dependent_core": {
+                        **policy,
+                        "measured_settled_element_count": count,
+                    }
+                },
+                "fork_decision_receipt": copy.deepcopy(receipt),
+            }
+            for (layout_id, policy), count in zip(
+                PATH_DEPENDENT_CORE_LAYOUTS.items(), (14, 10), strict=True
+            )
+        }
+        resolutions = {
+            layout_id: {
+                "peak_element_count": record["header"][
+                    "path_dependent_core"
+                ]["measured_settled_element_count"],
+                "structural_core_element_count": (
+                    record["header"]["path_dependent_core"][
+                        "measured_settled_element_count"
+                    ]
+                    - (layout_id == "hub_resumed")
+                ),
+                "structural_core_sha256": str(index + 2) * 64,
+            }
+            for index, (layout_id, record) in enumerate(fixtures.items())
+        }
+
+        audit = validate_path_dependent_core_forks(
+            fixtures, resolutions, dict(PATH_DEPENDENT_CORE_ENDPOINTS)
+        )
+        self.assertEqual(
+            [row["layout_id"] for row in audit],
+            list(PATH_DEPENDENT_CORE_LAYOUTS),
+        )
+
+        resolutions["hub_resumed"]["peak_element_count"] = 14
+        fixtures["hub_resumed"]["header"]["path_dependent_core"][
+            "measured_settled_element_count"
+        ] = 14
+        with self.assertRaisesRegex(
+            CampaignResolutionError,
+            "path-dependent core contract: Hub variants do not differ in element census",
+        ):
+            validate_path_dependent_core_forks(
+                fixtures, resolutions, dict(PATH_DEPENDENT_CORE_ENDPOINTS)
+            )
+
+    def test_hub_path_dependent_core_rejects_an_unbound_endpoint(self) -> None:
+        receipt = {
+            "evidence_path": "raw-final/hub-path-dependent-core-stop-audit.json",
+            "sha256": "1" * 64,
+            "bytes": 101,
+        }
+        fixtures = {
+            layout_id: {
+                "native_screen_id": "hub",
+                "header": {
+                    "path_dependent_core": {
+                        **policy,
+                        "measured_settled_element_count": count,
+                    }
+                },
+                "fork_decision_receipt": copy.deepcopy(receipt),
+            }
+            for (layout_id, policy), count in zip(
+                PATH_DEPENDENT_CORE_LAYOUTS.items(), (14, 10), strict=True
+            )
+        }
+        resolutions = {
+            layout_id: {
+                "peak_element_count": count,
+                "structural_core_element_count": count,
+                "structural_core_sha256": str(index + 2) * 64,
+            }
+            for index, (layout_id, count) in enumerate(
+                (("hub_new_game", 14), ("hub_resumed", 10))
+            )
+        }
+        endpoints = dict(PATH_DEPENDENT_CORE_ENDPOINTS)
+        endpoints.pop(("settings_to_hub", "after"))
+
+        with self.assertRaisesRegex(
+            CampaignResolutionError,
+            "path-dependent core contract: one or more Hub navigation endpoints "
+            "remain ambiguous",
+        ):
+            validate_path_dependent_core_forks(fixtures, resolutions, endpoints)
 
     def test_non_element_structural_field_variance_stops_settlement(self) -> None:
         samples = _stable_samples()
@@ -1034,6 +1345,276 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
         self.assertEqual(len(animated), 3)
         self.assertEqual({member["art_id"] for member in animated}, {"UI.scroll"})
 
+    def test_skill_picker_crossed_octet_resolves_one_animated_family(self) -> None:
+        resolved = _resolve_pair(
+            _skill_picker_animated_family_samples(),
+            _skill_picker_animated_family_samples(50.0),
+        )
+
+        self.assertEqual(resolved["settlement_spec"], "2.9")
+        self.assertEqual(resolved["peak_element_count"], 41)
+        self.assertEqual(resolved["structural_core_element_count"], 31)
+        self.assertEqual(len(resolved["animated_family_ids"]), 1)
+        self.assertEqual(len(resolved["animated_element_ids"]), 3)
+        family = next(
+            member
+            for member in resolved["ambient_members"]
+            if member["id"] == resolved["animated_family_ids"][0]
+        )
+        self.assertEqual(family["art_id"], "UI.3")
+        self.assertEqual(family["member_classes"], ["animated_family"])
+        self.assertEqual(
+            family["animated_family"]["exact_per_sample_member_count"], 8
+        )
+        self.assertEqual(
+            family["animated_family"]["relative_draw_slots"],
+            list(range(31, 39)),
+        )
+        self.assertEqual(
+            len(
+                family["animated_family"][
+                    "fresh_instance_rank_crossing_witnesses"
+                ]
+            ),
+            2,
+        )
+        per_member = [
+            member
+            for member in resolved["ambient_members"]
+            if member["art_id"] == "UI.62"
+        ]
+        self.assertEqual(len(per_member), 2)
+        self.assertTrue(
+            all(member["member_classes"] == ["animated"] for member in per_member)
+        )
+
+    def test_animated_family_declaration_without_crossing_proof_fails(self) -> None:
+        observations = [
+            _observation(
+                _same_art_disjoint_phase_samples(0.0), "menufx-primary", 101
+            ),
+            _observation(
+                _same_art_disjoint_phase_samples(50.0),
+                "menufx-confirmation",
+                202,
+            ),
+        ]
+        declared = resolve_ambient_lifecycle(observations)
+        declared = copy.deepcopy(declared)
+        declared["animated_family_ids"].append("screen.ambient.false-family.1")
+
+        with self.assertRaisesRegex(
+            AmbientLifecycleError,
+            "animated family rank-crossing contract: declared family collapse "
+            "lacks the machine-derived both-instance crossing proof",
+        ):
+            validate_ambient_resolution(declared, observations)
+
+    def test_skill_picker_octet_still_stops_when_family_rule_is_disabled(
+        self,
+    ) -> None:
+        with mock.patch(
+            "tools.native_menu_ambient_lifecycle._resolve_animated_family_keys",
+            return_value=({}, {}),
+        ):
+            with self.assertRaisesRegex(
+                AmbientLifecycleError,
+                "varying-member identity ambiguity: motion envelopes crossed "
+                "measured geometry ranks",
+            ):
+                _resolve_pair(
+                    _skill_picker_animated_family_samples(),
+                    _skill_picker_animated_family_samples(50.0),
+                )
+
+    def test_animated_family_crossing_must_reproduce_in_both_instances(self) -> None:
+        confirmation = _skill_picker_animated_family_samples(50.0)
+        for sample_index, sample in enumerate(confirmation):
+            movers = [
+                element
+                for element in sample["payload"]["elements"]  # type: ignore[index]
+                if element["art_id"] == "UI.3"
+            ]
+            for index, mover in enumerate(movers):
+                left = index * 1_000.0 + sample_index * 0.25
+                mover["rect"] = [left, 100.0, left + 80.0, 120.0]
+                mover["unclipped_rect"] = list(mover["rect"])
+
+        with self.assertRaisesRegex(
+            AmbientLifecycleError,
+            "animated family rank-crossing contract: repeated mover crossing "
+            "was not reproduced in fresh instance 'menufx-confirmation' PID 202",
+        ):
+            _resolve_pair(
+                _skill_picker_animated_family_samples(), confirmation
+            )
+
+    def test_animated_family_rejects_non_geometric_member_variance(self) -> None:
+        confirmation = _skill_picker_animated_family_samples(50.0)
+        for sample in confirmation:
+            mover = next(
+                element
+                for element in sample["payload"]["elements"]  # type: ignore[index]
+                if element["id"] == "skill_picker.art.ui_3.8"
+            )
+            mover["font_id"] = "different"
+
+        with self.assertRaisesRegex(
+            AmbientLifecycleError,
+            "animated family non-geometric contract: non-geometric payload "
+            "changed between fresh instances",
+        ):
+            _resolve_pair(
+                _skill_picker_animated_family_samples(), confirmation
+            )
+
+    def test_animated_family_rejects_visibility_or_member_count_change(self) -> None:
+        confirmation = _skill_picker_animated_family_samples(50.0)
+        for sample_index, sample in enumerate(confirmation):
+            mover = next(
+                element
+                for element in sample["payload"]["elements"]  # type: ignore[index]
+                if element["id"] == "skill_picker.art.ui_3.8"
+            )
+            mover["visible"] = sample_index % 2 == 0
+
+        with self.assertRaisesRegex(
+            AmbientLifecycleError,
+            "animated family member-count contract: visibility or membership "
+            "changed inside a fresh-instance family window",
+        ):
+            _resolve_pair(
+                _skill_picker_animated_family_samples(), confirmation
+            )
+
+    def test_animated_family_rejects_nonconstant_collective_slots(self) -> None:
+        confirmation = _skill_picker_animated_family_samples(50.0)
+        confirmation[20]["payload"]["elements"][0]["draw_order"] = 150  # type: ignore[index]
+
+        with self.assertRaisesRegex(
+            AmbientLifecycleError,
+            "animated family relative-slot contract: collective draw-slot set "
+            "changed within 'menufx-confirmation'",
+        ):
+            _resolve_pair(
+                _skill_picker_animated_family_samples(), confirmation
+            )
+
+    def test_skill_picker_choice_slots_resolve_from_manifest_geometry(self) -> None:
+        resolved = _resolve_pair(
+            _skill_picker_choice_samples(("Skills.48", "Skills.45")),
+            _skill_picker_choice_samples(
+                ("Skills.83", "Skills.92"), phase=50.0
+            ),
+            asset_manifest=_skill_picker_choice_manifest(),
+        )
+
+        self.assertEqual(resolved["settlement_spec"], "2.9")
+        self.assertEqual(resolved["peak_element_count"], 41)
+        self.assertEqual(resolved["structural_core_element_count"], 27)
+        self.assertEqual(len(resolved["animated_family_ids"]), 1)
+        self.assertEqual(
+            resolved["choice_slot_ids"],
+            ["skill_picker.choice_slot.1", "skill_picker.choice_slot.2"],
+        )
+        slots = resolved["choice_slots"]
+        self.assertEqual(
+            [slot["relative_draw_positions"] for slot in slots],
+            [[30, 31], [40, 41]],
+        )
+        self.assertEqual(
+            [slot["anchor"] for slot in slots],
+            [{"x": 604, "y": 386.5}, {"x": 1004, "y": 386.5}],
+        )
+        self.assertEqual(
+            [slot["exemplar_art_id"] for slot in slots],
+            ["Skills.48", "Skills.45"],
+        )
+        self.assertTrue(
+            all(
+                slot["inter_draw_offset_vectors"][1]["x"] == -4
+                and slot["inter_draw_offset_vectors"][1]["y"] == -4
+                for slot in slots
+            )
+        )
+        self.assertTrue(
+            all(slot["trim_centering_verified_member_count"] == 4 for slot in slots)
+        )
+        self.assertEqual(
+            resolved["classification_map"]["skill_picker.choice_slot.1"],
+            ["choice_slot"],
+        )
+
+    def test_choice_slot_anchor_mismatch_stops_instead_of_collapsing(self) -> None:
+        with self.assertRaisesRegex(
+            AmbientLifecycleError,
+            "choice-slot anchor contract: per-position anchor differs across "
+            "fresh instances",
+        ):
+            _resolve_pair(
+                _skill_picker_choice_samples(("Skills.48", "Skills.45")),
+                _skill_picker_choice_samples(
+                    ("Skills.83", "Skills.92"),
+                    phase=50.0,
+                    first_anchor_delta=(1.0, 0.0),
+                ),
+                asset_manifest=_skill_picker_choice_manifest(),
+            )
+
+    def test_choice_slot_offset_mismatch_stops_instead_of_collapsing(self) -> None:
+        with self.assertRaisesRegex(
+            AmbientLifecycleError,
+            "choice-slot inter-draw offset contract: intra-position offset "
+            "vectors differ across fresh instances",
+        ):
+            _resolve_pair(
+                _skill_picker_choice_samples(("Skills.48", "Skills.45")),
+                _skill_picker_choice_samples(
+                    ("Skills.83", "Skills.92"),
+                    phase=50.0,
+                    second_draw_offset=(-3.0, -4.0),
+                ),
+                asset_manifest=_skill_picker_choice_manifest(),
+            )
+
+    def test_choice_slot_trim_centering_is_arithmetic_against_manifest(self) -> None:
+        manifest = _skill_picker_choice_manifest()
+        manifest["entries"]["Skills.83"]["logicalSize"]["width"] = 44  # type: ignore[index]
+
+        with self.assertRaisesRegex(
+            AmbientLifecycleError,
+            "choice-slot manifest trim-centering contract: residual art "
+            "'Skills.83' rect is not exactly its manifest logicalSize",
+        ):
+            _resolve_pair(
+                _skill_picker_choice_samples(("Skills.48", "Skills.45")),
+                _skill_picker_choice_samples(
+                    ("Skills.83", "Skills.92"), phase=50.0
+                ),
+                asset_manifest=manifest,
+            )
+
+    def test_skill_picker_choice_residual_still_stops_when_rule_disabled(
+        self,
+    ) -> None:
+        with mock.patch(
+            "tools.native_menu_ambient_lifecycle._resolve_choice_slot_keys",
+            return_value=({}, {}),
+        ):
+            with self.assertRaisesRegex(
+                AmbientLifecycleError,
+                "cross-instance structural core inequality: non-ambient "
+                "full-presence member 'Skills.48' differs or is missing in "
+                "observation 0",
+            ):
+                _resolve_pair(
+                    _skill_picker_choice_samples(("Skills.48", "Skills.45")),
+                    _skill_picker_choice_samples(
+                        ("Skills.83", "Skills.92"), phase=50.0
+                    ),
+                    asset_manifest=_skill_picker_choice_manifest(),
+                )
+
     def test_declared_phantom_ambient_class_is_a_recorder_defect(self) -> None:
         observations = [
             _observation(_stable_samples(3), "menufx-primary", 101),
@@ -1173,6 +1754,63 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
 
         assert_overlay_hygiene(layout, reference)
 
+    def test_overlay_reference_uses_two_instance_local_standalone_cores(self) -> None:
+        title = _art(1, art_id="Title.0")
+        dialog = [
+            _art(2, art_id="UI.dialog.frame"),
+            _art(3, art_id="UI.dialog.button"),
+        ]
+
+        def beta_elements(sample_index: int) -> list[dict[str, object]]:
+            elements = copy.deepcopy([title, *dialog])
+            for element in elements:
+                element["draw_order"] = int(element["draw_order"]) + sample_index
+            return elements
+
+        beta_primary = _samples(beta_elements)
+        beta_confirmation = _samples(beta_elements)
+        main_primary = _samples(lambda _: [copy.deepcopy(title)])
+        main_confirmation = _samples(lambda _: [copy.deepcopy(title)])
+        beta_core = reproduce_standalone_structural_core(
+            beta_primary,
+            beta_confirmation,
+            label="beta_notice",
+        )
+        main_core = reproduce_standalone_structural_core(
+            main_primary,
+            main_confirmation,
+            label="main_menu_root",
+        )
+        corroboration = _multiset_reference(dialog)
+
+        reference = derive_overlay_reference(
+            beta_core,
+            main_core,
+            corroboration,
+            copy.deepcopy(corroboration),
+        )
+
+        self.assertEqual(beta_core["element_count"], 3)
+        self.assertEqual(main_core["element_count"], 1)
+        self.assertEqual(reference["overlay_semantic_draw_count"], 2)
+
+    def test_local_standalone_core_rejects_nonambient_instance_residual(self) -> None:
+        primary = _stable_samples(2)
+        confirmation = _stable_samples(2)
+        confirmation[0]["payload"]["elements"][1]["text"] = "changed"  # type: ignore[index]
+        for sample in confirmation[1:]:
+            sample["payload"]["elements"][1]["text"] = "changed"  # type: ignore[index]
+
+        with self.assertRaisesRegex(
+            AmbientLifecycleError,
+            "standalone structural-core reproduction contract: non-ambient member",
+        ):
+            reproduce_standalone_structural_core(
+                primary,
+                confirmation,
+                label="screen",
+            )
+
     def test_landed_diagnosis_strict_screen_matches_reproduced_core(self) -> None:
         samples = _stable_samples(3)
         settled = _resolve_pair(samples)
@@ -1192,6 +1830,126 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
         )
 
         self.assertEqual(diagnosis["status"], "strict_structural_bit_match")
+
+    def test_landed_ambient_lookup_uses_unique_exact_anchor_not_ordinal(self) -> None:
+        landed = _art(9, art_id="UI.shared")
+        anchors = [copy.deepcopy(landed), copy.deepcopy(landed)]
+        anchors[0]["rect"] = [1.0, 2.0, 9.0, 8.0]
+        anchors[0]["unclipped_rect"] = list(anchors[0]["rect"])
+        members = []
+        for index, anchor in enumerate(anchors, start=1):
+            anchor.pop("id")
+            anchor.pop("draw_order")
+            members.append(
+                {
+                    "id": f"screen.ambient.shared_slot_{index}.1",
+                    "class_members": [
+                        {
+                            "classification": "animated",
+                            "anchor_payload": anchor,
+                            "union_spatial_envelope": {
+                                "rect": {
+                                    "min_x": 0.0,
+                                    "max_x": 100.0,
+                                    "min_y": 0.0,
+                                    "max_y": 100.0,
+                                    "min_width": 8.0,
+                                    "max_width": 8.0,
+                                    "min_height": 6.0,
+                                    "max_height": 6.0,
+                                },
+                                "unclipped_rect": {
+                                    "min_x": 0.0,
+                                    "max_x": 100.0,
+                                    "min_y": 0.0,
+                                    "max_y": 100.0,
+                                    "min_width": 8.0,
+                                    "max_width": 8.0,
+                                    "min_height": 6.0,
+                                    "max_height": 6.0,
+                                },
+                            },
+                        }
+                    ],
+                    "observed_concurrency_range": [1, 1],
+                }
+            )
+
+        lifecycle, animation, unmatched = match_ambient_members(
+            [landed], {"ambient_members": members}
+        )
+
+        self.assertEqual(lifecycle, [])
+        self.assertEqual(unmatched, [])
+        self.assertEqual(animation[0]["member_id"], members[1]["id"])
+
+    def test_v29_beta_notice_exact_trio_moves_to_final_core_positions(self) -> None:
+        landed, settled, overlay, contract = _v29_order_case()
+
+        _, _, correction = _v29_beta_notice_order_projection(
+            landed, settled, overlay, contract
+        )
+
+        self.assertIsNotNone(correction)
+        self.assertEqual(
+            [
+                member["settled_relative_core_index"]
+                for member in correction["moved_members"]  # type: ignore[index]
+            ],
+            [4, 5, 6],
+        )
+
+    def test_v29_beta_notice_non_exempt_reorder_still_stops(self) -> None:
+        landed, settled, overlay, contract = _v29_order_case()
+        settled["elements"][1], settled["elements"][2] = (  # type: ignore[index]
+            settled["elements"][2],  # type: ignore[index]
+            settled["elements"][1],  # type: ignore[index]
+        )
+
+        with self.assertRaisesRegex(
+            LandedDiagnosisError,
+            "v2.9 beta-notice paint-order correction: a non-exempt core member moved",
+        ):
+            _v29_beta_notice_order_projection(landed, settled, overlay, contract)
+
+    def test_v29_beta_notice_dropped_trio_member_stops_set_identity(self) -> None:
+        landed, settled, overlay, contract = _v29_order_case()
+        settled["elements"].pop()  # type: ignore[union-attr]
+
+        with self.assertRaisesRegex(
+            LandedDiagnosisError,
+            "v2.9 beta-notice paint-order correction: exact core set identity failed",
+        ):
+            _v29_beta_notice_order_projection(landed, settled, overlay, contract)
+
+    def test_v29_beta_notice_mutated_trio_rect_stops_identity(self) -> None:
+        landed, settled, overlay, contract = _v29_order_case()
+        settled["elements"][-1]["rect"][0] += 1.0  # type: ignore[index]
+
+        with self.assertRaisesRegex(
+            LandedDiagnosisError,
+            "v2.9 beta-notice paint-order correction: exact core set identity failed",
+        ):
+            _v29_beta_notice_order_projection(landed, settled, overlay, contract)
+
+    def test_v29_beta_notice_trio_in_nonfinal_positions_stops(self) -> None:
+        landed, settled, overlay, contract = _v29_order_case()
+        elements = settled["elements"]  # type: ignore[assignment]
+        settled["elements"] = [
+            elements[0],
+            elements[1],
+            elements[4],
+            elements[5],
+            elements[6],
+            elements[2],
+            elements[3],
+        ]
+
+        with self.assertRaisesRegex(
+            LandedDiagnosisError,
+            "v2.9 beta-notice paint-order correction: bounded landed-to-settled positions differ",
+        ):
+            _v29_beta_notice_order_projection(landed, settled, overlay, contract)
 
     def test_landed_diagnosis_assigns_visibility_cycle_before_other_legs(self) -> None:
         def elements(sample_index: int) -> list[dict[str, object]]:
@@ -1317,6 +2075,66 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
 
         self.assertEqual(len(ambient), 1)
         self.assertEqual(corroboration["overlay_semantic_draw_count"], 1)
+
+    def test_landed_frozen_animated_rect_need_not_fit_new_envelope(self) -> None:
+        def elements(sample_index: int) -> list[dict[str, object]]:
+            moving = _art(8, art_id="UI.intermittent")
+            moving["rect"][0] += sample_index * 0.1  # type: ignore[index]
+            moving["rect"][2] += sample_index * 0.1  # type: ignore[index]
+            moving["unclipped_rect"] = list(moving["rect"])
+            return [_art(index) for index in range(4)] + [moving]
+
+        samples = _samples(elements)
+        settled = _resolve_pair(samples)
+        settled_layout = {
+            **settled["structural_core"],
+            "ambient_members": copy.deepcopy(settled["ambient_members"]),
+        }
+        landed = copy.deepcopy(samples[0]["payload"])
+        frozen = landed["elements"][-1]
+        frozen["rect"] = [900.0, 20.0, 908.0, 26.0]
+        frozen["unclipped_rect"] = list(frozen["rect"])
+
+        residual, ambient = diagnosis_prereference_residual(
+            landed, settled_layout
+        )
+
+        self.assertEqual(residual, [])
+        self.assertEqual(len(ambient), 1)
+        self.assertEqual(ambient[0]["member_classes"], ["animated"])
+
+    def test_landed_diagnosis_consumes_measured_animation_before_overlay(self) -> None:
+        def elements(sample_index: int) -> list[dict[str, object]]:
+            moving = _art(8, art_id="UI.intermittent")
+            moving["rect"][0] += sample_index * 0.1  # type: ignore[index]
+            moving["rect"][2] += sample_index * 0.1  # type: ignore[index]
+            moving["unclipped_rect"] = list(moving["rect"])
+            return [_art(index) for index in range(4)] + [moving]
+
+        samples = _samples(elements)
+        settled = _resolve_pair(samples)
+        settled_layout = {
+            **settled["structural_core"],
+            "ambient_members": copy.deepcopy(settled["ambient_members"]),
+        }
+        landed = copy.deepcopy(samples[0]["payload"])
+        frozen = landed["elements"][-1]
+        frozen["rect"] = [900.0, 20.0, 908.0, 26.0]
+        frozen["unclipped_rect"] = list(frozen["rect"])
+        trace = _trace(samples, copy.deepcopy(landed["elements"]))
+        unused_overlay = _multiset_reference([_art(99, art_id="UI.overlay")])
+
+        diagnosis = diagnose_landed_layout(
+            landed,
+            settled_layout,
+            trace,
+            copy.deepcopy(trace),
+            unused_overlay,
+        )
+
+        self.assertEqual(diagnosis["status"], "corrected")
+        self.assertEqual(len(diagnosis["animated_geometry_dispositions"]), 1)
+        self.assertEqual(diagnosis["overlay_dispositions"], [])
 
 
 if __name__ == "__main__":

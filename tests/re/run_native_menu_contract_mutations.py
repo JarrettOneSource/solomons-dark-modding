@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mutation-audit every Settlement v2.1/v2.3/v2.4/v2.5 menu claim."""
+"""Mutation-audit every Settlement v2.1/v2.3/v2.4/v2.5/v2.6 menu claim."""
 
 from __future__ import annotations
 
@@ -570,6 +570,8 @@ RECORDER = "test_native_menu_recorders_settle_and_derive_provenance"
 OVERLAY = "test_native_menu_overlay_contamination_override_is_fail_closed"
 CLASSIFIER = "test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired"
 CAMPAIGN = "test_native_menu_motion_capability_campaign_resolution_is_fail_closed"
+PATH_FORK = "test_native_menu_path_dependent_core_fork_is_exact"
+SURFACE_AGREEMENT = "test_native_menu_capture_surface_agreement_is_fail_closed"
 
 
 BEHAVIOR_MUTATIONS: tuple[BehaviorMutation, ...] = (
@@ -829,10 +831,47 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "v2.5.settings-route-complete-census",
         CAMPAIGN,
         "tools/resolve_native_menu_ambient_campaign.py",
-        "if explicit_layout_ids != set(NAVIGATION_ENDPOINT_LAYOUT_IDS):",
-        "if False and explicit_layout_ids != set(NAVIGATION_ENDPOINT_LAYOUT_IDS):",
+        "if explicit_layout_ids != applicable_explicit_layout_ids:",
+        "if False and explicit_layout_ids != applicable_explicit_layout_ids:",
         "ambient-lifecycle resolver no longer refuses the three-way settings "
         "screen ambiguity with an every-edge explicit route map",
+    ),
+    StaticMutation(
+        "v2.6.hub-route-exact-mapping",
+        PATH_FORK,
+        "tools/resolve_native_menu_ambient_campaign.py",
+        '("create_discipline_to_hub", "after"): "hub_new_game",',
+        '("create_discipline_to_hub", "after"): "hub_resumed",',
+        "Settlement v2.6 no longer names exactly two Hub layouts and binds "
+        "every Hub navigation endpoint to its deterministic path/session state",
+    ),
+    StaticMutation(
+        "v2.6.hub-distinct-census",
+        PATH_FORK,
+        "tools/resolve_native_menu_ambient_campaign.py",
+        "if len(set(counts.values())) != len(counts):",
+        "if False and len(set(counts.values())) != len(counts):",
+        "Settlement v2.6 no longer rejects an equal-census, unbound, "
+        "extra-layout, or differently evidenced Hub fork",
+    ),
+    StaticMutation(
+        "v2.6.materializer-no-provenance-override",
+        PATH_FORK,
+        "tools/materialize_native_menu_path_forks_v26.py",
+        'parser.add_argument("--candidate-root", required=True, type=Path)',
+        'parser.add_argument("--base-commit-sha")\n'
+        '    parser.add_argument("--candidate-root", required=True, type=Path)',
+        "path-dependent core materializer accepts operator-supplied "
+        "provenance or golden values: ['--base-commit-sha']",
+    ),
+    StaticMutation(
+        "v2.6.spec-version-and-stop-changelog",
+        PATH_FORK,
+        "docs/reverse-engineering/native-menu-settlement.md",
+        "# Native menu settlement specification v2.6",
+        "# Native menu settlement specification v2.5",
+        "the versioned settlement specification no longer records the narrow "
+        "path-dependent-core rule and the STOP that caused it",
     ),
     StaticMutation(
         "v2.5.independent-capture-runtime-provenance",
@@ -1024,17 +1063,25 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "recorder.blocking-modal-exact-surface",
         RECORDER,
         "scripts/NativeMenuCaptureSupport.ps1",
-        "$dispatch.semantic_surface -ceq",
-        "$dispatch.semantic_surface -cne",
+        "$dispatch.classified_surface -ceq",
+        "$dispatch.classified_surface -cne",
         "native-menu semantic actions no longer distinguish queued or busy requests, exact-surface blocking modals, completed dispatch, and terminal dispatch failure",
     ),
     StaticMutation(
         "recorder.blocking-modal-generation-advance",
         RECORDER,
         "scripts/NativeMenuCaptureSupport.ps1",
-        "$dispatch.semantic_generation -ne",
-        "$dispatch.semantic_generation -eq",
+        "$dispatch.layout_generation -ne",
+        "$dispatch.layout_generation -eq",
         "native-menu semantic actions no longer distinguish queued or busy requests, exact-surface blocking modals, completed dispatch, and terminal dispatch failure",
+    ),
+    StaticMutation(
+        "recorder.surface-mismatch-native-refusal",
+        SURFACE_AGREEMENT,
+        "SolomonDarkModLoader/src/debug_ui_overlay/public_api_surface_dispatch.inl",
+        "if (captured.screen_id != screen_id) {",
+        "if (captured.screen_id == screen_id) {",
+        "a classifier/tag mismatch can reach the accepted native layout cache",
     ),
     StaticMutation(
         "recorder.no-provenance-override",
@@ -1185,7 +1232,7 @@ def main() -> int:
 
     payload = {
         "schema": "solomon-dark-native-menu-contract-mutations-v1",
-        "settlement_spec": "2.5",
+        "settlement_spec": "2.9",
         "count": len(results),
         "results": [asdict(result) for result in results],
     }

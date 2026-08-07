@@ -111,7 +111,7 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         self.assertIn("kMenuLayoutCaptureTrackedDialogPriorityMs", frame)
         self.assertIn("menu_layout_capture_enabled", frame)
 
-    def test_current_frame_tag_keeps_live_text_but_drops_stale_controls(self) -> None:
+    def test_current_frame_capture_refuses_classifier_tag_disagreement(self) -> None:
         api = read(
             "SolomonDarkModLoader/src/debug_ui_overlay/"
             "public_api_surface_dispatch.inl"
@@ -119,13 +119,16 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         bindings = read("SolomonDarkModLoader/src/lua_engine_bindings_ui.cpp")
         recorder = read_native_menu_recorder()
         self.assertIn("TryCaptureCurrentDebugUiLayoutSnapshot", api)
-        self.assertIn('element.kind != "art"', api)
-        self.assertIn('element.kind != "text"', api)
-        self.assertIn("std::remove_if", api)
-        self.assertIn("stale controls omitted", api)
-        self.assertIn('screen_id == "profile_save_select"', api)
-        self.assertIn('screen_id == "beta_notice"', api)
-        self.assertIn('screen_id == "dark_cloud_search"', api)
+        self.assertRegex(
+            api,
+            r"captured\.screen_id != screen_id\) \{\s*return false;\s*\}",
+            "a classifier/tag mismatch must be refused before any snapshot is stored",
+        )
+        self.assertNotIn("classification_agrees", api)
+        self.assertNotIn("stale controls omitted", api)
+        self.assertNotIn("captured.screen_id = std::string(screen_id)", api)
+        self.assertIn("TryGetLatestDebugUiLayoutSnapshot", bindings)
+        self.assertIn('lua_setfield(state, -2, "classified_screen_id")', bindings)
         self.assertIn("capture_current_layout", bindings)
         self.assertIn("sd.ui.capture_current_layout", recorder)
 
@@ -273,25 +276,62 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         self.assertRegex(
             support,
             r"(?s)\$lastStatus -ceq \"dispatching\".*?"
-            r"\$ExpectedDestinationSurface.*?"
-            r"\$dispatch\.semantic_surface -ceq.*?"
-            r"\$ExpectedDestinationSurface.*?"
-            r"\$dispatch\.semantic_generation -ne.*?"
-            r"\$SourceSemanticGeneration",
+            r"\$dispatch\.classified_surface -ceq.*?"
+            r"\$ExpectedDestinationScreen.*?"
+            r"\$dispatch\.layout_generation -ne.*?"
+            r"\$SourceLayoutGeneration",
             "a blocking native modal may proceed only after its exact caller-pinned "
-            "destination surface and a semantic-generation advance are measured live",
+            "destination classification and a layout-generation advance are measured live",
         )
         self.assertIn(
-            "-SourceSemanticGeneration $before.semantic_generation",
+            "-SourceLayoutGeneration $before.layout_generation",
             transition,
             "the modal proof must compare against the exact settled source "
-            "semantic generation",
+            "layout generation",
         )
         self.assertIn(
-            "-ExpectedDestinationSurface $ExpectedDestinationSurface",
+            "-ExpectedDestinationScreen $DestinationScreen",
             transition,
-            "the transition recorder must bind modal dispatch to the pinned "
-            "destination surface",
+            "the transition recorder must bind modal dispatch to the intended "
+            "machine classification",
+        )
+        self.assertNotIn(
+            "ExpectedSourceSurface",
+            transition,
+            "source agreement must be mandatory rather than operator-optional",
+        )
+        self.assertNotIn(
+            "ExpectedDestinationSurface",
+            transition,
+            "destination agreement must be mandatory rather than operator-optional",
+        )
+        for script, consequence in (
+            (standalone, "standalone"),
+            (transition, "transition"),
+            (confirmation, "confirmation"),
+            (motion, "extended observation"),
+        ):
+            self.assertIn(
+                "Assert-NativeMenuCaptureSurfaceAgreement",
+                script,
+                f"{consequence} capture must refuse a classifier/tag mismatch",
+            )
+        self.assertIn(
+            'ParameterSetName = "MeasuredClick"',
+            transition,
+            "the corrected navigation path must derive its click from a live control",
+        )
+        self.assertRegex(
+            support,
+            r'if \(\$probe\.Status -eq "wrong_surface"\) \{\s*'
+            r'throw \[string\]\$probe\.Detail',
+            "a post-transition classifier mismatch must abort on its first probe "
+            "instead of aging into the settlement timeout",
+        )
+        self.assertIn(
+            "dispatch_measurement = $dispatchMeasurement",
+            transition,
+            "a live-derived click must carry its measured rectangle receipt",
         )
         self.assertNotIn(
             "WaitMilliseconds",

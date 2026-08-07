@@ -981,7 +981,7 @@ class NativeMenuSettlementV2Tests(unittest.TestCase):
                 promoted["schema"], "solomon-dark-native-menu-layout-v3"
             )
             self.assertEqual(
-                promoted["header"]["settlement"]["settlement_spec"], "2.5"
+                promoted["header"]["settlement"]["settlement_spec"], "2.9"
             )
             self.assertEqual(promoted["layout"]["structural_core_element_count"], 9)
             self.assertEqual(len(promoted["layout"]["animated_element_ids"]), 1)

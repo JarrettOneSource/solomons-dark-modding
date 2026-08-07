@@ -175,6 +175,9 @@ while (
             "reported '$($probe.SemanticPayload.screen_id)'."
         )
     }
+    Assert-NativeMenuCaptureSurfaceAgreement `
+        -OperatorScreenTag $ScreenId `
+        -MachineClassifiedSurface $probe.SemanticSurface
     Assert-NativeMenuOverlayHygiene `
         -Context $context `
         -Layout $probe.SemanticPayload

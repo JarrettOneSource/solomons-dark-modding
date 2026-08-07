@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the G11 aggregate only from resolved Settlement v2.5 artifacts."""
+"""Build the G11 aggregate only from resolved Settlement v2.9 artifacts."""
 
 from __future__ import annotations
 
@@ -16,6 +16,16 @@ from native_menu_overlay_v25 import (
     OVERLAY_REFERENCE_SCHEMA,
     OverlayV25Error,
     assert_overlay_hygiene,
+    derive_overlay_reference,
+)
+from native_menu_landed_diagnosis_v25 import (
+    LandedDiagnosisError,
+    diagnosis_prereference_residual,
+    semantic_overlay_corroboration,
+)
+from native_menu_ambient_lifecycle import (
+    AmbientLifecycleError,
+    reproduce_standalone_structural_core,
 )
 
 
@@ -119,7 +129,7 @@ def validate_fixture(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     fixture = read_object(path)
     if fixture.get("schema") != "solomon-dark-native-menu-layout-v3":
-        raise GoldenBuildError(f"{path} does not use Settlement v2.5 schema v3")
+        raise GoldenBuildError(f"{path} does not use Settlement v2.9 schema v3")
     header = fixture.get("header")
     layout = fixture.get("layout")
     if not isinstance(header, dict) or not isinstance(layout, dict):
@@ -130,17 +140,17 @@ def validate_fixture(
     if (
         header.get("recorded_live") is not True
         or not isinstance(settlement, dict)
-        or settlement.get("settlement_spec") != "2.5"
+        or settlement.get("settlement_spec") != "2.9"
         or settlement.get("consecutive_structural_samples", 0) < 40
         or settlement.get("stable_span_milliseconds", 0) < 2_000
         or not isinstance(ambient, dict)
         or len(ambient.get("independent_instances", [])) < 2
-        or layout.get("settlement_spec") != "2.5"
+        or layout.get("settlement_spec") != "2.9"
         or layout.get("draw_order_semantics")
         != "structural_core_relative_sequence"
         or layout.get("ambient_fraction", 1.0) > 0.40
     ):
-        raise GoldenBuildError(f"{path} has incomplete Settlement v2.5 provenance")
+        raise GoldenBuildError(f"{path} has incomplete Settlement v2.9 provenance")
     reference, reference_sha256 = reference_receipt(path, fixture, fixture_root)
     return fixture, {
         "fixture": (
@@ -153,6 +163,72 @@ def validate_fixture(
         "header": copy.deepcopy(header),
         "layout": copy.deepcopy(layout),
     }
+
+
+def standalone_settled_pair(
+    path: Path,
+    fixture_root: Path,
+    fixture: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    header = fixture["header"]
+    raw_receipt = header.get("settlement_trace", header.get("raw_recording"))
+    confirmation_receipt = header.get("animation_confirmation")
+    if not isinstance(raw_receipt, dict) or not isinstance(
+        confirmation_receipt, dict
+    ):
+        raise GoldenBuildError(
+            f"{path} has no two-window standalone settlement receipts"
+        )
+
+    def recording(
+        receipt: dict[str, Any], directory: str, label: str
+    ) -> dict[str, Any]:
+        filename = receipt.get("evidence_filename")
+        if not isinstance(filename, str) or not filename:
+            raise GoldenBuildError(f"{path} {label} receipt has no filename")
+        evidence_path = (fixture_root / directory / filename).resolve()
+        expected_root = (fixture_root / directory).resolve()
+        if not evidence_path.is_relative_to(expected_root) or not evidence_path.is_file():
+            raise GoldenBuildError(f"{path} {label} evidence is absent or escapes")
+        if (
+            evidence_path.stat().st_size != receipt.get("bytes")
+            or sha256_file(evidence_path) != receipt.get("sha256")
+        ):
+            raise GoldenBuildError(f"{path} {label} evidence receipt is false")
+        return read_object(evidence_path)
+
+    primary = recording(
+        raw_receipt, "menu-settlement-traces", "primary settlement"
+    )
+    confirmation = recording(
+        confirmation_receipt,
+        "menu-animation-confirmations",
+        "fresh-instance confirmation",
+    )
+    confirmation_header = confirmation.get("header")
+    if not isinstance(confirmation_header, dict):
+        raise GoldenBuildError(f"{path} confirmation has no capture header")
+    if canonical_bytes(header.get("source")) != canonical_bytes(
+        confirmation_header.get("source")
+    ):
+        raise GoldenBuildError(f"{path} confirmation changed native provenance")
+    primary_identity = (header.get("instance"), header.get("process_id"))
+    confirmation_identity = (
+        confirmation_header.get("instance"),
+        confirmation_header.get("process_id"),
+    )
+    if primary_identity == confirmation_identity:
+        raise GoldenBuildError(f"{path} confirmation reused the primary instance/PID")
+    primary_samples = primary.get("settled_window_samples")
+    confirmation_samples = confirmation.get("settled_window_samples")
+    if (
+        not isinstance(primary_samples, list)
+        or not isinstance(confirmation_samples, list)
+        or not all(isinstance(sample, dict) for sample in primary_samples)
+        or not all(isinstance(sample, dict) for sample in confirmation_samples)
+    ):
+        raise GoldenBuildError(f"{path} settled pair has no sample arrays")
+    return primary_samples, confirmation_samples
 
 
 def parse_capture_time(header: dict[str, Any], label: str) -> datetime:
@@ -173,12 +249,12 @@ def endpoint(value: dict[str, Any], edge_id: str, side: str) -> dict[str, Any]:
     if (
         not isinstance(layout, dict)
         or not isinstance(settlement, dict)
-        or settlement.get("settlement_spec") != "2.5"
+        or settlement.get("settlement_spec") != "2.9"
         or not isinstance(layout_id, str)
         or not layout_id
     ):
         raise GoldenBuildError(
-            f"navigation edge {edge_id} {side} has no resolved v2.5 endpoint"
+            f"navigation edge {edge_id} {side} has no resolved v2.9 endpoint"
         )
     frame = value.get("frame_sha256")
     if (
@@ -201,6 +277,8 @@ def endpoint(value: dict[str, Any], edge_id: str, side: str) -> dict[str, Any]:
         "layout",
         "layout_id",
         "animated_element_ids",
+        "animated_family_ids",
+        "choice_slot_ids",
     )
     return {
         field: copy.deepcopy(value.get(field))
@@ -228,16 +306,17 @@ def build(
     output_path: Path,
 ) -> dict[str, Any]:
     overlay_path = fixture_root / "menu-overlay-reference.json"
-    overlay = read_object(overlay_path)
-    if overlay.get("schema") != OVERLAY_REFERENCE_SCHEMA:
-        raise GoldenBuildError("derived Settlement v2.5 overlay reference is absent")
-
     layout_paths = unique_json_files(
         fixture_root / "menu-layouts", 28, "main-menu-root"
     )
     transition_paths = unique_json_files(
-        fixture_root / "menu-transition-layouts", 1, "hub"
+        fixture_root / "menu-transition-layouts", 2, "hub_new_game"
     )
+    if set(transition_paths) != {"hub_new_game", "hub_resumed"}:
+        raise GoldenBuildError(
+            "path-dependent core contract: transition fixture census is not the "
+            "two authorized Hub layouts"
+        )
     fixtures: dict[str, dict[str, Any]] = {}
     wrappers: list[dict[str, Any]] = []
     transition_wrappers: list[dict[str, Any]] = []
@@ -245,30 +324,116 @@ def build(
     sessions: list[dict[str, Any]] = []
     for layout_id, path in [*layout_paths.items(), *transition_paths.items()]:
         fixture, wrapper = validate_fixture(path, fixture_root)
+        if layout_id in fixtures:
+            raise GoldenBuildError(f"fixture id '{layout_id}' is ambiguous")
+        fixtures[layout_id] = fixture
+        (
+            transition_wrappers
+            if layout_id in {"hub_new_game", "hub_resumed"}
+            else wrappers
+        ).append(wrapper)
+        observed = parse_capture_time(fixture["header"], str(path))
+        latest_capture = observed if latest_capture is None else max(latest_capture, observed)
+        sessions.append(capture_session(fixture["header"]))
+    if len(fixtures) != 30 or latest_capture is None:
+        raise GoldenBuildError(
+            "aggregate fixture sweep did not reach 28 menus plus two Hub layouts"
+        )
+
+    landed = read_object(repo_root / "tests/fixtures/webgame/menu-goldens.json")
+    landed_layouts = landed.get("layouts")
+    if not isinstance(landed_layouts, list) or len(landed_layouts) != 28:
+        raise GoldenBuildError(
+            "derived overlay reference did not reach the landed 28-layout census"
+        )
+    landed_by_id = {
+        Path(entry["fixture"]).stem: entry["layout"]
+        for entry in landed_layouts
+        if isinstance(entry, dict)
+        and isinstance(entry.get("fixture"), str)
+        and isinstance(entry.get("layout"), dict)
+    }
+    overlay_witnesses = {
+        "beta-notice",
+        "main-menu-root",
+        "create-element",
+        "pause-menu",
+    }
+    if not overlay_witnesses <= set(fixtures) or not {
+        "create-element",
+        "pause-menu",
+    } <= set(landed_by_id):
+        raise GoldenBuildError(
+            "derived overlay reference did not reach every named structural witness"
+        )
+    try:
+        beta_primary, beta_confirmation = standalone_settled_pair(
+            layout_paths["beta-notice"],
+            fixture_root,
+            fixtures["beta-notice"],
+        )
+        main_primary, main_confirmation = standalone_settled_pair(
+            layout_paths["main-menu-root"],
+            fixture_root,
+            fixtures["main-menu-root"],
+        )
+        beta_standalone_core = reproduce_standalone_structural_core(
+            beta_primary,
+            beta_confirmation,
+            label="beta_notice",
+            authorized_ambient_family=set(
+                fixtures["beta-notice"]["layout"]["ambient_family_art_ids"]
+            ),
+        )
+        main_standalone_core = reproduce_standalone_structural_core(
+            main_primary,
+            main_confirmation,
+            label="main_menu_root",
+            authorized_ambient_family=set(
+                fixtures["main-menu-root"]["layout"]["ambient_family_art_ids"]
+            ),
+        )
+        create_residual, _ = diagnosis_prereference_residual(
+            landed_by_id["create-element"], fixtures["create-element"]["layout"]
+        )
+        pause_residual, _ = diagnosis_prereference_residual(
+            landed_by_id["pause-menu"], fixtures["pause-menu"]["layout"]
+        )
+        overlay = derive_overlay_reference(
+            beta_standalone_core,
+            main_standalone_core,
+            semantic_overlay_corroboration(create_residual),
+            semantic_overlay_corroboration(pause_residual),
+        )
+    except (
+        AmbientLifecycleError,
+        LandedDiagnosisError,
+        OverlayV25Error,
+    ) as error:
+        raise GoldenBuildError(
+            f"derived Settlement v2.9 overlay reference failed: {error}"
+        ) from error
+    if overlay.get("schema") != OVERLAY_REFERENCE_SCHEMA:
+        raise GoldenBuildError(
+            "derived Settlement v2.9 overlay reference has the wrong schema"
+        )
+    write_object(overlay_path, overlay)
+    for layout_id, fixture in fixtures.items():
         try:
             assert_overlay_hygiene(fixture["layout"], overlay)
         except OverlayV25Error as error:
             raise GoldenBuildError(
                 f"standalone '{layout_id}' failed derived overlay hygiene: {error}"
             ) from error
-        if layout_id in fixtures:
-            raise GoldenBuildError(f"fixture id '{layout_id}' is ambiguous")
-        fixtures[layout_id] = fixture
-        (transition_wrappers if layout_id == "hub" else wrappers).append(wrapper)
-        observed = parse_capture_time(fixture["header"], str(path))
-        latest_capture = observed if latest_capture is None else max(latest_capture, observed)
-        sessions.append(capture_session(fixture["header"]))
-    if len(fixtures) != 29 or latest_capture is None:
-        raise GoldenBuildError("aggregate fixture sweep did not reach 28 menus plus hub")
 
     navigation = read_object(navigation_path)
     resolution = navigation.get("header", {}).get("ambient_lifecycle_resolution")
     if (
         navigation.get("schema") != "solomon-dark-native-menu-navigation-v2"
         or not isinstance(resolution, dict)
-        or resolution.get("settlement_spec") != "2.5"
+        or resolution.get("settlement_spec") != "2.9"
     ):
-        raise GoldenBuildError("navigation recording has no Settlement v2.5 resolution")
+        raise GoldenBuildError("navigation recording has no Settlement v2.9 resolution")
     raw_edges = navigation.get("edges")
     if not isinstance(raw_edges, list) or not raw_edges:
         raise GoldenBuildError("navigation recording contains no live edges")
@@ -277,7 +442,6 @@ def build(
     }
     if len(raw_by_id) != len(raw_edges) or None in raw_by_id:
         raise GoldenBuildError("navigation recording contains ambiguous edge ids")
-    landed = read_object(repo_root / "tests/fixtures/webgame/menu-goldens.json")
     landed_edges = landed.get("navigation_graph", {}).get("edges")
     if not isinstance(landed_edges, list) or not landed_edges:
         raise GoldenBuildError("landed controller graph contains no edge witness")
@@ -322,8 +486,8 @@ def build(
                 ) from error
         destination_layout_id = after["layout_id"]
         destination_fixture = (
-            "menu-transition-layouts/hub.json"
-            if destination_layout_id == "hub"
+            f"menu-transition-layouts/{destination_layout_id}.json"
+            if destination_layout_id in transition_paths
             else f"menu-layouts/{destination_layout_id}.json"
         )
         observed_at = raw.get("observed_at_utc")
@@ -357,7 +521,8 @@ def build(
             "gap": "G11",
             "generated_from_live_capture_at_utc": latest_capture.isoformat(),
             "capture_method": (
-                "Settlement v2.5 reproduced structural cores with canonical "
+                "Settlement v2.9 reproduced structural cores, animated families, "
+                "choice slots, and canonical "
                 "relative draw order, measured ambient lifecycle and motion "
                 "envelopes, native Sprite/text hooks, live D3D9 frames, "
                 "exact-process input, and independent fresh-instance confirmation"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Import paired native-loader/loading recordings under Settlement v2.5."""
+"""Import paired native-loader/loading recordings under Settlement v2.9."""
 
 from __future__ import annotations
 
@@ -546,7 +546,7 @@ def write_trace(
         "schema": "solomon-dark-native-menu-settlement-trace-v3",
         "header": {
             "label": label,
-            "settlement_spec": "2.5",
+            "settlement_spec": "2.9",
             "source_recording": source_receipt(source_path),
         },
         "structural_phases": [],
@@ -797,7 +797,7 @@ def import_all(args: argparse.Namespace) -> dict[str, Any]:
             outputs.append(str(destination))
     return {
         "success": True,
-        "settlement_spec": "2.5",
+        "settlement_spec": "2.9",
         "paired_surface_count": 2,
         "outputs": outputs,
     }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Resolve a complete native-menu campaign under Settlement v2.5."""
+"""Resolve a complete native-menu campaign under Settlement v2.9."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from typing import Any
 if __package__:
     from .native_menu_ambient_lifecycle import (
         AmbientLifecycleError,
+        SETTLEMENT_SPEC,
         canonical_bytes,
         classify_ambient_window,
         resolve_ambient_lifecycle,
@@ -23,6 +24,7 @@ if __package__:
 else:
     from native_menu_ambient_lifecycle import (  # type: ignore[no-redef]
         AmbientLifecycleError,
+        SETTLEMENT_SPEC,
         canonical_bytes,
         classify_ambient_window,
         resolve_ambient_lifecycle,
@@ -31,7 +33,7 @@ else:
 
 
 class CampaignResolutionError(RuntimeError):
-    """The campaign inputs do not prove one unambiguous v2.5 result."""
+    """The campaign inputs do not prove one unambiguous v2.9 result."""
 
 
 NAVIGATION_ENDPOINT_LAYOUT_IDS = {
@@ -47,6 +49,44 @@ NAVIGATION_ENDPOINT_LAYOUT_IDS = {
     ("performance_to_settings", "after"): "game-settings-gameplay",
     ("settings_to_dark_cloud_settings", "before"): "game-settings-gameplay",
     ("dark_cloud_settings_to_settings", "after"): "game-settings-gameplay",
+    ("create_discipline_to_hub", "after"): "hub_new_game",
+    ("hub_to_pause", "before"): "hub_resumed",
+    ("pause_to_hub_resume", "after"): "hub_resumed",
+    ("profile_select_resume_to_hub", "after"): "hub_resumed",
+    ("settings_to_hub", "after"): "hub_resumed",
+}
+
+PATH_DEPENDENT_CORE_LAYOUTS = {
+    "hub_new_game": {
+        "parent_screen_id": "hub",
+        "path_qualifier": "new_game",
+        "selector": "entry_path:create_discipline_to_hub;session_state:new_game",
+    },
+    "hub_resumed": {
+        "parent_screen_id": "hub",
+        "path_qualifier": "resumed",
+        "selector": "session_state:resumed_run",
+    },
+}
+
+PATH_DEPENDENT_CORE_ENDPOINTS = {
+    key: NAVIGATION_ENDPOINT_LAYOUT_IDS[key]
+    for key in (
+        ("create_discipline_to_hub", "after"),
+        ("hub_to_pause", "before"),
+        ("pause_to_hub_resume", "after"),
+        ("profile_select_resume_to_hub", "after"),
+        ("settings_to_hub", "after"),
+    )
+}
+
+PATH_DEPENDENT_BASELINE_ALIASES = {
+    "hub_resumed": (
+        "hub.json",
+        "hub.confirmation.json",
+        "hub-primary.baseline.json",
+        "hub-confirmation.baseline.json",
+    ),
 }
 
 RUNTIME_PROVENANCE_FIELDS = (
@@ -54,6 +94,18 @@ RUNTIME_PROVENANCE_FIELDS = (
     "loader_dll_sha256",
 )
 NAVIGATION_GAME_PROVENANCE_FIELD = "game_executable_sha256"
+
+CHOICE_SLOT_RULING_EVIDENCE = {
+    "choice_core_stop_audit": (
+        "raw-final/diagnostics/skill-picker-v27-choice-core-stop-audit.json"
+    ),
+    "choice_core_resolver_transcript": (
+        "raw-final/diagnostics/skill-picker-v27-choice-core-full-resolver-stop.log"
+    ),
+    "choice_core_stop_manifest": (
+        "raw-final/diagnostics/skill-picker-v27-choice-core-stop-manifest.json"
+    ),
+}
 
 
 def read_object(path: Path) -> dict[str, Any]:
@@ -83,6 +135,26 @@ def evidence_receipt(path: Path, evidence_root: Path) -> dict[str, Any]:
         "sha256": file_sha256(resolved),
         "bytes": resolved.stat().st_size,
     }
+
+
+def choice_slot_ruling_receipts(
+    evidence_root: Path,
+) -> dict[str, dict[str, Any]]:
+    root = evidence_root.resolve()
+    receipts: dict[str, dict[str, Any]] = {}
+    for label, relative in CHOICE_SLOT_RULING_EVIDENCE.items():
+        path = (root / relative).resolve()
+        if not path.is_relative_to(root) or not path.is_file():
+            raise CampaignResolutionError(
+                "choice-slot provenance contract: accepted ruling evidence "
+                f"'{relative}' is absent"
+            )
+        receipts[label] = evidence_receipt(path, root)
+    if set(receipts) != set(CHOICE_SLOT_RULING_EVIDENCE):
+        raise CampaignResolutionError(
+            "choice-slot provenance contract: diagnostic receipt census is incomplete"
+        )
+    return receipts
 
 
 def resolve_unique_evidence(
@@ -410,6 +482,43 @@ def collect_standalones(
             )
         native_screen_id = _screen_id(primary_samples, str(raw_path))
 
+        fork_policy = PATH_DEPENDENT_CORE_LAYOUTS.get(layout_id)
+        fork_metadata = header.get("path_dependent_core")
+        if fork_policy is not None:
+            if not isinstance(fork_metadata, dict):
+                raise CampaignResolutionError(
+                    f"path-dependent core contract: '{layout_id}' has no fork provenance"
+                )
+            for field, expected in fork_policy.items():
+                if fork_metadata.get(field) != expected:
+                    raise CampaignResolutionError(
+                        "path-dependent core contract: "
+                        f"'{layout_id}' changed its deterministic {field}"
+                    )
+            if native_screen_id != fork_policy["parent_screen_id"]:
+                raise CampaignResolutionError(
+                    "path-dependent core contract: "
+                    f"'{layout_id}' no longer records its parent screen"
+                )
+            fork_decision_path = resolve_exact_evidence_receipt(
+                evidence_root,
+                fork_metadata.get("fork_decision"),
+                f"path-dependent core {layout_id} fork decision",
+            )
+            fork_decision_receipt = evidence_receipt(
+                fork_decision_path, evidence_root
+            )
+        elif native_screen_id == "hub":
+            raise CampaignResolutionError(
+                "path-dependent core contract: unqualified Hub fixture is forbidden"
+            )
+        else:
+            if fork_metadata is not None:
+                raise CampaignResolutionError(
+                    "path-dependent core contract: non-fork layout carries fork provenance"
+                )
+            fork_decision_receipt = None
+
         confirmation_receipt = header.get("animation_confirmation")
         if not isinstance(confirmation_receipt, dict):
             raise CampaignResolutionError(
@@ -467,6 +576,7 @@ def collect_standalones(
             "primary_observation": primary_observation,
             "confirmation_observation": confirmation_observation,
             "confirmation_path": confirmation_path,
+            "fork_decision_receipt": fork_decision_receipt,
         }
         observations[layout_id] = [
             primary_observation,
@@ -573,11 +683,16 @@ def collect_navigation(
                     f"edge {edge_id} independent {side} captures resolve different layouts"
                 )
             endpoint_layouts[(edge_id, endpoint_key)] = resolved_ids.pop()
-    if explicit_layout_ids != set(NAVIGATION_ENDPOINT_LAYOUT_IDS):
+    applicable_explicit_layout_ids = {
+        key
+        for key in NAVIGATION_ENDPOINT_LAYOUT_IDS
+        if key[0] in by_label["primary"]
+    }
+    if explicit_layout_ids != applicable_explicit_layout_ids:
         raise CampaignResolutionError(
             "explicit navigation layout mapping census changed: "
-            f"missing={sorted(set(NAVIGATION_ENDPOINT_LAYOUT_IDS) - explicit_layout_ids)} "
-            f"unexpected={sorted(explicit_layout_ids - set(NAVIGATION_ENDPOINT_LAYOUT_IDS))}"
+            f"missing={sorted(applicable_explicit_layout_ids - explicit_layout_ids)} "
+            f"unexpected={sorted(explicit_layout_ids - applicable_explicit_layout_ids)}"
         )
     return recordings["primary"], endpoint_layouts
 
@@ -592,6 +707,7 @@ def build_extended_baseline_filename_map(
             record["confirmation_path"].name,
             f"{layout_id}-primary.baseline.json",
             f"{layout_id}-confirmation.baseline.json",
+            *PATH_DEPENDENT_BASELINE_ALIASES.get(layout_id, ()),
         ):
             filename_layout_candidates.setdefault(filename, set()).add(layout_id)
     ambiguous_filenames = {
@@ -904,6 +1020,9 @@ def resolved_layout(resolution: dict[str, Any]) -> dict[str, Any]:
         "structural_core_sha256",
         "structural_core_element_count",
         "animated_element_ids",
+        "animated_family_ids",
+        "choice_slot_ids",
+        "choice_slots",
         "visibility_cycling_element_ids",
         "ambient_persistent_element_ids",
         "classification_map",
@@ -918,6 +1037,104 @@ def resolved_layout(resolution: dict[str, Any]) -> dict[str, Any]:
     return layout
 
 
+def validate_path_dependent_core_forks(
+    fixtures: dict[str, dict[str, Any]],
+    resolutions: dict[str, dict[str, Any]],
+    endpoint_layouts: dict[tuple[str, str], str],
+) -> list[dict[str, Any]]:
+    """Prove the v2.6 Hub fork and its complete deterministic route binding."""
+
+    expected_layouts = set(PATH_DEPENDENT_CORE_LAYOUTS)
+    reached_layouts = {
+        layout_id
+        for layout_id, record in fixtures.items()
+        if record["native_screen_id"] == "hub"
+    }
+    if reached_layouts != expected_layouts:
+        raise CampaignResolutionError(
+            "path-dependent core contract: Hub variant census changed: "
+            f"expected={sorted(expected_layouts)} observed={sorted(reached_layouts)}"
+        )
+
+    observed_bindings = {
+        key: endpoint_layouts.get(key) for key in PATH_DEPENDENT_CORE_ENDPOINTS
+    }
+    if observed_bindings != PATH_DEPENDENT_CORE_ENDPOINTS:
+        raise CampaignResolutionError(
+            "path-dependent core contract: one or more Hub navigation endpoints "
+            f"remain ambiguous: {observed_bindings}"
+        )
+    unexpected_hub_endpoints = sorted(
+        key
+        for key, layout_id in endpoint_layouts.items()
+        if layout_id in expected_layouts and key not in PATH_DEPENDENT_CORE_ENDPOINTS
+    )
+    if unexpected_hub_endpoints:
+        raise CampaignResolutionError(
+            "path-dependent core contract: Hub navigation endpoint lacks a "
+            f"declared selector: {unexpected_hub_endpoints}"
+        )
+
+    counts: dict[str, int] = {}
+    receipts: set[bytes] = set()
+    audit_rows: list[dict[str, Any]] = []
+    for layout_id, policy in PATH_DEPENDENT_CORE_LAYOUTS.items():
+        resolution = resolutions.get(layout_id)
+        record = fixtures[layout_id]
+        metadata = record["header"].get("path_dependent_core")
+        if not isinstance(resolution, dict) or not isinstance(metadata, dict):
+            raise CampaignResolutionError(
+                f"path-dependent core contract: '{layout_id}' was not resolved"
+            )
+        settled_count = resolution.get("peak_element_count")
+        expected_count = metadata.get("measured_settled_element_count")
+        if (
+            isinstance(settled_count, bool)
+            or not isinstance(settled_count, int)
+            or settled_count <= 0
+            or expected_count != settled_count
+        ):
+            raise CampaignResolutionError(
+                "path-dependent core contract: "
+                f"'{layout_id}' no longer reproduces its measured element census"
+            )
+        counts[layout_id] = settled_count
+        receipt = record.get("fork_decision_receipt")
+        if not isinstance(receipt, dict):
+            raise CampaignResolutionError(
+                f"path-dependent core contract: '{layout_id}' lost its fork audit receipt"
+            )
+        receipts.add(canonical_bytes(receipt))
+        audit_rows.append(
+            {
+                "layout_id": layout_id,
+                **copy.deepcopy(policy),
+                "settled_element_count": settled_count,
+                "structural_core_element_count": resolution[
+                    "structural_core_element_count"
+                ],
+                "structural_core_sha256": resolution["structural_core_sha256"],
+                "fork_decision": copy.deepcopy(receipt),
+                "bound_navigation_endpoints": [
+                    {"edge_id": edge_id, "endpoint": endpoint}
+                    for (edge_id, endpoint), bound_layout in sorted(
+                        PATH_DEPENDENT_CORE_ENDPOINTS.items()
+                    )
+                    if bound_layout == layout_id
+                ],
+            }
+        )
+    if len(set(counts.values())) != len(counts):
+        raise CampaignResolutionError(
+            "path-dependent core contract: Hub variants do not differ in element census"
+        )
+    if len(receipts) != 1:
+        raise CampaignResolutionError(
+            "path-dependent core contract: Hub variants cite different fork audits"
+        )
+    return audit_rows
+
+
 def settlement_summary(
     observation: dict[str, Any], resolution: dict[str, Any]
 ) -> dict[str, Any]:
@@ -925,7 +1142,7 @@ def settlement_summary(
         observation["samples"], label=observation["label"]
     )
     return {
-        "settlement_spec": "2.5",
+        "settlement_spec": SETTLEMENT_SPEC,
         "criterion": classified["criterion"],
         "settle_latency_milliseconds": classified[
             "settle_latency_milliseconds"
@@ -958,6 +1175,7 @@ def resolve_campaign(
     apply: bool,
     verify: bool = False,
     supplemental_pair_manifest: Path | None = None,
+    asset_manifest_path: Path | None = None,
 ) -> dict[str, Any]:
     if apply and verify:
         raise CampaignResolutionError(
@@ -968,6 +1186,32 @@ def resolve_campaign(
     if not motion_resolved.is_relative_to(evidence_resolved):
         raise CampaignResolutionError(
             "motion observation directory escapes the evidence root"
+        )
+    asset_manifest: dict[str, Any] | None = None
+    asset_manifest_receipt: dict[str, Any] | None = None
+    if asset_manifest_path is not None:
+        manifest_resolved = asset_manifest_path.resolve()
+        if not manifest_resolved.is_relative_to(evidence_resolved):
+            raise CampaignResolutionError(
+                "choice-slot asset manifest escapes the evidence root"
+            )
+        if not manifest_resolved.is_file():
+            raise CampaignResolutionError(
+                "choice-slot asset manifest is absent"
+            )
+        asset_manifest = read_object(manifest_resolved)
+        if (
+            asset_manifest.get("schema")
+            != "solomon-dark-web-asset-manifest-v1"
+            or not isinstance(asset_manifest.get("entries"), dict)
+            or not asset_manifest["entries"]
+        ):
+            raise CampaignResolutionError(
+                "choice-slot asset manifest does not contain the machine-built "
+                "renderer sprite entries"
+            )
+        asset_manifest_receipt = evidence_receipt(
+            manifest_resolved, evidence_resolved
         )
     fixtures, observations = collect_standalones(candidate_root, evidence_root)
     primary_navigation, endpoint_layouts = collect_navigation(
@@ -994,7 +1238,9 @@ def resolve_campaign(
                 f"standalone fixture '{layout_id}' was never reached"
             )
         try:
-            resolution = resolve_ambient_lifecycle(reached)
+            resolution = resolve_ambient_lifecycle(
+                reached, asset_manifest=asset_manifest
+            )
         except AmbientLifecycleError as error:
             raise CampaignResolutionError(
                 f"STOP: screen '{layout_id}': {error}"
@@ -1028,12 +1274,42 @@ def resolve_campaign(
                     "structural_core_sha256"
                 ],
                 "animated_element_ids": resolution["animated_element_ids"],
+                "animated_family_ids": resolution["animated_family_ids"],
+                "choice_slot_ids": resolution["choice_slot_ids"],
+                "choice_slots": copy.deepcopy(resolution["choice_slots"]),
                 "ambient_family_art_ids": resolution[
                     "ambient_family_art_ids"
                 ],
                 "ambient_fraction": resolution["ambient_fraction"],
             }
         )
+
+    choice_layout_ids = sorted(
+        layout_id
+        for layout_id, resolution in resolutions.items()
+        if resolution["choice_slot_ids"]
+    )
+    if choice_layout_ids and choice_layout_ids != ["skill-picker"]:
+        raise CampaignResolutionError(
+            "choice-slot scope contract: only the measured skill-picker residual "
+            f"is authorized, not {choice_layout_ids}"
+        )
+    if choice_layout_ids and asset_manifest_receipt is None:
+        raise CampaignResolutionError(
+            "choice-slot provenance contract: resolved slots have no hashed "
+            "asset-manifest receipt"
+        )
+    ruling_receipts = (
+        choice_slot_ruling_receipts(evidence_resolved)
+        if choice_layout_ids
+        else {}
+    )
+
+    path_dependent_core_audit = (
+        validate_path_dependent_core_forks(fixtures, resolutions, endpoint_layouts)
+        if any(record["native_screen_id"] == "hub" for record in fixtures.values())
+        else []
+    )
 
     candidate_updates: dict[Path, dict[str, Any]] = {}
     for layout_id, record in fixtures.items():
@@ -1065,6 +1341,18 @@ def resolve_campaign(
                 if "baseline_evidence" in observation
             ],
         }
+        if layout_id in choice_layout_ids:
+            fixture["header"]["choice_slots"] = {
+                "settlement_spec": SETTLEMENT_SPEC,
+                "promotion": (
+                    "reused_stopped_settled_windows_rederived_under_v2.8"
+                ),
+                "asset_manifest": copy.deepcopy(asset_manifest_receipt),
+                "diagnostic_receipts": copy.deepcopy(ruling_receipts),
+                "choice_slot_ids": copy.deepcopy(
+                    resolutions[layout_id]["choice_slot_ids"]
+                ),
+            }
         candidate_updates[record["path"]] = fixture
 
     resolved_navigation = copy.deepcopy(primary_navigation)
@@ -1095,17 +1383,29 @@ def resolve_campaign(
         endpoint["animated_element_ids"] = copy.deepcopy(
             resolutions[layout_id]["animated_element_ids"]
         )
+        endpoint["choice_slot_ids"] = copy.deepcopy(
+            resolutions[layout_id]["choice_slot_ids"]
+        )
         endpoint["element_count"] = resolutions[layout_id][
             "structural_core_element_count"
         ]
         endpoint["layout_id"] = layout_id
+        if layout_id in PATH_DEPENDENT_CORE_LAYOUTS:
+            endpoint["path_dependent_core"] = {
+                **copy.deepcopy(PATH_DEPENDENT_CORE_LAYOUTS[layout_id]),
+                "edge_id": edge_id,
+                "endpoint": endpoint_key,
+                "fork_decision": copy.deepcopy(
+                    fixtures[layout_id]["fork_decision_receipt"]
+                ),
+            }
     for edge in edge_by_id.values():
         edge["header"]["settlement"] = {
             "source": copy.deepcopy(edge["before"]["settlement"]),
             "destination": copy.deepcopy(edge["after"]["settlement"]),
         }
     resolved_navigation.setdefault("header", {})["ambient_lifecycle_resolution"] = {
-        "settlement_spec": "2.5",
+        "settlement_spec": SETTLEMENT_SPEC,
         "primary_raw_recording": evidence_receipt(
             primary_navigation_path, evidence_root
         ),
@@ -1116,6 +1416,10 @@ def resolve_campaign(
             evidence_resolved
         ).as_posix(),
         "screen_count": len(resolutions),
+        "path_dependent_core": copy.deepcopy(path_dependent_core_audit),
+        "choice_slot_asset_manifest": copy.deepcopy(asset_manifest_receipt),
+        "choice_slot_ruling_receipts": copy.deepcopy(ruling_receipts),
+        "choice_slot_layout_ids": choice_layout_ids,
         **(
             {
                 "supplemental_settled_pair_manifest": evidence_receipt(
@@ -1129,7 +1433,7 @@ def resolve_campaign(
 
     audit = {
         "schema": "solomon-dark-native-menu-ambient-lifecycle-audit-v1",
-        "settlement_spec": "2.5",
+        "settlement_spec": SETTLEMENT_SPEC,
         "applied": apply,
         "standalone_fixture_count": len(fixtures),
         "navigation_edge_count": len(edge_by_id),
@@ -1146,6 +1450,10 @@ def resolve_campaign(
             for observation in reached
         ),
         "screens": screen_audit,
+        "path_dependent_core": path_dependent_core_audit,
+        "choice_slot_asset_manifest": copy.deepcopy(asset_manifest_receipt),
+        "choice_slot_ruling_receipts": copy.deepcopy(ruling_receipts),
+        "choice_slot_layout_ids": choice_layout_ids,
         "outputs": {
             "resolved_navigation": str(resolved_navigation_output),
             "candidate_fixtures": [str(path) for path in sorted(candidate_updates)],
@@ -1160,13 +1468,13 @@ def resolve_campaign(
         for path, expected in candidate_updates.items():
             if canonical_bytes(read_object(path)) != canonical_bytes(expected):
                 raise CampaignResolutionError(
-                    f"resolved candidate {path} is not the machine-derived v2.5 result"
+                f"resolved candidate {path} is not the machine-derived v2.9 result"
                 )
         if not resolved_navigation_output.is_file() or canonical_bytes(
             read_object(resolved_navigation_output)
         ) != canonical_bytes(resolved_navigation):
             raise CampaignResolutionError(
-                "resolved navigation is not the machine-derived v2.5 result"
+                "resolved navigation is not the machine-derived v2.9 result"
             )
     return audit
 
@@ -1178,6 +1486,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--primary-navigation", type=Path, required=True)
     parser.add_argument("--confirmation-navigation", type=Path, required=True)
     parser.add_argument("--motion-observation-root", type=Path, required=True)
+    parser.add_argument("--asset-manifest", type=Path, required=True)
     parser.add_argument("--supplemental-settled-pair-manifest", type=Path)
     parser.add_argument("--resolved-navigation-output", type=Path, required=True)
     parser.add_argument("--audit-output", type=Path, required=True)
@@ -1204,6 +1513,7 @@ def main() -> int:
                 if args.supplemental_settled_pair_manifest is not None
                 else None
             ),
+            args.asset_manifest.resolve(),
         )
     except CampaignResolutionError as error:
         print(json.dumps({"success": False, "error": str(error)}))

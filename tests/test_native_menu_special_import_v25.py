@@ -252,7 +252,7 @@ class NativeMenuSpecialImportV25Tests(unittest.TestCase):
                 )
                 self.assertEqual(fixture["header"]["source"]["base_commit_sha"], commit)
                 self.assertEqual(
-                    fixture["header"]["settlement"]["settlement_spec"], "2.5"
+                    fixture["header"]["settlement"]["settlement_spec"], "2.9"
                 )
                 self.assertNotEqual(
                     fixture["header"]["instance"],

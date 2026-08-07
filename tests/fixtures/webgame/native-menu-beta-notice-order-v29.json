@@ -1,0 +1,85 @@
+{
+  "schema": "solomon-dark-native-menu-beta-notice-order-v29",
+  "layout_id": "beta-notice",
+  "screen_id": "beta_notice",
+  "core_member_count": 34,
+  "longest_common_subsequence_count": 31,
+  "moved_members": [
+    {
+      "art_id": "UI.101",
+      "rect": [
+        702.0,
+        643.5,
+        898.0,
+        712.0
+      ],
+      "unclipped_rect": [
+        623.5,
+        643.5,
+        976.5,
+        712.5
+      ],
+      "semantic_sha256": "34f86236f7af172702a7ec6f6ed26f425d2be6f86b7595319f666aa093f3714c",
+      "landed_relative_core_index": 8,
+      "settled_relative_core_index": 31,
+      "captured_draw_order": 13,
+      "native_paint_order": 100,
+      "overlay_reference_member": true
+    },
+    {
+      "art_id": "UI.54",
+      "rect": [
+        696.0,
+        637.5,
+        766.0,
+        722.5
+      ],
+      "unclipped_rect": [
+        696.0,
+        637.5,
+        766.0,
+        722.5
+      ],
+      "semantic_sha256": "257971bc0a9d693bfaaa125dc751fef5581692c11df145556c15adeee78caebd",
+      "landed_relative_core_index": 9,
+      "settled_relative_core_index": 32,
+      "captured_draw_order": 14,
+      "native_paint_order": 101,
+      "overlay_reference_member": true
+    },
+    {
+      "art_id": "UI.54",
+      "rect": [
+        834.0,
+        637.5,
+        904.0,
+        722.5
+      ],
+      "unclipped_rect": [
+        834.0,
+        637.5,
+        904.0,
+        722.5
+      ],
+      "semantic_sha256": "7ac8bd4c544d9a8dfe006d580ab42a2bcd48a44c802f23d9653f2d61d65c2a0f",
+      "landed_relative_core_index": 10,
+      "settled_relative_core_index": 33,
+      "captured_draw_order": 15,
+      "native_paint_order": 102,
+      "overlay_reference_member": true
+    }
+  ],
+  "source_stop_audit": {
+    "evidence_filename": "beta-notice-landed-core-order-stop-audit.json",
+    "sha256": "a3356a77d494866deaf7c628d369cc41381a2672aa98ee7e65c4563e1931bf63",
+    "bytes": 6288
+  },
+  "paint_truth": {
+    "repository_path": "webgame/client/ambient-title-data.json",
+    "introducing_commit": "b3eafc6c4ebccd574f534796203c7c7bea702280",
+    "sha256": "58af8f9a851936db633e7660da19f9295c8040931315799fdb10a08a1a2721b7",
+    "provenance_sha256": "5bf87434032cb3b76b2cb303be0cc309dad822dec522ab243f43ef7642e90544",
+    "method": "settled 100-sample dual-instance v6 traces; velocities cross-instance agreed <0.6px/s; static paint order = native draw-hook sequence"
+  },
+  "derivation": "sealed v2.8 STOP audit moved-member identities joined by art_id and exact rect to the provenance-pinned native static paint-order table"
+}

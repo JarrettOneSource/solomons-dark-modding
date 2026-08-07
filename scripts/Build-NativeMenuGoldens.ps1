@@ -23,19 +23,19 @@ $navigationPath = [IO.Path]::GetFullPath($NavigationRecordingPath)
 $builder = Join-Path $root "tools\build_native_menu_goldens_v25.py"
 
 if (-not (Test-Path -LiteralPath $navigationPath -PathType Leaf)) {
-    throw "The resolved Settlement v2.5 navigation recording is missing."
+    throw "The resolved Settlement v2.9 navigation recording is missing."
 }
 if (-not (Test-Path -LiteralPath $builder -PathType Leaf)) {
-    throw "The Settlement v2.5 aggregate builder is missing."
+    throw "The Settlement v2.9 aggregate builder is missing."
 }
 
 $python = Get-Command py.exe -ErrorAction SilentlyContinue
 if ($null -eq $python) {
-    throw "py.exe is required to build the Settlement v2.5 aggregate."
+    throw "py.exe is required to build the Settlement v2.9 aggregate."
 }
 $probe = @(& py.exe -3 -c "print('native-menu-golden-python-ready')" 2>&1)
 if ($LASTEXITCODE -ne 0 -or ($probe -join "`n") -notmatch "native-menu-golden-python-ready") {
-    throw "py.exe exists but cannot run the Settlement v2.5 aggregate builder."
+    throw "py.exe exists but cannot run the Settlement v2.9 aggregate builder."
 }
 
 $result = @(
@@ -47,7 +47,7 @@ $result = @(
 )
 if ($LASTEXITCODE -ne 0) {
     throw (
-        "Settlement v2.5 menu-golden build failed: " +
+        "Settlement v2.9 menu-golden build failed: " +
         (($result | ForEach-Object { [string]$_ }) -join "`n")
     )
 }

@@ -44,11 +44,12 @@ param(
     [Parameter(Mandatory = $true, ParameterSetName = "Click")]
     [float]$ClientY,
 
-    [Parameter(Mandatory = $true, ParameterSetName = "Observe")]
-    [switch]$ObserveOnly,
+    [Parameter(Mandatory = $true, ParameterSetName = "MeasuredClick")]
+    [ValidateLength(1, 128)]
+    [string]$ControlText,
 
-    [string]$ExpectedSourceSurface = "",
-    [string]$ExpectedDestinationSurface = ""
+    [Parameter(Mandatory = $true, ParameterSetName = "Observe")]
+    [switch]$ObserveOnly
 )
 
 Set-StrictMode -Version 3.0
@@ -87,7 +88,7 @@ if (Test-Path -LiteralPath $outputItemPath -PathType Leaf) {
         schema = "solomon-dark-native-menu-navigation-v2"
         header = [ordered]@{
             capture_method = (
-                "Settlement v2.5 reproduced structural-core native UI semantics + " +
+                "Settlement v2.9 reproduced structural-core native UI semantics + " +
                 "measured ambient lifecycle + exact-process action/key/click dispatch " +
                 "+ completed semantic-action lifecycle " +
                 "+ same-call D3D9 frame hashes + canonical draw-order/id " +
@@ -120,26 +121,22 @@ try {
         -ScreenId $SourceScreen `
         -FramePath $beforeFrame `
         -LatencyClock $sourceClock
-    if (
-        -not [string]::IsNullOrWhiteSpace($ExpectedSourceSurface) -and
-        $before.semantic_surface -ne $ExpectedSourceSurface
-    ) {
-        throw (
-            "STOP: source semantic surface '$($before.semantic_surface)' did " +
-            "not match '$ExpectedSourceSurface'."
-        )
-    }
+    Assert-NativeMenuCaptureSurfaceAgreement `
+        -OperatorScreenTag $SourceScreen `
+        -MachineClassifiedSurface $before.semantic_surface
 
     Initialize-NativeMenuPopulationSampler -Context $context
     Start-NativeMenuPopulationSampler `
         -Context $context `
-        -ScreenId $DestinationScreen `
-        -ExpectedSurface $ExpectedDestinationSurface
+        -ScreenId $DestinationScreen
     $populationSamplerArmed = $true
 
     $destinationClock = [Diagnostics.Stopwatch]::StartNew()
     $dispatchResult = "observed"
-    if ($PSCmdlet.ParameterSetName -eq "Action") {
+    $dispatchMeasurement = $null
+    $resolvedClickPoint = $null
+    try {
+      if ($PSCmdlet.ParameterSetName -eq "Action") {
         $dispatchResult = (Invoke-NativeMenuLua `
             -Context $context `
             -LuaCode @"
@@ -163,10 +160,10 @@ return tostring(request)
             -Context $context `
             -RequestId $requestId `
             -ActionId $ActionId `
-            -SourceSemanticGeneration $before.semantic_generation `
-            -ExpectedDestinationSurface $ExpectedDestinationSurface |
+            -SourceLayoutGeneration $before.layout_generation `
+            -ExpectedDestinationScreen $DestinationScreen |
             Out-Null
-    } elseif ($PSCmdlet.ParameterSetName -eq "Key") {
+      } elseif ($PSCmdlet.ParameterSetName -eq "Key") {
         $dispatchResult = (Invoke-NativeMenuLua `
             -Context $context `
             -LuaCode @"
@@ -174,11 +171,11 @@ local ok, message = sd.input.press_key([=[$Key]=])
 if not ok then error(tostring(message)) end
 return 'key'
 "@).Text
-    } elseif ($PSCmdlet.ParameterSetName -eq "Lua") {
+      } elseif ($PSCmdlet.ParameterSetName -eq "Lua") {
         $dispatchResult = (Invoke-NativeMenuLua `
             -Context $context `
             -LuaCode $LuaActionCode).Text
-    } elseif ($PSCmdlet.ParameterSetName -eq "Click") {
+      } elseif ($PSCmdlet.ParameterSetName -eq "Click") {
         & (Join-Path $PSScriptRoot "Invoke-ExactProcessClientClick.ps1") `
             -Instance $Instance `
             -ProcessId $ProcessId `
@@ -186,13 +183,157 @@ return 'key'
             -ClientY $ClientY |
             Out-Null
         $dispatchResult = "exact_owned_client_click=$ClientX,$ClientY"
-    }
+        $resolvedClickPoint = @([double]$ClientX, [double]$ClientY)
+      } elseif ($PSCmdlet.ParameterSetName -eq "MeasuredClick") {
+        $measuredCandidates = @(
+            $before.layout.elements | Where-Object {
+                [bool]$_.visible -and
+                [bool]$_.interactive -and
+                [string]::Equals(
+                    [string]$_.text,
+                    $ControlText,
+                    [StringComparison]::OrdinalIgnoreCase
+                )
+            }
+        )
+        if ($measuredCandidates.Count -ne 1) {
+            throw (
+                "STOP: live measured click '$ControlText' on " +
+                "'$SourceScreen' resolved $($measuredCandidates.Count) " +
+                "interactive candidates; refusing ambiguity."
+            )
+        }
+        $measuredElement = $measuredCandidates[0]
+        $measuredRect = @($measuredElement.rect)
+        if (
+            $measuredRect.Count -ne 4 -or
+            [double]$measuredRect[2] -le [double]$measuredRect[0] -or
+            [double]$measuredRect[3] -le [double]$measuredRect[1]
+        ) {
+            throw (
+                "BROKEN: live measured click '$ControlText' did not expose " +
+                "one positive-area capture rectangle."
+            )
+        }
+        $measuredX = (
+            [double]$measuredRect[0] + [double]$measuredRect[2]
+        ) / 2.0
+        $measuredY = (
+            [double]$measuredRect[1] + [double]$measuredRect[3]
+        ) / 2.0
+        & (Join-Path $PSScriptRoot "Invoke-ExactProcessClientClick.ps1") `
+            -Instance $Instance `
+            -ProcessId $ProcessId `
+            -ClientX $measuredX `
+            -ClientY $measuredY |
+            Out-Null
+        $resolvedClickPoint = @($measuredX, $measuredY)
+        $dispatchResult = "live_measured_control_click=$measuredX,$measuredY"
+        $dispatchMeasurement = [ordered]@{
+            source_screen = $SourceScreen
+            layout_generation = $before.layout_generation
+            frame_sha256 = $before.frame_sha256
+            element_id = [string]$measuredElement.id
+            text = [string]$measuredElement.text
+            action_id = [string]$measuredElement.action_id
+            rect = @($measuredRect)
+            client_point = @($resolvedClickPoint)
+        }
+      }
 
-    $after = Get-SettledNativeMenuObservation `
-        -Context $context `
-        -ScreenId $DestinationScreen `
-        -FramePath $afterFrame `
-        -LatencyClock $destinationClock
+      $after = Get-SettledNativeMenuObservation `
+          -Context $context `
+          -ScreenId $DestinationScreen `
+          -FramePath $afterFrame `
+          -LatencyClock $destinationClock
+    } catch {
+        $failureMessage = [string]$_.Exception.Message
+        $failureDirectory = [IO.Path]::ChangeExtension(
+            $outputItemPath,
+            $null
+        ) + ".rejected"
+        [IO.Directory]::CreateDirectory($failureDirectory) | Out-Null
+        $failureToken = (
+            [DateTime]::UtcNow.ToString("yyyyMMddTHHmmssfffZ") + "-" +
+            [Guid]::NewGuid().ToString("N")
+        )
+        $failureFrame = Join-Path $failureDirectory (
+            "$EdgeId.$failureToken.bmp"
+        )
+        $failureJson = Join-Path $failureDirectory (
+            "$EdgeId.$failureToken.json"
+        )
+        $diagnosticError = ""
+        $failureProbe = $null
+        try {
+            $failureProbe = Get-NativeMenuLayoutProbe `
+                -Context $context `
+                -ScreenId $DestinationScreen `
+                -FramePath $failureFrame
+        } catch {
+            $diagnosticError = [string]$_.Exception.Message
+        }
+        $frameReceipt = $null
+        if (Test-Path -LiteralPath $failureFrame -PathType Leaf) {
+            $frameItem = Get-Item -LiteralPath $failureFrame
+            $frameReceipt = [ordered]@{
+                path = $frameItem.FullName
+                bytes = [long]$frameItem.Length
+                sha256 = (Get-FileHash `
+                    -LiteralPath $frameItem.FullName `
+                    -Algorithm SHA256).Hash.ToLowerInvariant()
+            }
+        }
+        $failureRecord = [ordered]@{
+            schema = "solomon-dark-native-menu-navigation-rejection-v1"
+            status = "REJECTED"
+            named_reason = "capture_surface_did_not_match_operator_tag"
+            edge_id = $EdgeId
+            source_screen = $SourceScreen
+            intended_destination = $DestinationScreen
+            trigger = $Trigger
+            dispatch_kind = $PSCmdlet.ParameterSetName
+            dispatch_result = $dispatchResult
+            click_point = $resolvedClickPoint
+            dispatch_measurement = $dispatchMeasurement
+            machine_classified_surface = $(
+                if ($null -ne $failureProbe) {
+                    [string]$failureProbe.SemanticSurface
+                } else { "" }
+            )
+            native_surface = $(
+                if ($null -ne $failureProbe) {
+                    [string]$failureProbe.NativeSurface
+                } else { "" }
+            )
+            probe_status = $(
+                if ($null -ne $failureProbe) {
+                    [string]$failureProbe.Status
+                } else { "broken" }
+            )
+            probe_detail = $(
+                if ($null -ne $failureProbe) {
+                    [string]$failureProbe.Detail
+                } else { $diagnosticError }
+            )
+            failure = $failureMessage
+            frame = $frameReceipt
+            instance = $Instance
+            process_id = $ProcessId
+            source = $context.Source
+            rejected_at_utc = [DateTime]::UtcNow.ToString("o")
+        }
+        [IO.File]::WriteAllText(
+            $failureJson,
+            ($failureRecord | ConvertTo-Json -Depth 20) +
+                [Environment]::NewLine,
+            [Text.UTF8Encoding]::new($false)
+        )
+        throw (
+            "$failureMessage Navigation aborted before proceeding; " +
+            "diagnostics='$failureJson'."
+        )
+    }
     $populationTrace = Stop-NativeMenuPopulationSampler -Context $context
     $populationSamplerArmed = $false
     $after.settlement_trace["high_cadence_sample_count"] = (
@@ -201,15 +342,9 @@ return 'key'
     $after.settlement_trace["high_cadence_structural_phases"] = @(
         $populationTrace.structural_phases
     )
-    if (
-        -not [string]::IsNullOrWhiteSpace($ExpectedDestinationSurface) -and
-        $after.semantic_surface -ne $ExpectedDestinationSurface
-    ) {
-        throw (
-            "STOP: destination semantic surface '$($after.semantic_surface)' " +
-            "did not match '$ExpectedDestinationSurface'."
-        )
-    }
+    Assert-NativeMenuCaptureSurfaceAgreement `
+        -OperatorScreenTag $DestinationScreen `
+        -MachineClassifiedSurface $after.semantic_surface
 
     [IO.Directory]::CreateDirectory(
         (Split-Path -Parent $outputItemPath)
@@ -277,6 +412,7 @@ return 'key'
             } else { "" })
             destination = $DestinationScreen
             dispatch_result = $dispatchResult
+            dispatch_measurement = $dispatchMeasurement
             before = $before
             after = $after
             observed_at_utc = $capturedAtUtc

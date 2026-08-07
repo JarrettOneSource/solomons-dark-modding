@@ -92,6 +92,9 @@ try {
             "layout reported '$($observation.tagged_screen)'."
         )
     }
+    Assert-NativeMenuCaptureSurfaceAgreement `
+        -OperatorScreenTag $ScreenId `
+        -MachineClassifiedSurface $observation.semantic_surface
     Copy-Item -LiteralPath $tempFramePath -Destination $frameItemPath
 } finally {
     if (Test-Path -LiteralPath $tempDirectory -PathType Container) {
