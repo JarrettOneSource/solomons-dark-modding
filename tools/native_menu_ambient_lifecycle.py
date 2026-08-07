@@ -734,6 +734,9 @@ def _core_bands(
     varying_member_keys: dict[tuple[int, str], str],
 ) -> dict[str, dict[str, str]]:
     bands: dict[str, set[tuple[str, str]]] = defaultdict(set)
+    band_witnesses: dict[str, dict[tuple[str, str], set[str]]] = defaultdict(
+        lambda: defaultdict(set)
+    )
     for measurement in measurements:
         for sample in measurement["samples"]:
             ordered = _sorted_elements(sample["payload"])
@@ -761,13 +764,19 @@ def _core_bands(
                     else core_ids[core_positions[lower]]
                 )
                 upper_id = "top" if upper is None else core_ids[core_positions[upper]]
-                bands[band_key].add((lower_id, upper_id))
+                band = (lower_id, upper_id)
+                bands[band_key].add(band)
+                band_witnesses[band_key][band].add(measurement["label"])
     result: dict[str, dict[str, str]] = {}
     for key, values in sorted(bands.items()):
         if len(values) != 1:
+            details = {
+                f"{lower}->{upper}": sorted(band_witnesses[key][(lower, upper)])
+                for lower, upper in sorted(values)
+            }
             raise AmbientLifecycleError(
                 "ambient draw-band contract: member family "
-                f"'{key}' crossed structural-core bands"
+                f"'{key}' crossed structural-core bands: {details}"
             )
         lower, upper = next(iter(values))
         result[key] = {"below": lower, "above": upper}
