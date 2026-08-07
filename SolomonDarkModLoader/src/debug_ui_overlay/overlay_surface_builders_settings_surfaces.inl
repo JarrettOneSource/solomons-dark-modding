@@ -35,6 +35,86 @@ struct CachedSettingsFamilyOverlayArt {
     std::vector<CapturedMenuArtElement> elements;
 };
 
+struct SettingsFamilyOverlayArtCacheState {
+    CachedSettingsFamilyOverlayArt settings;
+    CachedSettingsFamilyOverlayArt controls;
+    CachedSettingsFamilyOverlayArt transition;
+    uintptr_t settings_address = 0;
+    SettingsRolloutPageState last_page =
+        SettingsRolloutPageState::Unknown;
+    std::vector<CapturedMenuArtElement> settings_underlay;
+};
+
+SettingsFamilyOverlayArtCacheState& GetSettingsFamilyOverlayArtCacheState() {
+    static SettingsFamilyOverlayArtCacheState state;
+    return state;
+}
+
+SettingsRolloutPageState ResolveSettingsRolloutPageForCapture(
+    const DebugUiOverlayConfig& config,
+    uintptr_t settings_address) {
+    SettingsRolloutPageObservation observation;
+    if (TryResolveSettingsRolloutPageState(
+            config,
+            settings_address,
+            &observation)) {
+        return observation.page;
+    }
+
+    const auto& cache_state = GetSettingsFamilyOverlayArtCacheState();
+    if (cache_state.settings_address == settings_address) {
+        return cache_state.last_page;
+    }
+    return SettingsRolloutPageState::Unknown;
+}
+
+std::string GetCapturedMenuArtSemanticKey(
+    const CapturedMenuArtElement& element) {
+    std::ostringstream key;
+    key << element.art_id.size() << ':' << element.art_id
+        << element.draw_kind.size() << ':' << element.draw_kind
+        << ':' << (element.visible ? 1 : 0)
+        << ':' << std::hexfloat
+        << element.left << ':' << element.top << ':'
+        << element.right << ':' << element.bottom << ':'
+        << element.unclipped_left << ':' << element.unclipped_top << ':'
+        << element.unclipped_right << ':' << element.unclipped_bottom;
+    return key.str();
+}
+
+bool TryExtractControlsPageArtDifference(
+    const std::vector<CapturedMenuArtElement>& settings_underlay,
+    const std::vector<CapturedMenuArtElement>& current_elements,
+    std::vector<CapturedMenuArtElement>* controls_elements) {
+    if (settings_underlay.empty() || controls_elements == nullptr) {
+        return false;
+    }
+
+    std::unordered_map<std::string, std::size_t> underlay_counts;
+    for (const auto& element : settings_underlay) {
+        ++underlay_counts[GetCapturedMenuArtSemanticKey(element)];
+    }
+
+    controls_elements->clear();
+    for (const auto& element : current_elements) {
+        const auto semantic_key = GetCapturedMenuArtSemanticKey(element);
+        auto underlay = underlay_counts.find(semantic_key);
+        if (underlay != underlay_counts.end() && underlay->second > 0) {
+            --underlay->second;
+            continue;
+        }
+        if (element.art_id.rfind("Title.", 0) == 0) {
+            continue;
+        }
+        if (element.art_id.rfind("ControlPanel.", 0) == 0) {
+            controls_elements->clear();
+            return false;
+        }
+        controls_elements->push_back(element);
+    }
+    return !controls_elements->empty();
+}
+
 bool TryExtractSettingsFamilyOverlayArt(
     const std::vector<CapturedMenuArtElement>& current_elements,
     std::vector<CapturedMenuArtElement>* overlay_elements) {
@@ -84,19 +164,39 @@ bool TryExtractSettingsFamilyOverlayArt(
 
 std::vector<CapturedMenuArtElement> ResolveSettingsFamilyMenuArtElements(
     std::vector<CapturedMenuArtElement> current_elements) {
-    static CachedSettingsFamilyOverlayArt s_settings_overlay_art;
-    static CachedSettingsFamilyOverlayArt s_controls_overlay_art;
-    static CachedSettingsFamilyOverlayArt s_transition_overlay_art;
-    static uintptr_t s_last_settings_address = 0;
-    static SettingsRolloutPageState s_last_page =
-        SettingsRolloutPageState::Unknown;
+    auto& cache_state = GetSettingsFamilyOverlayArtCacheState();
 
     const auto clear_caches = [&]() {
-        s_settings_overlay_art = CachedSettingsFamilyOverlayArt{};
-        s_controls_overlay_art = CachedSettingsFamilyOverlayArt{};
-        s_transition_overlay_art = CachedSettingsFamilyOverlayArt{};
-        s_last_settings_address = 0;
-        s_last_page = SettingsRolloutPageState::Unknown;
+        cache_state = SettingsFamilyOverlayArtCacheState{};
+    };
+
+    const auto replay_cached_overlay = [&current_elements](
+        const CachedSettingsFamilyOverlayArt& cache,
+        uintptr_t settings_address) {
+        if (HasAnyCurrentSettingsPanelArt(current_elements) ||
+            cache.settings_address != settings_address ||
+            cache.elements.empty()) {
+            return;
+        }
+
+        auto cached_overlay = cache.elements;
+        std::stable_sort(
+            cached_overlay.begin(),
+            cached_overlay.end(),
+            [](const CapturedMenuArtElement& left,
+               const CapturedMenuArtElement& right) {
+                return left.draw_order < right.draw_order;
+            });
+        std::uint32_t next_draw_order = 0;
+        for (const auto& element : current_elements) {
+            next_draw_order = (std::max)(
+                next_draw_order,
+                element.draw_order + 1);
+        }
+        for (auto& element : cached_overlay) {
+            element.draw_order = next_draw_order++;
+            current_elements.push_back(std::move(element));
+        }
     };
 
     const auto* config = TryGetDebugUiOverlayConfig();
@@ -122,11 +222,11 @@ std::vector<CapturedMenuArtElement> ResolveSettingsFamilyMenuArtElements(
         clear_caches();
         return current_elements;
     }
-    if (s_last_settings_address != 0 &&
-        s_last_settings_address != settings_address) {
+    if (cache_state.settings_address != 0 &&
+        cache_state.settings_address != settings_address) {
         clear_caches();
     }
-    s_last_settings_address = settings_address;
+    cache_state.settings_address = settings_address;
 
     SettingsRolloutPageObservation page_observation;
     if (!TryResolveSettingsRolloutPageState(
@@ -137,35 +237,66 @@ std::vector<CapturedMenuArtElement> ResolveSettingsFamilyMenuArtElements(
         if (TryExtractSettingsFamilyOverlayArt(
                 current_elements,
                 &transition_overlay)) {
-            s_transition_overlay_art.settings_address = settings_address;
-            s_transition_overlay_art.elements =
+            cache_state.transition.settings_address = settings_address;
+            cache_state.transition.elements =
+                std::move(transition_overlay);
+        } else if (TryExtractControlsPageArtDifference(
+                cache_state.settings_underlay,
+                current_elements,
+                &transition_overlay)) {
+            cache_state.transition.settings_address = settings_address;
+            cache_state.transition.elements =
                 std::move(transition_overlay);
         }
+
+        const auto* last_cache =
+            cache_state.last_page == SettingsRolloutPageState::Controls
+            ? &cache_state.controls
+            : &cache_state.settings;
+        replay_cached_overlay(*last_cache, settings_address);
         return current_elements;
     }
 
     auto* active_cache =
         page_observation.page == SettingsRolloutPageState::Controls
-        ? &s_controls_overlay_art
-        : &s_settings_overlay_art;
+        ? &cache_state.controls
+        : &cache_state.settings;
     std::vector<CapturedMenuArtElement> measured_overlay;
     if (TryExtractSettingsFamilyOverlayArt(
             current_elements,
             &measured_overlay)) {
         active_cache->settings_address = settings_address;
         active_cache->elements = std::move(measured_overlay);
-        s_transition_overlay_art = CachedSettingsFamilyOverlayArt{};
-        s_last_page = page_observation.page;
+        cache_state.transition = CachedSettingsFamilyOverlayArt{};
+        cache_state.last_page = page_observation.page;
+        if (page_observation.page == SettingsRolloutPageState::Settings) {
+            cache_state.settings_underlay = current_elements;
+        }
         return current_elements;
     }
 
-    if (s_last_page != page_observation.page &&
-        s_transition_overlay_art.settings_address == settings_address &&
-        !s_transition_overlay_art.elements.empty()) {
+    if (cache_state.last_page == SettingsRolloutPageState::Settings) {
+        std::vector<CapturedMenuArtElement> controls_overlay;
+        if (TryExtractControlsPageArtDifference(
+                cache_state.settings_underlay,
+                current_elements,
+                &controls_overlay)) {
+            cache_state.transition.settings_address = settings_address;
+            cache_state.transition.elements = std::move(controls_overlay);
+        } else if (
+            page_observation.page == SettingsRolloutPageState::Settings
+        ) {
+            cache_state.settings_underlay = current_elements;
+        }
+    }
+
+    if (cache_state.last_page != page_observation.page &&
+        cache_state.transition.settings_address == settings_address &&
+        !cache_state.transition.elements.empty()) {
         active_cache->settings_address = settings_address;
         active_cache->elements =
-            std::move(s_transition_overlay_art.elements);
-        s_transition_overlay_art = CachedSettingsFamilyOverlayArt{};
+            std::move(cache_state.transition.elements);
+        cache_state.transition = CachedSettingsFamilyOverlayArt{};
         static int s_transition_cache_adoption_logs_remaining = 8;
         if (s_transition_cache_adoption_logs_remaining > 0) {
             --s_transition_cache_adoption_logs_remaining;
@@ -175,32 +306,8 @@ std::vector<CapturedMenuArtElement> ResolveSettingsFamilyMenuArtElements(
                 "origin. settings=" + HexString(settings_address));
         }
     }
-    s_last_page = page_observation.page;
-
-    if (HasAnyCurrentSettingsPanelArt(current_elements) ||
-        active_cache->settings_address != settings_address ||
-        active_cache->elements.empty()) {
-        return current_elements;
-    }
-
-    auto cached_overlay = active_cache->elements;
-    std::stable_sort(
-        cached_overlay.begin(),
-        cached_overlay.end(),
-        [](const CapturedMenuArtElement& left,
-           const CapturedMenuArtElement& right) {
-            return left.draw_order < right.draw_order;
-        });
-    std::uint32_t next_draw_order = 0;
-    for (const auto& element : current_elements) {
-        next_draw_order = (std::max)(
-            next_draw_order,
-            element.draw_order + 1);
-    }
-    for (auto& element : cached_overlay) {
-        element.draw_order = next_draw_order++;
-        current_elements.push_back(std::move(element));
-    }
+    cache_state.last_page = page_observation.page;
+    replay_cached_overlay(*active_cache, settings_address);
     return current_elements;
 }
 
@@ -356,19 +463,25 @@ std::vector<OverlayRenderElement> TryBuildControlsOverlayRenderElements(
     const std::vector<ObservedUiElement>& exact_control_elements,
     const std::vector<CapturedMenuArtElement>& art_elements) {
     (void)exact_control_elements;
+    (void)art_elements;
 
     const auto* config = TryGetDebugUiOverlayConfig();
     if (config == nullptr) {
         return {};
     }
 
-    if (!HasCurrentSettingsPanelArt(art_elements)) {
-        return {};
-    }
-
     uintptr_t settings_address = 0;
     if (!TryReadTrackedSettingsRender(&settings_address) ||
         settings_address == 0) {
+        return {};
+    }
+    const auto& cache_state = GetSettingsFamilyOverlayArtCacheState();
+    if (
+        ResolveSettingsRolloutPageForCapture(*config, settings_address) !=
+            SettingsRolloutPageState::Controls ||
+        cache_state.controls.settings_address != settings_address ||
+        cache_state.controls.elements.empty()
+    ) {
         return {};
     }
 
@@ -534,12 +647,10 @@ std::vector<OverlayRenderElement> TryBuildSettingsOverlayRenderElements(
         return {};
     }
 
-    SettingsRolloutPageObservation page_observation;
-    if (!TryResolveSettingsRolloutPageState(
-            *config,
-            settings_address,
-            &page_observation) ||
-        page_observation.page != SettingsRolloutPageState::Settings) {
+    if (
+        ResolveSettingsRolloutPageForCapture(*config, settings_address) !=
+        SettingsRolloutPageState::Settings
+    ) {
         return {};
     }
 

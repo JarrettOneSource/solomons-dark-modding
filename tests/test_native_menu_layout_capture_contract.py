@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 
@@ -168,18 +169,52 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             r"!HasCurrentSettingsPanelArt\(current_elements\)\) \{\s*"
             r"return false;\s*\}.*?"
             r"overlay_first_draw_order.*?"
-            r"element\.art_id\.rfind\(\"Title\.\", 0\).*?"
-            r"ResolveSettingsFamilyMenuArtElements.*?"
+            r"element\.art_id\.rfind\(\"Title\.\", 0\)",
+            "Settings cached art must originate in one complete live panel "
+            "suffix and must exclude title-backdrop draws",
+        )
+        self.assertRegex(
+            builders,
+            r"(?s)SettingsFamilyOverlayArtCacheState.*?"
+            r"settings_underlay.*?"
+            r"GetCapturedMenuArtSemanticKey.*?"
+            r"TryExtractControlsPageArtDifference.*?"
+            r"underlay_counts.*?"
+            r"element\.art_id\.rfind\(\"Title\.\", 0\) == 0\).*?"
+            r"continue;.*?"
+            r"element\.art_id\.rfind\(\"ControlPanel\.\", 0\).*?"
+            r"controls_elements->clear\(\);.*?return false;",
+            "Controls cached art must be the semantic multiset difference from "
+            "the measured Settings underlay and exclude title/Settings draws",
+        )
+        semantic_key = re.search(
+            r"(?s)std::string GetCapturedMenuArtSemanticKey\(.*?"
+            r"return key\.str\(\);\s*\}",
+            builders,
+        )
+        self.assertIsNotNone(
+            semantic_key,
+            "the Controls underlay subtraction must define one semantic key",
+        )
+        self.assertNotIn(
+            "draw_order",
+            semantic_key.group(0),
+            "absolute draw order must not prevent stable underlay subtraction",
+        )
+        self.assertRegex(
+            builders,
+            r"(?s)ResolveSettingsFamilyMenuArtElements.*?"
+            r"cache\.settings_address != settings_address.*?"
+            r"element\.draw_order = next_draw_order\+\+.*?"
             r"TryResolveSettingsRolloutPageState.*?"
-            r"s_transition_overlay_art\.elements.*?"
-            r"s_last_page != page_observation\.page.*?"
+            r"TryExtractControlsPageArtDifference.*?"
+            r"replay_cached_overlay\(\*last_cache, settings_address\).*?"
+            r"cache_state\.last_page != page_observation\.page.*?"
             r"active_cache->settings_address = settings_address;.*?"
-            r"HasAnyCurrentSettingsPanelArt\(current_elements\).*?"
-            r"active_cache->settings_address != settings_address.*?"
-            r"element\.draw_order = next_draw_order\+\+",
-            "cached Settings-family panel art must originate in a complete live "
-            "panel draw, exclude ambient title draws, remain owner/page scoped, "
-            "and be replayed after the live underlay",
+            r"replay_cached_overlay\(\*active_cache, settings_address\)",
+            "Settings-family caches must remain owner/page scoped, replay the "
+            "known source through a native page transition, and adopt only the "
+            "measured destination page",
         )
         self.assertRegex(
             helpers,
@@ -203,15 +238,21 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         self.assertRegex(
             builders,
             r"(?s)TryBuildControlsOverlayRenderElements\(.*?"
-            r"HasCurrentSettingsPanelArt\(art_elements\).*?"
             r"TryReadTrackedSettingsRender\(&settings_address\).*?"
+            r"if \(\s*"
+            r"ResolveSettingsRolloutPageForCapture\(\*config, settings_address\) !=\s*"
+            r"SettingsRolloutPageState::Controls \|\|\s*"
+            r"cache_state\.controls\.settings_address != settings_address \|\|\s*"
+            r"cache_state\.controls\.elements\.empty\(\)\s*"
+            r"\) \{\s*return \{\};\s*\}.*?"
             r"TryIsCustomizeKeyboardRolloutExpanded.*?"
             r"TryReadSettingsDoneButtonRect.*?"
             r"back_button\.surface_id = \"controls\";.*?"
             r"back_button\.label = \"BACK\";.*?"
             r"ResolveConfiguredUiActionId\(\s*\"controls\"",
-            "Controls classification must require the complete cached/live panel, "
-            "the active native rollout page, and its machine-measured Back control",
+            "Controls classification must require a measured page-difference "
+            "cache for the active native rollout owner and its machine-measured "
+            "Back control",
         )
         self.assertRegex(
             binary_layout,

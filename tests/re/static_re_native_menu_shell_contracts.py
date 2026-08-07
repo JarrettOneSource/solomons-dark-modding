@@ -1241,18 +1241,49 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         r"!HasCurrentSettingsPanelArt\(current_elements\)\) \{\s*"
         r"return false;\s*\}.*?"
         r"overlay_first_draw_order.*?"
-        r"element\.art_id\.rfind\(\"Title\.\", 0\).*?"
+        r"element\.art_id\.rfind\(\"Title\.\", 0\)",
+        "Settings cached art is no longer extracted from one complete live "
+        "panel suffix or can include title-backdrop draws",
+    )
+    _require_regex(
+        settings_builder,
+        r"SettingsFamilyOverlayArtCacheState.*?"
+        r"settings_underlay.*?"
+        r"GetCapturedMenuArtSemanticKey.*?"
+        r"TryExtractControlsPageArtDifference.*?"
+        r"underlay_counts.*?"
+        r"element\.art_id\.rfind\(\"Title\.\", 0\) == 0\).*?continue;.*?"
+        r"element\.art_id\.rfind\(\"ControlPanel\.\", 0\).*?"
+        r"controls_elements->clear\(\);.*?return false;",
+        "Controls cached art is no longer the non-ID/non-draw-order semantic "
+        "multiset difference against its measured Settings underlay, or can "
+        "include title/partial Settings draws",
+    )
+    semantic_key = re.search(
+        r"std::string GetCapturedMenuArtSemanticKey\(.*?"
+        r"return key\.str\(\);\s*\}",
+        settings_builder,
+        flags=re.DOTALL,
+    )
+    if semantic_key is None or "draw_order" in semantic_key.group(0):
+        raise StaticReTestFailure(
+            "Controls cached art no longer uses one draw-order-independent "
+            "semantic key for measured multiset subtraction"
+        )
+    _require_regex(
+        settings_builder,
         r"ResolveSettingsFamilyMenuArtElements.*?"
+        r"cache\.settings_address != settings_address.*?"
+        r"element\.draw_order = next_draw_order\+\+.*?"
         r"TryResolveSettingsRolloutPageState.*?"
-        r"s_transition_overlay_art\.elements.*?"
-        r"s_last_page != page_observation\.page.*?"
+        r"TryExtractControlsPageArtDifference.*?"
+        r"replay_cached_overlay\(\*last_cache, settings_address\).*?"
+        r"cache_state\.last_page != page_observation\.page.*?"
         r"active_cache->settings_address = settings_address;.*?"
-        r"HasAnyCurrentSettingsPanelArt\(current_elements\).*?"
-        r"active_cache->settings_address != settings_address.*?"
-        r"element\.draw_order = next_draw_order\+\+",
-        "cached Settings-family art no longer comes from one complete live "
-        "panel suffix, excludes ambient title draws, stays owner/page scoped, "
-        "and replays after the live underlay",
+        r"replay_cached_overlay\(\*active_cache, settings_address\)",
+        "Settings-family cached page art can leak across an owner or "
+        "transition, or the known source is not replayed while neither native "
+        "page owns the origin",
     )
     _require_regex(
         settings_tracking,
@@ -1284,15 +1315,21 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
     _require_regex(
         settings_builder,
         r"TryBuildControlsOverlayRenderElements\(.*?"
-        r"if \(!HasCurrentSettingsPanelArt\(art_elements\)\).*?"
         r"TryReadTrackedSettingsRender\(&settings_address\).*?"
+        r"if \(\s*"
+        r"ResolveSettingsRolloutPageForCapture\(\*config, settings_address\) !=\s*"
+        r"SettingsRolloutPageState::Controls \|\|\s*"
+        r"cache_state\.controls\.settings_address != settings_address \|\|\s*"
+        r"cache_state\.controls\.elements\.empty\(\)\s*"
+        r"\) \{\s*return \{\};\s*\}.*?"
         r"TryIsCustomizeKeyboardRolloutExpanded.*?"
         r"TryReadSettingsDoneButtonRect.*?"
         r"back_button\.surface_id = \"controls\";.*?"
         r"back_button\.label = \"BACK\";.*?"
         r"ResolveConfiguredUiActionId\(\s*\"controls\"",
-        "Controls classification no longer requires complete cached/live panel "
-        "art, the active native rollout page, and its machine-measured Back control",
+        "Controls classification no longer requires measured page-difference "
+        "art for the active native rollout owner and its machine-measured Back "
+        "control",
     )
     _require_regex(
         binary_layout,

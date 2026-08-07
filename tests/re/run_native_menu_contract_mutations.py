@@ -1090,9 +1090,8 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "overlay_surface_builders_settings_surfaces.inl",
         "!HasCurrentSettingsPanelArt(current_elements)",
         "false && !HasCurrentSettingsPanelArt(current_elements)",
-        "cached Settings-family art no longer comes from one complete live "
-        "panel suffix, excludes ambient title draws, stays owner/page scoped, "
-        "and replays after the live underlay",
+        "Settings cached art is no longer extracted from one complete live "
+        "panel suffix or can include title-backdrop draws",
     ),
     StaticMutation(
         "recorder.settings-idle-owner-retention",
@@ -1109,14 +1108,26 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "before current-frame evidence validates it",
     ),
     StaticMutation(
+        "recorder.controls-underlay-multiset-difference",
+        SURFACE_AGREEMENT,
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "overlay_surface_builders_settings_surfaces.inl",
+        'if (element.art_id.rfind("Title.", 0) == 0) {',
+        'if (element.art_id.rfind("Title.", 0) != 0) {',
+        "Controls cached art is no longer the non-ID/non-draw-order semantic "
+        "multiset difference against its measured Settings underlay, or can "
+        "include title/partial Settings draws",
+    ),
+    StaticMutation(
         "recorder.controls-current-frame-rollout",
         SURFACE_AGREEMENT,
         "SolomonDarkModLoader/src/debug_ui_overlay/"
         "overlay_surface_builders_settings_surfaces.inl",
-        "if (!HasCurrentSettingsPanelArt(art_elements)) {",
-        "if (false && !HasCurrentSettingsPanelArt(art_elements)) {",
-        "Controls classification no longer requires complete cached/live panel "
-        "art, the active native rollout page, and its machine-measured Back control",
+        "cache_state.controls.elements.empty()",
+        "false && cache_state.controls.elements.empty()",
+        "Controls classification no longer requires measured page-difference "
+        "art for the active native rollout owner and its machine-measured Back "
+        "control",
     ),
     StaticMutation(
         "recorder.settings-page-single-active",
@@ -1133,22 +1144,22 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         SURFACE_AGREEMENT,
         "SolomonDarkModLoader/src/debug_ui_overlay/"
         "overlay_surface_builders_settings_surfaces.inl",
-        "active_cache->settings_address != settings_address",
-        "active_cache->settings_address == settings_address",
-        "cached Settings-family art no longer comes from one complete live "
-        "panel suffix, excludes ambient title draws, stays owner/page scoped, "
-        "and replays after the live underlay",
+        "cache.settings_address != settings_address",
+        "cache.settings_address == settings_address",
+        "Settings-family cached page art can leak across an owner or "
+        "transition, or the known source is not replayed while neither native "
+        "page owns the origin",
     ),
     StaticMutation(
         "recorder.settings-transition-cache-adoption",
         SURFACE_AGREEMENT,
         "SolomonDarkModLoader/src/debug_ui_overlay/"
         "overlay_surface_builders_settings_surfaces.inl",
-        "s_last_page != page_observation.page",
-        "s_last_page == page_observation.page",
-        "cached Settings-family art no longer comes from one complete live "
-        "panel suffix, excludes ambient title draws, stays owner/page scoped, "
-        "and replays after the live underlay",
+        "cache_state.last_page != page_observation.page",
+        "cache_state.last_page == page_observation.page",
+        "Settings-family cached page art can leak across an owner or "
+        "transition, or the known source is not replayed while neither native "
+        "page owns the origin",
     ),
     StaticMutation(
         "recorder.controls-live-back-action",
