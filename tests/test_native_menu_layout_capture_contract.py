@@ -332,6 +332,7 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             "NativeMenuExtendedMinimumMilliseconds = 60000",
             "NativeMenuExtendedSpanMultiplier = 10",
             "NativeMenuExtendedMinimumSamples = 200",
+            "NativeMenuExtendedPerSampleBudgetMilliseconds = 1000",
         ):
             self.assertIn(token, support)
         self.assertIn(
@@ -349,6 +350,12 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             motion,
             "extended observation duration must be measured between actual "
             "samples rather than from wall-clock startup",
+        )
+        self.assertIn(
+            "$sampleCensusDeadlineMilliseconds",
+            motion,
+            "the extended timeout must budget for the independent 200-sample "
+            "census as well as the elapsed-span floor",
         )
         self.assertIn(
             "motion_events = @($classification.motion_events)",

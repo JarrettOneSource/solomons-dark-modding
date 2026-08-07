@@ -915,6 +915,15 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "actual samples, and requires at least 200 samples",
     ),
     StaticMutation(
+        "recorder.extended-sample-census-budget",
+        RECORDER,
+        "scripts/Observe-NativeMenuMotionCapability.ps1",
+        "$sampleCensusDeadlineMilliseconds = (",
+        "$sampleCensusDeadlineMilliseconds = 0L # mutation removes sample budget\n(",
+        "extended observation timeout again budgets only elapsed span and can "
+        "STOP before the independent 200-sample census",
+    ),
+    StaticMutation(
         "special.loader-full-progress-settle-hold",
         RECORDER,
         "SolomonDarkModLoader/src/debug_ui_overlay/"

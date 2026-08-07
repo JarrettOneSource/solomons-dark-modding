@@ -131,7 +131,15 @@ $requiredSpanMilliseconds = [Math]::Max(
     [long]$script:NativeMenuExtendedMinimumMilliseconds,
     [long]$script:NativeMenuExtendedSpanMultiplier * $stableSpanMilliseconds
 )
-$deadlineMilliseconds = $requiredSpanMilliseconds + 60000L
+$sampleCensusDeadlineMilliseconds = (
+    [long]$script:NativeMenuExtendedMinimumSamples *
+    [long]$script:NativeMenuExtendedPerSampleBudgetMilliseconds
+)
+$deadlineMilliseconds = [Math]::Max(
+    $requiredSpanMilliseconds +
+        [long]$script:NativeMenuSettleTimeoutMilliseconds,
+    $sampleCensusDeadlineMilliseconds
+)
 $samples = [Collections.Generic.List[object]]::new()
 $busyCount = 0
 $notReadyCount = 0
@@ -146,6 +154,7 @@ while (
         throw (
             "STOP: '$ScreenId' could not produce at least 200 runnable samples " +
             "across its derived $requiredSpanMilliseconds ms motion observation; " +
+            "samples=$($samples.Count) " +
             "busy=$busyCount not_ready=$notReadyCount last='$lastUnavailable'."
         )
     }

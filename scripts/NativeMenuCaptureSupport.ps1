@@ -7,6 +7,7 @@ $script:NativeMenuSettlePollMilliseconds = 55
 $script:NativeMenuExtendedMinimumMilliseconds = 60000
 $script:NativeMenuExtendedSpanMultiplier = 10
 $script:NativeMenuExtendedMinimumSamples = 200
+$script:NativeMenuExtendedPerSampleBudgetMilliseconds = 1000
 $script:NativeMenuPopulationPhaseLimit = 4096
 $script:NativeMenuActionDispatchTimeoutMilliseconds = 15000
 $script:NativeMenuActionDispatchPollMilliseconds = 50

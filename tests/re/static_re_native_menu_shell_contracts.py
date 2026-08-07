@@ -817,6 +817,25 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
         "actual samples, and requires at least 200 samples",
     )
     _require_regex(
+        support,
+        r"NativeMenuExtendedPerSampleBudgetMilliseconds\s*=\s*1000",
+        "extended observation timeout again budgets only elapsed span and can "
+        "STOP before the independent 200-sample census",
+    )
+    _require_regex(
+        motion_recorder,
+        r"sampleCensusDeadlineMilliseconds\s*=\s*\(\s*"
+        r"\[long\]\$script:NativeMenuExtendedMinimumSamples\s*\*\s*"
+        r"\[long\]\$script:NativeMenuExtendedPerSampleBudgetMilliseconds\s*"
+        r"\).*?deadlineMilliseconds\s*=\s*\[Math\]::Max\(\s*"
+        r"\$requiredSpanMilliseconds\s*\+\s*"
+        r"\[long\]\$script:NativeMenuSettleTimeoutMilliseconds,\s*"
+        r"\$sampleCensusDeadlineMilliseconds\s*\).*?"
+        r'"samples=\$\(\$samples\.Count\) "',
+        "extended observation timeout again budgets only elapsed span and can "
+        "STOP before the independent 200-sample census",
+    )
+    _require_regex(
         motion_recorder,
         r"baselineHeader\.instance\s+-cne\s+\$Instance.*?"
         r"baselineHeader\.process_id\s+-ne\s+\$ProcessId.*?"
