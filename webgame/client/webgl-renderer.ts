@@ -1,4 +1,4 @@
-import type { AssetEntry, AtlasDescriptor, FontGroup } from "../assets/types.js";
+import type { AtlasDescriptor, FontGroup } from "../assets/types.js";
 import type { NativeRect } from "./menu-catalog.js";
 import type { ManifestAssets } from "./manifest-assets.js";
 import type {
@@ -9,6 +9,7 @@ import type {
   SpriteDraw,
   SystemTextDraw,
 } from "./render-plan.js";
+import { DEFAULT_TEXT_GOLD, FONT_DESCENT, type GlyphPlacement } from "./text-layout.js";
 
 interface TextureRecord {
   readonly texture: WebGLTexture;
@@ -169,10 +170,6 @@ function spriteSlice(
   return { rectangle: [left, top, right, bottom], uv };
 }
 
-function glyphAdvance(entry: AssetEntry): number {
-  return Math.max(1, entry.logicalSize.width);
-}
-
 function kerning(font: FontGroup, left: number, right: number): number {
   return font.kerning.find((pair) => pair.leftGlyphId === left && pair.rightGlyphId === right)?.adjustment ?? 0;
 }
@@ -243,7 +240,8 @@ export class WebGlShellRenderer {
       if (command.kind !== "atlas-text") {
         continue;
       }
-      for (const character of command.text) {
+      const characters = command.glyphLayout?.map((placement) => placement.ch) ?? Array.from(command.text);
+      for (const character of characters) {
         const glyph = this.#assets.glyph(command.fontId, character);
         if (glyph !== null) {
           requestedAssets.set(glyph.canonicalId, glyph);
@@ -310,13 +308,9 @@ export class WebGlShellRenderer {
     if (texture === undefined) {
       throw new Error(`assetpack sprite ${command.asset.requestedId} was not prepared before drawing ${command.elementId}`);
     }
-    const [left, top, right, bottom] = command.unclippedRect;
-    const sourceAspect = texture.width / texture.height;
-    const destinationAspect = Math.abs((right - left) / (bottom - top));
-    const quarterTurn = command.asset.entry.rotated || (
-      Math.abs(Math.log(destinationAspect * sourceAspect))
-      < Math.abs(Math.log(destinationAspect / sourceAspect))
-    );
+    // Orientation is data, never inference: atlas packing rotation from the
+    // manifest, placement rotation only from a plan layer that measured it.
+    const quarterTurn = command.asset.entry.rotated !== (command.quarterTurn ?? false);
     const slice = spriteSlice(command.rect, command.unclippedRect, quarterTurn, command.flip ?? [false, false]);
     if (slice === null) {
       return;
@@ -347,50 +341,70 @@ export class WebGlShellRenderer {
     );
   }
 
+  // Native bitmap text never stretches: every glyph blits its atlas content box
+  // at 1:1. Placement comes from a measured glyphLayout when the plan carries
+  // one, otherwise from the rect-anchored model measured off the native
+  // reference captures (see text-layout.ts): the fixture rect is the ink
+  // bounding box, so the pen starts at rect left and the baseline sits at rect
+  // top plus the tallest glyph ascent; advance is content width - 1 + kern and
+  // a space advances by the font's second metric.
   #drawAtlasText(command: AtlasTextDraw): void {
     const font = this.#assets.font(command.fontId);
     if (!("glyphs" in font)) {
       throw new Error(`${command.elementId} expected an assetpack bitmap font group`);
     }
-    const glyphs = Array.from(command.text, (character) => ({
-      character,
-      asset: this.#assets.glyph(command.fontId, character),
+    const tint = command.color ?? DEFAULT_TEXT_GOLD;
+    for (const placement of command.glyphLayout ?? this.#modelLayout(command, font)) {
+      const asset = this.#assets.glyph(command.fontId, placement.ch);
+      if (asset === null) {
+        throw new Error(`${command.fontId} is missing glyph ${placement.ch} placed for ${command.elementId}`);
+      }
+      const texture = this.#assetTextures.get(asset.canonicalId);
+      if (texture === undefined) {
+        throw new Error(`assetpack glyph ${asset.requestedId} was not prepared for ${command.elementId}`);
+      }
+      this.#drawQuad(
+        [placement.x, placement.y, placement.x + asset.entry.rect.width, placement.y + asset.entry.rect.height],
+        [0, 0, 1, 0, 1, 1, 0, 1],
+        tint,
+        tint,
+        texture,
+      );
+    }
+  }
+
+  #modelLayout(command: AtlasTextDraw, font: FontGroup): GlyphPlacement[] {
+    const descent = FONT_DESCENT[command.fontId] ?? {};
+    const resolved = Array.from(command.text, (ch) => ({
+      ch,
+      asset: ch === " " ? null : this.#assets.glyph(command.fontId, ch),
     }));
-    const rawWidth = glyphs.reduce((total, glyph, index) => {
-      const previous = glyphs[index - 1];
-      const kern = previous === undefined
-        ? 0
-        : kerning(font, previous.character.codePointAt(0) ?? 0, glyph.character.codePointAt(0) ?? 0);
-      return total + kern + (glyph.asset === null ? font.metrics[1] : glyphAdvance(glyph.asset.entry));
-    }, 0);
-    if (rawWidth <= 0) {
-      return;
-    }
-    const [left, top, right, bottom] = command.unclippedRect;
-    const scale = (right - left) / rawWidth;
-    let x = left;
-    for (const [index, glyph] of glyphs.entries()) {
-      const previous = glyphs[index - 1];
-      if (previous !== undefined) {
-        x += kerning(font, previous.character.codePointAt(0) ?? 0, glyph.character.codePointAt(0) ?? 0) * scale;
+    const lineAscent = resolved.reduce((tallest, glyph) => (
+      glyph.asset === null
+        ? tallest
+        : Math.max(tallest, glyph.asset.entry.rect.height - (descent[glyph.ch] ?? 0))
+    ), 0);
+    const baseline = command.unclippedRect[1] + lineAscent;
+    const placements: GlyphPlacement[] = [];
+    let pen = command.unclippedRect[0];
+    let previous: string | null = null;
+    for (const glyph of resolved) {
+      if (glyph.asset === null) {
+        pen += font.metrics[1];
+        continue;
       }
-      const width = (glyph.asset === null ? font.metrics[1] : glyphAdvance(glyph.asset.entry)) * scale;
-      if (glyph.asset !== null) {
-        const texture = this.#assetTextures.get(glyph.asset.canonicalId);
-        if (texture === undefined) {
-          throw new Error(`assetpack glyph ${glyph.asset.requestedId} was not prepared for ${command.elementId}`);
-        }
-        const tint = command.color ?? [0.86, 0.74, 0.42, 1];
-        this.#drawQuad(
-          [x, top, x + width, bottom],
-          [0, 0, 1, 0, 1, 1, 0, 1],
-          tint,
-          tint,
-          texture,
-        );
+      if (previous !== null) {
+        pen += kerning(font, previous.codePointAt(0) ?? 0, glyph.ch.codePointAt(0) ?? 0);
       }
-      x += width;
+      placements.push({
+        ch: glyph.ch,
+        x: pen,
+        y: baseline - glyph.asset.entry.rect.height + (descent[glyph.ch] ?? 0),
+      });
+      pen += glyph.asset.entry.rect.width - 1;
+      previous = glyph.ch;
     }
+    return placements;
   }
 
   #drawSystemText(command: SystemTextDraw): void {

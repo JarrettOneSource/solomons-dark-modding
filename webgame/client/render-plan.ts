@@ -29,6 +29,9 @@ export interface SpriteDraw extends DrawBase {
   // mirrored placements capture as identical un-flipped draws; the ATC-preview
   // orientation layer (native-orientation.ts) restores the mirrors at render time.
   readonly flip?: readonly [boolean, boolean];
+  // Placement quarter turn, set only by a plan layer that knows the native
+  // placement (the renderer never guesses orientation from aspect ratios).
+  readonly quarterTurn?: boolean;
 }
 
 export interface SolidDraw extends DrawBase {
@@ -44,6 +47,9 @@ export interface AtlasTextDraw extends DrawBase {
   // Glyph tint; absent means the native menu gold. The beta-notice dialog body is
   // the one captured surface with white/yellow text (see beta-dialog.ts).
   readonly color?: readonly [number, number, number, number];
+  // Measured per-glyph placement (native 1600x900 content-box corners) from
+  // text-layout.ts. Absent means the renderer's rect-anchored model layout.
+  readonly glyphLayout?: readonly { readonly ch: string; readonly x: number; readonly y: number }[];
 }
 
 export interface SystemTextDraw extends DrawBase {

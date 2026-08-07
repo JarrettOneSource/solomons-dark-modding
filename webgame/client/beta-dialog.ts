@@ -7,6 +7,13 @@ import type {
   SolidDraw,
   SpriteDraw,
 } from "./render-plan.js";
+import {
+  DEFAULT_TEXT_GOLD,
+  DIALOG_LINE_GLYPHS,
+  LABEL_GLYPH_OFFSETS,
+  STAMP_GLYPHS,
+  type GlyphPlacement,
+} from "./text-layout.js";
 
 // ATC-preview beta-notice dialog reconstruction (superseded by shellfix #101).
 //
@@ -14,14 +21,13 @@ import type {
 // never reached the capture pipeline — that draw path was unhooked, so the G11
 // fixture holds only the dialog's chrome skeleton over a fully visible main
 // menu (capture-method gap, routed to the #96 architecture docs). This layer
-// rebuilds the missing panel and text from the native reference capture:
+// rebuilds the missing panel, scrim and text from the native reference capture:
 //   menu-reference-captures/beta-notice.png
 //   sha256 a10f40d3ea5c72e8e6e634134ab845a6779f981e9d2bd61e6aa8b69a777c1126
-// Every rectangle and color below is pixel-measured from that capture. Text
-// widths come from the assetpack font advances scaled by per-font calibration
-// constants measured on the capture (body 388px / 1767 raw, heading 284px /
-// 1374 raw); the native engine compresses advances at these sizes, so glyph
-// heights follow the captured-label convention instead of the raw aspect.
+// Every rectangle and color below is pixel-measured from that capture. Glyph
+// placement comes from the measured tables in text-layout.ts (the Fonts bundle
+// carries no placement data); this layer also attaches those tables to the
+// catalog's own menu labels wherever full clean measurements exist.
 
 interface DialogAssets {
   resolve(id: string): ResolvedAsset;
@@ -39,7 +45,8 @@ const STAMP_SCREENS: ReadonlySet<string> = new Set([
 
 // Menu labels that sit fully under the opaque dialog panel. Natively they are
 // invisible on this screen; the shell draws text above sprites, so they must
-// not survive into the dialog plan. quit.1 sits outside the panel and stays.
+// not survive into the dialog plan. The quit label sits outside the panel and
+// stays, dimmed by the native scrim factor below.
 const COVERED_MENU_TEXT: ReadonlySet<string> = new Set([
   "beta_notice.text.play.1",
   "beta_notice.text.explore_the.1",
@@ -48,13 +55,27 @@ const COVERED_MENU_TEXT: ReadonlySet<string> = new Set([
   "beta_notice.text.hall_of_fame.1",
 ]);
 
-const HEADING_FONT = "Fonts.308-349";
-const BODY_FONT = "Fonts.216-307";
+// Serif display face (dialog heading, OK, menu labels) and the body face
+// (dialog body, list, stamp), both pinned by 1.000-score ink matches against
+// the reference captures. The fixture separately records the focused PLAY
+// label in the large face Fonts.308-349, which flows through untouched.
+const HEADING_FONT = "Fonts.216-307";
+const BODY_FONT = "Fonts.93-184";
 
 const WHITE = [1, 1, 1, 1] as const;
 const YELLOW = [1, 1, 0, 1] as const;
 const RULE_GOLD = [0.85, 0.75, 0.5, 1] as const;
 const PANEL_BLACK = [0.008, 0.008, 0.01, 1] as const;
+// Everything outside the panel dims by exactly this factor on the native
+// capture (quit ink measures gold x 0.254): a solid black scrim at 75% alpha.
+const SCRIM_BLACK = [0, 0, 0, 0.75] as const;
+const SCRIM_FACTOR = 0.25;
+const DIMMED_GOLD = [
+  DEFAULT_TEXT_GOLD[0] * SCRIM_FACTOR,
+  DEFAULT_TEXT_GOLD[1] * SCRIM_FACTOR,
+  DEFAULT_TEXT_GOLD[2] * SCRIM_FACTOR,
+  1,
+] as const;
 
 const PANEL: NativeRect = [516.5, 99.5, 1083.5, 800.5];
 const CHAIN_ART = "UI.79";
@@ -68,7 +89,9 @@ const RULE_INNER: NativeRect = [547, 130, 1053.5, 771];
 const RULE_THICKNESS = 3;
 
 // The ambient static contract orders menu content at or below 87 and dialog
-// chrome at 88 and above; the panel stack slots strictly between them.
+// chrome at 88 and above; the scrim dims exactly the menu band and the panel
+// stack slots strictly between them.
+const ORDER_SCRIM = 87.1;
 const ORDER_BASE = 87.3;
 const ORDER_CHAIN = 87.4;
 const ORDER_LEATHER = 87.5;
@@ -83,8 +106,17 @@ interface TextLine {
   readonly text: string;
 }
 
+function measuredGlyphs(lineId: string): readonly GlyphPlacement[] {
+  const glyphs = DIALOG_LINE_GLYPHS[lineId];
+  if (glyphs === undefined) {
+    throw new Error(`text-layout.ts holds no measured glyphs for dialog line ${lineId}`);
+  }
+  return glyphs;
+}
+
 // Native body copy transcribed verbatim from the reference capture, including
 // the native "becompleted" typo and double spaces. Line pitch is exactly 17.
+// Rects approximate each line's ink box; placement truth is the glyph table.
 const TEXT_LINES: readonly TextLine[] = [
   { id: "heading", fontId: HEADING_FONT, color: WHITE, rect: [607, 189.2, 891, 205.8], text: "BETA VERSION V.0.72" },
   { id: "body.1", fontId: BODY_FONT, color: WHITE, rect: [605, 229.5, 971.261, 244.5], text: "This is an incomplete version of Solomon" },
@@ -106,20 +138,19 @@ const TEXT_LINES: readonly TextLine[] = [
   { id: "body.10", fontId: BODY_FONT, color: WHITE, rect: [605, 560.5, 949.962, 575.5], text: "news there and vote on any greenlights" },
   { id: "body.11", fontId: BODY_FONT, color: WHITE, rect: [605, 577.5, 959.843, 592.5], text: "or take advantage of any special offers" },
   { id: "body.12", fontId: BODY_FONT, color: WHITE, rect: [605, 594.5, 908.9, 609.5], text: "that I have up!  I'd appreciate it!" },
-  // OK label centered on the native slab center x=800 at its measured width.
   { id: "ok", fontId: HEADING_FONT, color: null, rect: [781.5, 669, 818.5, 686], text: "OK" },
 ];
 
-// Top-right build stamp, right-aligned at its measured native edge.
+// Top-right build stamp at its measured absolute position.
 const STAMP: TextLine = {
   id: "stamp",
   fontId: BODY_FONT,
   color: null,
-  rect: [1496, 2.25, 1595, 16.75],
+  rect: [1494, 2, 1595, 17],
   text: "V.0.72BETA",
 };
 
-function textCommand(line: TextLine): AtlasTextDraw {
+function textCommand(line: TextLine, glyphLayout: readonly GlyphPlacement[]): AtlasTextDraw {
   return {
     kind: "atlas-text",
     elementId: `dialog.text.${line.id}`,
@@ -129,7 +160,29 @@ function textCommand(line: TextLine): AtlasTextDraw {
     unclippedRect: line.rect,
     fontId: line.fontId,
     text: line.text,
+    glyphLayout,
     ...(line.color === null ? {} : { color: line.color }),
+  };
+}
+
+// Catalog label name from its element id, e.g. main_menu.text.play.1 -> play.
+function labelName(elementId: string): string | null {
+  return /\.text\.([a-z0-9_]+)\.\d+$/.exec(elementId)?.[1] ?? null;
+}
+
+// Attach the measured glyph table to a catalog label when one exists. The
+// fixture rect is the hook-recorded ink anchor; the table stores content-box
+// corners relative to it, so repeated chrome labels stay correct per screen.
+function withMeasuredLabel(command: AtlasTextDraw): AtlasTextDraw {
+  const name = labelName(command.elementId);
+  const offsets = name === null ? undefined : LABEL_GLYPH_OFFSETS[name];
+  if (offsets === undefined) {
+    return command;
+  }
+  const [left, top] = command.unclippedRect;
+  return {
+    ...command,
+    glyphLayout: offsets.map((glyph) => ({ ch: glyph.ch, x: left + glyph.x, y: top + glyph.y })),
   };
 }
 
@@ -190,24 +243,40 @@ export class BetaNoticeDialog {
       }
       if (command.kind === "focus") {
         focus.push(command);
-      } else if (command.kind === "atlas-text" || command.kind === "system-text") {
+      } else if (command.kind === "atlas-text") {
+        const measured = withMeasuredLabel(command);
+        text.push(
+          wantsDialog && measured.color === undefined
+            ? { ...measured, color: DIMMED_GOLD }
+            : measured,
+        );
+      } else if (command.kind === "system-text") {
         text.push(command);
       } else {
         visual.push(command);
       }
     }
     if (wantsDialog) {
+      visual.push(solid("dialog.scrim", [0, 0, 1600, 900], ORDER_SCRIM, SCRIM_BLACK));
       visual.push(...this.#panelCommands());
       visual.sort((left, right) => left.drawOrder - right.drawOrder);
-      text.push(...TEXT_LINES.map(textCommand));
+      text.push(...TEXT_LINES.map((line) => textCommand(line, measuredGlyphs(line.id))));
     }
     if (wantsStamp) {
-      text.push(textCommand(STAMP));
+      const stamp = textCommand(STAMP, STAMP_GLYPHS);
+      text.push(wantsDialog ? { ...stamp, color: DIMMED_GOLD } : stamp);
     }
     return { ...plan, commands: [...visual, ...text, ...focus] };
   }
 
-  #sprite(elementId: string, artId: string, rect: NativeRect, unclippedRect: NativeRect, drawOrder: number): SpriteDraw {
+  #sprite(
+    elementId: string,
+    artId: string,
+    rect: NativeRect,
+    unclippedRect: NativeRect,
+    drawOrder: number,
+    quarterTurn = false,
+  ): SpriteDraw {
     return {
       kind: "sprite",
       elementId,
@@ -216,6 +285,7 @@ export class BetaNoticeDialog {
       rect,
       unclippedRect,
       asset: this.#assets.resolve(artId),
+      ...(quarterTurn ? { quarterTurn } : {}),
     };
   }
 
@@ -229,8 +299,9 @@ export class BetaNoticeDialog {
   }
 
   // Chain border flush with the panel edges: full-width horizontal runs, with
-  // vertical runs spanning between them. The 21x108 source auto-quarter-turns
-  // for the horizontal runs. Corner joins hide under the UI.107-110 stones.
+  // vertical runs spanning between them. The 21x108 source is vertical, so the
+  // horizontal runs declare their quarter turn explicitly. Corner joins hide
+  // under the UI.107-110 stones.
   #chainRing(): SpriteDraw[] {
     const [left, top, right, bottom] = PANEL;
     const tiles: SpriteDraw[] = [];
@@ -243,6 +314,7 @@ export class BetaNoticeDialog {
         [x, top, clipRight, top + CHAIN_THICKNESS],
         [x, top, x + CHAIN_LENGTH, top + CHAIN_THICKNESS],
         ORDER_CHAIN,
+        true,
       ));
       tiles.push(this.#sprite(
         `dialog.chain.bottom.${index}`,
@@ -250,6 +322,7 @@ export class BetaNoticeDialog {
         [x, bottom - CHAIN_THICKNESS, clipRight, bottom],
         [x, bottom - CHAIN_THICKNESS, x + CHAIN_LENGTH, bottom],
         ORDER_CHAIN,
+        true,
       ));
       index += 1;
     }

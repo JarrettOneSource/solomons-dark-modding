@@ -124,6 +124,56 @@ describe("BetaNoticeDialog", () => {
     expect(result.commands.some((command) => command.elementId === "beta_notice.text.quit.1")).toBe(true);
   });
 
+  it("dims everything outside the panel with the native 75% black scrim", () => {
+    const { dialog } = layer();
+    const result = dialog.apply(betaNoticePlan());
+
+    const scrim = result.commands.find((command) => command.elementId === "dialog.scrim");
+    expect(scrim?.kind).toBe("solid");
+    expect(scrim?.unclippedRect).toEqual([0, 0, 1600, 900]);
+    expect((scrim as SolidDraw).colorTop).toEqual([0, 0, 0, 0.75]);
+
+    // quit ink measures gold x 0.254 on the native capture; text draws above
+    // the scrim, so the layer tints it by the scrim factor directly.
+    const dimmed = [209 / 255 * 0.25, 180 / 255 * 0.25, 108 / 255 * 0.25, 1];
+    const quit = result.commands.find(
+      (command): command is AtlasTextDraw => command.elementId === "beta_notice.text.quit.1",
+    );
+    expect(quit?.color).toEqual(dimmed);
+    const stamp = result.commands.find(
+      (command): command is AtlasTextDraw => command.elementId === "dialog.text.stamp",
+    );
+    expect(stamp?.color).toEqual(dimmed);
+  });
+
+  it("anchors measured label glyph tables at the fixture rect origin", () => {
+    const { dialog } = layer();
+    const result = dialog.apply(betaNoticePlan());
+    const quit = result.commands.find(
+      (command): command is AtlasTextDraw => command.elementId === "beta_notice.text.quit.1",
+    );
+    expect(quit?.glyphLayout).toEqual([
+      { ch: "q", x: 1503, y: 854 },
+      { ch: "u", x: 1520, y: 854 },
+      { ch: "i", x: 1537, y: 854 },
+      { ch: "t", x: 1543, y: 853 },
+    ]);
+  });
+
+  it("declares the quarter turn on horizontal chain runs only", () => {
+    const { dialog } = layer();
+    const result = dialog.apply(betaNoticePlan());
+    const chains = result.commands.filter((command): command is SpriteDraw => (
+      command.kind === "sprite" && command.elementId.startsWith("dialog.chain.")
+    ));
+    const horizontal = chains.filter((tile) => /\.(top|bottom)\./.test(tile.elementId));
+    const vertical = chains.filter((tile) => /\.(left|right)\./.test(tile.elementId));
+    expect(horizontal.length).toBeGreaterThan(0);
+    expect(vertical.length).toBeGreaterThan(0);
+    expect(horizontal.every((tile) => tile.quarterTurn === true)).toBe(true);
+    expect(vertical.every((tile) => tile.quarterTurn === undefined)).toBe(true);
+  });
+
   it("slots the reconstructed panel between menu content and dialog chrome", () => {
     const { dialog, requested } = layer();
     const result = dialog.apply(betaNoticePlan());
@@ -175,8 +225,14 @@ describe("BetaNoticeDialog", () => {
 
     const heading = texts.find((command) => command.elementId === "dialog.text.heading");
     expect(heading?.text).toBe("BETA VERSION V.0.72");
-    expect(heading?.fontId).toBe("Fonts.308-349");
+    expect(heading?.fontId).toBe("Fonts.216-307");
     expect(heading?.color).toEqual([1, 1, 1, 1]);
+    expect(heading?.glyphLayout?.[0]).toEqual({ ch: "B", x: 605, y: 189 });
+    expect(heading?.glyphLayout).toHaveLength(17);
+
+    const body = texts.find((command) => command.elementId === "dialog.text.body.1");
+    expect(body?.fontId).toBe("Fonts.93-184");
+    expect(body?.glyphLayout?.[0]).toEqual({ ch: "T", x: 604, y: 228 });
 
     const bullet = texts.find((command) => command.elementId === "dialog.text.list.1");
     expect(bullet?.text).toBe("ONE story level");
@@ -184,7 +240,9 @@ describe("BetaNoticeDialog", () => {
 
     const ok = texts.find((command) => command.elementId === "dialog.text.ok");
     expect(ok?.text).toBe("OK");
+    expect(ok?.fontId).toBe("Fonts.216-307");
     expect(ok?.color).toBeUndefined();
+    expect(ok?.glyphLayout).toEqual([{ ch: "O", x: 782, y: 669 }, { ch: "K", x: 803, y: 669 }]);
 
     // heading + 12 body lines + 7 list lines + OK, plus the version stamp.
     const bodyCount = texts.filter((command) => command.elementId.startsWith("dialog.text.")).length;
