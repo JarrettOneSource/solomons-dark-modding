@@ -132,6 +132,7 @@ bool TryReadSettingsPanelRect(
     float* top,
     float* right,
     float* bottom);
+void CacheObservedObjectLabel(uintptr_t object_address, std::string label);
 bool TryReadPointerField(const void* object, std::size_t byte_offset, uintptr_t* value);
 std::string GetOverlaySurfaceRootId(std::string_view surface_id);
 #include "debug_ui_overlay/state_and_actions.inl"
