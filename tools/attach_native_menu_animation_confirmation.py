@@ -10,11 +10,18 @@ import os
 from pathlib import Path
 from typing import Any
 
-from native_menu_settlement_v2 import (
-    SettlementV2Error,
-    canonical_bytes,
-    structural_layout_bytes,
-)
+if __package__:
+    from .native_menu_ambient_lifecycle import (
+        AmbientLifecycleError,
+        classify_ambient_window,
+    )
+    from .native_menu_settlement_v2 import SettlementV2Error, canonical_bytes
+else:
+    from native_menu_ambient_lifecycle import (
+        AmbientLifecycleError,
+        classify_ambient_window,
+    )
+    from native_menu_settlement_v2 import SettlementV2Error, canonical_bytes
 
 
 def read_object(path: Path) -> dict[str, Any]:
@@ -28,44 +35,79 @@ def file_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def resolve_confirmation_trace(
-    confirmation_path: Path,
-    confirmation_header: dict[str, Any],
+def resolve_settlement_trace(
+    fixture_path: Path,
+    fixture_header: dict[str, Any],
     evidence_root: Path,
+    label: str,
 ) -> tuple[Path, dict[str, Any]]:
-    receipt = confirmation_header.get(
-        "settlement_trace", confirmation_header.get("raw_recording")
+    receipt = fixture_header.get(
+        "settlement_trace", fixture_header.get("raw_recording")
     )
     if not isinstance(receipt, dict):
-        raise SettlementV2Error("confirmation fixture has no settlement trace receipt")
+        raise SettlementV2Error(f"{label} fixture has no settlement trace receipt")
     filename = receipt.get("evidence_filename")
     if not isinstance(filename, str) or not filename:
-        raise SettlementV2Error("confirmation settlement trace filename is absent")
+        raise SettlementV2Error(f"{label} settlement trace filename is absent")
     candidates = {
         path.resolve()
         for path in (
-            confirmation_path.parent / filename,
+            fixture_path.parent / filename,
             *evidence_root.rglob(filename),
         )
         if path.is_file()
     }
     if len(candidates) != 1:
         raise SettlementV2Error(
-            "confirmation settlement trace is absent or ambiguous: "
+            f"{label} settlement trace is absent or ambiguous: "
             + ", ".join(sorted(str(path) for path in candidates))
         )
     path = candidates.pop()
     if path.stat().st_size != receipt.get("bytes") or file_sha256(path) != receipt.get(
         "sha256"
     ):
-        raise SettlementV2Error("confirmation settlement trace receipt is false")
+        raise SettlementV2Error(f"{label} settlement trace receipt is false")
     trace = read_object(path)
     samples = trace.get("settled_window_samples")
     if not isinstance(samples, list) or len(samples) < 40:
         raise SettlementV2Error(
-            "confirmation settlement trace reached fewer than 40 samples"
+            f"{label} settlement trace reached fewer than 40 samples"
         )
     return path, trace
+
+
+def validate_recorded_window(
+    fixture: dict[str, Any],
+    trace: dict[str, Any],
+    label: str,
+) -> dict[str, Any]:
+    samples = trace.get("settled_window_samples")
+    if not isinstance(samples, list):
+        raise SettlementV2Error(f"{label} settlement trace has no sample window")
+    try:
+        classification = classify_ambient_window(samples, label=label)
+    except AmbientLifecycleError as error:
+        raise SettlementV2Error(
+            f"{label} settlement trace does not reclassify under v2.9: {error}"
+        ) from error
+    layout = fixture.get("layout")
+    header = fixture.get("header")
+    if not isinstance(layout, dict) or not isinstance(header, dict):
+        raise SettlementV2Error(f"{label} fixture has no header/layout")
+    if canonical_bytes(classification["layout"]) != canonical_bytes(layout):
+        raise SettlementV2Error(
+            f"{label} fixture layout is not derived from its settlement trace"
+        )
+    settlement = header.get("settlement")
+    if (
+        not isinstance(settlement, dict)
+        or settlement.get("structural_sha256")
+        != classification["structural_sha256"]
+    ):
+        raise SettlementV2Error(
+            f"{label} fixture records a false v2.9 window structural hash"
+        )
+    return classification
 
 
 def write_atomically(path: Path, value: dict[str, Any]) -> None:
@@ -123,22 +165,19 @@ def attach(
             "raw animation confirmation needs unique non-empty measured IDs"
         )
     raw_sets_match = set(primary_ids) == set(confirmation_ids)
-    confirmation_trace_path, confirmation_trace = resolve_confirmation_trace(
-        confirmation_path, confirmation_header, evidence_root
+    primary_trace_path, primary_trace = resolve_settlement_trace(
+        primary_path, primary_header, evidence_root, "primary"
     )
-    primary_structural_sha = hashlib.sha256(
-        structural_layout_bytes(primary["layout"])
-    ).hexdigest()
-    confirmation_structural_sha = hashlib.sha256(
-        structural_layout_bytes(confirmation["layout"])
-    ).hexdigest()
-    if primary_structural_sha != primary_header["settlement"]["structural_sha256"]:
-        raise SettlementV2Error("primary fixture records a false structural hash")
-    if (
-        confirmation_structural_sha
-        != confirmation_header["settlement"]["structural_sha256"]
-    ):
-        raise SettlementV2Error("confirmation fixture records a false structural hash")
+    confirmation_trace_path, confirmation_trace = resolve_settlement_trace(
+        confirmation_path, confirmation_header, evidence_root, "confirmation"
+    )
+    validate_recorded_window(primary, primary_trace, "primary")
+    confirmation_classification = validate_recorded_window(
+        confirmation, confirmation_trace, "confirmation"
+    )
+    confirmation_structural_sha = confirmation_classification[
+        "structural_sha256"
+    ]
     if evidence_path.exists():
         raise SettlementV2Error(
             f"confirmation evidence already exists at {evidence_path}; refusing ambiguity"
@@ -146,7 +185,7 @@ def attach(
 
     evidence_path.parent.mkdir(parents=True, exist_ok=True)
     confirmation_evidence = {
-        "schema": "solomon-dark-native-menu-animation-confirmation-v3",
+        "schema": "solomon-dark-native-menu-animation-confirmation-v4",
         "header": {
             "label": confirmation_header["label"],
             "instance": confirmation_header["instance"],
@@ -165,6 +204,11 @@ def attach(
                 "evidence_filename": confirmation_trace_path.name,
                 "sha256": file_sha256(confirmation_trace_path),
                 "bytes": confirmation_trace_path.stat().st_size,
+            },
+            "primary_settlement_trace": {
+                "evidence_filename": primary_trace_path.name,
+                "sha256": file_sha256(primary_trace_path),
+                "bytes": primary_trace_path.stat().st_size,
             },
         },
         "settlement": confirmation_header["settlement"],
