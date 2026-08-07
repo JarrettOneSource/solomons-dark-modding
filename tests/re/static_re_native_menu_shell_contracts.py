@@ -1344,15 +1344,20 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
     )
     _require_regex(
         classifier,
-        r"screen_identities\s*=\s*\{\s*\(\s*"
-        r'measurement\["identity"\]\["semantic_surface"\],\s*'
-        r'measurement\["identity"\]\["screen_id"\],\s*\).*?'
-        r"if len\(screen_identities\) != 1:.*?"
+        r"screen_ids\s*=\s*\{.*?"
+        r'measurement\["identity"\]\["screen_id"\].*?'
+        r"probed_semantic_surfaces\s*=\s*\{.*?"
+        r'identity_source"\]\s*==\s*"semantic_probe".*?'
+        r"invalid_fallback_identities\s*=\s*\[.*?"
+        r"sealed-v6 fallback.*?exact screen/layout payload fallback.*?"
+        r"len\(screen_ids\) != 1 or len\(probed_semantic_surfaces\) > 1.*?"
+        r"semantic_generation_measurements\s*=\s*\[.*?"
+        r'identity_source"\]\s*==\s*"semantic_probe".*?or measurements.*?'
         r'identity\["observed_layout_generations"\]\s*=\s*sorted\(.*?'
         r'measurement\["identity"\]\["layout_generation"\].*?'
         r'identity\["layout_generation_semantics"\]',
-        "Settlement v2.5 no longer keeps path-local generation counters in "
-        "each observation while comparing screen identity and structural core",
+        "Settlement v2.5 no longer keeps path-local generation counters and "
+        "sealed-v6 placeholder surfaces out of live-probed screen identity",
     )
     _require_regex(
         resolver,

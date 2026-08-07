@@ -1002,14 +1002,33 @@ def resolve_ambient_lifecycle(
         raise AmbientLifecycleError(
             "cross-instance structural core contract: two fresh settled instances are required"
         )
-    screen_identities = {
-        (
-            measurement["identity"]["semantic_surface"],
-            measurement["identity"]["screen_id"],
-        )
-        for measurement in measurements
+    screen_ids = {
+        measurement["identity"]["screen_id"] for measurement in measurements
     }
-    if len(screen_identities) != 1:
+    probed_semantic_surfaces = {
+        measurement["identity"]["semantic_surface"]
+        for measurement in measurements
+        if measurement["identity"]["identity_source"] == "semantic_probe"
+    }
+    invalid_fallback_identities = [
+        measurement["label"]
+        for measurement in measurements
+        if measurement["identity"]["identity_source"]
+        == "sealed_v6_payload_fallback"
+        and (
+            measurement["identity"]["semantic_surface"]
+            != measurement["identity"]["screen_id"]
+            or measurement["identity"]["semantic_generation"]
+            != measurement["identity"]["layout_generation"]
+        )
+    ]
+    if invalid_fallback_identities:
+        raise AmbientLifecycleError(
+            "cross-instance structural core contract: sealed-v6 fallback "
+            "identity is not the exact screen/layout payload fallback in "
+            f"'{invalid_fallback_identities[0]}'"
+        )
+    if len(screen_ids) != 1 or len(probed_semantic_surfaces) > 1:
         raise AmbientLifecycleError(
             "cross-instance structural core contract: observations do not name "
             "one semantic surface and screen"
@@ -1136,9 +1155,25 @@ def resolve_ambient_lifecycle(
         raise AmbientLifecycleError(
             "cross-instance structural core contract: no core sequence was observed"
         )
-    identity = copy.deepcopy(measurements[0]["identity"])
+    identity_measurement = next(
+        (
+            measurement
+            for measurement in measurements
+            if measurement["identity"]["identity_source"] == "semantic_probe"
+        ),
+        measurements[0],
+    )
+    identity = copy.deepcopy(identity_measurement["identity"])
+    semantic_generation_measurements = [
+        measurement
+        for measurement in measurements
+        if measurement["identity"]["identity_source"] == "semantic_probe"
+    ] or measurements
     identity["semantic_generations"] = sorted(
-        {measurement["identity"]["semantic_generation"] for measurement in measurements}
+        {
+            measurement["identity"]["semantic_generation"]
+            for measurement in semantic_generation_measurements
+        }
     )
     identity["observed_layout_generations"] = sorted(
         {measurement["identity"]["layout_generation"] for measurement in measurements}

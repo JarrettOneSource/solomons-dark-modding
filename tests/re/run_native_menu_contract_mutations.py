@@ -847,10 +847,27 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "v2.5.path-local-layout-generation",
         CAMPAIGN,
         "tools/native_menu_ambient_lifecycle.py",
-        'measurement["identity"]["semantic_surface"],\n            measurement["identity"]["screen_id"],',
-        'measurement["identity"]["semantic_surface"],\n            measurement["identity"]["layout_generation"],\n            measurement["identity"]["screen_id"],',
-        "Settlement v2.5 no longer keeps path-local generation counters in "
-        "each observation while comparing screen identity and structural core",
+        '{measurement["identity"]["layout_generation"] for measurement in measurements}',
+        '{measurement["identity"]["semantic_generation"] for measurement in measurements}',
+        "Settlement v2.5 no longer keeps path-local generation counters and "
+        "sealed-v6 placeholder surfaces out of live-probed screen identity",
+    ),
+    StaticMutation(
+        "v2.5.sealed-v6-surface-fallback",
+        CAMPAIGN,
+        "tools/native_menu_ambient_lifecycle.py",
+        'semantic_generation_measurements = [\n'
+        '        measurement\n'
+        '        for measurement in measurements\n'
+        '        if measurement["identity"]["identity_source"] == "semantic_probe"\n'
+        '    ] or measurements',
+        'semantic_generation_measurements = [\n'
+        '        measurement\n'
+        '        for measurement in measurements\n'
+        '        if True  # mutation promotes sealed-v6 placeholder surface to live truth\n'
+        '    ] or measurements',
+        "Settlement v2.5 no longer keeps path-local generation counters and "
+        "sealed-v6 placeholder surfaces out of live-probed screen identity",
     ),
     StaticMutation(
         "v2.3.navigation-replay-corroboration-scope",

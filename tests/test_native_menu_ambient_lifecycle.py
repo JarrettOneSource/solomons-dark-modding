@@ -243,6 +243,39 @@ def _trace(
 
 
 class NativeMenuAmbientLifecycleTests(unittest.TestCase):
+    def test_sealed_v6_surface_fallback_does_not_override_live_probe_identity(
+        self,
+    ) -> None:
+        historical = _stable_samples(3)
+        for sample in historical:
+            sample.pop("semantic_surface")
+            sample.pop("semantic_generation")
+
+        resolved = resolve_ambient_lifecycle(
+            [
+                _observation(_stable_samples(3), "menufx-primary", 101),
+                _observation(_stable_samples(3), "menufx-confirmation", 202),
+                {
+                    **_observation(historical, "menufx-history", 303),
+                    "corroboration_anchor": False,
+                },
+            ]
+        )
+
+        self.assertEqual(resolved["identity"]["semantic_surface"], "menu")
+        self.assertEqual(resolved["identity"]["semantic_generations"], [11])
+
+    def test_two_live_probed_semantic_surfaces_remain_a_stop(self) -> None:
+        confirmation = _stable_samples(3)
+        for sample in confirmation:
+            sample["semantic_surface"] = "different_surface"
+
+        with self.assertRaisesRegex(
+            AmbientLifecycleError,
+            "observations do not name one semantic surface and screen",
+        ):
+            _resolve_pair(_stable_samples(3), confirmation)
+
     def test_path_local_layout_generations_do_not_change_screen_identity(self) -> None:
         primary = _stable_samples(3)
         confirmation = copy.deepcopy(primary)
