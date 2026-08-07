@@ -871,6 +871,15 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "motion slots instead of retaining authorized art-family identity",
     ),
     StaticMutation(
+        "v2.3.disjoint-phase-geometry-rank",
+        CAMPAIGN,
+        "tools/native_menu_ambient_lifecycle.py",
+        "geometry_ranks = _varying_member_geometry_ranks(records)",
+        "geometry_ranks = {}  # mutation fragments disjoint motion phases",
+        "same-art movers observed at disjoint phases again fragment into "
+        "instance-local slots instead of measured geometry-ranked members",
+    ),
+    StaticMutation(
         "v2.5.empty-gameplay-surface-is-constant",
         CLASSIFIER,
         "tools/native_menu_ambient_lifecycle.py",

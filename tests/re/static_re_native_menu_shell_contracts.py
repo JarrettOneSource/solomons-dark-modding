@@ -1314,6 +1314,17 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
     )
     _require_regex(
         classifier,
+        r"def _varying_member_geometry_ranks\(.*?"
+        r'if len\(by_measurement\) < 2 or len\(counts\) != 1:\s*return \{\}.*?'
+        r"geometry-rank collision.*?"
+        r"geometry_ranks\s*=\s*_varying_member_geometry_ranks\(records\).*?"
+        r"in geometry_ranks.*?and geometry_ranks\[.*?== geometry_ranks\[.*?"
+        r"motion envelopes crossed.*?measured geometry ranks",
+        "same-art movers observed at disjoint phases again fragment into "
+        "instance-local slots instead of measured geometry-ranked members",
+    )
+    _require_regex(
+        classifier,
         r"ambient_family\s*=\s*\{.*?"
         r"_resolve_varying_member_keys\(\s*measurements, ambient_family\s*\)",
         "title-backdrop ambient art is again forced through screen-member "

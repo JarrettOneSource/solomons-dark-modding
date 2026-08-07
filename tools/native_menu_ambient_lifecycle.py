@@ -524,6 +524,40 @@ def _union_member_ranges(
     )
 
 
+def _varying_member_geometry_ranks(
+    records: list[tuple[dict[str, Any], dict[str, Any]]],
+) -> dict[tuple[int, str], int]:
+    by_measurement: dict[
+        int, list[tuple[dict[str, Any], dict[str, Any]]]
+    ] = defaultdict(list)
+    for measurement, member in records:
+        if member["classification"] in {"animated", "full_presence"}:
+            by_measurement[id(measurement)].append((measurement, member))
+    counts = {len(values) for values in by_measurement.values()}
+    if len(by_measurement) < 2 or len(counts) != 1:
+        return {}
+
+    result: dict[tuple[int, str], int] = {}
+    for values in by_measurement.values():
+        ranked = sorted(
+            values,
+            key=lambda record: (
+                _member_envelope_ranges(record[1])[1],
+                _member_envelope_ranges(record[1])[0],
+                _member_envelope_ranges(record[1])[2:],
+            ),
+        )
+        rank_keys = [_member_envelope_ranges(member) for _, member in ranked]
+        if len(rank_keys) != len(set(rank_keys)):
+            raise AmbientLifecycleError(
+                "varying-member identity ambiguity: geometry-rank collision "
+                "within one observation"
+            )
+        for rank, (measurement, member) in enumerate(ranked):
+            result[(id(measurement), member["captured_element_id"])] = rank
+    return result
+
+
 def _resolve_varying_member_keys(
     measurements: list[dict[str, Any]],
     ambient_family: set[str],
@@ -547,6 +581,7 @@ def _resolve_varying_member_keys(
         ]
         if not witnesses:
             continue
+        geometry_ranks = _varying_member_geometry_ranks(records)
         remaining = set(range(len(witnesses)))
         components: list[list[tuple[dict[str, Any], dict[str, Any]]]] = []
         while remaining:
@@ -564,6 +599,30 @@ def _resolve_varying_member_keys(
                     if _motion_geometry_compatible(
                         left, _member_envelope_ranges(witnesses[candidate][1])
                     )
+                    or (
+                        (
+                            id(witnesses[index][0]),
+                            witnesses[index][1]["captured_element_id"],
+                        )
+                        in geometry_ranks
+                        and (
+                            id(witnesses[candidate][0]),
+                            witnesses[candidate][1]["captured_element_id"],
+                        )
+                        in geometry_ranks
+                        and geometry_ranks[
+                            (
+                                id(witnesses[index][0]),
+                                witnesses[index][1]["captured_element_id"],
+                            )
+                        ]
+                        == geometry_ranks[
+                            (
+                                id(witnesses[candidate][0]),
+                                witnesses[candidate][1]["captured_element_id"],
+                            )
+                        ]
+                    )
                 ]
                 for candidate in neighbours:
                     remaining.remove(candidate)
@@ -573,6 +632,22 @@ def _resolve_varying_member_keys(
         components.sort(key=lambda component: canonical_bytes(_union_member_ranges(component)))
         for slot, component in enumerate(components, start=1):
             component_ranges = _union_member_ranges(component)
+            component_ranks = {
+                geometry_ranks.get(
+                    (id(measurement), member["captured_element_id"])
+                )
+                for measurement, member in component
+                if (
+                    id(measurement),
+                    member["captured_element_id"],
+                )
+                in geometry_ranks
+            }
+            if len(component_ranks) > 1:
+                raise AmbientLifecycleError(
+                    "varying-member identity ambiguity: motion envelopes crossed "
+                    "measured geometry ranks"
+                )
             identities = [id(measurement) for measurement, _ in component]
             if len(identities) != len(set(identities)):
                 raise AmbientLifecycleError(
@@ -593,6 +668,17 @@ def _resolve_varying_member_keys(
                     if _motion_geometry_compatible(
                         _member_envelope_ranges(member),
                         _union_member_ranges(candidate),
+                    )
+                    or any(
+                        geometry_ranks.get(record_key)
+                        == geometry_ranks.get(
+                            (
+                                id(candidate_measurement),
+                                candidate_member["captured_element_id"],
+                            )
+                        )
+                        for candidate_measurement, candidate_member in candidate
+                        if record_key in geometry_ranks
                     )
                 ]
                 if len(matches) > 1:

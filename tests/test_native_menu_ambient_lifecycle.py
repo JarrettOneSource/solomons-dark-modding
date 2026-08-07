@@ -161,6 +161,23 @@ def _two_band_ephemeral_samples(*, include_upper_band: bool = True) -> list[dict
     return _samples(elements)
 
 
+def _same_art_disjoint_phase_samples(phase: float) -> list[dict[str, object]]:
+    def elements(sample_index: int) -> list[dict[str, object]]:
+        core = [_art(index) for index in range(7)]
+        movers: list[dict[str, object]] = []
+        for index in range(3):
+            mover = _art(20 + index, art_id="UI.scroll")
+            mover["id"] = f"screen.art.scroll.{index + 1}"
+            left = phase + index * 100.0 + sample_index * 0.25
+            mover["rect"] = [left, 100.0, left + 80.0, 120.0]
+            mover["unclipped_rect"] = list(mover["rect"])
+            mover["draw_order"] = 100 + index
+            movers.append(mover)
+        return [*core, *movers]
+
+    return _samples(elements)
+
+
 def _multiset_reference(elements: list[dict[str, object]]) -> dict[str, object]:
     counts: dict[bytes, int] = {}
     payloads: dict[bytes, dict[str, object]] = {}
@@ -690,6 +707,20 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
         )
         self.assertEqual(animated["art_id"], "UI.shared")
         self.assertTrue(animated["member_key"].startswith("member:"))
+
+    def test_same_art_disjoint_motion_phases_resolve_by_geometry_rank(self) -> None:
+        resolved = _resolve_pair(
+            _same_art_disjoint_phase_samples(0.0),
+            _same_art_disjoint_phase_samples(50.0),
+        )
+
+        animated = [
+            member
+            for member in resolved["ambient_members"]
+            if "animated" in member["member_classes"]
+        ]
+        self.assertEqual(len(animated), 3)
+        self.assertEqual({member["art_id"] for member in animated}, {"UI.scroll"})
 
     def test_declared_phantom_ambient_class_is_a_recorder_defect(self) -> None:
         observations = [
