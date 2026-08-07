@@ -2,10 +2,19 @@
 
 Owner-visible task (#102): the deployed /game preview at solomondarker.com/game must
 match the native menus. The owner reported rotated buttons/images and a beta-warning
-dialog with no text or background. Most of the fix is landed on this branch and
-verified; TWO diagnosed defects remain, then conformance re-verification, landing,
-and redeploy. This document is the complete state transfer: nothing below needs
-re-derivation, and every claim carries its evidence.
+dialog with no text or background; a second owner pass (2026-08-07, on the ATC stage
+build) reported three more: OK un-clickable on the beta dialog, the dialog border
+persisting after ESC, and a mangled Raptisoft loading bar. Most of the fix is landed
+on this branch and verified; FIVE diagnosed defects remain (1a–1e below), then
+conformance re-verification, landing, and redeploy. This document is the complete
+state transfer: nothing below needs re-derivation, and every claim carries its
+evidence.
+
+Process (owner directive 2026-08-07): the owner is the acceptance tester and WANTS
+the loop — fix what is diagnosed here, land + deploy, report DONE; the owner
+re-checks and reports remaining or new defects; those come back to you as thread
+resumes. Owner-reported defects are the task, not scope creep. Keep your work
+resumable.
 
 Branch: `atc/menu-preview-20260807` (continue on it; land on main by rebase, never force).
 Evidence dir for your run: `D:\codex-evidence\menupreview-20260807\` (create; SHA256SUMS
@@ -57,6 +66,97 @@ may ride along with anything authorized here.
 - Acceptance: binary-ink IoU ≥ 0.95 vs refs in (690,630,910,730) on beta-notice
   and in the PLAY row on main-menu-root; update `beta-dialog.test.ts` /
   render-plan tests to the new focus command shape without dropping floors.
+
+### 1c. Owner cannot click OK on the beta dialog (pipeline verified GOOD — fix the
+### gate UX; most of the perception is 1d)
+Verified live on the stage build (headless chrome, 2026-08-07) — do not re-derive:
+- `KeyboardMouseProducer` listens for `mousedown`/`mouseup` on `window` (NOT
+  pointer events, NOT `click`). Real-type MouseEvents at the OK center dismiss the
+  dialog: beta-notice → main-menu-root. Controller path
+  (`__webshell.dispatch({kind:'interact',target:'dialog.primary',phase:'press'})`)
+  also dismisses. Fresh-boot flow end-to-end also dismisses once the input gate
+  expires. `dialog.primary` is the only focus node, rect [702,643.5,898,712.5],
+  enabled. The pipeline is NOT broken.
+- The 2.0s boot input gate (`completeBoot`: `#inputGateUntil = clock()+2000`)
+  swallows ALL input silently; it auto-clears by clock comparison (verified
+  `inputGated:false` after expiry). The boot fade is 1.1s → a ~0.9s window where
+  the dialog looks fully ready but eats clicks with zero feedback.
+- Compounding: after a SUCCESSFUL dismiss, defect 1d repaints the dialog border +
+  OK plate over the main menu — a working click looks like a no-op.
+- FIX: check the 2000ms constant against the menure/flowre evidence; under the
+  parity policy the gate must not outlive the native-visible readiness — at
+  minimum, input must be accepted the moment the dialog is fully presented (gate
+  tied to fade completion, not an independent longer timer). Then 1d does the rest.
+- Acceptance: clean-profile fresh boot; a click on OK at fade-completion+50ms
+  dismisses; owner confirms on their machine (iterate loop).
+
+### 1d. Fixture contamination: beta dialog chrome baked into 21 of 27 non-beta
+### layouts (owner's "border frame remains")
+- Census (2026-08-07, against landed `tests/fixtures/webgame/menu-goldens.json`):
+  all 15 overlay-reference members — UI.101 OK plate, UI.54 ×2 skulls, UI.18
+  crest, UI.107–110 corner medallions, UI.17 ×4 filigree, UI.8 ×3 daggers
+  (authoritative list: menufix evidence `candidate-v7/menu-overlay-reference.json`,
+  sha256 5d331ef402a8bc4aadc30895cdc89578c022ba2a9907a0b1d0c580e953f68570) —
+  appear at EXACT beta-notice rects in 21 non-beta layouts: main_menu (gen 14),
+  create_element, create_discipline, profile_save_select, pause_menu,
+  hall_of_fame, controls, performance, settings ×3, simple_menu, and all
+  dark_cloud_* screens. Clean: native_loader, loading_screen,
+  control_scheme_picker, skill_picker, map_picker, game_over.
+- Mechanism: G11 capture-session bleed — the hook kept the dialog's members
+  enumerated on screens captured after the session passed through the dialog
+  (ascending generations corroborate).
+- Player-visible effect: dismissing the dialog lands on main-menu-root, which
+  repaints border/plate/daggers WITHOUT panel/scrim/text (the shell's
+  reconstruction layer is beta-only) — the owner's "border frame remains", and
+  the misperception feeding 1c.
+- FIX (sequencing): menufix (#97) is landing a settled re-capture of ALL 28
+  fixtures; its fresh captures are clean (its own overlay-reference derivation
+  proves settled main_menu carries zero overlay members). Implement 1a/1b/1c/1e
+  now; when menufix lands on main, REBASE onto main, re-run the census (below)
+  expecting zero contaminated layouts, then run final §4 verification + deploy.
+  If menufix has NOT landed when you are otherwise done: STOP and report — do NOT
+  hand-edit fixtures, do NOT deploy with contaminated fixtures.
+- Census procedure (make it a battery gate, §5): needles = the 15
+  (art_id, rect) pairs from menu-overlay-reference.json; for each
+  `layouts[].layout` in menu-goldens.json count kind=art visible=true members
+  matching art_id + rect within ±0.5. FAIL if any non-beta_notice layout has ≥1
+  hit. Mutation tests: inject one chrome member into a clean layout copy → trips;
+  menufix's fixtures → passes.
+- Re-attribution: the §4 structural-diff buckets at columns ~520/1040/1060 and
+  rows ~100/600–780 are THESE members painting on main-menu-root (rects match
+  UI.107–110/UI.17), not defects 1a/1b as previously written. They must clear
+  after the rebase with no code change; 1a/1b acceptance regions are unchanged.
+
+### 1e. Raptisoft loader bar mangled (owner: "loading bar is cooked now — before
+### it was fine")
+- Reproduced on the stage build (`__webshell.showLayout('native-loader')`): logo
+  (Loader.2) and URL fine; the bar is a red smear over a squashed white frame
+  with notches.
+- Root cause (exact, third instance of the crest class): the orientation-as-data
+  cutover removed aspect inference, which had been silently turning these; the
+  native-loader screen never received declared turns. Atlas truth vs placement:
+  - Loader.0 (bar fill): logical 18×192 portrait → placed [704,572,896,590] =
+    192×18 landscape → REQUIRES a declared quarter-turn.
+  - Loader.1 (bar frame): logical 54×230 portrait → placed [685,553,915,607] =
+    230×54 landscape → REQUIRES a declared quarter-turn.
+  - Loader.3 (244×18 → placed 244×18) and Loader.2 (388×227 as-is): no turn.
+- FIX: add the two entries to `native-orientation.ts` (same mechanism as 1a).
+  Verify turn DIRECTION visually (quarterTurn:true = source TL→dest TR = 90° CW;
+  if the art reads wrong-way, it needs the opposite composition — check against a
+  native boot screenshot / menure reference). CRITICAL: `withLoaderProgress`
+  scales/clips the Loader.0 fill by progress fraction — under a quarter-turn the
+  progress axis maps to the source's OTHER axis; verify at partial progress that
+  the bar fills left→right on screen (cpu-throttled boot or a forced
+  partial-progress render).
+- CLASS CLOSE: run a transposition audit across ALL 28 layouts — every kind=art
+  member whose atlas logicalSize aspect is transposed vs its placement rect
+  (W/H ≈ rect H/W within tolerance) must have a declared orientation entry. Emit
+  the audit table into evidence and wire it as a battery assertion (transposed
+  placement with no declared turn = FAIL). Mutation: remove the Loader.1
+  declaration → trips.
+- Acceptance: bar-region conformance in (679,541,923,610) vs a native loader
+  reference (menufix's re-capture includes reference captures; else screenshot
+  the native game's boot), plus owner visual sign-off (iterate loop).
 
 ### Closed false lead — do not chase
 "HALL bleeding through the dialog" was a tooling artifact: a crop script selected
@@ -128,17 +228,27 @@ Clone fresh from origin (GitHub `solomons-dark-modding`), check out this branch.
 
 Element-by-element against the refs, not eyeballing:
 1. All gates green at floors.
-2. Fresh build + capture of beta-notice and main-menu-root.
+2. Fresh build + capture of ALL 28 screens via `__webshell.showLayout(id)` — the
+   1e regression escaped because only beta-notice and main-menu-root were
+   captured. Native refs exist for those two; for the rest, assert the structural
+   gates (transposition audit, fixture hygiene, no-throw render, glyph-table
+   coverage) and eyeball-diff against menufix reference captures once available.
 3. Per-line ink IoU (template ink = atlas alpha>128; bright = luminance>120 lit /
    >40 dimmed; score = hit/n − 0.5·spill/n): every dialog line ≥ 0.95; expect the
    current 0.997+ on lines already passing — a regression below a line's current
    value is a defect even above 0.95.
-4. Structural region diff over the panel + chrome: no >100-pixel diff mass buckets
-   (the current buckets at columns ~520/1040/1060 and rows ~100/600–780 must clear
-   — they are defects 1a/1b).
-5. Crest and focus-ring region IoUs (§1 acceptances), quit dim check.
-6. Ambient regions animate by design — mask them or capture at a pinned time; do
+4. Structural region diff over the panel + chrome: no >100-pixel diff mass buckets.
+   The pre-existing buckets at columns ~520/1040/1060 and rows ~100/600–780 are
+   defect 1d contamination painting on main-menu-root — they clear after the
+   menufix rebase with no code change (see 1d re-attribution).
+5. Crest and focus-ring region IoUs (§1 acceptances), quit dim check, loader
+   bar-region check (1e acceptance).
+6. Fixture-hygiene census green (1d) and transposition audit green (1e) — both
+   wired as battery gates with archived mutation trips.
+7. Ambient regions animate by design — mask them or capture at a pinned time; do
    NOT chase whole-frame equality across sessions.
+8. Clean-profile fresh-boot click test (1c acceptance): OK dismisses at
+   fade-completion+50ms.
 
 ## 5. Class-closing mandate (owner: "get Codex fixed so you won't have to do this again")
 
@@ -153,7 +263,12 @@ Element-by-element against the refs, not eyeballing:
    panel/scrim/text pass unhooked; native focus chrome unhooked; fixture
    draw_order = enumeration order, paint order lives in the trace; Fonts bundle
    carries no glyph placement; row-collision measurement class; non-painting
-   enumerated elements (e.g. beta_version_v_0_72.1).
+   enumerated elements (e.g. beta_version_v_0_72.1); capture-session bleed —
+   hook enumeration retains dialog members on screens captured after the dialog
+   (21/27 landed layouts contaminated, defect 1d).
+4. The battery gate list now includes the 1d fixture-hygiene census and the 1e
+   transposition audit, each mutation-tested in BOTH directions (trip + pass)
+   with trips archived in evidence.
 
 ## 6. Landing + deploy (owner's /game override covers this publication — nothing else)
 
