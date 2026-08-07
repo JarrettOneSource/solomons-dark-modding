@@ -1149,6 +1149,18 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "transition cache and be adopted as Controls art",
     ),
     StaticMutation(
+        "recorder.settings-unresolved-cache-expiry",
+        SURFACE_AGREEMENT,
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "overlay_surface_builders_settings_surfaces.inl",
+        "now - cache_state.transition_started_at >\n"
+        "                kTrackedSettingsMaximumIdleMs",
+        "now - cache_state.transition_started_at <=\n"
+        "                kTrackedSettingsMaximumIdleMs",
+        "an unresolved Settings-family source can mask a settled main-menu "
+        "destination beyond the bounded transition window",
+    ),
+    StaticMutation(
         "recorder.controls-retains-owner-through-underlay-frame",
         SURFACE_AGREEMENT,
         "SolomonDarkModLoader/src/debug_ui_overlay/"

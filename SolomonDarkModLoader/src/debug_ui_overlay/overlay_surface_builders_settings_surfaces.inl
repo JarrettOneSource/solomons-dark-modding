@@ -286,6 +286,14 @@ std::vector<CapturedMenuArtElement> ResolveSettingsFamilyMenuArtElements(
         if (cache_state.last_page != SettingsRolloutPageState::Unknown) {
             MarkSettingsFamilyPageTransitionPending(&cache_state);
         }
+        const auto now = GetTickCount64();
+        if (cache_state.transition_started_at != 0 &&
+            now - cache_state.transition_started_at >
+                kTrackedSettingsMaximumIdleMs) {
+            Log("Debug UI settings-family cached page retired after bounded unresolved transition.");
+            clear_caches();
+            return current_elements;
+        }
         std::vector<CapturedMenuArtElement> transition_overlay;
         if (TryExtractSettingsFamilyOverlayArt(
                 current_elements,

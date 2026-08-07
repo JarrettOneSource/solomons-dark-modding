@@ -251,6 +251,21 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             "the Settings cache instead of becoming Controls transition art",
         )
         self.assertRegex(
+            builders,
+            r"(?s)if \(!TryResolveSettingsRolloutPageState\(.*?"
+            r"MarkSettingsFamilyPageTransitionPending\(&cache_state\);.*?"
+            r"if \(cache_state\.transition_started_at != 0 &&\s*"
+            r"now - cache_state\.transition_started_at >\s*"
+            r"kTrackedSettingsMaximumIdleMs\) \{\s*"
+            r"Log\(\s*\"Debug UI settings-family cached page retired "
+            r"after bounded unresolved transition\.\"\);\s*"
+            r"clear_caches\(\);\s*"
+            r"return current_elements;\s*\}.*?"
+            r"replay_cached_overlay\(\*last_cache, settings_address\)",
+            "an unresolved Settings-family source must expire before its cached "
+            "panel can mask a settled main-menu destination indefinitely",
+        )
+        self.assertRegex(
             builders + frame,
             r"(?s)SettingsFamilyOverlayArtCacheState.*?"
             r"transition_started_at.*?"

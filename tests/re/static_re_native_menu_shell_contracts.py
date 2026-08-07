@@ -1321,6 +1321,21 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         "transition cache and be adopted as Controls art",
     )
     _require_regex(
+        settings_builder,
+        r"if \(!TryResolveSettingsRolloutPageState\(.*?"
+        r"MarkSettingsFamilyPageTransitionPending\(&cache_state\);.*?"
+        r"if \(cache_state\.transition_started_at != 0 &&\s*"
+        r"now - cache_state\.transition_started_at >\s*"
+        r"kTrackedSettingsMaximumIdleMs\) \{\s*"
+        r"Log\(\s*\"Debug UI settings-family cached page retired "
+        r"after bounded unresolved transition\.\"\);\s*"
+        r"clear_caches\(\);\s*"
+        r"return current_elements;\s*\}.*?"
+        r"replay_cached_overlay\(\*last_cache, settings_address\)",
+        "an unresolved Settings-family source can mask a settled main-menu "
+        "destination beyond the bounded transition window",
+    )
+    _require_regex(
         settings_builder + frame_registry,
         r"SettingsFamilyOverlayArtCacheState.*?"
         r"transition_started_at.*?"
