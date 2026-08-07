@@ -2,6 +2,7 @@ import menuGoldenJson from "../../tests/fixtures/webgame/menu-goldens.json" with
 import focusModelJson from "../../webgame-contracts/menu-focus-model.json" with { type: "json" };
 import { GamepadProducer } from "../input/gamepad-producer.js";
 import { parseFocusModel } from "../input/focus-model.js";
+import { AmbientTitleLayer } from "./ambient-title.js";
 import type { Intent, Point2 } from "../input/intent.js";
 import { parseIntent } from "../input/intent.js";
 import { KeyboardMouseProducer } from "../input/keyboard-mouse-producer.js";
@@ -83,6 +84,8 @@ async function main(): Promise<void> {
   assets.assertShellAssets(catalog);
   const renderer = new WebGlShellRenderer(canvas, assets);
   const controller = new ShellController(catalog, focusModel, { store: browserStore() });
+  const ambient = new AmbientTitleLayer(assets);
+  const ambientEpoch = performance.now();
 
   const loaderLayout = catalog.layouts.get("native-loader");
   if (loaderLayout === undefined) {
@@ -145,7 +148,9 @@ async function main(): Promise<void> {
     } else {
       nextPlan = buildOutOfScopePlan(snapshot.surface.message);
     }
-    await renderer.prepare(nextPlan);
+    await renderer.prepare(
+      ambient.handles(nextPlan.layoutId) ? ambient.augmentForPrepare(nextPlan) : nextPlan,
+    );
     if (generation !== renderGeneration) {
       return;
     }
@@ -257,9 +262,14 @@ async function main(): Promise<void> {
     controller.tick();
     gamepad.pollBrowserGamepads();
     keyboardMouse.tick();
-    // The P0 shell has no simulated or animated scene. State changes render in
-    // installSnapshot; the 60Hz loop remains responsible only for input and
-    // time-gated shell transitions, avoiding redundant static WebGL uploads.
+    // State changes render in installSnapshot. The 60Hz loop redraws only the
+    // ATC-preview ambient Title backdrops (see ambient-title.ts; superseded by
+    // shellfix #101); every other surface keeps the static single-render path
+    // with no redundant WebGL uploads. The conformance harness keeps reading
+    // the fixture-pure activePlan via renderPlan().
+    if (ambient.handles(activePlan.layoutId)) {
+      renderer.render(ambient.apply(activePlan, performance.now() - ambientEpoch));
+    }
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
