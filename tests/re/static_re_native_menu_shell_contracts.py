@@ -1321,6 +1321,19 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
     )
     _require_regex(
         resolver,
+        r"def build_extended_baseline_filename_map\(.*?"
+        r'f"\{layout_id\}-primary\.baseline\.json".*?'
+        r'f"\{layout_id\}-confirmation\.baseline\.json".*?'
+        r'filename_layout_candidates\.setdefault\(filename, set\(\)\)\.add\(layout_id\).*?'
+        r"if ambiguous_filenames:.*?"
+        r"extended baseline filename map is ambiguous.*?"
+        r"layout_by_filename\s*=\s*build_extended_baseline_filename_map\(fixtures\).*?"
+        r"layout_id\s*=\s*layout_by_filename\.get\(filename\)",
+        "historical motion observations are no longer byte-bound to one copied "
+        "baseline with matching capture and runtime provenance",
+    )
+    _require_regex(
+        resolver,
         r"primary_identity\s*=\s*_identity\(.*?"
         r"confirmation_identity\s*=\s*_identity\(.*?"
         r"if primary_identity == confirmation_identity:.*?"

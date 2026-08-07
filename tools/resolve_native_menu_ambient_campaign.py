@@ -582,6 +582,34 @@ def collect_navigation(
     return recordings["primary"], endpoint_layouts
 
 
+def build_extended_baseline_filename_map(
+    fixtures: dict[str, dict[str, Any]],
+) -> dict[str, str]:
+    filename_layout_candidates: dict[str, set[str]] = {}
+    for layout_id, record in fixtures.items():
+        for filename in (
+            record["path"].name,
+            record["confirmation_path"].name,
+            f"{layout_id}-primary.baseline.json",
+            f"{layout_id}-confirmation.baseline.json",
+        ):
+            filename_layout_candidates.setdefault(filename, set()).add(layout_id)
+    ambiguous_filenames = {
+        filename: sorted(layout_ids)
+        for filename, layout_ids in filename_layout_candidates.items()
+        if len(layout_ids) != 1
+    }
+    if ambiguous_filenames:
+        raise CampaignResolutionError(
+            "extended baseline filename map is ambiguous: "
+            f"{ambiguous_filenames}"
+        )
+    return {
+        filename: next(iter(layout_ids))
+        for filename, layout_ids in filename_layout_candidates.items()
+    }
+
+
 def collect_extended(
     observation_root: Path,
     evidence_root: Path,
@@ -590,13 +618,7 @@ def collect_extended(
 ) -> int:
     if not observation_root.exists():
         return 0
-    fixture_by_filename = {
-        record["path"].name: layout_id for layout_id, record in fixtures.items()
-    }
-    confirmation_by_filename = {
-        record["confirmation_path"].name: layout_id
-        for layout_id, record in fixtures.items()
-    }
+    layout_by_filename = build_extended_baseline_filename_map(fixtures)
     count = 0
     witnessed: set[tuple[str, int, str]] = set()
     for path in sorted(observation_root.rglob("*.json")):
@@ -650,16 +672,22 @@ def collect_extended(
         if schema in {
             "solomon-dark-native-menu-layout-v2",
             "solomon-dark-native-menu-layout-v3",
-        }:
-            layout_id = fixture_by_filename.get(filename)
-        elif schema in {
             "solomon-dark-native-menu-animation-confirmation-v2",
             "solomon-dark-native-menu-animation-confirmation-v3",
             "solomon-dark-native-menu-animation-confirmation-v4",
         }:
-            layout_id = confirmation_by_filename.get(filename)
+            layout_id = layout_by_filename.get(filename)
         else:
             layout_id = None
+        if schema in {
+            "solomon-dark-native-menu-animation-confirmation-v2",
+            "solomon-dark-native-menu-animation-confirmation-v3",
+            "solomon-dark-native-menu-animation-confirmation-v4",
+        } and not filename.endswith((".confirmation.json", "-confirmation.baseline.json")):
+            raise CampaignResolutionError(
+                f"extended observation {path} confirmation baseline filename "
+                "does not identify a confirmation recording"
+            )
         if layout_id is None:
             screen = header.get("label")
             matching = [

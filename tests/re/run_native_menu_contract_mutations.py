@@ -808,6 +808,15 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "baseline with matching capture and runtime provenance",
     ),
     StaticMutation(
+        "v2.3.historical-baseline-logical-identity",
+        CAMPAIGN,
+        "tools/resolve_native_menu_ambient_campaign.py",
+        'f"{layout_id}-primary.baseline.json"',
+        'f"{layout_id}-unbound-primary.json"',
+        "historical motion observations are no longer byte-bound to one copied "
+        "baseline with matching capture and runtime provenance",
+    ),
+    StaticMutation(
         "v2.5.settings-route-exact-mapping",
         CAMPAIGN,
         "tools/resolve_native_menu_ambient_campaign.py",

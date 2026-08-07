@@ -12,6 +12,7 @@ from tools.resolve_native_menu_ambient_campaign import (
     _assert_game_executable_matches,
     _assert_runtime_provenance_matches,
     _resolve_layout_id,
+    build_extended_baseline_filename_map,
     collect_supplemental_standalones,
     file_sha256,
     resolve_baseline_evidence,
@@ -455,6 +456,45 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
                     "supplemental:screen-history:primary",
                     "supplemental:screen-history:confirmation",
                 ],
+            )
+
+    def test_extended_baseline_layout_names_are_exact_and_unambiguous(self) -> None:
+        mapping = build_extended_baseline_filename_map(
+            {
+                "game-settings-gameplay": {
+                    "path": Path("game-settings-gameplay.json"),
+                    "confirmation_path": Path(
+                        "game-settings-gameplay.confirmation.json"
+                    ),
+                }
+            }
+        )
+
+        self.assertEqual(
+            mapping["game-settings-gameplay-primary.baseline.json"],
+            "game-settings-gameplay",
+        )
+        self.assertEqual(
+            mapping["game-settings-gameplay-confirmation.baseline.json"],
+            "game-settings-gameplay",
+        )
+        with self.assertRaisesRegex(
+            CampaignResolutionError,
+            "extended baseline filename map is ambiguous",
+        ):
+            build_extended_baseline_filename_map(
+                {
+                    "first": {
+                        "path": Path("first.json"),
+                        "confirmation_path": Path(
+                            "shared-confirmation.baseline.json"
+                        ),
+                    },
+                    "shared": {
+                        "path": Path("shared.json"),
+                        "confirmation_path": Path("shared.confirmation.json"),
+                    },
+                }
             )
 
     def test_ambiguous_settings_screen_requires_exact_edge_route(self) -> None:
