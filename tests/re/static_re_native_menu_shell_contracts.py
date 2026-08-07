@@ -1127,6 +1127,15 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         "SolomonDarkModLoader/src/debug_ui_overlay/"
         "overlay_surface_builders_settings_surfaces.inl"
     )
+    settings_helpers = _read(
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "overlay_surface_builders_settings_helpers.inl"
+    )
+    frame_registry = _read(
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "label_resolution_surface_registry_and_frame_render.inl"
+    )
+    binary_layout = _read("config/binary-layout.ini")
     settings_tracking = _read(
         "SolomonDarkModLoader/src/debug_ui_overlay/"
         "tracked_surfaces_and_main_menu.inl"
@@ -1219,12 +1228,18 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         r"bool HasCurrentSettingsPanelArt\(.*?"
         r'"ControlPanel\.0".*?"ControlPanel\.8".*?"ControlPanel\.18".*?'
         r"element\.visible.*?element\.art_id == required_art_id.*?"
-        r"has_current_settings_panel_art\s*=.*?"
-        r"if \(has_current_settings_panel_art\) \{.*?"
-        r"TryReadTrackedSettingsRender\(&settings_address\).*?"
-        r"else if \(!TryGetActiveSettingsRender\(&settings_address\)\)",
-        "Settings modal classification no longer uses its complete "
-        "current-frame panel-art signature to bridge the retained one-shot owner",
+        r"ResolveSettingsFamilyMenuArtElements.*?"
+        r"TryResolveSettingsRolloutPageState.*?"
+        r"if \(HasCurrentSettingsPanelArt\(current_elements\)\).*?"
+        r"overlay_first_draw_order.*?"
+        r"element\.art_id\.rfind\(\"Title\.\", 0\).*?"
+        r"active_cache->settings_address = settings_address;.*?"
+        r"HasAnyCurrentSettingsPanelArt\(current_elements\).*?"
+        r"active_cache->settings_address != settings_address.*?"
+        r"element\.draw_order = next_draw_order\+\+",
+        "cached Settings-family art no longer comes from one complete live "
+        "panel suffix, excludes ambient title draws, stays owner/page scoped, "
+        "and replays after the live underlay",
     )
     _require_regex(
         settings_tracking,
@@ -1235,14 +1250,45 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         "before current-frame evidence validates it",
     )
     _require_regex(
+        settings_helpers,
+        r"TryResolveSettingsRolloutPageState.*?"
+        r"duplicate GAME SETTINGS roots.*?"
+        r"duplicate CUSTOMIZE KEYBOARD roots.*?"
+        r"IsSettingsRolloutPageAtLocalOrigin.*?"
+        r"if \(settings_at_origin == controls_at_origin\).*?return false;.*?"
+        r"SettingsRolloutPageState::Controls.*?"
+        r"SettingsRolloutPageState::Settings",
+        "Settings and Controls can again be selected without one unique native "
+        "rollout page occupying the live local origin",
+    )
+    _require_regex(
+        frame_registry,
+        r"ResolveSettingsFamilyMenuArtElements\(\s*"
+        r"TakeCapturedMenuArtFrame\(\)\)",
+        "the frame classifier bypasses the owner/page-scoped Settings-family "
+        "cached-art resolver",
+    )
+    _require_regex(
         settings_builder,
         r"TryBuildControlsOverlayRenderElements\(.*?"
-        r"if \(!HasCurrentSettingsPanelArt\(art_elements\)\) \{.*?"
-        r"return \{\};.*?\}.*?"
+        r"if \(!HasCurrentSettingsPanelArt\(art_elements\)\).*?"
         r"TryReadTrackedSettingsRender\(&settings_address\).*?"
-        r"TryIsCustomizeKeyboardRolloutExpanded",
-        "Controls classification no longer requires current-frame settings "
-        "panel art plus a live expanded rollout",
+        r"TryIsCustomizeKeyboardRolloutExpanded.*?"
+        r"TryReadSettingsDoneButtonRect.*?"
+        r"back_button\.surface_id = \"controls\";.*?"
+        r"back_button\.label = \"BACK\";.*?"
+        r"ResolveConfiguredUiActionId\(\s*\"controls\"",
+        "Controls classification no longer requires complete cached/live panel "
+        "art, the active native rollout page, and its machine-measured Back control",
+    )
+    _require_regex(
+        binary_layout,
+        r"\[surface\.controls\].*?actions=.*?controls\.back.*?"
+        r"\[action\.controls\.back\]\s*"
+        r"surface=controls\s*label=BACK\s*owner=0x005D9A50\s*"
+        r"handler=0x005D8120\s*control_offset=0x00B8",
+        "the live Controls Back widget is no longer a configured interactive "
+        "action backed by the native Settings done control",
     )
     _require_regex(
         settings_builder,

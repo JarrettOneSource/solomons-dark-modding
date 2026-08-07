@@ -364,37 +364,82 @@ std::string ResolveSimpleMenuSurfaceTitle(
     return "Simple Menu";
 }
 
-bool TryIsCustomizeKeyboardRolloutExpanded(
+enum class SettingsRolloutPageState {
+    Unknown,
+    Settings,
+    Controls,
+};
+
+struct SettingsRolloutPageObservation {
+    SettingsRolloutPageState page = SettingsRolloutPageState::Unknown;
+    uintptr_t settings_page_control = 0;
+    uintptr_t customize_page_control = 0;
+    uintptr_t customize_rollout_child_control = 0;
+    std::uint8_t customize_rollout_child_enabled = 0xff;
+};
+
+bool IsSettingsRolloutPageAtLocalOrigin(
+    const DebugUiOverlayConfig& config,
+    uintptr_t control_address,
+    float panel_width) {
+    float left = 0.0f;
+    float top = 0.0f;
+    float right = 0.0f;
+    float bottom = 0.0f;
+    if (control_address == 0 || panel_width <= 0.0f ||
+        !TryReadExactControlRect(
+            config,
+            reinterpret_cast<const void*>(control_address),
+            &left,
+            &top,
+            &right,
+            &bottom)) {
+        return false;
+    }
+
+    const auto width = right - left;
+    const auto height = bottom - top;
+    constexpr float kRolloutPositionTolerance = 1.0f;
+    return std::fabs(left) <= kRolloutPositionTolerance &&
+           std::fabs(width - panel_width) <= kRolloutPositionTolerance &&
+           height > kRolloutPositionTolerance;
+}
+
+bool TryResolveSettingsRolloutPageState(
     const DebugUiOverlayConfig& config,
     uintptr_t settings_address,
-    uintptr_t* owner_control_address,
-    uintptr_t* rollout_child_control_address,
-    std::uint8_t* rollout_child_enabled_byte) {
-    if (owner_control_address != nullptr) {
-        *owner_control_address = 0;
+    SettingsRolloutPageObservation* observation) {
+    if (observation == nullptr) {
+        return false;
     }
-    if (rollout_child_control_address != nullptr) {
-        *rollout_child_control_address = 0;
-    }
-    if (rollout_child_enabled_byte != nullptr) {
-        *rollout_child_enabled_byte = 0xff;
-    }
+    *observation = SettingsRolloutPageObservation{};
     if (settings_address == 0) {
         return false;
     }
+
+    float panel_left = 0.0f;
+    float panel_top = 0.0f;
+    float panel_right = 0.0f;
+    float panel_bottom = 0.0f;
+    if (!TryReadSettingsPanelRect(
+            config,
+            settings_address,
+            &panel_left,
+            &panel_top,
+            &panel_right,
+            &panel_bottom)) {
+        return false;
+    }
+    const auto panel_width = panel_right - panel_left;
 
     std::vector<uintptr_t> root_controls;
     if (!TryReadSettingsControlPointers(config, settings_address, &root_controls) || root_controls.empty()) {
         return false;
     }
 
-    uintptr_t owner_context_settings_address = 0;
-    const auto owner_context_global_address = GetUiSurfaceAddress("settings", "owner_context_global");
-    if (owner_context_global_address != 0) {
-        (void)TryReadResolvedGamePointer(owner_context_global_address, &owner_context_settings_address);
-    }
+    const auto normalized_settings_label =
+        NormalizeSemanticUiToken("GAME SETTINGS");
     const auto normalized_target_label = NormalizeSemanticUiToken("CUSTOMIZE KEYBOARD");
-
     for (const auto root_control : root_controls) {
         if (root_control == 0) {
             continue;
@@ -404,36 +449,97 @@ bool TryIsCustomizeKeyboardRolloutExpanded(
         if (!TryReadCachedObjectLabel(root_control, &control_label)) {
             control_label = ResolveSettingsControlLabel(config, root_control);
         }
-        if (NormalizeSemanticUiToken(control_label) != normalized_target_label) {
+        const auto normalized_label = NormalizeSemanticUiToken(control_label);
+        if (normalized_label == normalized_settings_label) {
+            if (observation->settings_page_control != 0) {
+                Log(
+                    "Debug UI settings rollout page classification refused "
+                    "duplicate GAME SETTINGS roots. settings=" +
+                    HexString(settings_address));
+                return false;
+            }
+            observation->settings_page_control = root_control;
             continue;
         }
-
-        std::vector<uintptr_t> child_controls;
-        (void)TryReadSettingsControlChildPointers(config, root_control, &child_controls);
-        if (child_controls.size() <= 2 || child_controls[2] == 0) {
+        if (normalized_label != normalized_target_label) {
+            continue;
+        }
+        if (observation->customize_page_control != 0) {
+            Log(
+                "Debug UI settings rollout page classification refused "
+                "duplicate CUSTOMIZE KEYBOARD roots. settings=" +
+                HexString(settings_address));
             return false;
         }
-
-        const auto rollout_child_control = child_controls[2];
-        std::uint8_t rollout_child_enabled = 0xff;
-        if (!TryReadByteValueDirect(
-                rollout_child_control + config.settings_control_enabled_byte_offset,
-                &rollout_child_enabled)) {
-            return false;
-        }
-
-        if (owner_control_address != nullptr) {
-            *owner_control_address = root_control;
-        }
-        if (rollout_child_control_address != nullptr) {
-            *rollout_child_control_address = rollout_child_control;
-        }
-        if (rollout_child_enabled_byte != nullptr) {
-            *rollout_child_enabled_byte = rollout_child_enabled;
-        }
-
-        return owner_context_settings_address == settings_address && rollout_child_enabled == 0;
+        observation->customize_page_control = root_control;
     }
 
-    return false;
+    if (observation->settings_page_control == 0 ||
+        observation->customize_page_control == 0) {
+        return false;
+    }
+
+    std::vector<uintptr_t> child_controls;
+    (void)TryReadSettingsControlChildPointers(
+        config,
+        observation->customize_page_control,
+        &child_controls);
+    if (child_controls.size() <= 2 || child_controls[2] == 0) {
+        return false;
+    }
+
+    observation->customize_rollout_child_control = child_controls[2];
+    if (!TryReadByteValueDirect(
+            observation->customize_rollout_child_control +
+                config.settings_control_enabled_byte_offset,
+            &observation->customize_rollout_child_enabled)) {
+        return false;
+    }
+
+    const auto settings_at_origin = IsSettingsRolloutPageAtLocalOrigin(
+        config,
+        observation->settings_page_control,
+        panel_width);
+    const auto controls_at_origin = IsSettingsRolloutPageAtLocalOrigin(
+        config,
+        observation->customize_page_control,
+        panel_width);
+    if (settings_at_origin == controls_at_origin) {
+        return false;
+    }
+
+    observation->page = controls_at_origin
+        ? SettingsRolloutPageState::Controls
+        : SettingsRolloutPageState::Settings;
+    return true;
+}
+
+bool TryIsCustomizeKeyboardRolloutExpanded(
+    const DebugUiOverlayConfig& config,
+    uintptr_t settings_address,
+    uintptr_t* owner_control_address,
+    uintptr_t* rollout_child_control_address,
+    std::uint8_t* rollout_child_enabled_byte) {
+    SettingsRolloutPageObservation observation;
+    if (!TryResolveSettingsRolloutPageState(
+            config,
+            settings_address,
+            &observation) ||
+        observation.page != SettingsRolloutPageState::Controls) {
+        return false;
+    }
+
+    if (owner_control_address != nullptr) {
+        *owner_control_address = observation.customize_page_control;
+    }
+    if (rollout_child_control_address != nullptr) {
+        *rollout_child_control_address =
+            observation.customize_rollout_child_control;
+    }
+    if (rollout_child_enabled_byte != nullptr) {
+        *rollout_child_enabled_byte =
+            observation.customize_rollout_child_enabled;
+    }
+
+    return true;
 }

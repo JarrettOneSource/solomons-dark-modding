@@ -868,8 +868,8 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "v2.6.spec-version-and-stop-changelog",
         PATH_FORK,
         "docs/reverse-engineering/native-menu-settlement.md",
-        "# Native menu settlement specification v2.6",
-        "# Native menu settlement specification v2.5",
+        "# Native menu settlement specification v2.9",
+        "# Native menu settlement specification v2.8",
         "the versioned settlement specification no longer records the narrow "
         "path-dependent-core rule and the STOP that caused it",
     ),
@@ -1088,10 +1088,11 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         SURFACE_AGREEMENT,
         "SolomonDarkModLoader/src/debug_ui_overlay/"
         "overlay_surface_builders_settings_surfaces.inl",
-        "if (has_current_settings_panel_art) {",
-        "if (false && has_current_settings_panel_art) {",
-        "Settings modal classification no longer uses its complete "
-        "current-frame panel-art signature to bridge the retained one-shot owner",
+        "if (HasCurrentSettingsPanelArt(current_elements)) {",
+        "if (false && HasCurrentSettingsPanelArt(current_elements)) {",
+        "cached Settings-family art no longer comes from one complete live "
+        "panel suffix, excludes ambient title draws, stays owner/page scoped, "
+        "and replays after the live underlay",
     ),
     StaticMutation(
         "recorder.settings-idle-owner-retention",
@@ -1114,8 +1115,38 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "overlay_surface_builders_settings_surfaces.inl",
         "if (!HasCurrentSettingsPanelArt(art_elements)) {",
         "if (false && !HasCurrentSettingsPanelArt(art_elements)) {",
-        "Controls classification no longer requires current-frame settings "
-        "panel art plus a live expanded rollout",
+        "Controls classification no longer requires complete cached/live panel "
+        "art, the active native rollout page, and its machine-measured Back control",
+    ),
+    StaticMutation(
+        "recorder.settings-page-single-active",
+        SURFACE_AGREEMENT,
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "overlay_surface_builders_settings_helpers.inl",
+        "if (settings_at_origin == controls_at_origin) {",
+        "if (settings_at_origin != controls_at_origin) {",
+        "Settings and Controls can again be selected without one unique native "
+        "rollout page occupying the live local origin",
+    ),
+    StaticMutation(
+        "recorder.settings-cached-overlay-owner",
+        SURFACE_AGREEMENT,
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "overlay_surface_builders_settings_surfaces.inl",
+        "active_cache->settings_address != settings_address",
+        "active_cache->settings_address == settings_address",
+        "cached Settings-family art no longer comes from one complete live "
+        "panel suffix, excludes ambient title draws, stays owner/page scoped, "
+        "and replays after the live underlay",
+    ),
+    StaticMutation(
+        "recorder.controls-live-back-action",
+        SURFACE_AGREEMENT,
+        "config/binary-layout.ini",
+        ",controls.back",
+        "",
+        "the live Controls Back widget is no longer a configured interactive "
+        "action backed by the native Settings done control",
     ),
     StaticMutation(
         "recorder.settings-live-rollout-affordance-pairing",

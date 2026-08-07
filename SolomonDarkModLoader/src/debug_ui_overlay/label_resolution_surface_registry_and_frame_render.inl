@@ -165,7 +165,8 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
     auto raw_elements = TakeObservedFrameElements();
     auto exact_text_elements = TakeExactTextFrameElements();
     auto exact_control_elements = TakeExactControlFrameElements();
-    auto menu_art_elements = TakeCapturedMenuArtFrame();
+    auto menu_art_elements = ResolveSettingsFamilyMenuArtElements(
+        TakeCapturedMenuArtFrame());
     auto elements = FilterElementsToDominantSurface(raw_elements);
     std::vector<OverlayRenderElement> semantic_surface_elements;
     const auto quick_panel_render_elements =

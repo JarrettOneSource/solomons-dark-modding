@@ -132,11 +132,20 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         self.assertIn("capture_current_layout", bindings)
         self.assertIn("sd.ui.capture_current_layout", recorder)
 
-    def test_settings_modal_uses_current_frame_art_to_retain_its_owner(self) -> None:
+    def test_settings_family_replays_only_machine_measured_cached_panel_art(self) -> None:
         builders = read(
             "SolomonDarkModLoader/src/debug_ui_overlay/"
             "overlay_surface_builders_settings_surfaces.inl"
         )
+        helpers = read(
+            "SolomonDarkModLoader/src/debug_ui_overlay/"
+            "overlay_surface_builders_settings_helpers.inl"
+        )
+        frame = read(
+            "SolomonDarkModLoader/src/debug_ui_overlay/"
+            "label_resolution_surface_registry_and_frame_render.inl"
+        )
+        binary_layout = read("config/binary-layout.ini")
         tracking = read(
             "SolomonDarkModLoader/src/debug_ui_overlay/"
             "tracked_surfaces_and_main_menu.inl"
@@ -154,21 +163,59 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             builders,
             r"(?s)HasCurrentSettingsPanelArt.*?"
             r'"ControlPanel\.0".*?"ControlPanel\.8".*?"ControlPanel\.18".*?'
-            r"has_current_settings_panel_art.*?"
-            r"if \(has_current_settings_panel_art\).*?"
-            r"TryReadTrackedSettingsRender\(&settings_address\).*?"
-            r"else if \(!TryGetActiveSettingsRender\(&settings_address\)\)",
-            "current-frame settings panel art must bridge the stock modal's one-shot "
-            "render helper without turning the retained owner into timeless evidence",
+            r"ResolveSettingsFamilyMenuArtElements.*?"
+            r"TryResolveSettingsRolloutPageState.*?"
+            r"if \(HasCurrentSettingsPanelArt\(current_elements\)\).*?"
+            r"overlay_first_draw_order.*?"
+            r"element\.art_id\.rfind\(\"Title\.\", 0\).*?"
+            r"active_cache->settings_address = settings_address;.*?"
+            r"HasAnyCurrentSettingsPanelArt\(current_elements\).*?"
+            r"active_cache->settings_address != settings_address.*?"
+            r"element\.draw_order = next_draw_order\+\+",
+            "cached Settings-family panel art must originate in a complete live "
+            "panel draw, exclude ambient title draws, remain owner/page scoped, "
+            "and be replayed after the live underlay",
+        )
+        self.assertRegex(
+            helpers,
+            r"(?s)TryResolveSettingsRolloutPageState.*?"
+            r"duplicate GAME SETTINGS roots.*?"
+            r"duplicate CUSTOMIZE KEYBOARD roots.*?"
+            r"IsSettingsRolloutPageAtLocalOrigin.*?"
+            r"if \(settings_at_origin == controls_at_origin\).*?return false;.*?"
+            r"SettingsRolloutPageState::Controls.*?"
+            r"SettingsRolloutPageState::Settings",
+            "Settings and Controls must be selected from one unique native rollout "
+            "page at the live local origin, never from a stale render timestamp",
+        )
+        self.assertRegex(
+            frame,
+            r"ResolveSettingsFamilyMenuArtElements\(\s*"
+            r"TakeCapturedMenuArtFrame\(\)\)",
+            "the frame classifier must consume the owner/page-scoped Settings-family "
+            "art resolver rather than raw one-shot draws",
         )
         self.assertRegex(
             builders,
             r"(?s)TryBuildControlsOverlayRenderElements\(.*?"
             r"HasCurrentSettingsPanelArt\(art_elements\).*?"
             r"TryReadTrackedSettingsRender\(&settings_address\).*?"
-            r"TryIsCustomizeKeyboardRolloutExpanded",
-            "controls classification must require current-frame settings panel art "
-            "and the live expanded rollout on the retained settings owner",
+            r"TryIsCustomizeKeyboardRolloutExpanded.*?"
+            r"TryReadSettingsDoneButtonRect.*?"
+            r"back_button\.surface_id = \"controls\";.*?"
+            r"back_button\.label = \"BACK\";.*?"
+            r"ResolveConfiguredUiActionId\(\s*\"controls\"",
+            "Controls classification must require the complete cached/live panel, "
+            "the active native rollout page, and its machine-measured Back control",
+        )
+        self.assertRegex(
+            binary_layout,
+            r"(?s)\[surface\.controls\].*?actions=.*?controls\.back.*?"
+            r"\[action\.controls\.back\]\s*"
+            r"surface=controls\s*label=BACK\s*owner=0x005D9A50\s*"
+            r"handler=0x005D8120\s*control_offset=0x00B8",
+            "the measured native Controls Back widget must remain a configured "
+            "interactive action instead of a fixture-only label",
         )
 
     def test_settings_modal_retains_one_shot_rows_only_for_its_live_owner(self) -> None:

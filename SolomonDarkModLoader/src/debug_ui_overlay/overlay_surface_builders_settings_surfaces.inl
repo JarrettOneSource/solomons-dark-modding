@@ -19,6 +19,143 @@ bool HasCurrentSettingsPanelArt(
         });
 }
 
+bool HasAnyCurrentSettingsPanelArt(
+    const std::vector<CapturedMenuArtElement>& art_elements) {
+    return std::any_of(
+        art_elements.begin(),
+        art_elements.end(),
+        [](const CapturedMenuArtElement& element) {
+            return element.visible &&
+                element.art_id.rfind("ControlPanel.", 0) == 0;
+        });
+}
+
+struct CachedSettingsFamilyOverlayArt {
+    uintptr_t settings_address = 0;
+    std::vector<CapturedMenuArtElement> elements;
+};
+
+std::vector<CapturedMenuArtElement> ResolveSettingsFamilyMenuArtElements(
+    std::vector<CapturedMenuArtElement> current_elements) {
+    static CachedSettingsFamilyOverlayArt s_settings_overlay_art;
+    static CachedSettingsFamilyOverlayArt s_controls_overlay_art;
+
+    const auto* config = TryGetDebugUiOverlayConfig();
+    uintptr_t settings_address = 0;
+    if (config == nullptr ||
+        !TryReadTrackedSettingsRender(&settings_address) ||
+        settings_address == 0) {
+        s_settings_overlay_art = CachedSettingsFamilyOverlayArt{};
+        s_controls_overlay_art = CachedSettingsFamilyOverlayArt{};
+        return current_elements;
+    }
+
+    float panel_left = 0.0f;
+    float panel_top = 0.0f;
+    float panel_right = 0.0f;
+    float panel_bottom = 0.0f;
+    if (!TryReadSettingsPanelRect(
+            *config,
+            settings_address,
+            &panel_left,
+            &panel_top,
+            &panel_right,
+            &panel_bottom)) {
+        s_settings_overlay_art = CachedSettingsFamilyOverlayArt{};
+        s_controls_overlay_art = CachedSettingsFamilyOverlayArt{};
+        return current_elements;
+    }
+
+    SettingsRolloutPageObservation page_observation;
+    if (!TryResolveSettingsRolloutPageState(
+            *config,
+            settings_address,
+            &page_observation)) {
+        // During the stock horizontal page transition neither rollout owns
+        // the local origin. Preserve both caches for this still-live owner,
+        // but classify no Settings-family surface until one page arrives.
+        return current_elements;
+    }
+
+    auto* active_cache =
+        page_observation.page == SettingsRolloutPageState::Controls
+        ? &s_controls_overlay_art
+        : &s_settings_overlay_art;
+    if (HasCurrentSettingsPanelArt(current_elements)) {
+        const auto first_panel_art = std::min_element(
+            current_elements.begin(),
+            current_elements.end(),
+            [](const CapturedMenuArtElement& left,
+               const CapturedMenuArtElement& right) {
+                const auto left_is_panel =
+                    left.visible &&
+                    left.art_id.rfind("ControlPanel.", 0) == 0;
+                const auto right_is_panel =
+                    right.visible &&
+                    right.art_id.rfind("ControlPanel.", 0) == 0;
+                if (left_is_panel != right_is_panel) {
+                    return left_is_panel;
+                }
+                return left.draw_order < right.draw_order;
+            });
+        if (first_panel_art != current_elements.end() &&
+            first_panel_art->visible &&
+            first_panel_art->art_id.rfind("ControlPanel.", 0) == 0) {
+            const auto overlay_first_draw_order =
+                first_panel_art->draw_order;
+            std::vector<CapturedMenuArtElement> overlay_elements;
+            for (const auto& element : current_elements) {
+                if (element.draw_order >= overlay_first_draw_order) {
+                    overlay_elements.push_back(element);
+                }
+            }
+
+            const auto includes_title_backdrop = std::any_of(
+                overlay_elements.begin(),
+                overlay_elements.end(),
+                [](const CapturedMenuArtElement& element) {
+                    return element.art_id.rfind("Title.", 0) == 0;
+                });
+            if (!overlay_elements.empty() && !includes_title_backdrop) {
+                active_cache->settings_address = settings_address;
+                active_cache->elements = std::move(overlay_elements);
+            } else {
+                Log(
+                    "Debug UI settings-family cached-art classification "
+                    "refused an overlay suffix containing title backdrop "
+                    "draws. settings=" + HexString(settings_address));
+            }
+        }
+        return current_elements;
+    }
+
+    if (HasAnyCurrentSettingsPanelArt(current_elements) ||
+        active_cache->settings_address != settings_address ||
+        active_cache->elements.empty()) {
+        return current_elements;
+    }
+
+    auto cached_overlay = active_cache->elements;
+    std::stable_sort(
+        cached_overlay.begin(),
+        cached_overlay.end(),
+        [](const CapturedMenuArtElement& left,
+           const CapturedMenuArtElement& right) {
+            return left.draw_order < right.draw_order;
+        });
+    std::uint32_t next_draw_order = 0;
+    for (const auto& element : current_elements) {
+        next_draw_order = (std::max)(
+            next_draw_order,
+            element.draw_order + 1);
+    }
+    for (auto& element : cached_overlay) {
+        element.draw_order = next_draw_order++;
+        current_elements.push_back(std::move(element));
+    }
+    return current_elements;
+}
+
 bool TryBuildSettingsRolloutMarkerElements(
     const DebugUiOverlayConfig& config,
     uintptr_t settings_address,
@@ -237,7 +374,7 @@ std::vector<OverlayRenderElement> TryBuildControlsOverlayRenderElements(
     constexpr float kControlsRowStep = 22.0f;
 
     std::vector<OverlayRenderElement> render_elements;
-    render_elements.reserve(controls_surface->action_ids.size() + 1);
+    render_elements.reserve(controls_surface->action_ids.size() + 2);
 
     OverlayRenderElement panel;
     panel.surface_id = "controls.panel";
@@ -280,6 +417,44 @@ std::vector<OverlayRenderElement> TryBuildControlsOverlayRenderElements(
         ++rendered_action_count;
     }
 
+    float back_left = 0.0f;
+    float back_top = 0.0f;
+    float back_right = 0.0f;
+    float back_bottom = 0.0f;
+    uintptr_t back_button_address = 0;
+    (void)TryGetSettingsDoneButtonAddress(
+        *config,
+        settings_address,
+        &back_button_address);
+    if (!TryReadSettingsDoneButtonRect(
+            *config,
+            settings_address,
+            &back_left,
+            &back_top,
+            &back_right,
+            &back_bottom)) {
+        return {};
+    }
+
+    OverlayRenderElement back_button;
+    back_button.surface_id = "controls";
+    back_button.surface_title = title;
+    back_button.label = "BACK";
+    back_button.action_id = ResolveConfiguredUiActionId(
+        "controls",
+        back_button.label);
+    if (back_button.action_id.empty()) {
+        return {};
+    }
+    back_button.source_object_ptr = back_button_address;
+    back_button.surface_object_ptr = settings_address;
+    back_button.show_label = true;
+    back_button.left = back_left;
+    back_button.top = back_top;
+    back_button.right = back_right;
+    back_button.bottom = back_bottom;
+    render_elements.push_back(std::move(back_button));
+
     static int s_controls_surface_logs_remaining = 8;
     if (s_controls_surface_logs_remaining > 0) {
         --s_controls_surface_logs_remaining;
@@ -305,18 +480,18 @@ std::vector<OverlayRenderElement> TryBuildSettingsOverlayRenderElements(
         return {};
     }
 
-    const auto has_current_settings_panel_art =
-        HasCurrentSettingsPanelArt(art_elements);
-
     uintptr_t settings_address = 0;
-    if (has_current_settings_panel_art) {
-        // Settings_Render is a one-shot modal owner call. The complete panel
-        // art signature is captured afresh from this frame; the panel read
-        // below proves that the retained object is still runnable memory.
-        if (!TryReadTrackedSettingsRender(&settings_address)) {
-            return {};
-        }
-    } else if (!TryGetActiveSettingsRender(&settings_address)) {
+    if (!HasCurrentSettingsPanelArt(art_elements) ||
+        !TryReadTrackedSettingsRender(&settings_address)) {
+        return {};
+    }
+
+    SettingsRolloutPageObservation page_observation;
+    if (!TryResolveSettingsRolloutPageState(
+            *config,
+            settings_address,
+            &page_observation) ||
+        page_observation.page != SettingsRolloutPageState::Settings) {
         return {};
     }
 
