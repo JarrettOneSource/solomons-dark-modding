@@ -57,16 +57,22 @@ def resolve_settlement_trace(
         )
         if path.is_file()
     }
-    if len(candidates) != 1:
+    matching_candidates = {
+        path
+        for path in candidates
+        if path.stat().st_size == receipt.get("bytes")
+        and file_sha256(path) == receipt.get("sha256")
+    }
+    if not matching_candidates:
         raise SettlementV2Error(
-            f"{label} settlement trace is absent or ambiguous: "
-            + ", ".join(sorted(str(path) for path in candidates))
+            f"{label} settlement trace receipt does not match any trace"
         )
-    path = candidates.pop()
-    if path.stat().st_size != receipt.get("bytes") or file_sha256(path) != receipt.get(
-        "sha256"
-    ):
-        raise SettlementV2Error(f"{label} settlement trace receipt is false")
+    if len(matching_candidates) != 1:
+        raise SettlementV2Error(
+            f"{label} settlement trace receipt resolves ambiguously: "
+            + ", ".join(sorted(str(path) for path in matching_candidates))
+        )
+    path = matching_candidates.pop()
     trace = read_object(path)
     samples = trace.get("settled_window_samples")
     if not isinstance(samples, list) or len(samples) < 40:

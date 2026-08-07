@@ -73,6 +73,8 @@ class NativeMenuAnimationConfirmationTests(unittest.TestCase):
             trace_path,
             {
                 "schema": "solomon-dark-native-menu-settlement-trace-v2",
+                "label": name,
+                "instance": instance,
                 "settled_window_samples": samples,
             },
         )
@@ -147,6 +149,47 @@ class NativeMenuAnimationConfirmationTests(unittest.TestCase):
             with self.assertRaisesRegex(
                 SettlementV2Error,
                 "confirmation fixture layout is not derived from its settlement trace",
+            ):
+                attach(
+                    primary,
+                    confirmation,
+                    root / "screen.confirmation.json",
+                    root,
+                )
+
+    def test_trace_receipt_disambiguates_filename_collision_only_by_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            primary_dir = root / "primary"
+            confirmation_dir = root / "confirmation"
+            primary_dir.mkdir()
+            confirmation_dir.mkdir()
+            primary = self._recording(
+                primary_dir, "screen", "menufx-a", 101
+            )
+            confirmation = self._recording(
+                confirmation_dir, "screen", "menufx-b", 202
+            )
+
+            attach(
+                primary,
+                confirmation,
+                root / "screen.confirmation.json",
+                root,
+            )
+
+            duplicate = root / "duplicate" / "screen.settlement.json"
+            duplicate.parent.mkdir()
+            duplicate.write_bytes(
+                primary_dir.joinpath("screen.settlement.json").read_bytes()
+            )
+            updated_primary = json.loads(primary.read_text(encoding="utf-8"))
+            updated_primary["header"].pop("animation_confirmation")
+            _write_json(primary, updated_primary)
+            (root / "screen.confirmation.json").unlink()
+            with self.assertRaisesRegex(
+                SettlementV2Error,
+                "primary settlement trace receipt resolves ambiguously",
             ):
                 attach(
                     primary,
