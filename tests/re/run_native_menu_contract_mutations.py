@@ -1133,6 +1133,22 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "destination cache instead of the measured Controls page difference",
     ),
     StaticMutation(
+        "recorder.controls-quarantines-unresolved-settings-panel",
+        SURFACE_AGREEMENT,
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "overlay_surface_builders_settings_surfaces.inl",
+        "cache_state.settings.settings_address = settings_address;\n"
+        "            cache_state.settings.elements =\n"
+        "                std::move(transition_overlay);\n"
+        "            cache_state.settings_underlay = current_elements;\n"
+        "            cache_state.transition = CachedSettingsFamilyOverlayArt{};",
+        "cache_state.transition.settings_address = settings_address;\n"
+        "            cache_state.transition.elements =\n"
+        "                std::move(transition_overlay);",
+        "an unresolved outgoing Settings panel can enter the destination "
+        "transition cache and be adopted as Controls art",
+    ),
+    StaticMutation(
         "recorder.controls-current-frame-rollout",
         SURFACE_AGREEMENT,
         "SolomonDarkModLoader/src/debug_ui_overlay/"

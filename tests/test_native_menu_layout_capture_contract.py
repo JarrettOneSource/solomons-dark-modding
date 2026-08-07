@@ -226,6 +226,20 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             "Controls destination cache",
         )
         self.assertRegex(
+            builders,
+            r"(?s)if \(!TryResolveSettingsRolloutPageState\(.*?"
+            r"TryExtractSettingsFamilyOverlayArt\(\s*"
+            r"current_elements,\s*&transition_overlay\)\) \{\s*"
+            r"cache_state\.settings\.settings_address = settings_address;\s*"
+            r"cache_state\.settings\.elements =\s*"
+            r"std::move\(transition_overlay\);\s*"
+            r"cache_state\.settings_underlay = current_elements;\s*"
+            r"cache_state\.transition = CachedSettingsFamilyOverlayArt\{\};\s*"
+            r"\} else if \(TryExtractControlsPageArtDifference",
+            "an unresolved outgoing Settings panel must remain quarantined in "
+            "the Settings cache instead of becoming Controls transition art",
+        )
+        self.assertRegex(
             helpers,
             r"(?s)TryResolveSettingsRolloutPageState.*?"
             r"duplicate GAME SETTINGS roots.*?"

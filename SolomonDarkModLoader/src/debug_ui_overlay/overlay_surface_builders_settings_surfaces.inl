@@ -237,9 +237,11 @@ std::vector<CapturedMenuArtElement> ResolveSettingsFamilyMenuArtElements(
         if (TryExtractSettingsFamilyOverlayArt(
                 current_elements,
                 &transition_overlay)) {
-            cache_state.transition.settings_address = settings_address;
-            cache_state.transition.elements =
+            cache_state.settings.settings_address = settings_address;
+            cache_state.settings.elements =
                 std::move(transition_overlay);
+            cache_state.settings_underlay = current_elements;
+            cache_state.transition = CachedSettingsFamilyOverlayArt{};
         } else if (TryExtractControlsPageArtDifference(
                 cache_state.settings_underlay,
                 current_elements,
