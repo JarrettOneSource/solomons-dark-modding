@@ -395,12 +395,13 @@ std::vector<CapturedMenuArtElement> ResolveSettingsFamilyMenuArtElements(
     if (page_observation.page == SettingsRolloutPageState::Controls &&
         (active_cache->settings_address != settings_address ||
          active_cache->elements.empty())) {
-        MarkSettingsFamilyPageTransitionPending(&cache_state);
-        const auto* last_cache =
-            cache_state.last_page == SettingsRolloutPageState::Controls
-            ? &cache_state.controls
-            : &cache_state.settings;
-        replay_cached_overlay(*last_cache, settings_address);
+        // The Controls modal is painted by its own nested loop.  Its native
+        // rollout root reaches the unique local origin even when the
+        // one-shot Sprite draw never enters this frame's art cache.  That
+        // machine state is the page identity; an unrelated draw cache must
+        // not veto it.
+        cache_state.last_page = page_observation.page;
+        cache_state.transition_started_at = 0;
         return current_elements;
     }
     cache_state.last_page = page_observation.page;
@@ -573,12 +574,9 @@ std::vector<OverlayRenderElement> TryBuildControlsOverlayRenderElements(
         settings_address == 0) {
         return {};
     }
-    const auto& cache_state = GetSettingsFamilyOverlayArtCacheState();
     if (
         ResolveSettingsRolloutPageForCapture(*config, settings_address) !=
-            SettingsRolloutPageState::Controls ||
-        cache_state.controls.settings_address != settings_address ||
-        cache_state.controls.elements.empty()
+            SettingsRolloutPageState::Controls
     ) {
         return {};
     }

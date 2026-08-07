@@ -1157,18 +1157,19 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "                !retain_settings_tracking) {",
         "if (entry.clear_settings_tracking) {",
         "the main-menu underlay can retire the Settings owner before a visible "
-        "Controls frame supplies its measured destination art",
+        "Controls page reaches its unique native local origin",
     ),
     StaticMutation(
         "recorder.controls-current-frame-rollout",
         SURFACE_AGREEMENT,
         "SolomonDarkModLoader/src/debug_ui_overlay/"
         "overlay_surface_builders_settings_surfaces.inl",
-        "cache_state.controls.elements.empty()",
-        "false && cache_state.controls.elements.empty()",
-        "Controls classification no longer requires measured page-difference "
-        "art for the active native rollout owner and its machine-measured Back "
-        "control",
+        "SettingsRolloutPageState::Controls\n    ) {\n        return {};",
+        "SettingsRolloutPageState::Controls ||\n"
+        "        GetSettingsFamilyOverlayArtCacheState().controls.elements.empty()\n"
+        "    ) {\n        return {};",
+        "Controls classification can again wait for unrelated one-shot art "
+        "after the native Controls page is uniquely at the local origin",
     ),
     StaticMutation(
         "recorder.settings-page-single-active",
@@ -1196,8 +1197,10 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         SURFACE_AGREEMENT,
         "SolomonDarkModLoader/src/debug_ui_overlay/"
         "overlay_surface_builders_settings_surfaces.inl",
-        "cache_state.last_page != page_observation.page",
-        "cache_state.last_page == page_observation.page",
+        "if (cache_state.last_page != page_observation.page &&\n"
+        "        cache_state.transition.settings_address == settings_address &&",
+        "if (cache_state.last_page == page_observation.page &&\n"
+        "        cache_state.transition.settings_address == settings_address &&",
         "Settings-family cached page art can leak across an owner or "
         "transition, or the known source is not replayed while neither native "
         "page owns the origin",

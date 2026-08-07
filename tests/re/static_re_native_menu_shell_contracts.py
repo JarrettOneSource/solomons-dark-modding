@@ -1287,6 +1287,18 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
     )
     _require_regex(
         settings_builder,
+        r"if \(cache_state\.last_page != page_observation\.page &&\s*"
+        r"cache_state\.transition\.settings_address == settings_address &&\s*"
+        r"!cache_state\.transition\.elements\.empty\(\)\) \{\s*"
+        r"active_cache->settings_address = settings_address;\s*"
+        r"active_cache->elements =\s*"
+        r"std::move\(cache_state\.transition\.elements\);",
+        "Settings-family cached page art can leak across an owner or "
+        "transition, or the known source is not replayed while neither native "
+        "page owns the origin",
+    )
+    _require_regex(
+        settings_builder,
         r"auto\* active_cache =.*?"
         r"if \(page_observation\.page == "
         r"SettingsRolloutPageState::Settings &&\s*"
@@ -1319,14 +1331,15 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         r"page_observation\.page == SettingsRolloutPageState::Controls &&\s*"
         r"\(active_cache->settings_address != settings_address \|\|\s*"
         r"active_cache->elements\.empty\(\)\).*?"
-        r"MarkSettingsFamilyPageTransitionPending\(&cache_state\).*?"
+        r"cache_state\.last_page = page_observation\.page;.*?"
+        r"cache_state\.transition_started_at = 0;.*?"
         r"retain_settings_tracking =.*?"
         r"std::strcmp\(entry\.surface_id, \"main_menu\"\) == 0 &&\s*"
         r"ShouldRetainSettingsTrackingAcrossMainMenuFallback\(\).*?"
         r"if \(entry\.clear_settings_tracking &&\s*"
         r"!retain_settings_tracking\)",
         "the main-menu underlay can retire the Settings owner before a visible "
-        "Controls frame supplies its measured destination art",
+        "Controls page reaches its unique native local origin",
     )
     _require_regex(
         settings_tracking,
@@ -1355,25 +1368,32 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         "the frame classifier bypasses the owner/page-scoped Settings-family "
         "cached-art resolver",
     )
-    _require_regex(
-        settings_builder,
+    controls_builder_match = re.search(
         r"TryBuildControlsOverlayRenderElements\(.*?"
         r"TryReadTrackedSettingsRender\(&settings_address\).*?"
         r"if \(\s*"
         r"ResolveSettingsRolloutPageForCapture\(\*config, settings_address\) !=\s*"
-        r"SettingsRolloutPageState::Controls \|\|\s*"
-        r"cache_state\.controls\.settings_address != settings_address \|\|\s*"
-        r"cache_state\.controls\.elements\.empty\(\)\s*"
+        r"SettingsRolloutPageState::Controls.*?"
         r"\) \{\s*return \{\};\s*\}.*?"
         r"TryIsCustomizeKeyboardRolloutExpanded.*?"
         r"TryReadSettingsDoneButtonRect.*?"
         r"back_button\.surface_id = \"controls\";.*?"
         r"back_button\.label = \"BACK\";.*?"
-        r"ResolveConfiguredUiActionId\(\s*\"controls\"",
-        "Controls classification no longer requires measured page-difference "
-        "art for the active native rollout owner and its machine-measured Back "
-        "control",
+        r"ResolveConfiguredUiActionId\(\s*\"controls\".*?"
+        r"return render_elements;\s*\}",
+        settings_builder,
+        flags=re.DOTALL,
     )
+    if controls_builder_match is None:
+        raise StaticReTestFailure(
+            "Controls classification no longer requires the unique live native "
+            "rollout page and its machine-measured Back control"
+        )
+    if "controls.elements" in controls_builder_match.group(0):
+        raise StaticReTestFailure(
+            "Controls classification can again wait for unrelated one-shot art "
+            "after the native Controls page is uniquely at the local origin"
+        )
     _require_regex(
         binary_layout,
         r"\[surface\.controls\].*?actions=.*?controls\.back.*?"

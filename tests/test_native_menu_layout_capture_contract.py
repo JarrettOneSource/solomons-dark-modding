@@ -218,6 +218,17 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         )
         self.assertRegex(
             builders,
+            r"(?s)if \(cache_state\.last_page != page_observation\.page &&\s*"
+            r"cache_state\.transition\.settings_address == settings_address &&\s*"
+            r"!cache_state\.transition\.elements\.empty\(\)\) \{\s*"
+            r"active_cache->settings_address = settings_address;\s*"
+            r"active_cache->elements =\s*"
+            r"std::move\(cache_state\.transition\.elements\);",
+            "Settings-family cached page art must be adopted only when the "
+            "machine-measured destination differs from the known source page",
+        )
+        self.assertRegex(
+            builders,
             r"(?s)auto\* active_cache =.*?"
             r"if \(page_observation\.page == "
             r"SettingsRolloutPageState::Settings &&\s*"
@@ -250,14 +261,15 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             r"page_observation\.page == SettingsRolloutPageState::Controls &&\s*"
             r"\(active_cache->settings_address != settings_address \|\|\s*"
             r"active_cache->elements\.empty\(\)\).*?"
-            r"MarkSettingsFamilyPageTransitionPending\(&cache_state\).*?"
+            r"cache_state\.last_page = page_observation\.page;.*?"
+            r"cache_state\.transition_started_at = 0;.*?"
             r"retain_settings_tracking =.*?"
             r"std::strcmp\(entry\.surface_id, \"main_menu\"\) == 0 &&\s*"
             r"ShouldRetainSettingsTrackingAcrossMainMenuFallback\(\).*?"
             r"if \(entry\.clear_settings_tracking &&\s*"
             r"!retain_settings_tracking\)",
             "the main-menu underlay must not retire the Settings owner during "
-            "the bounded unresolved handoff to a measured Controls frame",
+            "the bounded handoff to a uniquely resolved native Controls page",
         )
         self.assertRegex(
             helpers,
@@ -278,24 +290,31 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             "the frame classifier must consume the owner/page-scoped Settings-family "
             "art resolver rather than raw one-shot draws",
         )
-        self.assertRegex(
-            builders,
+        controls_builder = re.search(
             r"(?s)TryBuildControlsOverlayRenderElements\(.*?"
             r"TryReadTrackedSettingsRender\(&settings_address\).*?"
             r"if \(\s*"
             r"ResolveSettingsRolloutPageForCapture\(\*config, settings_address\) !=\s*"
-            r"SettingsRolloutPageState::Controls \|\|\s*"
-            r"cache_state\.controls\.settings_address != settings_address \|\|\s*"
-            r"cache_state\.controls\.elements\.empty\(\)\s*"
+            r"SettingsRolloutPageState::Controls.*?"
             r"\) \{\s*return \{\};\s*\}.*?"
             r"TryIsCustomizeKeyboardRolloutExpanded.*?"
             r"TryReadSettingsDoneButtonRect.*?"
             r"back_button\.surface_id = \"controls\";.*?"
             r"back_button\.label = \"BACK\";.*?"
-            r"ResolveConfiguredUiActionId\(\s*\"controls\"",
-            "Controls classification must require a measured page-difference "
-            "cache for the active native rollout owner and its machine-measured "
-            "Back control",
+            r"ResolveConfiguredUiActionId\(\s*\"controls\".*?"
+            r"return render_elements;\s*\}",
+            builders,
+        )
+        self.assertIsNotNone(
+            controls_builder,
+            "Controls classification must require the unique live native rollout "
+            "page and its machine-measured Back control",
+        )
+        self.assertNotIn(
+            "controls.elements",
+            controls_builder.group(0),
+            "Controls classification must not wait for a one-shot art cache after "
+            "the native Controls rollout is uniquely at the local origin",
         )
         self.assertRegex(
             binary_layout,
