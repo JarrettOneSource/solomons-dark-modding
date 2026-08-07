@@ -1088,8 +1088,8 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         SURFACE_AGREEMENT,
         "SolomonDarkModLoader/src/debug_ui_overlay/"
         "overlay_surface_builders_settings_surfaces.inl",
-        "if (HasCurrentSettingsPanelArt(current_elements)) {",
-        "if (false && HasCurrentSettingsPanelArt(current_elements)) {",
+        "!HasCurrentSettingsPanelArt(current_elements)",
+        "false && !HasCurrentSettingsPanelArt(current_elements)",
         "cached Settings-family art no longer comes from one complete live "
         "panel suffix, excludes ambient title draws, stays owner/page scoped, "
         "and replays after the live underlay",
@@ -1135,6 +1135,17 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "overlay_surface_builders_settings_surfaces.inl",
         "active_cache->settings_address != settings_address",
         "active_cache->settings_address == settings_address",
+        "cached Settings-family art no longer comes from one complete live "
+        "panel suffix, excludes ambient title draws, stays owner/page scoped, "
+        "and replays after the live underlay",
+    ),
+    StaticMutation(
+        "recorder.settings-transition-cache-adoption",
+        SURFACE_AGREEMENT,
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "overlay_surface_builders_settings_surfaces.inl",
+        "s_last_page != page_observation.page",
+        "s_last_page == page_observation.page",
         "cached Settings-family art no longer comes from one complete live "
         "panel suffix, excludes ambient title draws, stays owner/page scoped, "
         "and replays after the live underlay",
