@@ -943,7 +943,8 @@ function Wait-NativeMenuLayoutSettlement {
     param(
         [Parameter(Mandatory = $true)][object]$Context,
         [Parameter(Mandatory = $true)][string]$ScreenId,
-        [Parameter(Mandatory = $true)][Diagnostics.Stopwatch]$LatencyClock
+        [Parameter(Mandatory = $true)][Diagnostics.Stopwatch]$LatencyClock,
+        [string]$TransitionalSourceScreen = ""
     )
 
     $sampleCount = 0
@@ -955,6 +956,9 @@ function Wait-NativeMenuLayoutSettlement {
     $structuralPhaseByHash = @{}
     $candidateSamples = [Collections.Generic.List[object]]::new()
     $candidateProbes = [Collections.Generic.List[object]]::new()
+    $transitionSourceProbeCount = 0
+    $consecutiveTransitionSourceProbes = 0
+    $transitionSourceStartedMilliseconds = 0L
 
     while ($LatencyClock.ElapsedMilliseconds -le
         $script:NativeMenuSettleTimeoutMilliseconds) {
@@ -963,8 +967,38 @@ function Wait-NativeMenuLayoutSettlement {
             -ScreenId $ScreenId
         if ($probe.Status -ne "ready") {
             if ($probe.Status -eq "wrong_surface") {
-                throw [string]$probe.Detail
+                $measuredSurface = [string]$probe.SemanticSurface
+                if (
+                    [string]::IsNullOrWhiteSpace(
+                        $TransitionalSourceScreen
+                    ) -or
+                    $measuredSurface -cne $TransitionalSourceScreen
+                ) {
+                    throw [string]$probe.Detail
+                }
+
+                $elapsed = [long]$LatencyClock.ElapsedMilliseconds
+                $transitionSourceProbeCount += 1
+                if ($consecutiveTransitionSourceProbes -eq 0) {
+                    $transitionSourceStartedMilliseconds = $elapsed
+                }
+                $consecutiveTransitionSourceProbes += 1
+                if (
+                    $consecutiveTransitionSourceProbes -ge
+                        $script:NativeMenuSettleConsecutiveSamples -and
+                    ($elapsed - $transitionSourceStartedMilliseconds) -ge
+                        $script:NativeMenuSettleMinimumSpanMilliseconds
+                ) {
+                    throw [string]$probe.Detail
+                }
+                $notReadyCount += 1
+                $lastUnavailable = [string]$probe.Detail
+                Start-Sleep -Milliseconds (
+                    $script:NativeMenuSettlePollMilliseconds
+                )
+                continue
             }
+            $consecutiveTransitionSourceProbes = 0
             if ($probe.Status -eq "busy") {
                 $busyCount += 1
             } else {
@@ -974,6 +1008,7 @@ function Wait-NativeMenuLayoutSettlement {
             Start-Sleep -Milliseconds $script:NativeMenuSettlePollMilliseconds
             continue
         }
+        $consecutiveTransitionSourceProbes = 0
 
         $sampleCount += 1
         $elapsed = [long]$LatencyClock.ElapsedMilliseconds
@@ -1093,6 +1128,7 @@ function Wait-NativeMenuLayoutSettlement {
                 total_semantic_samples = $sampleCount
                 busy_probe_count = $busyCount
                 not_ready_probe_count = $notReadyCount
+                transition_source_probe_count = $transitionSourceProbeCount
                 structural_phase_count = $structuralPhases.Count
                 structural_sha256 = [string]$classification.structural_sha256
                 animated_element_ids = @(
@@ -1170,14 +1206,16 @@ function Get-SettledNativeMenuObservation {
         [Parameter(Mandatory = $true)][object]$Context,
         [Parameter(Mandatory = $true)][string]$ScreenId,
         [Parameter(Mandatory = $true)][string]$FramePath,
-        [Parameter(Mandatory = $true)][Diagnostics.Stopwatch]$LatencyClock
+        [Parameter(Mandatory = $true)][Diagnostics.Stopwatch]$LatencyClock,
+        [string]$TransitionalSourceScreen = ""
     )
 
     while ($true) {
         $settled = Wait-NativeMenuLayoutSettlement `
             -Context $Context `
             -ScreenId $ScreenId `
-            -LatencyClock $LatencyClock
+            -LatencyClock $LatencyClock `
+            -TransitionalSourceScreen $TransitionalSourceScreen
         if (Test-Path -LiteralPath $FramePath -PathType Leaf) {
             Remove-Item -LiteralPath $FramePath -Force
         }

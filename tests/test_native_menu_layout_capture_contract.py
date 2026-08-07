@@ -481,10 +481,23 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         )
         self.assertRegex(
             support,
-            r'if \(\$probe\.Status -eq "wrong_surface"\) \{\s*'
+            r'(?s)if \(\$probe\.Status -eq "wrong_surface"\) \{.*?'
+            r'IsNullOrWhiteSpace\(\s*\$TransitionalSourceScreen\s*\).*?'
+            r'\$measuredSurface -cne \$TransitionalSourceScreen.*?'
+            r'throw \[string\]\$probe\.Detail.*?'
+            r'\$consecutiveTransitionSourceProbes -ge\s*'
+            r'\$script:NativeMenuSettleConsecutiveSamples.*?'
+            r'\$script:NativeMenuSettleMinimumSpanMilliseconds.*?'
             r'throw \[string\]\$probe\.Detail',
-            "a post-transition classifier mismatch must abort on its first probe "
-            "instead of aging into the settlement timeout",
+            "a transition may outlive its source surface briefly, but a foreign "
+            "surface or a source that itself meets the 40-sample/two-second "
+            "settlement floor must still abort with the measured mismatch",
+        )
+        self.assertIn(
+            "-TransitionalSourceScreen $SourceScreen",
+            transition,
+            "destination settlement must distinguish its known source surface "
+            "from an unrelated classifier/tag substitution",
         )
         self.assertIn(
             "dispatch_measurement = $dispatchMeasurement",

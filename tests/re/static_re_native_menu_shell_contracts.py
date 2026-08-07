@@ -1219,9 +1219,17 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         r"Assert-NativeMenuCaptureSurfaceAgreement.*?"
         r"Status = \"ready\".*?"
         r"if \(\$probe\.Status -eq \"wrong_surface\"\) \{\s*"
+        r"\$measuredSurface.*?"
+        r"IsNullOrWhiteSpace\(\s*\$TransitionalSourceScreen\s*\).*?"
+        r"\$measuredSurface -cne \$TransitionalSourceScreen.*?"
+        r"throw \[string\]\$probe\.Detail.*?"
+        r"\$consecutiveTransitionSourceProbes -ge\s*"
+        r"\$script:NativeMenuSettleConsecutiveSamples.*?"
+        r"\$script:NativeMenuSettleMinimumSpanMilliseconds.*?"
         r"throw \[string\]\$probe\.Detail",
-        "the live probe can accept a retagged layout or loses the measured "
-        "surface on rejection, or a mismatch can age into a timeout",
+        "the live probe can accept a retagged layout, lose the measured "
+        "surface, tolerate a foreign surface, or let a settled source "
+        "mismatch age into the general timeout",
     )
     _require_regex(
         settings_builder,
@@ -1404,10 +1412,12 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         r"-OperatorScreenTag \$SourceScreen.*?"
         r"-MachineClassifiedSurface \$before\.semantic_surface.*?"
         r"\$after\s*=\s*Get-SettledNativeMenuObservation.*?"
+        r"-TransitionalSourceScreen \$SourceScreen.*?"
         r"-OperatorScreenTag \$DestinationScreen.*?"
         r"-MachineClassifiedSurface \$after\.semantic_surface",
         "a navigation edge can proceed without classifier agreement at both "
-        "source and destination",
+        "source and destination, or cannot distinguish a transient known "
+        "source from wholesale surface substitution",
     )
     supplied = _powershell_parameter_names(transition)
     forbidden_overrides = {

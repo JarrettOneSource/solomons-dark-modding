@@ -262,7 +262,8 @@ return 'key'
           -Context $context `
           -ScreenId $DestinationScreen `
           -FramePath $afterFrame `
-          -LatencyClock $destinationClock
+          -LatencyClock $destinationClock `
+          -TransitionalSourceScreen $SourceScreen
     } catch {
         $failureMessage = [string]$_.Exception.Message
         $failureDirectory = [IO.Path]::ChangeExtension(

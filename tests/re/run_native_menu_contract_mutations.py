@@ -1201,6 +1201,16 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "foreign semantic surface",
     ),
     StaticMutation(
+        "recorder.transition-source-settlement-bound",
+        SURFACE_AGREEMENT,
+        "scripts/Record-NativeMenuTransition.ps1",
+        "-TransitionalSourceScreen $SourceScreen",
+        '-TransitionalSourceScreen ""',
+        "a navigation edge can proceed without classifier agreement at both "
+        "source and destination, or cannot distinguish a transient known "
+        "source from wholesale surface substitution",
+    ),
+    StaticMutation(
         "recorder.failure-probe-shape",
         SURFACE_AGREEMENT,
         "scripts/Record-NativeMenuTransition.ps1",
