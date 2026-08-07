@@ -1766,6 +1766,34 @@ def find_ambient_settled_window(samples: list[dict[str, Any]]) -> dict[str, Any]
         except AmbientLifecycleError as error:
             last_error = str(error)
             continue
+        window_members = result["window_classification"]["members"]
+        window_ephemeral_art_ids = sorted(
+            {
+                member["art_id"]
+                for member in window_members
+                if member["classification"]
+                in {"ephemeral", "one_way_spawn_candidate"}
+                and member["art_id"]
+            }
+        )
+        membership_events = [
+            event
+            for member in window_members
+            if member["art_id"] in window_ephemeral_art_ids
+            for event in member["events"]["membership"]
+        ]
+        if window_ephemeral_art_ids and (
+            not any(event["event"] == "spawn" for event in membership_events)
+            or not any(
+                event["event"] == "despawn" for event in membership_events
+            )
+        ):
+            last_error = (
+                "population-versus-ephemeral settlement guardrail: membership-"
+                "changing art families lack in-window bidirectional spawn and "
+                f"despawn evidence: {window_ephemeral_art_ids}"
+            )
+            continue
         result["stable_start_index"] = start
         result["stable_end_index"] = end
         result["total_semantic_samples"] = end + 1

@@ -20,6 +20,7 @@ from tools.native_menu_ambient_lifecycle import (
     AmbientLifecycleError,
     classify_ambient_extended_observation,
     classify_ambient_window,
+    find_ambient_settled_window,
     resolve_ambient_lifecycle,
     validate_ambient_resolution,
 )
@@ -508,6 +509,23 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
             "bidirectional spawn and despawn witnesses",
         ):
             _resolve_pair(_samples(elements))
+
+    def test_settlement_skips_one_way_membership_decay(self) -> None:
+        def elements(sample_index: int) -> list[dict[str, object]]:
+            core = [_art(index) for index in range(5)]
+            if sample_index < 5:
+                decay = _art(10, art_id="Create.4")
+                decay["id"] = "screen.art.transition_decay.1"
+                return [*core, decay]
+            return core
+
+        settled = find_ambient_settled_window(
+            _samples(elements, sample_count=45)
+        )
+
+        self.assertEqual(settled["stable_start_index"], 5)
+        self.assertEqual(settled["stable_end_index"], 44)
+        self.assertEqual(settled["ephemeral_art_ids"], [])
 
     def test_family_wide_bidirectional_churn_resolves_one_way_members(self) -> None:
         def elements(sample_index: int) -> list[dict[str, object]]:

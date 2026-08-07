@@ -880,6 +880,15 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "instance-local slots instead of measured geometry-ranked members",
     ),
     StaticMutation(
+        "v2.5.one-way-decay-is-not-settled",
+        CAMPAIGN,
+        "tools/native_menu_ambient_lifecycle.py",
+        "if window_ephemeral_art_ids and (",
+        "if False and (  # mutation accepts one-way membership decay",
+        "Settlement v2.5 again accepts one-way membership decay as settled "
+        "ephemeral churn before bidirectional family evidence",
+    ),
+    StaticMutation(
         "v2.5.empty-gameplay-surface-is-constant",
         CLASSIFIER,
         "tools/native_menu_ambient_lifecycle.py",

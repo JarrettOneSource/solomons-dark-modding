@@ -1344,6 +1344,19 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
     )
     _require_regex(
         classifier,
+        r"def find_ambient_settled_window\(.*?"
+        r"window_ephemeral_art_ids\s*=\s*sorted\(.*?"
+        r"membership_events\s*=\s*\[.*?"
+        r"if window_ephemeral_art_ids and \(\s*"
+        r'not any\(event\["event"\] == "spawn".*?or not any\(\s*'
+        r'event\["event"\] == "despawn".*?'
+        r"population-versus-ephemeral settlement guardrail.*?continue.*?"
+        r'result\["stable_start_index"\]\s*=\s*start',
+        "Settlement v2.5 again accepts one-way membership decay as settled "
+        "ephemeral churn before bidirectional family evidence",
+    )
+    _require_regex(
+        classifier,
         r"ambient_family\s*=\s*\{.*?"
         r"_resolve_varying_member_keys\(\s*measurements, ambient_family\s*\)",
         "title-backdrop ambient art is again forced through screen-member "
