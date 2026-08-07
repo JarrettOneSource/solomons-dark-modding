@@ -1291,12 +1291,21 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
         r"def _assert_runtime_provenance_matches\(.*?"
         r"for field in RUNTIME_PROVENANCE_FIELDS:.*?"
         r"changed runtime provenance field.*?"
-        r"_assert_runtime_provenance_matches\(\s*"
+        r"_assert_game_executable_matches\(\s*"
         r"_source\(header, str\(paths\[label\]\)\),\s*"
         r'fixtures\[layout_id\]\["source"\]',
         "independent navigation recordings no longer retain their own "
-        "machine-derived commit provenance while requiring exact game and "
-        "loader runtime hashes",
+        "machine-derived commit and loader provenance while requiring the "
+        "exact game executable",
+    )
+    _require_regex(
+        resolver,
+        r'NAVIGATION_GAME_PROVENANCE_FIELD\s*=\s*"game_executable_sha256".*?'
+        r"def _assert_game_executable_matches\(.*?"
+        r"field = NAVIGATION_GAME_PROVENANCE_FIELD.*?"
+        r"changed game executable provenance field",
+        "navigation-to-standalone comparison no longer rejects a changed game "
+        "binary while allowing independently recorded loader evolution",
     )
     _require_regex(
         resolver,

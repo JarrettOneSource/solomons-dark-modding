@@ -798,11 +798,10 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "v2.5.independent-capture-runtime-provenance",
         CAMPAIGN,
         "tools/resolve_native_menu_ambient_campaign.py",
-        'RUNTIME_PROVENANCE_FIELDS = (\n    "game_executable_sha256",\n    "loader_dll_sha256",\n)',
-        'RUNTIME_PROVENANCE_FIELDS = (\n    "game_executable_sha256",\n    "base_commit_sha",\n)',
-        "independent navigation recordings no longer retain their own "
-        "machine-derived commit provenance while requiring exact game and "
-        "loader runtime hashes",
+        'NAVIGATION_GAME_PROVENANCE_FIELD = "game_executable_sha256"',
+        'NAVIGATION_GAME_PROVENANCE_FIELD = "loader_dll_sha256"',
+        "navigation-to-standalone comparison no longer rejects a changed game "
+        "binary while allowing independently recorded loader evolution",
     ),
     StaticMutation(
         "v2.5.path-local-layout-generation",

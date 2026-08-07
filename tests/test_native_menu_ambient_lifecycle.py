@@ -9,6 +9,7 @@ from pathlib import Path
 
 from tools.resolve_native_menu_ambient_campaign import (
     CampaignResolutionError,
+    _assert_game_executable_matches,
     _assert_runtime_provenance_matches,
     _resolve_layout_id,
     file_sha256,
@@ -219,7 +220,7 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
         )
         self.assertEqual(resolved["structural_core_element_count"], 3)
 
-    def test_runtime_provenance_allows_independent_capture_commits(self) -> None:
+    def test_navigation_provenance_allows_recorder_evolution(self) -> None:
         observed = {
             "base_commit_sha": "1" * 40,
             "source_tree_sha": "2" * 40,
@@ -230,15 +231,25 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
             **observed,
             "base_commit_sha": "5" * 40,
             "source_tree_sha": "6" * 40,
+            "loader_dll_sha256": "7" * 64,
         }
 
-        _assert_runtime_provenance_matches(observed, reference, "independent capture")
+        _assert_game_executable_matches(observed, reference, "independent capture")
 
-        reference["loader_dll_sha256"] = "7" * 64
+        reference["game_executable_sha256"] = "8" * 64
+        with self.assertRaisesRegex(
+            CampaignResolutionError,
+            "independent capture changed game executable provenance field "
+            "'game_executable_sha256'",
+        ):
+            _assert_game_executable_matches(
+                observed, reference, "independent capture"
+            )
+
         with self.assertRaisesRegex(
             CampaignResolutionError,
             "independent capture changed runtime provenance field "
-            "'loader_dll_sha256'",
+            "'game_executable_sha256'",
         ):
             _assert_runtime_provenance_matches(
                 observed, reference, "independent capture"

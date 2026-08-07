@@ -53,6 +53,7 @@ RUNTIME_PROVENANCE_FIELDS = (
     "game_executable_sha256",
     "loader_dll_sha256",
 )
+NAVIGATION_GAME_PROVENANCE_FIELD = "game_executable_sha256"
 
 
 def read_object(path: Path) -> dict[str, Any]:
@@ -207,6 +208,18 @@ def _assert_runtime_provenance_matches(
             raise CampaignResolutionError(
                 f"{label} changed runtime provenance field '{field}'"
             )
+
+
+def _assert_game_executable_matches(
+    observed: dict[str, Any],
+    reference: dict[str, Any],
+    label: str,
+) -> None:
+    field = NAVIGATION_GAME_PROVENANCE_FIELD
+    if observed[field] != reference[field]:
+        raise CampaignResolutionError(
+            f"{label} changed game executable provenance field '{field}'"
+        )
 
 
 def _identity(header: dict[str, Any], label: str) -> tuple[str, int]:
@@ -522,7 +535,7 @@ def collect_navigation(
                 )
                 if used_explicit_mapping:
                     explicit_layout_ids.add((edge_id, endpoint_key))
-                _assert_runtime_provenance_matches(
+                _assert_game_executable_matches(
                     _source(header, str(paths[label])),
                     fixtures[layout_id]["source"],
                     f"edge {edge_id} {label} {side}",
