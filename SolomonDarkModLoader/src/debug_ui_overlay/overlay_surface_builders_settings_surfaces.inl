@@ -68,6 +68,33 @@ bool ShouldRetainSettingsTrackingAcrossMainMenuFallback() {
         now - state.transition_started_at <= kTrackedSettingsMaximumIdleMs;
 }
 
+void LogSettingsFamilyTransitionArtFrame(
+    SettingsRolloutPageState page,
+    SettingsRolloutPageState last_page,
+    const std::vector<CapturedMenuArtElement>& current_elements,
+    const std::vector<CapturedMenuArtElement>& settings_underlay) {
+    static int s_logs_remaining = 12;
+    if (s_logs_remaining <= 0) {
+        return;
+    }
+    --s_logs_remaining;
+    std::ostringstream message;
+    message << "Debug UI settings-family transition art frame: page="
+            << static_cast<int>(page)
+            << " last_page=" << static_cast<int>(last_page)
+            << " current=" << current_elements.size()
+            << " underlay=" << settings_underlay.size();
+    for (const auto& element : current_elements) {
+        message << " |" << element.art_id
+                << '@' << HexString(element.source_object_ptr)
+                << '@' << element.draw_order
+                << '@' << std::hexfloat
+                << element.left << ',' << element.top << ','
+                << element.right << ',' << element.bottom;
+    }
+    Log(message.str());
+}
+
 SettingsRolloutPageState ResolveSettingsRolloutPageForCapture(
     const DebugUiOverlayConfig& config,
     uintptr_t settings_address) {
@@ -251,6 +278,11 @@ std::vector<CapturedMenuArtElement> ResolveSettingsFamilyMenuArtElements(
             *config,
             settings_address,
             &page_observation)) {
+        LogSettingsFamilyTransitionArtFrame(
+            SettingsRolloutPageState::Unknown,
+            cache_state.last_page,
+            current_elements,
+            cache_state.settings_underlay);
         if (cache_state.last_page != SettingsRolloutPageState::Unknown) {
             MarkSettingsFamilyPageTransitionPending(&cache_state);
         }
@@ -295,6 +327,13 @@ std::vector<CapturedMenuArtElement> ResolveSettingsFamilyMenuArtElements(
         page_observation.page == SettingsRolloutPageState::Controls
         ? &cache_state.controls
         : &cache_state.settings;
+    if (cache_state.last_page != page_observation.page) {
+        LogSettingsFamilyTransitionArtFrame(
+            page_observation.page,
+            cache_state.last_page,
+            current_elements,
+            cache_state.settings_underlay);
+    }
     std::vector<CapturedMenuArtElement> measured_overlay;
     if (page_observation.page == SettingsRolloutPageState::Settings &&
         TryExtractSettingsFamilyOverlayArt(
