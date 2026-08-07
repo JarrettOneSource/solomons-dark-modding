@@ -400,9 +400,9 @@ bool TryIsCustomizeKeyboardRolloutExpanded(
             continue;
         }
 
-        std::string control_label = ResolveSettingsControlLabel(config, root_control);
-        if (control_label.empty()) {
-            (void)TryReadCachedObjectLabel(root_control, &control_label);
+        std::string control_label;
+        if (!TryReadCachedObjectLabel(root_control, &control_label)) {
+            control_label = ResolveSettingsControlLabel(config, root_control);
         }
         if (NormalizeSemanticUiToken(control_label) != normalized_target_label) {
             continue;

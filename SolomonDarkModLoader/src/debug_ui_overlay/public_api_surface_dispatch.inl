@@ -191,9 +191,9 @@ bool TryResolveSettingsSnapshotElementDispatch(
             return false;
         }
 
-        std::string candidate_label = ResolveSettingsControlLabel(*config, candidate_control);
-        if (candidate_label.empty()) {
-            (void)TryReadCachedObjectLabel(candidate_control, &candidate_label);
+        std::string candidate_label;
+        if (!TryReadCachedObjectLabel(candidate_control, &candidate_label)) {
+            candidate_label = ResolveSettingsControlLabel(*config, candidate_control);
         }
 
         return !candidate_label.empty() &&

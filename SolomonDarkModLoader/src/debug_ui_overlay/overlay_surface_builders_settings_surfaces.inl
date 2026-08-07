@@ -19,6 +19,153 @@ bool HasCurrentSettingsPanelArt(
         });
 }
 
+bool TryBuildSettingsRolloutMarkerElements(
+    const DebugUiOverlayConfig& config,
+    uintptr_t settings_address,
+    std::string_view surface_title,
+    float panel_left,
+    float panel_top,
+    float panel_right,
+    float panel_bottom,
+    const std::vector<CapturedMenuArtElement>& art_elements,
+    std::vector<OverlayRenderElement>* render_elements) {
+    if (settings_address == 0 || render_elements == nullptr) {
+        return false;
+    }
+
+    struct RolloutRow {
+        uintptr_t control_address = 0;
+        std::string label;
+    };
+
+    std::vector<uintptr_t> root_controls;
+    if (!TryReadSettingsControlPointers(
+            config,
+            settings_address,
+            &root_controls)) {
+        return false;
+    }
+
+    const auto normalized_surface_title =
+        NormalizeSemanticUiToken(surface_title);
+    std::vector<RolloutRow> rollout_rows;
+    std::set<uintptr_t> seen_rollout_controls;
+    for (const auto root_control : root_controls) {
+        if (!IsSettingsRolloutControl(config, root_control)) {
+            continue;
+        }
+        if (!seen_rollout_controls.insert(root_control).second) {
+            Log(
+                "Debug UI settings rollout marker pairing refused duplicate "
+                "root control. settings=" + HexString(settings_address) +
+                " control=" + HexString(root_control));
+            return false;
+        }
+
+        std::string label;
+        if (!TryReadCachedObjectLabel(root_control, &label)) {
+            label = ResolveSettingsControlLabel(config, root_control);
+        }
+        if (label.empty() ||
+            NormalizeSemanticUiToken(label) == normalized_surface_title) {
+            continue;
+        }
+
+        rollout_rows.push_back(RolloutRow{root_control, std::move(label)});
+    }
+
+    std::vector<const CapturedMenuArtElement*> marker_draws;
+    for (const auto& art_element : art_elements) {
+        const auto center_x =
+            (art_element.left + art_element.right) * 0.5f;
+        const auto center_y =
+            (art_element.top + art_element.bottom) * 0.5f;
+        if (!art_element.visible ||
+            art_element.art_id != "ControlPanel.0" ||
+            art_element.right <= art_element.left ||
+            art_element.bottom <= art_element.top ||
+            !PointInsideRect(
+                center_x,
+                center_y,
+                panel_left,
+                panel_top,
+                panel_right,
+                panel_bottom)) {
+            continue;
+        }
+        marker_draws.push_back(&art_element);
+    }
+    std::sort(
+        marker_draws.begin(),
+        marker_draws.end(),
+        [](const CapturedMenuArtElement* left,
+           const CapturedMenuArtElement* right) {
+            if (left->top != right->top) {
+                return left->top < right->top;
+            }
+            if (left->left != right->left) {
+                return left->left < right->left;
+            }
+            return left->draw_order < right->draw_order;
+        });
+
+    if (rollout_rows.empty() ||
+        rollout_rows.size() != marker_draws.size()) {
+        Log(
+            "Debug UI settings rollout marker pairing refused ambiguity. "
+            "settings=" + HexString(settings_address) +
+            " rollout_rows=" + std::to_string(rollout_rows.size()) +
+            " marker_draws=" + std::to_string(marker_draws.size()));
+        return false;
+    }
+
+    for (std::size_t index = 1; index < marker_draws.size(); ++index) {
+        const auto* previous = marker_draws[index - 1];
+        const auto* current = marker_draws[index];
+        if (previous->left == current->left &&
+            previous->top == current->top &&
+            previous->right == current->right &&
+            previous->bottom == current->bottom) {
+            Log(
+                "Debug UI settings rollout marker pairing refused duplicate "
+                "live geometry. settings=" + HexString(settings_address));
+            return false;
+        }
+    }
+
+    const auto original_size = render_elements->size();
+    for (std::size_t index = 0; index < rollout_rows.size(); ++index) {
+        const auto& row = rollout_rows[index];
+        const auto* marker = marker_draws[index];
+
+        OverlayRenderElement element;
+        element.surface_id = "settings";
+        element.surface_title = std::string(surface_title);
+        element.label = row.label;
+        element.action_id = ResolveConfiguredUiActionId(
+            "settings",
+            row.label);
+        if (element.action_id.empty()) {
+            element.surface_id = "settings.control";
+        }
+        element.source_object_ptr = row.control_address;
+        element.surface_object_ptr = settings_address;
+        element.show_label = true;
+        element.left = marker->left;
+        element.top = marker->top;
+        element.right = marker->right;
+        element.bottom = marker->bottom;
+        render_elements->push_back(std::move(element));
+    }
+
+    Log(
+        "Debug UI settings rollout rows paired with machine-measured live "
+        "affordances. settings=" + HexString(settings_address) +
+        " paired=" +
+        std::to_string(render_elements->size() - original_size));
+    return true;
+}
+
 std::vector<OverlayRenderElement> TryBuildControlsOverlayRenderElements(
     const std::vector<ObservedUiElement>& exact_text_elements,
     const std::vector<ObservedUiElement>& exact_control_elements,
@@ -373,6 +520,17 @@ std::vector<OverlayRenderElement> TryBuildSettingsOverlayRenderElements(
     render_elements.reserve(exact_control_elements.size() + exact_text_elements.size() + 1);
     render_elements.push_back(panel);
 
+    (void)TryBuildSettingsRolloutMarkerElements(
+        *config,
+        settings_address,
+        surface_title,
+        panel_left,
+        panel_top,
+        panel_right,
+        panel_bottom,
+        art_elements,
+        &render_elements);
+
     float done_left = 0.0f;
     float done_top = 0.0f;
     float done_right = 0.0f;
@@ -398,6 +556,14 @@ std::vector<OverlayRenderElement> TryBuildSettingsOverlayRenderElements(
     std::set<uintptr_t> consumed_control_addresses;
     if (done_button_address != 0) {
         consumed_control_addresses.insert(done_button_address);
+    }
+    for (const auto& render_element : render_elements) {
+        if (render_element.surface_id == "settings" &&
+            !render_element.action_id.empty() &&
+            render_element.source_object_ptr != 0) {
+            consumed_control_addresses.insert(
+                render_element.source_object_ptr);
+        }
     }
 
     for (const auto& text_element : exact_text_elements) {

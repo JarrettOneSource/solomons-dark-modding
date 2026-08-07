@@ -1118,6 +1118,16 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "panel art plus a live expanded rollout",
     ),
     StaticMutation(
+        "recorder.settings-live-rollout-affordance-pairing",
+        SURFACE_AGREEMENT,
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "overlay_surface_builders_settings_surfaces.inl",
+        "rollout_rows.size() != marker_draws.size()",
+        "rollout_rows.size() == marker_draws.size()",
+        "Settings navigation can lose its unambiguous machine-measured "
+        "rollout affordance and fall back to stale coordinates",
+    ),
+    StaticMutation(
         "recorder.settings-one-shot-row-retention",
         SURFACE_AGREEMENT,
         "SolomonDarkModLoader/src/debug_ui_overlay/"

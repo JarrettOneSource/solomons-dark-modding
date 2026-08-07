@@ -1245,6 +1245,33 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         "panel art plus a live expanded rollout",
     )
     _require_regex(
+        settings_builder,
+        r"bool TryBuildSettingsRolloutMarkerElements\(.*?"
+        r"TryReadSettingsControlPointers\(\s*config,\s*settings_address,"
+        r"\s*&root_controls\).*?"
+        r"IsSettingsRolloutControl\(config, root_control\).*?"
+        r"if \(!TryReadCachedObjectLabel\(root_control, &label\)\) \{\s*"
+        r"label = ResolveSettingsControlLabel\(config, root_control\);\s*"
+        r"\}.*?"
+        r"art_element\.art_id != \"ControlPanel\.0\".*?"
+        r"PointInsideRect\(\s*center_x,\s*center_y,\s*panel_left,\s*"
+        r"panel_top,\s*panel_right,\s*panel_bottom\).*?"
+        r"rollout_rows\.size\(\) != marker_draws\.size\(\).*?"
+        r"return false;.*?"
+        r"element\.action_id = ResolveConfiguredUiActionId\(\s*"
+        r"\"settings\",\s*row\.label\);.*?"
+        r"element\.source_object_ptr = row\.control_address;.*?"
+        r"element\.left = marker->left;\s*"
+        r"element\.top = marker->top;\s*"
+        r"element\.right = marker->right;\s*"
+        r"element\.bottom = marker->bottom;.*?"
+        r"TryBuildSettingsRolloutMarkerElements\(\s*\*config,\s*"
+        r"settings_address,\s*surface_title,\s*panel_left,\s*panel_top,\s*"
+        r"panel_right,\s*panel_bottom,\s*art_elements,\s*&render_elements\)",
+        "Settings navigation can lose its unambiguous machine-measured "
+        "rollout affordance and fall back to stale coordinates",
+    )
+    _require_regex(
         overlay_state + frame_capture,
         r"retained_settings_elements_owner.*?"
         r"retained_settings_exact_text_elements.*?"
