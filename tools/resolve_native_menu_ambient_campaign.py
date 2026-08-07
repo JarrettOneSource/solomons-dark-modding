@@ -49,6 +49,11 @@ NAVIGATION_ENDPOINT_LAYOUT_IDS = {
     ("dark_cloud_settings_to_settings", "after"): "game-settings-gameplay",
 }
 
+RUNTIME_PROVENANCE_FIELDS = (
+    "game_executable_sha256",
+    "loader_dll_sha256",
+)
+
 
 def read_object(path: Path) -> dict[str, Any]:
     value = json.loads(path.read_text(encoding="utf-8-sig"))
@@ -190,6 +195,18 @@ def _source(header: dict[str, Any], label: str) -> dict[str, Any]:
                 f"{label} has invalid machine-derived provenance field '{field}'"
             )
     return source
+
+
+def _assert_runtime_provenance_matches(
+    observed: dict[str, Any],
+    reference: dict[str, Any],
+    label: str,
+) -> None:
+    for field in RUNTIME_PROVENANCE_FIELDS:
+        if observed[field] != reference[field]:
+            raise CampaignResolutionError(
+                f"{label} changed runtime provenance field '{field}'"
+            )
 
 
 def _identity(header: dict[str, Any], label: str) -> tuple[str, int]:
@@ -501,12 +518,11 @@ def collect_navigation(
                 )
                 if used_explicit_mapping:
                     explicit_layout_ids.add((edge_id, endpoint_key))
-                if canonical_bytes(_source(header, str(paths[label]))) != canonical_bytes(
-                    fixtures[layout_id]["source"]
-                ):
-                    raise CampaignResolutionError(
-                        f"edge {edge_id} {label} {side} changed capture provenance"
-                    )
+                _assert_runtime_provenance_matches(
+                    _source(header, str(paths[label])),
+                    fixtures[layout_id]["source"],
+                    f"edge {edge_id} {label} {side}",
+                )
                 resolved_ids.add(layout_id)
                 observations[layout_id].append(
                     _observation(
@@ -630,15 +646,11 @@ def collect_extended(
                 f"does not match sampled screen '{sampled_screen}'"
             )
         fixture_source = fixtures[layout_id]["source"]
-        for field in (
-            "game_executable_sha256",
-            "loader_dll_sha256",
-        ):
-            if fixture_source[field] != motion_source[field]:
-                raise CampaignResolutionError(
-                    f"extended observation {path} baseline runtime provenance "
-                    f"does not match fixture '{layout_id}' field '{field}'"
-                )
+        _assert_runtime_provenance_matches(
+            motion_source,
+            fixture_source,
+            f"extended observation {path} baseline",
+        )
         witness = (instance, process_id, layout_id)
         if witness in witnessed:
             raise CampaignResolutionError(

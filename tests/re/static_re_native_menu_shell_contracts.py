@@ -1236,9 +1236,8 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
         r"if canonical_bytes\(baseline_source\) != "
         r"canonical_bytes\(motion_source\):.*?"
         r"baseline provenance does not.*?match the motion observation.*?"
-        r"\"game_executable_sha256\".*?\"loader_dll_sha256\".*?"
-        r"if fixture_source\[field\] != motion_source\[field\]:.*?"
-        r"baseline runtime provenance.*?does not match fixture",
+        r"_assert_runtime_provenance_matches\(\s*motion_source,\s*"
+        r"fixture_source,\s*f\"extended observation \{path\} baseline\"",
         "historical motion observations are no longer byte-bound to one copied "
         "baseline with matching capture and runtime provenance",
     )
@@ -1251,6 +1250,20 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
         r"resolution\s*=\s*resolve_ambient_lifecycle\(reached\)",
         "screen lifecycle resolution no longer requires independent standalone "
         "instances and resolves every reached window together",
+    )
+    _require_regex(
+        resolver,
+        r"RUNTIME_PROVENANCE_FIELDS\s*=\s*\(\s*"
+        r'"game_executable_sha256",\s*"loader_dll_sha256",\s*\).*?'
+        r"def _assert_runtime_provenance_matches\(.*?"
+        r"for field in RUNTIME_PROVENANCE_FIELDS:.*?"
+        r"changed runtime provenance field.*?"
+        r"_assert_runtime_provenance_matches\(\s*"
+        r"_source\(header, str\(paths\[label\]\)\),\s*"
+        r'fixtures\[layout_id\]\["source"\]',
+        "independent navigation recordings no longer retain their own "
+        "machine-derived commit provenance while requiring exact game and "
+        "loader runtime hashes",
     )
     _require_regex(
         resolver,

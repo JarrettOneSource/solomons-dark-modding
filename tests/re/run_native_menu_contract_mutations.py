@@ -795,6 +795,16 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "screen ambiguity with an every-edge explicit route map",
     ),
     StaticMutation(
+        "v2.5.independent-capture-runtime-provenance",
+        CAMPAIGN,
+        "tools/resolve_native_menu_ambient_campaign.py",
+        'RUNTIME_PROVENANCE_FIELDS = (\n    "game_executable_sha256",\n    "loader_dll_sha256",\n)',
+        'RUNTIME_PROVENANCE_FIELDS = (\n    "game_executable_sha256",\n    "base_commit_sha",\n)',
+        "independent navigation recordings no longer retain their own "
+        "machine-derived commit provenance while requiring exact game and "
+        "loader runtime hashes",
+    ),
+    StaticMutation(
         "v2.5.empty-gameplay-surface-is-constant",
         CLASSIFIER,
         "tools/native_menu_ambient_lifecycle.py",

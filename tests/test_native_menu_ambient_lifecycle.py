@@ -9,6 +9,7 @@ from pathlib import Path
 
 from tools.resolve_native_menu_ambient_campaign import (
     CampaignResolutionError,
+    _assert_runtime_provenance_matches,
     _resolve_layout_id,
     file_sha256,
     resolve_baseline_evidence,
@@ -203,6 +204,31 @@ def _trace(
 
 
 class NativeMenuAmbientLifecycleTests(unittest.TestCase):
+    def test_runtime_provenance_allows_independent_capture_commits(self) -> None:
+        observed = {
+            "base_commit_sha": "1" * 40,
+            "source_tree_sha": "2" * 40,
+            "game_executable_sha256": "3" * 64,
+            "loader_dll_sha256": "4" * 64,
+        }
+        reference = {
+            **observed,
+            "base_commit_sha": "5" * 40,
+            "source_tree_sha": "6" * 40,
+        }
+
+        _assert_runtime_provenance_matches(observed, reference, "independent capture")
+
+        reference["loader_dll_sha256"] = "7" * 64
+        with self.assertRaisesRegex(
+            CampaignResolutionError,
+            "independent capture changed runtime provenance field "
+            "'loader_dll_sha256'",
+        ):
+            _assert_runtime_provenance_matches(
+                observed, reference, "independent capture"
+            )
+
     def test_extended_baseline_receipt_resolves_exact_recording_bytes(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
