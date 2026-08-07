@@ -1498,12 +1498,15 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
         r"resolve_exact_evidence_receipt\(.*?primary_fixture.*?"
         r"resolve_exact_evidence_receipt\(.*?primary_trace.*?"
         r"resolve_exact_evidence_receipt\(.*?confirmation.*?"
+        r"_assert_game_executable_matches\(\s*historical_source,\s*"
+        r'fixtures\[layout_id\]\["source"\].*?'
         r"candidate_identities & \(existing \| historical_identities\).*?"
         r"repeats an existing capture identity.*?"
         r"collect_supplemental_standalones\(.*?"
         r'"supplemental_settled_pair_manifest": evidence_receipt',
         "cross-window motion history is no longer bound to an exact nonempty "
-        "hashed pair manifest with unambiguous independent identities",
+        "hashed pair manifest with unambiguous independent identities and an "
+        "unchanged retail game binary",
     )
     _require_regex(
         resolver,

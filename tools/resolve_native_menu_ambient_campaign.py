@@ -851,7 +851,7 @@ def collect_supplemental_standalones(
             raise CampaignResolutionError(
                 f"supplemental pair '{pair_id}' changed provenance between instances"
             )
-        _assert_runtime_provenance_matches(
+        _assert_game_executable_matches(
             historical_source,
             fixtures[layout_id]["source"],
             f"supplemental pair {pair_id}",

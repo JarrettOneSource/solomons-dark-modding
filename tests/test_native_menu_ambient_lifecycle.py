@@ -442,7 +442,10 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
                 {
                     "screen": {
                         "native_screen_id": "screen",
-                        "source": source,
+                        "source": {
+                            **source,
+                            "loader_dll_sha256": "5" * 64,
+                        },
                     }
                 },
                 observations,
