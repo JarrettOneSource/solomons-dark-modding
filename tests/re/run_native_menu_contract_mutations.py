@@ -717,6 +717,15 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "before they can reset settlement",
     ),
     StaticMutation(
+        "special.loading-final-barrier-settle-hold",
+        RECORDER,
+        "SolomonDarkModLoader/src/loading_screen_native_present.cpp",
+        "snapshot.stage ==\n            LoadingScreenStage::WaitingForParticipants",
+        "snapshot.stage !=\n            LoadingScreenStage::WaitingForParticipants",
+        "loading-screen capture no longer holds and settle-samples the real "
+        "final barrier or bounds failure as STOP",
+    ),
+    StaticMutation(
         "recorder.blocking-modal-exact-surface",
         RECORDER,
         "scripts/NativeMenuCaptureSupport.ps1",

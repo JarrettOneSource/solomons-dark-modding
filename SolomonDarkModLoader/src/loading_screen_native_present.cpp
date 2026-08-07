@@ -531,6 +531,23 @@ void PresentLoadingScreenFrame() {
     }
 
     CaptureLoadingScreenEvidenceFrame(snapshot);
+    if (!ReadEnvironmentVariable(
+             kCaptureDirectoryEnvironment).empty() &&
+        snapshot.stage ==
+            LoadingScreenStage::WaitingForParticipants &&
+        !g_loading_capture_settled) {
+        const auto deadline = GetTickCount64() + 60000;
+        while (!g_loading_capture_settled &&
+               GetTickCount64() <= deadline) {
+            Sleep(50);
+            CaptureLoadingScreenEvidenceFrame(snapshot);
+        }
+        if (!g_loading_capture_settled) {
+            Log(
+                "STOP: loading screen never satisfied the 40-sample, "
+                "two-second settlement criterion within 60 seconds.");
+        }
+    }
     const HRESULT present_result =
         device->Present(nullptr, nullptr, nullptr, nullptr);
     g_presenting_loading_frame = false;

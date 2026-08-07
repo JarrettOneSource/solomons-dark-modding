@@ -78,6 +78,14 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             r"return;\s*\}\s*if \(g_loading_capture_sequence",
             "offscreen loading frames must be rejected before settlement state changes",
         )
+        self.assertRegex(
+            source,
+            r"(?s)snapshot\.stage\s*==\s*"
+            r"LoadingScreenStage::WaitingForParticipants.*?"
+            r"while \(!g_loading_capture_settled.*?"
+            r"CaptureLoadingScreenEvidenceFrame\(snapshot\)",
+            "the real final loading barrier must remain presented until settled",
+        )
 
     def test_layout_api_retains_transient_screens(self) -> None:
         header = read("SolomonDarkModLoader/include/debug_ui_overlay.h")

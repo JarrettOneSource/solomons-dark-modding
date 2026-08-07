@@ -996,6 +996,17 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
         "before they can reset settlement",
     )
     _require_regex(
+        loading_capture,
+        r"snapshot\.stage\s*==\s*"
+        r"LoadingScreenStage::WaitingForParticipants.*?"
+        r"deadline\s*=\s*GetTickCount64\(\)\s*\+\s*60000.*?"
+        r"while \(!g_loading_capture_settled.*?"
+        r"Sleep\(50\).*?CaptureLoadingScreenEvidenceFrame\(snapshot\).*?"
+        r"STOP: loading screen never satisfied",
+        "loading-screen capture no longer holds and settle-samples the real "
+        "final barrier or bounds failure as STOP",
+    )
+    _require_regex(
         loader_capture,
         r"SerializeNativeBootStructure\(.*?"
         r"const auto semantic = SerializeNativeBootStructure\(sample\).*?"
