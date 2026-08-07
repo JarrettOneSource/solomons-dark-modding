@@ -191,8 +191,8 @@ std::vector<OverlayRenderElement> TryBuildDarkCloudBrowserOverlayRenderElements(
                 g_debug_ui_overlay_state.config.dark_cloud_browser_list_widget_row_height_offset,
                 &list_row_height);
             TryReadPlainField(
-                reinterpret_cast<const void*>(list_widget),
-                g_debug_ui_overlay_state.config.dark_cloud_browser_list_widget_entry_count_offset,
+                reinterpret_cast<const void*>(browser_address),
+                g_debug_ui_overlay_state.config.dark_cloud_browser_entry_count_offset,
                 &entry_count);
             TryReadPlainField(
                 reinterpret_cast<const void*>(list_widget),
@@ -201,27 +201,8 @@ std::vector<OverlayRenderElement> TryBuildDarkCloudBrowserOverlayRenderElements(
 
             if (list_row_height > 1.0f && list_right > list_left && list_bottom > list_top) {
                 const int clamped_max_visible = max_visible > 0 ? max_visible : 15;
-                int probed_content_count = 0;
-                uintptr_t row_data_base = 0;
-                TryReadPointerField(
-                    reinterpret_cast<const void*>(list_widget),
-                    g_debug_ui_overlay_state.config.dark_cloud_browser_list_widget_row_data_base_offset,
-                    &row_data_base);
-
-                if (row_data_base != 0 && row_data_base > 0x100000) {
-                    for (int ri = 0; ri < clamped_max_visible; ++ri) {
-                        uintptr_t row_ptr = 0;
-                        if (TryReadPointerField(reinterpret_cast<const void*>(row_data_base), ri * 4, &row_ptr) &&
-                            row_ptr != 0 && row_ptr > 0x10000) {
-                            ++probed_content_count;
-                        } else {
-                            break;
-                        }
-                    }
-                }
-
                 const int draw_count =
-                    probed_content_count > 0 ? probed_content_count : (std::min)(entry_count, clamped_max_visible);
+                    (std::min)((std::max)(entry_count, 0), clamped_max_visible);
                 constexpr int kHeaderRowCount = 1;
                 for (int i = 0; i < draw_count; ++i) {
                     const float row_top = list_top + static_cast<float>(i + kHeaderRowCount) * list_row_height;

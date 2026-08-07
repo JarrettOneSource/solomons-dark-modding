@@ -90,10 +90,9 @@ struct DebugUiOverlayConfig {
     size_t dark_cloud_browser_modal_header_group_width_offset = 0;
     size_t dark_cloud_browser_modal_header_group_height_offset = 0;
     size_t dark_cloud_browser_list_widget_offset = 0;
-    size_t dark_cloud_browser_list_widget_entry_count_offset = 0;
+    size_t dark_cloud_browser_entry_count_offset = 0;
     size_t dark_cloud_browser_list_widget_max_visible_rows_offset = 0;
     size_t dark_cloud_browser_list_widget_row_height_offset = 0;
-    size_t dark_cloud_browser_list_widget_row_data_base_offset = 0;
     uintptr_t dark_cloud_browser_modal_header_text_caller = 0;
     size_t settings_control_list_count_offset = 0;
     size_t settings_control_list_entries_offset = 0;

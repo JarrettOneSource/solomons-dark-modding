@@ -595,6 +595,13 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
     ]
     importer = _read("tools/import_native_menu_special_captures_v25.py")
     support = _read("scripts/NativeMenuCaptureSupport.ps1")
+    dark_cloud_rows = _read(
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "label_resolution_and_frame_render.inl"
+    )
+    debug_ui_ini = _read("config/debug-ui.ini")
+    debug_ui_header = _read("SolomonDarkModLoader/include/debug_ui_config.h")
+    debug_ui_parser = _read("SolomonDarkModLoader/src/debug_ui_config.cpp")
     loader_capture = _read(
         "SolomonDarkModLoader/src/debug_ui_overlay/"
         "menu_layout_capture_snapshot_and_hooks.inl"
@@ -612,6 +619,51 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
             raise StaticReTestFailure(
                 f"{path} regained a fixed-delay capture path"
             )
+
+    legacy_dark_cloud_capacity_probe = "\n".join(
+        (dark_cloud_rows, debug_ui_ini, debug_ui_header, debug_ui_parser)
+    )
+    for forbidden in (
+        "dark_cloud_browser_list_widget_entry_count_offset",
+        "dark_cloud_browser_list_widget_row_data_base_offset",
+        "probed_content_count",
+    ):
+        if forbidden in legacy_dark_cloud_capacity_probe:
+            raise StaticReTestFailure(
+                "Dark Cloud row census again trusts pointer-probed widget "
+                "capacity instead of the browser's native +0x1E0 entry count"
+            )
+    _require_regex(
+        debug_ui_ini,
+        r"^dark_cloud_browser_entry_count_offset=0x1E0$",
+        "Dark Cloud row census again trusts pointer-probed widget capacity "
+        "instead of the browser's native +0x1E0 entry count",
+    )
+    _require_regex(
+        debug_ui_header,
+        r"size_t dark_cloud_browser_entry_count_offset = 0;",
+        "Dark Cloud row census again trusts pointer-probed widget capacity "
+        "instead of the browser's native +0x1E0 entry count",
+    )
+    _require_regex(
+        debug_ui_parser,
+        r'\{"dark_cloud_browser_entry_count_offset",\s*'
+        r"&DebugUiOverlayConfig::dark_cloud_browser_entry_count_offset\}",
+        "Dark Cloud row census again trusts pointer-probed widget capacity "
+        "instead of the browser's native +0x1E0 entry count",
+    )
+    _require_regex(
+        dark_cloud_rows,
+        r"TryReadPlainField\(\s*"
+        r"reinterpret_cast<const void\*>\(browser_address\),\s*"
+        r"g_debug_ui_overlay_state\.config\."
+        r"dark_cloud_browser_entry_count_offset,\s*&entry_count\);.*?"
+        r"const int draw_count\s*=\s*"
+        r"\(std::min\)\(\(std::max\)\(entry_count, 0\), "
+        r"clamped_max_visible\);",
+        "Dark Cloud row census again trusts pointer-probed widget capacity "
+        "instead of the browser's native +0x1E0 entry count",
+    )
 
     _require_regex(
         support,
@@ -1057,7 +1109,8 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
     return (
         "standalone, transition, native-loader, and loading-screen capture paths "
         "apply Settlement v2.5, preserve fresh-instance raw measurements, "
-        "derive long corroboration from the stationary window, and "
+        "derive long corroboration from the stationary window, read Dark "
+        "Cloud row census from the native browser owner, and "
         "derive commit/tree/exact-binary provenance without operator overrides"
     )
 

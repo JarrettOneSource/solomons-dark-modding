@@ -906,6 +906,20 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "Record-NativeMenuLayout.ps1 regained a fixed-delay capture path",
     ),
     StaticMutation(
+        "recorder.dark-cloud-native-row-census",
+        RECORDER,
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "label_resolution_and_frame_render.inl",
+        "                reinterpret_cast<const void*>(browser_address),\n"
+        "                g_debug_ui_overlay_state.config."
+        "dark_cloud_browser_entry_count_offset,",
+        "                reinterpret_cast<const void*>(list_widget),\n"
+        "                g_debug_ui_overlay_state.config."
+        "dark_cloud_browser_entry_count_offset,",
+        "Dark Cloud row census again trusts pointer-probed widget capacity "
+        "instead of the browser's native +0x1E0 entry count",
+    ),
+    StaticMutation(
         "recorder.40-sample-floor",
         RECORDER,
         "scripts/NativeMenuCaptureSupport.ps1",
