@@ -664,6 +664,22 @@ def test_pair_launcher_drains_redirected_json_output() -> str:
 def test_ui_sandbox_retries_unlatched_create_choices() -> str:
     setup = _read("mods/lua_ui_sandbox_lab/scripts/lib/setup.lua")
 
+    assert re.search(
+        r"local native_menu_capture_idle_steps = \{\s*"
+        r"\{ kind = \"wait_action\", action_id = actions\.dialog_primary, "
+        r"surface_id = \"dialog\" \},\s*"
+        r"\{ kind = \"activate_action\", "
+        r"action_id = actions\.dialog_primary, surface_id = \"dialog\" \},\s*"
+        r"\}.*?"
+        r"if active_preset == \"native_menu_capture_idle\" then\s*"
+        r"return native_menu_capture_idle_steps\s*end",
+        setup,
+        re.DOTALL,
+    ), (
+        "native-menu capture can no longer dismiss the stock beta dialog "
+        "and then leave the automation mod inert before the recorder drives"
+    )
+
     for token in (
         "local CREATE_SELECTION_MAX_ATTEMPTS = 3",
         "local CREATE_SELECTION_LATCH_TIMEOUT_MS = 5000",

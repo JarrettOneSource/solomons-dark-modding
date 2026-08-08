@@ -235,6 +235,11 @@ local function build_steps(mode, actions, active_preset)
     { kind = "resolve_new_game_branch", create_surface_id = "create", confirm_action_id = actions.dialog_primary, confirm_surface_id = "dialog" },
   }
 
+  local native_menu_capture_idle_steps = {
+    { kind = "wait_action", action_id = actions.dialog_primary, surface_id = "dialog" },
+    { kind = "activate_action", action_id = actions.dialog_primary, surface_id = "dialog" },
+  }
+
   if mode == "create_probe" then
     return create_probe_steps
   end
@@ -243,6 +248,9 @@ local function build_steps(mode, actions, active_preset)
   end
   if active_preset == "create_manual" then
     return create_manual_steps
+  end
+  if active_preset == "native_menu_capture_idle" then
+    return native_menu_capture_idle_steps
   end
   if active_preset == "trace_rich_item_startup" then
     return trace_rich_item_startup_steps
