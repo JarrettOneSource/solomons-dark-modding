@@ -1530,6 +1530,42 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
                 f"control stripping through {forbidden!r}"
             )
     _require_regex(
+        layout_snapshot,
+        r"ResolveCapturedLayoutScreenId\(.*?"
+        r"has_action_prefix\(\"pause_menu\.\"\).*?return \"pause_menu\";.*?"
+        r"has_action_prefix\(\"profile\.\"\).*?return \"dark_cloud_menu\";.*?"
+        r"has_action\(\"main_menu\.resume_last_game\"\).*?"
+        r"has_action\(\"main_menu\.new_game\"\).*?"
+        r"has_action\(\"main_menu\.back\"\).*?"
+        r"return \"profile_save_select\";",
+        "the capture-time classifier can no longer distinguish pause, Dark "
+        "Cloud menu, and profile-select surfaces by their measured actions",
+    )
+    _require_regex(
+        layout_snapshot,
+        r"has_art\(\"GameOver\.0\"\) && has_art\(\"GameOver\.1\"\).*?"
+        r"return \"game_over\";.*?"
+        r"has_art\(\"ControlPanel\.9\"\).*?return \"performance\";.*?"
+        r"has_art\(\"ControlPanel\.0\"\) && "
+        r"has_art\(\"ControlPanel\.18\"\).*?return \"settings\";.*?"
+        r"has_art\(\"UI\.51\"\) && has_art\(\"Skills\.13\"\).*?"
+        r"return \"skill_picker\";.*?"
+        r"has_art\(\"LevelPicker\.3\"\).*?return \"map_picker\";",
+        "art-only game-over, performance, settings, skill-picker, and "
+        "map-picker layouts can no longer acquire a measured screen identity",
+    )
+    _require_regex(
+        layout_snapshot,
+        r"visible_art_count\(\"UI\.17\"\) >= 4 &&\s*"
+        r"visible_art_count\(\"UI\.18\"\) >= 2 && "
+        r"has_art\(\"UI\.28\"\).*?return \"dark_cloud_settings\";.*?"
+        r"has_art\(\"Skills\.43\"\) && has_art\(\"UI\.42\"\) &&\s*"
+        r"\(has_art\(\"LevelPicker\.0\"\) \|\| "
+        r"has_art\(\"UI\.28\"\)\).*?return \"hub\";",
+        "the art-only Dark Cloud settings and both Hub path states can no "
+        "longer be separated by their measured native art signatures",
+    )
+    _require_regex(
         bindings,
         r"if \(!sdmod::TryCaptureCurrentDebugUiLayoutSnapshot\(.*?"
         r"lua_pushnil\(state\);.*?"
@@ -1542,7 +1578,7 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
     _require_regex(
         support,
         r"function Assert-NativeMenuCaptureSurfaceAgreement\s*\{.*?"
-        r"\$captureSurface\s*=\s*Get-NativeMenuCaptureSurfaceId.*?"
+        r"\$captureSurface\s*=\s*Get-NativeMenuMachineSurfaceId.*?"
         r"if \(\s*\$MachineClassifiedSurface -cne \$captureSurface -and\s*"
         r"\$MachineClassifiedSurface -cne \$OperatorScreenTag\s*\) \{\s*"
         r"throw \(.*?"
@@ -1564,8 +1600,8 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         r"local snapshot, capture_diagnostic\s*=\s*"
         r"sd\.ui\.capture_current_layout\(\[=\[\$captureSurfaceId\]=\]\).*?"
         r"__NATIVE_MENU_LAYOUT_SURFACE_MISMATCH__=.*?"
-        r"Status = \"wrong_surface\".*?"
         r"Assert-NativeMenuCaptureSurfaceAgreement.*?"
+        r"catch\s*\{.*?Status = \"wrong_surface\".*?"
         r"Status = \"not_ready\".*?"
         r"exact capture snapshot.*?still populating.*?"
         r"Status = \"ready\".*?"

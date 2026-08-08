@@ -421,8 +421,24 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         self.assertIn('return "create_element"', source)
         self.assertIn('has_art("Create.16")', source)
         self.assertIn('return "create_discipline"', source)
-        self.assertIn('element.action_id.rfind("pause_menu.", 0)', source)
+        self.assertIn('has_action_prefix("pause_menu.")', source)
         self.assertIn('return "pause_menu"', source)
+        self.assertIn('has_action_prefix("profile.")', source)
+        self.assertIn('return "dark_cloud_menu"', source)
+        self.assertIn('has_action("main_menu.resume_last_game")', source)
+        self.assertIn('return "profile_save_select"', source)
+        for art_id, screen_id in (
+            ("GameOver.0", "game_over"),
+            ("ControlPanel.9", "performance"),
+            ("ControlPanel.0", "settings"),
+            ("UI.51", "skill_picker"),
+            ("LevelPicker.3", "map_picker"),
+            ("Skills.43", "hub"),
+        ):
+            self.assertIn(f'has_art("{art_id}")', source)
+            self.assertIn(f'return "{screen_id}"', source)
+        self.assertIn('visible_art_count("UI.17") >= 4', source)
+        self.assertIn('return "dark_cloud_settings"', source)
         self.assertIn("ContainsObservedTextAbove", source)
         self.assertIn('"hall of fame",', source)
         self.assertIn("100.0f", source)

@@ -45,12 +45,64 @@ std::string ResolveCapturedLayoutScreenId(
     const auto semantic_root = semantic_elements.empty()
         ? std::string{}
         : GetOverlaySurfaceRootId(semantic_elements.front().surface_id);
+    const auto has_action_prefix =
+        [&](std::string_view prefix) {
+            return std::any_of(
+                semantic_elements.begin(),
+                semantic_elements.end(),
+                [&](const OverlayRenderElement& element) {
+                    return element.action_id.rfind(prefix, 0) == 0;
+                });
+        };
+    const auto has_action =
+        [&](std::string_view action_id) {
+            return std::any_of(
+                semantic_elements.begin(),
+                semantic_elements.end(),
+                [&](const OverlayRenderElement& element) {
+                    return element.action_id == action_id;
+                });
+        };
+    const auto visible_art_count =
+        [&](std::string_view art_id) {
+            return std::count_if(
+                art_elements.begin(),
+                art_elements.end(),
+                [&](const CapturedMenuArtElement& element) {
+                    return element.visible && element.art_id == art_id;
+                });
+        };
+    const auto has_art =
+        [&](std::string_view art_id) {
+            return visible_art_count(art_id) != 0;
+        };
     if (semantic_root == "settings" || semantic_root == "controls") {
         return semantic_root;
     }
     if (semantic_root == "dialog" &&
         ContainsObservedText(exact_text_elements, "beta version v.0.72")) {
         return "beta_notice";
+    }
+    if (has_action_prefix("pause_menu.")) {
+        return "pause_menu";
+    }
+    if (has_action_prefix("profile.")) {
+        return "dark_cloud_menu";
+    }
+    if (has_action("main_menu.resume_last_game") ||
+        has_action("main_menu.new_game") ||
+        has_action("main_menu.back")) {
+        return "profile_save_select";
+    }
+    if (ContainsObservedText(exact_text_elements, "resume game") &&
+        ContainsObservedText(exact_text_elements, "leave game") &&
+        ContainsObservedText(exact_text_elements, "game settings")) {
+        return "pause_menu";
+    }
+    if (ContainsObservedText(exact_text_elements, "last game") &&
+        ContainsObservedText(exact_text_elements, "new game") &&
+        ContainsObservedText(exact_text_elements, "back")) {
+        return "profile_save_select";
     }
     struct TextScreen {
         const char* text;
@@ -61,7 +113,9 @@ std::string ResolveCapturedLayoutScreenId(
         {"search cloud for boneyards", "dark_cloud_search"},
         {"sort levels by", "dark_cloud_sort"},
         {"level options", "dark_cloud_options"},
+        {"item 1", "dark_cloud_login_settings"},
         {"dark cloud settings", "dark_cloud_settings"},
+        {"tweak performance", "performance"},
         {"game over", "game_over"},
     };
     for (const auto& candidate : kTextScreens) {
@@ -76,14 +130,6 @@ std::string ResolveCapturedLayoutScreenId(
         return "hall_of_fame";
     }
     if (semantic_root == "create") {
-        const auto has_art = [&](std::string_view art_id) {
-            return std::any_of(
-                art_elements.begin(),
-                art_elements.end(),
-                [&](const CapturedMenuArtElement& element) {
-                    return element.visible && element.art_id == art_id;
-                });
-        };
         if (has_art("Create.9")) {
             return "create_element";
         }
@@ -91,13 +137,33 @@ std::string ResolveCapturedLayoutScreenId(
             return "create_discipline";
         }
     }
-    if (std::any_of(
-            semantic_elements.begin(),
-            semantic_elements.end(),
-            [](const OverlayRenderElement& element) {
-                return element.action_id.rfind("pause_menu.", 0) == 0;
-            })) {
-        return "pause_menu";
+    if (has_art("GameOver.0") && has_art("GameOver.1")) {
+        return "game_over";
+    }
+    if (has_art("ControlPanel.9")) {
+        return "performance";
+    }
+    if (has_art("ControlPanel.0") && has_art("ControlPanel.18")) {
+        return "settings";
+    }
+    if (has_art("UI.51") && has_art("Skills.13")) {
+        return "skill_picker";
+    }
+    if (has_art("LevelPicker.3")) {
+        return "map_picker";
+    }
+    if (visible_art_count("UI.101") >= 5 &&
+        visible_art_count("UI.54") >= 10 &&
+        visible_art_count("UI.13") >= 8) {
+        return "dark_cloud_menu";
+    }
+    if (visible_art_count("UI.17") >= 4 &&
+        visible_art_count("UI.18") >= 2 && has_art("UI.28")) {
+        return "dark_cloud_settings";
+    }
+    if (has_art("Skills.43") && has_art("UI.42") &&
+        (has_art("LevelPicker.0") || has_art("UI.28"))) {
+        return "hub";
     }
     if (!semantic_root.empty()) {
         return semantic_root;
