@@ -1531,6 +1531,18 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
             )
     _require_regex(
         layout_snapshot,
+        r"const auto contains_text =.*?"
+        r"ContainsObservedText\(exact_text_elements, expected\).*?"
+        r"LowerAsciiCopy\(element\.label\)\.find\(\s*"
+        r"normalized_expected\).*?"
+        r"semantic_root == \"dialog\" && "
+        r"contains_text\(\"beta version v\.0\.72\"\).*?"
+        r"return \"beta_notice\";",
+        "the capture-time classifier can no longer identify the stock beta "
+        "dialog when its measured title arrives through semantic text",
+    )
+    _require_regex(
+        layout_snapshot,
         r"ResolveCapturedLayoutScreenId\(.*?"
         r"has_action_prefix\(\"pause_menu\.\"\).*?return \"pause_menu\";.*?"
         r"has_action_prefix\(\"profile\.\"\).*?return \"dark_cloud_menu\";.*?"

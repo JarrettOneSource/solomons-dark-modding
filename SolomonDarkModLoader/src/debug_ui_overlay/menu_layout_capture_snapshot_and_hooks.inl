@@ -76,11 +76,24 @@ std::string ResolveCapturedLayoutScreenId(
         [&](std::string_view art_id) {
             return visible_art_count(art_id) != 0;
         };
+    const auto contains_text =
+        [&](std::string_view expected) {
+            if (ContainsObservedText(exact_text_elements, expected)) {
+                return true;
+            }
+            const auto normalized_expected = LowerAsciiCopy(expected);
+            return std::any_of(
+                semantic_elements.begin(),
+                semantic_elements.end(),
+                [&](const OverlayRenderElement& element) {
+                    return LowerAsciiCopy(element.label).find(
+                               normalized_expected) != std::string::npos;
+                });
+        };
     if (semantic_root == "settings" || semantic_root == "controls") {
         return semantic_root;
     }
-    if (semantic_root == "dialog" &&
-        ContainsObservedText(exact_text_elements, "beta version v.0.72")) {
+    if (semantic_root == "dialog" && contains_text("beta version v.0.72")) {
         return "beta_notice";
     }
     if (has_action_prefix("pause_menu.")) {
@@ -94,14 +107,12 @@ std::string ResolveCapturedLayoutScreenId(
         has_action("main_menu.back")) {
         return "profile_save_select";
     }
-    if (ContainsObservedText(exact_text_elements, "resume game") &&
-        ContainsObservedText(exact_text_elements, "leave game") &&
-        ContainsObservedText(exact_text_elements, "game settings")) {
+    if (contains_text("resume game") && contains_text("leave game") &&
+        contains_text("game settings")) {
         return "pause_menu";
     }
-    if (ContainsObservedText(exact_text_elements, "last game") &&
-        ContainsObservedText(exact_text_elements, "new game") &&
-        ContainsObservedText(exact_text_elements, "back")) {
+    if (contains_text("last game") && contains_text("new game") &&
+        contains_text("back")) {
         return "profile_save_select";
     }
     struct TextScreen {
@@ -119,7 +130,7 @@ std::string ResolveCapturedLayoutScreenId(
         {"game over", "game_over"},
     };
     for (const auto& candidate : kTextScreens) {
-        if (ContainsObservedText(exact_text_elements, candidate.text)) {
+        if (contains_text(candidate.text)) {
             return candidate.screen_id;
         }
     }

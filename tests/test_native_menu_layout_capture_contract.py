@@ -425,6 +425,9 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         self.assertIn('return "pause_menu"', source)
         self.assertIn('has_action_prefix("profile.")', source)
         self.assertIn('return "dark_cloud_menu"', source)
+        self.assertIn("ContainsObservedText(exact_text_elements, expected)", source)
+        self.assertIn("LowerAsciiCopy(element.label).find(", source)
+        self.assertIn('contains_text("beta version v.0.72")', source)
         self.assertIn('has_action("main_menu.resume_last_game")', source)
         self.assertIn('return "profile_save_select"', source)
         for art_id, screen_id in (
