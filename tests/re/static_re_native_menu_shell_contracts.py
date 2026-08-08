@@ -1242,7 +1242,8 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
         attributes + "\n" + baseline_writer,
         r"^tests/fixtures/webgame/native-menu-profile-state-baseline\.json "
         r"text eol=lf$.*?"
-        r"\(\$value \| ConvertTo-Json -Depth 20\) \+ \"`n\"",
+        r"\(\$value \| ConvertTo-Json -Depth 20\)\.Replace\("
+        r"\"`r`n\", \"`n\"\).*?\$serialized \+ \"`n\"",
         "the committed profile-state baseline no longer has identical LF bytes "
         "on Windows capture hosts and CI checkouts",
     )

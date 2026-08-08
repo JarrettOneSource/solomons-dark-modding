@@ -172,9 +172,10 @@ if (Test-Path -LiteralPath $outputItemPath) {
 ) | Out-Null
 $temporaryPath = $outputItemPath + ".menufix.tmp"
 try {
+    $serialized = ($value | ConvertTo-Json -Depth 20).Replace("`r`n", "`n")
     [IO.File]::WriteAllText(
         $temporaryPath,
-        ($value | ConvertTo-Json -Depth 20) + "`n",
+        $serialized + "`n",
         [Text.UTF8Encoding]::new($false)
     )
     [IO.File]::Move($temporaryPath, $outputItemPath)
