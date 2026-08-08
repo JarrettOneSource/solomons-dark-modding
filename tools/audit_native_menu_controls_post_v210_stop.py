@@ -113,8 +113,8 @@ def settled_identity(
         surfaces != {"controls"}
         or tagged_screens != {"controls"}
         or screen_titles != {"Wizard Controls"}
+        or len(semantic_generations) != 1
         or len(layout_generations) != 1
-        or len(censuses) != 1
     ):
         raise ValueError(
             f"{label} no longer reproduces one classifier-agreed Controls state"
