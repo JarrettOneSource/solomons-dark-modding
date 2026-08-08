@@ -1,0 +1,34 @@
+{
+    "schema":  "solomon-dark-native-menu-profile-state-baseline-v1",
+    "header":  {
+                   "label":  "menufix pristine durable-state baseline",
+                   "instance":  "menufx-v9base3",
+                   "process_id":  9940,
+                   "source":  {
+                                  "base_commit_sha":  "d709ce1b23b819cd2fda920cfc1613a773c54f5c",
+                                  "source_tree_sha":  "70ba8c80324b23144313be6968bad9917c2b4019",
+                                  "capture_tree":  "exact committed tree at base_commit_sha",
+                                  "game_executable_sha256":  "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+                                  "loader_dll_sha256":  "77d86da0660c57ba59d3977cd60ee04e9b9e04a05de379dcd4fe8e3b7051e884",
+                                  "profile_state_identity_sha256":  "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372"
+                              },
+                   "recorded_live":  true,
+                   "captured_at_utc":  "2026-08-08T17:00:31.9656549Z",
+                   "launch_receipt":  {
+                                          "evidence_filename":  "menufx-v9base3.prelaunch-profile-state.json",
+                                          "sha256":  "91a78be908cdfc2dc8c379f8bca496409e31a674e3f9b3576fa72970a7fb4bf1",
+                                          "bytes":  700
+                                      },
+                   "corrective":  "Case A durable-state pin: source sandbox excluded, retail APPDATA unseeded, no profile files"
+               },
+    "profile_state":  {
+                          "identity_schema":  "solomon-dark-native-menu-profile-state-input-v1",
+                          "profile_state_identity_sha256":  "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+                          "baseline_mode":  "fresh_install",
+                          "source_sandbox_excluded":  true,
+                          "retail_appdata_seeded":  false,
+                          "files":  [
+
+                                    ]
+                      }
+}
