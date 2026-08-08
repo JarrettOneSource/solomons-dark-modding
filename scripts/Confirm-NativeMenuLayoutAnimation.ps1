@@ -54,13 +54,54 @@ if ([string]$primary.header.instance -eq $Instance) {
 if ([int]$primary.header.process_id -eq $ProcessId) {
     throw "Animated-ID confirmation must come from a different exact process."
 }
-$primarySourceJson = $primary.header.source | ConvertTo-Json -Compress
-$confirmationSourceJson = $context.Source | ConvertTo-Json -Compress
-if ($primarySourceJson -cne $confirmationSourceJson) {
+$profileStateBinding = Get-NativeMenuProfileStateBinding `
+    -Context $context `
+    -LayoutId $ScreenId
+$primaryBinding = $primary.header.profile_state_binding
+if (
+    $null -eq $primaryBinding -or
+    [string]$primaryBinding.layout_id -cne $ScreenId -or
+    [string]$primaryBinding.baseline_id -cne
+        [string]$profileStateBinding.baseline_id
+) {
     throw (
-        "Animated-ID confirmation must use the same commit, tree, game, and " +
-        "loader provenance as the primary capture."
+        "STOP: native-menu per-binding profile-state baseline mismatch: " +
+        "animation confirmation does not match the primary layout binding."
     )
+}
+foreach ($field in @(
+    "base_commit_sha",
+    "source_tree_sha",
+    "game_executable_sha256",
+    "loader_dll_sha256"
+)) {
+    if (
+        [string]$primary.header.source.$field -cne
+            [string]$context.Source.$field
+    ) {
+        throw (
+            "Animated-ID confirmation must use the same commit, tree, game, " +
+            "and loader provenance as the primary capture."
+        )
+    }
+}
+if (
+    [string]$profileStateBinding.baseline_id -ceq
+        "hub_new_game_two_action_v213"
+) {
+    $primaryRole = [string]$primaryBinding.derivation_witness_role
+    $confirmationRole = [string]$profileStateBinding.derivation_witness_role
+    if (
+        $primaryRole -cne "primary" -or
+        $confirmationRole -cne "confirmation" -or
+        [string]$primary.header.source.profile_state_identity_sha256 -ceq
+            [string]$context.Source.profile_state_identity_sha256
+    ) {
+        throw (
+            "STOP: native-menu derivation receipt mismatch: animation " +
+            "confirmation requires distinct primary and confirmation witnesses."
+        )
+    }
 }
 if ($null -ne $primary.header.PSObject.Properties["animation_confirmation"]) {
     throw "Primary fixture already names an animation confirmation; refusing ambiguity."
@@ -143,6 +184,7 @@ $confirmation = [ordered]@{
         process_id = $ProcessId
         source = $context.Source
         profile_state = $profileState
+        profile_state_binding = $profileStateBinding
         recorded_live = $true
         captured_at_utc = $capturedAtUtc
         capture_method = $observation.capture_method
@@ -169,6 +211,11 @@ $confirmation = [ordered]@{
         $observation.settlement_trace.settled_window_samples
     )
 }
+if ($profileStateBinding.Contains("path_dependent_core")) {
+    $confirmation.header["path_dependent_core"] = (
+        $profileStateBinding.path_dependent_core
+    )
+}
 [IO.File]::WriteAllText(
     $outputItemPath,
     (($confirmation | ConvertTo-Json -Depth 100) + [Environment]::NewLine),
@@ -188,6 +235,7 @@ $confirmationHeader = [pscustomobject][ordered]@{
     process_id = $ProcessId
     source = $context.Source
     profile_state = $profileState
+    profile_state_binding = $profileStateBinding
     confirmation_structural_sha256 = (
         [string]$observation.settlement.structural_sha256
     )

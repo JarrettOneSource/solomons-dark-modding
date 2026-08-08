@@ -116,6 +116,11 @@ $trace = [ordered]@{
         $observation.settlement_trace.settled_window_samples
     )
 }
+if ($profileStateBinding.Contains("path_dependent_core")) {
+    $trace.header["path_dependent_core"] = (
+        $profileStateBinding.path_dependent_core
+    )
+}
 [IO.File]::WriteAllText(
     $traceItemPath,
     ($trace | ConvertTo-Json -Depth 100) + [Environment]::NewLine,
@@ -155,6 +160,11 @@ $fixture = [ordered]@{
         reference_capture = $referenceRelative
     }
     layout = $observation.layout
+}
+if ($profileStateBinding.Contains("path_dependent_core")) {
+    $fixture.header["path_dependent_core"] = (
+        $profileStateBinding.path_dependent_core
+    )
 }
 [IO.File]::WriteAllText(
     $outputItemPath,

@@ -1229,6 +1229,30 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
             r"profile_state\s*=\s*\$profileState",
             f"{path} no longer copies and records the machine-derived durable-state receipt",
         )
+    _require_regex(
+        recorders["scripts/Confirm-NativeMenuLayoutAnimation.ps1"],
+        r"Get-NativeMenuProfileStateBinding.*?"
+        r"profile_state_binding.*?"
+        r"base_commit_sha.*?source_tree_sha.*?game_executable_sha256.*?"
+        r"loader_dll_sha256.*?"
+        r"hub_new_game_two_action_v213.*?"
+        r"primaryRole -cne \"primary\".*?"
+        r"confirmationRole -cne \"confirmation\".*?"
+        r"profile_state_identity_sha256 -ceq",
+        "animation confirmation no longer keeps commit/tree/binaries exact "
+        "while requiring distinct pinned v2.13 derivation witness roles",
+    )
+    _require_regex(
+        support + "\n" + recorders["scripts/Record-NativeMenuLayout.ps1"],
+        r"pathDependentCore = \[ordered\]@\{.*?"
+        r"parent_screen_id.*?path_qualifier.*?selector.*?"
+        r"required_baseline_id.*?measured_settled_element_count.*?"
+        r"fork_decision.*?"
+        r"profileStateBinding\.Contains\(\"path_dependent_core\"\).*?"
+        r"fixture\.header\[\"path_dependent_core\"\]",
+        "the standalone recorder no longer emits exact Hub fork provenance "
+        "from the machine-derived v2.13 binding contract",
+    )
 
     _require_regex(
         baseline_writer,

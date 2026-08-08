@@ -516,11 +516,23 @@ function Get-NativeMenuProfileStateBinding {
     $baselineId = [string]$Context.ProfileState.baseline_id
     $requiredBaselineId = "pristine_fresh_install"
     $resolvedLayoutId = $LayoutId
+    $pathDependentCore = $null
     if (-not [string]::IsNullOrWhiteSpace($LayoutId)) {
         $hubLayouts = @($Context.ProfileStateBindingContract.layouts.PSObject.Properties |
             Where-Object Name -ceq $LayoutId)
         if ($hubLayouts.Count -eq 1) {
-            $requiredBaselineId = [string]$hubLayouts[0].Value.required_baseline_id
+            $hubLayout = $hubLayouts[0].Value
+            $requiredBaselineId = [string]$hubLayout.required_baseline_id
+            $pathDependentCore = [ordered]@{
+                parent_screen_id = [string]$hubLayout.parent_screen_id
+                path_qualifier = [string]$hubLayout.path_qualifier
+                selector = [string]$hubLayout.selector
+                required_baseline_id = [string]$hubLayout.required_baseline_id
+                measured_settled_element_count = (
+                    [int]$hubLayout.measured_settled_element_count
+                )
+                fork_decision = $hubLayout.fork_decision
+            }
         } elseif ($hubLayouts.Count -gt 1) {
             throw "BROKEN: profile-state layout binding lookup is ambiguous."
         }
@@ -556,7 +568,7 @@ function Get-NativeMenuProfileStateBinding {
             "'$baselineId'."
         )
     }
-    return [ordered]@{
+    $result = [ordered]@{
         baseline_id = $baselineId
         layout_id = $resolvedLayoutId
         edge_id = $EdgeId
@@ -566,6 +578,10 @@ function Get-NativeMenuProfileStateBinding {
             } else { "" }
         )
     }
+    if ($null -ne $pathDependentCore) {
+        $result["path_dependent_core"] = $pathDependentCore
+    }
+    return $result
 }
 
 function Copy-NativeMenuProfileStateEvidence {
