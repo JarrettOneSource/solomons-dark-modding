@@ -1399,6 +1399,9 @@ def validate_and_promote(
     order_override_contract = read_json(
         landed_root / "native-menu-beta-notice-order-v29.json"
     )
+    controls_title_contract = read_json(
+        landed_root / "native-menu-controls-title-v210.json"
+    )
     resolved_navigation = read_json(navigation_path)
     (
         primary_navigation,
@@ -1549,12 +1552,14 @@ def validate_and_promote(
             continue
         try:
             standalone_diagnoses[layout_id] = diagnose_landed_layout(
+                layout_id,
                 landed_by_layout_id[layout_id],
                 records[layout_id]["layout"],
                 records[layout_id]["primary_trace"],
                 records[layout_id]["confirmation_trace"],
                 derived_overlay_reference,
                 order_override_contract,
+                controls_title_contract,
             )
         except LandedDiagnosisError as error:
             raise PromotionError(f"STOP: standalone {layout_id}: {error}") from error
@@ -1713,12 +1718,14 @@ def validate_and_promote(
         if source_layout_id in landed_by_layout_id:
             try:
                 source_diagnosis = diagnose_landed_layout(
+                    source_layout_id,
                     landed_by_layout_id[source_layout_id],
                     records[source_layout_id]["layout"],
                     records[source_layout_id]["primary_trace"],
                     records[source_layout_id]["confirmation_trace"],
                     derived_overlay_reference,
                     order_override_contract,
+                    controls_title_contract,
                 )
             except LandedDiagnosisError as error:
                 raise PromotionError(

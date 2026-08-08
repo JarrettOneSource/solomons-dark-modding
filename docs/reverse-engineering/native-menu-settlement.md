@@ -1,4 +1,4 @@
-# Native menu settlement specification v2.9
+# Native menu settlement specification v2.10
 
 This specification governs every G11 native-menu standalone and navigation
 endpoint recording. Its rule is: what two independent fresh instances
@@ -134,7 +134,31 @@ changing one member, moving any other member, or placing the trio anywhere
 else is still a STOP. No other layout or order permutation can enter this
 path; all v2.1-v2.8 guardrails remain unchanged.
 
+## Controls title capture defect
+
+Settlement v2.10 adds one bounded landed-metadata correction. The old
+`controls` fixture omitted both the player-visible title member and the
+top-level `layout.screen_title`, leaving that field empty. Two independent
+classifier-agreed Controls windows reproduced the exact case-sensitive title
+`Wizard Controls`; the live Controls builder obtains it from the recovered
+`surface.controls` definition, and snapshot construction copies that measured
+semantic surface title into `layout.screen_title`. The accepted STOP audit is
+`0377809414de5a1e5d0b8af01baaf1ee8221c5e586e81d7dfda95f18d1da703f`.
+
+The correction applies only when the compared layout id and native screen id
+are both exactly `controls`, the landed title is exactly empty, and the settled
+title is exactly `Wizard Controls`. The title text member follows the ordinary
+settled-content diagnosis paths; v2.10 authorizes only the top-level field.
+Any case change, any other old or new value, any other field, or any other
+layout still takes the unchanged mismatch STOP. The v2.1-v2.9 settlement and
+diagnosis guardrails remain unchanged.
+
 ## Changelog
+
+- **v2.10 — 2026-08-07:** the accepted Controls title STOP proved that the
+  stale landed capture omitted its player-visible title and left
+  `layout.screen_title` empty. Added the exact Controls-only correction above;
+  no general title tolerance was added.
 
 - **v2.9 — 2026-08-07:** the accepted beta-notice landed-core-order STOP
   proved that one generation-13 fixture encoded hook enumeration rather than

@@ -112,6 +112,14 @@ def _stable_samples(count: int = 10) -> list[dict[str, object]]:
     return _samples(lambda _: [_art(index) for index in range(count)])
 
 
+def _v210_controls_title_contract() -> dict[str, object]:
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "tests/fixtures/webgame/native-menu-controls-title-v210.json"
+    )
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def _observation(
     samples: list[dict[str, object]], instance: str, process_id: int
 ) -> dict[str, object]:
@@ -1856,6 +1864,7 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
         unused_overlay = _multiset_reference([_art(99, art_id="UI.overlay")])
 
         diagnosis = diagnose_landed_layout(
+            "screen",
             landed,
             {**settled["structural_core"], **{
                 key: copy.deepcopy(settled[key])
@@ -1867,6 +1876,95 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
         )
 
         self.assertEqual(diagnosis["status"], "strict_structural_bit_match")
+
+    def test_v210_controls_title_exact_correction_is_bounded(self) -> None:
+        samples = _stable_samples(3)
+        for sample in samples:
+            sample["payload"]["screen_id"] = "controls"  # type: ignore[index]
+            sample["payload"]["screen_title"] = "Wizard Controls"  # type: ignore[index]
+        settled = _resolve_pair(samples)
+        landed = copy.deepcopy(samples[0]["payload"])
+        landed["screen_title"] = ""
+        trace = _trace(samples, copy.deepcopy(landed["elements"]))
+
+        diagnosis = diagnose_landed_layout(
+            "controls",
+            landed,
+            {
+                **settled["structural_core"],
+                "ambient_members": copy.deepcopy(settled["ambient_members"]),
+            },
+            trace,
+            copy.deepcopy(trace),
+            _multiset_reference([_art(99, art_id="UI.overlay")]),
+            controls_title_contract=_v210_controls_title_contract(),
+        )
+
+        self.assertEqual(diagnosis["status"], "corrected")
+        self.assertEqual(
+            diagnosis["screen_title_correction"]["layout_id"],  # type: ignore[index]
+            "controls",
+        )
+
+    def test_v210_controls_title_case_variant_remains_a_stop(self) -> None:
+        samples = _stable_samples(3)
+        for sample in samples:
+            sample["payload"]["screen_id"] = "controls"  # type: ignore[index]
+            sample["payload"]["screen_title"] = "WIZARD CONTROLS"  # type: ignore[index]
+        settled = _resolve_pair(samples)
+        landed = copy.deepcopy(samples[0]["payload"])
+        landed["screen_title"] = ""
+        trace = _trace(samples, copy.deepcopy(landed["elements"]))
+
+        with self.assertRaisesRegex(
+            LandedDiagnosisError,
+            "landed-vs-settled mismatch outside authorized classes: layout "
+            "field 'screen_title' differs",
+        ):
+            diagnose_landed_layout(
+                "controls",
+                landed,
+                {
+                    **settled["structural_core"],
+                    "ambient_members": copy.deepcopy(
+                        settled["ambient_members"]
+                    ),
+                },
+                trace,
+                copy.deepcopy(trace),
+                _multiset_reference([_art(99, art_id="UI.overlay")]),
+                controls_title_contract=_v210_controls_title_contract(),
+            )
+
+    def test_v210_controls_title_rule_does_not_apply_to_another_layout(self) -> None:
+        samples = _stable_samples(3)
+        for sample in samples:
+            sample["payload"]["screen_id"] = "other_screen"  # type: ignore[index]
+            sample["payload"]["screen_title"] = "Changed title"  # type: ignore[index]
+        settled = _resolve_pair(samples)
+        landed = copy.deepcopy(samples[0]["payload"])
+        landed["screen_title"] = ""
+        trace = _trace(samples, copy.deepcopy(landed["elements"]))
+
+        with self.assertRaisesRegex(
+            LandedDiagnosisError,
+            "landed-vs-settled mismatch outside authorized classes: layout "
+            "field 'screen_title' differs",
+        ):
+            diagnose_landed_layout(
+                "other-layout",
+                landed,
+                {
+                    **settled["structural_core"],
+                    "ambient_members": copy.deepcopy(
+                        settled["ambient_members"]
+                    ),
+                },
+                trace,
+                copy.deepcopy(trace),
+                _multiset_reference([_art(99, art_id="UI.overlay")]),
+                controls_title_contract=_v210_controls_title_contract(),
+            )
 
     def test_landed_ambient_lookup_uses_unique_exact_anchor_not_ordinal(self) -> None:
         landed = _art(9, art_id="UI.shared")
@@ -2005,6 +2103,7 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
         unused_overlay = _multiset_reference([_art(99, art_id="UI.overlay")])
 
         diagnosis = diagnose_landed_layout(
+            "screen",
             landed, settled_layout, trace, copy.deepcopy(trace), unused_overlay
         )
 
@@ -2033,6 +2132,7 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
             "and animation diagnosis",
         ):
             diagnose_landed_layout(
+                "screen",
                 landed,
                 settled_layout,
                 primary,
@@ -2055,6 +2155,7 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
         unused_overlay = _multiset_reference([_art(99, art_id="UI.overlay")])
 
         diagnosis = diagnose_landed_layout(
+            "screen",
             landed, settled_layout, trace, copy.deepcopy(trace), unused_overlay
         )
 
@@ -2081,6 +2182,7 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
         reference = _multiset_reference(overlay)
 
         diagnosis = diagnose_landed_layout(
+            "screen",
             landed, settled_layout, trace, copy.deepcopy(trace), reference
         )
 
@@ -2162,6 +2264,7 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
         unused_overlay = _multiset_reference([_art(99, art_id="UI.overlay")])
 
         diagnosis = diagnose_landed_layout(
+            "screen",
             landed,
             settled_layout,
             trace,

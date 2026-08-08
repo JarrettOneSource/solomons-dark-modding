@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mutation-audit every Settlement v2.1/v2.3/v2.4/v2.5/v2.6 menu claim."""
+"""Mutation-audit every Settlement v2.1-v2.10 native-menu claim."""
 
 from __future__ import annotations
 
@@ -572,6 +572,7 @@ CLASSIFIER = "test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired"
 CAMPAIGN = "test_native_menu_motion_capability_campaign_resolution_is_fail_closed"
 PATH_FORK = "test_native_menu_path_dependent_core_fork_is_exact"
 SURFACE_AGREEMENT = "test_native_menu_capture_surface_agreement_is_fail_closed"
+TITLE_V210 = "test_native_menu_v210_controls_title_correction_is_exact"
 
 
 BEHAVIOR_MUTATIONS: tuple[BehaviorMutation, ...] = (
@@ -792,6 +793,42 @@ BEHAVIOR_MUTATIONS: tuple[BehaviorMutation, ...] = (
 
 STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
     StaticMutation(
+        "v2.10.controls-layout-scope",
+        TITLE_V210,
+        "tools/native_menu_landed_diagnosis_v25.py",
+        'layout_id != controls_title_contract["layout_id"]',
+        '"controls" != controls_title_contract["layout_id"]',
+        "Settlement v2.10 can authorize a title change outside the exact "
+        "Controls layout, native screen, old value, and new value",
+    ),
+    StaticMutation(
+        "v2.10.controls-title-value-scope",
+        TITLE_V210,
+        "tools/native_menu_landed_diagnosis_v25.py",
+        'settled_title != controls_title_contract["settled_value"]',
+        '"Wizard Controls" != controls_title_contract["settled_value"]',
+        "Settlement v2.10 can authorize a title change outside the exact "
+        "Controls layout, native screen, old value, and new value",
+    ),
+    StaticMutation(
+        "v2.10.versioned-specification",
+        TITLE_V210,
+        "docs/reverse-engineering/native-menu-settlement.md",
+        "# Native menu settlement specification v2.10",
+        "# Native menu settlement specification v2.9",
+        "the versioned settlement specification no longer records the exact "
+        "Controls title STOP and bounded v2.10 correction",
+    ),
+    StaticMutation(
+        "v2.10.real-candidate-mutation-scope",
+        TITLE_V210,
+        "tools/run_native_menu_v210_title_mutations.py",
+        '"other_layout_title_change",',
+        '"other_layout_title_change_disabled",',
+        "the real-candidate v2.10 mutation runner no longer proves exact value "
+        "and exact layout scope with cleared-bytecode green baselines",
+    ),
+    StaticMutation(
         "v2.3.historical-baseline-hash-check",
         CAMPAIGN,
         "tools/resolve_native_menu_ambient_campaign.py",
@@ -868,7 +905,7 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "v2.6.spec-version-and-stop-changelog",
         PATH_FORK,
         "docs/reverse-engineering/native-menu-settlement.md",
-        "# Native menu settlement specification v2.9",
+        "# Native menu settlement specification v2.10",
         "# Native menu settlement specification v2.8",
         "the versioned settlement specification no longer records the narrow "
         "path-dependent-core rule and the STOP that caused it",
@@ -1451,7 +1488,7 @@ def main() -> int:
 
     payload = {
         "schema": "solomon-dark-native-menu-contract-mutations-v1",
-        "settlement_spec": "2.9",
+        "settlement_spec": "2.10",
         "count": len(results),
         "results": [asdict(result) for result in results],
     }

@@ -80,6 +80,7 @@ def main() -> int:
 
     def diagnose(layout: dict[str, Any]) -> dict[str, Any]:
         result = diagnose_landed_layout(
+            "beta-notice",
             landed,
             layout,
             record["primary_trace"],

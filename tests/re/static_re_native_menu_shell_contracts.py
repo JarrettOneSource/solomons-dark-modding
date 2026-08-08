@@ -2039,6 +2039,111 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
     )
 
 
+def test_native_menu_v210_controls_title_correction_is_exact() -> str:
+    assert_module_runs_in_ci("test_native_menu_ambient_lifecycle")
+    contract_path = (
+        ROOT
+        / "tests/fixtures/webgame/native-menu-controls-title-v210.json"
+    )
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    expected_fields = {
+        "schema": "solomon-dark-native-menu-controls-title-v210",
+        "settlement_spec": "2.10",
+        "layout_id": "controls",
+        "screen_id": "controls",
+        "field": "screen_title",
+        "landed_value": "",
+        "settled_value": "Wizard Controls",
+    }
+    if {field: contract.get(field) for field in expected_fields} != expected_fields:
+        raise StaticReTestFailure(
+            "Settlement v2.10 no longer authorizes exactly the empty-to-Wizard "
+            "Controls title correction"
+        )
+    if set(contract) != {*expected_fields, "source_stop_audit", "derivation"}:
+        raise StaticReTestFailure(
+            "Settlement v2.10 Controls title contract gained an unreviewed scope"
+        )
+    source_stop_audit = contract.get("source_stop_audit")
+    if source_stop_audit != {
+        "evidence_filename": "controls-screen-title-stop-audit.json",
+        "sha256": (
+            "0377809414de5a1e5d0b8af01baaf1ee8221c5e586e81d7dfda95f18d1da703f"
+        ),
+        "bytes": 5456,
+    }:
+        raise StaticReTestFailure(
+            "Settlement v2.10 Controls title correction lost its accepted STOP audit receipt"
+        )
+
+    diagnosis = _read("tools/native_menu_landed_diagnosis_v25.py")
+    promoter = _read("tools/promote_native_menu_recapture.py")
+    mutation_runner = _read("tools/run_native_menu_v210_title_mutations.py")
+    unit_tests = _read("tests/test_native_menu_ambient_lifecycle.py")
+    specification = _read("docs/reverse-engineering/native-menu-settlement.md")
+    _require_regex(
+        diagnosis,
+        r"def _diagnose_layout_identity_v210\(.*?"
+        r"landed_layout\.get\(\"screen_id\"\) != "
+        r"settled_layout\.get\(\"screen_id\"\).*?"
+        r"field 'screen_id' differs.*?"
+        r"if landed_title == settled_title:\s*return None.*?"
+        r"layout_id != controls_title_contract\[\"layout_id\"\].*?"
+        r"landed_layout\.get\(\"screen_id\"\) != "
+        r"controls_title_contract\[\"screen_id\"\].*?"
+        r"landed_title != controls_title_contract\[\"landed_value\"\].*?"
+        r"settled_title != controls_title_contract\[\"settled_value\"\].*?"
+        r"field 'screen_title' differs.*?"
+        r"solomon-dark-native-menu-screen-title-correction-v210",
+        "Settlement v2.10 can authorize a title change outside the exact "
+        "Controls layout, native screen, old value, and new value",
+    )
+    _require_regex(
+        promoter,
+        r"native-menu-controls-title-v210\.json.*?"
+        r"diagnose_landed_layout\(\s*layout_id,.*?"
+        r"order_override_contract,\s*controls_title_contract,.*?"
+        r"diagnose_landed_layout\(\s*source_layout_id,.*?"
+        r"order_override_contract,\s*controls_title_contract,",
+        "standalone or transition-source promotion can bypass the exact "
+        "v2.10 Controls title contract or lose layout identity",
+    )
+    _require_regex(
+        unit_tests,
+        r"def test_v210_controls_title_exact_correction_is_bounded\(.*?"
+        r"def test_v210_controls_title_case_variant_remains_a_stop\(.*?"
+        r"def test_v210_controls_title_rule_does_not_apply_to_another_layout\(",
+        "the CI behavior suite no longer proves v2.10 positive, wrong-value, "
+        "and wrong-layout behavior",
+    )
+    _require_regex(
+        mutation_runner,
+        r'layout\["screen_title"\] = "WIZARD CONTROLS".*?'
+        r'layout\["screen_title"\] = "Changed title outside Controls".*?'
+        r'"exact_controls_title_positive".*?'
+        r'"controls_title_case_variant".*?'
+        r'"other_layout_title_change".*?'
+        r"cleared_before_baseline = clear_contract_bytecode.*?"
+        r"cleared_before_mutation = clear_contract_bytecode.*?"
+        r"cleared_before_restore = clear_contract_bytecode",
+        "the real-candidate v2.10 mutation runner no longer proves exact value "
+        "and exact layout scope with cleared-bytecode green baselines",
+    )
+    _require_regex(
+        specification,
+        r"# Native menu settlement specification v2\.10.*?"
+        r"## Controls title capture defect.*?"
+        r"0377809414de5a1e5d0b8af01baaf1ee8221c5e586e81d7dfda95f18d1da703f.*?"
+        r"no general title tolerance was added",
+        "the versioned settlement specification no longer records the exact "
+        "Controls title STOP and bounded v2.10 correction",
+    )
+    return (
+        "Settlement v2.10 corrects only Controls layout.screen_title from the "
+        "landed empty value to the two-instance Wizard Controls value"
+    )
+
+
 def test_native_menu_path_dependent_core_fork_is_exact() -> str:
     assert_module_runs_in_ci("test_native_menu_ambient_lifecycle")
     resolver = _read("tools/resolve_native_menu_ambient_campaign.py")
@@ -2162,7 +2267,7 @@ def test_native_menu_path_dependent_core_fork_is_exact() -> str:
     )
     _require_regex(
         specification,
-        r"# Native menu settlement specification v2\.9.*?"
+        r"# Native menu settlement specification v2\.10.*?"
         r"## Path-dependent core.*?Settlement v2\.6.*?"
         r"two.*?fresh instances.*?"
         r"deterministic entry path.*?durable session state.*?"

@@ -39,6 +39,11 @@ class LandedDiagnosisError(ValueError):
     """A landed mismatch does not satisfy an authorized correction path."""
 
 
+V210_CONTROLS_TITLE_CONTRACT_SCHEMA = (
+    "solomon-dark-native-menu-controls-title-v210"
+)
+
+
 def canonical_bytes(value: Any) -> bytes:
     return json.dumps(
         value,
@@ -788,19 +793,115 @@ def diagnosis_prereference_residual(
     return unmatched, [*lifecycle, *animation]
 
 
+def _require_v210_controls_title_contract(
+    contract: dict[str, Any],
+) -> dict[str, Any]:
+    expected = {
+        "schema": V210_CONTROLS_TITLE_CONTRACT_SCHEMA,
+        "settlement_spec": "2.10",
+        "layout_id": "controls",
+        "screen_id": "controls",
+        "field": "screen_title",
+        "landed_value": "",
+        "settled_value": "Wizard Controls",
+    }
+    if set(contract) != {*expected, "source_stop_audit", "derivation"}:
+        raise LandedDiagnosisError(
+            "v2.10 Controls screen-title correction: generated contract "
+            "gained an unreviewed scope"
+        )
+    for field, value in expected.items():
+        if contract.get(field) != value:
+            raise LandedDiagnosisError(
+                "v2.10 Controls screen-title correction: generated contract "
+                f"changed its exact {field!r} scope"
+            )
+    source_stop_audit = contract.get("source_stop_audit")
+    if not isinstance(source_stop_audit, dict):
+        raise LandedDiagnosisError(
+            "v2.10 Controls screen-title correction: source STOP audit is absent"
+        )
+    if source_stop_audit != {
+        "evidence_filename": "controls-screen-title-stop-audit.json",
+        "sha256": (
+            "0377809414de5a1e5d0b8af01baaf1ee8221c5e586e81d7dfda95f18d1da703f"
+        ),
+        "bytes": 5456,
+    }:
+        raise LandedDiagnosisError(
+            "v2.10 Controls screen-title correction: source STOP audit receipt "
+            "does not match the accepted finding"
+        )
+    return source_stop_audit
+
+
+def _diagnose_layout_identity_v210(
+    layout_id: str,
+    landed_layout: dict[str, Any],
+    settled_layout: dict[str, Any],
+    controls_title_contract: dict[str, Any],
+) -> dict[str, Any] | None:
+    if landed_layout.get("screen_id") != settled_layout.get("screen_id"):
+        raise LandedDiagnosisError(
+            "landed-vs-settled mismatch outside authorized classes: layout "
+            "field 'screen_id' differs"
+        )
+    landed_title = landed_layout.get("screen_title")
+    settled_title = settled_layout.get("screen_title")
+    if landed_title == settled_title:
+        return None
+
+    if not controls_title_contract:
+        raise LandedDiagnosisError(
+            "landed-vs-settled mismatch outside authorized classes: layout "
+            "field 'screen_title' differs"
+        )
+    source_stop_audit = _require_v210_controls_title_contract(
+        controls_title_contract
+    )
+    if (
+        layout_id != controls_title_contract["layout_id"]
+        or landed_layout.get("screen_id") != controls_title_contract["screen_id"]
+        or landed_title != controls_title_contract["landed_value"]
+        or settled_title != controls_title_contract["settled_value"]
+    ):
+        raise LandedDiagnosisError(
+            "landed-vs-settled mismatch outside authorized classes: layout "
+            "field 'screen_title' differs"
+        )
+    return {
+        "schema": "solomon-dark-native-menu-screen-title-correction-v210",
+        "layout_id": layout_id,
+        "field": "screen_title",
+        "old_value": landed_title,
+        "new_value": settled_title,
+        "reason": "landed_stale_controls_capture_omitted_live_title",
+        "source_stop_audit": copy.deepcopy(source_stop_audit),
+    }
+
+
 def diagnose_landed_layout(
+    layout_id: str,
     landed_layout: dict[str, Any],
     settled_layout: dict[str, Any],
     primary_trace: dict[str, Any],
     confirmation_trace: dict[str, Any],
     overlay_reference: dict[str, Any],
     order_override_contract: dict[str, Any] | None = None,
+    controls_title_contract: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    for field in ("screen_id", "screen_title"):
-        if landed_layout.get(field) != settled_layout.get(field):
-            raise LandedDiagnosisError(
-                f"landed-vs-settled mismatch outside authorized classes: layout field '{field}' differs"
-            )
+    if not isinstance(layout_id, str) or not layout_id:
+        raise LandedDiagnosisError(
+            "landed-vs-settled diagnosis has no unambiguous layout identity"
+        )
+    if controls_title_contract is None:
+        controls_title_contract = {}
+    screen_title_correction = _diagnose_layout_identity_v210(
+        layout_id,
+        landed_layout,
+        settled_layout,
+        controls_title_contract,
+    )
     if order_override_contract is None:
         projected, residual = project_structural_core(landed_layout, settled_layout)
         order_correction = None
@@ -830,7 +931,12 @@ def diagnose_landed_layout(
             f"'{element.get('art_id') or element.get('action_id') or element.get('text')}'"
         )
     corrected = bool(
-        lifecycle or population or overlay or animation or order_correction
+        lifecycle
+        or population
+        or overlay
+        or animation
+        or order_correction
+        or screen_title_correction
     )
     if not corrected and landed_layout.get("generation") != settled_layout.get("generation"):
         raise LandedDiagnosisError(
@@ -860,5 +966,6 @@ def diagnose_landed_layout(
         "overlay_reference_sha256": sha256_json(overlay_reference),
         "animated_geometry_dispositions": animation,
         "core_order_correction": order_correction,
+        "screen_title_correction": screen_title_correction,
         "all_differing_members_enumerated": True,
     }

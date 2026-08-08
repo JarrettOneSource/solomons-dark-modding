@@ -1,0 +1,15 @@
+{
+  "schema": "solomon-dark-native-menu-controls-title-v210",
+  "settlement_spec": "2.10",
+  "layout_id": "controls",
+  "screen_id": "controls",
+  "field": "screen_title",
+  "landed_value": "",
+  "settled_value": "Wizard Controls",
+  "source_stop_audit": {
+    "evidence_filename": "controls-screen-title-stop-audit.json",
+    "sha256": "0377809414de5a1e5d0b8af01baaf1ee8221c5e586e81d7dfda95f18d1da703f",
+    "bytes": 5456
+  },
+  "derivation": "two independent classifier-agreed Controls windows reproduced the configured player-visible title omitted by the stale landed capture"
+}

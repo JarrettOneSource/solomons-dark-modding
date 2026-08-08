@@ -140,6 +140,7 @@ from static_re_native_menu_shell_contracts import (
     test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired,
     test_native_menu_settled_destinations_equal_standalones,
     test_native_menu_transition_endpoint_provenance_is_pinned,
+    test_native_menu_v210_controls_title_correction_is_exact,
 )
 from static_re_boneyard_lighting_contracts import (
     test_boneyard_tree_last_writer_render_path_is_registered,
@@ -1179,6 +1180,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native menu motion capability campaign resolution is fail closed",
         test_native_menu_motion_capability_campaign_resolution_is_fail_closed,
+    ),
+    (
+        "Native menu v2.10 Controls title correction is exact",
+        test_native_menu_v210_controls_title_correction_is_exact,
     ),
     (
         "Native menu path-dependent core fork is exact",
