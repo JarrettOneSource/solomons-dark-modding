@@ -840,6 +840,11 @@ local function core(element)
     ',"draw_order":', tostring(element.draw_order or 0)
   })
 end
+if type(sd) ~= 'table' or type(sd.ui) ~= 'table' or
+    type(sd.ui.get_snapshot) ~= 'function' or
+    type(sd.ui.capture_current_layout) ~= 'function' then
+  return '__NATIVE_MENU_LAYOUT_NOT_READY__'
+end
 $captureFrame
 local semantic = sd.ui.get_snapshot()
 local snapshot, capture_diagnostic =

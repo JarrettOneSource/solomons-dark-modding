@@ -1552,6 +1552,11 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
     )
     _require_regex(
         support,
+        r"type\(sd\) ~= 'table'.*?"
+        r"type\(sd\.ui\) ~= 'table'.*?"
+        r"type\(sd\.ui\.get_snapshot\) ~= 'function'.*?"
+        r"type\(sd\.ui\.capture_current_layout\) ~= 'function'.*?"
+        r"return '__NATIVE_MENU_LAYOUT_NOT_READY__'.*?"
         r"local snapshot, capture_diagnostic\s*=\s*"
         r"sd\.ui\.capture_current_layout\(\[=\[\$captureSurfaceId\]=\]\).*?"
         r"__NATIVE_MENU_LAYOUT_SURFACE_MISMATCH__=.*?"
@@ -1570,9 +1575,9 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         r"\$script:NativeMenuSettleConsecutiveSamples.*?"
         r"\$script:NativeMenuSettleMinimumSpanMilliseconds.*?"
         r"throw \[string\]\$probe\.Detail",
-        "the live probe can accept a retagged layout, lose the measured "
-        "surface, tolerate a foreign surface, or let a settled source "
-        "mismatch age into the general timeout",
+        "the live probe can treat an initializing API as broken, accept a "
+        "retagged layout, lose the measured surface, tolerate a foreign "
+        "surface, or let a settled source mismatch age into the general timeout",
     )
     _require_regex(
         settings_builder,
