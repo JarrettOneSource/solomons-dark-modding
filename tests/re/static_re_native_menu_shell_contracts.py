@@ -1620,18 +1620,19 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         r"if \(\$probe\.Status -in "
         r"@\(\"wrong_surface\", \"wrong_tab\"\)\) \{\s*"
         r"\$measuredSurface.*?"
-        r"IsNullOrWhiteSpace\(\s*\$TransitionalSourceScreen\s*\).*?"
         r"Test-NativeMenuScreenTagsEquivalent.*?"
         r"-Left \$measuredSurface.*?"
         r"-Right \$TransitionalSourceScreen.*?"
-        r"throw \[string\]\$probe\.Detail.*?"
-        r"\$consecutiveTransitionSourceProbes -ge\s*"
+        r"\$probeKey = \(.*?\$probe\.Status.*?\$measuredSurface.*?"
+        r"\$probe\.NativeGeneration.*?"
+        r"\$probeKey -cne \$foreignSurfaceProbeKey.*?"
+        r"if \(\s*\$consecutiveForeignSurfaceProbes -ge\s*"
         r"\$script:NativeMenuSettleConsecutiveSamples.*?"
         r"\$script:NativeMenuSettleMinimumSpanMilliseconds.*?"
         r"throw \[string\]\$probe\.Detail",
         "the live probe can treat an initializing API as broken, accept a "
-        "retagged layout, lose the measured surface, tolerate a foreign "
-        "surface, or let a settled source mismatch age into the general timeout",
+        "retagged layout, lose the measured surface, or let a settled foreign "
+        "surface age into the general timeout",
     )
     _require_regex(
         settings_builder,

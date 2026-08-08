@@ -631,18 +631,19 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             support,
             r'(?s)if \(\$probe\.Status -in '
             r'@\("wrong_surface", "wrong_tab"\)\) \{.*?'
-            r'IsNullOrWhiteSpace\(\s*\$TransitionalSourceScreen\s*\).*?'
             r'Test-NativeMenuScreenTagsEquivalent.*?'
             r'-Left \$measuredSurface.*?'
             r'-Right \$TransitionalSourceScreen.*?'
-            r'throw \[string\]\$probe\.Detail.*?'
-            r'\$consecutiveTransitionSourceProbes -ge\s*'
+            r'\$probeKey = \(.*?\$probe\.Status.*?\$measuredSurface.*?'
+            r'\$probe\.NativeGeneration.*?'
+            r'\$probeKey -cne \$foreignSurfaceProbeKey.*?'
+            r'if \(\s*\$consecutiveForeignSurfaceProbes -ge\s*'
             r'\$script:NativeMenuSettleConsecutiveSamples.*?'
             r'\$script:NativeMenuSettleMinimumSpanMilliseconds.*?'
             r'throw \[string\]\$probe\.Detail',
-            "a transition may outlive its source surface briefly, but a foreign "
-            "surface or a source that itself meets the 40-sample/two-second "
-            "settlement floor must still abort with the measured mismatch",
+            "a transient population classifier may be retried, but any one "
+            "foreign surface that itself meets the 40-sample/two-second "
+            "settlement floor must abort with the measured mismatch",
         )
         self.assertRegex(
             support,

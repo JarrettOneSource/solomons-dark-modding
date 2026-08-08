@@ -1426,8 +1426,10 @@ function Wait-NativeMenuLayoutSettlement {
     $candidateSamples = [Collections.Generic.List[object]]::new()
     $candidateProbes = [Collections.Generic.List[object]]::new()
     $transitionSourceProbeCount = 0
-    $consecutiveTransitionSourceProbes = 0
-    $transitionSourceStartedMilliseconds = 0L
+    $foreignSurfaceProbeCount = 0
+    $consecutiveForeignSurfaceProbes = 0
+    $foreignSurfaceStartedMilliseconds = 0L
+    $foreignSurfaceProbeKey = ""
 
     while ($LatencyClock.ElapsedMilliseconds -le
         $script:NativeMenuSettleTimeoutMilliseconds) {
@@ -1438,25 +1440,32 @@ function Wait-NativeMenuLayoutSettlement {
             if ($probe.Status -in @("wrong_surface", "wrong_tab")) {
                 $measuredSurface = [string]$probe.SemanticSurface
                 if (
-                    [string]::IsNullOrWhiteSpace(
+                    -not [string]::IsNullOrWhiteSpace(
                         $TransitionalSourceScreen
-                    ) -or -not (Test-NativeMenuScreenTagsEquivalent `
+                    ) -and (Test-NativeMenuScreenTagsEquivalent `
                         -Left $measuredSurface `
                         -Right $TransitionalSourceScreen)
                 ) {
-                    throw [string]$probe.Detail
+                    $transitionSourceProbeCount += 1
                 }
 
                 $elapsed = [long]$LatencyClock.ElapsedMilliseconds
-                $transitionSourceProbeCount += 1
-                if ($consecutiveTransitionSourceProbes -eq 0) {
-                    $transitionSourceStartedMilliseconds = $elapsed
+                $foreignSurfaceProbeCount += 1
+                $probeKey = (
+                    [string]$probe.Status + "|" + $measuredSurface + "|" +
+                    [string]$probe.NativeSurface + "|" +
+                    [string]$probe.NativeGeneration
+                )
+                if ($probeKey -cne $foreignSurfaceProbeKey) {
+                    $foreignSurfaceProbeKey = $probeKey
+                    $consecutiveForeignSurfaceProbes = 0
+                    $foreignSurfaceStartedMilliseconds = $elapsed
                 }
-                $consecutiveTransitionSourceProbes += 1
+                $consecutiveForeignSurfaceProbes += 1
                 if (
-                    $consecutiveTransitionSourceProbes -ge
+                    $consecutiveForeignSurfaceProbes -ge
                         $script:NativeMenuSettleConsecutiveSamples -and
-                    ($elapsed - $transitionSourceStartedMilliseconds) -ge
+                    ($elapsed - $foreignSurfaceStartedMilliseconds) -ge
                         $script:NativeMenuSettleMinimumSpanMilliseconds
                 ) {
                     throw [string]$probe.Detail
@@ -1468,7 +1477,8 @@ function Wait-NativeMenuLayoutSettlement {
                 )
                 continue
             }
-            $consecutiveTransitionSourceProbes = 0
+            $consecutiveForeignSurfaceProbes = 0
+            $foreignSurfaceProbeKey = ""
             if ($probe.Status -eq "busy") {
                 $busyCount += 1
             } else {
@@ -1478,7 +1488,8 @@ function Wait-NativeMenuLayoutSettlement {
             Start-Sleep -Milliseconds $script:NativeMenuSettlePollMilliseconds
             continue
         }
-        $consecutiveTransitionSourceProbes = 0
+        $consecutiveForeignSurfaceProbes = 0
+        $foreignSurfaceProbeKey = ""
 
         $sampleCount += 1
         $elapsed = [long]$LatencyClock.ElapsedMilliseconds
@@ -1599,6 +1610,7 @@ function Wait-NativeMenuLayoutSettlement {
                 busy_probe_count = $busyCount
                 not_ready_probe_count = $notReadyCount
                 transition_source_probe_count = $transitionSourceProbeCount
+                foreign_surface_probe_count = $foreignSurfaceProbeCount
                 structural_phase_count = $structuralPhases.Count
                 structural_sha256 = [string]$classification.structural_sha256
                 animated_element_ids = @(
