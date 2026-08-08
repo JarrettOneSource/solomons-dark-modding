@@ -290,7 +290,7 @@ def main() -> int:
         raise ValueError("full promoter transcript lacks the named structural STOP")
 
     navigation = read_json(args.navigation_recording)
-    edges = navigation.get("navigation_graph", {}).get("edges")
+    edges = navigation.get("edges")
     if not isinstance(edges, list) or not edges:
         raise ValueError("Controls post-v2.10 audit reached no navigation graph")
     controls_endpoints: list[dict[str, Any]] = []
