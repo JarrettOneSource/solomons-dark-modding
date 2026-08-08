@@ -21,6 +21,14 @@ if __package__:
         resolve_ambient_lifecycle,
         sha256_json,
     )
+    from .native_menu_profile_state import (
+        NativeMenuProfileStateError,
+        validate_capture_profile_state,
+    )
+    from .native_menu_browser_tab import (
+        NativeMenuBrowserTabError,
+        validate_browser_tab,
+    )
 else:
     from native_menu_ambient_lifecycle import (  # type: ignore[no-redef]
         AmbientLifecycleError,
@@ -29,6 +37,14 @@ else:
         classify_ambient_window,
         resolve_ambient_lifecycle,
         sha256_json,
+    )
+    from native_menu_profile_state import (  # type: ignore[no-redef]
+        NativeMenuProfileStateError,
+        validate_capture_profile_state,
+    )
+    from native_menu_browser_tab import (  # type: ignore[no-redef]
+        NativeMenuBrowserTabError,
+        validate_browser_tab,
     )
 
 
@@ -274,6 +290,7 @@ def _source(header: dict[str, Any], label: str) -> dict[str, Any]:
         "source_tree_sha": 40,
         "game_executable_sha256": 64,
         "loader_dll_sha256": 64,
+        "profile_state_identity_sha256": 64,
     }
     for field, length in required.items():
         value = source.get(field)
@@ -442,8 +459,42 @@ def _resolve_layout_id(
     return layout_id, used_explicit_mapping
 
 
+def _validate_profile_state(
+    repo_root: Path,
+    evidence_root: Path,
+    header: dict[str, Any],
+    label: str,
+) -> dict[str, Any]:
+    try:
+        return validate_capture_profile_state(
+            repo_root=repo_root,
+            header=header,
+            label=label,
+            evidence_root=evidence_root,
+        )
+    except NativeMenuProfileStateError as error:
+        raise CampaignResolutionError(str(error)) from error
+
+
+def _validate_browser_tab(
+    screen_tag: str,
+    layout: dict[str, Any],
+    receipt: object,
+    label: str,
+) -> None:
+    try:
+        validate_browser_tab(
+            screen_tag=screen_tag,
+            layout=layout,
+            receipt=receipt,
+            label=label,
+        )
+    except NativeMenuBrowserTabError as error:
+        raise CampaignResolutionError(str(error)) from error
+
+
 def collect_standalones(
-    candidate_root: Path, evidence_root: Path
+    repo_root: Path, candidate_root: Path, evidence_root: Path
 ) -> tuple[dict[str, dict[str, Any]], dict[str, list[dict[str, Any]]]]:
     paths = sorted((candidate_root / "menu-layouts").glob("*.json"))
     paths += sorted((candidate_root / "menu-transition-layouts").glob("*.json"))
@@ -463,6 +514,9 @@ def collect_standalones(
         header = fixture.get("header")
         if not isinstance(header, dict):
             raise CampaignResolutionError(f"{path} has no capture header")
+        profile_state = _validate_profile_state(
+            repo_root, evidence_root, header, str(path)
+        )
         source = _source(header, str(path))
         raw_receipt = header.get("settlement_trace", header.get("raw_recording"))
         if not isinstance(raw_receipt, dict):
@@ -474,7 +528,31 @@ def collect_standalones(
         )
         validate_receipt(raw_path, raw_receipt, str(path))
         raw_trace = read_object(raw_path)
+        raw_header = raw_trace.get("header")
+        if not isinstance(raw_header, dict):
+            raise CampaignResolutionError(f"{raw_path} has no capture header")
+        _validate_profile_state(
+            repo_root, evidence_root, raw_header, str(raw_path)
+        )
         primary_samples = _settled_samples(raw_trace, str(raw_path))
+        primary_payload = primary_samples[0].get("payload")
+        if not isinstance(primary_payload, dict):
+            raise CampaignResolutionError(
+                f"{raw_path} first settled sample has no payload"
+            )
+        primary_screen_tag = _screen_id(primary_samples, str(raw_path))
+        _validate_browser_tab(
+            primary_screen_tag,
+            primary_payload,
+            header.get("browser_tab_verification"),
+            str(path),
+        )
+        _validate_browser_tab(
+            primary_screen_tag,
+            primary_payload,
+            raw_header.get("browser_tab_verification"),
+            str(raw_path),
+        )
         layout_id = path.stem
         if layout_id in fixtures:
             raise CampaignResolutionError(
@@ -541,6 +619,27 @@ def collect_standalones(
         confirmation_samples = _settled_samples(
             confirmation, str(confirmation_path)
         )
+        confirmation_payload = confirmation_samples[0].get("payload")
+        if not isinstance(confirmation_payload, dict):
+            raise CampaignResolutionError(
+                f"{confirmation_path} first settled sample has no payload"
+            )
+        _validate_browser_tab(
+            _screen_id(confirmation_samples, str(confirmation_path)),
+            confirmation_payload,
+            confirmation_header.get("browser_tab_verification"),
+            str(confirmation_path),
+        )
+        confirmation_profile_state = _validate_profile_state(
+            repo_root,
+            evidence_root,
+            confirmation_header,
+            str(confirmation_path),
+        )
+        if confirmation_profile_state["identity"] != profile_state["identity"]:
+            raise CampaignResolutionError(
+                f"{path} confirmation changed profile-state identity"
+            )
         if _screen_id(confirmation_samples, str(confirmation_path)) != native_screen_id:
             raise CampaignResolutionError(f"{path} confirmation changed native screen")
         if canonical_bytes(source) != canonical_bytes(
@@ -577,6 +676,7 @@ def collect_standalones(
             "confirmation_observation": confirmation_observation,
             "confirmation_path": confirmation_path,
             "fork_decision_receipt": fork_decision_receipt,
+            "profile_state": profile_state,
         }
         observations[layout_id] = [
             primary_observation,
@@ -586,6 +686,7 @@ def collect_standalones(
 
 
 def collect_navigation(
+    repo_root: Path,
     primary_path: Path,
     confirmation_path: Path,
     evidence_root: Path,
@@ -637,6 +738,12 @@ def collect_navigation(
                     raise CampaignResolutionError(
                         f"edge {edge_id} {label} {side} is incomplete"
                     )
+                _validate_profile_state(
+                    repo_root,
+                    evidence_root,
+                    header,
+                    f"edge {edge_id} {label}",
+                )
                 _source(header, f"edge {edge_id} {label}")
                 trace = endpoint.get("settlement_trace")
                 if not isinstance(trace, dict):
@@ -648,6 +755,27 @@ def collect_navigation(
                 )
                 native_screen_id = _screen_id(
                     samples, f"edge {edge_id} {label} {side}"
+                )
+                endpoint_payload = samples[0].get("payload")
+                if not isinstance(endpoint_payload, dict):
+                    raise CampaignResolutionError(
+                        f"edge {edge_id} {label} {side} has no sampled payload"
+                    )
+                header_tab_receipts = header.get("browser_tab_verification")
+                header_tab_receipt = (
+                    header_tab_receipts.get(side)
+                    if isinstance(header_tab_receipts, dict)
+                    else None
+                )
+                if endpoint.get("browser_tab_verification") != header_tab_receipt:
+                    raise CampaignResolutionError(
+                        f"edge {edge_id} {label} {side} browser-tab receipts disagree"
+                    )
+                _validate_browser_tab(
+                    native_screen_id,
+                    endpoint_payload,
+                    endpoint.get("browser_tab_verification"),
+                    f"edge {edge_id} {label} {side}",
                 )
                 logical_name = edge.get(logical_field)
                 if not isinstance(logical_name, str) or not logical_name:
@@ -727,6 +855,7 @@ def build_extended_baseline_filename_map(
 
 
 def collect_extended(
+    repo_root: Path,
     observation_root: Path,
     evidence_root: Path,
     fixtures: dict[str, dict[str, Any]],
@@ -747,6 +876,9 @@ def collect_extended(
         samples = value.get("samples")
         if not isinstance(header, dict) or not isinstance(samples, list):
             raise CampaignResolutionError(f"extended observation {path} is incomplete")
+        _validate_profile_state(
+            repo_root, evidence_root, header, f"extended observation {path}"
+        )
         instance, process_id = _identity(header, str(path))
         motion_source = _source(header, str(path))
         baseline = header.get("baseline")
@@ -853,6 +985,7 @@ def collect_extended(
 
 
 def collect_supplemental_standalones(
+    repo_root: Path,
     manifest_path: Path | None,
     evidence_root: Path,
     fixtures: dict[str, dict[str, Any]],
@@ -921,6 +1054,12 @@ def collect_supplemental_standalones(
             raise CampaignResolutionError(
                 f"supplemental pair '{pair_id}' fixture has no header"
             )
+        _validate_profile_state(
+            repo_root,
+            evidence_root,
+            header,
+            f"supplemental pair {pair_id} fixture",
+        )
         raw_receipt = header.get("settlement_trace", header.get("raw_recording"))
         confirmation_receipt = header.get("animation_confirmation")
         if not isinstance(raw_receipt, dict) or not isinstance(
@@ -948,6 +1087,12 @@ def collect_supplemental_standalones(
             raise CampaignResolutionError(
                 f"supplemental pair '{pair_id}' confirmation has no header"
             )
+        _validate_profile_state(
+            repo_root,
+            evidence_root,
+            confirmation_header,
+            f"supplemental pair {pair_id} confirmation",
+        )
         primary_samples = _settled_samples(trace, str(trace_path))
         confirmation_samples = _settled_samples(
             confirmation, str(confirmation_path)
@@ -1213,8 +1358,11 @@ def resolve_campaign(
         asset_manifest_receipt = evidence_receipt(
             manifest_resolved, evidence_resolved
         )
-    fixtures, observations = collect_standalones(candidate_root, evidence_root)
+    fixtures, observations = collect_standalones(
+        repo_root, candidate_root, evidence_root
+    )
     primary_navigation, endpoint_layouts = collect_navigation(
+        repo_root,
         primary_navigation_path,
         confirmation_navigation_path,
         evidence_root,
@@ -1222,10 +1370,18 @@ def resolve_campaign(
         observations,
     )
     extended_count = collect_extended(
-        motion_observation_root, evidence_root, fixtures, observations
+        repo_root,
+        motion_observation_root,
+        evidence_root,
+        fixtures,
+        observations,
     )
     supplemental_pair_count = collect_supplemental_standalones(
-        supplemental_pair_manifest, evidence_root, fixtures, observations
+        repo_root,
+        supplemental_pair_manifest,
+        evidence_root,
+        fixtures,
+        observations,
     )
 
     resolutions: dict[str, dict[str, Any]] = {}

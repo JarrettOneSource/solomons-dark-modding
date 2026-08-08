@@ -41,6 +41,16 @@ from native_menu_overlay_v25 import (
     assert_overlay_hygiene as assert_overlay_hygiene_v25,
     derive_overlay_reference,
 )
+from native_menu_profile_state import (
+    NativeMenuProfileStateError,
+    load_profile_state_baseline,
+    validate_capture_profile_state,
+)
+from native_menu_browser_tab import (
+    NativeMenuBrowserTabError,
+    resolve_browser_tab,
+    validate_browser_tab,
+)
 from build_menu_baseline_interregnum import BaselineBuildError, build as build_menu_baseline
 
 
@@ -1025,6 +1035,7 @@ def _validate_source_v25(repo_root: Path, source: Any, label: str) -> dict[str, 
         "source_tree_sha": 40,
         "game_executable_sha256": 64,
         "loader_dll_sha256": 64,
+        "profile_state_identity_sha256": 64,
     }
     for field, length in required.items():
         value = source.get(field)
@@ -1060,6 +1071,40 @@ def _validate_source_v25(repo_root: Path, source: Any, label: str) -> dict[str, 
     return source
 
 
+def _validate_profile_state_v25(
+    repo_root: Path,
+    evidence_root: Path,
+    header: dict[str, Any],
+    label: str,
+) -> dict[str, Any]:
+    try:
+        return validate_capture_profile_state(
+            repo_root=repo_root,
+            header=header,
+            label=label,
+            evidence_root=evidence_root,
+        )
+    except NativeMenuProfileStateError as error:
+        raise PromotionError(str(error)) from error
+
+
+def _validate_browser_tab_v25(
+    screen_tag: str,
+    layout: dict[str, Any],
+    receipt: object,
+    label: str,
+) -> None:
+    try:
+        validate_browser_tab(
+            screen_tag=screen_tag,
+            layout=layout,
+            receipt=receipt,
+            label=label,
+        )
+    except NativeMenuBrowserTabError as error:
+        raise PromotionError(str(error)) from error
+
+
 def _structural_core_v25(layout: dict[str, Any]) -> dict[str, Any]:
     fields = (
         "generation",
@@ -1072,6 +1117,75 @@ def _structural_core_v25(layout: dict[str, Any]) -> dict[str, Any]:
     if any(field not in layout for field in fields):
         raise PromotionError("Settlement v2.9 layout has an incomplete structural core")
     return {field: copy.deepcopy(layout[field]) for field in fields}
+
+
+def _validate_navigation_profile_state_v25(
+    repo_root: Path,
+    evidence_root: Path,
+    recording: dict[str, Any],
+    label: str,
+) -> None:
+    edges = recording.get("edges")
+    if not isinstance(edges, list) or not edges:
+        raise PromotionError(
+            f"{label} profile-state sweep reached no navigation edges"
+        )
+    reached_ids: set[str] = set()
+    for edge in edges:
+        if not isinstance(edge, dict) or not isinstance(edge.get("id"), str):
+            raise PromotionError(
+                f"{label} profile-state sweep reached an unresolvable edge"
+            )
+        edge_id = edge["id"]
+        if edge_id in reached_ids:
+            raise PromotionError(
+                f"{label} profile-state sweep found ambiguous edge '{edge_id}'"
+            )
+        reached_ids.add(edge_id)
+        header = edge.get("header")
+        if not isinstance(header, dict):
+            raise PromotionError(
+                f"{label} edge '{edge_id}' has no capture header"
+            )
+        _validate_profile_state_v25(
+            repo_root,
+            evidence_root,
+            header,
+            f"{label} edge {edge_id}",
+        )
+        header_tab_receipts = header.get("browser_tab_verification")
+        for endpoint_key, side in (("before", "source"), ("after", "destination")):
+            endpoint = edge.get(endpoint_key)
+            if not isinstance(endpoint, dict):
+                raise PromotionError(
+                    f"{label} edge '{edge_id}' {side} endpoint is absent"
+                )
+            endpoint_layout = endpoint.get("layout")
+            if not isinstance(endpoint_layout, dict) or not isinstance(
+                endpoint_layout.get("screen_id"), str
+            ):
+                raise PromotionError(
+                    f"{label} edge '{edge_id}' {side} has no screen layout"
+                )
+            header_tab_receipt = (
+                header_tab_receipts.get(side)
+                if isinstance(header_tab_receipts, dict)
+                else None
+            )
+            if endpoint.get("browser_tab_verification") != header_tab_receipt:
+                raise PromotionError(
+                    f"{label} edge '{edge_id}' {side} browser-tab receipts disagree"
+                )
+            _validate_browser_tab_v25(
+                endpoint_layout["screen_id"],
+                endpoint_layout,
+                endpoint.get("browser_tab_verification"),
+                f"{label} edge {edge_id} {side}",
+            )
+    if "main_to_dark_cloud" not in reached_ids:
+        raise PromotionError(
+            f"{label} profile-state sweep did not reach the Dark Cloud entry edge"
+        )
 
 
 def _settled_samples_v25(trace: dict[str, Any], label: str) -> list[dict[str, Any]]:
@@ -1100,6 +1214,9 @@ def validate_settlement_fixture_v25(
     if header.get("recorded_live") is not True:
         raise PromotionError(f"{fixture_path} is not marked as a live recording")
     source = _validate_source_v25(repo_root, header.get("source"), str(fixture_path))
+    profile_state = _validate_profile_state_v25(
+        repo_root, evidence_root, header, str(fixture_path)
+    )
     settlement = header.get("settlement")
     if not isinstance(settlement, dict) or settlement.get("settlement_spec") != "2.9":
         raise PromotionError(f"{fixture_path} does not identify Settlement v2.9")
@@ -1260,7 +1377,34 @@ def validate_settlement_fixture_v25(
         f"{fixture_path} primary trace",
     )
     raw_trace = read_json(raw_path)
+    raw_header = raw_trace.get("header")
+    if not isinstance(raw_header, dict):
+        raise PromotionError(f"{fixture_path} primary trace has no capture header")
+    _validate_profile_state_v25(
+        repo_root,
+        evidence_root,
+        raw_header,
+        f"{fixture_path} primary trace",
+    )
     primary_samples = _settled_samples_v25(raw_trace, f"{fixture_path} primary trace")
+    primary_payload = primary_samples[0].get("payload")
+    if not isinstance(primary_payload, dict) or not isinstance(
+        primary_payload.get("screen_id"), str
+    ):
+        raise PromotionError(f"{fixture_path} primary trace has no screen payload")
+    primary_screen_tag = primary_payload["screen_id"]
+    _validate_browser_tab_v25(
+        primary_screen_tag,
+        primary_payload,
+        header.get("browser_tab_verification"),
+        str(fixture_path),
+    )
+    _validate_browser_tab_v25(
+        primary_screen_tag,
+        primary_payload,
+        raw_header.get("browser_tab_verification"),
+        f"{fixture_path} primary trace",
+    )
 
     confirmation_receipt = header.get("animation_confirmation")
     if not isinstance(confirmation_receipt, dict):
@@ -1275,6 +1419,16 @@ def validate_settlement_fixture_v25(
     confirmation_header = confirmation_trace.get("header")
     if not isinstance(confirmation_header, dict):
         raise PromotionError(f"{fixture_path} confirmation has no capture header")
+    confirmation_profile_state = _validate_profile_state_v25(
+        repo_root,
+        evidence_root,
+        confirmation_header,
+        f"{fixture_path} confirmation",
+    )
+    if confirmation_profile_state["identity"] != profile_state["identity"]:
+        raise PromotionError(
+            f"{fixture_path} confirmation changed profile-state identity"
+        )
     confirmation_source = _validate_source_v25(
         repo_root,
         confirmation_header.get("source"),
@@ -1298,6 +1452,27 @@ def validate_settlement_fixture_v25(
     confirmation_samples = _settled_samples_v25(
         confirmation_trace, f"{fixture_path} confirmation"
     )
+    confirmation_payload = confirmation_samples[0].get("payload")
+    if not isinstance(confirmation_payload, dict) or not isinstance(
+        confirmation_payload.get("screen_id"), str
+    ):
+        raise PromotionError(f"{fixture_path} confirmation has no screen payload")
+    _validate_browser_tab_v25(
+        confirmation_payload["screen_id"],
+        confirmation_payload,
+        confirmation_header.get("browser_tab_verification"),
+        f"{fixture_path} confirmation",
+    )
+    if primary_screen_tag in {
+        "dark_cloud_browser",
+        "dark_cloud_recent",
+        "dark_cloud_online_levels",
+        "dark_cloud_my_levels",
+    }:
+        try:
+            resolve_browser_tab(layout, f"{fixture_path} resolved layout")
+        except NativeMenuBrowserTabError as error:
+            raise PromotionError(str(error)) from error
     return {
         "fixture": fixture,
         "header": header,
@@ -1812,6 +1987,18 @@ def validate_and_promote(
     ) = _resolved_navigation_inputs_v25(
         evidence_root, navigation_path, resolved_navigation
     )
+    _validate_navigation_profile_state_v25(
+        repo_root,
+        evidence_root,
+        read_json(primary_navigation),
+        "primary navigation",
+    )
+    _validate_navigation_profile_state_v25(
+        repo_root,
+        evidence_root,
+        read_json(confirmation_navigation),
+        "confirmation navigation",
+    )
     try:
         resolve_campaign(
             candidate_root,
@@ -2052,6 +2239,23 @@ def validate_and_promote(
     }
     if canonical_bytes(overlay_receipt) != canonical_bytes(expected_overlay_receipt):
         raise PromotionError("candidate aggregate records a false derived overlay receipt")
+    try:
+        profile_baseline = load_profile_state_baseline(repo_root)
+    except NativeMenuProfileStateError as error:
+        raise PromotionError(str(error)) from error
+    expected_profile_baseline_receipt = {
+        "fixture": "native-menu-profile-state-baseline.json",
+        "sha256": profile_baseline["sha256"],
+        "bytes": profile_baseline["bytes"],
+        "profile_state_identity_sha256": profile_baseline["identity"],
+        "corrective": "shellfix task #101 consumes the settled corpus",
+    }
+    if canonical_bytes(
+        candidate_golden.get("header", {}).get("profile_state_baseline")
+    ) != canonical_bytes(expected_profile_baseline_receipt):
+        raise PromotionError(
+            "candidate aggregate records a false committed profile-state baseline receipt"
+        )
     navigation_receipt = candidate_golden.get("header", {}).get("raw_recording")
     if not isinstance(navigation_receipt, dict):
         raise PromotionError("candidate aggregate has no resolved-navigation receipt")

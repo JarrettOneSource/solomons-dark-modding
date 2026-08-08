@@ -27,6 +27,15 @@ from native_menu_ambient_lifecycle import (
     AmbientLifecycleError,
     reproduce_standalone_structural_core,
 )
+from native_menu_profile_state import (
+    NativeMenuProfileStateError,
+    load_profile_state_baseline,
+    validate_capture_profile_state,
+)
+from native_menu_browser_tab import (
+    NativeMenuBrowserTabError,
+    validate_browser_tab,
+)
 
 
 class GoldenBuildError(RuntimeError):
@@ -92,6 +101,7 @@ def source_provenance(header: dict[str, Any], label: str) -> dict[str, Any]:
         "source_tree_sha": 40,
         "game_executable_sha256": 64,
         "loader_dll_sha256": 64,
+        "profile_state_identity_sha256": 64,
     }
     for field, length in requirements.items():
         value = source.get(field)
@@ -125,7 +135,7 @@ def reference_receipt(
 
 
 def validate_fixture(
-    path: Path, fixture_root: Path
+    repo_root: Path, path: Path, fixture_root: Path
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     fixture = read_object(path)
     if fixture.get("schema") != "solomon-dark-native-menu-layout-v3":
@@ -135,6 +145,24 @@ def validate_fixture(
     if not isinstance(header, dict) or not isinstance(layout, dict):
         raise GoldenBuildError(f"{path} has no capture header/layout")
     source_provenance(header, str(path))
+    try:
+        validate_capture_profile_state(
+            repo_root=repo_root,
+            header=header,
+            label=str(path),
+            evidence_root=None,
+        )
+    except NativeMenuProfileStateError as error:
+        raise GoldenBuildError(str(error)) from error
+    try:
+        validate_browser_tab(
+            screen_tag=str(layout.get("screen_id", "")),
+            layout=layout,
+            receipt=header.get("browser_tab_verification"),
+            label=str(path),
+        )
+    except NativeMenuBrowserTabError as error:
+        raise GoldenBuildError(str(error)) from error
     settlement = header.get("settlement")
     ambient = header.get("ambient_lifecycle")
     if (
@@ -267,6 +295,7 @@ def endpoint(value: dict[str, Any], edge_id: str, side: str) -> dict[str, Any]:
         )
     fields = (
         "semantic_surface",
+        "machine_classified_surface",
         "semantic_generation",
         "tagged_screen",
         "layout_generation",
@@ -279,6 +308,7 @@ def endpoint(value: dict[str, Any], edge_id: str, side: str) -> dict[str, Any]:
         "animated_element_ids",
         "animated_family_ids",
         "choice_slot_ids",
+        "browser_tab_verification",
     )
     return {
         field: copy.deepcopy(value.get(field))
@@ -293,6 +323,7 @@ def capture_session(header: dict[str, Any]) -> dict[str, Any]:
         "instance": header.get("instance"),
         "process_id": header.get("process_id"),
         "source": copy.deepcopy(header.get("source")),
+        "profile_state": copy.deepcopy(header.get("profile_state")),
         "capture_method": header.get("capture_method"),
         "recorded_live": header.get("recorded_live"),
         "captured_at_utc": header.get("captured_at_utc"),
@@ -323,7 +354,7 @@ def build(
     latest_capture: datetime | None = None
     sessions: list[dict[str, Any]] = []
     for layout_id, path in [*layout_paths.items(), *transition_paths.items()]:
-        fixture, wrapper = validate_fixture(path, fixture_root)
+        fixture, wrapper = validate_fixture(repo_root, path, fixture_root)
         if layout_id in fixtures:
             raise GoldenBuildError(f"fixture id '{layout_id}' is ambiguous")
         fixtures[layout_id] = fixture
@@ -462,8 +493,18 @@ def build(
         if not all(isinstance(value, dict) for value in (header, before_raw, after_raw)):
             raise GoldenBuildError(f"navigation edge {edge_id} is incomplete")
         source_provenance(header, f"navigation edge {edge_id}")
+        try:
+            validate_capture_profile_state(
+                repo_root=repo_root,
+                header=header,
+                label=f"navigation edge {edge_id}",
+                evidence_root=None,
+            )
+        except NativeMenuProfileStateError as error:
+            raise GoldenBuildError(str(error)) from error
         before = endpoint(before_raw, edge_id, "source")
         after = endpoint(after_raw, edge_id, "destination")
+        header_tab_receipts = header.get("browser_tab_verification")
         for side, observed in (("source", before), ("destination", after)):
             layout_id = observed["layout_id"]
             if layout_id not in fixtures:
@@ -477,6 +518,24 @@ def build(
                     f"navigation edge {edge_id} {side} does not byte-equal "
                     f"standalone '{layout_id}'"
                 )
+            header_tab_receipt = (
+                header_tab_receipts.get(side)
+                if isinstance(header_tab_receipts, dict)
+                else None
+            )
+            if observed.get("browser_tab_verification") != header_tab_receipt:
+                raise GoldenBuildError(
+                    f"navigation edge {edge_id} {side} browser-tab receipts disagree"
+                )
+            try:
+                validate_browser_tab(
+                    screen_tag=str(observed["layout"].get("screen_id", "")),
+                    layout=observed["layout"],
+                    receipt=observed.get("browser_tab_verification"),
+                    label=f"navigation edge {edge_id} {side}",
+                )
+            except NativeMenuBrowserTabError as error:
+                raise GoldenBuildError(str(error)) from error
             try:
                 assert_overlay_hygiene(observed["layout"], overlay)
             except OverlayV25Error as error:
@@ -514,6 +573,10 @@ def build(
     for session in sessions:
         key = canonical_bytes(session)
         unique_sessions.setdefault(key, session)
+    try:
+        profile_baseline = load_profile_state_baseline(repo_root)
+    except NativeMenuProfileStateError as error:
+        raise GoldenBuildError(str(error)) from error
     golden = {
         "schema": "solomon-dark-menu-goldens-v3",
         "header": {
@@ -537,6 +600,17 @@ def build(
                 "fixture": "menu-overlay-reference.json",
                 "sha256": sha256_file(overlay_path),
                 "bytes": overlay_path.stat().st_size,
+            },
+            "profile_state_baseline": {
+                "fixture": (
+                    "native-menu-profile-state-baseline.json"
+                ),
+                "sha256": profile_baseline["sha256"],
+                "bytes": profile_baseline["bytes"],
+                "profile_state_identity_sha256": profile_baseline[
+                    "identity"
+                ],
+                "corrective": "shellfix task #101 consumes the settled corpus",
             },
             "screen_count": len(wrappers),
             "edge_count": len(edges),

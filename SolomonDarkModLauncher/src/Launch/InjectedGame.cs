@@ -8,4 +8,7 @@ internal sealed record InjectedGame(
     LoaderStartupStatus StartupStatus,
     MultiplayerSessionStatus? MultiplayerSessionStatus,
     string? SavegamesRootPath,
-    bool SavegamesUsesDirectoryMirror);
+    bool SavegamesUsesDirectoryMirror,
+    string ProfileStateReceiptPath,
+    string ProfileStateIdentitySha256,
+    string ProfileBaselineMode);

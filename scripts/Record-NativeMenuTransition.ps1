@@ -80,6 +80,14 @@ $context = New-NativeMenuCaptureContext `
     -ProcessId $ProcessId
 
 $outputItemPath = [IO.Path]::GetFullPath($OutputPath)
+$profileStateDirectory = [IO.Path]::ChangeExtension(
+    $outputItemPath,
+    $null
+) + ".profile-state"
+$profileState = Copy-NativeMenuProfileStateEvidence `
+    -Context $context `
+    -DestinationDirectory $profileStateDirectory `
+    -EvidenceBasename ("$Instance.$ProcessId")
 if (Test-Path -LiteralPath $outputItemPath -PathType Leaf) {
     $fixture = Get-Content -LiteralPath $outputItemPath -Raw |
         ConvertFrom-Json
@@ -307,6 +315,11 @@ return 'key'
                 "*native-menu capture surface agreement rejected*"
         ) {
             "capture_surface_did_not_match_operator_tag"
+        } elseif (
+            $failureMessage -like
+                "*native-menu browser tab agreement rejected*"
+        ) {
+            "capture_browser_tab_did_not_match_operator_tag"
         } else {
             "navigation_transition_failed_before_destination_settlement"
         }
@@ -322,9 +335,12 @@ return 'key'
             dispatch_result = $dispatchResult
             click_point = $resolvedClickPoint
             dispatch_measurement = $dispatchMeasurement
-            machine_classified_surface = Get-NativeMenuProbeProperty `
+            measured_screen_tag = Get-NativeMenuProbeProperty `
                 -Probe $failureProbe `
                 -Name "SemanticSurface"
+            machine_classified_surface = Get-NativeMenuProbeProperty `
+                -Probe $failureProbe `
+                -Name "MachineClassifiedSurface"
             native_surface = Get-NativeMenuProbeProperty `
                 -Probe $failureProbe `
                 -Name "NativeSurface"
@@ -341,6 +357,7 @@ return 'key'
             instance = $Instance
             process_id = $ProcessId
             source = $context.Source
+            profile_state = $profileState
             rejected_at_utc = [DateTime]::UtcNow.ToString("o")
         }
         [IO.File]::WriteAllText(
@@ -385,6 +402,7 @@ return 'key'
             instance = $Instance
             process_id = $ProcessId
             source = $context.Source
+            profile_state = $profileState
             recorded_live = $true
             captured_at_utc = $capturedAtUtc
         }
@@ -396,12 +414,17 @@ return 'key'
                 instance = $Instance
                 process_id = $ProcessId
                 source = $context.Source
+                profile_state = $profileState
                 capture_method = [string]$fixture.header.capture_method
                 recorded_live = $true
                 captured_at_utc = $capturedAtUtc
                 settlement = [ordered]@{
                     source = $before.settlement
                     destination = $after.settlement
+                }
+                browser_tab_verification = [ordered]@{
+                    source = $before.browser_tab_verification
+                    destination = $after.browser_tab_verification
                 }
                 raw_frames = [ordered]@{
                     before = [ordered]@{

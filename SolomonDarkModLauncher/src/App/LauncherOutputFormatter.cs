@@ -329,6 +329,12 @@ internal static class LauncherOutputFormatter
         builder.AppendLine($"Loader startup code: {launchedGame.StartupStatus.Code}");
         builder.AppendLine($"Loader startup message: {launchedGame.StartupStatus.Message}");
         builder.AppendLine($"Loader log: {launchedGame.StartupStatus.LogPath ?? "(unknown)"}");
+        builder.AppendLine(
+            $"Profile-state receipt: {launchedGame.ProfileStateReceiptPath}");
+        builder.AppendLine(
+            $"Profile-state identity: {launchedGame.ProfileStateIdentitySha256}");
+        builder.AppendLine(
+            $"Profile baseline mode: {launchedGame.ProfileBaselineMode}");
         if (launchedGame.MultiplayerSessionStatus is { } session)
         {
             builder.AppendLine($"Steam session phase: {session.Phase}");

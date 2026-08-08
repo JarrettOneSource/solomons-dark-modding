@@ -761,11 +761,11 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
         r"function Wait-NativeMenuActionDispatch.*?"
         r"sd\.ui\.get_action_dispatch\(\$RequestId\).*?"
         r"sd\.ui\.capture_current_layout\("
-        r"\[=\[\$ExpectedDestinationScreen\]=\]\).*?"
+        r"\[=\[\$captureDestinationScreen\]=\]\).*?"
         r"\$lastStatus -ceq \"dispatched\".*?"
         r"\$lastStatus -ceq \"dispatching\".*?"
         r"\$dispatch\.classified_surface -ceq.*?"
-        r"\$ExpectedDestinationScreen.*?"
+        r"\$captureDestinationScreen.*?"
         r"\$dispatch\.layout_generation -ne.*?"
         r"\$SourceLayoutGeneration.*?"
         r"\$lastStatus -ceq \"failed\".*?"
@@ -1117,6 +1117,322 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
     )
 
 
+def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
+    assert_module_runs_in_ci("test_native_menu_profile_state_and_browser_tab")
+    launcher_provenance = _read(
+        "SolomonDarkModLauncher/src/Launch/"
+        "NativeMenuProfileStateProvenance.cs"
+    )
+    staged_launcher = _read(
+        "SolomonDarkModLauncher/src/Launch/StagedGameLauncher.cs"
+    )
+    profile_python = _read("tools/native_menu_profile_state.py")
+    browser_python = _read("tools/native_menu_browser_tab.py")
+    support = _read("scripts/NativeMenuCaptureSupport.ps1")
+    baseline_writer = _read("scripts/Write-NativeMenuProfileStateBaseline.ps1")
+    resolver = _read("tools/resolve_native_menu_ambient_campaign.py")
+    promoter = _read("tools/promote_native_menu_recapture.py")
+    aggregate_builder = _read("tools/build_native_menu_goldens_v25.py")
+    special_importer = _read("tools/import_native_menu_special_captures_v25.py")
+
+    recorder_paths = (
+        "scripts/Record-NativeMenuLayout.ps1",
+        "scripts/Record-NativeMenuTransition.ps1",
+        "scripts/Confirm-NativeMenuLayoutAnimation.ps1",
+        "scripts/Observe-NativeMenuMotionCapability.ps1",
+        "scripts/Import-NativeMenuSpecialCaptures.ps1",
+        "scripts/Write-NativeMenuProfileStateBaseline.ps1",
+    )
+    recorders = {path: _read(path) for path in recorder_paths}
+    if "scripts/Record-NativeMenuLayout.ps1" not in recorders:
+        raise StaticReTestFailure(
+            "profile-state override census did not reach the standalone recorder"
+        )
+    forbidden_parameters = {
+        "basecommitsha",
+        "sourcetreesha",
+        "gameexecutablesha256",
+        "loaderdllsha256",
+        "profilestate",
+        "profilestateidentity",
+        "profilestateidentitysha256",
+        "profilestatereceipt",
+        "profilestatereceiptpath",
+        "profilebaseline",
+        "profilebaselinemode",
+    }
+    for path, source in recorders.items():
+        overrides = sorted(
+            _powershell_parameter_names(source) & forbidden_parameters
+        )
+        if overrides:
+            raise StaticReTestFailure(
+                "native-menu profile-state provenance accepts an operator "
+                f"override in {path}: {overrides}"
+            )
+
+    _require_regex(
+        staged_launcher,
+        r"IsolatedProfileBootstrapper\.CreateLaunchOptions\(.*?"
+        r"freshInstall\);.*?"
+        r"NativeMenuProfileStateProvenance\.Materialize\(\s*"
+        r"stage\.StageRootPath,\s*options,\s*freshInstall,.*?\);.*?"
+        r"options\s*=\s*ApplySandboxEnvironment",
+        "the launcher no longer derives durable-state provenance from the "
+        "fresh isolated inputs before the game process environment is built",
+    )
+    _require_regex(
+        launcher_provenance,
+        r"IdentitySchema\s*=.*?native-menu-profile-state-input-v1.*?"
+        r"new StateRoot\(\s*\"stage_sandbox\".*?"
+        r"new StateRoot\(\"isolated_profile\".*?"
+        r"SelectMany\(ReadFiles\).*?"
+        r"OrderBy\(file => file\.Root, StringComparer\.Ordinal\).*?"
+        r"ThenBy\(file => file\.RelativePath, StringComparer\.Ordinal\).*?"
+        r"SHA256\.HashData\(Encoding\.UTF8\.GetBytes"
+        r"\(canonicalIdentityJson\)\).*?"
+        r"WriteAtomic\(receiptPath, receipt\)",
+        "the launcher profile identity is no longer a canonical machine hash "
+        "of both durable-state roots written atomically before launch",
+    )
+    _require_regex(
+        support,
+        r"function Get-NativeMenuProfileStateProvenance.*?"
+        r"native-menu-profile-state\.json.*?"
+        r"native-menu-profile-state-baseline\.json.*?"
+        r"\$identity -cne \$expectedIdentity.*?"
+        r"STOP: native-menu profile-state provenance mismatch.*?"
+        r"\$receiptFiles\.Count -ne 0.*?"
+        r"function Copy-NativeMenuProfileStateEvidence.*?"
+        r"Get-FileHash.*?launch_receipt\.sha256.*?"
+        r"New-NativeMenuCaptureContext.*?"
+        r"Get-NativeMenuProfileStateProvenance.*?"
+        r"profile_state_identity_sha256",
+        "the live recorder no longer rejects non-pristine durable state, "
+        "copies its exact launch receipt, or binds the identity into source provenance",
+    )
+    for path in (
+        "scripts/Record-NativeMenuLayout.ps1",
+        "scripts/Record-NativeMenuTransition.ps1",
+        "scripts/Confirm-NativeMenuLayoutAnimation.ps1",
+        "scripts/Observe-NativeMenuMotionCapability.ps1",
+    ):
+        _require_regex(
+            recorders[path],
+            r"Copy-NativeMenuProfileStateEvidence.*?"
+            r"profile_state\s*=\s*\$profileState",
+            f"{path} no longer copies and records the machine-derived durable-state receipt",
+        )
+
+    _require_regex(
+        baseline_writer,
+        r"status\", \"--porcelain\", \"--untracked-files=no\".*?"
+        r"native-menu-profile-state\.json.*?"
+        r"baseline_mode.*?fresh_install.*?"
+        r"source_sandbox_excluded.*?\$true.*?"
+        r"retail_appdata_seeded.*?\$false.*?"
+        r"@\(\$receipt\.files\)\.Count -ne 0.*?"
+        r"SolomonDarkModLoader\.dll.*?Get-FileHash.*?"
+        r"solomon-dark-native-menu-profile-state-baseline-v1",
+        "the committed pristine baseline can be authored without a live, clean, "
+        "exact-binary fresh instance",
+    )
+    _require_regex(
+        profile_python,
+        r"def validate_capture_profile_state\(.*?"
+        r"identity != baseline\[\"identity\"\].*?"
+        r"PROFILE_MISMATCH_REASON.*?"
+        r"baseline_receipt\.get\(\"sha256\"\) != baseline\[\"sha256\"\].*?"
+        r"_resolve_unique_receipt\(.*?"
+        r"receipt_path\.stat\(\)\.st_size != expected_bytes.*?"
+        r"sha256_file\(receipt_path\) != expected_sha256",
+        "the offline durable-state verifier can accept a foreign identity, "
+        "false committed baseline hash, ambiguous receipt, or false receipt hash",
+    )
+    _require_regex(
+        resolver,
+        r"def _validate_profile_state\(.*?"
+        r"return validate_capture_profile_state\(.*?"
+        r"def collect_standalones\(.*?"
+        r"profile_state\s*=\s*_validate_profile_state\(",
+        "the resolver no longer calls its profile-state verifier at the "
+        "standalone fixture boundary",
+    )
+    _require_regex(
+        promoter,
+        r"def _validate_profile_state_v25\(.*?"
+        r"return validate_capture_profile_state\(.*?"
+        r"def validate_settlement_fixture_v25\(.*?"
+        r"profile_state\s*=\s*_validate_profile_state_v25\(",
+        "the promoter no longer calls its profile-state verifier at the "
+        "settled fixture boundary",
+    )
+    _require_regex(
+        aggregate_builder,
+        r"def validate_fixture\(.*?validate_capture_profile_state\(",
+        "the aggregate builder no longer validates profile-state provenance "
+        "at its fixture boundary",
+    )
+    _require_regex(
+        special_importer,
+        r"def derive_binary_source\(.*?"
+        r"materialize_capture_profile_state\(.*?"
+        r"profile_state_identity_sha256.*?"
+        r"return source, profile_state",
+        "native-loader/loading imports no longer derive pristine durable-state "
+        "provenance from each exact fresh stage",
+    )
+
+    _require_regex(
+        support,
+        r"function Get-NativeMenuExpectedBrowserTab.*?"
+        r"\"dark_cloud_browser\" \{ return \"online_levels\" \}.*?"
+        r"function Resolve-NativeMenuBrowserTabState.*?"
+        r"dark_cloud_browser\.recent.*?"
+        r"dark_cloud_browser\.online_levels.*?"
+        r"dark_cloud_browser\.my_levels.*?"
+        r"art_id -ceq \"UI\.13\".*?"
+        r"\$memberIds\.Count -ne 6.*?"
+        r"\$distinctTops\.Count -ne 2.*?"
+        r"function Assert-NativeMenuBrowserTabAgreement.*?"
+        r"STOP: native-menu browser tab agreement rejected.*?"
+        r"Status = \"wrong_tab\".*?"
+        r"if \(\$probe\.Status -in "
+        r"@\(\"wrong_surface\", \"wrong_tab\"\)\)",
+        "the browser driver no longer classifies the selected tab from all six "
+        "measured brackets or fails at capture time on a wrong tab",
+    )
+    _require_regex(
+        browser_python,
+        r"ENTRY_STATE_STOP\s*=.*?pristine.*?online_levels.*?"
+        r"def resolve_browser_tab\(.*?"
+        r"len\(geometry_ids\) != 6.*?"
+        r"len\(set\(tops\)\) != 2.*?"
+        r"def validate_browser_tab\(.*?"
+        r"measured\[\"measured_tab\"\] != expected.*?"
+        r"receipt\.get\(\"geometry_sha256\"\) != "
+        r"measured\[\"geometry_sha256\"\]",
+        "offline promotion no longer remeasures the Case A browser tab or "
+        "verifies the exact capture-time geometry receipt",
+    )
+
+    baseline_path = (
+        ROOT / "tests/fixtures/webgame/native-menu-profile-state-baseline.json"
+    )
+    if not baseline_path.is_file():
+        raise StaticReTestFailure(
+            "the committed pristine native-menu profile-state baseline is absent"
+        )
+    baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+    baseline_profile = baseline.get("profile_state")
+    if not isinstance(baseline_profile, dict):
+        raise StaticReTestFailure(
+            "the committed pristine native-menu profile-state baseline has no payload"
+        )
+    baseline_identity = baseline_profile.get("profile_state_identity_sha256")
+    if (
+        baseline.get("schema")
+        != "solomon-dark-native-menu-profile-state-baseline-v1"
+        or not isinstance(baseline_identity, str)
+        or re.fullmatch(r"[0-9a-f]{64}", baseline_identity) is None
+        or baseline_profile.get("baseline_mode") != "fresh_install"
+        or baseline_profile.get("source_sandbox_excluded") is not True
+        or baseline_profile.get("retail_appdata_seeded") is not False
+        or baseline_profile.get("files") != []
+    ):
+        raise StaticReTestFailure(
+            "the committed native-menu profile-state baseline is not the "
+            "machine-derived pristine Case A state"
+        )
+
+    fixture_paths = sorted(
+        (ROOT / "tests/fixtures/webgame/menu-layouts").glob("*.json")
+    ) + sorted(
+        (ROOT / "tests/fixtures/webgame/menu-transition-layouts").glob("*.json")
+    )
+    expected_paths = {
+        f"menu-layouts/{layout_id}.json" for layout_id in LAYOUT_IDS
+    } | {
+        "menu-transition-layouts/hub_new_game.json",
+        "menu-transition-layouts/hub_resumed.json",
+    }
+    actual_paths = {
+        f"{path.parent.name}/{path.name}" for path in fixture_paths
+    }
+    if actual_paths != expected_paths:
+        raise StaticReTestFailure(
+            "profile-state fixture sweep did not reach the exact 30-layout corpus: "
+            f"missing={sorted(expected_paths - actual_paths)} "
+            f"extra={sorted(actual_paths - expected_paths)}"
+        )
+    if "menu-layouts/dark-cloud-browser.json" not in actual_paths:
+        raise StaticReTestFailure(
+            "profile-state fixture sweep did not reach the Case A browser witness"
+        )
+    for path in fixture_paths:
+        fixture = json.loads(path.read_text(encoding="utf-8"))
+        header = fixture.get("header")
+        profile_state = (
+            header.get("profile_state") if isinstance(header, dict) else None
+        )
+        source = header.get("source") if isinstance(header, dict) else None
+        if not isinstance(profile_state, dict) or not isinstance(source, dict):
+            raise StaticReTestFailure(
+                f"{path.name} does not carry machine-derived durable-state provenance"
+            )
+        if (
+            profile_state.get("profile_state_identity_sha256")
+            != baseline_identity
+            or source.get("profile_state_identity_sha256") != baseline_identity
+        ):
+            raise StaticReTestFailure(
+                f"{path.name} does not bind the pinned pristine profile-state identity"
+            )
+        recorded_baseline = profile_state.get("baseline_fixture")
+        if not isinstance(recorded_baseline, dict):
+            raise StaticReTestFailure(
+                f"{path.name} does not name the committed profile-state baseline"
+            )
+        assert_recorded_hash_matches_file(
+            str(recorded_baseline.get("sha256", "")),
+            baseline_path,
+            f"{path.name} profile-state baseline",
+        )
+        if recorded_baseline.get("bytes") != baseline_path.stat().st_size:
+            raise StaticReTestFailure(
+                f"{path.name} records a false profile-state baseline byte count"
+            )
+
+    menu_goldens_path = ROOT / "tests/fixtures/webgame/menu-goldens.json"
+    menu_goldens = json.loads(menu_goldens_path.read_text(encoding="utf-8"))
+    aggregate_baseline = menu_goldens.get("header", {}).get(
+        "profile_state_baseline"
+    )
+    if not isinstance(aggregate_baseline, dict):
+        raise StaticReTestFailure(
+            "menu-goldens does not bind the committed pristine profile-state baseline"
+        )
+    assert_recorded_hash_matches_file(
+        str(aggregate_baseline.get("sha256", "")),
+        baseline_path,
+        "menu-goldens profile-state baseline",
+    )
+    if (
+        aggregate_baseline.get("bytes") != baseline_path.stat().st_size
+        or aggregate_baseline.get("profile_state_identity_sha256")
+        != baseline_identity
+    ):
+        raise StaticReTestFailure(
+            "menu-goldens records false pristine profile-state baseline provenance"
+        )
+
+    return (
+        "launcher and recorders derive one pristine durable-state identity with "
+        "no override path; all 30 layouts and menu-goldens hash-check the committed "
+        "baseline; Dark Cloud entry/tab state is measured from six live brackets"
+    )
+
+
 def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
     assert_module_runs_in_ci("test_native_menu_layout_capture_contract")
     api = _read(
@@ -1202,11 +1518,14 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
     _require_regex(
         support,
         r"function Assert-NativeMenuCaptureSurfaceAgreement\s*\{.*?"
-        r"if \(\$MachineClassifiedSurface -cne "
-        r"\$OperatorScreenTag\) \{\s*throw \(.*?"
+        r"\$captureSurface\s*=\s*Get-NativeMenuCaptureSurfaceId.*?"
+        r"if \(\s*\$MachineClassifiedSurface -cne \$captureSurface -and\s*"
+        r"\$MachineClassifiedSurface -cne \$OperatorScreenTag\s*\) \{\s*"
+        r"throw \(.*?"
         r"STOP: native-menu capture surface agreement rejected:.*?"
         r"operator tag '\$OperatorScreenTag' does not equal.*?"
-        r"machine-classified surface '\$MachineClassifiedSurface'\."
+        r"machine-classified surface '\$MachineClassifiedSurface'.*?"
+        r"capture surface '\$captureSurface'\."
         r".*?\}\s*\}",
         "the recorder agreement gate no longer names and rejects unequal "
         "machine surface and operator tag",
@@ -1214,15 +1533,18 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
     _require_regex(
         support,
         r"local snapshot, capture_diagnostic\s*=\s*"
-        r"sd\.ui\.capture_current_layout\(\[=\[\$ScreenId\]=\]\).*?"
+        r"sd\.ui\.capture_current_layout\(\[=\[\$captureSurfaceId\]=\]\).*?"
         r"__NATIVE_MENU_LAYOUT_SURFACE_MISMATCH__=.*?"
         r"Status = \"wrong_surface\".*?"
         r"Assert-NativeMenuCaptureSurfaceAgreement.*?"
         r"Status = \"ready\".*?"
-        r"if \(\$probe\.Status -eq \"wrong_surface\"\) \{\s*"
+        r"if \(\$probe\.Status -in "
+        r"@\(\"wrong_surface\", \"wrong_tab\"\)\) \{\s*"
         r"\$measuredSurface.*?"
         r"IsNullOrWhiteSpace\(\s*\$TransitionalSourceScreen\s*\).*?"
-        r"\$measuredSurface -cne \$TransitionalSourceScreen.*?"
+        r"Test-NativeMenuScreenTagsEquivalent.*?"
+        r"-Left \$measuredSurface.*?"
+        r"-Right \$TransitionalSourceScreen.*?"
         r"throw \[string\]\$probe\.Detail.*?"
         r"\$consecutiveTransitionSourceProbes -ge\s*"
         r"\$script:NativeMenuSettleConsecutiveSamples.*?"

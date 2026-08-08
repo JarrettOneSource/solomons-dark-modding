@@ -214,6 +214,12 @@ internal static class LauncherJsonConsole
                     SavegamesRootPath = execution.LaunchedGame.SavegamesRootPath,
                     SavegamesUsesDirectoryMirror =
                         execution.LaunchedGame.SavegamesUsesDirectoryMirror,
+                    ProfileStateReceiptPath =
+                        execution.LaunchedGame.ProfileStateReceiptPath,
+                    ProfileStateIdentitySha256 =
+                        execution.LaunchedGame.ProfileStateIdentitySha256,
+                    ProfileBaselineMode =
+                        execution.LaunchedGame.ProfileBaselineMode,
                     MultiplayerSession = execution.LaunchedGame.MultiplayerSessionStatus is { } session
                         ? new LauncherJsonMultiplayerSession
                         {
@@ -497,6 +503,9 @@ internal static class LauncherJsonConsole
         public required bool HeadlessSimulationEnabled { get; init; }
         public required string? SavegamesRootPath { get; init; }
         public required bool SavegamesUsesDirectoryMirror { get; init; }
+        public required string ProfileStateReceiptPath { get; init; }
+        public required string ProfileStateIdentitySha256 { get; init; }
+        public required string ProfileBaselineMode { get; init; }
         public required LauncherJsonMultiplayerSession? MultiplayerSession { get; init; }
     }
 

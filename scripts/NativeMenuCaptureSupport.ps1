@@ -32,12 +32,213 @@ function Assert-NativeMenuCaptureSurfaceAgreement {
         [Parameter(Mandatory = $true)][string]$MachineClassifiedSurface
     )
 
-    if ($MachineClassifiedSurface -cne $OperatorScreenTag) {
+    $captureSurface = Get-NativeMenuCaptureSurfaceId `
+        -ScreenTag $OperatorScreenTag
+    if (
+        $MachineClassifiedSurface -cne $captureSurface -and
+        $MachineClassifiedSurface -cne $OperatorScreenTag
+    ) {
         throw (
             "STOP: native-menu capture surface agreement rejected: " +
             "operator tag '$OperatorScreenTag' does not equal " +
-            "machine-classified surface '$MachineClassifiedSurface'."
+            "machine-classified surface '$MachineClassifiedSurface' " +
+            "through capture surface '$captureSurface'."
         )
+    }
+}
+
+function Convert-NativeMenuBrowserTabToScreenTag {
+    param([Parameter(Mandatory = $true)][string]$Tab)
+
+    switch ($Tab) {
+        "recent" { return "dark_cloud_recent" }
+        "online_levels" { return "dark_cloud_online_levels" }
+        "my_levels" { return "dark_cloud_my_levels" }
+        default {
+            throw "BROKEN: native-menu browser tab classifier returned '$Tab'."
+        }
+    }
+}
+
+function Test-NativeMenuScreenTagsEquivalent {
+    param(
+        [Parameter(Mandatory = $true)][string]$Left,
+        [Parameter(Mandatory = $true)][string]$Right
+    )
+
+    if ($Left -ceq $Right) {
+        return $true
+    }
+    $leftTab = Get-NativeMenuExpectedBrowserTab -ScreenTag $Left
+    $rightTab = Get-NativeMenuExpectedBrowserTab -ScreenTag $Right
+    return (
+        -not [string]::IsNullOrWhiteSpace($leftTab) -and
+        $leftTab -ceq $rightTab
+    )
+}
+
+function Get-NativeMenuCaptureSurfaceId {
+    param([Parameter(Mandatory = $true)][string]$ScreenTag)
+
+    if ($ScreenTag -in @(
+        "dark_cloud_browser",
+        "dark_cloud_recent",
+        "dark_cloud_online_levels",
+        "dark_cloud_my_levels"
+    )) {
+        return "dark_cloud_browser"
+    }
+    return $ScreenTag
+}
+
+function Get-NativeMenuExpectedBrowserTab {
+    param([Parameter(Mandatory = $true)][string]$ScreenTag)
+
+    switch ($ScreenTag) {
+        "dark_cloud_browser" { return "online_levels" }
+        "dark_cloud_recent" { return "recent" }
+        "dark_cloud_online_levels" { return "online_levels" }
+        "dark_cloud_my_levels" { return "my_levels" }
+        default { return "" }
+    }
+}
+
+function Resolve-NativeMenuBrowserTabState {
+    param([Parameter(Mandatory = $true)][object]$Layout)
+
+    $tabActions = [ordered]@{
+        recent = "dark_cloud_browser.recent"
+        online_levels = "dark_cloud_browser.online_levels"
+        my_levels = "dark_cloud_browser.my_levels"
+    }
+    $artElements = @($Layout.elements | Where-Object {
+        [string]$_.kind -ceq "art" -and
+        [string]$_.art_id -ceq "UI.13"
+    })
+    $measurements = [Collections.Generic.List[object]]::new()
+    $geometryMembers = [Collections.Generic.List[object]]::new()
+    foreach ($entry in $tabActions.GetEnumerator()) {
+        $controls = @($Layout.elements | Where-Object {
+            [string]$_.kind -ceq "control" -and
+            [string]$_.action_id -ceq [string]$entry.Value
+        })
+        if ($controls.Count -ne 1) {
+            throw (
+                "STOP: native-menu browser tab verification could not resolve " +
+                "exactly one '$($entry.Value)' control."
+            )
+        }
+        $controlRect = @($controls[0].rect)
+        if ($controlRect.Count -ne 4) {
+            throw (
+                "STOP: native-menu browser tab verification found a malformed " +
+                "'$($entry.Value)' control rect."
+            )
+        }
+        $leftMatches = @($artElements | Where-Object {
+            $rect = @($_.rect)
+            $rect.Count -eq 4 -and
+            [double]$rect[0] -eq [double]$controlRect[0]
+        })
+        $rightMatches = @($artElements | Where-Object {
+            $rect = @($_.rect)
+            $rect.Count -eq 4 -and
+            [double]$rect[2] -eq [double]$controlRect[2]
+        })
+        if ($leftMatches.Count -ne 1 -or $rightMatches.Count -ne 1) {
+            throw (
+                "STOP: native-menu browser tab verification did not resolve " +
+                "one measured UI.13 bracket pair for '$($entry.Value)'."
+            )
+        }
+        if ([string]$leftMatches[0].id -ceq [string]$rightMatches[0].id) {
+            throw (
+                "STOP: native-menu browser tab verification resolved one " +
+                "UI.13 member as both sides of '$($entry.Value)'."
+            )
+        }
+        $leftRect = @($leftMatches[0].rect)
+        $rightRect = @($rightMatches[0].rect)
+        if ([double]$leftRect[1] -ne [double]$rightRect[1]) {
+            throw (
+                "STOP: native-menu browser tab verification found a split " +
+                "vertical bracket pair for '$($entry.Value)'."
+            )
+        }
+        $geometryMembers.Add($leftMatches[0])
+        $geometryMembers.Add($rightMatches[0])
+        $measurements.Add([ordered]@{
+            tab = [string]$entry.Key
+            action_id = [string]$entry.Value
+            control_id = [string]$controls[0].id
+            bracket_ids = @(
+                [string]$leftMatches[0].id,
+                [string]$rightMatches[0].id
+            )
+            bracket_top = [double]$leftRect[1]
+            control_rect = @($controlRect | ForEach-Object { [double]$_ })
+            bracket_rects = @(
+                @($leftRect | ForEach-Object { [double]$_ }),
+                @($rightRect | ForEach-Object { [double]$_ })
+            )
+        })
+    }
+    $memberIds = @($geometryMembers | ForEach-Object { [string]$_.id })
+    if ($memberIds.Count -ne 6 -or @($memberIds | Sort-Object -Unique).Count -ne 6) {
+        throw (
+            "STOP: native-menu browser tab verification did not reach the " +
+            "six distinct measured geometry-bearing bracket members."
+        )
+    }
+    $minimumTop = ($measurements | Measure-Object -Property bracket_top -Minimum).Minimum
+    $selected = @($measurements | Where-Object {
+        [double]$_.bracket_top -eq [double]$minimumTop
+    })
+    $distinctTops = @(
+        $measurements | ForEach-Object { [double]$_.bracket_top } |
+            Sort-Object -Unique
+    )
+    if ($selected.Count -ne 1 -or $distinctTops.Count -ne 2) {
+        throw (
+            "STOP: native-menu browser tab verification did not resolve one " +
+            "selected tab from the measured bracket geometry."
+        )
+    }
+    $geometryJson = @($measurements) | ConvertTo-Json -Depth 20 -Compress
+    return [pscustomobject][ordered]@{
+        measured_tab = [string]$selected[0].tab
+        member_ids = @($memberIds | Sort-Object)
+        geometry_sha256 = Get-NativeMenuStringSha256 $geometryJson
+        measurements = @($measurements)
+    }
+}
+
+function Assert-NativeMenuBrowserTabAgreement {
+    param(
+        [Parameter(Mandatory = $true)][string]$OperatorScreenTag,
+        [Parameter(Mandatory = $true)][object]$Layout
+    )
+
+    $expectedTab = Get-NativeMenuExpectedBrowserTab `
+        -ScreenTag $OperatorScreenTag
+    if ([string]::IsNullOrWhiteSpace($expectedTab)) {
+        return $null
+    }
+    $measured = Resolve-NativeMenuBrowserTabState -Layout $Layout
+    if ([string]$measured.measured_tab -cne $expectedTab) {
+        throw (
+            "STOP: native-menu browser tab agreement rejected: operator tag " +
+            "'$OperatorScreenTag' requires tab '$expectedTab' but the six " +
+            "measured geometry-bearing members classify " +
+            "'$($measured.measured_tab)'."
+        )
+    }
+    return [pscustomobject][ordered]@{
+        expected_tab = $expectedTab
+        measured_tab = [string]$measured.measured_tab
+        member_ids = @($measured.member_ids)
+        geometry_sha256 = [string]$measured.geometry_sha256
+        measurements = @($measured.measurements)
     }
 }
 
@@ -75,6 +276,166 @@ function Invoke-NativeMenuGit {
         )
     }
     return (($result | ForEach-Object { [string]$_ }) -join "`n").Trim()
+}
+
+function Get-NativeMenuProfileStateProvenance {
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [Parameter(Mandatory = $true)][string]$InstanceRoot
+    )
+
+    $receiptPath = Join-Path $InstanceRoot (
+        "stage\.sdmod\native-menu-profile-state.json"
+    )
+    $baselinePath = Join-Path $Root (
+        "tests\fixtures\webgame\native-menu-profile-state-baseline.json"
+    )
+    if (-not (Test-Path -LiteralPath $receiptPath -PathType Leaf)) {
+        throw (
+            "BROKEN: the exact staged process has no pre-launch native-menu " +
+            "profile-state receipt."
+        )
+    }
+    if (-not (Test-Path -LiteralPath $baselinePath -PathType Leaf)) {
+        throw "BROKEN: the pinned native-menu profile-state baseline is missing."
+    }
+    try {
+        $receipt = Get-Content -LiteralPath $receiptPath -Raw |
+            ConvertFrom-Json
+        $baseline = Get-Content -LiteralPath $baselinePath -Raw |
+            ConvertFrom-Json
+    } catch {
+        throw "BROKEN: native-menu profile-state provenance is not valid JSON."
+    }
+    if (
+        [string]$receipt.schema -cne
+            "solomon-dark-native-menu-profile-state-v1" -or
+        [string]$baseline.schema -cne
+            "solomon-dark-native-menu-profile-state-baseline-v1"
+    ) {
+        throw "BROKEN: native-menu profile-state provenance schema is not recognized."
+    }
+    $identity = [string]$receipt.profile_state_identity_sha256
+    $expectedIdentity = [string]$baseline.profile_state.profile_state_identity_sha256
+    if ($identity -notmatch '^[0-9a-f]{64}$' -or
+        $expectedIdentity -notmatch '^[0-9a-f]{64}$') {
+        throw "BROKEN: native-menu profile-state identity is not a lowercase SHA-256."
+    }
+    if ($identity -cne $expectedIdentity) {
+        throw (
+            "STOP: native-menu profile-state provenance mismatch: capture " +
+            "identity '$identity' does not equal pinned campaign baseline " +
+            "'$expectedIdentity'."
+        )
+    }
+    $receiptFiles = @($receipt.files)
+    $baselineFiles = @($baseline.profile_state.files)
+    $receiptFilesJson = $receiptFiles | ConvertTo-Json -Depth 20 -Compress
+    $baselineFilesJson = $baselineFiles | ConvertTo-Json -Depth 20 -Compress
+    if (
+        [string]$receipt.baseline_mode -cne "fresh_install" -or
+        [bool]$receipt.source_sandbox_excluded -ne $true -or
+        [bool]$receipt.retail_appdata_seeded -ne $false -or
+        [string]$baseline.profile_state.baseline_mode -cne "fresh_install" -or
+        [bool]$baseline.profile_state.source_sandbox_excluded -ne $true -or
+        [bool]$baseline.profile_state.retail_appdata_seeded -ne $false -or
+        $receiptFilesJson -cne $baselineFilesJson
+    ) {
+        throw (
+            "STOP: native-menu profile-state provenance does not reproduce " +
+            "the pinned pristine file-state contract."
+        )
+    }
+    if ($receiptFiles.Count -ne 0 -or $baselineFiles.Count -ne 0) {
+        throw (
+            "STOP: native-menu pristine profile-state baseline contains " +
+            "durable files and is not the diagnosed clean campaign state."
+        )
+    }
+    $baselineItem = Get-Item -LiteralPath $baselinePath
+    $receiptItem = Get-Item -LiteralPath $receiptPath
+    return [pscustomobject]@{
+        ReceiptPath = $receiptItem.FullName
+        Value = [ordered]@{
+            schema = [string]$receipt.schema
+            profile_state_identity_sha256 = $identity
+            baseline_mode = [string]$receipt.baseline_mode
+            source_sandbox_excluded = [bool]$receipt.source_sandbox_excluded
+            retail_appdata_seeded = [bool]$receipt.retail_appdata_seeded
+            durable_file_count = $receiptFiles.Count
+            baseline_fixture = [ordered]@{
+                repo_relative_path = (
+                    "tests/fixtures/webgame/" + $baselineItem.Name
+                )
+                sha256 = (
+                    Get-FileHash -LiteralPath $baselineItem.FullName `
+                        -Algorithm SHA256
+                ).Hash.ToLowerInvariant()
+                bytes = $baselineItem.Length
+            }
+            launch_receipt = [ordered]@{
+                evidence_filename = $receiptItem.Name
+                sha256 = (
+                    Get-FileHash -LiteralPath $receiptItem.FullName `
+                        -Algorithm SHA256
+                ).Hash.ToLowerInvariant()
+                bytes = $receiptItem.Length
+            }
+        }
+    }
+}
+
+function Copy-NativeMenuProfileStateEvidence {
+    param(
+        [Parameter(Mandatory = $true)][object]$Context,
+        [Parameter(Mandatory = $true)][string]$DestinationDirectory,
+        [Parameter(Mandatory = $true)]
+        [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$')]
+        [string]$EvidenceBasename
+    )
+
+    [IO.Directory]::CreateDirectory($DestinationDirectory) | Out-Null
+    $destination = Join-Path $DestinationDirectory (
+        $EvidenceBasename + ".profile-state.json"
+    )
+    if (Test-Path -LiteralPath $destination -PathType Leaf) {
+        $existingSha = (
+            Get-FileHash -LiteralPath $destination -Algorithm SHA256
+        ).Hash.ToLowerInvariant()
+        if ($existingSha -cne
+            [string]$Context.ProfileState.launch_receipt.sha256) {
+            throw (
+                "BROKEN: profile-state evidence filename is ambiguous for " +
+                "'$EvidenceBasename'."
+            )
+        }
+    } else {
+        Copy-Item `
+            -LiteralPath $Context.ProfileStateReceiptPath `
+            -Destination $destination
+    }
+    $item = Get-Item -LiteralPath $destination
+    $sha256 = (
+        Get-FileHash -LiteralPath $item.FullName -Algorithm SHA256
+    ).Hash.ToLowerInvariant()
+    if (
+        $sha256 -cne [string]$Context.ProfileState.launch_receipt.sha256 -or
+        $item.Length -ne [long]$Context.ProfileState.launch_receipt.bytes
+    ) {
+        throw "BROKEN: copied profile-state evidence does not match the launch receipt."
+    }
+    $value = [ordered]@{}
+    foreach ($property in $Context.ProfileState.GetEnumerator()) {
+        if ([string]$property.Key -cne "launch_receipt") {
+            $value[[string]$property.Key] = $property.Value
+        }
+    }
+    $value["launch_receipt"] = [ordered]@{
+        evidence_filename = $item.Name
+        sha256 = $sha256
+        bytes = $item.Length
+    }
+    return $value
 }
 
 function New-NativeMenuCaptureContext {
@@ -197,12 +558,19 @@ function New-NativeMenuCaptureContext {
         )
     }
 
+    $profileState = Get-NativeMenuProfileStateProvenance `
+        -Root $Root `
+        -InstanceRoot $instanceRoot
+
     $source = [ordered]@{
         base_commit_sha = $baseCommitSha
         source_tree_sha = $sourceTreeSha
         capture_tree = "exact committed tree at base_commit_sha"
         game_executable_sha256 = $gameExecutableSha256
         loader_dll_sha256 = $loaderDllSha256
+        profile_state_identity_sha256 = (
+            [string]$profileState.Value.profile_state_identity_sha256
+        )
     }
     return [pscustomobject]@{
         Root = $Root
@@ -216,6 +584,8 @@ function New-NativeMenuCaptureContext {
         OverlayReference = $overlayReference
         StartupLog = $startupLog
         Source = $source
+        ProfileStateReceiptPath = $profileState.ReceiptPath
+        ProfileState = $profileState.Value
     }
 }
 
@@ -311,6 +681,8 @@ function Wait-NativeMenuActionDispatch {
         [Parameter(Mandatory = $true)][string]$ExpectedDestinationScreen
     )
 
+    $captureDestinationScreen = Get-NativeMenuCaptureSurfaceId `
+        -ScreenTag $ExpectedDestinationScreen
     $clock = [Diagnostics.Stopwatch]::StartNew()
     $lastStatus = "not_ready"
     while ($clock.ElapsedMilliseconds -le
@@ -330,7 +702,7 @@ local function quote(value)
 end
 local dispatch = sd.ui.get_action_dispatch($RequestId)
 local destination, capture_diagnostic =
-  sd.ui.capture_current_layout([=[$ExpectedDestinationScreen]=])
+  sd.ui.capture_current_layout([=[$captureDestinationScreen]=])
 local classified_surface = type(destination) == 'table' and
   tostring(destination.screen_id or '') or
   (type(capture_diagnostic) == 'table' and
@@ -369,7 +741,7 @@ return table.concat({
             if (
                 $lastStatus -ceq "dispatching" -and
                 [string]$dispatch.classified_surface -ceq
-                    $ExpectedDestinationScreen -and
+                    $captureDestinationScreen -and
                 [uint64]$dispatch.layout_generation -ne
                     $SourceLayoutGeneration
             ) {
@@ -409,6 +781,7 @@ function Get-NativeMenuLayoutProbe {
         [string]$FramePath = ""
     )
 
+    $captureSurfaceId = Get-NativeMenuCaptureSurfaceId -ScreenTag $ScreenId
     $captureFrame = ""
     if (-not [string]::IsNullOrWhiteSpace($FramePath)) {
         $captureFrame = @"
@@ -455,7 +828,7 @@ end
 $captureFrame
 local semantic = sd.ui.get_snapshot()
 local snapshot, capture_diagnostic =
-  sd.ui.capture_current_layout([=[$ScreenId]=])
+  sd.ui.capture_current_layout([=[$captureSurfaceId]=])
 if type(snapshot) ~= 'table' then
   local classified = type(capture_diagnostic) == 'table' and
     tostring(capture_diagnostic.classified_screen_id or '') or ''
@@ -584,9 +957,56 @@ return table.concat({
     Assert-NativeMenuCaptureSurfaceAgreement `
         -OperatorScreenTag $ScreenId `
         -MachineClassifiedSurface $machineSurface
+    $browserTabVerification = $null
+    $expectedBrowserTab = Get-NativeMenuExpectedBrowserTab `
+        -ScreenTag $ScreenId
+    if (-not [string]::IsNullOrWhiteSpace($expectedBrowserTab)) {
+        try {
+            $browserTabVerification = Assert-NativeMenuBrowserTabAgreement `
+                -OperatorScreenTag $ScreenId `
+                -Layout $semanticPayload
+        } catch {
+            $measured = Resolve-NativeMenuBrowserTabState -Layout $semanticPayload
+            return [pscustomobject]@{
+                Status = "wrong_tab"
+                Detail = [string]$_.Exception.Message
+                SemanticSurface = Convert-NativeMenuBrowserTabToScreenTag `
+                    -Tab ([string]$measured.measured_tab)
+                MachineClassifiedSurface = $machineSurface
+                NativeSurface = $parts[2].Substring("__NATIVE_SURFACE__=".Length)
+                NativeGeneration = [uint64]$parts[3].Substring(
+                    "__NATIVE_GENERATION__=".Length
+                )
+                BrowserTabVerification = $measured
+            }
+        }
+        if ($ScreenId -cne $captureSurfaceId) {
+            $from = '"screen_id":"' + $captureSurfaceId + '"'
+            $to = '"screen_id":"' + $ScreenId + '"'
+            if (
+                ([regex]::Matches(
+                    $semanticJson,
+                    [regex]::Escape($from)
+                )).Count -ne 1 -or
+                ([regex]::Matches(
+                    $nonGeometryJson,
+                    [regex]::Escape($from)
+                )).Count -ne 1
+            ) {
+                throw (
+                    "BROKEN: browser tab verification could not re-tag one " +
+                    "machine-classified semantic payload."
+                )
+            }
+            $semanticJson = $semanticJson.Replace($from, $to)
+            $nonGeometryJson = $nonGeometryJson.Replace($from, $to)
+            $semanticPayload.screen_id = $ScreenId
+        }
+    }
     return [pscustomobject]@{
         Status = "ready"
-        SemanticSurface = $machineSurface
+        SemanticSurface = $ScreenId
+        MachineClassifiedSurface = $machineSurface
         SemanticGeneration = [uint64]$parts[1].Substring(
             "__SEMANTIC_GENERATION__=".Length
         )
@@ -600,6 +1020,7 @@ return table.concat({
         NonGeometryJson = $nonGeometryJson
         SemanticJson = $semanticJson
         SemanticPayload = $semanticPayload
+        BrowserTabVerification = $browserTabVerification
     }
 }
 
@@ -670,8 +1091,9 @@ if sampler == nil then
     local state = rawget(_G, '__sd_native_menu_population_sampler')
     if state == nil or not state.active then return end
     local ok, detail = pcall(function()
-      local snapshot = sd.ui.capture_current_layout(state.screen_id)
+      local snapshot = sd.ui.capture_current_layout(state.capture_screen_id)
       if type(snapshot) ~= 'table' then return end
+      snapshot.screen_id = state.logical_screen_id
       local structural_elements = {}
       for index, element in ipairs(snapshot.elements or {}) do
         structural_elements[index] = element
@@ -740,6 +1162,7 @@ function Start-NativeMenuPopulationSampler {
         [Parameter(Mandatory = $true)][string]$ScreenId
     )
 
+    $captureSurfaceId = Get-NativeMenuCaptureSurfaceId -ScreenTag $ScreenId
     $result = Invoke-NativeMenuLua -Context $Context -LuaCode @"
 local sampler = rawget(_G, '__sd_native_menu_population_sampler')
 if sampler == nil then error('population sampler was not initialized') end
@@ -749,7 +1172,8 @@ sampler.phases = {}
 sampler.sample_count = 0
 sampler.overflow = false
 sampler.error = ''
-sampler.screen_id = [=[$ScreenId]=]
+sampler.capture_screen_id = [=[$captureSurfaceId]=]
+sampler.logical_screen_id = [=[$ScreenId]=]
 sampler.active = true
 return 'population-sampler-armed'
 "@
@@ -966,13 +1390,14 @@ function Wait-NativeMenuLayoutSettlement {
             -Context $Context `
             -ScreenId $ScreenId
         if ($probe.Status -ne "ready") {
-            if ($probe.Status -eq "wrong_surface") {
+            if ($probe.Status -in @("wrong_surface", "wrong_tab")) {
                 $measuredSurface = [string]$probe.SemanticSurface
                 if (
                     [string]::IsNullOrWhiteSpace(
                         $TransitionalSourceScreen
-                    ) -or
-                    $measuredSurface -cne $TransitionalSourceScreen
+                    ) -or -not (Test-NativeMenuScreenTagsEquivalent `
+                        -Left $measuredSurface `
+                        -Right $TransitionalSourceScreen)
                 ) {
                     throw [string]$probe.Detail
                 }
@@ -1160,6 +1585,9 @@ function Wait-NativeMenuLayoutSettlement {
                 EphemeralArtIds = @($classification.ephemeral_art_ids)
                 StructuralPhases = $structuralPhases
                 SettledWindowSamples = @($stableWindow)
+                BrowserTabVerification = (
+                    $windowAnchorProbe.BrowserTabVerification
+                )
             }
         }
         Start-Sleep -Milliseconds $script:NativeMenuSettlePollMilliseconds
@@ -1248,6 +1676,9 @@ function Get-SettledNativeMenuObservation {
             -Layout $layout
         return [pscustomobject]@{
             semantic_surface = $settled.AnchorProbe.SemanticSurface
+            machine_classified_surface = (
+                $settled.AnchorProbe.MachineClassifiedSurface
+            )
             semantic_generation = $settled.AnchorProbe.SemanticGeneration
             native_surface = $settled.AnchorProbe.NativeSurface
             native_generation = $settled.AnchorProbe.NativeGeneration
@@ -1265,6 +1696,7 @@ function Get-SettledNativeMenuObservation {
             ).Hash.ToLowerInvariant()
             settlement = $settled.Summary
             layout = $layout
+            browser_tab_verification = $settled.BrowserTabVerification
             settlement_trace = [ordered]@{
                 structural_phases = @($settled.StructuralPhases)
                 settled_window_samples = @($settled.SettledWindowSamples)

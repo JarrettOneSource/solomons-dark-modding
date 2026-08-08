@@ -564,7 +564,7 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             support,
             r"(?s)\$lastStatus -ceq \"dispatching\".*?"
             r"\$dispatch\.classified_surface -ceq.*?"
-            r"\$ExpectedDestinationScreen.*?"
+            r"\$captureDestinationScreen.*?"
             r"\$dispatch\.layout_generation -ne.*?"
             r"\$SourceLayoutGeneration",
             "a blocking native modal may proceed only after its exact caller-pinned "
@@ -610,9 +610,12 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         )
         self.assertRegex(
             support,
-            r'(?s)if \(\$probe\.Status -eq "wrong_surface"\) \{.*?'
+            r'(?s)if \(\$probe\.Status -in '
+            r'@\("wrong_surface", "wrong_tab"\)\) \{.*?'
             r'IsNullOrWhiteSpace\(\s*\$TransitionalSourceScreen\s*\).*?'
-            r'\$measuredSurface -cne \$TransitionalSourceScreen.*?'
+            r'Test-NativeMenuScreenTagsEquivalent.*?'
+            r'-Left \$measuredSurface.*?'
+            r'-Right \$TransitionalSourceScreen.*?'
             r'throw \[string\]\$probe\.Detail.*?'
             r'\$consecutiveTransitionSourceProbes -ge\s*'
             r'\$script:NativeMenuSettleConsecutiveSamples.*?'
@@ -621,6 +624,20 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             "a transition may outlive its source surface briefly, but a foreign "
             "surface or a source that itself meets the 40-sample/two-second "
             "settlement floor must still abort with the measured mismatch",
+        )
+        self.assertRegex(
+            support,
+            r'(?s)function Resolve-NativeMenuBrowserTabState.*?'
+            r'dark_cloud_browser\.recent.*?'
+            r'dark_cloud_browser\.online_levels.*?'
+            r'dark_cloud_browser\.my_levels.*?'
+            r'UI\.13.*?'
+            r'\$memberIds\.Count -ne 6.*?'
+            r'\$distinctTops\.Count -ne 2.*?'
+            r'function Assert-NativeMenuBrowserTabAgreement.*?'
+            r'native-menu browser tab agreement rejected',
+            "browser layouts must be selected by the six measured bracket "
+            "members and reject a wrong operator tab",
         )
         self.assertIn(
             "-TransitionalSourceScreen $SourceScreen",

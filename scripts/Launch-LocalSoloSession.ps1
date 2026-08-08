@@ -253,6 +253,10 @@ $summary = [ordered]@{
     unusedRemotePort = [int]$UnusedRemotePort
     luaPipe = $pipeName
     startupLogPath = $result.launch.startupLogPath
+    profileStateReceiptPath = $result.launch.profileStateReceiptPath
+    profileStateIdentitySha256 =
+        $result.launch.profileStateIdentitySha256
+    profileBaselineMode = $result.launch.profileBaselineMode
     audioDisabled = -not [bool]$audioEnabled
     maxParticipants = $MaxParticipants
     telemetryEnabled = [bool]$EnableNetworkTelemetry

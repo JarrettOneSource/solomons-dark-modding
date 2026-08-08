@@ -33,6 +33,10 @@ if __package__:
         SettlementV2Error,
         assert_overlay_sample_hygiene as assert_overlay_sample_hygiene_v24,
     )
+    from .native_menu_profile_state import (
+        NativeMenuProfileStateError,
+        materialize_capture_profile_state,
+    )
 else:
     from native_menu_ambient_lifecycle import (  # type: ignore[no-redef]
         AmbientLifecycleError,
@@ -48,6 +52,10 @@ else:
         OVERLAY_REFERENCE_SCHEMA as OVERLAY_REFERENCE_SCHEMA_V24,
         SettlementV2Error,
         assert_overlay_sample_hygiene as assert_overlay_sample_hygiene_v24,
+    )
+    from native_menu_profile_state import (  # type: ignore[no-redef]
+        NativeMenuProfileStateError,
+        materialize_capture_profile_state,
     )
 
 
@@ -137,17 +145,23 @@ def derive_binary_source(
     repo_root: Path,
     instance: str,
     git_provenance: dict[str, str],
-) -> dict[str, str]:
+    profile_evidence_path: Path,
+    label: str,
+) -> tuple[dict[str, str], dict[str, Any]]:
     instance_root = repo_root / "runtime" / "instances" / instance.lower()
     executable = instance_root / "stage" / "SolomonDark.exe"
     loader = repo_root / "dist" / "launcher" / "SolomonDarkModLoader.dll"
     compatibility_path = (
         instance_root / "stage" / ".sdmod" / "multiplayer-compatibility.json"
     )
+    profile_receipt_path = (
+        instance_root / "stage" / ".sdmod" / "native-menu-profile-state.json"
+    )
     for label, path in (
         ("staged game executable", executable),
         ("launcher-side loader DLL", loader),
         ("staged compatibility receipt", compatibility_path),
+        ("pre-launch profile-state receipt", profile_receipt_path),
     ):
         if not path.is_file():
             raise SpecialImportError(f"{label} is missing for '{instance}': {path}")
@@ -170,12 +184,25 @@ def derive_binary_source(
             "staged compatibility receipt does not identify the exact game and "
             f"launcher-side loader for '{instance}'"
         )
-    return {
+    try:
+        profile_state = materialize_capture_profile_state(
+            repo_root=repo_root,
+            launch_receipt_path=profile_receipt_path,
+            evidence_path=profile_evidence_path,
+            label=label,
+        )
+    except NativeMenuProfileStateError as error:
+        raise SpecialImportError(str(error)) from error
+    source = {
         **git_provenance,
         "capture_tree": "exact committed tree at base_commit_sha",
         "game_executable_sha256": game_hash,
         "loader_dll_sha256": loader_hash,
+        "profile_state_identity_sha256": profile_state[
+            "profile_state_identity_sha256"
+        ],
     }
+    return source, profile_state
 
 
 def source_receipt(path: Path) -> dict[str, Any]:
@@ -485,6 +512,7 @@ def capture_header(
     frame_path: Path,
     metadata: dict[str, Any],
     source: dict[str, str],
+    profile_state: dict[str, Any],
     settlement: dict[str, Any],
     reference_capture: str | None,
 ) -> dict[str, Any]:
@@ -493,6 +521,7 @@ def capture_header(
         "instance": metadata["instance"],
         "process_id": metadata["process_id"],
         "source": copy.deepcopy(source),
+        "profile_state": copy.deepcopy(profile_state),
         "recorded_live": True,
         "captured_at_utc": captured_at_utc(capture_path),
         "capture_method": metadata["capture_method"],
@@ -541,12 +570,19 @@ def write_trace(
     label: str,
     source_path: Path,
     window: list[dict[str, Any]],
+    capture: dict[str, Any],
 ) -> dict[str, Any]:
     value = {
         "schema": "solomon-dark-native-menu-settlement-trace-v3",
         "header": {
             "label": label,
             "settlement_spec": "2.9",
+            "instance": capture["instance"],
+            "process_id": capture["process_id"],
+            "source": copy.deepcopy(capture["source"]),
+            "profile_state": copy.deepcopy(capture["profile_state"]),
+            "recorded_live": True,
+            "captured_at_utc": capture["captured_at_utc"],
             "source_recording": source_receipt(source_path),
         },
         "structural_phases": [],
@@ -642,11 +678,28 @@ def import_surface(
         confirmation_classification,
         f"{label} confirmation",
     )
-    primary_source = derive_binary_source(
-        repo_root, primary_metadata["instance"], git_provenance
+    profile_receipt_root = output_root / "menu-profile-state-receipts"
+    primary_profile_evidence = profile_receipt_root / (
+        f"{fixture_stem}.primary.{primary_metadata['instance']}."
+        f"{primary_metadata['process_id']}.profile-state.json"
     )
-    confirmation_source = derive_binary_source(
-        repo_root, confirmation_metadata["instance"], git_provenance
+    confirmation_profile_evidence = profile_receipt_root / (
+        f"{fixture_stem}.confirmation.{confirmation_metadata['instance']}."
+        f"{confirmation_metadata['process_id']}.profile-state.json"
+    )
+    primary_source, primary_profile_state = derive_binary_source(
+        repo_root,
+        primary_metadata["instance"],
+        git_provenance,
+        primary_profile_evidence,
+        f"{label} primary",
+    )
+    confirmation_source, confirmation_profile_state = derive_binary_source(
+        repo_root,
+        confirmation_metadata["instance"],
+        git_provenance,
+        confirmation_profile_evidence,
+        f"{label} confirmation",
     )
     reference_name = f"{fixture_stem}.png"
     primary_header = capture_header(
@@ -655,6 +708,7 @@ def import_surface(
         frame_path=primary_frame,
         metadata=primary_metadata,
         source=primary_source,
+        profile_state=primary_profile_state,
         settlement=settlement_summary(primary_classification),
         reference_capture=f"../menu-reference-captures/{reference_name}",
     )
@@ -664,6 +718,7 @@ def import_surface(
         frame_path=confirmation_frame,
         metadata=confirmation_metadata,
         source=confirmation_source,
+        profile_state=confirmation_profile_state,
         settlement=settlement_summary(confirmation_classification),
         reference_capture=None,
     )
@@ -673,7 +728,7 @@ def import_surface(
     convert_reference(primary_frame, reference_path)
     trace_path = output_root / "menu-settlement-traces" / f"{fixture_stem}.settlement.json"
     primary_header["settlement_trace"] = write_trace(
-        trace_path, label, primary_path, primary_window
+        trace_path, label, primary_path, primary_window, primary_header
     )
 
     confirmation = confirmation_value(
@@ -695,6 +750,7 @@ def import_surface(
         "instance": confirmation_header["instance"],
         "process_id": confirmation_header["process_id"],
         "source": copy.deepcopy(confirmation_header["source"]),
+        "profile_state": copy.deepcopy(confirmation_header["profile_state"]),
         "confirmation_structural_sha256": confirmation_classification[
             "structural_sha256"
         ],
@@ -721,13 +777,15 @@ def import_surface(
         str(confirmation_output),
         str(trace_path),
         str(reference_path),
+        str(primary_profile_evidence),
+        str(confirmation_profile_evidence),
     ]
 
 
 def import_all(args: argparse.Namespace) -> dict[str, Any]:
     repo_root = args.repo_root.resolve()
     output_root = args.output_root.resolve()
-    expected_relative_paths = {
+    expected_fixed_relative_paths = {
         Path("menu-layouts/native-loader.json"),
         Path("menu-animation-confirmations/native-loader.confirmation.json"),
         Path("menu-settlement-traces/native-loader.settlement.json"),
@@ -739,7 +797,7 @@ def import_all(args: argparse.Namespace) -> dict[str, Any]:
     }
     collisions = sorted(
         str(relative)
-        for relative in expected_relative_paths
+        for relative in expected_fixed_relative_paths
         if (output_root / relative).exists()
     )
     if collisions:
@@ -784,6 +842,38 @@ def import_all(args: argparse.Namespace) -> dict[str, Any]:
         observed_relative_paths = {
             Path(path).relative_to(staging_root) for path in staged_outputs
         }
+        profile_paths = {
+            path
+            for path in observed_relative_paths
+            if path.parent == Path("menu-profile-state-receipts")
+        }
+        expected_profile_prefixes = {
+            "native-loader.primary.",
+            "native-loader.confirmation.",
+            "loading-screen.primary.",
+            "loading-screen.confirmation.",
+        }
+        observed_profile_prefixes = {
+            next(
+                (
+                    prefix
+                    for prefix in expected_profile_prefixes
+                    if path.name.startswith(prefix)
+                    and path.name.endswith(".profile-state.json")
+                ),
+                "",
+            )
+            for path in profile_paths
+        }
+        if (
+            len(profile_paths) != 4
+            or observed_profile_prefixes != expected_profile_prefixes
+        ):
+            raise SpecialImportError(
+                "special-capture profile-state evidence census is incomplete "
+                "or ambiguous"
+            )
+        expected_relative_paths = expected_fixed_relative_paths | profile_paths
         if observed_relative_paths != expected_relative_paths:
             raise SpecialImportError(
                 "special-capture staged output census is incomplete or ambiguous"
@@ -792,6 +882,10 @@ def import_all(args: argparse.Namespace) -> dict[str, Any]:
         for relative in sorted(expected_relative_paths):
             source = staging_root / relative
             destination = output_root / relative
+            if destination.exists():
+                raise SpecialImportError(
+                    f"special-capture output already exists: {destination}"
+                )
             destination.parent.mkdir(parents=True, exist_ok=True)
             os.replace(source, destination)
             outputs.append(str(destination))

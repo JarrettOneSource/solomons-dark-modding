@@ -50,6 +50,12 @@ $traceItemPath = Join-Path (
 [IO.Directory]::CreateDirectory(
     (Split-Path -Parent $referenceItemPath)
 ) | Out-Null
+$profileState = Copy-NativeMenuProfileStateEvidence `
+    -Context $context `
+    -DestinationDirectory $traceDirectory `
+    -EvidenceBasename (
+        "$fixtureBasename.$Instance.$ProcessId"
+    )
 
 $tempDirectory = Join-Path ([IO.Path]::GetTempPath()) (
     "sdmod-menu-layout-" + [Guid]::NewGuid().ToString("N")
@@ -92,9 +98,11 @@ $trace = [ordered]@{
         instance = $Instance
         process_id = $ProcessId
         source = $context.Source
+        profile_state = $profileState
         recorded_live = $true
         captured_at_utc = $capturedAtUtc
         capture_method = $observation.capture_method
+        browser_tab_verification = $observation.browser_tab_verification
     }
     settlement = $observation.settlement
     structural_phases = @(
@@ -126,10 +134,12 @@ $fixture = [ordered]@{
         instance = $Instance
         process_id = $ProcessId
         source = $context.Source
+        profile_state = $profileState
         capture_method = $observation.capture_method
         recorded_live = $true
         captured_at_utc = $capturedAtUtc
         settlement = $observation.settlement
+        browser_tab_verification = $observation.browser_tab_verification
         raw_recording = [ordered]@{
             evidence_filename = $traceItem.Name
             sha256 = (

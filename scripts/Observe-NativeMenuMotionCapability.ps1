@@ -203,6 +203,13 @@ $classification = Invoke-NativeMenuExtendedObservationClassifier `
     -RequiredSpanMilliseconds $requiredSpanMilliseconds
 
 [IO.Directory]::CreateDirectory((Split-Path -Parent $outputItemPath)) | Out-Null
+$profileState = Copy-NativeMenuProfileStateEvidence `
+    -Context $context `
+    -DestinationDirectory (Split-Path -Parent $outputItemPath) `
+    -EvidenceBasename (
+        ([IO.Path]::GetFileNameWithoutExtension($outputItemPath)) +
+        ".$Instance.$ProcessId"
+    )
 $capturedAtUtc = [DateTime]::UtcNow.ToString("o")
 $recording = [ordered]@{
     schema = "solomon-dark-native-menu-motion-capability-observation-v1"
@@ -211,6 +218,7 @@ $recording = [ordered]@{
         instance = $Instance
         process_id = $ProcessId
         source = $context.Source
+        profile_state = $profileState
         recorded_live = $true
         captured_at_utc = $capturedAtUtc
         capture_method = "sd.ui.capture_current_layout sampled continuously"

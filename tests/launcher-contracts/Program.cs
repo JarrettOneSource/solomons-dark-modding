@@ -62,6 +62,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("cloud save archive integrity", TestCloudSaveArchiveIntegrityAsync),
     ("selected save launch routing", TestSelectedSaveLaunchRoutingAsync),
     ("fresh install isolation", TestFreshInstallIsolationAsync),
+    ("native-menu profile-state provenance", TestNativeMenuProfileStateProvenanceAsync),
     ("tutorial bypass launch routing", TestTutorialBypassLaunchRoutingAsync),
     ("audio disable launch routing", TestAudioDisableLaunchRoutingAsync),
     ("headless simulation launch routing", TestHeadlessSimulationLaunchRoutingAsync),
@@ -1414,6 +1415,127 @@ static Task TestFreshInstallIsolationAsync()
             () => LauncherCommandParser.Parse(
                 ["launch", "--fresh-install", "--savegames-root", Path.Combine(root, "external")]),
             "--fresh-install accepted an external savegames root");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+
+    return Task.CompletedTask;
+}
+
+static Task TestNativeMenuProfileStateProvenanceAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        static (string StageRoot, string ProfileRoot) CreateEmptyRoots(
+            string parent)
+        {
+            var stageRoot = Path.Combine(parent, "stage");
+            var profileRoot = Path.Combine(parent, "profile");
+            Directory.CreateDirectory(Path.Combine(stageRoot, "sandbox"));
+            Directory.CreateDirectory(profileRoot);
+            return (stageRoot, profileRoot);
+        }
+
+        var firstRoots = CreateEmptyRoots(Path.Combine(root, "first"));
+        var secondRoots = CreateEmptyRoots(Path.Combine(root, "second"));
+        var first = NativeMenuProfileStateProvenance.Materialize(
+            firstRoots.StageRoot,
+            new LaunchOptions(
+                TemporaryProfile: true,
+                ProfileRootPath: firstRoots.ProfileRoot),
+            freshInstall: true,
+            retailAppDataSeeded: false);
+        var second = NativeMenuProfileStateProvenance.Materialize(
+            secondRoots.StageRoot,
+            new LaunchOptions(
+                TemporaryProfile: true,
+                ProfileRootPath: secondRoots.ProfileRoot),
+            freshInstall: true,
+            retailAppDataSeeded: false);
+
+        Require(
+            first.ProfileStateIdentitySha256 ==
+                second.ProfileStateIdentitySha256,
+            "native-menu profile identity depends on absolute instance paths");
+        Require(
+            first.ProfileStateIdentitySha256.Length == 64 &&
+                first.ProfileStateIdentitySha256.All(Uri.IsHexDigit),
+            "native-menu profile identity is not a machine-derived SHA-256");
+        Require(
+            first.BaselineMode == "fresh_install" &&
+                first.SourceSandboxExcluded &&
+                !first.RetailAppDataSeeded,
+            "native-menu fresh baseline receipt does not prove source and retail state exclusion");
+        Require(
+            first.Files.Count == 0,
+            "native-menu pristine baseline unexpectedly includes durable files");
+        Require(
+            File.Exists(first.ReceiptPath),
+            "native-menu profile provenance was not materialized before launch");
+        using (var receipt = JsonDocument.Parse(File.ReadAllText(first.ReceiptPath)))
+        {
+            var receiptRoot = receipt.RootElement;
+            Require(
+                receiptRoot.GetProperty("schema").GetString() ==
+                    NativeMenuProfileStateProvenance.ReceiptSchema,
+                "native-menu profile receipt schema cannot be audited by capture tooling");
+            Require(
+                receiptRoot.GetProperty("profile_state_identity_sha256").GetString() ==
+                    first.ProfileStateIdentitySha256,
+                "native-menu profile receipt does not carry its computed identity");
+            Require(
+                receiptRoot.GetProperty("files").GetArrayLength() == 0,
+                "native-menu pristine receipt serialized hidden durable inputs");
+        }
+
+        var durableFile = Path.Combine(
+            secondRoots.ProfileRoot,
+            "AppData",
+            "Roaming",
+            "solomondark",
+            "settings.txt");
+        Directory.CreateDirectory(Path.GetDirectoryName(durableFile)!);
+        File.WriteAllText(durableFile, "DarkCloud.ViewingLevels=1\n");
+        var changed = NativeMenuProfileStateProvenance.Materialize(
+            secondRoots.StageRoot,
+            new LaunchOptions(
+                TemporaryProfile: true,
+                ProfileRootPath: secondRoots.ProfileRoot),
+            freshInstall: true,
+            retailAppDataSeeded: false);
+        var expectedFileSha256 = Convert.ToHexString(
+            SHA256.HashData(File.ReadAllBytes(durableFile)))
+            .ToLowerInvariant();
+        Require(
+            changed.ProfileStateIdentitySha256 !=
+                first.ProfileStateIdentitySha256,
+            "native-menu profile identity ignored a durable-state mutation");
+        Require(
+            changed.Files.Count == 1 &&
+                changed.Files[0].Root == "isolated_profile" &&
+                changed.Files[0].RelativePath ==
+                    "AppData/Roaming/solomondark/settings.txt" &&
+                changed.Files[0].Sha256 == expectedFileSha256,
+            "native-menu profile receipt did not enumerate and hash the exact durable input");
+
+        var nonFreshRoots = CreateEmptyRoots(Path.Combine(root, "non-fresh"));
+        var nonFresh = NativeMenuProfileStateProvenance.Materialize(
+            nonFreshRoots.StageRoot,
+            new LaunchOptions(
+                TemporaryProfile: true,
+                ProfileRootPath: nonFreshRoots.ProfileRoot),
+            freshInstall: false,
+            retailAppDataSeeded: true);
+        Require(
+            nonFresh.ProfileStateIdentitySha256 !=
+                first.ProfileStateIdentitySha256 &&
+                nonFresh.BaselineMode == "temporary_profile" &&
+                !nonFresh.SourceSandboxExcluded &&
+                nonFresh.RetailAppDataSeeded,
+            "native-menu profile identity does not distinguish an unpinned seeded launch");
     }
     finally
     {

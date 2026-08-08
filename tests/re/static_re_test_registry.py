@@ -135,6 +135,7 @@ from static_re_native_menu_shell_contracts import (
     test_native_menu_ambient_overlay_derivation_is_fail_closed,
     test_native_menu_overlay_contamination_override_is_fail_closed,
     test_native_menu_path_dependent_core_fork_is_exact,
+    test_native_menu_profile_state_and_browser_tab_are_pinned,
     test_native_menu_recorders_settle_and_derive_provenance,
     test_native_menu_screen_census_and_live_layouts_are_pinned,
     test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired,
@@ -1169,6 +1170,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native menu recorders settle and derive provenance",
         test_native_menu_recorders_settle_and_derive_provenance,
+    ),
+    (
+        "Native menu profile state and browser tab are pinned",
+        test_native_menu_profile_state_and_browser_tab_are_pinned,
     ),
     (
         "Native menu capture surface agreement is fail closed",

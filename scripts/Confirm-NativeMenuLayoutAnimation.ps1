@@ -69,6 +69,12 @@ if ($null -ne $primary.header.PSObject.Properties["animation_confirmation"]) {
 [IO.Directory]::CreateDirectory(
     (Split-Path -Parent $outputItemPath)
 ) | Out-Null
+$profileState = Copy-NativeMenuProfileStateEvidence `
+    -Context $context `
+    -DestinationDirectory (Split-Path -Parent $outputItemPath) `
+    -EvidenceBasename (
+        "$confirmationBasename.$Instance.$ProcessId"
+    )
 $frameDirectory = Join-Path (
     Split-Path -Parent $outputItemPath
 ) "frames"
@@ -136,9 +142,11 @@ $confirmation = [ordered]@{
         instance = $Instance
         process_id = $ProcessId
         source = $context.Source
+        profile_state = $profileState
         recorded_live = $true
         captured_at_utc = $capturedAtUtc
         capture_method = $observation.capture_method
+        browser_tab_verification = $observation.browser_tab_verification
         frame = [ordered]@{
             evidence_filename = $frameItem.Name
             sha256 = (
@@ -179,6 +187,7 @@ $confirmationHeader = [pscustomobject][ordered]@{
     instance = $Instance
     process_id = $ProcessId
     source = $context.Source
+    profile_state = $profileState
     confirmation_structural_sha256 = (
         [string]$observation.settlement.structural_sha256
     )

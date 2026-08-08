@@ -142,6 +142,7 @@ def validate_endpoint(edge: dict[str, Any], label: str) -> tuple[dict[str, Any],
         ("source_tree_sha", 40),
         ("game_executable_sha256", 64),
         ("loader_dll_sha256", 64),
+        ("profile_state_identity_sha256", 64),
     ):
         value = source.get(field)
         if (
@@ -152,6 +153,8 @@ def validate_endpoint(edge: dict[str, Any], label: str) -> tuple[dict[str, Any],
             raise PathForkError(
                 f"{label} has invalid machine-derived provenance field '{field}'"
             )
+    if not isinstance(header.get("profile_state"), dict):
+        raise PathForkError(f"{label} has no machine-derived profile-state receipt")
     return header, endpoint
 
 
@@ -225,6 +228,7 @@ def capture_header(edge_header: dict[str, Any], label: str) -> dict[str, Any]:
         "instance": edge_header["instance"],
         "process_id": edge_header["process_id"],
         "source": copy.deepcopy(edge_header["source"]),
+        "profile_state": copy.deepcopy(edge_header["profile_state"]),
         "recorded_live": True,
         "captured_at_utc": edge_header["captured_at_utc"],
         "capture_method": edge_header["capture_method"],
@@ -371,6 +375,9 @@ def materialize(
             "instance": resumed_confirmation["header"]["instance"],
             "process_id": resumed_confirmation["header"]["process_id"],
             "source": copy.deepcopy(resumed_confirmation["header"]["source"]),
+            "profile_state": copy.deepcopy(
+                resumed_confirmation["header"]["profile_state"]
+            ),
             "confirmation_structural_sha256": resumed_confirmation[
                 "structural_sha256"
             ],
@@ -412,6 +419,9 @@ def materialize(
                 "instance": confirmation_header["instance"],
                 "process_id": confirmation_header["process_id"],
                 "source": copy.deepcopy(confirmation_header["source"]),
+                "profile_state": copy.deepcopy(
+                    confirmation_header["profile_state"]
+                ),
                 "confirmation_structural_sha256": confirmation_endpoint[
                     "settlement"
                 ]["structural_sha256"],

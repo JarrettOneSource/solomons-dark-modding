@@ -55,10 +55,11 @@ internal static class StagedGameLauncher
     {
         ApplyTestSurvivalBoneyardOverride(stage);
         ApplyTestWaveOverride(stage);
+        var retailGameAppDataPath = TryResolveRetailAppDataPath();
         options = IsolatedProfileBootstrapper.CreateLaunchOptions(
             configuration.Workspace,
             options?.EnvironmentOverrides,
-            TryResolveRetailAppDataPath(),
+            retailGameAppDataPath,
             temporaryProfile,
             savegamesRootOverride,
             freshInstall);
@@ -68,6 +69,14 @@ internal static class StagedGameLauncher
             savegamesUsesDirectoryMirror =
                 StageSandboxCompatibilityLinks.Materialize(stage.StageRootPath, options.SavegamesRootPath);
         }
+        var profileStateReceipt =
+            NativeMenuProfileStateProvenance.Materialize(
+                stage.StageRootPath,
+                options,
+                freshInstall,
+                !freshInstall &&
+                    !string.IsNullOrWhiteSpace(retailGameAppDataPath) &&
+                    Directory.Exists(retailGameAppDataPath));
         options = ApplySandboxEnvironment(configuration, options);
         options = TutorialLaunchEnvironment.Apply(
             options,
@@ -185,7 +194,10 @@ internal static class StagedGameLauncher
                 startupStatus,
                 multiplayerSessionStatus,
                 options.SavegamesRootPath,
-                savegamesUsesDirectoryMirror);
+                savegamesUsesDirectoryMirror,
+                profileStateReceipt.ReceiptPath,
+                profileStateReceipt.ProfileStateIdentitySha256,
+                profileStateReceipt.BaselineMode);
         }
         catch
         {
