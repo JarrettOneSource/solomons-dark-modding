@@ -1489,6 +1489,10 @@ static Task TestNativeMenuProfileStateProvenanceAsync()
             Require(
                 receiptRoot.GetProperty("files").GetArrayLength() == 0,
                 "native-menu pristine receipt serialized hidden durable inputs");
+            Require(
+                !receiptRoot.GetProperty("retail_appdata_seeded").GetBoolean() &&
+                    !receiptRoot.TryGetProperty("retail_app_data_seeded", out _),
+                "native-menu profile receipt changed its audited durable-state field name");
         }
 
         var durableFile = Path.Combine(

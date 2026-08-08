@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace SolomonDarkModLauncher.Launch;
 
@@ -162,6 +163,7 @@ internal sealed record NativeMenuProfileStateReceipt(
     string ProfileStateIdentitySha256,
     string BaselineMode,
     bool SourceSandboxExcluded,
+    [property: JsonPropertyName("retail_appdata_seeded")]
     bool RetailAppDataSeeded,
     IReadOnlyList<NativeMenuProfileStateFile> Files,
     string StageSandboxRoot,
