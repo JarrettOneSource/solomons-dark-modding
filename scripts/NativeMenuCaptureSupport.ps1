@@ -88,6 +88,13 @@ function Get-NativeMenuCaptureSurfaceId {
     )) {
         return "dark_cloud_browser"
     }
+    if ($ScreenTag -in @(
+        "hub_new_game",
+        "hub_pristine_second_new_game",
+        "hub_resumed"
+    )) {
+        return "hub"
+    }
     return $ScreenTag
 }
 
@@ -116,6 +123,13 @@ function Get-NativeMenuMachineSurfaceId {
             return "dark_cloud_browser"
         }
         "skill_picker" { return "spell_picker" }
+        { $_ -in @(
+            "hub_new_game",
+            "hub_pristine_second_new_game",
+            "hub_resumed"
+        ) } {
+            return "hub"
+        }
         default { return $ScreenTag }
     }
 }
@@ -319,6 +333,9 @@ function Get-NativeMenuProfileStateProvenance {
     $baselinePath = Join-Path $Root (
         "tests\fixtures\webgame\native-menu-profile-state-baseline.json"
     )
+    $bindingContractPath = Join-Path $Root (
+        "tests\fixtures\webgame\native-menu-hub-bindings-v213.json"
+    )
     if (-not (Test-Path -LiteralPath $receiptPath -PathType Leaf)) {
         throw (
             "BROKEN: the exact staged process has no pre-launch native-menu " +
@@ -328,10 +345,15 @@ function Get-NativeMenuProfileStateProvenance {
     if (-not (Test-Path -LiteralPath $baselinePath -PathType Leaf)) {
         throw "BROKEN: the pinned native-menu profile-state baseline is missing."
     }
+    if (-not (Test-Path -LiteralPath $bindingContractPath -PathType Leaf)) {
+        throw "BROKEN: the pinned native-menu per-binding baseline contract is missing."
+    }
     try {
         $receipt = Get-Content -LiteralPath $receiptPath -Raw |
             ConvertFrom-Json
         $baseline = Get-Content -LiteralPath $baselinePath -Raw |
+            ConvertFrom-Json
+        $bindingContract = Get-Content -LiteralPath $bindingContractPath -Raw |
             ConvertFrom-Json
     } catch {
         throw "BROKEN: native-menu profile-state provenance is not valid JSON."
@@ -340,77 +362,209 @@ function Get-NativeMenuProfileStateProvenance {
         [string]$receipt.schema -cne
             "solomon-dark-native-menu-profile-state-v1" -or
         [string]$baseline.schema -cne
-            "solomon-dark-native-menu-profile-state-baseline-v1"
+            "solomon-dark-native-menu-profile-state-baseline-v1" -or
+        [string]$bindingContract.schema -cne
+            "solomon-dark-native-menu-hub-bindings-v213" -or
+        [string]$bindingContract.settlement_spec -cne "2.13" -or
+        [bool]$bindingContract.baseline_legitimacy.copied_profile_state_forbidden `
+            -ne $true
     ) {
         throw "BROKEN: native-menu profile-state provenance schema is not recognized."
     }
     $identity = [string]$receipt.profile_state_identity_sha256
-    $expectedIdentity = [string]$baseline.profile_state.profile_state_identity_sha256
+    $freshBaseline = $bindingContract.baselines.pristine_fresh_install
+    $derivedBaseline = $bindingContract.baselines.hub_new_game_two_action_v213
+    $expectedIdentity = [string]$freshBaseline.profile_state_identity_sha256
     if ($identity -notmatch '^[0-9a-f]{64}$' -or
         $expectedIdentity -notmatch '^[0-9a-f]{64}$') {
         throw "BROKEN: native-menu profile-state identity is not a lowercase SHA-256."
     }
-    if ($identity -cne $expectedIdentity) {
-        throw (
-            "STOP: native-menu profile-state provenance mismatch: capture " +
-            "identity '$identity' does not equal pinned campaign baseline " +
-            "'$expectedIdentity'."
-        )
-    }
     $receiptFiles = @($receipt.files)
     $baselineFiles = @($baseline.profile_state.files)
-    $receiptFilesJson = $receiptFiles | ConvertTo-Json -Depth 20 -Compress
-    $baselineFilesJson = $baselineFiles | ConvertTo-Json -Depth 20 -Compress
-    if (
-        [string]$receipt.baseline_mode -cne "fresh_install" -or
-        [bool]$receipt.source_sandbox_excluded -ne $true -or
-        [bool]$receipt.retail_appdata_seeded -ne $false -or
-        [string]$baseline.profile_state.baseline_mode -cne "fresh_install" -or
-        [bool]$baseline.profile_state.source_sandbox_excluded -ne $true -or
-        [bool]$baseline.profile_state.retail_appdata_seeded -ne $false -or
-        $receiptFilesJson -cne $baselineFilesJson
-    ) {
-        throw (
-            "STOP: native-menu profile-state provenance does not reproduce " +
-            "the pinned pristine file-state contract."
-        )
-    }
-    if ($receiptFiles.Count -ne 0 -or $baselineFiles.Count -ne 0) {
-        throw (
-            "STOP: native-menu pristine profile-state baseline contains " +
-            "durable files and is not the diagnosed clean campaign state."
-        )
+    $baselineId = ""
+    $witnessRole = ""
+    $expectedWitnessReceipt = $null
+    if ($identity -ceq $expectedIdentity) {
+        $receiptFilesJson = $receiptFiles | ConvertTo-Json -Depth 20 -Compress
+        $baselineFilesJson = $baselineFiles | ConvertTo-Json -Depth 20 -Compress
+        if (
+            [string]$receipt.baseline_mode -cne "fresh_install" -or
+            [bool]$receipt.source_sandbox_excluded -ne $true -or
+            [bool]$receipt.retail_appdata_seeded -ne $false -or
+            [string]$baseline.profile_state.baseline_mode -cne "fresh_install" -or
+            [bool]$baseline.profile_state.source_sandbox_excluded -ne $true -or
+            [bool]$baseline.profile_state.retail_appdata_seeded -ne $false -or
+            $receiptFilesJson -cne $baselineFilesJson -or
+            $receiptFiles.Count -ne 0 -or
+            $baselineFiles.Count -ne 0
+        ) {
+            throw (
+                "STOP: native-menu profile-state provenance does not reproduce " +
+                "the pinned pristine file-state contract."
+            )
+        }
+        $baselineId = "pristine_fresh_install"
+    } else {
+        $witnesses = @($derivedBaseline.witnesses | Where-Object {
+            [string]$_.profile_state_identity_sha256 -ceq $identity
+        })
+        if ($witnesses.Count -ne 1) {
+            throw (
+                "STOP: native-menu profile-state provenance mismatch: capture " +
+                "identity '$identity' is not one exact pinned baseline witness."
+            )
+        }
+        if (
+            [string]$receipt.baseline_mode -cne "persistent_profile" -or
+            [bool]$receipt.source_sandbox_excluded -ne $false -or
+            [bool]$receipt.retail_appdata_seeded -ne $false -or
+            $receiptFiles.Count -le 0
+        ) {
+            throw (
+                "STOP: native-menu derivation receipt mismatch: capture did " +
+                "not record the pinned derived durable files."
+            )
+        }
+        $receiptItemForWitness = Get-Item -LiteralPath $receiptPath
+        $receiptShaForWitness = (Get-FileHash `
+            -LiteralPath $receiptItemForWitness.FullName `
+            -Algorithm SHA256).Hash.ToLowerInvariant()
+        $expectedWitnessReceipt = $witnesses[0].profile_state_receipt
+        if (
+            $receiptShaForWitness -cne [string]$expectedWitnessReceipt.sha256 -or
+            $receiptItemForWitness.Length -ne [long]$expectedWitnessReceipt.bytes
+        ) {
+            throw (
+                "STOP: native-menu derivation receipt mismatch: capture launch " +
+                "receipt is not the exact pinned derivation witness."
+            )
+        }
+        $baselineId = "hub_new_game_two_action_v213"
+        $witnessRole = [string]$witnesses[0].role
     }
     $baselineItem = Get-Item -LiteralPath $baselinePath
+    $bindingContractItem = Get-Item -LiteralPath $bindingContractPath
     $receiptItem = Get-Item -LiteralPath $receiptPath
+    $baselineFixture = if ($baselineId -ceq "pristine_fresh_install") {
+        [ordered]@{
+            repo_relative_path = (
+                "tests/fixtures/webgame/" + $baselineItem.Name
+            )
+            sha256 = (Get-FileHash `
+                -LiteralPath $baselineItem.FullName `
+                -Algorithm SHA256).Hash.ToLowerInvariant()
+            bytes = $baselineItem.Length
+        }
+    } else {
+        [ordered]@{
+            repo_relative_path = (
+                "tests/fixtures/webgame/" + $bindingContractItem.Name
+            )
+            sha256 = (Get-FileHash `
+                -LiteralPath $bindingContractItem.FullName `
+                -Algorithm SHA256).Hash.ToLowerInvariant()
+            bytes = $bindingContractItem.Length
+        }
+    }
+    $value = [ordered]@{
+        schema = [string]$receipt.schema
+        profile_state_identity_sha256 = $identity
+        baseline_id = $baselineId
+        baseline_mode = [string]$receipt.baseline_mode
+        source_sandbox_excluded = [bool]$receipt.source_sandbox_excluded
+        retail_appdata_seeded = [bool]$receipt.retail_appdata_seeded
+        durable_file_count = $receiptFiles.Count
+        baseline_fixture = $baselineFixture
+        binding_contract = [ordered]@{
+            repo_relative_path = (
+                "tests/fixtures/webgame/" + $bindingContractItem.Name
+            )
+            sha256 = (Get-FileHash `
+                -LiteralPath $bindingContractItem.FullName `
+                -Algorithm SHA256).Hash.ToLowerInvariant()
+            bytes = $bindingContractItem.Length
+        }
+        launch_receipt = [ordered]@{
+            evidence_filename = $receiptItem.Name
+            sha256 = (Get-FileHash `
+                -LiteralPath $receiptItem.FullName `
+                -Algorithm SHA256).Hash.ToLowerInvariant()
+            bytes = $receiptItem.Length
+        }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($witnessRole)) {
+        $value["derivation_witness_role"] = $witnessRole
+    }
     return [pscustomobject]@{
         ReceiptPath = $receiptItem.FullName
-        Value = [ordered]@{
-            schema = [string]$receipt.schema
-            profile_state_identity_sha256 = $identity
-            baseline_mode = [string]$receipt.baseline_mode
-            source_sandbox_excluded = [bool]$receipt.source_sandbox_excluded
-            retail_appdata_seeded = [bool]$receipt.retail_appdata_seeded
-            durable_file_count = $receiptFiles.Count
-            baseline_fixture = [ordered]@{
-                repo_relative_path = (
-                    "tests/fixtures/webgame/" + $baselineItem.Name
-                )
-                sha256 = (
-                    Get-FileHash -LiteralPath $baselineItem.FullName `
-                        -Algorithm SHA256
-                ).Hash.ToLowerInvariant()
-                bytes = $baselineItem.Length
-            }
-            launch_receipt = [ordered]@{
-                evidence_filename = $receiptItem.Name
-                sha256 = (
-                    Get-FileHash -LiteralPath $receiptItem.FullName `
-                        -Algorithm SHA256
-                ).Hash.ToLowerInvariant()
-                bytes = $receiptItem.Length
-            }
+        BindingContract = $bindingContract
+        Value = $value
+    }
+}
+
+function Get-NativeMenuProfileStateBinding {
+    param(
+        [Parameter(Mandatory = $true)][object]$Context,
+        [string]$LayoutId = "",
+        [string]$EdgeId = ""
+    )
+
+    if ([string]::IsNullOrWhiteSpace($LayoutId) -eq
+        [string]::IsNullOrWhiteSpace($EdgeId)) {
+        throw "BROKEN: profile-state binding requires exactly one layout or edge id."
+    }
+    $baselineId = [string]$Context.ProfileState.baseline_id
+    $requiredBaselineId = "pristine_fresh_install"
+    $resolvedLayoutId = $LayoutId
+    if (-not [string]::IsNullOrWhiteSpace($LayoutId)) {
+        $hubLayouts = @($Context.ProfileStateBindingContract.layouts.PSObject.Properties |
+            Where-Object Name -ceq $LayoutId)
+        if ($hubLayouts.Count -eq 1) {
+            $requiredBaselineId = [string]$hubLayouts[0].Value.required_baseline_id
+        } elseif ($hubLayouts.Count -gt 1) {
+            throw "BROKEN: profile-state layout binding lookup is ambiguous."
         }
+    } else {
+        $hubBindings = @($Context.ProfileStateBindingContract.bindings |
+            Where-Object {
+                [string]$_.edge_id -ceq $EdgeId -and
+                [string]$_.required_baseline_id -ceq $baselineId
+            })
+        $knownHubEdge = @($Context.ProfileStateBindingContract.bindings |
+            Where-Object { [string]$_.edge_id -ceq $EdgeId })
+        if ($knownHubEdge.Count -gt 0) {
+            if ($hubBindings.Count -ne 1) {
+                throw (
+                    "STOP: native-menu per-binding profile-state baseline " +
+                    "mismatch: edge '$EdgeId' has no unique binding for " +
+                    "baseline '$baselineId'."
+                )
+            }
+            $requiredBaselineId = [string]$hubBindings[0].required_baseline_id
+            $resolvedLayoutId = [string]$hubBindings[0].layout_id
+        }
+    }
+    if ($baselineId -cne $requiredBaselineId) {
+        $bindingName = if (-not [string]::IsNullOrWhiteSpace($LayoutId)) {
+            "layout '$LayoutId'"
+        } else {
+            "edge '$EdgeId'"
+        }
+        throw (
+            "STOP: native-menu per-binding profile-state baseline mismatch: " +
+            "$bindingName requires '$requiredBaselineId' but capture proves " +
+            "'$baselineId'."
+        )
+    }
+    return [ordered]@{
+        baseline_id = $baselineId
+        layout_id = $resolvedLayoutId
+        edge_id = $EdgeId
+        derivation_witness_role = [string]$(
+            if ($Context.ProfileState.Contains("derivation_witness_role")) {
+                $Context.ProfileState["derivation_witness_role"]
+            } else { "" }
+        )
     }
 }
 
@@ -615,6 +769,7 @@ function New-NativeMenuCaptureContext {
         Source = $source
         ProfileStateReceiptPath = $profileState.ReceiptPath
         ProfileState = $profileState.Value
+        ProfileStateBindingContract = $profileState.BindingContract
     }
 }
 

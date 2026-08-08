@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest import mock
 
 TOOLS = Path(__file__).resolve().parents[1] / "tools"
+REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
@@ -752,6 +753,7 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
             }
 
             count = collect_supplemental_standalones(
+                REPO_ROOT,
                 manifest,
                 root,
                 {
@@ -823,32 +825,38 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
         }
 
         layout_id, used_explicit_mapping = _resolve_layout_id(
+            REPO_ROOT,
             "settings",
             "settings",
             fixtures,
             "main_to_settings",
             "after",
+            "pristine_fresh_install",
         )
 
         self.assertEqual(layout_id, "game-settings-title")
         self.assertTrue(used_explicit_mapping)
 
         controls_source_id, controls_source_explicit = _resolve_layout_id(
+            REPO_ROOT,
             "settings",
             "settings",
             fixtures,
             "settings_to_controls",
             "before",
+            "pristine_fresh_install",
         )
         self.assertEqual(controls_source_id, "game-settings-title")
         self.assertTrue(controls_source_explicit)
 
         controls_return_id, controls_return_explicit = _resolve_layout_id(
+            REPO_ROOT,
             "settings",
             "settings",
             fixtures,
             "controls_to_settings",
             "after",
+            "pristine_fresh_install",
         )
         self.assertEqual(controls_return_id, "game-settings-title")
         self.assertTrue(controls_return_explicit)
@@ -858,11 +866,13 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
             "'unknown_settings_edge' side 'before'",
         ):
             _resolve_layout_id(
+                REPO_ROOT,
                 "settings",
                 "settings",
                 fixtures,
                 "unknown_settings_edge",
                 "before",
+                "pristine_fresh_install",
             )
 
     def test_hub_path_dependent_core_routes_are_exact_and_complete(self) -> None:
@@ -874,7 +884,9 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
             PATH_DEPENDENT_CORE_ENDPOINTS.items()
         ):
             layout_id, explicit = _resolve_layout_id(
+                REPO_ROOT,
                 "hub", "hub", fixtures, edge_id, endpoint
+                , "pristine_fresh_install"
             )
             self.assertEqual(layout_id, expected_layout_id)
             self.assertTrue(explicit)
@@ -885,31 +897,72 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
             "'unknown_hub_edge' side 'after'",
         ):
             _resolve_layout_id(
-                "hub", "hub", fixtures, "unknown_hub_edge", "after"
+                REPO_ROOT,
+                "hub",
+                "hub",
+                fixtures,
+                "unknown_hub_edge",
+                "after",
+                "pristine_fresh_install",
             )
 
     def test_hub_path_dependent_core_requires_distinct_reproduced_censuses(
         self,
     ) -> None:
-        receipt = {
-            "evidence_path": "raw-final/hub-path-dependent-core-stop-audit.json",
-            "sha256": "1" * 64,
-            "bytes": 101,
-        }
+        contract = json.loads(
+            (
+                REPO_ROOT
+                / "tests/fixtures/webgame/native-menu-hub-bindings-v213.json"
+            ).read_text(encoding="utf-8")
+        )
         fixtures = {
             layout_id: {
                 "native_screen_id": "hub",
                 "header": {
                     "path_dependent_core": {
                         **policy,
-                        "measured_settled_element_count": count,
+                        "measured_settled_element_count": contract["layouts"][
+                            layout_id
+                        ]["measured_settled_element_count"],
                     }
                 },
-                "fork_decision_receipt": copy.deepcopy(receipt),
+                "fork_decision_receipt": copy.deepcopy(
+                    contract["layouts"][layout_id]["fork_decision"]
+                ),
+                "primary_observation": {
+                    "samples": [
+                        {
+                            "payload": {
+                                "elements": [
+                                    {}
+                                    for _ in range(
+                                        contract["layouts"][layout_id][
+                                            "measured_settled_element_count"
+                                        ]
+                                    )
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "confirmation_observation": {
+                    "samples": [
+                        {
+                            "payload": {
+                                "elements": [
+                                    {}
+                                    for _ in range(
+                                        contract["layouts"][layout_id][
+                                            "measured_settled_element_count"
+                                        ]
+                                    )
+                                ]
+                            }
+                        }
+                    ]
+                },
             }
-            for (layout_id, policy), count in zip(
-                PATH_DEPENDENT_CORE_LAYOUTS.items(), (14, 10), strict=True
-            )
+            for layout_id, policy in PATH_DEPENDENT_CORE_LAYOUTS.items()
         }
         resolutions = {
             layout_id: {
@@ -927,9 +980,17 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
             for index, (layout_id, record) in enumerate(fixtures.items())
         }
 
-        audit = validate_path_dependent_core_forks(
-            fixtures, resolutions, dict(PATH_DEPENDENT_CORE_ENDPOINTS)
-        )
+        with mock.patch(
+            "tools.resolve_native_menu_ambient_campaign."
+            "validate_exact_hub_layout_pair",
+            return_value={"status": "exact"},
+        ):
+            audit = validate_path_dependent_core_forks(
+                fixtures,
+                resolutions,
+                dict(PATH_DEPENDENT_CORE_ENDPOINTS),
+                REPO_ROOT,
+            )
         self.assertEqual(
             [row["layout_id"] for row in audit],
             list(PATH_DEPENDENT_CORE_LAYOUTS),
@@ -943,40 +1004,63 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
             CampaignResolutionError,
             "path-dependent core contract: Hub variants do not differ in element census",
         ):
-            validate_path_dependent_core_forks(
-                fixtures, resolutions, dict(PATH_DEPENDENT_CORE_ENDPOINTS)
-            )
+            mutated_contract = copy.deepcopy(contract)
+            mutated_contract["layouts"]["hub_resumed"][
+                "measured_settled_element_count"
+            ] = 14
+            with mock.patch.multiple(
+                "tools.resolve_native_menu_ambient_campaign",
+                load_hub_binding_contract=mock.DEFAULT,
+                validate_exact_hub_layout_pair=mock.DEFAULT,
+            ) as patched:
+                patched["load_hub_binding_contract"].return_value = {
+                    "value": mutated_contract
+                }
+                patched["validate_exact_hub_layout_pair"].return_value = {
+                    "status": "exact"
+                }
+                validate_path_dependent_core_forks(
+                    fixtures,
+                    resolutions,
+                    dict(PATH_DEPENDENT_CORE_ENDPOINTS),
+                    REPO_ROOT,
+                )
 
     def test_hub_path_dependent_core_rejects_an_unbound_endpoint(self) -> None:
-        receipt = {
-            "evidence_path": "raw-final/hub-path-dependent-core-stop-audit.json",
-            "sha256": "1" * 64,
-            "bytes": 101,
-        }
+        contract = json.loads(
+            (
+                REPO_ROOT
+                / "tests/fixtures/webgame/native-menu-hub-bindings-v213.json"
+            ).read_text(encoding="utf-8")
+        )
         fixtures = {
             layout_id: {
                 "native_screen_id": "hub",
                 "header": {
                     "path_dependent_core": {
                         **policy,
-                        "measured_settled_element_count": count,
+                        "measured_settled_element_count": contract["layouts"][
+                            layout_id
+                        ]["measured_settled_element_count"],
                     }
                 },
-                "fork_decision_receipt": copy.deepcopy(receipt),
+                "fork_decision_receipt": copy.deepcopy(
+                    contract["layouts"][layout_id]["fork_decision"]
+                ),
             }
-            for (layout_id, policy), count in zip(
-                PATH_DEPENDENT_CORE_LAYOUTS.items(), (14, 10), strict=True
-            )
+            for layout_id, policy in PATH_DEPENDENT_CORE_LAYOUTS.items()
         }
         resolutions = {
             layout_id: {
-                "peak_element_count": count,
-                "structural_core_element_count": count,
+                "peak_element_count": contract["layouts"][layout_id][
+                    "measured_settled_element_count"
+                ],
+                "structural_core_element_count": contract["layouts"][layout_id][
+                    "measured_settled_element_count"
+                ],
                 "structural_core_sha256": str(index + 2) * 64,
             }
-            for index, (layout_id, count) in enumerate(
-                (("hub_new_game", 14), ("hub_resumed", 10))
-            )
+            for index, layout_id in enumerate(PATH_DEPENDENT_CORE_LAYOUTS)
         }
         endpoints = dict(PATH_DEPENDENT_CORE_ENDPOINTS)
         endpoints.pop(("settings_to_hub", "after"))
@@ -986,7 +1070,9 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
             "path-dependent core contract: one or more Hub navigation endpoints "
             "remain ambiguous",
         ):
-            validate_path_dependent_core_forks(fixtures, resolutions, endpoints)
+            validate_path_dependent_core_forks(
+                fixtures, resolutions, endpoints, REPO_ROOT
+            )
 
     def test_non_element_structural_field_variance_stops_settlement(self) -> None:
         samples = _stable_samples()

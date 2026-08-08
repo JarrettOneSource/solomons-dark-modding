@@ -28,8 +28,13 @@ from native_menu_ambient_lifecycle import (
     reproduce_standalone_structural_core,
 )
 from native_menu_profile_state import (
+    FRESH_BASELINE_ID,
     NativeMenuProfileStateError,
+    assert_navigation_baseline_allowed,
+    load_hub_binding_contract,
     load_profile_state_baseline,
+    required_baseline_for_layout,
+    resolve_navigation_profile_binding,
     validate_capture_profile_state,
 )
 from native_menu_browser_tab import (
@@ -151,6 +156,10 @@ def validate_fixture(
             header=header,
             label=str(path),
             evidence_root=None,
+            required_baseline_id=required_baseline_for_layout(
+                repo_root, path.stem
+            ),
+            binding_label=f"layout '{path.stem}'",
         )
     except NativeMenuProfileStateError as error:
         raise GoldenBuildError(str(error)) from error
@@ -194,6 +203,7 @@ def validate_fixture(
 
 
 def standalone_settled_pair(
+    repo_root: Path,
     path: Path,
     fixture_root: Path,
     fixture: dict[str, Any],
@@ -236,10 +246,45 @@ def standalone_settled_pair(
     confirmation_header = confirmation.get("header")
     if not isinstance(confirmation_header, dict):
         raise GoldenBuildError(f"{path} confirmation has no capture header")
-    if canonical_bytes(header.get("source")) != canonical_bytes(
-        confirmation_header.get("source")
+    try:
+        primary_profile = validate_capture_profile_state(
+            repo_root=repo_root,
+            header=header,
+            label=str(path),
+            evidence_root=None,
+            required_baseline_id=required_baseline_for_layout(
+                repo_root, path.stem
+            ),
+            binding_label=f"layout '{path.stem}'",
+        )
+        confirmation_profile = validate_capture_profile_state(
+            repo_root=repo_root,
+            header=confirmation_header,
+            label=f"{path} confirmation",
+            evidence_root=None,
+            required_baseline_id=primary_profile["baseline_id"],
+            binding_label=f"layout '{path.stem}' confirmation",
+        )
+    except NativeMenuProfileStateError as error:
+        raise GoldenBuildError(str(error)) from error
+    if confirmation_profile["baseline_id"] != primary_profile["baseline_id"]:
+        raise GoldenBuildError(f"{path} confirmation changed profile baseline")
+    primary_source = header.get("source")
+    confirmation_source = confirmation_header.get("source")
+    if not isinstance(primary_source, dict) or not isinstance(
+        confirmation_source, dict
     ):
-        raise GoldenBuildError(f"{path} confirmation changed native provenance")
+        raise GoldenBuildError(f"{path} settled pair lost source provenance")
+    for field in (
+        "base_commit_sha",
+        "source_tree_sha",
+        "game_executable_sha256",
+        "loader_dll_sha256",
+    ):
+        if primary_source.get(field) != confirmation_source.get(field):
+            raise GoldenBuildError(
+                f"{path} confirmation changed native provenance field '{field}'"
+            )
     primary_identity = (header.get("instance"), header.get("process_id"))
     confirmation_identity = (
         confirmation_header.get("instance"),
@@ -324,6 +369,9 @@ def capture_session(header: dict[str, Any]) -> dict[str, Any]:
         "process_id": header.get("process_id"),
         "source": copy.deepcopy(header.get("source")),
         "profile_state": copy.deepcopy(header.get("profile_state")),
+        "profile_state_binding": copy.deepcopy(
+            header.get("profile_state_binding")
+        ),
         "capture_method": header.get("capture_method"),
         "recorded_live": header.get("recorded_live"),
         "captured_at_utc": header.get("captured_at_utc"),
@@ -341,12 +389,16 @@ def build(
         fixture_root / "menu-layouts", 28, "main-menu-root"
     )
     transition_paths = unique_json_files(
-        fixture_root / "menu-transition-layouts", 2, "hub_new_game"
+        fixture_root / "menu-transition-layouts", 3, "hub_new_game"
     )
-    if set(transition_paths) != {"hub_new_game", "hub_resumed"}:
+    if set(transition_paths) != {
+        "hub_new_game",
+        "hub_pristine_second_new_game",
+        "hub_resumed",
+    }:
         raise GoldenBuildError(
             "path-dependent core contract: transition fixture census is not the "
-            "two authorized Hub layouts"
+            "three authorized Hub layouts"
         )
     fixtures: dict[str, dict[str, Any]] = {}
     wrappers: list[dict[str, Any]] = []
@@ -360,15 +412,19 @@ def build(
         fixtures[layout_id] = fixture
         (
             transition_wrappers
-            if layout_id in {"hub_new_game", "hub_resumed"}
+            if layout_id in {
+                "hub_new_game",
+                "hub_pristine_second_new_game",
+                "hub_resumed",
+            }
             else wrappers
         ).append(wrapper)
         observed = parse_capture_time(fixture["header"], str(path))
         latest_capture = observed if latest_capture is None else max(latest_capture, observed)
         sessions.append(capture_session(fixture["header"]))
-    if len(fixtures) != 30 or latest_capture is None:
+    if len(fixtures) != 31 or latest_capture is None:
         raise GoldenBuildError(
-            "aggregate fixture sweep did not reach 28 menus plus two Hub layouts"
+            "aggregate fixture sweep did not reach 28 menus plus three Hub layouts"
         )
 
     landed = read_object(repo_root / "tests/fixtures/webgame/menu-goldens.json")
@@ -399,11 +455,13 @@ def build(
         )
     try:
         beta_primary, beta_confirmation = standalone_settled_pair(
+            repo_root,
             layout_paths["beta-notice"],
             fixture_root,
             fixtures["beta-notice"],
         )
         main_primary, main_confirmation = standalone_settled_pair(
+            repo_root,
             layout_paths["main-menu-root"],
             fixture_root,
             fixtures["main-menu-root"],
@@ -494,11 +552,16 @@ def build(
             raise GoldenBuildError(f"navigation edge {edge_id} is incomplete")
         source_provenance(header, f"navigation edge {edge_id}")
         try:
-            validate_capture_profile_state(
+            edge_profile = validate_capture_profile_state(
                 repo_root=repo_root,
                 header=header,
                 label=f"navigation edge {edge_id}",
                 evidence_root=None,
+            )
+            assert_navigation_baseline_allowed(
+                repo_root,
+                edge_id=edge_id,
+                baseline_id=edge_profile["baseline_id"],
             )
         except NativeMenuProfileStateError as error:
             raise GoldenBuildError(str(error)) from error
@@ -517,6 +580,20 @@ def build(
                 raise GoldenBuildError(
                     f"navigation edge {edge_id} {side} does not byte-equal "
                     f"standalone '{layout_id}'"
+                )
+            expected_bound_layout = resolve_navigation_profile_binding(
+                repo_root,
+                edge_id=edge_id,
+                endpoint="before" if side == "source" else "after",
+                baseline_id=edge_profile["baseline_id"],
+            )
+            if expected_bound_layout is not None and (
+                layout_id != expected_bound_layout
+            ):
+                raise GoldenBuildError(
+                    "native-menu per-binding profile-state baseline mismatch: "
+                    f"edge '{edge_id}' {side} resolves '{layout_id}' instead "
+                    f"of '{expected_bound_layout}'"
                 )
             header_tab_receipt = (
                 header_tab_receipts.get(side)
@@ -575,6 +652,7 @@ def build(
         unique_sessions.setdefault(key, session)
     try:
         profile_baseline = load_profile_state_baseline(repo_root)
+        profile_bindings = load_hub_binding_contract(repo_root)
     except NativeMenuProfileStateError as error:
         raise GoldenBuildError(str(error)) from error
     golden = {
@@ -611,6 +689,16 @@ def build(
                     "identity"
                 ],
                 "corrective": "shellfix task #101 consumes the settled corpus",
+            },
+            "profile_state_bindings": {
+                "fixture": "native-menu-hub-bindings-v213.json",
+                "sha256": profile_bindings["sha256"],
+                "bytes": profile_bindings["bytes"],
+                "baseline_ids": sorted(profile_bindings["baselines"]),
+                "corrective": (
+                    "Settlement v2.13 qualifies every layout and edge by an "
+                    "exact legitimate baseline"
+                ),
             },
             "screen_count": len(wrappers),
             "edge_count": len(edges),

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mutation-audit every Settlement v2.1-v2.11 native-menu claim."""
+"""Mutation-audit every Settlement v2.1-v2.13 native-menu claim."""
 
 from __future__ import annotations
 
@@ -25,7 +25,11 @@ for path in (ROOT, ROOT / "tools", ROOT / "tests/re"):
 import static_re_native_menu_shell_contracts as static_contracts  # noqa: E402
 from static_re_contract_support import StaticReTestFailure  # noqa: E402
 from tests import test_native_menu_ambient_lifecycle as ambient_cases  # noqa: E402
+from tests import (  # noqa: E402
+    test_native_menu_profile_state_and_browser_tab as profile_cases,
+)
 from tests import test_native_menu_settlement_v2 as settlement_cases  # noqa: E402
+from tools import native_menu_profile_state as profile_state  # noqa: E402
 from tools import native_menu_settlement_v2 as settlement_v2  # noqa: E402
 from tools import resolve_native_menu_ambient_campaign as campaign_resolver  # noqa: E402
 from tools.native_menu_ambient_lifecycle import (  # noqa: E402
@@ -542,11 +546,13 @@ def _ambiguous_settings_fixtures() -> dict[str, dict[str, str]]:
 
 def green_settings_route_resolution() -> str:
     layout_id, explicit = campaign_resolver._resolve_layout_id(  # noqa: SLF001
+        ROOT,
         "settings",
         "settings",
         _ambiguous_settings_fixtures(),
         "main_to_settings",
         "after",
+        "pristine_fresh_install",
     )
     require(
         layout_id == "game-settings-title" and explicit,
@@ -557,12 +563,218 @@ def green_settings_route_resolution() -> str:
 
 def mutate_ambiguous_settings_route() -> str:
     campaign_resolver._resolve_layout_id(  # noqa: SLF001
+        ROOT,
         "settings",
         "settings",
         _ambiguous_settings_fixtures(),
         "unknown_settings_edge",
         "before",
+        "pristine_fresh_install",
     )
+    return "unreachable"
+
+
+def green_v212_exact_hub_layout() -> str:
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        repo = root / "repo"
+        evidence = root / "evidence"
+        profile_cases._profile_fixture(repo, evidence)  # noqa: SLF001
+        layout = profile_cases._exact_hub_layout(  # noqa: SLF001
+            repo, "hub_pristine_second_new_game"
+        )
+        resolved = profile_state.validate_exact_hub_layout_pair(
+            repo,
+            layout_id="hub_pristine_second_new_game",
+            primary_layout=layout,
+            confirmation_layout=copy.deepcopy(layout),
+            baseline_id=profile_state.FRESH_BASELINE_ID,
+        )
+        require(
+            resolved is not None and resolved["element_count"] == 15,
+            "v2.12 baseline did not accept its complete exact layout",
+        )
+    return "green: v2.12 accepts only the complete exact pristine second-New-Game Hub"
+
+
+def mutate_v212_drop_ui28() -> str:
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        repo = root / "repo"
+        evidence = root / "evidence"
+        profile_cases._profile_fixture(repo, evidence)  # noqa: SLF001
+        layout = profile_cases._exact_hub_layout(  # noqa: SLF001
+            repo, "hub_pristine_second_new_game"
+        )
+        layout["elements"] = [
+            element
+            for element in layout["elements"]
+            if element["art_id"] != "UI.28"
+        ]
+        profile_state.validate_exact_hub_layout_pair(
+            repo,
+            layout_id="hub_pristine_second_new_game",
+            primary_layout=layout,
+            confirmation_layout=copy.deepcopy(layout),
+            baseline_id=profile_state.FRESH_BASELINE_ID,
+        )
+    return "unreachable"
+
+
+def mutate_v212_drop_level_picker() -> str:
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        repo = root / "repo"
+        evidence = root / "evidence"
+        profile_cases._profile_fixture(repo, evidence)  # noqa: SLF001
+        layout = profile_cases._exact_hub_layout(  # noqa: SLF001
+            repo, "hub_pristine_second_new_game"
+        )
+        layout["elements"] = [
+            element
+            for element in layout["elements"]
+            if element["art_id"] != "LevelPicker.0"
+        ]
+        profile_state.validate_exact_hub_layout_pair(
+            repo,
+            layout_id="hub_pristine_second_new_game",
+            primary_layout=layout,
+            confirmation_layout=copy.deepcopy(layout),
+            baseline_id=profile_state.FRESH_BASELINE_ID,
+        )
+    return "unreachable"
+
+
+def mutate_v212_add_member() -> str:
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        repo = root / "repo"
+        evidence = root / "evidence"
+        profile_cases._profile_fixture(repo, evidence)  # noqa: SLF001
+        layout = profile_cases._exact_hub_layout(  # noqa: SLF001
+            repo, "hub_pristine_second_new_game"
+        )
+        extra = copy.deepcopy(layout["elements"][0])
+        extra["id"] = "hub.art.fixture.extra"
+        extra["art_id"] = "LevelPicker.extra"
+        layout["elements"].append(extra)
+        profile_state.validate_exact_hub_layout_pair(
+            repo,
+            layout_id="hub_pristine_second_new_game",
+            primary_layout=layout,
+            confirmation_layout=copy.deepcopy(layout),
+            baseline_id=profile_state.FRESH_BASELINE_ID,
+        )
+    return "unreachable"
+
+
+def mutate_v212_scope() -> str:
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        repo = root / "repo"
+        evidence = root / "evidence"
+        profile_cases._profile_fixture(repo, evidence)  # noqa: SLF001
+        layout = profile_cases._exact_hub_layout(  # noqa: SLF001
+            repo, "hub_pristine_second_new_game"
+        )
+        profile_state.validate_exact_hub_layout_pair(
+            repo,
+            layout_id="hub_new_game",
+            primary_layout=layout,
+            confirmation_layout=copy.deepcopy(layout),
+            baseline_id=profile_state.FRESH_BASELINE_ID,
+        )
+    return "unreachable"
+
+
+def green_per_binding_profile_baseline() -> str:
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        repo = root / "repo"
+        evidence = root / "evidence"
+        header = profile_cases._profile_fixture(repo, evidence)  # noqa: SLF001
+        result = profile_state.validate_capture_profile_state(
+            repo_root=repo,
+            header=header,
+            label="fresh Hub binding",
+            evidence_root=evidence,
+            required_baseline_id=profile_state.FRESH_BASELINE_ID,
+            binding_label="layout 'hub_pristine_second_new_game'",
+        )
+        require(
+            result["baseline_id"] == profile_state.FRESH_BASELINE_ID,
+            "per-binding baseline did not retain its exact fresh identity",
+        )
+    return "green: matching per-binding pristine profile baseline is accepted"
+
+
+def mutate_per_binding_profile_baseline() -> str:
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        repo = root / "repo"
+        evidence = root / "evidence"
+        header = profile_cases._profile_fixture(repo, evidence)  # noqa: SLF001
+        profile_state.validate_capture_profile_state(
+            repo_root=repo,
+            header=header,
+            label="wrong derived binding",
+            evidence_root=evidence,
+            required_baseline_id=profile_state.DERIVED_HUB_BASELINE_ID,
+            binding_label="layout 'hub_new_game'",
+        )
+    return "unreachable"
+
+
+def green_v213_derived_hub_layout() -> str:
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        repo = root / "repo"
+        evidence = root / "evidence"
+        header = profile_cases._derived_profile_fixture(  # noqa: SLF001
+            repo, evidence
+        )
+        provenance = profile_state.validate_capture_profile_state(
+            repo_root=repo,
+            header=header,
+            label="derived Hub binding",
+            evidence_root=evidence,
+            required_baseline_id=profile_state.DERIVED_HUB_BASELINE_ID,
+            binding_label="layout 'hub_new_game'",
+        )
+        layout = profile_cases._exact_hub_layout(  # noqa: SLF001
+            repo, "hub_new_game"
+        )
+        resolved = profile_state.validate_exact_hub_layout_pair(
+            repo,
+            layout_id="hub_new_game",
+            primary_layout=layout,
+            confirmation_layout=copy.deepcopy(layout),
+            baseline_id=provenance["baseline_id"],
+        )
+        require(
+            resolved is not None and resolved["element_count"] == 14,
+            "v2.13 baseline did not accept its exact derived layout",
+        )
+    return "green: exact two-action derivation receipt and 14-member Hub are accepted"
+
+
+def mutate_v213_derivation_receipt() -> str:
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        repo = root / "repo"
+        evidence = root / "evidence"
+        header = profile_cases._derived_profile_fixture(  # noqa: SLF001
+            repo, evidence
+        )
+        header["profile_state"]["launch_receipt"]["sha256"] = "0" * 64
+        profile_state.validate_capture_profile_state(
+            repo_root=repo,
+            header=header,
+            label="mutated derivation receipt",
+            evidence_root=evidence,
+            required_baseline_id=profile_state.DERIVED_HUB_BASELINE_ID,
+            binding_label="layout 'hub_new_game'",
+        )
     return "unreachable"
 
 
@@ -693,6 +905,63 @@ BEHAVIOR_MUTATIONS: tuple[BehaviorMutation, ...] = (
         "['game-settings-dark-cloud', 'game-settings-gameplay', "
         "'game-settings-title']",
         (campaign_resolver.CampaignResolutionError,),
+    ),
+    BehaviorMutation(
+        "v2.12.pristine-hub-ui28-required",
+        "validate_exact_hub_layout_pair",
+        green_v212_exact_hub_layout,
+        mutate_v212_drop_ui28,
+        "Settlement v2.12 exact pristine Hub layout scope mismatch: exact "
+        "Hub multiset for ['hub_new_game'] claimed as "
+        "'hub_pristine_second_new_game'",
+        (profile_state.NativeMenuProfileStateError,),
+    ),
+    BehaviorMutation(
+        "v2.12.pristine-hub-level-picker-required",
+        "validate_exact_hub_layout_pair",
+        green_v212_exact_hub_layout,
+        mutate_v212_drop_level_picker,
+        "Settlement v2.12 exact pristine Hub layout mismatch: "
+        "'hub_pristine_second_new_game' does not reproduce both exact instances",
+        (profile_state.NativeMenuProfileStateError,),
+    ),
+    BehaviorMutation(
+        "v2.12.pristine-hub-extra-member-refusal",
+        "validate_exact_hub_layout_pair",
+        green_v212_exact_hub_layout,
+        mutate_v212_add_member,
+        "Settlement v2.12 exact pristine Hub layout mismatch: "
+        "'hub_pristine_second_new_game' does not reproduce both exact instances",
+        (profile_state.NativeMenuProfileStateError,),
+    ),
+    BehaviorMutation(
+        "v2.12.pristine-hub-layout-scope",
+        "validate_exact_hub_layout_pair",
+        green_v212_exact_hub_layout,
+        mutate_v212_scope,
+        "Settlement v2.12 exact pristine Hub layout scope mismatch: exact "
+        "Hub multiset for ['hub_pristine_second_new_game'] claimed as "
+        "'hub_new_game'",
+        (profile_state.NativeMenuProfileStateError,),
+    ),
+    BehaviorMutation(
+        "v2.13.per-binding-profile-baseline",
+        "validate_capture_profile_state",
+        green_per_binding_profile_baseline,
+        mutate_per_binding_profile_baseline,
+        "native-menu per-binding profile-state baseline mismatch: layout "
+        "'hub_new_game' requires 'hub_new_game_two_action_v213' but capture "
+        "proves 'pristine_fresh_install'",
+        (profile_state.NativeMenuProfileStateError,),
+    ),
+    BehaviorMutation(
+        "v2.13.derivation-receipt-binding",
+        "validate_capture_profile_state",
+        green_v213_derived_hub_layout,
+        mutate_v213_derivation_receipt,
+        "native-menu derivation receipt mismatch: mutated derivation receipt "
+        "launch receipt does not equal the pinned derivation witness",
+        (profile_state.NativeMenuProfileStateError,),
     ),
     BehaviorMutation(
         "v2.5.phantom-ambient",
@@ -920,25 +1189,25 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "screen ambiguity with an every-edge explicit route map",
     ),
     StaticMutation(
-        "v2.6.hub-route-exact-mapping",
+        "v2.13.hub-route-exact-mapping",
         PATH_FORK,
         "tools/resolve_native_menu_ambient_campaign.py",
-        '("create_discipline_to_hub", "after"): "hub_new_game",',
+        '("create_discipline_to_hub", "after"): "hub_pristine_second_new_game",',
         '("create_discipline_to_hub", "after"): "hub_resumed",',
-        "Settlement v2.6 no longer names exactly two Hub layouts and binds "
-        "every Hub navigation endpoint to its deterministic path/session state",
+        "Settlement v2.13 no longer names exactly three Hub layouts or binds "
+        "the fresh navigation graph to its deterministic path/session state",
     ),
     StaticMutation(
-        "v2.6.hub-distinct-census",
+        "v2.13.hub-distinct-census",
         PATH_FORK,
         "tools/resolve_native_menu_ambient_campaign.py",
         "if len(set(counts.values())) != len(counts):",
         "if False and len(set(counts.values())) != len(counts):",
-        "Settlement v2.6 no longer rejects an equal-census, unbound, "
-        "extra-layout, or differently evidenced Hub fork",
+        "Settlement v2.13 no longer rejects an equal-census, unbound, or "
+        "extra-layout Hub fork",
     ),
     StaticMutation(
-        "v2.6.materializer-no-provenance-override",
+        "v2.13.materializer-no-provenance-override",
         PATH_FORK,
         "tools/materialize_native_menu_path_forks_v26.py",
         'parser.add_argument("--candidate-root", required=True, type=Path)',
@@ -948,13 +1217,13 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "provenance or golden values: ['--base-commit-sha']",
     ),
     StaticMutation(
-        "v2.6.spec-version-and-stop-changelog",
+        "v2.13.spec-version-and-stop-changelog",
         PATH_FORK,
         "docs/reverse-engineering/native-menu-settlement.md",
-        "# Native menu settlement specification v2.11",
+        "# Native menu settlement specification v2.13",
         "# Native menu settlement specification v2.8",
-        "the versioned settlement specification no longer records the narrow "
-        "path-dependent-core rule and the STOP that caused it",
+        "the versioned settlement specification no longer records the exact "
+        "v2.12/v2.13 Hub baselines, paths, and accepted STOP mechanism",
     ),
     StaticMutation(
         "v2.5.independent-capture-runtime-provenance",
@@ -1534,7 +1803,7 @@ def main() -> int:
 
     payload = {
         "schema": "solomon-dark-native-menu-contract-mutations-v1",
-        "settlement_spec": "2.11",
+        "settlement_spec": "2.13",
         "count": len(results),
         "results": [asdict(result) for result in results],
     }

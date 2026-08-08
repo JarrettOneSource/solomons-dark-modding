@@ -42,8 +42,14 @@ from native_menu_overlay_v25 import (
     derive_overlay_reference,
 )
 from native_menu_profile_state import (
+    FRESH_BASELINE_ID,
     NativeMenuProfileStateError,
+    assert_navigation_baseline_allowed,
+    load_hub_binding_contract,
     load_profile_state_baseline,
+    required_baseline_for_layout,
+    resolve_navigation_profile_binding,
+    validate_exact_hub_layout_pair,
     validate_capture_profile_state,
 )
 from native_menu_browser_tab import (
@@ -1076,6 +1082,9 @@ def _validate_profile_state_v25(
     evidence_root: Path,
     header: dict[str, Any],
     label: str,
+    *,
+    required_baseline_id: str | None = None,
+    binding_label: str | None = None,
 ) -> dict[str, Any]:
     try:
         return validate_capture_profile_state(
@@ -1083,6 +1092,8 @@ def _validate_profile_state_v25(
             header=header,
             label=label,
             evidence_root=evidence_root,
+            required_baseline_id=required_baseline_id,
+            binding_label=binding_label,
         )
     except NativeMenuProfileStateError as error:
         raise PromotionError(str(error)) from error
@@ -1147,12 +1158,20 @@ def _validate_navigation_profile_state_v25(
             raise PromotionError(
                 f"{label} edge '{edge_id}' has no capture header"
             )
-        _validate_profile_state_v25(
+        profile_state = _validate_profile_state_v25(
             repo_root,
             evidence_root,
             header,
             f"{label} edge {edge_id}",
         )
+        try:
+            assert_navigation_baseline_allowed(
+                repo_root,
+                edge_id=edge_id,
+                baseline_id=profile_state["baseline_id"],
+            )
+        except NativeMenuProfileStateError as error:
+            raise PromotionError(str(error)) from error
         header_tab_receipts = header.get("browser_tab_verification")
         for endpoint_key, side in (("before", "source"), ("after", "destination")):
             endpoint = edge.get(endpoint_key)
@@ -1182,6 +1201,24 @@ def _validate_navigation_profile_state_v25(
                 endpoint.get("browser_tab_verification"),
                 f"{label} edge {edge_id} {side}",
             )
+            try:
+                expected_layout_id = resolve_navigation_profile_binding(
+                    repo_root,
+                    edge_id=edge_id,
+                    endpoint=endpoint_key,
+                    baseline_id=profile_state["baseline_id"],
+                )
+            except NativeMenuProfileStateError as error:
+                raise PromotionError(str(error)) from error
+            observed_layout_id = endpoint.get("layout_id")
+            if expected_layout_id is not None and observed_layout_id is not None and (
+                observed_layout_id != expected_layout_id
+            ):
+                raise PromotionError(
+                    "native-menu per-binding profile-state baseline mismatch: "
+                    f"{label} edge '{edge_id}' {side} resolves "
+                    f"'{observed_layout_id}' instead of '{expected_layout_id}'"
+                )
     if "main_to_dark_cloud" not in reached_ids:
         raise PromotionError(
             f"{label} profile-state sweep did not reach the Dark Cloud entry edge"
@@ -1205,6 +1242,7 @@ def validate_settlement_fixture_v25(
     fixture_path: Path,
     fixture: dict[str, Any],
 ) -> dict[str, Any]:
+    layout_id = fixture_path.stem
     if fixture.get("schema") != "solomon-dark-native-menu-layout-v3":
         raise PromotionError(f"{fixture_path} does not use Settlement v2.9 schema v3")
     header = fixture.get("header")
@@ -1215,7 +1253,14 @@ def validate_settlement_fixture_v25(
         raise PromotionError(f"{fixture_path} is not marked as a live recording")
     source = _validate_source_v25(repo_root, header.get("source"), str(fixture_path))
     profile_state = _validate_profile_state_v25(
-        repo_root, evidence_root, header, str(fixture_path)
+        repo_root,
+        evidence_root,
+        header,
+        str(fixture_path),
+        required_baseline_id=required_baseline_for_layout(
+            repo_root, layout_id
+        ),
+        binding_label=f"layout '{layout_id}'",
     )
     settlement = header.get("settlement")
     if not isinstance(settlement, dict) or settlement.get("settlement_spec") != "2.9":
@@ -1385,6 +1430,8 @@ def validate_settlement_fixture_v25(
         evidence_root,
         raw_header,
         f"{fixture_path} primary trace",
+        required_baseline_id=profile_state["baseline_id"],
+        binding_label=f"layout '{layout_id}' primary trace",
     )
     primary_samples = _settled_samples_v25(raw_trace, f"{fixture_path} primary trace")
     primary_payload = primary_samples[0].get("payload")
@@ -1424,18 +1471,35 @@ def validate_settlement_fixture_v25(
         evidence_root,
         confirmation_header,
         f"{fixture_path} confirmation",
+        required_baseline_id=profile_state["baseline_id"],
+        binding_label=f"layout '{layout_id}' confirmation",
     )
-    if confirmation_profile_state["identity"] != profile_state["identity"]:
+    if confirmation_profile_state["baseline_id"] != profile_state["baseline_id"]:
         raise PromotionError(
-            f"{fixture_path} confirmation changed profile-state identity"
+            f"{fixture_path} confirmation changed profile-state baseline"
+        )
+    if profile_state["baseline_id"] != FRESH_BASELINE_ID and {
+        profile_state["witness_role"],
+        confirmation_profile_state["witness_role"],
+    } != {"primary", "confirmation"}:
+        raise PromotionError(
+            f"{fixture_path} derived confirmation did not use both pinned witness roles"
         )
     confirmation_source = _validate_source_v25(
         repo_root,
         confirmation_header.get("source"),
         f"{fixture_path} confirmation",
     )
-    if canonical_bytes(source) != canonical_bytes(confirmation_source):
-        raise PromotionError(f"{fixture_path} confirmation changed capture provenance")
+    for field in (
+        "base_commit_sha",
+        "source_tree_sha",
+        "game_executable_sha256",
+        "loader_dll_sha256",
+    ):
+        if source[field] != confirmation_source[field]:
+            raise PromotionError(
+                f"{fixture_path} confirmation changed capture provenance field '{field}'"
+            )
     primary_identity = (header.get("instance"), header.get("process_id"))
     confirmation_identity = (
         confirmation_header.get("instance"),
@@ -1463,6 +1527,24 @@ def validate_settlement_fixture_v25(
         confirmation_header.get("browser_tab_verification"),
         f"{fixture_path} confirmation",
     )
+    hub_contract = load_hub_binding_contract(repo_root)["value"]
+    if layout_id in hub_contract["layouts"]:
+        contract_layout = hub_contract["layouts"][layout_id]
+        expected_count = contract_layout["measured_settled_element_count"]
+        if layout.get("peak_element_count") != expected_count:
+            raise PromotionError(
+                f"v2.12/v2.13 exact Hub layout '{layout_id}' changed its settled census"
+            )
+        try:
+            validate_exact_hub_layout_pair(
+                repo_root,
+                layout_id=layout_id,
+                primary_layout=primary_payload,
+                confirmation_layout=confirmation_payload,
+                baseline_id=profile_state["baseline_id"],
+            )
+        except NativeMenuProfileStateError as error:
+            raise PromotionError(str(error)) from error
     if primary_screen_tag in {
         "dark_cloud_browser",
         "dark_cloud_recent",
@@ -2034,7 +2116,11 @@ def validate_and_promote(
     candidate_transition_paths = require_unique_files(
         candidate_root / "menu-transition-layouts",
         "*.json",
-        {"hub_new_game.json", "hub_resumed.json"},
+        {
+            "hub_new_game.json",
+            "hub_pristine_second_new_game.json",
+            "hub_resumed.json",
+        },
     )
     records: dict[str, dict[str, Any]] = {}
     path_by_layout_id: dict[str, Path] = {}
@@ -2047,9 +2133,13 @@ def validate_and_promote(
             raise PromotionError(f"candidate standalone id '{layout_id}' is ambiguous")
         records[layout_id] = record
         path_by_layout_id[layout_id] = path
-    if len(records) != 30 or not {"hub_new_game", "hub_resumed"} <= set(records):
+    if len(records) != 31 or not {
+        "hub_new_game",
+        "hub_pristine_second_new_game",
+        "hub_resumed",
+    } <= set(records):
         raise PromotionError(
-            "candidate standalone sweep did not reach 28 menus plus two Hub layouts"
+            "candidate standalone sweep did not reach 28 menus plus three Hub layouts"
         )
 
     landed_by_layout_id: dict[str, dict[str, Any]] = {}
@@ -2146,7 +2236,11 @@ def validate_and_promote(
     for layout_id in sorted(records):
         if layout_id not in landed_by_layout_id:
             fork = records[layout_id]["header"].get("path_dependent_core")
-            if layout_id not in {"hub_new_game", "hub_resumed"} or not isinstance(
+            if layout_id not in {
+                "hub_new_game",
+                "hub_pristine_second_new_game",
+                "hub_resumed",
+            } or not isinstance(
                 fork, dict
             ):
                 raise PromotionError(
@@ -2209,6 +2303,7 @@ def validate_and_promote(
     }
     expected_transition_fixtures = {
         "menu-transition-layouts/hub_new_game.json",
+        "menu-transition-layouts/hub_pristine_second_new_game.json",
         "menu-transition-layouts/hub_resumed.json",
     }
     embedded = _aggregate_wrapper_map(
@@ -2241,6 +2336,7 @@ def validate_and_promote(
         raise PromotionError("candidate aggregate records a false derived overlay receipt")
     try:
         profile_baseline = load_profile_state_baseline(repo_root)
+        profile_bindings = load_hub_binding_contract(repo_root)
     except NativeMenuProfileStateError as error:
         raise PromotionError(str(error)) from error
     expected_profile_baseline_receipt = {
@@ -2255,6 +2351,22 @@ def validate_and_promote(
     ) != canonical_bytes(expected_profile_baseline_receipt):
         raise PromotionError(
             "candidate aggregate records a false committed profile-state baseline receipt"
+        )
+    expected_profile_binding_receipt = {
+        "fixture": "native-menu-hub-bindings-v213.json",
+        "sha256": profile_bindings["sha256"],
+        "bytes": profile_bindings["bytes"],
+        "baseline_ids": sorted(profile_bindings["baselines"]),
+        "corrective": (
+            "Settlement v2.13 qualifies every layout and edge by an exact "
+            "legitimate baseline"
+        ),
+    }
+    if canonical_bytes(
+        candidate_golden.get("header", {}).get("profile_state_bindings")
+    ) != canonical_bytes(expected_profile_binding_receipt):
+        raise PromotionError(
+            "candidate aggregate records a false per-binding profile-state contract receipt"
         )
     navigation_receipt = candidate_golden.get("header", {}).get("raw_recording")
     if not isinstance(navigation_receipt, dict):
@@ -2468,7 +2580,7 @@ def validate_and_promote(
     return {
         "success": True,
         "dry_run": dry_run,
-        "settlement_spec": "2.11",
+        "settlement_spec": "2.13",
         "controls_core_supersession": controls_core_context,
         "standalone_count": len(records),
         "standalone_diagnoses": standalone_diagnoses,

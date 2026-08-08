@@ -50,6 +50,9 @@ $traceItemPath = Join-Path (
 [IO.Directory]::CreateDirectory(
     (Split-Path -Parent $referenceItemPath)
 ) | Out-Null
+$profileStateBinding = Get-NativeMenuProfileStateBinding `
+    -Context $context `
+    -LayoutId $ScreenId
 $profileState = Copy-NativeMenuProfileStateEvidence `
     -Context $context `
     -DestinationDirectory $traceDirectory `
@@ -99,6 +102,7 @@ $trace = [ordered]@{
         process_id = $ProcessId
         source = $context.Source
         profile_state = $profileState
+        profile_state_binding = $profileStateBinding
         recorded_live = $true
         captured_at_utc = $capturedAtUtc
         capture_method = $observation.capture_method
@@ -135,6 +139,7 @@ $fixture = [ordered]@{
         process_id = $ProcessId
         source = $context.Source
         profile_state = $profileState
+        profile_state_binding = $profileStateBinding
         capture_method = $observation.capture_method
         recorded_live = $true
         captured_at_utc = $capturedAtUtc

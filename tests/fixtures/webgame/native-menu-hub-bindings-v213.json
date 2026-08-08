@@ -1,0 +1,910 @@
+{
+  "schema": "solomon-dark-native-menu-hub-bindings-v213",
+  "settlement_spec": "2.13",
+  "governing_rule": "Hub path variants are exact data-bound layouts selected only by an exact pinned profile baseline and deterministic entry path",
+  "baseline_legitimacy": {
+    "copied_profile_state_forbidden": true,
+    "allowed_construction": [
+      "pristine_fresh_install",
+      "documented_deterministic_receipted_in_game_derivation"
+    ]
+  },
+  "baselines": {
+    "pristine_fresh_install": {
+      "kind": "pristine_fresh_install",
+      "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+      "fixture": {
+        "repo_relative_path": "tests/fixtures/webgame/native-menu-profile-state-baseline.json",
+        "sha256": "02ac22b1de367e9e94477f61c8e1144e6a5b16bd67bd418e69e9a2ec620914ff",
+        "bytes": 2155
+      }
+    },
+    "hub_new_game_two_action_v213": {
+      "kind": "documented_deterministic_receipted_in_game_derivation",
+      "parent_baseline_id": "pristine_fresh_install",
+      "case_a_audit": {
+        "evidence_path": "raw-v9/hub-restart-v212/hub-v213-case-a-audit.json",
+        "sha256": "e52c22e9e46ad95f7762391617b453bef61a61fec0ca60db2a709cd2aa6b8c1f",
+        "bytes": 13633
+      },
+      "procedure": [
+        "start from the pinned pristine fresh_install baseline",
+        "reach the first-run Hub, return to Main Menu, and enter New Game",
+        "walk the stock local player into unique object_type_id 5003 Annalist",
+        "Leave Game, confirm, Quit, and relaunch the same profile",
+        "enter New Game and walk the stock local player into unique object_type_id 5004 PotionGuy/Fomentius",
+        "close the stock service, Leave Game, confirm, Quit, and relaunch the same profile",
+        "enter New Game and settle hub_new_game"
+      ],
+      "required_profile_fields": [
+        {
+          "profile_field": "class_enabled[0]",
+          "runtime_address_expression": "profile + 0x9a",
+          "native_actor": {
+            "object_type_id": 5003,
+            "name": "Annalist"
+          },
+          "effect": "suppresses the resolved UI.28 member",
+          "watched_transition": {
+            "before": 1,
+            "after": 0,
+            "write_count": 1
+          }
+        },
+        {
+          "profile_field": "class_enabled[1]",
+          "runtime_address_expression": "profile + 0x9b",
+          "native_actor": {
+            "object_type_id": 5004,
+            "name": "PotionGuy/Fomentius"
+          },
+          "effect": "promotes the five LevelPicker.0/.2/.4/.5/.6 draws from null geometry to their retained visible geometry",
+          "watched_transition": {
+            "before": 1,
+            "after": 0,
+            "write_count_per_instance": 1
+          }
+        }
+      ],
+      "witnesses": [
+        {
+          "role": "primary",
+          "instance": "menufx-v9p16",
+          "profile_state_identity_sha256": "631e106b4174952e10fc74ff51e1930548b3b5c70cb4398c64ba1ea4a943c94f",
+          "profile_state_receipt": {
+            "evidence_path": "raw-v9/hub-restart-v212/profile-state-v213/menufx-v9p16/menufx-v9p16.derived-profile-state.json",
+            "sha256": "90dadd803ff31089c80f666ee72a18a8efada9bc9da6afaf9c0873114e003b90",
+            "bytes": 1994
+          },
+          "potionguy_action_receipt": {
+            "evidence_path": "raw-v9/menufx-v9p16/annalist-derivation/potionguy-action-proof/potionguy-action.json",
+            "sha256": "e576b98152393af6ec07c6e23206787c3cc7ca288fe63b10ee8bd899246b05e9",
+            "bytes": 2829
+          },
+          "clean_completion_receipt": {
+            "evidence_path": "raw-v9/menufx-v9p16/annalist-derivation/two-action-completion/derived-baseline-completion.json",
+            "sha256": "4a04bdfbd794f1c70bed9fdc95cc8ed467721ae8e7604b96f395a38c3174ae40",
+            "bytes": 3441
+          },
+          "settled_hub_observation": {
+            "evidence_path": "raw-v9/menufx-v9p16/annalist-derivation/relaunch-two-action-1/direct-new-game-route/restart-05-hub.observation.json",
+            "sha256": "15f6bca490a1020e75dd6ece339aef9a6ce7a1c8aba3395c0369dfc8f7c97d6d",
+            "bytes": 1936932
+          },
+          "durable_file_count": 6
+        },
+        {
+          "role": "confirmation",
+          "instance": "menufx-v9p17",
+          "profile_state_identity_sha256": "378eaedc9a20a56ada7805efcb91253cacab0de87cb18642a58ec2536df3cbbc",
+          "profile_state_receipt": {
+            "evidence_path": "raw-v9/hub-restart-v212/profile-state-v213/menufx-v9p17/menufx-v9p17.derived-profile-state.json",
+            "sha256": "39663d4b2af3ec4504a4441d7df1b40215cfb23bf41ea37be32b36be219de2cf",
+            "bytes": 1992
+          },
+          "potionguy_action_receipt": {
+            "evidence_path": "raw-v9/menufx-v9p17/annalist-derivation/potionguy-derived-run1/potionguy-action-proof/potionguy-action.json",
+            "sha256": "7328e6a800e44d77ba5179e076a8ddac8dd12f15a10131707ddd43e8ba06955c",
+            "bytes": 2851
+          },
+          "clean_completion_receipt": {
+            "evidence_path": "raw-v9/menufx-v9p17/annalist-derivation/potionguy-derived-run1/two-action-completion/derived-baseline-completion.json",
+            "sha256": "85a9ec143f300d982704dd5debb1dc335a85972c303defe9cc397a5f91b7c0bd",
+            "bytes": 3447
+          },
+          "settled_hub_observation": {
+            "evidence_path": "raw-v9/menufx-v9p17/annalist-derivation/relaunch-two-action-1/direct-new-game-route/restart-05-hub.observation.json",
+            "sha256": "b9f9213dab6fb1b8dd2ac7ad67928d6bc6746fc181c04ccdc1876b6d91232fa7",
+            "bytes": 1925141
+          },
+          "durable_file_count": 6
+        }
+      ]
+    }
+  },
+  "layouts": {
+    "hub_resumed": {
+      "parent_screen_id": "hub",
+      "path_qualifier": "resumed",
+      "selector": "session_state:resumed_run",
+      "required_baseline_id": "pristine_fresh_install",
+      "measured_settled_element_count": 10,
+      "resolved_layout_sha256": "ff525469914ba91ceedd0ce6958648c711dec3a60ca396e2023113c9c422f370",
+      "fork_decision": {
+        "evidence_path": "raw-v9/raw-final/diagnostics/hub-path-dependent-core-stop-audit.json",
+        "sha256": "82e0006d03724219affc5c9943b67636d4c71fd4072cfade4e55e7228ba8d0d0",
+        "bytes": 101877
+      }
+    },
+    "hub_pristine_second_new_game": {
+      "parent_screen_id": "hub",
+      "path_qualifier": "pristine_second_new_game",
+      "selector": "profile_baseline:pristine_fresh_install;entry_path:first_run_hub_to_main_then_new_game_create_to_hub;same_process",
+      "required_baseline_id": "pristine_fresh_install",
+      "measured_settled_element_count": 15,
+      "resolved_semantic_multiset_sha256": "c141b1d3eccac08fc08f9adbb810eb6b2ac77efddf11193dab89602922984455",
+      "resolved_semantic_multiset": [
+        [
+          "art",
+          "",
+          "",
+          "LevelPicker.0",
+          "",
+          "position",
+          true,
+          false,
+          [
+            [
+              1505.0,
+              55.0,
+              1600.0,
+              148.0
+            ],
+            [
+              1505.0,
+              55.0,
+              1600.0,
+              148.0
+            ]
+          ]
+        ],
+        [
+          "art",
+          "",
+          "",
+          "LevelPicker.2",
+          "",
+          "position",
+          true,
+          false,
+          [
+            [
+              1505.0,
+              427.0,
+              1600.0,
+              520.0
+            ],
+            [
+              1505.0,
+              427.0,
+              1600.0,
+              520.0
+            ]
+          ]
+        ],
+        [
+          "art",
+          "",
+          "",
+          "LevelPicker.4",
+          "",
+          "position",
+          true,
+          false,
+          [
+            [
+              1505.0,
+              241.0,
+              1600.0,
+              334.0
+            ],
+            [
+              1505.0,
+              241.0,
+              1600.0,
+              334.0
+            ]
+          ]
+        ],
+        [
+          "art",
+          "",
+          "",
+          "LevelPicker.5",
+          "",
+          "position",
+          true,
+          false,
+          [
+            [
+              1505.0,
+              334.0,
+              1600.0,
+              427.0
+            ],
+            [
+              1505.0,
+              334.0,
+              1600.0,
+              427.0
+            ]
+          ]
+        ],
+        [
+          "art",
+          "",
+          "",
+          "LevelPicker.6",
+          "",
+          "position",
+          true,
+          false,
+          [
+            [
+              1505.0,
+              148.0,
+              1600.0,
+              241.0
+            ],
+            [
+              1505.0,
+              148.0,
+              1600.0,
+              241.0
+            ]
+          ]
+        ],
+        [
+          "art",
+          "",
+          "",
+          "Skills.43",
+          "",
+          "transform",
+          true,
+          false,
+          [
+            [
+              784.25,
+              9.75,
+              815.75,
+              41.25
+            ],
+            [
+              784.25,
+              9.75,
+              815.75,
+              41.25
+            ]
+          ]
+        ],
+        [
+          "art",
+          "",
+          "",
+          "Skills.48",
+          "",
+          "position",
+          true,
+          false,
+          [
+            [
+              480.5,
+              838.0,
+              508.5,
+              880.0
+            ],
+            [
+              480.5,
+              838.0,
+              508.5,
+              880.0
+            ]
+          ]
+        ],
+        [
+          "art",
+          "",
+          "",
+          "UI.100",
+          "",
+          "position",
+          true,
+          false,
+          [
+            [
+              483.5,
+              877.0,
+              505.5,
+              900.0
+            ],
+            [
+              483.5,
+              877.0,
+              505.5,
+              908.0
+            ]
+          ]
+        ],
+        [
+          "art",
+          "",
+          "",
+          "UI.28",
+          "",
+          "transform",
+          true,
+          false,
+          [
+            "v2.3-motion-capable-geometry"
+          ]
+        ],
+        [
+          "art",
+          "",
+          "",
+          "UI.42",
+          "",
+          "position",
+          true,
+          false,
+          [
+            [
+              9.5,
+              8.5,
+              40.5,
+              41.5
+            ],
+            [
+              9.5,
+              8.5,
+              40.5,
+              41.5
+            ]
+          ]
+        ],
+        [
+          "art",
+          "",
+          "",
+          "UI.47",
+          "",
+          "position",
+          true,
+          false,
+          [
+            [
+              730.5,
+              825.0,
+              788.5,
+              887.0
+            ],
+            [
+              730.5,
+              825.0,
+              788.5,
+              887.0
+            ]
+          ]
+        ],
+        [
+          "art",
+          "",
+          "",
+          "UI.47",
+          "",
+          "position",
+          true,
+          false,
+          [
+            [
+              735.5,
+              830.0,
+              793.5,
+              892.0
+            ],
+            [
+              735.5,
+              830.0,
+              793.5,
+              892.0
+            ]
+          ]
+        ],
+        [
+          "art",
+          "",
+          "",
+          "UI.48",
+          "",
+          "position",
+          true,
+          false,
+          [
+            [
+              810.5,
+              825.0,
+              868.5,
+              887.0
+            ],
+            [
+              810.5,
+              825.0,
+              868.5,
+              887.0
+            ]
+          ]
+        ],
+        [
+          "art",
+          "",
+          "",
+          "UI.48",
+          "",
+          "position",
+          true,
+          false,
+          [
+            [
+              815.5,
+              830.0,
+              873.5,
+              892.0
+            ],
+            [
+              815.5,
+              830.0,
+              873.5,
+              892.0
+            ]
+          ]
+        ],
+        [
+          "art",
+          "",
+          "",
+          "UI.82",
+          "",
+          "centered",
+          true,
+          false,
+          [
+            [
+              794.5,
+              829.0,
+              806.5,
+              885.0
+            ],
+            [
+              794.5,
+              829.0,
+              806.5,
+              885.0
+            ]
+          ]
+        ]
+      ],
+      "fork_decision": {
+        "evidence_path": "raw-v9/diagnostics/hub-profile-path-v26-question-audit.json",
+        "sha256": "0542af1cdb416133c13547b2a1015db7b2ad582b1b3dd3eda81610c9c8255871",
+        "bytes": 13459
+      },
+      "case_a_confirmation": {
+        "evidence_path": "raw-v9/hub-restart-v212/hub-v213-case-a-audit.json",
+        "sha256": "e52c22e9e46ad95f7762391617b453bef61a61fec0ca60db2a709cd2aa6b8c1f",
+        "bytes": 13633
+      }
+    },
+    "hub_new_game": {
+      "parent_screen_id": "hub",
+      "path_qualifier": "new_game_derived_two_action",
+      "selector": "profile_baseline:hub_new_game_two_action_v213;entry_path:direct_new_game_create_to_hub",
+      "required_baseline_id": "hub_new_game_two_action_v213",
+      "measured_settled_element_count": 14,
+      "resolved_semantic_multiset_sha256": "0cc6560cb9ec264e58f07191261ba5604ff83bab83a97d1a7fdee6745ce7a1fa",
+      "resolved_semantic_multiset": [
+        [
+          "art",
+          "",
+          "",
+          "LevelPicker.0",
+          "",
+          "position",
+          true,
+          false,
+          [
+            [
+              1505.0,
+              55.0,
+              1600.0,
+              148.0
+            ],
+            [
+              1505.0,
+              55.0,
+              1600.0,
+              148.0
+            ]
+          ]
+        ],
+        [
+          "art",
+          "",
+          "",
+          "LevelPicker.2",
+          "",
+          "position",
+          true,
+          false,
+          [
+            [
+              1505.0,
+              427.0,
+              1600.0,
+              520.0
+            ],
+            [
+              1505.0,
+              427.0,
+              1600.0,
+              520.0
+            ]
+          ]
+        ],
+        [
+          "art",
+          "",
+          "",
+          "LevelPicker.4",
+          "",
+          "position",
+          true,
+          false,
+          [
+            [
+              1505.0,
+              241.0,
+              1600.0,
+              334.0
+            ],
+            [
+              1505.0,
+              241.0,
+              1600.0,
+              334.0
+            ]
+          ]
+        ],
+        [
+          "art",
+          "",
+          "",
+          "LevelPicker.5",
+          "",
+          "position",
+          true,
+          false,
+          [
+            [
+              1505.0,
+              334.0,
+              1600.0,
+              427.0
+            ],
+            [
+              1505.0,
+              334.0,
+              1600.0,
+              427.0
+            ]
+          ]
+        ],
+        [
+          "art",
+          "",
+          "",
+          "LevelPicker.6",
+          "",
+          "position",
+          true,
+          false,
+          [
+            [
+              1505.0,
+              148.0,
+              1600.0,
+              241.0
+            ],
+            [
+              1505.0,
+              148.0,
+              1600.0,
+              241.0
+            ]
+          ]
+        ],
+        [
+          "art",
+          "",
+          "",
+          "Skills.43",
+          "",
+          "transform",
+          true,
+          false,
+          [
+            [
+              784.25,
+              9.75,
+              815.75,
+              41.25
+            ],
+            [
+              784.25,
+              9.75,
+              815.75,
+              41.25
+            ]
+          ]
+        ],
+        [
+          "art",
+          "",
+          "",
+          "Skills.48",
+          "",
+          "position",
+          true,
+          false,
+          [
+            [
+              480.5,
+              838.0,
+              508.5,
+              880.0
+            ],
+            [
+              480.5,
+              838.0,
+              508.5,
+              880.0
+            ]
+          ]
+        ],
+        [
+          "art",
+          "",
+          "",
+          "UI.100",
+          "",
+          "position",
+          true,
+          false,
+          [
+            [
+              483.5,
+              877.0,
+              505.5,
+              900.0
+            ],
+            [
+              483.5,
+              877.0,
+              505.5,
+              908.0
+            ]
+          ]
+        ],
+        [
+          "art",
+          "",
+          "",
+          "UI.42",
+          "",
+          "position",
+          true,
+          false,
+          [
+            [
+              9.5,
+              8.5,
+              40.5,
+              41.5
+            ],
+            [
+              9.5,
+              8.5,
+              40.5,
+              41.5
+            ]
+          ]
+        ],
+        [
+          "art",
+          "",
+          "",
+          "UI.47",
+          "",
+          "position",
+          true,
+          false,
+          [
+            [
+              730.5,
+              825.0,
+              788.5,
+              887.0
+            ],
+            [
+              730.5,
+              825.0,
+              788.5,
+              887.0
+            ]
+          ]
+        ],
+        [
+          "art",
+          "",
+          "",
+          "UI.47",
+          "",
+          "position",
+          true,
+          false,
+          [
+            [
+              735.5,
+              830.0,
+              793.5,
+              892.0
+            ],
+            [
+              735.5,
+              830.0,
+              793.5,
+              892.0
+            ]
+          ]
+        ],
+        [
+          "art",
+          "",
+          "",
+          "UI.48",
+          "",
+          "position",
+          true,
+          false,
+          [
+            [
+              810.5,
+              825.0,
+              868.5,
+              887.0
+            ],
+            [
+              810.5,
+              825.0,
+              868.5,
+              887.0
+            ]
+          ]
+        ],
+        [
+          "art",
+          "",
+          "",
+          "UI.48",
+          "",
+          "position",
+          true,
+          false,
+          [
+            [
+              815.5,
+              830.0,
+              873.5,
+              892.0
+            ],
+            [
+              815.5,
+              830.0,
+              873.5,
+              892.0
+            ]
+          ]
+        ],
+        [
+          "art",
+          "",
+          "",
+          "UI.82",
+          "",
+          "centered",
+          true,
+          false,
+          [
+            [
+              794.5,
+              829.0,
+              806.5,
+              885.0
+            ],
+            [
+              794.5,
+              829.0,
+              806.5,
+              885.0
+            ]
+          ]
+        ]
+      ],
+      "fork_decision": {
+        "evidence_path": "raw-v9/hub-restart-v212/hub-v213-case-a-audit.json",
+        "sha256": "e52c22e9e46ad95f7762391617b453bef61a61fec0ca60db2a709cd2aa6b8c1f",
+        "bytes": 13633
+      },
+      "content_vindication": {
+        "evidence_path": "raw-v9/candidates/candidate-v29/menu-transition-layouts/hub_new_game.json",
+        "sha256": "4e0e71a57b6c2b1fa40e4aeffa59011c33637529567c79e7fd9aac4903d5f9fc",
+        "bytes": 14388
+      }
+    }
+  },
+  "bindings": [
+    {
+      "edge_id": "create_discipline_to_hub",
+      "endpoint": "after",
+      "required_baseline_id": "pristine_fresh_install",
+      "layout_id": "hub_pristine_second_new_game"
+    },
+    {
+      "edge_id": "create_discipline_to_hub",
+      "endpoint": "after",
+      "required_baseline_id": "hub_new_game_two_action_v213",
+      "layout_id": "hub_new_game"
+    },
+    {
+      "edge_id": "hub_to_pause",
+      "endpoint": "before",
+      "required_baseline_id": "pristine_fresh_install",
+      "layout_id": "hub_resumed"
+    },
+    {
+      "edge_id": "pause_to_hub_resume",
+      "endpoint": "after",
+      "required_baseline_id": "pristine_fresh_install",
+      "layout_id": "hub_resumed"
+    },
+    {
+      "edge_id": "profile_select_resume_to_hub",
+      "endpoint": "after",
+      "required_baseline_id": "pristine_fresh_install",
+      "layout_id": "hub_resumed"
+    },
+    {
+      "edge_id": "settings_to_hub",
+      "endpoint": "after",
+      "required_baseline_id": "pristine_fresh_install",
+      "layout_id": "hub_resumed"
+    }
+  ],
+  "explicitly_forbidden": [
+    "count_or_class_based_acceptance",
+    "copied_install_profile_baseline",
+    "hub_layout_without_exact_path_and_baseline_binding",
+    "v212_multiset_on_hub_new_game_or_hub_resumed",
+    "v213_supersession_outside_hub_new_game"
+  ]
+}

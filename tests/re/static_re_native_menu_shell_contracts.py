@@ -1127,6 +1127,9 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
         "SolomonDarkModLauncher/src/Launch/StagedGameLauncher.cs"
     )
     profile_python = _read("tools/native_menu_profile_state.py")
+    hub_binding_generator = _read(
+        "tools/derive_native_menu_hub_bindings_v213.py"
+    )
     browser_python = _read("tools/native_menu_browser_tab.py")
     attributes = _read(".gitattributes")
     support = _read("scripts/NativeMenuCaptureSupport.ps1")
@@ -1201,16 +1204,18 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
         r"function Get-NativeMenuProfileStateProvenance.*?"
         r"native-menu-profile-state\.json.*?"
         r"native-menu-profile-state-baseline\.json.*?"
-        r"\$identity -cne \$expectedIdentity.*?"
-        r"STOP: native-menu profile-state provenance mismatch.*?"
-        r"\$receiptFiles\.Count -ne 0.*?"
+        r"native-menu-hub-bindings-v213\.json.*?"
+        r"hub_new_game_two_action_v213.*?"
+        r"native-menu derivation receipt mismatch.*?"
+        r"function Get-NativeMenuProfileStateBinding.*?"
+        r"native-menu per-binding profile-state baseline.*?"
         r"function Copy-NativeMenuProfileStateEvidence.*?"
         r"Get-FileHash.*?launch_receipt\.sha256.*?"
         r"New-NativeMenuCaptureContext.*?"
         r"Get-NativeMenuProfileStateProvenance.*?"
         r"profile_state_identity_sha256",
-        "the live recorder no longer rejects non-pristine durable state, "
-        "copies its exact launch receipt, or binds the identity into source provenance",
+        "the live recorder no longer admits only the exact pristine/derived "
+        "baselines, copies its launch receipt, or enforces per-binding scope",
     )
     for path in (
         "scripts/Record-NativeMenuLayout.ps1",
@@ -1250,14 +1255,34 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
     _require_regex(
         profile_python,
         r"def validate_capture_profile_state\(.*?"
-        r"identity != baseline\[\"identity\"\].*?"
+        r"identity != source_identity.*?"
         r"PROFILE_MISMATCH_REASON.*?"
-        r"baseline_receipt\.get\(\"sha256\"\) != baseline\[\"sha256\"\].*?"
+        r"required_baseline_id.*?PER_BINDING_MISMATCH_REASON.*?"
+        r"expected_derived_receipt.*?DERIVATION_MISMATCH_REASON.*?"
         r"_resolve_unique_receipt\(.*?"
         r"receipt_path\.stat\(\)\.st_size != expected_bytes.*?"
         r"sha256_file\(receipt_path\) != expected_sha256",
         "the offline durable-state verifier can accept a foreign identity, "
-        "false committed baseline hash, ambiguous receipt, or false receipt hash",
+        "wrong binding, false derivation receipt, ambiguity, or false receipt hash",
+    )
+    _require_regex(
+        hub_binding_generator,
+        r"def derive\(.*?"
+        r"decision\"\) != \"CASE_A\".*?"
+        r"historical_hub_new_game_equal.*?"
+        r"isolated_two_field_replay_equal.*?"
+        r"any\(value != pristine_values\[0\].*?"
+        r"any\(.*?value != derived_values\[0\].*?"
+        r"v212_exact.*?v213_exact.*?"
+        r"historical_exact != v213_exact.*?"
+        r"content-vindication consequence.*?"
+        r"witness_specs.*?primary.*?confirmation.*?"
+        r"evidence_receipt\(.*?"
+        r"copied_profile_state_forbidden.*?"
+        r"hub_pristine_second_new_game.*?"
+        r"hub_new_game_two_action_v213",
+        "the v2.12/v2.13 Hub contract is no longer derived from both exact "
+        "fresh/derived instance pairs and the accepted content-vindication audit",
     )
     _require_regex(
         resolver,
@@ -1295,12 +1320,12 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
 
     _require_regex(
         support,
-        r"function Get-NativeMenuExpectedBrowserTab.*?"
-        r"\"dark_cloud_browser\" \{ return \"online_levels\" \}.*?"
         r"function Get-NativeMenuCaptureSurfaceId.*?"
         r"dark_cloud_browser.*?dark_cloud_recent.*?"
         r"dark_cloud_online_levels.*?dark_cloud_my_levels.*?"
-        r"return \"dark_cloud_browser\".*?return \$ScreenTag.*?"
+        r"return \"dark_cloud_browser\".*?"
+        r"hub_new_game.*?hub_pristine_second_new_game.*?hub_resumed.*?"
+        r"return \"hub\".*?return \$ScreenTag.*?"
         r"function Get-NativeMenuMachineSurfaceId.*?"
         r"create_element.*?create_discipline.*?return \"create\".*?"
         r"beta_notice.*?return \"dialog\".*?"
@@ -1310,6 +1335,10 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
         r"dark_cloud_sort.*?dark_cloud_options.*?"
         r"dark_cloud_login_settings.*?return \"dark_cloud_browser\".*?"
         r"skill_picker.*?return \"spell_picker\".*?"
+        r"hub_new_game.*?hub_pristine_second_new_game.*?hub_resumed.*?"
+        r"return \"hub\".*?"
+        r"function Get-NativeMenuExpectedBrowserTab.*?"
+        r"\"dark_cloud_browser\" \{ return \"online_levels\" \}.*?"
         r"function Resolve-NativeMenuBrowserTabState.*?"
         r"dark_cloud_browser\.recent.*?"
         r"dark_cloud_browser\.online_levels.*?"
@@ -1369,6 +1398,108 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
             "machine-derived pristine Case A state"
         )
 
+    binding_path = (
+        ROOT / "tests/fixtures/webgame/native-menu-hub-bindings-v213.json"
+    )
+    if not binding_path.is_file():
+        raise StaticReTestFailure(
+            "the committed v2.12/v2.13 Hub baseline/binding contract is absent"
+        )
+    bindings = json.loads(binding_path.read_text(encoding="utf-8"))
+    baseline_registry = bindings.get("baselines")
+    hub_layouts = bindings.get("layouts")
+    endpoint_bindings = bindings.get("bindings")
+    if (
+        bindings.get("schema")
+        != "solomon-dark-native-menu-hub-bindings-v213"
+        or bindings.get("settlement_spec") != "2.13"
+        or bindings.get("baseline_legitimacy", {}).get(
+            "copied_profile_state_forbidden"
+        )
+        is not True
+        or not isinstance(baseline_registry, dict)
+        or set(baseline_registry)
+        != {"pristine_fresh_install", "hub_new_game_two_action_v213"}
+        or not isinstance(hub_layouts, dict)
+        or set(hub_layouts)
+        != {
+            "hub_resumed",
+            "hub_pristine_second_new_game",
+            "hub_new_game",
+        }
+        or not isinstance(endpoint_bindings, list)
+        or len(endpoint_bindings) != 6
+    ):
+        raise StaticReTestFailure(
+            "the committed v2.12/v2.13 contract is not the exact two-baseline, "
+            "three-layout, six-binding boundary"
+        )
+    fresh_contract = baseline_registry["pristine_fresh_install"]
+    fresh_fixture_receipt = fresh_contract.get("fixture")
+    if not isinstance(fresh_fixture_receipt, dict):
+        raise StaticReTestFailure(
+            "the v2.13 registry lost its committed pristine baseline receipt"
+        )
+    assert_recorded_hash_matches_file(
+        str(fresh_fixture_receipt.get("sha256", "")),
+        baseline_path,
+        "v2.13 pristine baseline registry",
+    )
+    if (
+        fresh_contract.get("profile_state_identity_sha256") != baseline_identity
+        or fresh_fixture_receipt.get("bytes") != baseline_path.stat().st_size
+        or fresh_fixture_receipt.get("repo_relative_path")
+        != "tests/fixtures/webgame/native-menu-profile-state-baseline.json"
+    ):
+        raise StaticReTestFailure(
+            "the v2.13 registry records false pristine baseline identity or bytes"
+        )
+    derived_witnesses = baseline_registry["hub_new_game_two_action_v213"].get(
+        "witnesses"
+    )
+    if (
+        not isinstance(derived_witnesses, list)
+        or len(derived_witnesses) != 2
+        or {witness.get("role") for witness in derived_witnesses}
+        != {"primary", "confirmation"}
+        or len(
+            {
+                witness.get("profile_state_identity_sha256")
+                for witness in derived_witnesses
+            }
+        )
+        != 2
+    ):
+        raise StaticReTestFailure(
+            "the v2.13 derived baseline does not pin two independent witness identities"
+        )
+    for layout_id in (
+        "hub_pristine_second_new_game",
+        "hub_new_game",
+    ):
+        layout_contract = hub_layouts[layout_id]
+        digest = layout_contract.get("resolved_semantic_multiset_sha256")
+        members = layout_contract.get("resolved_semantic_multiset")
+        measured_count = layout_contract.get("measured_settled_element_count")
+        if (
+            not isinstance(digest, str)
+            or re.fullmatch(r"[0-9a-f]{64}", digest) is None
+            or not isinstance(members, list)
+            or len(members) != measured_count
+        ):
+            raise StaticReTestFailure(
+                f"the exact {layout_id} complete semantic multiset is not pinned"
+            )
+        measured_digest = hashlib.sha256(
+            json.dumps(
+                members, ensure_ascii=False, separators=(",", ":")
+            ).encode("utf-8")
+        ).hexdigest()
+        if measured_digest != digest:
+            raise StaticReTestFailure(
+                f"the exact {layout_id} semantic multiset digest is false"
+            )
+
     fixture_paths = sorted(
         (ROOT / "tests/fixtures/webgame/menu-layouts").glob("*.json")
     ) + sorted(
@@ -1378,6 +1509,7 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
         f"menu-layouts/{layout_id}.json" for layout_id in LAYOUT_IDS
     } | {
         "menu-transition-layouts/hub_new_game.json",
+        "menu-transition-layouts/hub_pristine_second_new_game.json",
         "menu-transition-layouts/hub_resumed.json",
     }
     actual_paths = {
@@ -1385,7 +1517,7 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
     }
     if actual_paths != expected_paths:
         raise StaticReTestFailure(
-            "profile-state fixture sweep did not reach the exact 30-layout corpus: "
+            "profile-state fixture sweep did not reach the exact 31-layout corpus: "
             f"missing={sorted(expected_paths - actual_paths)} "
             f"extra={sorted(actual_paths - expected_paths)}"
         )
@@ -1393,7 +1525,10 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
         raise StaticReTestFailure(
             "profile-state fixture sweep did not reach the Case A browser witness"
         )
+    reached_layouts: set[str] = set()
     for path in fixture_paths:
+        layout_id = path.stem
+        reached_layouts.add(layout_id)
         fixture = json.loads(path.read_text(encoding="utf-8"))
         header = fixture.get("header")
         profile_state = (
@@ -1404,28 +1539,75 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
             raise StaticReTestFailure(
                 f"{path.name} does not carry machine-derived durable-state provenance"
             )
+        required_baseline_id = (
+            hub_layouts.get(layout_id, {}).get(
+                "required_baseline_id", "pristine_fresh_install"
+            )
+        )
+        allowed_identities = (
+            {baseline_identity}
+            if required_baseline_id == "pristine_fresh_install"
+            else {
+                witness["profile_state_identity_sha256"]
+                for witness in derived_witnesses
+            }
+        )
         if (
-            profile_state.get("profile_state_identity_sha256")
-            != baseline_identity
-            or source.get("profile_state_identity_sha256") != baseline_identity
+            profile_state.get("baseline_id") != required_baseline_id
+            or profile_state.get("profile_state_identity_sha256")
+            not in allowed_identities
+            or source.get("profile_state_identity_sha256")
+            != profile_state.get("profile_state_identity_sha256")
         ):
             raise StaticReTestFailure(
-                f"{path.name} does not bind the pinned pristine profile-state identity"
+                f"{path.name} does not bind its exact qualified profile-state identity"
             )
         recorded_baseline = profile_state.get("baseline_fixture")
         if not isinstance(recorded_baseline, dict):
             raise StaticReTestFailure(
                 f"{path.name} does not name the committed profile-state baseline"
             )
+        expected_baseline_path = (
+            baseline_path
+            if required_baseline_id == "pristine_fresh_install"
+            else binding_path
+        )
         assert_recorded_hash_matches_file(
             str(recorded_baseline.get("sha256", "")),
-            baseline_path,
+            expected_baseline_path,
             f"{path.name} profile-state baseline",
         )
-        if recorded_baseline.get("bytes") != baseline_path.stat().st_size:
+        if recorded_baseline.get("bytes") != expected_baseline_path.stat().st_size:
             raise StaticReTestFailure(
                 f"{path.name} records a false profile-state baseline byte count"
             )
+        recorded_binding = profile_state.get("binding_contract")
+        if not isinstance(recorded_binding, dict):
+            raise StaticReTestFailure(
+                f"{path.name} does not name the committed per-binding contract"
+            )
+        assert_recorded_hash_matches_file(
+            str(recorded_binding.get("sha256", "")),
+            binding_path,
+            f"{path.name} per-binding baseline contract",
+        )
+        if recorded_binding.get("bytes") != binding_path.stat().st_size:
+            raise StaticReTestFailure(
+                f"{path.name} records a false per-binding contract byte count"
+            )
+        profile_binding = header.get("profile_state_binding")
+        if (
+            not isinstance(profile_binding, dict)
+            or profile_binding.get("baseline_id") != required_baseline_id
+            or profile_binding.get("layout_id") != layout_id
+        ):
+            raise StaticReTestFailure(
+                f"{path.name} does not explicitly record its per-layout baseline binding"
+            )
+    if "hub_pristine_second_new_game" not in reached_layouts:
+        raise StaticReTestFailure(
+            "profile-state fixture sweep did not reach the v2.12 Hub witness"
+        )
 
     menu_goldens_path = ROOT / "tests/fixtures/webgame/menu-goldens.json"
     menu_goldens = json.loads(menu_goldens_path.read_text(encoding="utf-8"))
@@ -1449,11 +1631,31 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
         raise StaticReTestFailure(
             "menu-goldens records false pristine profile-state baseline provenance"
         )
+    aggregate_bindings = menu_goldens.get("header", {}).get(
+        "profile_state_bindings"
+    )
+    if not isinstance(aggregate_bindings, dict):
+        raise StaticReTestFailure(
+            "menu-goldens does not bind the committed v2.13 baseline registry"
+        )
+    assert_recorded_hash_matches_file(
+        str(aggregate_bindings.get("sha256", "")),
+        binding_path,
+        "menu-goldens v2.13 baseline registry",
+    )
+    if (
+        aggregate_bindings.get("bytes") != binding_path.stat().st_size
+        or aggregate_bindings.get("baseline_ids")
+        != sorted(baseline_registry)
+    ):
+        raise StaticReTestFailure(
+            "menu-goldens records false v2.13 baseline registry bytes or census"
+        )
 
     return (
-        "launcher and recorders derive one pristine durable-state identity with "
-        "no override path; all 30 layouts and menu-goldens hash-check the committed "
-        "baseline; Dark Cloud entry/tab state is measured from six live brackets"
+        "launcher and recorders derive only exact legitimate durable-state "
+        "identities with no override path; all 31 layouts and menu-goldens "
+        "hash-check their per-binding baseline; Dark Cloud tabs remain measured"
     )
 
 
@@ -2868,6 +3070,7 @@ def test_native_menu_path_dependent_core_fork_is_exact() -> str:
     specification = _read(
         "docs/reverse-engineering/native-menu-settlement.md"
     )
+    profile = _read("tools/native_menu_profile_state.py")
 
     forbidden_provenance_options = (
         "--base-commit-sha",
@@ -2888,35 +3091,39 @@ def test_native_menu_path_dependent_core_fork_is_exact() -> str:
     _require_regex(
         resolver,
         r'NAVIGATION_ENDPOINT_LAYOUT_IDS\s*=\s*\{.*?'
-        r'\("create_discipline_to_hub", "after"\): "hub_new_game".*?'
         r'\("hub_to_pause", "before"\): "hub_resumed".*?'
         r'\("pause_to_hub_resume", "after"\): "hub_resumed".*?'
         r'\("profile_select_resume_to_hub", "after"\): "hub_resumed".*?'
         r'\("settings_to_hub", "after"\): "hub_resumed"',
-        "Settlement v2.6 no longer names exactly two Hub layouts and binds "
-        "every Hub navigation endpoint to its deterministic path/session state",
+        "Settlement v2.13 no longer retains every non-conditional Hub route mapping",
     )
     _require_regex(
         resolver,
         r'PATH_DEPENDENT_CORE_LAYOUTS\s*=\s*\{.*?'
+        r'"hub_pristine_second_new_game"\s*:\s*\{.*?'
+        r'"path_qualifier"\s*:\s*"pristine_second_new_game".*?'
+        r'"required_baseline_id"\s*:\s*"pristine_fresh_install".*?'
         r'"hub_new_game"\s*:\s*\{.*?'
         r'"parent_screen_id"\s*:\s*"hub".*?'
-        r'"path_qualifier"\s*:\s*"new_game".*?'
+        r'"path_qualifier"\s*:\s*"new_game_derived_two_action".*?'
+        r'"required_baseline_id"\s*:\s*"hub_new_game_two_action_v213".*?'
         r'"hub_resumed"\s*:\s*\{.*?'
         r'"parent_screen_id"\s*:\s*"hub".*?'
         r'"path_qualifier"\s*:\s*"resumed".*?'
         r'PATH_DEPENDENT_CORE_ENDPOINTS\s*=\s*\{.*?'
-        r'\("create_discipline_to_hub", "after"\).*?'
+        r'\("create_discipline_to_hub", "after"\): '
+        r'"hub_pristine_second_new_game".*?'
         r'\("hub_to_pause", "before"\).*?'
         r'\("pause_to_hub_resume", "after"\).*?'
         r'\("profile_select_resume_to_hub", "after"\).*?'
         r'\("settings_to_hub", "after"\)',
-        "Settlement v2.6 no longer names exactly two Hub layouts and binds "
-        "every Hub navigation endpoint to its deterministic path/session state",
+        "Settlement v2.13 no longer names exactly three Hub layouts or binds "
+        "the fresh navigation graph to its deterministic path/session state",
     )
     _require_regex(
         resolver,
         r"def validate_path_dependent_core_forks\(.*?"
+        r"load_hub_binding_contract.*?"
         r"if reached_layouts != expected_layouts:.*?"
         r"path-dependent core contract: Hub variant census changed.*?"
         r"if observed_bindings != PATH_DEPENDENT_CORE_ENDPOINTS:.*?"
@@ -2924,11 +3131,21 @@ def test_native_menu_path_dependent_core_fork_is_exact() -> str:
         r"if unexpected_hub_endpoints:.*?"
         r"Hub navigation endpoint lacks a.*?declared selector.*?"
         r"if len\(set\(counts\.values\(\)\)\) != len\(counts\):.*?"
-        r"Hub variants do not differ in element census.*?"
-        r"if len\(receipts\) != 1:.*?"
-        r"Hub variants cite different fork audits",
-        "Settlement v2.6 no longer rejects an equal-census, unbound, "
-        "extra-layout, or differently evidenced Hub fork",
+        r"Hub variants do not differ in element census",
+        "Settlement v2.13 no longer rejects an equal-census, unbound, or "
+        "extra-layout Hub fork",
+    )
+    _require_regex(
+        profile,
+        r"def resolve_navigation_profile_binding\(.*?"
+        r"edge_id.*?endpoint.*?baseline_id.*?"
+        r"if len\(matches\) != 1:.*?"
+        r"PER_BINDING_MISMATCH_REASON.*?"
+        r"def assert_navigation_baseline_allowed\(.*?"
+        r"if baseline_id not in allowed:.*?"
+        r"PER_BINDING_MISMATCH_REASON",
+        "the v2.13 edge resolver no longer refuses an absent or ambiguous "
+        "baseline-qualified Hub binding",
     )
     _require_regex(
         materializer,
@@ -2953,19 +3170,22 @@ def test_native_menu_path_dependent_core_fork_is_exact() -> str:
     )
     _require_regex(
         builder,
-        r'menu-transition-layouts", 2, "hub_new_game".*?'
-        r'set\(transition_paths\) != \{"hub_new_game", "hub_resumed"\}.*?'
-        r"two authorized Hub layouts.*?"
-        r"if len\(fixtures\) != 30.*?"
-        r"28 menus plus two Hub layouts",
-        "menu-goldens aggregation no longer embeds both authorized Hub "
+        r'menu-transition-layouts", 3, "hub_new_game".*?'
+        r'"hub_pristine_second_new_game".*?'
+        r'"hub_resumed".*?'
+        r"three authorized Hub layouts.*?"
+        r"if len\(fixtures\) != 31.*?"
+        r"28 menus plus three Hub layouts",
+        "menu-goldens aggregation no longer embeds all three authorized Hub "
         "standalones while preserving the 28 shell-facing layout census",
     )
     _require_regex(
         promoter,
-        r'\{"hub_new_game\.json", "hub_resumed\.json"\}.*?'
-        r"if len\(records\) != 30.*?"
-        r"28 menus plus two Hub layouts.*?"
+        r'"hub_new_game\.json".*?'
+        r'"hub_pristine_second_new_game\.json".*?'
+        r'"hub_resumed\.json".*?'
+        r"if len\(records\) != 31.*?"
+        r"28 menus plus three Hub layouts.*?"
         r'"status": "new_path_dependent_layout".*?'
         r'"fork_decision": copy\.deepcopy',
         "promotion no longer carries both new Hub path layouts and their fork "
@@ -2981,19 +3201,23 @@ def test_native_menu_path_dependent_core_fork_is_exact() -> str:
     )
     _require_regex(
         specification,
-        r"# Native menu settlement specification v2\.10.*?"
+        r"# Native menu settlement specification v2\.13.*?"
         r"## Path-dependent core.*?Settlement v2\.6.*?"
         r"two.*?fresh instances.*?"
         r"deterministic entry path.*?durable session state.*?"
         r"differ in element census.*?"
-        r"## Changelog.*?v2\.6.*?accepted Hub path-dependent-core STOP",
-        "the versioned settlement specification no longer records the narrow "
-        "path-dependent-core rule and the STOP that caused it",
+        r"## Hub baseline legitimacy and exact path bindings.*?"
+        r"Settlement v2\.12.*?hub_pristine_second_new_game.*?"
+        r"Settlement v2\.13.*?hub_new_game.*?"
+        r"Annalist.*?PotionGuy.*?"
+        r"## Changelog.*?v2\.13.*?v2\.12",
+        "the versioned settlement specification no longer records the exact "
+        "v2.12/v2.13 Hub baselines, paths, and accepted STOP mechanism",
     )
     return (
-        "Settlement v2.6 permits exactly the paired-evidence Hub new-game and "
-        "resumed layouts, exhaustively binds their graph endpoints, and derives "
-        "all provenance and measured censuses"
+        "Settlement v2.12/v2.13 permits exactly three paired-evidence Hub "
+        "layouts, binds every graph endpoint by legitimate baseline, and "
+        "derives all provenance and measured censuses"
     )
 
 

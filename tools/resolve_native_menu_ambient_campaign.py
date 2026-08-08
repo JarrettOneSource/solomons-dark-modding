@@ -22,7 +22,13 @@ if __package__:
         sha256_json,
     )
     from .native_menu_profile_state import (
+        FRESH_BASELINE_ID,
         NativeMenuProfileStateError,
+        assert_navigation_baseline_allowed,
+        load_hub_binding_contract,
+        required_baseline_for_layout,
+        resolve_navigation_profile_binding,
+        validate_exact_hub_layout_pair,
         validate_capture_profile_state,
     )
     from .native_menu_browser_tab import (
@@ -39,7 +45,13 @@ else:
         sha256_json,
     )
     from native_menu_profile_state import (  # type: ignore[no-redef]
+        FRESH_BASELINE_ID,
         NativeMenuProfileStateError,
+        assert_navigation_baseline_allowed,
+        load_hub_binding_contract,
+        required_baseline_for_layout,
+        resolve_navigation_profile_binding,
+        validate_exact_hub_layout_pair,
         validate_capture_profile_state,
     )
     from native_menu_browser_tab import (  # type: ignore[no-redef]
@@ -65,7 +77,6 @@ NAVIGATION_ENDPOINT_LAYOUT_IDS = {
     ("performance_to_settings", "after"): "game-settings-gameplay",
     ("settings_to_dark_cloud_settings", "before"): "game-settings-gameplay",
     ("dark_cloud_settings_to_settings", "after"): "game-settings-gameplay",
-    ("create_discipline_to_hub", "after"): "hub_new_game",
     ("hub_to_pause", "before"): "hub_resumed",
     ("pause_to_hub_resume", "after"): "hub_resumed",
     ("profile_select_resume_to_hub", "after"): "hub_resumed",
@@ -73,27 +84,38 @@ NAVIGATION_ENDPOINT_LAYOUT_IDS = {
 }
 
 PATH_DEPENDENT_CORE_LAYOUTS = {
+    "hub_pristine_second_new_game": {
+        "parent_screen_id": "hub",
+        "path_qualifier": "pristine_second_new_game",
+        "selector": (
+            "profile_baseline:pristine_fresh_install;entry_path:"
+            "first_run_hub_to_main_then_new_game_create_to_hub;same_process"
+        ),
+        "required_baseline_id": "pristine_fresh_install",
+    },
     "hub_new_game": {
         "parent_screen_id": "hub",
-        "path_qualifier": "new_game",
-        "selector": "entry_path:create_discipline_to_hub;session_state:new_game",
+        "path_qualifier": "new_game_derived_two_action",
+        "selector": (
+            "profile_baseline:hub_new_game_two_action_v213;entry_path:"
+            "direct_new_game_create_to_hub"
+        ),
+        "required_baseline_id": "hub_new_game_two_action_v213",
     },
     "hub_resumed": {
         "parent_screen_id": "hub",
         "path_qualifier": "resumed",
         "selector": "session_state:resumed_run",
+        "required_baseline_id": "pristine_fresh_install",
     },
 }
 
 PATH_DEPENDENT_CORE_ENDPOINTS = {
-    key: NAVIGATION_ENDPOINT_LAYOUT_IDS[key]
-    for key in (
-        ("create_discipline_to_hub", "after"),
-        ("hub_to_pause", "before"),
-        ("pause_to_hub_resume", "after"),
-        ("profile_select_resume_to_hub", "after"),
-        ("settings_to_hub", "after"),
-    )
+    ("create_discipline_to_hub", "after"): "hub_pristine_second_new_game",
+    ("hub_to_pause", "before"): "hub_resumed",
+    ("pause_to_hub_resume", "after"): "hub_resumed",
+    ("profile_select_resume_to_hub", "after"): "hub_resumed",
+    ("settings_to_hub", "after"): "hub_resumed",
 }
 
 PATH_DEPENDENT_BASELINE_ALIASES = {
@@ -406,11 +428,13 @@ def _logical_key(value: str) -> str:
 
 
 def _resolve_layout_id(
+    repo_root: Path,
     logical_name: str,
     native_screen_id: str,
     fixtures: dict[str, dict[str, Any]],
     edge_id: str,
     endpoint_key: str,
+    baseline_id: str,
 ) -> tuple[str, bool]:
     logical_candidates = [
         layout_id
@@ -434,8 +458,19 @@ def _resolve_layout_id(
         if len(native_candidates) == 1:
             layout_id = native_candidates[0]
         else:
+            try:
+                profile_layout_id = resolve_navigation_profile_binding(
+                    repo_root,
+                    edge_id=edge_id,
+                    endpoint=endpoint_key,
+                    baseline_id=baseline_id,
+                )
+            except NativeMenuProfileStateError as error:
+                raise CampaignResolutionError(str(error)) from error
             mapping_key = (edge_id, endpoint_key)
-            layout_id = NAVIGATION_ENDPOINT_LAYOUT_IDS.get(mapping_key, "")
+            layout_id = profile_layout_id or NAVIGATION_ENDPOINT_LAYOUT_IDS.get(
+                mapping_key, ""
+            )
             if not layout_id:
                 raise CampaignResolutionError(
                     f"navigation endpoint '{logical_name}' screen "
@@ -464,6 +499,9 @@ def _validate_profile_state(
     evidence_root: Path,
     header: dict[str, Any],
     label: str,
+    *,
+    required_baseline_id: str | None = None,
+    binding_label: str | None = None,
 ) -> dict[str, Any]:
     try:
         return validate_capture_profile_state(
@@ -471,6 +509,8 @@ def _validate_profile_state(
             header=header,
             label=label,
             evidence_root=evidence_root,
+            required_baseline_id=required_baseline_id,
+            binding_label=binding_label,
         )
     except NativeMenuProfileStateError as error:
         raise CampaignResolutionError(str(error)) from error
@@ -505,6 +545,7 @@ def collect_standalones(
     fixtures: dict[str, dict[str, Any]] = {}
     observations: dict[str, list[dict[str, Any]]] = {}
     for path in paths:
+        layout_id = path.stem
         fixture = read_object(path)
         if fixture.get("schema") not in {
             "solomon-dark-native-menu-layout-v2",
@@ -515,7 +556,14 @@ def collect_standalones(
         if not isinstance(header, dict):
             raise CampaignResolutionError(f"{path} has no capture header")
         profile_state = _validate_profile_state(
-            repo_root, evidence_root, header, str(path)
+            repo_root,
+            evidence_root,
+            header,
+            str(path),
+            required_baseline_id=required_baseline_for_layout(
+                repo_root, layout_id
+            ),
+            binding_label=f"layout '{layout_id}'",
         )
         source = _source(header, str(path))
         raw_receipt = header.get("settlement_trace", header.get("raw_recording"))
@@ -532,7 +580,12 @@ def collect_standalones(
         if not isinstance(raw_header, dict):
             raise CampaignResolutionError(f"{raw_path} has no capture header")
         _validate_profile_state(
-            repo_root, evidence_root, raw_header, str(raw_path)
+            repo_root,
+            evidence_root,
+            raw_header,
+            str(raw_path),
+            required_baseline_id=profile_state["baseline_id"],
+            binding_label=f"layout '{layout_id}' raw settlement",
         )
         primary_samples = _settled_samples(raw_trace, str(raw_path))
         primary_payload = primary_samples[0].get("payload")
@@ -553,7 +606,6 @@ def collect_standalones(
             raw_header.get("browser_tab_verification"),
             str(raw_path),
         )
-        layout_id = path.stem
         if layout_id in fixtures:
             raise CampaignResolutionError(
                 f"standalone fixture id '{layout_id}' is ambiguous"
@@ -635,17 +687,35 @@ def collect_standalones(
             evidence_root,
             confirmation_header,
             str(confirmation_path),
+            required_baseline_id=profile_state["baseline_id"],
+            binding_label=f"layout '{layout_id}' confirmation",
         )
-        if confirmation_profile_state["identity"] != profile_state["identity"]:
+        if confirmation_profile_state["baseline_id"] != profile_state["baseline_id"]:
             raise CampaignResolutionError(
-                f"{path} confirmation changed profile-state identity"
+                f"{path} confirmation changed profile-state baseline"
+            )
+        if profile_state["baseline_id"] != FRESH_BASELINE_ID and {
+            profile_state["witness_role"],
+            confirmation_profile_state["witness_role"],
+        } != {"primary", "confirmation"}:
+            raise CampaignResolutionError(
+                f"{path} derived confirmation did not use both pinned witness roles"
             )
         if _screen_id(confirmation_samples, str(confirmation_path)) != native_screen_id:
             raise CampaignResolutionError(f"{path} confirmation changed native screen")
-        if canonical_bytes(source) != canonical_bytes(
-            _source(confirmation_header, str(confirmation_path))
-        ):
-            raise CampaignResolutionError(f"{path} confirmation changed provenance")
+        confirmation_source = _source(
+            confirmation_header, str(confirmation_path)
+        )
+        _assert_runtime_provenance_matches(
+            confirmation_source,
+            source,
+            f"{path} confirmation",
+        )
+        for field in ("base_commit_sha", "source_tree_sha"):
+            if confirmation_source[field] != source[field]:
+                raise CampaignResolutionError(
+                    f"{path} confirmation changed provenance field '{field}'"
+                )
         primary_identity = _identity(header, str(path))
         confirmation_identity = _identity(
             confirmation_header, str(confirmation_path)
@@ -738,12 +808,20 @@ def collect_navigation(
                     raise CampaignResolutionError(
                         f"edge {edge_id} {label} {side} is incomplete"
                     )
-                _validate_profile_state(
+                profile_state = _validate_profile_state(
                     repo_root,
                     evidence_root,
                     header,
                     f"edge {edge_id} {label}",
                 )
+                try:
+                    assert_navigation_baseline_allowed(
+                        repo_root,
+                        edge_id=edge_id,
+                        baseline_id=profile_state["baseline_id"],
+                    )
+                except NativeMenuProfileStateError as error:
+                    raise CampaignResolutionError(str(error)) from error
                 _source(header, f"edge {edge_id} {label}")
                 trace = endpoint.get("settlement_trace")
                 if not isinstance(trace, dict):
@@ -783,11 +861,13 @@ def collect_navigation(
                         f"edge {edge_id} has no logical {side} screen name"
                     )
                 layout_id, used_explicit_mapping = _resolve_layout_id(
+                    repo_root,
                     logical_name,
                     native_screen_id,
                     fixtures,
                     edge_id,
                     endpoint_key,
+                    profile_state["baseline_id"],
                 )
                 if used_explicit_mapping:
                     explicit_layout_ids.add((edge_id, endpoint_key))
@@ -814,6 +894,10 @@ def collect_navigation(
     applicable_explicit_layout_ids = {
         key
         for key in NAVIGATION_ENDPOINT_LAYOUT_IDS
+        if key[0] in by_label["primary"]
+    } | {
+        key
+        for key in PATH_DEPENDENT_CORE_ENDPOINTS
         if key[0] in by_label["primary"]
     }
     if explicit_layout_ids != applicable_explicit_layout_ids:
@@ -1186,10 +1270,20 @@ def validate_path_dependent_core_forks(
     fixtures: dict[str, dict[str, Any]],
     resolutions: dict[str, dict[str, Any]],
     endpoint_layouts: dict[tuple[str, str], str],
+    repo_root: Path | None = None,
 ) -> list[dict[str, Any]]:
-    """Prove the v2.6 Hub fork and its complete deterministic route binding."""
+    """Prove the exact v2.6-v2.13 Hub fork and baseline-qualified routes."""
 
-    expected_layouts = set(PATH_DEPENDENT_CORE_LAYOUTS)
+    root = repo_root or Path(__file__).resolve().parents[1]
+    try:
+        binding_contract = load_hub_binding_contract(root)["value"]
+    except NativeMenuProfileStateError as error:
+        raise CampaignResolutionError(str(error)) from error
+    expected_layouts = set(binding_contract["layouts"])
+    if expected_layouts != set(PATH_DEPENDENT_CORE_LAYOUTS):
+        raise CampaignResolutionError(
+            "path-dependent core contract: code and generated Hub layout registries disagree"
+        )
     reached_layouts = {
         layout_id
         for layout_id, record in fixtures.items()
@@ -1221,7 +1315,6 @@ def validate_path_dependent_core_forks(
         )
 
     counts: dict[str, int] = {}
-    receipts: set[bytes] = set()
     audit_rows: list[dict[str, Any]] = []
     for layout_id, policy in PATH_DEPENDENT_CORE_LAYOUTS.items():
         resolution = resolutions.get(layout_id)
@@ -1249,7 +1342,47 @@ def validate_path_dependent_core_forks(
             raise CampaignResolutionError(
                 f"path-dependent core contract: '{layout_id}' lost its fork audit receipt"
             )
-        receipts.add(canonical_bytes(receipt))
+        contract_layout = binding_contract["layouts"][layout_id]
+        if any(
+            metadata.get(field) != contract_layout.get(field)
+            for field in (
+                "parent_screen_id",
+                "path_qualifier",
+                "selector",
+                "required_baseline_id",
+                "measured_settled_element_count",
+            )
+        ):
+            raise CampaignResolutionError(
+                f"path-dependent core contract: '{layout_id}' changed its exact v2.13 selector"
+            )
+        if receipt != contract_layout.get("fork_decision"):
+            raise CampaignResolutionError(
+                f"path-dependent core contract: '{layout_id}' changed its authorized STOP receipt"
+            )
+        if "resolved_semantic_multiset_sha256" in contract_layout:
+            primary_payload = record["primary_observation"]["samples"][0].get(
+                "payload"
+            )
+            confirmation_payload = record["confirmation_observation"][
+                "samples"
+            ][0].get("payload")
+            if not isinstance(primary_payload, dict) or not isinstance(
+                confirmation_payload, dict
+            ):
+                raise CampaignResolutionError(
+                    f"path-dependent core contract: '{layout_id}' lost settled payloads"
+                )
+            try:
+                validate_exact_hub_layout_pair(
+                    root,
+                    layout_id=layout_id,
+                    primary_layout=primary_payload,
+                    confirmation_layout=confirmation_payload,
+                    baseline_id=contract_layout["required_baseline_id"],
+                )
+            except NativeMenuProfileStateError as error:
+                raise CampaignResolutionError(str(error)) from error
         audit_rows.append(
             {
                 "layout_id": layout_id,
@@ -1260,22 +1393,25 @@ def validate_path_dependent_core_forks(
                 ],
                 "structural_core_sha256": resolution["structural_core_sha256"],
                 "fork_decision": copy.deepcopy(receipt),
+                "required_baseline_id": contract_layout[
+                    "required_baseline_id"
+                ],
                 "bound_navigation_endpoints": [
-                    {"edge_id": edge_id, "endpoint": endpoint}
-                    for (edge_id, endpoint), bound_layout in sorted(
-                        PATH_DEPENDENT_CORE_ENDPOINTS.items()
-                    )
-                    if bound_layout == layout_id
+                    {
+                        "edge_id": binding["edge_id"],
+                        "endpoint": binding["endpoint"],
+                        "required_baseline_id": binding[
+                            "required_baseline_id"
+                        ],
+                    }
+                    for binding in binding_contract["bindings"]
+                    if binding["layout_id"] == layout_id
                 ],
             }
         )
     if len(set(counts.values())) != len(counts):
         raise CampaignResolutionError(
             "path-dependent core contract: Hub variants do not differ in element census"
-        )
-    if len(receipts) != 1:
-        raise CampaignResolutionError(
-            "path-dependent core contract: Hub variants cite different fork audits"
         )
     return audit_rows
 
@@ -1462,7 +1598,9 @@ def resolve_campaign(
     )
 
     path_dependent_core_audit = (
-        validate_path_dependent_core_forks(fixtures, resolutions, endpoint_layouts)
+        validate_path_dependent_core_forks(
+            fixtures, resolutions, endpoint_layouts, repo_root
+        )
         if any(record["native_screen_id"] == "hub" for record in fixtures.values())
         else []
     )
@@ -1471,6 +1609,32 @@ def resolve_campaign(
     for layout_id, record in fixtures.items():
         fixture = copy.deepcopy(record["value"])
         fixture["schema"] = "solomon-dark-native-menu-layout-v3"
+        fixture_profile_state = fixture["header"].get("profile_state")
+        if not isinstance(fixture_profile_state, dict):
+            raise CampaignResolutionError(
+                f"standalone '{layout_id}' lost profile-state provenance during resolution"
+            )
+        fixture_profile_state["baseline_id"] = record["profile_state"][
+            "baseline_id"
+        ]
+        fixture_profile_state["binding_contract"] = {
+            "repo_relative_path": (
+                "tests/fixtures/webgame/native-menu-hub-bindings-v213.json"
+            ),
+            "sha256": record["profile_state"][
+                "binding_contract_sha256"
+            ],
+            "bytes": record["profile_state"]["binding_contract_bytes"],
+        }
+        witness_role = record["profile_state"]["witness_role"]
+        if witness_role is not None:
+            fixture_profile_state["derivation_witness_role"] = witness_role
+        fixture["header"]["profile_state_binding"] = {
+            "baseline_id": record["profile_state"]["baseline_id"],
+            "layout_id": layout_id,
+            "edge_id": "",
+            "derivation_witness_role": witness_role or "",
+        }
         fixture["layout"] = copy.deepcopy(layouts[layout_id])
         fixture["header"]["settlement"] = settlement_summary(
             record["primary_observation"], resolutions[layout_id]
@@ -1519,6 +1683,49 @@ def resolve_campaign(
     }
     if len(edge_by_id) != len(resolved_navigation.get("edges", [])):
         raise CampaignResolutionError("resolved navigation edge ids are ambiguous")
+    for edge_id, edge in edge_by_id.items():
+        edge_header = edge.get("header")
+        if not isinstance(edge_header, dict):
+            raise CampaignResolutionError(
+                f"resolved edge '{edge_id}' has no capture header"
+            )
+        edge_profile = _validate_profile_state(
+            repo_root,
+            evidence_root,
+            edge_header,
+            f"resolved edge {edge_id}",
+        )
+        try:
+            assert_navigation_baseline_allowed(
+                repo_root,
+                edge_id=edge_id,
+                baseline_id=edge_profile["baseline_id"],
+            )
+        except NativeMenuProfileStateError as error:
+            raise CampaignResolutionError(str(error)) from error
+        profile_payload = edge_header.get("profile_state")
+        if not isinstance(profile_payload, dict):
+            raise CampaignResolutionError(
+                f"resolved edge '{edge_id}' lost profile-state provenance"
+            )
+        profile_payload["baseline_id"] = edge_profile["baseline_id"]
+        profile_payload["binding_contract"] = {
+            "repo_relative_path": (
+                "tests/fixtures/webgame/native-menu-hub-bindings-v213.json"
+            ),
+            "sha256": edge_profile["binding_contract_sha256"],
+            "bytes": edge_profile["binding_contract_bytes"],
+        }
+        if edge_profile["witness_role"] is not None:
+            profile_payload["derivation_witness_role"] = edge_profile[
+                "witness_role"
+            ]
+        edge_header["profile_state_binding"] = {
+            "baseline_id": edge_profile["baseline_id"],
+            "layout_id": "",
+            "edge_id": edge_id,
+            "derivation_witness_role": edge_profile["witness_role"] or "",
+        }
     for (edge_id, endpoint_key), layout_id in endpoint_layouts.items():
         edge = edge_by_id[edge_id]
         endpoint = edge[endpoint_key]

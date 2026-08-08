@@ -84,6 +84,9 @@ $profileStateDirectory = [IO.Path]::ChangeExtension(
     $outputItemPath,
     $null
 ) + ".profile-state"
+$profileStateBinding = Get-NativeMenuProfileStateBinding `
+    -Context $context `
+    -EdgeId $EdgeId
 $profileState = Copy-NativeMenuProfileStateEvidence `
     -Context $context `
     -DestinationDirectory $profileStateDirectory `
@@ -358,6 +361,7 @@ return 'key'
             process_id = $ProcessId
             source = $context.Source
             profile_state = $profileState
+            profile_state_binding = $profileStateBinding
             rejected_at_utc = [DateTime]::UtcNow.ToString("o")
         }
         [IO.File]::WriteAllText(
@@ -403,6 +407,7 @@ return 'key'
             process_id = $ProcessId
             source = $context.Source
             profile_state = $profileState
+            profile_state_binding = $profileStateBinding
             recorded_live = $true
             captured_at_utc = $capturedAtUtc
         }
@@ -415,6 +420,7 @@ return 'key'
                 process_id = $ProcessId
                 source = $context.Source
                 profile_state = $profileState
+                profile_state_binding = $profileStateBinding
                 capture_method = [string]$fixture.header.capture_method
                 recorded_live = $true
                 captured_at_utc = $capturedAtUtc

@@ -1,4 +1,4 @@
-# Native menu settlement specification v2.11
+# Native menu settlement specification v2.13
 
 This specification governs every G11 native-menu standalone and navigation
 endpoint recording. Its rule is: what two independent fresh instances
@@ -53,18 +53,58 @@ core count. In particular, a member such as resumed Hub's motion-capable
 it outside the reproduced structural core. The resolver pins both values and
 the core hash independently.
 
-The only authorized G11 fork is Hub:
+The only authorized G11 fork is Hub. It has three exact layouts:
 
-- `hub_new_game` is selected by `create_discipline_to_hub` entering a new-game
-  session.
+- `hub_pristine_second_new_game` is selected under the pristine baseline by
+  the same-process route first-run Hub -> Main Menu -> New Game -> Create ->
+  Hub.
+- `hub_new_game` is selected by direct New Game -> Create -> Hub only under
+  the receipted two-action derived baseline described below.
 - `hub_resumed` is selected by durable resumed-run state for the Hub source of
   `hub_to_pause` and the Hub destinations of `pause_to_hub_resume`,
   `profile_select_resume_to_hub`, and `settings_to_hub`.
 
-Both layouts cite the same hashed
-`hub-path-dependent-core-stop-audit.json` decision evidence. Their element
-censuses are measurements carried by the fixtures and re-derived by the
-resolver; this document does not duplicate those golden values.
+Each layout cites its own accepted, hashed decision evidence. Their element
+censuses and exact semantic multisets are measurements carried by the generated
+binding contract and re-derived by the resolver; this document does not
+duplicate those golden values.
+
+## Hub baseline legitimacy and exact path bindings
+
+Settlement v2.12 adds the `hub_pristine_second_new_game` state. Two independent
+instances reproduced the same settled layout reached from the pinned pristine
+baseline, in the same process, after returning from the first-run Hub to Main
+Menu and entering New Game again. That state contains the five full-presence
+`LevelPicker.0/.2/.4/.5/.6` members and motion-capable `UI.28`. It is a third
+layout, not a replacement for either earlier fork, and the exact multiset is
+valid only on that path and baseline.
+
+Settlement v2.13 closes the provenance defect behind the retained
+`hub_new_game` content. The old v7 captures copied retail durable state into
+their stages, so their content could not establish a legitimate baseline even
+though it settled. Starting independently from pristine profiles, the bounded
+restart experiment and durable-variable bisection found a deterministic
+in-game derivation. Contact with the unique type-5003 Annalist changes
+`class_enabled[0]`; after a clean Leave Game, Quit, and relaunch, contact with
+the unique type-5004 PotionGuy/Fomentius changes `class_enabled[1]`; a second
+clean exit and relaunch then makes direct New Game reproduce the retained Hub
+multiset in both instances. The first field suppresses `UI.28`; the second
+promotes the five LevelPicker members from null to their reproduced visible
+geometry. Write watches observed exactly one native change for each action,
+and an isolated two-field replay reproduced the same result. Thus the v7
+content is vindicated while its copied-profile provenance remains invalid.
+
+No capture baseline may be made by copying profile or durable state from any
+install. A baseline is either the pinned pristine `fresh_install` state or is
+derived from it by a documented, deterministic, receipted in-game procedure.
+Every layout and navigation edge records a baseline id; the recorder and
+promoter match the capture's exact machine-derived profile identity to one
+unambiguous registry witness and then enforce the binding's required baseline.
+The fresh `create_discipline_to_hub.after` endpoint binds to
+`hub_pristine_second_new_game`; the same endpoint under the two-action derived
+baseline binds to `hub_new_game`. All resumed-Hub bindings remain pristine.
+An unknown identity, wrong derivation receipt, wrong baseline for a binding,
+or reuse of either exact multiset at another layout/path is a named STOP.
 
 ## Animated families
 
@@ -191,6 +231,14 @@ All v2.1-v2.10 rules remain active, and no general settled-only-member tolerance
 was added.
 
 ## Changelog
+
+- **v2.13 — 2026-08-08:** the accepted Hub provenance-boundary STOP was
+  resolved by a two-instance, pristine-derived Annalist then
+  PotionGuy/Fomentius procedure. Added the exact second baseline and
+  per-binding qualification; copied install state is explicitly forbidden.
+- **v2.12 — 2026-08-08:** the accepted pristine-path STOP added the exact
+  second-New-Game Hub layout reached in the same process from the pristine
+  first-run Hub. No existing Hub binding was widened or replaced.
 
 - **v2.11 — 2026-08-07:** the accepted Controls structural-core STOP proved
   that the old fixture combined the complete G11 session-bleed block with
