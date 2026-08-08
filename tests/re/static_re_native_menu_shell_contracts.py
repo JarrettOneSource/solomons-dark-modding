@@ -1297,6 +1297,15 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
         support,
         r"function Get-NativeMenuExpectedBrowserTab.*?"
         r"\"dark_cloud_browser\" \{ return \"online_levels\" \}.*?"
+        r"function Get-NativeMenuCaptureSurfaceId.*?"
+        r"create_element.*?create_discipline.*?return \"create\".*?"
+        r"beta_notice.*?return \"dialog\".*?"
+        r"pause_menu.*?dark_cloud_menu.*?return \"simple_menu\".*?"
+        r"profile_save_select.*?return \"main_menu\".*?"
+        r"dark_cloud_search.*?return \"quick_panel\".*?"
+        r"dark_cloud_sort.*?dark_cloud_options.*?"
+        r"dark_cloud_login_settings.*?return \"dark_cloud_browser\".*?"
+        r"skill_picker.*?return \"spell_picker\".*?"
         r"function Resolve-NativeMenuBrowserTabState.*?"
         r"dark_cloud_browser\.recent.*?"
         r"dark_cloud_browser\.online_levels.*?"
@@ -1309,8 +1318,9 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
         r"Status = \"wrong_tab\".*?"
         r"if \(\$probe\.Status -in "
         r"@\(\"wrong_surface\", \"wrong_tab\"\)\)",
-        "the browser driver no longer classifies the selected tab from all six "
-        "measured brackets or fails at capture time on a wrong tab",
+        "the recorder no longer maps logical layouts to their exact machine "
+        "surface, classifies browser tabs from all six measured brackets, or "
+        "fails at capture time on a wrong tab",
     )
     _require_regex(
         browser_python,

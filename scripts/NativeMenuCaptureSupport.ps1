@@ -80,15 +80,30 @@ function Test-NativeMenuScreenTagsEquivalent {
 function Get-NativeMenuCaptureSurfaceId {
     param([Parameter(Mandatory = $true)][string]$ScreenTag)
 
-    if ($ScreenTag -in @(
-        "dark_cloud_browser",
-        "dark_cloud_recent",
-        "dark_cloud_online_levels",
-        "dark_cloud_my_levels"
-    )) {
-        return "dark_cloud_browser"
+    switch ($ScreenTag) {
+        { $_ -in @("create_element", "create_discipline") } {
+            return "create"
+        }
+        "beta_notice" { return "dialog" }
+        { $_ -in @("pause_menu", "dark_cloud_menu") } {
+            return "simple_menu"
+        }
+        "profile_save_select" { return "main_menu" }
+        "dark_cloud_search" { return "quick_panel" }
+        { $_ -in @(
+            "dark_cloud_browser",
+            "dark_cloud_recent",
+            "dark_cloud_online_levels",
+            "dark_cloud_my_levels",
+            "dark_cloud_sort",
+            "dark_cloud_options",
+            "dark_cloud_login_settings"
+        ) } {
+            return "dark_cloud_browser"
+        }
+        "skill_picker" { return "spell_picker" }
+        default { return $ScreenTag }
     }
-    return $ScreenTag
 }
 
 function Get-NativeMenuExpectedBrowserTab {
