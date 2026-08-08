@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mutation-audit every Settlement v2.1-v2.10 native-menu claim."""
+"""Mutation-audit every Settlement v2.1-v2.11 native-menu claim."""
 
 from __future__ import annotations
 
@@ -573,6 +573,7 @@ CAMPAIGN = "test_native_menu_motion_capability_campaign_resolution_is_fail_close
 PATH_FORK = "test_native_menu_path_dependent_core_fork_is_exact"
 SURFACE_AGREEMENT = "test_native_menu_capture_surface_agreement_is_fail_closed"
 TITLE_V210 = "test_native_menu_v210_controls_title_correction_is_exact"
+CORE_V211 = "test_native_menu_v211_controls_core_supersession_is_exact"
 
 
 BEHAVIOR_MUTATIONS: tuple[BehaviorMutation, ...] = (
@@ -793,6 +794,51 @@ BEHAVIOR_MUTATIONS: tuple[BehaviorMutation, ...] = (
 
 STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
     StaticMutation(
+        "v2.4.population-witness-ambiguity-refusal",
+        OVERLAY,
+        "tools/promote_native_menu_recapture.py",
+        "if len(qualifying_navigation) > 1:",
+        "if False and len(qualifying_navigation) > 1:",
+        "overlay generation proof can select an unpaired, wrong-layout, or "
+        "ambiguous navigation witness",
+    ),
+    StaticMutation(
+        "v2.11.controls-layout-scope",
+        CORE_V211,
+        "tools/native_menu_landed_diagnosis_v25.py",
+        'layout_id != contract["layout_id"]',
+        '"controls" != contract["layout_id"]',
+        "Settlement v2.11 runtime can accept a non-exact receipt, layout, or "
+        "semantic multiset",
+    ),
+    StaticMutation(
+        "v2.11.final-context-gate",
+        CORE_V211,
+        "tools/promote_native_menu_recapture.py",
+        "controls_core_context = _validate_controls_context_v211(",
+        "controls_core_context = dict(",
+        "standalone, transition-source, or final promotion can bypass the "
+        "exact v2.11 Controls contract and context gate",
+    ),
+    StaticMutation(
+        "v2.11.real-candidate-mutation-scope",
+        CORE_V211,
+        "tools/run_native_menu_v211_controls_core_mutations.py",
+        '"wrong_layout_claim",',
+        '"wrong_layout_claim_disabled",',
+        "the real v2.11 mutation table no longer proves exact positive, drop, "
+        "mutate, add, and wrong-layout behavior with green baselines",
+    ),
+    StaticMutation(
+        "v2.11.versioned-specification",
+        CORE_V211,
+        "docs/reverse-engineering/native-menu-settlement.md",
+        "# Native menu settlement specification v2.11",
+        "# Native menu settlement specification v2.10",
+        "the versioned settlement specification no longer records the exact "
+        "Controls structural STOP and bounded v2.11 supersession",
+    ),
+    StaticMutation(
         "v2.10.controls-layout-scope",
         TITLE_V210,
         "tools/native_menu_landed_diagnosis_v25.py",
@@ -814,7 +860,7 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "v2.10.versioned-specification",
         TITLE_V210,
         "docs/reverse-engineering/native-menu-settlement.md",
-        "# Native menu settlement specification v2.10",
+        "# Native menu settlement specification v2.11",
         "# Native menu settlement specification v2.9",
         "the versioned settlement specification no longer records the exact "
         "Controls title STOP and bounded v2.10 correction",
@@ -905,7 +951,7 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "v2.6.spec-version-and-stop-changelog",
         PATH_FORK,
         "docs/reverse-engineering/native-menu-settlement.md",
-        "# Native menu settlement specification v2.10",
+        "# Native menu settlement specification v2.11",
         "# Native menu settlement specification v2.8",
         "the versioned settlement specification no longer records the narrow "
         "path-dependent-core rule and the STOP that caused it",
@@ -1488,7 +1534,7 @@ def main() -> int:
 
     payload = {
         "schema": "solomon-dark-native-menu-contract-mutations-v1",
-        "settlement_spec": "2.10",
+        "settlement_spec": "2.11",
         "count": len(results),
         "results": [asdict(result) for result in results],
     }

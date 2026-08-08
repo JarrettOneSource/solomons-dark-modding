@@ -31,6 +31,7 @@ from native_menu_ambient_lifecycle import (
 )
 from native_menu_landed_diagnosis_v25 import (
     LandedDiagnosisError,
+    _population_evidence,
     diagnose_landed_layout,
     diagnosis_prereference_residual,
     semantic_overlay_corroboration,
@@ -60,6 +61,10 @@ def file_sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def file_receipt(path: Path) -> dict[str, Any]:
+    return {"sha256": file_sha256(path), "bytes": path.stat().st_size}
 
 
 def require_unique_files(root: Path, pattern: str, expected: set[str]) -> dict[str, Path]:
@@ -1387,6 +1392,398 @@ def _navigation_endpoint_signature_v25(endpoint: dict[str, Any]) -> dict[str, An
     }
 
 
+def _navigation_population_trace_pairs_v25(
+    resolved_navigation: dict[str, Any],
+    confirmation_path: Path,
+    required_layouts: dict[str, dict[str, Any]],
+) -> dict[str, list[dict[str, Any]]]:
+    if not required_layouts:
+        return {}
+    confirmation_navigation = read_json(confirmation_path)
+
+    def edge_map(recording: dict[str, Any], label: str) -> dict[str, dict[str, Any]]:
+        edges = recording.get("edges")
+        if not isinstance(edges, list) or not edges:
+            raise PromotionError(
+                f"{label} population-witness routing reached no navigation edges"
+            )
+        result = {
+            edge.get("id"): edge
+            for edge in edges
+            if isinstance(edge, dict) and isinstance(edge.get("id"), str)
+        }
+        if len(result) != len(edges):
+            raise PromotionError(
+                f"{label} population-witness edge lookup is absent or ambiguous"
+            )
+        return result
+
+    primary_by_id = edge_map(resolved_navigation, "primary resolved")
+    confirmation_by_id = edge_map(
+        confirmation_navigation, "confirmation raw"
+    )
+    if set(primary_by_id) != set(confirmation_by_id):
+        raise PromotionError(
+            "population-witness routing changed the paired navigation edge census"
+        )
+    result: dict[str, list[dict[str, Any]]] = {}
+    for edge_id in sorted(primary_by_id):
+        primary_edge = primary_by_id[edge_id]
+        confirmation_edge = confirmation_by_id[edge_id]
+        primary_header = primary_edge.get("header")
+        confirmation_header = confirmation_edge.get("header")
+        if not isinstance(primary_header, dict) or not isinstance(
+            confirmation_header, dict
+        ):
+            raise PromotionError(
+                f"edge {edge_id} population-witness headers are absent"
+            )
+        primary_identity = (
+            primary_header.get("instance"),
+            primary_header.get("process_id"),
+        )
+        confirmation_identity = (
+            confirmation_header.get("instance"),
+            confirmation_header.get("process_id"),
+        )
+        if (
+            not isinstance(primary_identity[0], str)
+            or not isinstance(primary_identity[1], int)
+            or not isinstance(confirmation_identity[0], str)
+            or not isinstance(confirmation_identity[1], int)
+            or primary_identity == confirmation_identity
+        ):
+            raise PromotionError(
+                f"edge {edge_id} population-witness pair is not two fresh instances"
+            )
+        for side in ("before", "after"):
+            primary_endpoint = primary_edge.get(side)
+            confirmation_endpoint = confirmation_edge.get(side)
+            if not isinstance(primary_endpoint, dict) or not isinstance(
+                confirmation_endpoint, dict
+            ):
+                raise PromotionError(
+                    f"edge {edge_id} {side} population-witness endpoint is absent"
+                )
+            layout_id = primary_endpoint.get("layout_id")
+            primary_trace = primary_endpoint.get("settlement_trace")
+            confirmation_trace = confirmation_endpoint.get("settlement_trace")
+            if (
+                not isinstance(layout_id, str)
+                or not isinstance(primary_trace, dict)
+                or not isinstance(confirmation_trace, dict)
+            ):
+                raise PromotionError(
+                    f"edge {edge_id} {side} population-witness trace is incomplete"
+                )
+            if layout_id not in required_layouts:
+                continue
+            if canonical_bytes(primary_endpoint.get("layout")) != canonical_bytes(
+                required_layouts[layout_id]
+            ):
+                raise PromotionError(
+                    f"edge {edge_id} {side} population witness does not bind "
+                    f"the resolved standalone {layout_id}"
+                )
+            result.setdefault(layout_id, []).append(
+                {
+                    "edge_id": edge_id,
+                    "side": side,
+                    "primary_identity": list(primary_identity),
+                    "confirmation_identity": list(confirmation_identity),
+                    "primary_trace": primary_trace,
+                    "confirmation_trace": confirmation_trace,
+                }
+            )
+    if "create-discipline" in required_layouts and "create-discipline" not in result:
+        raise PromotionError(
+            "population-witness routing did not reach create-discipline"
+        )
+    return result
+
+
+def _select_population_trace_pair_v25(
+    layout_id: str,
+    landed_generation: Any,
+    settled_generation: Any,
+    standalone_primary: dict[str, Any],
+    standalone_confirmation: dict[str, Any],
+    navigation_pairs: dict[str, list[dict[str, Any]]],
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    def qualifies(
+        primary_trace: dict[str, Any], confirmation_trace: dict[str, Any], label: str
+    ) -> tuple[bool, dict[str, Any]]:
+        primary = _population_evidence(primary_trace, f"{label} primary")
+        confirmation = _population_evidence(
+            confirmation_trace, f"{label} confirmation"
+        )
+
+        def settled_generations(trace: dict[str, Any]) -> set[Any]:
+            samples = trace.get("settled_window_samples")
+            if not isinstance(samples, list) or not samples:
+                raise PromotionError(
+                    f"{label} population witness has no settled sample window"
+                )
+            values: set[Any] = set()
+            for sample in samples:
+                payload = sample.get("payload") if isinstance(sample, dict) else None
+                if not isinstance(payload, dict):
+                    raise PromotionError(
+                        f"{label} population witness has a sample without payload"
+                    )
+                values.add(payload.get("generation"))
+            return values
+
+        detail = {
+            "primary_generation_trace": primary["generation_trace"],
+            "confirmation_generation_trace": confirmation["generation_trace"],
+            "primary_settled_generations": sorted(
+                settled_generations(primary_trace)
+            ),
+            "confirmation_settled_generations": sorted(
+                settled_generations(confirmation_trace)
+            ),
+        }
+        return (
+            landed_generation in primary["generation_trace"]
+            and landed_generation in confirmation["generation_trace"],
+            detail,
+        )
+
+    if landed_generation == settled_generation:
+        return (
+            standalone_primary,
+            standalone_confirmation,
+            {"source": "standalone_pair", "generation_witness_required": False},
+        )
+    standalone_qualifies, standalone_detail = qualifies(
+        standalone_primary,
+        standalone_confirmation,
+        f"{layout_id} standalone",
+    )
+    if standalone_qualifies:
+        return (
+            standalone_primary,
+            standalone_confirmation,
+            {
+                "source": "standalone_pair",
+                "generation_witness_required": True,
+                **standalone_detail,
+            },
+        )
+    qualifying_navigation: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    for pair in navigation_pairs.get(layout_id, []):
+        qualified, detail = qualifies(
+            pair["primary_trace"],
+            pair["confirmation_trace"],
+            f"{layout_id} edge {pair['edge_id']} {pair['side']}",
+        )
+        if qualified:
+            qualifying_navigation.append((pair, detail))
+    if len(qualifying_navigation) > 1:
+        identities = [
+            (pair["edge_id"], pair["side"])
+            for pair, _ in qualifying_navigation
+        ]
+        raise PromotionError(
+            f"{layout_id} population-witness routing is ambiguous: {identities}"
+        )
+    if len(qualifying_navigation) == 1:
+        pair, detail = qualifying_navigation[0]
+        return (
+            pair["primary_trace"],
+            pair["confirmation_trace"],
+            {
+                "source": "paired_navigation_endpoint",
+                "edge_id": pair["edge_id"],
+                "side": pair["side"],
+                "primary_identity": pair["primary_identity"],
+                "confirmation_identity": pair["confirmation_identity"],
+                "generation_witness_required": True,
+                **detail,
+            },
+        )
+    return (
+        standalone_primary,
+        standalone_confirmation,
+        {
+            "source": "standalone_pair_without_landed_generation_witness",
+            "generation_witness_required": True,
+            **standalone_detail,
+        },
+    )
+
+
+def _controls_settled_identity_v211(
+    samples: list[dict[str, Any]], header: dict[str, Any], label: str
+) -> dict[str, Any]:
+    if len(samples) < 40:
+        raise PromotionError(f"v2.11 {label} has fewer than 40 settled samples")
+    surfaces: set[Any] = set()
+    screens: set[Any] = set()
+    titles: set[Any] = set()
+    semantic_generations: set[Any] = set()
+    layout_generations: set[Any] = set()
+    for sample in samples:
+        payload = sample.get("payload")
+        if not isinstance(payload, dict):
+            raise PromotionError(f"v2.11 {label} contains a sample without payload")
+        surfaces.add(sample.get("semantic_surface"))
+        screens.add(payload.get("screen_id"))
+        titles.add(payload.get("screen_title"))
+        semantic_generations.add(sample.get("semantic_generation"))
+        layout_generations.add(payload.get("generation"))
+    if (
+        surfaces != {"controls"}
+        or screens != {"controls"}
+        or titles != {"Wizard Controls"}
+        or len(semantic_generations) != 1
+        or len(layout_generations) != 1
+    ):
+        raise PromotionError(
+            f"v2.11 {label} lost capture-time classifier/tag agreement"
+        )
+    return {
+        "instance": header.get("instance"),
+        "process_id": header.get("process_id"),
+        "sample_count": len(samples),
+        "stable_span_milliseconds": (
+            samples[-1].get("elapsed_milliseconds", 0)
+            - samples[0].get("elapsed_milliseconds", 0)
+        ),
+        "semantic_surface": "controls",
+        "operator_tagged_screen": "controls",
+        "screen_title": "Wizard Controls",
+        "semantic_generation": next(iter(semantic_generations)),
+        "layout_generation": next(iter(layout_generations)),
+    }
+
+
+def _validate_controls_context_v211(
+    contract: dict[str, Any],
+    record: dict[str, Any],
+    candidate_path: Path,
+    evidence_root: Path,
+    resolved_navigation: dict[str, Any],
+) -> dict[str, Any]:
+    if contract.get("schema") != (
+        "solomon-dark-native-menu-controls-core-supersession-v211"
+    ):
+        raise PromotionError("v2.11 Controls structural contract schema is invalid")
+    expected_candidate = contract.get("superseding_candidate_fixture")
+    if not isinstance(expected_candidate, dict) or file_receipt(candidate_path) != {
+        "sha256": expected_candidate.get("sha256"),
+        "bytes": expected_candidate.get("bytes"),
+    }:
+        raise PromotionError(
+            "v2.11 exact Controls candidate receipt does not match the authorized core"
+        )
+    audits = contract.get("source_audits")
+    if not isinstance(audits, dict) or set(audits) != {"title", "structural_core"}:
+        raise PromotionError("v2.11 Controls source-audit census is not exact")
+    for label in ("title", "structural_core"):
+        recorded = audits[label]
+        if not isinstance(recorded, dict) or set(recorded) != {
+            "path",
+            "sha256",
+            "bytes",
+        }:
+            raise PromotionError(f"v2.11 Controls {label} audit receipt is malformed")
+        relative = Path(str(recorded["path"]))
+        if relative.is_absolute() or ".." in relative.parts:
+            raise PromotionError(f"v2.11 Controls {label} audit path escapes evidence")
+        audit_path = evidence_root / relative
+        if not audit_path.is_file() or file_receipt(audit_path) != {
+            "sha256": recorded.get("sha256"),
+            "bytes": recorded.get("bytes"),
+        }:
+            raise PromotionError(
+                f"v2.11 Controls {label} audit receipt does not match its evidence file"
+            )
+
+    paired = contract.get("paired_settlement")
+    if not isinstance(paired, dict) or paired.get("two_independent_instances") is not True:
+        raise PromotionError("v2.11 Controls contract lost two-instance settlement")
+    primary_header = record.get("header")
+    confirmation_header = record.get("confirmation_trace", {}).get("header")
+    if not isinstance(primary_header, dict) or not isinstance(
+        confirmation_header, dict
+    ):
+        raise PromotionError("v2.11 Controls settlement headers are absent")
+    primary = _controls_settled_identity_v211(
+        record["primary_samples"], primary_header, "primary settlement"
+    )
+    confirmation = _controls_settled_identity_v211(
+        record["confirmation_samples"],
+        confirmation_header,
+        "confirmation settlement",
+    )
+    if (
+        primary != paired.get("primary")
+        or confirmation != paired.get("confirmation")
+        or paired.get("classifier_and_tag_agree") is not True
+        or (primary["instance"], primary["process_id"])
+        == (confirmation["instance"], confirmation["process_id"])
+    ):
+        raise PromotionError(
+            "v2.11 Controls paired settlement does not reproduce the authorized instances"
+        )
+
+    edges = resolved_navigation.get("edges")
+    if not isinstance(edges, list) or not edges:
+        raise PromotionError("v2.11 Controls endpoint audit reached no navigation edges")
+    expected_endpoints = contract.get("navigation_endpoints")
+    if not isinstance(expected_endpoints, list) or len(expected_endpoints) != 2:
+        raise PromotionError("v2.11 Controls contract does not pin exactly two endpoints")
+    expected_by_identity = {
+        (value.get("edge_id"), value.get("side"), value.get("trigger")): value
+        for value in expected_endpoints
+        if isinstance(value, dict)
+    }
+    if len(expected_by_identity) != 2:
+        raise PromotionError("v2.11 Controls endpoint identities are ambiguous")
+    observed: dict[tuple[Any, Any, Any], dict[str, Any]] = {}
+    for edge in edges:
+        if not isinstance(edge, dict):
+            continue
+        for side in ("before", "after"):
+            endpoint = edge.get(side)
+            if not isinstance(endpoint, dict) or endpoint.get("layout_id") != "controls":
+                continue
+            identity = (edge.get("id"), side, edge.get("trigger"))
+            if identity in observed:
+                raise PromotionError("v2.11 Controls endpoint lookup is ambiguous")
+            if canonical_bytes(endpoint.get("layout")) != canonical_bytes(
+                record["layout"]
+            ):
+                raise PromotionError(
+                    f"v2.11 Controls endpoint {identity} does not equal its standalone"
+                )
+            observed[identity] = {
+                "edge_id": identity[0],
+                "side": side,
+                "trigger": identity[2],
+                "semantic_surface": endpoint.get("semantic_surface"),
+                "tagged_screen": endpoint.get("tagged_screen"),
+                "layout_generation": endpoint.get("layout_generation"),
+                "element_count": endpoint.get("element_count"),
+                "frame_sha256": endpoint.get("frame_sha256"),
+            }
+    if set(observed) != set(expected_by_identity) or any(
+        observed[identity] != expected_by_identity[identity]
+        for identity in observed
+    ):
+        raise PromotionError(
+            "v2.11 Controls endpoints do not reproduce both exact standalone bindings"
+        )
+    return {
+        "candidate_receipt": file_receipt(candidate_path),
+        "paired_settlement": {"primary": primary, "confirmation": confirmation},
+        "endpoint_count": len(observed),
+        "destination_equals_standalone": True,
+    }
+
+
 def validate_and_promote(
     repo_root: Path,
     candidate_root: Path,
@@ -1401,6 +1798,9 @@ def validate_and_promote(
     )
     controls_title_contract = read_json(
         landed_root / "native-menu-controls-title-v210.json"
+    )
+    controls_core_contract = read_json(
+        landed_root / "native-menu-controls-core-v211.json"
     )
     resolved_navigation = read_json(navigation_path)
     (
@@ -1465,10 +1865,33 @@ def validate_and_promote(
             "candidate standalone sweep did not reach 28 menus plus two Hub layouts"
         )
 
-    landed_by_layout_id = {
-        Path(entry["fixture"]).stem: entry["layout"]
-        for entry in landed_layout_entries
+    landed_by_layout_id: dict[str, dict[str, Any]] = {}
+    landed_path_by_layout_id: dict[str, Path] = {}
+    for entry in landed_layout_entries:
+        if not isinstance(entry, dict) or not isinstance(entry.get("fixture"), str):
+            raise PromotionError("landed menu layout lookup contains an invalid entry")
+        layout_id = Path(entry["fixture"]).stem
+        layout = entry.get("layout")
+        if layout_id in landed_by_layout_id or not isinstance(layout, dict):
+            raise PromotionError(
+                f"landed menu layout lookup is ambiguous for {layout_id!r}"
+            )
+        landed_by_layout_id[layout_id] = layout
+        landed_path_by_layout_id[layout_id] = landed_root / entry["fixture"]
+    generation_changed_layout_ids = {
+        layout_id
+        for layout_id in set(landed_by_layout_id) & set(records)
+        if landed_by_layout_id[layout_id].get("generation")
+        != records[layout_id]["layout"].get("generation")
     }
+    navigation_population_pairs = _navigation_population_trace_pairs_v25(
+        resolved_navigation,
+        confirmation_navigation,
+        {
+            layout_id: records[layout_id]["layout"]
+            for layout_id in generation_changed_layout_ids
+        },
+    )
     for witness in ("create-element", "pause-menu", "beta-notice", "main-menu-root"):
         if witness not in records or witness not in landed_by_layout_id:
             raise PromotionError(f"overlay derivation did not reach {witness} witness")
@@ -1550,19 +1973,45 @@ def validate_and_promote(
                 "fork_decision": copy.deepcopy(fork.get("fork_decision")),
             }
             continue
+        (
+            population_primary_trace,
+            population_confirmation_trace,
+            population_trace_selection,
+        ) = _select_population_trace_pair_v25(
+            layout_id,
+            landed_by_layout_id[layout_id].get("generation"),
+            records[layout_id]["layout"].get("generation"),
+            records[layout_id]["primary_trace"],
+            records[layout_id]["confirmation_trace"],
+            navigation_population_pairs,
+        )
         try:
             standalone_diagnoses[layout_id] = diagnose_landed_layout(
                 layout_id,
                 landed_by_layout_id[layout_id],
                 records[layout_id]["layout"],
-                records[layout_id]["primary_trace"],
-                records[layout_id]["confirmation_trace"],
+                population_primary_trace,
+                population_confirmation_trace,
                 derived_overlay_reference,
                 order_override_contract,
                 controls_title_contract,
+                controls_core_contract,
+                file_receipt(landed_path_by_layout_id[layout_id]),
+                file_receipt(path_by_layout_id[layout_id]),
             )
+            standalone_diagnoses[layout_id][
+                "population_trace_selection"
+            ] = population_trace_selection
         except LandedDiagnosisError as error:
             raise PromotionError(f"STOP: standalone {layout_id}: {error}") from error
+
+    controls_core_context = _validate_controls_context_v211(
+        controls_core_contract,
+        records["controls"],
+        path_by_layout_id["controls"],
+        evidence_root,
+        resolved_navigation,
+    )
 
     candidate_golden_path = candidate_root / "menu-goldens.json"
     candidate_golden = read_json(candidate_golden_path)
@@ -1716,17 +2165,35 @@ def validate_and_promote(
         )
         source_layout_id = raw_edge["before"]["layout_id"]
         if source_layout_id in landed_by_layout_id:
+            (
+                population_primary_trace,
+                population_confirmation_trace,
+                population_trace_selection,
+            ) = _select_population_trace_pair_v25(
+                source_layout_id,
+                landed_by_layout_id[source_layout_id].get("generation"),
+                records[source_layout_id]["layout"].get("generation"),
+                records[source_layout_id]["primary_trace"],
+                records[source_layout_id]["confirmation_trace"],
+                navigation_population_pairs,
+            )
             try:
                 source_diagnosis = diagnose_landed_layout(
                     source_layout_id,
                     landed_by_layout_id[source_layout_id],
                     records[source_layout_id]["layout"],
-                    records[source_layout_id]["primary_trace"],
-                    records[source_layout_id]["confirmation_trace"],
+                    population_primary_trace,
+                    population_confirmation_trace,
                     derived_overlay_reference,
                     order_override_contract,
                     controls_title_contract,
+                    controls_core_contract,
+                    file_receipt(landed_path_by_layout_id[source_layout_id]),
+                    file_receipt(path_by_layout_id[source_layout_id]),
                 )
+                source_diagnosis[
+                    "population_trace_selection"
+                ] = population_trace_selection
             except LandedDiagnosisError as error:
                 raise PromotionError(
                     f"STOP: transition source {edge_id}: {error}"
@@ -1797,7 +2264,8 @@ def validate_and_promote(
     return {
         "success": True,
         "dry_run": dry_run,
-        "settlement_spec": "2.9",
+        "settlement_spec": "2.11",
+        "controls_core_supersession": controls_core_context,
         "standalone_count": len(records),
         "standalone_diagnoses": standalone_diagnoses,
         "corrected_screen_count": len(corrected),

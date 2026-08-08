@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import subprocess
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -2131,7 +2132,7 @@ def test_native_menu_v210_controls_title_correction_is_exact() -> str:
     )
     _require_regex(
         specification,
-        r"# Native menu settlement specification v2\.10.*?"
+        r"# Native menu settlement specification v2\.11.*?"
         r"## Controls title capture defect.*?"
         r"0377809414de5a1e5d0b8af01baaf1ee8221c5e586e81d7dfda95f18d1da703f.*?"
         r"no general title tolerance was added",
@@ -2141,6 +2142,317 @@ def test_native_menu_v210_controls_title_correction_is_exact() -> str:
     return (
         "Settlement v2.10 corrects only Controls layout.screen_title from the "
         "landed empty value to the two-instance Wizard Controls value"
+    )
+
+
+def test_native_menu_v211_controls_core_supersession_is_exact() -> str:
+    assert_module_runs_in_ci("test_native_menu_ambient_lifecycle")
+    contract_path = (
+        ROOT
+        / "tests/fixtures/webgame/native-menu-controls-core-v211.json"
+    )
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    expected_top_level = {
+        "schema",
+        "settlement_spec",
+        "layout_id",
+        "screen_id",
+        "superseded_landed_fixture",
+        "superseding_candidate_fixture",
+        "source_audits",
+        "paired_settlement",
+        "navigation_endpoints",
+        "justification",
+        "forbidden",
+        "derivation",
+    }
+    if set(contract) != expected_top_level:
+        raise StaticReTestFailure(
+            "Settlement v2.11 Controls structural supersession gained an "
+            "unreviewed acceptance surface"
+        )
+    if {
+        field: contract.get(field)
+        for field in ("schema", "settlement_spec", "layout_id", "screen_id")
+    } != {
+        "schema": "solomon-dark-native-menu-controls-core-supersession-v211",
+        "settlement_spec": "2.11",
+        "layout_id": "controls",
+        "screen_id": "controls",
+    }:
+        raise StaticReTestFailure(
+            "Settlement v2.11 no longer authorizes exactly one Controls-only "
+            "structural supersession"
+        )
+    if contract.get("forbidden") != [
+        "general_settled_only_member_tolerance",
+        "count_or_class_based_acceptance",
+        "another_layout",
+        "another_candidate_content",
+    ]:
+        raise StaticReTestFailure(
+            "Settlement v2.11 no longer explicitly forbids generalized "
+            "structural mismatch acceptance"
+        )
+
+    landed = contract.get("superseded_landed_fixture")
+    settled = contract.get("superseding_candidate_fixture")
+    if not isinstance(landed, dict) or not isinstance(settled, dict):
+        raise StaticReTestFailure(
+            "Settlement v2.11 lost one of its exact old/new fixture receipts"
+        )
+    if landed.get("path") != (
+        "webgame-contracts/baseline-snapshots/menu-layouts/controls.json"
+    ) or settled.get("path") != (
+        "candidates/candidate-v29/menu-layouts/controls.json"
+    ):
+        raise StaticReTestFailure(
+            "Settlement v2.11 old/new fixture receipts no longer name the "
+            "reviewed Controls artifacts"
+        )
+    assert_recorded_hash_matches_file(
+        landed.get("sha256"),
+        ROOT / landed["path"],
+        "Settlement v2.11 superseded Controls baseline snapshot",
+    )
+    settled_fixture_path = (
+        ROOT / "tests/fixtures/webgame/menu-layouts/controls.json"
+    )
+    assert_recorded_hash_matches_file(
+        settled.get("sha256"),
+        settled_fixture_path,
+        "Settlement v2.11 superseding settled Controls fixture",
+    )
+    if landed.get("bytes") != (ROOT / landed["path"]).stat().st_size:
+        raise StaticReTestFailure(
+            "Settlement v2.11 superseded Controls byte receipt no longer "
+            "matches the committed baseline"
+        )
+    if settled.get("bytes") != settled_fixture_path.stat().st_size:
+        raise StaticReTestFailure(
+            "Settlement v2.11 superseding Controls byte receipt no longer "
+            "matches the committed settled fixture"
+        )
+
+    def semantic_counter(path: Path) -> Counter[str]:
+        fixture = json.loads(path.read_text(encoding="utf-8"))
+        elements = fixture.get("layout", {}).get("elements")
+        if not isinstance(elements, list) or not elements:
+            raise StaticReTestFailure(
+                "Settlement v2.11 semantic comparison reached no Controls members"
+            )
+        counter: Counter[str] = Counter()
+        for element in elements:
+            if not isinstance(element, dict):
+                raise StaticReTestFailure(
+                    "Settlement v2.11 semantic comparison reached a malformed member"
+                )
+            semantic = {
+                key: value
+                for key, value in element.items()
+                if key not in {"id", "draw_order", "draw_order_semantics"}
+            }
+            encoded = json.dumps(
+                semantic,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+            counter[hashlib.sha256(encoded).hexdigest()] += 1
+        return counter
+
+    def recorded_counter(value: dict[str, Any], label: str) -> Counter[str]:
+        entries = value.get("semantic_multiset")
+        if not isinstance(entries, list) or not entries:
+            raise StaticReTestFailure(
+                f"Settlement v2.11 {label} semantic multiset is absent"
+            )
+        counter: Counter[str] = Counter()
+        for entry in entries:
+            if not isinstance(entry, dict) or set(entry) != {
+                "semantic_sha256",
+                "count",
+            }:
+                raise StaticReTestFailure(
+                    f"Settlement v2.11 {label} semantic multiset is ambiguous"
+                )
+            digest = entry.get("semantic_sha256")
+            count = entry.get("count")
+            if (
+                not isinstance(digest, str)
+                or not re.fullmatch(r"[0-9a-f]{64}", digest)
+                or isinstance(count, bool)
+                or not isinstance(count, int)
+                or count <= 0
+                or digest in counter
+            ):
+                raise StaticReTestFailure(
+                    f"Settlement v2.11 {label} semantic multiset is not canonical"
+                )
+            counter[digest] = count
+        return counter
+
+    landed_counter = recorded_counter(landed, "superseded")
+    settled_counter = recorded_counter(settled, "superseding")
+    if landed_counter != semantic_counter(ROOT / landed["path"]):
+        raise StaticReTestFailure(
+            "Settlement v2.11 superseded Controls semantic multiset no longer "
+            "matches its committed baseline"
+        )
+    if settled_counter != semantic_counter(settled_fixture_path):
+        raise StaticReTestFailure(
+            "Settlement v2.11 superseding Controls semantic multiset no longer "
+            "matches its committed fixture"
+        )
+    if (
+        landed.get("semantic_member_count") != sum(landed_counter.values())
+        or settled.get("semantic_member_count") != sum(settled_counter.values())
+    ):
+        raise StaticReTestFailure(
+            "Settlement v2.11 Controls semantic member census no longer closes"
+        )
+
+    audits = contract.get("source_audits")
+    if audits != {
+        "title": {
+            "path": "diagnostics/controls-screen-title-stop-audit.json",
+            "sha256": (
+                "0377809414de5a1e5d0b8af01baaf1ee8221c5e586e81d7dfda95f18d1da703f"
+            ),
+            "bytes": 5456,
+        },
+        "structural_core": {
+            "path": "diagnostics/controls-post-v210-structural-stop-audit.json",
+            "sha256": (
+                "22fc8f3061a0f0577bf805ab1ddf750416744bc0097405187321b9feeae148f1"
+            ),
+            "bytes": 63660,
+        },
+    }:
+        raise StaticReTestFailure(
+            "Settlement v2.11 Controls supersession lost its exact title and "
+            "structural STOP audit receipts"
+        )
+    paired = contract.get("paired_settlement")
+    if (
+        not isinstance(paired, dict)
+        or paired.get("two_independent_instances") is not True
+        or paired.get("classifier_and_tag_agree") is not True
+        or not isinstance(paired.get("primary"), dict)
+        or not isinstance(paired.get("confirmation"), dict)
+        or (
+            paired["primary"].get("instance"),
+            paired["primary"].get("process_id"),
+        )
+        == (
+            paired["confirmation"].get("instance"),
+            paired["confirmation"].get("process_id"),
+        )
+    ):
+        raise StaticReTestFailure(
+            "Settlement v2.11 no longer requires two independent "
+            "classifier-agreed Controls settlements"
+        )
+    endpoints = contract.get("navigation_endpoints")
+    if not isinstance(endpoints, list) or len(endpoints) != 2:
+        raise StaticReTestFailure(
+            "Settlement v2.11 no longer pins exactly both regenerated Controls endpoints"
+        )
+    endpoint_identities = {
+        (entry.get("edge_id"), entry.get("side"), entry.get("trigger"))
+        for entry in endpoints
+        if isinstance(entry, dict)
+    }
+    if endpoint_identities != {
+        ("settings_to_controls", "after", "customize_keyboard_click"),
+        ("controls_to_settings", "before", "back_button_click"),
+    } or any(
+        entry.get("semantic_surface") != "controls"
+        or entry.get("tagged_screen") != "controls"
+        for entry in endpoints
+    ):
+        raise StaticReTestFailure(
+            "Settlement v2.11 Controls endpoints no longer bind both exact "
+            "classifier-agreed standalone endpoints"
+        )
+
+    diagnosis = _read("tools/native_menu_landed_diagnosis_v25.py")
+    promoter = _read("tools/promote_native_menu_recapture.py")
+    generator = _read("tools/derive_native_menu_controls_supersession_v211.py")
+    mutation_runner = _read(
+        "tools/run_native_menu_v211_controls_core_mutations.py"
+    )
+    unit_tests = _read("tests/test_native_menu_ambient_lifecycle.py")
+    specification = _read("docs/reverse-engineering/native-menu-settlement.md")
+    _require_regex(
+        diagnosis,
+        r"def _diagnose_structural_core_v211\(.*?"
+        r"_v211_receipt_matches\(recorded_landed, landed_fixture_receipt\).*?"
+        r"_v211_receipt_matches\(recorded_candidate, candidate_fixture_receipt\).*?"
+        r"layout_id != contract\[\"layout_id\"\].*?"
+        r"_v211_semantic_counter\(landed_layout.*?!= landed_counter.*?"
+        r"_v211_semantic_counter\(settled_layout.*?!= settled_counter.*?"
+        r"V211_STRUCTURAL_MISMATCH",
+        "Settlement v2.11 runtime can accept a non-exact receipt, layout, or "
+        "semantic multiset",
+    )
+    _require_regex(
+        promoter,
+        r"native-menu-controls-core-v211\.json.*?"
+        r"diagnose_landed_layout\(\s*layout_id,.*?"
+        r"controls_core_contract,.*?file_receipt\(landed_path_by_layout_id\[layout_id\]\).*?"
+        r"_validate_controls_context_v211\(.*?"
+        r"controls_core_contract,.*?records\[\"controls\"\].*?"
+        r"diagnose_landed_layout\(\s*source_layout_id,.*?"
+        r"controls_core_contract,.*?"
+        r"promotion_pairs",
+        "standalone, transition-source, or final promotion can bypass the "
+        "exact v2.11 Controls contract and context gate",
+    )
+    _require_regex(
+        generator,
+        r"committed_receipt\(repo_root, landed_snapshot_relative\).*?"
+        r"structural_audit does not reproduce both multisets.*?"
+        r"Controls confirmation reused the primary identity.*?"
+        r"controls_endpoints\(navigation, settled_layout\)",
+        "Settlement v2.11 generator can accept an uncommitted old snapshot, "
+        "unclosed audit arithmetic, reused instance, or missing endpoint",
+    )
+    _require_regex(
+        mutation_runner,
+        r'"exact_55_member_core_positive".*?'
+        r'"drop_one_core_member".*?'
+        r'"mutate_one_core_rect".*?'
+        r'"add_one_core_member".*?'
+        r'"wrong_layout_claim".*?'
+        r"cleared_before_baseline = clear_contract_bytecode.*?"
+        r"cleared_before_mutation = clear_contract_bytecode.*?"
+        r"cleared_before_restore = clear_contract_bytecode",
+        "the real v2.11 mutation table no longer proves exact positive, drop, "
+        "mutate, add, and wrong-layout behavior with green baselines",
+    )
+    _require_regex(
+        unit_tests,
+        r"test_v211_controls_structural_core_exact_supersession_is_bounded.*?"
+        r"test_v211_controls_structural_core_drop_one_stops.*?"
+        r"test_v211_controls_structural_core_mutate_one_stops.*?"
+        r"test_v211_controls_structural_core_add_one_stops.*?"
+        r"test_v211_controls_structural_core_rule_does_not_apply_elsewhere",
+        "the CI behavior suite no longer proves the bounded v2.11 Controls "
+        "supersession in both directions",
+    )
+    _require_regex(
+        specification,
+        r"# Native menu settlement specification v2\.11.*?"
+        r"## Controls structural-core capture defect.*?"
+        r"22fc8f3061a0f0577bf805ab1ddf750416744bc0097405187321b9feeae148f1.*?"
+        r"no general settled-only-member tolerance",
+        "the versioned settlement specification no longer records the exact "
+        "Controls structural STOP and bounded v2.11 supersession",
+    )
+    return (
+        "Settlement v2.11 supersedes exactly the audited Controls core while "
+        "preserving classifier agreement, paired settlement, and both endpoints"
     )
 
 
@@ -2486,6 +2798,29 @@ def test_native_menu_overlay_contamination_override_is_fail_closed() -> str:
         r"derived exactly from the reference and both fresh traces",
         "menu promotion no longer re-derives the exact declared Settlement "
         "v2.4 overlay proof from the committed reference and both traces",
+    )
+    _require_regex(
+        promoter,
+        r"def _navigation_population_trace_pairs_v25\(.*?"
+        r"primary_identity == confirmation_identity.*?"
+        r"if layout_id not in required_layouts:\s*continue.*?"
+        r"canonical_bytes\(primary_endpoint\.get\(\"layout\"\)\).*?"
+        r"required_layouts\[layout_id\].*?"
+        r"def _select_population_trace_pair_v25\(.*?"
+        r"landed_generation in primary\[\"generation_trace\"\].*?"
+        r"landed_generation in confirmation\[\"generation_trace\"\].*?"
+        r"if len\(qualifying_navigation\) > 1:.*?"
+        r"population-witness routing is ambiguous.*?"
+        r'"source": "paired_navigation_endpoint"',
+        "overlay generation proof can select an unpaired, wrong-layout, or "
+        "ambiguous navigation witness",
+    )
+    _require_regex(
+        _read("tests/test_native_menu_ambient_lifecycle.py"),
+        r"test_population_witness_routing_uses_unique_paired_navigation_trace.*?"
+        r"test_population_witness_routing_refuses_ambiguous_paired_edges",
+        "the CI behavior suite no longer proves unique paired-navigation "
+        "population-witness routing and ambiguity refusal",
     )
     _require_regex(
         promoter,

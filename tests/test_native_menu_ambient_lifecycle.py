@@ -3,11 +3,16 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import sys
 import tempfile
 import unittest
 from collections.abc import Callable
 from pathlib import Path
 from unittest import mock
+
+TOOLS = Path(__file__).resolve().parents[1] / "tools"
+if str(TOOLS) not in sys.path:
+    sys.path.insert(0, str(TOOLS))
 
 from tools.resolve_native_menu_ambient_campaign import (
     CampaignResolutionError,
@@ -46,6 +51,10 @@ from tools.native_menu_overlay_v25 import (
     assert_overlay_hygiene,
     derive_overlay_reference,
     overlay_draw_payload,
+)
+from tools.promote_native_menu_recapture import (
+    PromotionError,
+    _select_population_trace_pair_v25,
 )
 
 
@@ -118,6 +127,55 @@ def _v210_controls_title_contract() -> dict[str, object]:
         / "tests/fixtures/webgame/native-menu-controls-title-v210.json"
     )
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _v211_controls_core_contract() -> dict[str, object]:
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "tests/fixtures/webgame/native-menu-controls-core-v211.json"
+    )
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _v211_controls_layouts() -> tuple[dict[str, object], dict[str, object]]:
+    root = Path(__file__).resolve().parents[1]
+    landed = json.loads(
+        (
+            root
+            / "webgame-contracts/baseline-snapshots/menu-layouts/controls.json"
+        ).read_text(encoding="utf-8")
+    )["layout"]
+    settled = json.loads(
+        (
+            root / "tests/fixtures/webgame/menu-layouts/controls.json"
+        ).read_text(encoding="utf-8")
+    )["layout"]
+    return landed, settled
+
+
+def _diagnose_v211_controls(
+    settled: dict[str, object], layout_id: str = "controls"
+) -> dict[str, object]:
+    landed, _ = _v211_controls_layouts()
+    contract = _v211_controls_core_contract()
+    return diagnose_landed_layout(
+        layout_id,
+        copy.deepcopy(landed),
+        copy.deepcopy(settled),
+        {},
+        {},
+        {},
+        controls_title_contract=_v210_controls_title_contract(),
+        controls_core_contract=contract,
+        landed_fixture_receipt={
+            field: contract["superseded_landed_fixture"][field]  # type: ignore[index]
+            for field in ("sha256", "bytes")
+        },
+        candidate_fixture_receipt={
+            field: contract["superseding_candidate_fixture"][field]  # type: ignore[index]
+            for field in ("sha256", "bytes")
+        },
+    )
 
 
 def _observation(
@@ -1966,6 +2024,69 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
                 controls_title_contract=_v210_controls_title_contract(),
             )
 
+    def test_v211_controls_structural_core_exact_supersession_is_bounded(
+        self,
+    ) -> None:
+        _, settled = _v211_controls_layouts()
+        diagnosis = _diagnose_v211_controls(settled)
+
+        self.assertEqual(diagnosis["status"], "corrected")
+        self.assertEqual(
+            diagnosis["structural_core_supersession"]["layout_id"],  # type: ignore[index]
+            "controls",
+        )
+        self.assertFalse(
+            diagnosis["structural_core_supersession"]["general_tolerance"]  # type: ignore[index]
+        )
+
+    def test_v211_controls_structural_core_drop_one_stops(self) -> None:
+        _, settled = _v211_controls_layouts()
+        settled = copy.deepcopy(settled)
+        settled["elements"].pop()  # type: ignore[index]
+
+        with self.assertRaisesRegex(
+            LandedDiagnosisError,
+            "exact v2.11 Controls supersession semantic multiset differs",
+        ):
+            _diagnose_v211_controls(settled)
+
+    def test_v211_controls_structural_core_mutate_one_stops(self) -> None:
+        _, settled = _v211_controls_layouts()
+        settled = copy.deepcopy(settled)
+        settled["elements"][0]["rect"][0] += 1  # type: ignore[index]
+
+        with self.assertRaisesRegex(
+            LandedDiagnosisError,
+            "exact v2.11 Controls supersession semantic multiset differs",
+        ):
+            _diagnose_v211_controls(settled)
+
+    def test_v211_controls_structural_core_add_one_stops(self) -> None:
+        _, settled = _v211_controls_layouts()
+        settled = copy.deepcopy(settled)
+        extra = copy.deepcopy(settled["elements"][0])  # type: ignore[index]
+        extra["id"] = "controls.v211.unreviewed_extra"
+        settled["elements"].append(extra)  # type: ignore[index]
+
+        with self.assertRaisesRegex(
+            LandedDiagnosisError,
+            "exact v2.11 Controls supersession semantic multiset differs",
+        ):
+            _diagnose_v211_controls(settled)
+
+    def test_v211_controls_structural_core_rule_does_not_apply_elsewhere(
+        self,
+    ) -> None:
+        _, settled = _v211_controls_layouts()
+        settled = copy.deepcopy(settled)
+        settled["screen_title"] = ""
+
+        with self.assertRaisesRegex(
+            LandedDiagnosisError,
+            "v2.11 Controls supersession claimed by another layout",
+        ):
+            _diagnose_v211_controls(settled, "control-scheme-picker")
+
     def test_landed_ambient_lookup_uses_unique_exact_anchor_not_ordinal(self) -> None:
         landed = _art(9, art_id="UI.shared")
         anchors = [copy.deepcopy(landed), copy.deepcopy(landed)]
@@ -2165,6 +2286,79 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
                 "generation_difference_witnessed_in_both_traces"
             ]
         )
+
+    def test_population_witness_routing_uses_unique_paired_navigation_trace(
+        self,
+    ) -> None:
+        samples = _stable_samples(3)
+        for sample in samples:
+            sample["payload"]["generation"] = 5  # type: ignore[index]
+        elements = copy.deepcopy(samples[0]["payload"]["elements"])  # type: ignore[index]
+        standalone = _trace(samples, elements, population_generation=5)
+        navigation = _trace(samples, elements, population_generation=4)
+        pairs = {
+            "create-discipline": [
+                {
+                    "edge_id": "create_element_to_discipline",
+                    "side": "after",
+                    "primary_identity": ["menufx-primary", 101],
+                    "confirmation_identity": ["menufx-confirmation", 202],
+                    "primary_trace": navigation,
+                    "confirmation_trace": copy.deepcopy(navigation),
+                }
+            ]
+        }
+
+        primary, confirmation, selection = _select_population_trace_pair_v25(
+            "create-discipline",
+            4,
+            6,
+            standalone,
+            copy.deepcopy(standalone),
+            pairs,
+        )
+
+        self.assertIs(primary, navigation)
+        self.assertEqual(confirmation, navigation)
+        self.assertEqual(selection["source"], "paired_navigation_endpoint")
+        self.assertEqual(
+            (selection["edge_id"], selection["side"]),
+            ("create_element_to_discipline", "after"),
+        )
+        self.assertEqual(selection["primary_settled_generations"], [5])
+
+    def test_population_witness_routing_refuses_ambiguous_paired_edges(
+        self,
+    ) -> None:
+        samples = _stable_samples(3)
+        for sample in samples:
+            sample["payload"]["generation"] = 5  # type: ignore[index]
+        elements = copy.deepcopy(samples[0]["payload"]["elements"])  # type: ignore[index]
+        standalone = _trace(samples, elements, population_generation=5)
+        navigation = _trace(samples, elements, population_generation=4)
+        pair = {
+            "edge_id": "create_element_to_discipline",
+            "side": "after",
+            "primary_identity": ["menufx-primary", 101],
+            "confirmation_identity": ["menufx-confirmation", 202],
+            "primary_trace": navigation,
+            "confirmation_trace": copy.deepcopy(navigation),
+        }
+        duplicate = copy.deepcopy(pair)
+        duplicate["edge_id"] = "another_edge"
+
+        with self.assertRaisesRegex(
+            PromotionError,
+            "create-discipline population-witness routing is ambiguous",
+        ):
+            _select_population_trace_pair_v25(
+                "create-discipline",
+                4,
+                5,
+                standalone,
+                copy.deepcopy(standalone),
+                {"create-discipline": [pair, duplicate]},
+            )
 
     def test_landed_diagnosis_accepts_exact_semantic_overlay_only(self) -> None:
         samples = _stable_samples(3)

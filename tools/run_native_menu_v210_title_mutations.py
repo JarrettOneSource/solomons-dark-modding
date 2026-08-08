@@ -16,6 +16,7 @@ from native_menu_landed_diagnosis_v25 import (
     diagnose_landed_layout,
 )
 from promote_native_menu_recapture import (
+    file_receipt,
     read_json,
     validate_settlement_fixture_v25,
 )
@@ -95,11 +96,16 @@ def main() -> int:
     title_contract = read_json(
         repo / "tests/fixtures/webgame/native-menu-controls-title-v210.json"
     )
+    core_contract = read_json(
+        repo / "tests/fixtures/webgame/native-menu-controls-core-v211.json"
+    )
 
     records: dict[str, dict[str, Any]] = {}
     landed: dict[str, dict[str, Any]] = {}
+    candidate_paths: dict[str, Path] = {}
     for layout_id in ("controls", "control-scheme-picker"):
         fixture_path = candidate_root / "menu-layouts" / f"{layout_id}.json"
+        candidate_paths[layout_id] = fixture_path
         records[layout_id] = validate_settlement_fixture_v25(
             repo,
             evidence_root,
@@ -119,6 +125,13 @@ def main() -> int:
             overlay,
             order_contract,
             title_contract,
+            core_contract,
+            file_receipt(
+                repo
+                / "tests/fixtures/webgame/menu-layouts"
+                / f"{layout_id}.json"
+            ),
+            file_receipt(candidate_paths[layout_id]),
         )
 
     def controls_green() -> dict[str, Any]:

@@ -1,4 +1,4 @@
-# Native menu settlement specification v2.10
+# Native menu settlement specification v2.11
 
 This specification governs every G11 native-menu standalone and navigation
 endpoint recording. Its rule is: what two independent fresh instances
@@ -24,6 +24,16 @@ corrections remain the narrow v2.1, v2.4, v2.3, and v2.5 diagnosis paths. Every
 leg requires paired evidence and zero unexplained residual fields. Canonical
 cross-instance comparisons sort semantic members by relative draw order and
 then deterministic element id; raw list position is never contractual.
+
+A standalone trace that begins after population cannot manufacture an earlier
+generation witness. In that case promotion may use one uniquely resolving
+primary/confirmation navigation-endpoint pair for the same layout, but only
+when both fresh instances contain the landed generation and the resolved
+endpoint layout equals the standalone. Multiple qualifying endpoint pairs are
+an ambiguity STOP. Absolute layout-generation counters are capture-path local,
+so the paired trace proves the generation change and screen structure; its
+settled counter need not equal a different standalone recording's local
+counter.
 
 ## Path-dependent core
 
@@ -153,7 +163,40 @@ Any case change, any other old or new value, any other field, or any other
 layout still takes the unchanged mismatch STOP. The v2.1-v2.9 settlement and
 diagnosis guardrails remain unchanged.
 
+## Controls structural-core capture defect
+
+Settlement v2.11 adds one exact, data-bound supersession for the `controls`
+structural core. The superseded capture is preserved byte-for-byte in the
+shellfix baseline snapshot and pinned by its committed-file hash. Its measured
+semantic multiset contains the complete 15-draw G11 session-bleed block, ten
+additional stale art draws, and no text member. The paired fresh captures
+instead reproduce the full key-bindings page: panel and art, the visible title
+and row texts, and the interactive Back affordance. The accepted structural
+STOP audit is
+`22fc8f3061a0f0577bf805ab1ddf750416744bc0097405187321b9feeae148f1`;
+the title audit remains
+`0377809414de5a1e5d0b8af01baaf1ee8221c5e586e81d7dfda95f18d1da703f`.
+
+The generated contract pins the complete old and new semantic multisets,
+their full fixture receipts, both independent classifier-agreed settlements,
+and the regenerated `settings_to_controls.after` and
+`controls_to_settings.before` endpoints. Promotion accepts the supersession
+only when every receipt and every semantic member matches that contract and
+both endpoints byte-equal the settled standalone. Dropping, moving, or adding
+one member fails the same structural mismatch; claiming the contract for
+another layout fails its Controls-only scope. A candidate with any other file
+receipt—including the sealed main-menu surface-substitution candidate—never
+enters v2.11 and still reaches the pre-existing wholesale-substitution STOP.
+All v2.1-v2.10 rules remain active, and no general settled-only-member tolerance
+was added.
+
 ## Changelog
+
+- **v2.11 — 2026-08-07:** the accepted Controls structural-core STOP proved
+  that the old fixture combined the complete G11 session-bleed block with
+  stale art while omitting the live key-binding texts. Added the exact
+  old-multiset-to-new-multiset supersession above; no count-, class-, or
+  layout-general tolerance was added.
 
 - **v2.10 — 2026-08-07:** the accepted Controls title STOP proved that the
   stale landed capture omitted its player-visible title and left

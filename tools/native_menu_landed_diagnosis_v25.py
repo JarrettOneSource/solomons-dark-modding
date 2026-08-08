@@ -42,6 +42,17 @@ class LandedDiagnosisError(ValueError):
 V210_CONTROLS_TITLE_CONTRACT_SCHEMA = (
     "solomon-dark-native-menu-controls-title-v210"
 )
+V211_CONTROLS_CORE_CONTRACT_SCHEMA = (
+    "solomon-dark-native-menu-controls-core-supersession-v211"
+)
+V211_STRUCTURAL_MISMATCH = (
+    "landed-vs-settled structural core mismatch: exact v2.11 Controls "
+    "supersession semantic multiset differs"
+)
+V211_WRONG_LAYOUT = (
+    "landed-vs-settled structural core mismatch: v2.11 Controls "
+    "supersession claimed by another layout"
+)
 
 
 def canonical_bytes(value: Any) -> bytes:
@@ -793,6 +804,301 @@ def diagnosis_prereference_residual(
     return unmatched, [*lifecycle, *animation]
 
 
+def _v211_semantic_counter(
+    layout: dict[str, Any], label: str
+) -> Counter[str]:
+    return Counter(
+        hashlib.sha256(_signature(element)).hexdigest()
+        for element in _elements(layout, label)
+    )
+
+
+def _v211_counter_entries(
+    counter: Counter[str], label: str
+) -> list[dict[str, Any]]:
+    if any(
+        not isinstance(key, str)
+        or len(key) != 64
+        or any(character not in "0123456789abcdef" for character in key)
+        or isinstance(count, bool)
+        or not isinstance(count, int)
+        or count <= 0
+        for key, count in counter.items()
+    ):
+        raise LandedDiagnosisError(
+            f"v2.11 Controls structural supersession: {label} is malformed"
+        )
+    return [
+        {"semantic_sha256": key, "count": counter[key]}
+        for key in sorted(counter)
+    ]
+
+
+def _v211_counter_from_entries(
+    values: Any, label: str
+) -> Counter[str]:
+    if not isinstance(values, list) or not values:
+        raise LandedDiagnosisError(
+            f"v2.11 Controls structural supersession: {label} is absent"
+        )
+    result: Counter[str] = Counter()
+    for value in values:
+        if not isinstance(value, dict) or set(value) != {
+            "semantic_sha256",
+            "count",
+        }:
+            raise LandedDiagnosisError(
+                f"v2.11 Controls structural supersession: {label} gained "
+                "an unreviewed field"
+            )
+        key = value.get("semantic_sha256")
+        count = value.get("count")
+        candidate = Counter({key: count}) if isinstance(key, str) else Counter()
+        if not candidate or _v211_counter_entries(candidate, label) != [value]:
+            raise LandedDiagnosisError(
+                f"v2.11 Controls structural supersession: {label} is malformed"
+            )
+        result[key] += count
+    if _v211_counter_entries(result, label) != values:
+        raise LandedDiagnosisError(
+            f"v2.11 Controls structural supersession: {label} is not canonical"
+        )
+    return result
+
+
+def _v211_counter_digest(counter: Counter[str]) -> str:
+    return sha256_json(_v211_counter_entries(counter, "semantic multiset"))
+
+
+def _require_v211_controls_core_contract(
+    contract: dict[str, Any],
+) -> tuple[Counter[str], Counter[str]]:
+    expected_top_level = {
+        "schema",
+        "settlement_spec",
+        "layout_id",
+        "screen_id",
+        "superseded_landed_fixture",
+        "superseding_candidate_fixture",
+        "source_audits",
+        "paired_settlement",
+        "navigation_endpoints",
+        "justification",
+        "forbidden",
+        "derivation",
+    }
+    if set(contract) != expected_top_level:
+        raise LandedDiagnosisError(
+            "v2.11 Controls structural supersession: generated contract "
+            "gained an unreviewed scope"
+        )
+    if (
+        contract.get("schema") != V211_CONTROLS_CORE_CONTRACT_SCHEMA
+        or contract.get("settlement_spec") != "2.11"
+        or contract.get("layout_id") != "controls"
+        or contract.get("screen_id") != "controls"
+        or contract.get("forbidden")
+        != [
+            "general_settled_only_member_tolerance",
+            "count_or_class_based_acceptance",
+            "another_layout",
+            "another_candidate_content",
+        ]
+    ):
+        raise LandedDiagnosisError(
+            "v2.11 Controls structural supersession: generated contract "
+            "changed its exact Controls-only scope"
+        )
+
+    landed = contract.get("superseded_landed_fixture")
+    settled = contract.get("superseding_candidate_fixture")
+    if not isinstance(landed, dict) or set(landed) != {
+        "path",
+        "sha256",
+        "bytes",
+        "generation",
+        "semantic_member_count",
+        "semantic_multiset_sha256",
+        "semantic_multiset",
+    }:
+        raise LandedDiagnosisError(
+            "v2.11 Controls structural supersession: superseded fixture "
+            "receipt or multiset is not exact"
+        )
+    if not isinstance(settled, dict) or set(settled) != {
+        "path",
+        "sha256",
+        "bytes",
+        "generation",
+        "semantic_member_count",
+        "semantic_multiset_sha256",
+        "semantic_multiset",
+        "structural_core_sha256",
+    }:
+        raise LandedDiagnosisError(
+            "v2.11 Controls structural supersession: superseding fixture "
+            "receipt or multiset is not exact"
+        )
+    if landed.get("path") != (
+        "webgame-contracts/baseline-snapshots/menu-layouts/controls.json"
+    ) or settled.get("path") != (
+        "candidates/candidate-v29/menu-layouts/controls.json"
+    ):
+        raise LandedDiagnosisError(
+            "v2.11 Controls structural supersession: fixture receipts name "
+            "unreviewed paths"
+        )
+    landed_counter = _v211_counter_from_entries(
+        landed.get("semantic_multiset"), "superseded semantic multiset"
+    )
+    settled_counter = _v211_counter_from_entries(
+        settled.get("semantic_multiset"), "superseding semantic multiset"
+    )
+    for value, counter, label in (
+        (landed, landed_counter, "superseded fixture"),
+        (settled, settled_counter, "superseding fixture"),
+    ):
+        if (
+            value.get("semantic_member_count") != sum(counter.values())
+            or value.get("semantic_multiset_sha256")
+            != _v211_counter_digest(counter)
+            or not isinstance(value.get("sha256"), str)
+            or len(value["sha256"]) != 64
+            or isinstance(value.get("bytes"), bool)
+            or not isinstance(value.get("bytes"), int)
+            or value["bytes"] <= 0
+        ):
+            raise LandedDiagnosisError(
+                f"v2.11 Controls structural supersession: {label} exact "
+                "receipt does not close"
+            )
+
+    if contract.get("source_audits") != {
+        "title": {
+            "path": "diagnostics/controls-screen-title-stop-audit.json",
+            "sha256": (
+                "0377809414de5a1e5d0b8af01baaf1ee8221c5e586e81d7dfda95f18d1da703f"
+            ),
+            "bytes": 5456,
+        },
+        "structural_core": {
+            "path": "diagnostics/controls-post-v210-structural-stop-audit.json",
+            "sha256": (
+                "22fc8f3061a0f0577bf805ab1ddf750416744bc0097405187321b9feeae148f1"
+            ),
+            "bytes": 63660,
+        },
+    }:
+        raise LandedDiagnosisError(
+            "v2.11 Controls structural supersession: accepted STOP audit "
+            "receipts changed"
+        )
+
+    common = landed_counter & settled_counter
+    landed_only = landed_counter - settled_counter
+    settled_only = settled_counter - landed_counter
+    justification = contract.get("justification")
+    if not isinstance(justification, dict) or set(justification) != {
+        "common_semantic_member_count",
+        "landed_only_semantic_member_count",
+        "landed_only_session_bleed",
+        "landed_only_stale_art",
+        "landed_text_member_count",
+        "settled_only_semantic_member_count",
+        "settled_only_semantic_multiset",
+        "multiset_arithmetic_closed",
+    }:
+        raise LandedDiagnosisError(
+            "v2.11 Controls structural supersession: justification gained "
+            "an unreviewed class"
+        )
+    bleed = _v211_counter_from_entries(
+        justification.get("landed_only_session_bleed"),
+        "session-bleed semantic multiset",
+    )
+    stale = _v211_counter_from_entries(
+        justification.get("landed_only_stale_art"),
+        "stale-art semantic multiset",
+    )
+    if (
+        justification.get("common_semantic_member_count")
+        != sum(common.values())
+        or justification.get("landed_only_semantic_member_count")
+        != sum(landed_only.values())
+        or bleed + stale != landed_only
+        or justification.get("landed_text_member_count") != 0
+        or justification.get("settled_only_semantic_member_count")
+        != sum(settled_only.values())
+        or _v211_counter_from_entries(
+            justification.get("settled_only_semantic_multiset"),
+            "settled-only semantic multiset",
+        )
+        != settled_only
+        or justification.get("multiset_arithmetic_closed") is not True
+    ):
+        raise LandedDiagnosisError(
+            "v2.11 Controls structural supersession: accepted structural "
+            "audit arithmetic no longer closes"
+        )
+    return landed_counter, settled_counter
+
+
+def _v211_receipt_matches(recorded: dict[str, Any], actual: Any) -> bool:
+    return isinstance(actual, dict) and {
+        "sha256": actual.get("sha256"),
+        "bytes": actual.get("bytes"),
+    } == {
+        "sha256": recorded.get("sha256"),
+        "bytes": recorded.get("bytes"),
+    }
+
+
+def _diagnose_structural_core_v211(
+    layout_id: str,
+    landed_layout: dict[str, Any],
+    settled_layout: dict[str, Any],
+    contract: dict[str, Any],
+    landed_fixture_receipt: dict[str, Any] | None,
+    candidate_fixture_receipt: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not contract:
+        return None
+    landed_counter, settled_counter = _require_v211_controls_core_contract(contract)
+    recorded_landed = contract["superseded_landed_fixture"]
+    recorded_candidate = contract["superseding_candidate_fixture"]
+    if not (
+        _v211_receipt_matches(recorded_landed, landed_fixture_receipt)
+        and _v211_receipt_matches(recorded_candidate, candidate_fixture_receipt)
+    ):
+        return None
+    if (
+        layout_id != contract["layout_id"]
+        or landed_layout.get("screen_id") != contract["screen_id"]
+        or settled_layout.get("screen_id") != contract["screen_id"]
+    ):
+        raise LandedDiagnosisError(V211_WRONG_LAYOUT)
+    if (
+        _v211_semantic_counter(landed_layout, "v2.11 landed Controls")
+        != landed_counter
+        or _v211_semantic_counter(settled_layout, "v2.11 settled Controls")
+        != settled_counter
+    ):
+        raise LandedDiagnosisError(V211_STRUCTURAL_MISMATCH)
+    return {
+        "schema": "solomon-dark-native-menu-structural-core-supersession-v211",
+        "layout_id": layout_id,
+        "superseded_semantic_multiset_sha256": recorded_landed[
+            "semantic_multiset_sha256"
+        ],
+        "superseding_semantic_multiset_sha256": recorded_candidate[
+            "semantic_multiset_sha256"
+        ],
+        "reason": "landed_controls_capture_is_session_bleed_plus_stale_art_without_text",
+        "source_audits": copy.deepcopy(contract["source_audits"]),
+        "general_tolerance": False,
+    }
+
+
 def _require_v210_controls_title_contract(
     contract: dict[str, Any],
 ) -> dict[str, Any]:
@@ -889,6 +1195,9 @@ def diagnose_landed_layout(
     overlay_reference: dict[str, Any],
     order_override_contract: dict[str, Any] | None = None,
     controls_title_contract: dict[str, Any] | None = None,
+    controls_core_contract: dict[str, Any] | None = None,
+    landed_fixture_receipt: dict[str, Any] | None = None,
+    candidate_fixture_receipt: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not isinstance(layout_id, str) or not layout_id:
         raise LandedDiagnosisError(
@@ -896,13 +1205,27 @@ def diagnose_landed_layout(
         )
     if controls_title_contract is None:
         controls_title_contract = {}
+    if controls_core_contract is None:
+        controls_core_contract = {}
     screen_title_correction = _diagnose_layout_identity_v210(
         layout_id,
         landed_layout,
         settled_layout,
         controls_title_contract,
     )
-    if order_override_contract is None:
+    structural_core_supersession = _diagnose_structural_core_v211(
+        layout_id,
+        landed_layout,
+        settled_layout,
+        controls_core_contract,
+        landed_fixture_receipt,
+        candidate_fixture_receipt,
+    )
+    if structural_core_supersession is not None:
+        projected = _elements(settled_layout, "settled structural core")
+        residual: list[dict[str, Any]] = []
+        order_correction = None
+    elif order_override_contract is None:
         projected, residual = project_structural_core(landed_layout, settled_layout)
         order_correction = None
     else:
@@ -912,17 +1235,29 @@ def diagnose_landed_layout(
             overlay_reference,
             order_override_contract,
         )
-    lifecycle, animation, unmatched = match_ambient_members(residual, settled_layout)
-    population, after_population, population_proof = match_population_members(
-        unmatched,
-        landed_layout.get("generation"),
-        settled_layout.get("generation"),
-        primary_trace,
-        confirmation_trace,
-    )
-    overlay, residual_after_overlay = match_overlay_members(
-        after_population, overlay_reference
-    )
+    if structural_core_supersession is not None:
+        lifecycle: list[dict[str, Any]] = []
+        animation: list[dict[str, Any]] = []
+        population: list[dict[str, Any]] = []
+        overlay: list[dict[str, Any]] = []
+        population_proof = {
+            "structural_core_supersession": "exact_v211_controls_contract"
+        }
+        residual_after_overlay: list[dict[str, Any]] = []
+    else:
+        lifecycle, animation, unmatched = match_ambient_members(
+            residual, settled_layout
+        )
+        population, after_population, population_proof = match_population_members(
+            unmatched,
+            landed_layout.get("generation"),
+            settled_layout.get("generation"),
+            primary_trace,
+            confirmation_trace,
+        )
+        overlay, residual_after_overlay = match_overlay_members(
+            after_population, overlay_reference
+        )
     if residual_after_overlay:
         element = residual_after_overlay[0]
         raise LandedDiagnosisError(
@@ -937,6 +1272,7 @@ def diagnose_landed_layout(
         or animation
         or order_correction
         or screen_title_correction
+        or structural_core_supersession
     )
     if not corrected and landed_layout.get("generation") != settled_layout.get("generation"):
         raise LandedDiagnosisError(
@@ -967,5 +1303,6 @@ def diagnose_landed_layout(
         "animated_geometry_dispositions": animation,
         "core_order_correction": order_correction,
         "screen_title_correction": screen_title_correction,
+        "structural_core_supersession": structural_core_supersession,
         "all_differing_members_enumerated": True,
     }
