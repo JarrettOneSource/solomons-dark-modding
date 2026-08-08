@@ -766,7 +766,9 @@ def mutate_v213_derivation_receipt() -> str:
         header = profile_cases._derived_profile_fixture(  # noqa: SLF001
             repo, evidence
         )
-        header["profile_state"]["launch_receipt"]["sha256"] = "0" * 64
+        header["profile_state"]["derivation_evidence"][
+            "clean_completion_receipt"
+        ]["sha256"] = "0" * 64
         profile_state.validate_capture_profile_state(
             repo_root=repo,
             header=header,
@@ -960,7 +962,7 @@ BEHAVIOR_MUTATIONS: tuple[BehaviorMutation, ...] = (
         green_v213_derived_hub_layout,
         mutate_v213_derivation_receipt,
         "native-menu derivation receipt mismatch: mutated derivation receipt "
-        "launch receipt does not equal the pinned derivation witness",
+        "does not bind the exact witness instance and derivation evidence",
         (profile_state.NativeMenuProfileStateError,),
     ),
     BehaviorMutation(

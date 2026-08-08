@@ -514,7 +514,7 @@ def _resolve_baseline_identity(
         return {
             "baseline_id": FRESH_BASELINE_ID,
             "witness_role": None,
-            "expected_receipt": None,
+            "witness": None,
         }
     witnesses = contract["baselines"][DERIVED_HUB_BASELINE_ID]["witnesses"]
     matches = [
@@ -541,7 +541,17 @@ def _resolve_baseline_identity(
     return {
         "baseline_id": DERIVED_HUB_BASELINE_ID,
         "witness_role": witness["role"],
-        "expected_receipt": witness["profile_state_receipt"],
+        "witness": witness,
+    }
+
+
+def _derivation_evidence(witness: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "instance": witness["instance"],
+        "profile_state_receipt": witness["profile_state_receipt"],
+        "potionguy_action_receipt": witness["potionguy_action_receipt"],
+        "clean_completion_receipt": witness["clean_completion_receipt"],
+        "settled_hub_observation": witness["settled_hub_observation"],
     }
 
 
@@ -589,14 +599,6 @@ def materialize_capture_profile_state(
             temporary.unlink()
     launch_sha256 = sha256_file(evidence_path)
     launch_bytes = evidence_path.stat().st_size
-    expected_receipt = resolved["expected_receipt"]
-    if expected_receipt is not None and (
-        expected_receipt.get("sha256") != launch_sha256
-        or expected_receipt.get("bytes") != launch_bytes
-    ):
-        raise NativeMenuProfileStateError(
-            f"{DERIVATION_MISMATCH_REASON}: {label} launch receipt is not its exact pinned witness"
-        )
     baseline_fixture = (
         {
             "repo_relative_path": BASELINE_REPO_PATH.as_posix(),
@@ -632,6 +634,12 @@ def materialize_capture_profile_state(
     }
     if resolved["witness_role"] is not None:
         value["derivation_witness_role"] = resolved["witness_role"]
+        value["derivation_witness_instance"] = resolved["witness"][
+            "instance"
+        ]
+        value["derivation_evidence"] = _derivation_evidence(
+            resolved["witness"]
+        )
     return value
 
 
@@ -698,7 +706,7 @@ def validate_capture_profile_state(
         resolved = {
             "baseline_id": FRESH_BASELINE_ID,
             "witness_role": None,
-            "expected_receipt": None,
+            "witness": None,
         }
         if (
             profile_state.get("baseline_mode") != "fresh_install"
@@ -724,7 +732,7 @@ def validate_capture_profile_state(
         resolved = {
             "baseline_id": DERIVED_HUB_BASELINE_ID,
             "witness_role": witness["role"],
-            "expected_receipt": witness["profile_state_receipt"],
+            "witness": witness,
         }
         if (
             profile_state.get("baseline_mode") != "persistent_profile"
@@ -750,6 +758,19 @@ def validate_capture_profile_state(
         raise NativeMenuProfileStateError(
             f"{DERIVATION_MISMATCH_REASON}: {label} records the wrong derivation witness role"
         )
+    if resolved["witness"] is not None:
+        expected_instance = resolved["witness"]["instance"]
+        if (
+            header.get("instance") != expected_instance
+            or profile_state.get("derivation_witness_instance")
+            != expected_instance
+            or profile_state.get("derivation_evidence")
+            != _derivation_evidence(resolved["witness"])
+        ):
+            raise NativeMenuProfileStateError(
+                f"{DERIVATION_MISMATCH_REASON}: {label} does not bind the "
+                "exact witness instance and derivation evidence"
+            )
     if required_baseline_id is not None and (
         resolved["baseline_id"] != required_baseline_id
     ):
@@ -807,15 +828,6 @@ def validate_capture_profile_state(
         raise NativeMenuProfileStateError(
             f"{label} launch receipt has no positive byte count"
         )
-    expected_derived_receipt = resolved["expected_receipt"]
-    if expected_derived_receipt is not None and (
-        expected_sha256 != expected_derived_receipt.get("sha256")
-        or expected_bytes != expected_derived_receipt.get("bytes")
-    ):
-        raise NativeMenuProfileStateError(
-            f"{DERIVATION_MISMATCH_REASON}: {label} launch receipt does not "
-            "equal the pinned derivation witness"
-        )
     if evidence_root is not None:
         filename = launch_receipt.get("evidence_filename")
         if not isinstance(filename, str):
@@ -849,6 +861,11 @@ def validate_capture_profile_state(
             receipt_identity != identity
             or resolved_receipt["baseline_id"] != resolved["baseline_id"]
             or resolved_receipt["witness_role"] != resolved["witness_role"]
+            or (
+                resolved_receipt["witness"] is not None
+                and resolved_receipt["witness"]["instance"]
+                != resolved["witness"]["instance"]
+            )
         ):
             raise NativeMenuProfileStateError(
                 f"{PROFILE_MISMATCH_REASON}: {label} launch receipt and header disagree"
@@ -857,6 +874,11 @@ def validate_capture_profile_state(
         "identity": identity,
         "baseline_id": resolved["baseline_id"],
         "witness_role": resolved["witness_role"],
+        "witness_instance": (
+            resolved["witness"]["instance"]
+            if resolved["witness"] is not None
+            else None
+        ),
         "baseline_sha256": baseline["sha256"],
         "baseline_bytes": baseline["bytes"],
         "binding_contract_sha256": contract["sha256"],

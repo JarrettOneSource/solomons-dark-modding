@@ -174,12 +174,29 @@ def _derived_profile_fixture(
         "bytes": contract_path.stat().st_size,
     }
     return {
+        "instance": witness["instance"],
         "source": {"profile_state_identity_sha256": identity},
         "profile_state": {
             "schema": RECEIPT_SCHEMA,
             "profile_state_identity_sha256": identity,
             "baseline_id": "hub_new_game_two_action_v213",
             "derivation_witness_role": "primary",
+            "derivation_witness_instance": witness["instance"],
+            "derivation_evidence": {
+                "instance": witness["instance"],
+                "profile_state_receipt": copy.deepcopy(
+                    witness["profile_state_receipt"]
+                ),
+                "potionguy_action_receipt": copy.deepcopy(
+                    witness["potionguy_action_receipt"]
+                ),
+                "clean_completion_receipt": copy.deepcopy(
+                    witness["clean_completion_receipt"]
+                ),
+                "settled_hub_observation": copy.deepcopy(
+                    witness["settled_hub_observation"]
+                ),
+            },
             "baseline_mode": "persistent_profile",
             "source_sandbox_excluded": False,
             "retail_appdata_seeded": False,
@@ -386,7 +403,9 @@ class NativeMenuProfileStateTests(unittest.TestCase):
             repo = root / "repo"
             evidence = root / "evidence"
             header = _derived_profile_fixture(repo, evidence)
-            header["profile_state"]["launch_receipt"]["sha256"] = "0" * 64
+            header["profile_state"]["derivation_evidence"][
+                "clean_completion_receipt"
+            ]["sha256"] = "0" * 64
 
             with self.assertRaisesRegex(
                 NativeMenuProfileStateError, DERIVATION_MISMATCH_REASON

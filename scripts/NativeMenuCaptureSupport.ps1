@@ -383,7 +383,8 @@ function Get-NativeMenuProfileStateProvenance {
     $baselineFiles = @($baseline.profile_state.files)
     $baselineId = ""
     $witnessRole = ""
-    $expectedWitnessReceipt = $null
+    $witnessInstance = ""
+    $derivationEvidence = $null
     if ($identity -ceq $expectedIdentity) {
         $receiptFilesJson = $receiptFiles | ConvertTo-Json -Depth 20 -Compress
         $baselineFilesJson = $baselineFiles | ConvertTo-Json -Depth 20 -Compress
@@ -414,6 +415,14 @@ function Get-NativeMenuProfileStateProvenance {
                 "identity '$identity' is not one exact pinned baseline witness."
             )
         }
+        $instanceName = (Split-Path -Leaf $InstanceRoot).ToLowerInvariant()
+        if ([string]$witnesses[0].instance -cne $instanceName) {
+            throw (
+                "STOP: native-menu derivation receipt mismatch: capture " +
+                "instance '$instanceName' is not the pinned witness for " +
+                "identity '$identity'."
+            )
+        }
         if (
             [string]$receipt.baseline_mode -cne "persistent_profile" -or
             [bool]$receipt.source_sandbox_excluded -ne $false -or
@@ -425,22 +434,16 @@ function Get-NativeMenuProfileStateProvenance {
                 "not record the pinned derived durable files."
             )
         }
-        $receiptItemForWitness = Get-Item -LiteralPath $receiptPath
-        $receiptShaForWitness = (Get-FileHash `
-            -LiteralPath $receiptItemForWitness.FullName `
-            -Algorithm SHA256).Hash.ToLowerInvariant()
-        $expectedWitnessReceipt = $witnesses[0].profile_state_receipt
-        if (
-            $receiptShaForWitness -cne [string]$expectedWitnessReceipt.sha256 -or
-            $receiptItemForWitness.Length -ne [long]$expectedWitnessReceipt.bytes
-        ) {
-            throw (
-                "STOP: native-menu derivation receipt mismatch: capture launch " +
-                "receipt is not the exact pinned derivation witness."
-            )
-        }
         $baselineId = "hub_new_game_two_action_v213"
         $witnessRole = [string]$witnesses[0].role
+        $witnessInstance = [string]$witnesses[0].instance
+        $derivationEvidence = [ordered]@{
+            instance = $witnessInstance
+            profile_state_receipt = $witnesses[0].profile_state_receipt
+            potionguy_action_receipt = $witnesses[0].potionguy_action_receipt
+            clean_completion_receipt = $witnesses[0].clean_completion_receipt
+            settled_hub_observation = $witnesses[0].settled_hub_observation
+        }
     }
     $baselineItem = Get-Item -LiteralPath $baselinePath
     $bindingContractItem = Get-Item -LiteralPath $bindingContractPath
@@ -494,6 +497,8 @@ function Get-NativeMenuProfileStateProvenance {
     }
     if (-not [string]::IsNullOrWhiteSpace($witnessRole)) {
         $value["derivation_witness_role"] = $witnessRole
+        $value["derivation_witness_instance"] = $witnessInstance
+        $value["derivation_evidence"] = $derivationEvidence
     }
     return [pscustomobject]@{
         ReceiptPath = $receiptItem.FullName

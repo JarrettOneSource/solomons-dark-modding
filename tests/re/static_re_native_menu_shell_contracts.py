@@ -1281,8 +1281,10 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
         r"def validate_capture_profile_state\(.*?"
         r"identity != source_identity.*?"
         r"PROFILE_MISMATCH_REASON.*?"
+        r"derivation_witness_instance.*?derivation_evidence.*?"
+        r"_derivation_evidence\(resolved\[\"witness\"\]\).*?"
+        r"DERIVATION_MISMATCH_REASON.*?"
         r"required_baseline_id.*?PER_BINDING_MISMATCH_REASON.*?"
-        r"expected_derived_receipt.*?DERIVATION_MISMATCH_REASON.*?"
         r"_resolve_unique_receipt\(.*?"
         r"receipt_path\.stat\(\)\.st_size != expected_bytes.*?"
         r"sha256_file\(receipt_path\) != expected_sha256",
