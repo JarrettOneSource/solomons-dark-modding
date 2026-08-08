@@ -174,7 +174,7 @@ $temporaryPath = $outputItemPath + ".menufix.tmp"
 try {
     [IO.File]::WriteAllText(
         $temporaryPath,
-        ($value | ConvertTo-Json -Depth 20) + [Environment]::NewLine,
+        ($value | ConvertTo-Json -Depth 20) + "`n",
         [Text.UTF8Encoding]::new($false)
     )
     [IO.File]::Move($temporaryPath, $outputItemPath)

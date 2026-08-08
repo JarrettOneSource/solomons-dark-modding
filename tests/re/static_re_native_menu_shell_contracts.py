@@ -1128,6 +1128,7 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
     )
     profile_python = _read("tools/native_menu_profile_state.py")
     browser_python = _read("tools/native_menu_browser_tab.py")
+    attributes = _read(".gitattributes")
     support = _read("scripts/NativeMenuCaptureSupport.ps1")
     baseline_writer = _read("scripts/Write-NativeMenuProfileStateBaseline.ps1")
     resolver = _read("tools/resolve_native_menu_ambient_campaign.py")
@@ -1236,6 +1237,14 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
         r"solomon-dark-native-menu-profile-state-baseline-v1",
         "the committed pristine baseline can be authored without a live, clean, "
         "exact-binary fresh instance",
+    )
+    _require_regex(
+        attributes + "\n" + baseline_writer,
+        r"^tests/fixtures/webgame/native-menu-profile-state-baseline\.json "
+        r"text eol=lf$.*?"
+        r"\(\$value \| ConvertTo-Json -Depth 20\) \+ \"`n\"",
+        "the committed profile-state baseline no longer has identical LF bytes "
+        "on Windows capture hosts and CI checkouts",
     )
     _require_regex(
         profile_python,
