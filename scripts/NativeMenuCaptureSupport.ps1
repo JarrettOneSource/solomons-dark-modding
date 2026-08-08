@@ -32,7 +32,7 @@ function Assert-NativeMenuCaptureSurfaceAgreement {
         [Parameter(Mandatory = $true)][string]$MachineClassifiedSurface
     )
 
-    $captureSurface = Get-NativeMenuCaptureSurfaceId `
+    $captureSurface = Get-NativeMenuMachineSurfaceId `
         -ScreenTag $OperatorScreenTag
     if (
         $MachineClassifiedSurface -cne $captureSurface -and
@@ -78,6 +78,20 @@ function Test-NativeMenuScreenTagsEquivalent {
 }
 
 function Get-NativeMenuCaptureSurfaceId {
+    param([Parameter(Mandatory = $true)][string]$ScreenTag)
+
+    if ($ScreenTag -in @(
+        "dark_cloud_browser",
+        "dark_cloud_recent",
+        "dark_cloud_online_levels",
+        "dark_cloud_my_levels"
+    )) {
+        return "dark_cloud_browser"
+    }
+    return $ScreenTag
+}
+
+function Get-NativeMenuMachineSurfaceId {
     param([Parameter(Mandatory = $true)][string]$ScreenTag)
 
     switch ($ScreenTag) {
@@ -696,7 +710,7 @@ function Wait-NativeMenuActionDispatch {
         [Parameter(Mandatory = $true)][string]$ExpectedDestinationScreen
     )
 
-    $captureDestinationScreen = Get-NativeMenuCaptureSurfaceId `
+    $captureDestinationScreen = Get-NativeMenuMachineSurfaceId `
         -ScreenTag $ExpectedDestinationScreen
     $clock = [Diagnostics.Stopwatch]::StartNew()
     $lastStatus = "not_ready"
@@ -951,7 +965,18 @@ return table.concat({
                 NativeGeneration = [uint64]$mismatchFields[2]
             }
         }
-        throw "BROKEN: a surface mismatch passed the capture agreement gate."
+        return [pscustomobject]@{
+            Status = "not_ready"
+            Detail = (
+                "machine-classified surface '$machineSurface' reached the " +
+                "expected logical layout, but its exact capture snapshot " +
+                "is still populating"
+            )
+            SemanticSurface = $machineSurface
+            MachineClassifiedSurface = $machineSurface
+            NativeSurface = $mismatchFields[1]
+            NativeGeneration = [uint64]$mismatchFields[2]
+        }
     }
     $parts = @($result.Text -split "`r?`n", 7)
     if (
