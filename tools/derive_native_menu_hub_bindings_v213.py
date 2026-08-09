@@ -86,6 +86,17 @@ def evidence_receipt(path: Path, evidence_root: Path) -> dict[str, Any]:
     }
 
 
+def assert_receipt_matches(
+    recorded: object,
+    path: Path,
+    evidence_root: Path,
+    label: str,
+) -> None:
+    actual = evidence_receipt(path, evidence_root)
+    if not isinstance(recorded, dict) or recorded != actual:
+        raise HubBindingDerivationError(f"{label} records a false evidence receipt")
+
+
 def receipt_state(receipt: dict[str, Any], label: str) -> dict[str, Any]:
     files = receipt.get("files")
     if not isinstance(files, list) or not files:
@@ -228,19 +239,19 @@ def derive(repo_root: Path, evidence_root: Path) -> dict[str, Any]:
     refresh_rows = refresh.get("instances")
     if (
         refresh.get("schema")
-        != "solomon-dark-hub-v213-recapture-baseline-refresh-audit-v1"
+        != "solomon-dark-hub-v213-recapture-baseline-refresh-audit-v2"
         or not isinstance(refresh_rows, list)
         or len(refresh_rows) != 2
         or {row.get("instance") for row in refresh_rows if isinstance(row, dict)}
-        != {"menufx-v9p16", "menufx-v9p17"}
+        != {"menufx-v9p40", "menufx-v9p17"}
     ):
         raise HubBindingDerivationError(
             "v2.13 recapture refresh does not name exactly two derived witnesses"
         )
 
     primary_observation = evidence_root / (
-        "raw-v9/menufx-v9p16/annalist-derivation/relaunch-two-action-1/"
-        "direct-new-game-route/restart-05-hub.observation.json"
+        "raw-v9/hub-restart-v212/replacement-witness-p40/route-final-proof/"
+        "restart-05-hub.observation.json"
     )
     confirmation_observation = evidence_root / (
         "raw-v9/menufx-v9p17/annalist-derivation/relaunch-two-action-1/"
@@ -297,12 +308,20 @@ def derive(repo_root: Path, evidence_root: Path) -> dict[str, Any]:
         )
 
     witness_specs = (
-        ("primary", "menufx-v9p16"),
+        ("primary", "menufx-v9p40"),
         ("confirmation", "menufx-v9p17"),
     )
-    audit_identities = confirmation.get("launch_profile_state_identity_sha256")
-    if not isinstance(audit_identities, dict):
-        raise HubBindingDerivationError("v2.13 audit lost profile identities")
+    refresh_cross_instance = refresh.get("cross_instance")
+    if (
+        not isinstance(refresh_cross_instance, dict)
+        or refresh_cross_instance.get("equal") is not True
+        or refresh_cross_instance.get("settled_element_count") != v213_count
+        or refresh_cross_instance.get("resolved_semantic_multiset_sha256")
+        != v213_hash
+    ):
+        raise HubBindingDerivationError(
+            "v2.13 recapture refresh does not prove cross-instance settled equality"
+        )
     witnesses: list[dict[str, Any]] = []
     for role, instance in witness_specs:
         matching_refresh_rows = [
@@ -315,16 +334,53 @@ def derive(repo_root: Path, evidence_root: Path) -> dict[str, Any]:
                 f"v2.13 recapture refresh lookup is ambiguous for {instance}"
             )
         refresh_row = matching_refresh_rows[0]
-        profile_path = evidence_root / (
-            f"raw-v9/hub-restart-v212/profile-state-v213-recapture/{instance}/"
-            f"{instance}.derived-profile-state.json"
-        )
+        if instance == "menufx-v9p40":
+            profile_path = evidence_root / (
+                "raw-v9/hub-restart-v212/profile-state-v213-recapture/"
+                "menufx-v9p40/menufx-v9p40.derived-profile-state.json"
+            )
+            original_profile_path = evidence_root / (
+                "raw-v9/hub-restart-v212/profile-state-v213-final/"
+                "menufx-v9p40/menufx-v9p40.derived-profile-state.json"
+            )
+            route_complete_path = evidence_root / (
+                "raw-v9/hub-restart-v212/replacement-witness-p40/"
+                "route-final-proof/99-route-complete.profile-state.json"
+            )
+            action_path = evidence_root / (
+                "raw-v9/hub-restart-v212/replacement-witness-p40/"
+                "potionguy-action-proof/potionguy-action.json"
+            )
+            completion_path = evidence_root / (
+                "raw-v9/hub-restart-v212/replacement-witness-p40/"
+                "two-action-completion-retry/derived-baseline-completion.json"
+            )
+        else:
+            profile_path = evidence_root / (
+                "raw-v9/hub-restart-v212/profile-state-v213-recapture/"
+                "menufx-v9p17/menufx-v9p17.derived-profile-state.json"
+            )
+            original_profile_path = evidence_root / (
+                "raw-v9/hub-restart-v212/profile-state-v213/menufx-v9p17/"
+                "menufx-v9p17.derived-profile-state.json"
+            )
+            route_complete_path = evidence_root / (
+                "raw-v9/menufx-v9p17/annalist-derivation/"
+                "relaunch-two-action-1/direct-new-game-route/"
+                "99-route-complete.profile-state.json"
+            )
+            action_path = evidence_root / (
+                "raw-v9/menufx-v9p17/annalist-derivation/"
+                "potionguy-derived-run1/potionguy-action-proof/"
+                "potionguy-action.json"
+            )
+            completion_path = evidence_root / (
+                "raw-v9/menufx-v9p17/annalist-derivation/"
+                "potionguy-derived-run1/two-action-completion/"
+                "derived-baseline-completion.json"
+            )
         profile = read_object(profile_path, f"{instance} derived profile receipt")
         state = receipt_state(profile, f"{instance} derived profile receipt")
-        original_profile_path = evidence_root / (
-            f"raw-v9/hub-restart-v212/profile-state-v213/{instance}/"
-            f"{instance}.derived-profile-state.json"
-        )
         original_profile = read_object(
             original_profile_path,
             f"{instance} original derived profile receipt",
@@ -333,69 +389,109 @@ def derive(repo_root: Path, evidence_root: Path) -> dict[str, Any]:
             original_profile,
             f"{instance} original derived profile receipt",
         )
-        route_complete_path = evidence_root / (
-            f"raw-v9/{instance}/annalist-derivation/relaunch-two-action-1/"
-            "direct-new-game-route/99-route-complete.profile-state.json"
-        )
         route_complete = read_object(
             route_complete_path,
             f"{instance} prior route-complete profile state",
         )
         recapture_receipt = refresh_row.get("recapture_receipt")
+        original_receipt = refresh_row.get("prior_receipt")
         route_receipt = refresh_row.get("prior_route_completion")
         differences = refresh_row.get("difference")
+        route_differences = refresh_row.get("route_to_recapture_difference")
+        expected_changed_paths = (
+            {
+                "settings.txt",
+                "savegames/solomondark/savegames/_survival/gamestate.sav",
+            }
+            if instance == "menufx-v9p40"
+            else {"settings.txt"}
+        )
+        expected_route_changed_paths = (
+            {"savegames/solomondark/savegames/_survival/gamestate.sav"}
+            if instance == "menufx-v9p40"
+            else set()
+        )
         if (
-            audit_identities.get(instance) != original_state["identity"]
+            refresh_row.get("role") != role
             or refresh_row.get("prior_launch_profile_state_identity_sha256")
             != original_state["identity"]
             or refresh_row.get("recapture_profile_state_identity_sha256")
             != state["identity"]
-            or not isinstance(recapture_receipt, dict)
-            or recapture_receipt.get("sha256") != sha256_file(profile_path)
-            or recapture_receipt.get("bytes") != profile_path.stat().st_size
-            or not isinstance(route_receipt, dict)
-            or route_receipt.get("sha256") != sha256_file(route_complete_path)
-            or route_receipt.get("bytes") != route_complete_path.stat().st_size
-            or normalized_file_set(
-                route_complete.get("files"),
-                f"{instance} prior route-complete profile state",
-            )
-            != normalized_file_set(
-                state["files"],
-                f"{instance} recapture profile state",
-            )
-            or refresh_row.get("unchanged_non_settings_file_count") != 5
             or not isinstance(differences, list)
-            or len(differences) != 1
-            or differences[0].get("relative_path") != "settings.txt"
+            or {
+                str(row.get("relative_path", "")).replace("\\", "/").casefold()
+                for row in differences
+                if isinstance(row, dict)
+            }
+            != expected_changed_paths
+            or not isinstance(route_differences, list)
+            or {
+                str(row.get("relative_path", "")).replace("\\", "/").casefold()
+                for row in route_differences
+                if isinstance(row, dict)
+            }
+            != expected_route_changed_paths
+            or refresh_row.get("unchanged_non_settings_file_count")
+            != 6 - len(expected_changed_paths)
+            or not isinstance(route_receipt, dict)
+            or route_receipt.get("normalized_file_membership_equals_recapture")
+            is not True
+            or {
+                (row[0], row[1])
+                for row in normalized_file_set(
+                    route_complete.get("files"),
+                    f"{instance} prior route-complete profile state",
+                )
+            }
+            != {
+                (row[0], row[1])
+                for row in normalized_file_set(
+                    state["files"],
+                    f"{instance} recapture profile state",
+                )
+            }
         ):
             raise HubBindingDerivationError(
                 f"v2.13 recapture refresh does not prove the exact post-route "
                 f"derived profile for {instance}"
             )
-        action_path = evidence_root / (
-            f"raw-v9/{instance}/annalist-derivation/"
-            + (
-                "potionguy-action-proof/potionguy-action.json"
-                if instance == "menufx-v9p16"
-                else "potionguy-derived-run1/potionguy-action-proof/"
-                "potionguy-action.json"
-            )
-        )
-        completion_path = evidence_root / (
-            f"raw-v9/{instance}/annalist-derivation/"
-            + (
-                "two-action-completion/derived-baseline-completion.json"
-                if instance == "menufx-v9p16"
-                else "potionguy-derived-run1/two-action-completion/"
-                "derived-baseline-completion.json"
-            )
-        )
         observation_path = (
             primary_observation if role == "primary" else confirmation_observation
         )
-        for audited_path in (action_path, completion_path, observation_path):
-            one_input_receipt(case_a, audited_path)
+        assert_receipt_matches(
+            original_receipt,
+            original_profile_path,
+            evidence_root,
+            f"{instance} pre-route profile",
+        )
+        assert_receipt_matches(
+            recapture_receipt,
+            profile_path,
+            evidence_root,
+            f"{instance} post-route profile",
+        )
+        route_receipt_without_claim = {
+            key: value
+            for key, value in route_receipt.items()
+            if key != "normalized_file_membership_equals_recapture"
+        }
+        assert_receipt_matches(
+            route_receipt_without_claim,
+            route_complete_path,
+            evidence_root,
+            f"{instance} route completion",
+        )
+        for field, audited_path in (
+            ("potionguy_action_receipt", action_path),
+            ("clean_completion_receipt", completion_path),
+            ("settled_hub_observation", observation_path),
+        ):
+            assert_receipt_matches(
+                refresh_row.get(field),
+                audited_path,
+                evidence_root,
+                f"{instance} {field}",
+            )
         witnesses.append(
             {
                 "role": role,

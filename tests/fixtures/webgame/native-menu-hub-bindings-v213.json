@@ -30,8 +30,8 @@
       "identity_phase": "post_final_settled_route",
       "recapture_refresh_audit": {
         "evidence_path": "raw-v9/hub-restart-v212/hub-v213-recapture-baseline-refresh-audit.json",
-        "sha256": "3bc66d600353dfe681cb99d0348524c2167711cb26ae8574e216ddac541a8125",
-        "bytes": 6553
+        "sha256": "6bbb7a3f2aa7ebfbb1cf658f5399619151e8802454c752f8e0971281323b6ba1",
+        "bytes": 7693
       },
       "procedure": [
         "start from the pinned pristine fresh_install baseline",
@@ -75,27 +75,27 @@
       "witnesses": [
         {
           "role": "primary",
-          "instance": "menufx-v9p16",
-          "profile_state_identity_sha256": "620351471780d185ae6dd4502ba74b45218de6e8c61c9c48cd3297419909eae5",
+          "instance": "menufx-v9p40",
+          "profile_state_identity_sha256": "97a0ae31aa1fab0de82922509871dcded28fdfee6a4bfc253b6502e2a4606098",
           "profile_state_receipt": {
-            "evidence_path": "raw-v9/hub-restart-v212/profile-state-v213-recapture/menufx-v9p16/menufx-v9p16.derived-profile-state.json",
-            "sha256": "b4a1fbc833c7f02b9540155e8c609b1522684e165d01901a96c3964df99efd1d",
+            "evidence_path": "raw-v9/hub-restart-v212/profile-state-v213-recapture/menufx-v9p40/menufx-v9p40.derived-profile-state.json",
+            "sha256": "011a0973ea464cb499c14cf44853d43fe705029b69a7371ddee19413c1471a0d",
             "bytes": 1994
           },
           "potionguy_action_receipt": {
-            "evidence_path": "raw-v9/menufx-v9p16/annalist-derivation/potionguy-action-proof/potionguy-action.json",
-            "sha256": "e576b98152393af6ec07c6e23206787c3cc7ca288fe63b10ee8bd899246b05e9",
-            "bytes": 2829
+            "evidence_path": "raw-v9/hub-restart-v212/replacement-witness-p40/potionguy-action-proof/potionguy-action.json",
+            "sha256": "cce9056acec8339ca269c54673cddbc10940e10bc0f6da2ef843af4bf701aa44",
+            "bytes": 2835
           },
           "clean_completion_receipt": {
-            "evidence_path": "raw-v9/menufx-v9p16/annalist-derivation/two-action-completion/derived-baseline-completion.json",
-            "sha256": "4a04bdfbd794f1c70bed9fdc95cc8ed467721ae8e7604b96f395a38c3174ae40",
-            "bytes": 3441
+            "evidence_path": "raw-v9/hub-restart-v212/replacement-witness-p40/two-action-completion-retry/derived-baseline-completion.json",
+            "sha256": "3826a97a07dcb972d6b2a63b506bfc91e0c3b431e386d6e57df0f75b0bddf1d1",
+            "bytes": 3461
           },
           "settled_hub_observation": {
-            "evidence_path": "raw-v9/menufx-v9p16/annalist-derivation/relaunch-two-action-1/direct-new-game-route/restart-05-hub.observation.json",
-            "sha256": "15f6bca490a1020e75dd6ece339aef9a6ce7a1c8aba3395c0369dfc8f7c97d6d",
-            "bytes": 1936932
+            "evidence_path": "raw-v9/hub-restart-v212/replacement-witness-p40/route-final-proof/restart-05-hub.observation.json",
+            "sha256": "7122d04b458959bbe33ff79bfd1a3dcae025643cffadfaacb37d24c072b0db8a",
+            "bytes": 1948707
           },
           "durable_file_count": 6
         },
