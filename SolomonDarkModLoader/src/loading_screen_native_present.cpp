@@ -85,6 +85,15 @@ bool g_loading_capture_settled = false;
 std::string g_loading_stable_semantic;
 std::vector<LoadingEvidenceSample> g_loading_capture_samples;
 
+bool IsLoadingCaptureSettlementBarrier(
+    const LoadingScreenSnapshot& snapshot) {
+    return (
+        snapshot.flow == LoadingScreenFlow::SinglePlayer &&
+        snapshot.stage == LoadingScreenStage::MaterializingParticipants) ||
+        (snapshot.flow != LoadingScreenFlow::SinglePlayer &&
+         snapshot.stage == LoadingScreenStage::WaitingForParticipants);
+}
+
 std::wstring ReadEnvironmentVariable(const wchar_t* name) {
     const DWORD required =
         GetEnvironmentVariableW(name, nullptr, 0);
@@ -497,8 +506,7 @@ void CaptureLoadingScreenEvidenceFrame(
         *layout);
     if (!ReadEnvironmentVariable(
              kCaptureDirectoryEnvironment).empty() &&
-        snapshot.stage ==
-            LoadingScreenStage::WaitingForParticipants &&
+        IsLoadingCaptureSettlementBarrier(snapshot) &&
         !g_loading_capture_settled) {
         const auto deadline = GetTickCount64() + 60000;
         while (!g_loading_capture_settled &&

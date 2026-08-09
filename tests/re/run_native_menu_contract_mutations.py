@@ -1426,10 +1426,21 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "special.loading-final-barrier-settle-hold",
         RECORDER,
         "SolomonDarkModLoader/src/loading_screen_native_present.cpp",
-        "snapshot.stage ==\n            LoadingScreenStage::WaitingForParticipants",
-        "snapshot.stage !=\n            LoadingScreenStage::WaitingForParticipants",
-        "loading-screen capture no longer holds and settle-samples the real "
-        "final barrier or bounds failure as STOP",
+        "snapshot.stage == LoadingScreenStage::WaitingForParticipants",
+        "snapshot.stage != LoadingScreenStage::WaitingForParticipants",
+        "loading-screen capture no longer holds and settle-samples both the "
+        "single-player materialization terminal and multiplayer participant "
+        "barrier, or bounds failure as STOP",
+    ),
+    StaticMutation(
+        "special.loading-single-player-terminal-settle-hold",
+        RECORDER,
+        "SolomonDarkModLoader/src/loading_screen_native_present.cpp",
+        "snapshot.flow == LoadingScreenFlow::SinglePlayer",
+        "snapshot.flow != LoadingScreenFlow::SinglePlayer",
+        "loading-screen capture no longer holds and settle-samples both the "
+        "single-player materialization terminal and multiplayer participant "
+        "barrier, or bounds failure as STOP",
     ),
     StaticMutation(
         "special.loading-pins-client-layout",

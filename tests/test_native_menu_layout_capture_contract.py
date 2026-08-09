@@ -81,12 +81,19 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         )
         self.assertRegex(
             source,
-            r"(?s)snapshot\.stage\s*==\s*"
+            r"(?s)snapshot\.flow\s*==\s*"
+            r"LoadingScreenFlow::SinglePlayer\s*&&\s*"
+            r"snapshot\.stage\s*==\s*"
+            r"LoadingScreenStage::MaterializingParticipants.*?"
+            r"snapshot\.flow\s*!=\s*"
+            r"LoadingScreenFlow::SinglePlayer\s*&&\s*"
+            r"snapshot\.stage\s*==\s*"
             r"LoadingScreenStage::WaitingForParticipants.*?"
+            r"IsLoadingCaptureSettlementBarrier\(snapshot\).*?"
             r"while \(!g_loading_capture_settled.*?"
             r"CaptureLoadingScreenEvidenceFrameInternal\(\s*"
             r"snapshot,\s*\*layout\)",
-            "the real final loading barrier must remain presented until settled",
+            "single-player and multiplayer terminal loading barriers must remain presented until settled",
         )
 
     def test_layout_api_retains_transient_screens(self) -> None:

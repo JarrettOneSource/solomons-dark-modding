@@ -1085,15 +1085,22 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
     )
     _require_regex(
         loading_capture,
+        r"bool IsLoadingCaptureSettlementBarrier\(.*?"
+        r"snapshot\.flow\s*==\s*LoadingScreenFlow::SinglePlayer\s*&&\s*"
+        r"snapshot\.stage\s*==\s*"
+        r"LoadingScreenStage::MaterializingParticipants.*?"
+        r"snapshot\.flow\s*!=\s*LoadingScreenFlow::SinglePlayer\s*&&\s*"
         r"snapshot\.stage\s*==\s*"
         r"LoadingScreenStage::WaitingForParticipants.*?"
+        r"IsLoadingCaptureSettlementBarrier\(snapshot\).*?"
         r"deadline\s*=\s*GetTickCount64\(\)\s*\+\s*60000.*?"
         r"while \(!g_loading_capture_settled.*?"
         r"Sleep\(50\).*?CaptureLoadingScreenEvidenceFrameInternal\(\s*"
         r"snapshot,\s*\*layout\).*?"
         r"STOP: loading screen never satisfied",
-        "loading-screen capture no longer holds and settle-samples the real "
-        "final barrier or bounds failure as STOP",
+        "loading-screen capture no longer holds and settle-samples both the "
+        "single-player materialization terminal and multiplayer participant "
+        "barrier, or bounds failure as STOP",
     )
     _require_regex(
         loader_capture,
