@@ -165,6 +165,9 @@ std::string ResolveCapturedLayoutScreenId(
         contains_text("back")) {
         return "profile_save_select";
     }
+    if (contains_text("item 1") && has_art("ControlPanel.0")) {
+        return "dark_cloud_login_settings";
+    }
     struct TextScreen {
         const char* text;
         const char* screen_id;
@@ -174,7 +177,6 @@ std::string ResolveCapturedLayoutScreenId(
         {"search cloud for boneyards", "dark_cloud_search"},
         {"sort levels by", "dark_cloud_sort"},
         {"level options", "dark_cloud_options"},
-        {"item 1", "dark_cloud_login_settings"},
         {"dark cloud settings", "dark_cloud_settings"},
         {"tweak performance", "performance"},
         {"game over", "game_over"},

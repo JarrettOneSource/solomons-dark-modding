@@ -1692,6 +1692,10 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
 def test_native_menu_browser_tab_measurement_records_are_aggregable() -> str:
     assert_module_runs_in_ci("test_native_menu_layout_capture_contract")
     support = _read("scripts/NativeMenuCaptureSupport.ps1")
+    layout_capture = _read(
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "menu_layout_capture_snapshot_and_hooks.inl"
+    )
     _require_regex(
         support,
         r"function Resolve-NativeMenuBrowserTabState.*?"
@@ -1701,7 +1705,23 @@ def test_native_menu_browser_tab_measurement_records_are_aggregable() -> str:
         "browser-tab geometry measurements are no longer typed records that "
         "Windows PowerShell can aggregate before enforcing the selected tab",
     )
-    return "browser-tab geometry is aggregated from typed measured records"
+    _require_regex(
+        layout_capture,
+        r'contains_text\("item 1"\)\s*&&\s*'
+        r'has_art\("ControlPanel\.0"\).*?'
+        r'return "dark_cloud_login_settings";',
+        "My Levels can no longer keep its browser identity when roster text "
+        "shares Item 1 with the ControlPanel-backed login modal",
+    )
+    if '{"item 1", "dark_cloud_login_settings"}' in layout_capture:
+        raise StaticReTestFailure(
+            "My Levels is again misclassified as login settings from shared "
+            "roster text without the measured modal-art witness"
+        )
+    return (
+        "browser-tab geometry is aggregated from typed measured records and "
+        "shared roster text cannot masquerade as the login modal"
+    )
 
 
 def test_native_menu_hall_layout_retention_is_native_owner_bounded() -> str:
