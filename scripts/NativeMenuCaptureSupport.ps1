@@ -189,12 +189,12 @@ function Get-NativeMenuMachineSurfaceId {
             "dark_cloud_recent",
             "dark_cloud_online_levels",
             "dark_cloud_my_levels",
-            "dark_cloud_sort",
-            "dark_cloud_options",
             "dark_cloud_login_settings"
         ) } {
             return "dark_cloud_browser"
         }
+        "dark_cloud_sort" { return "dark_cloud_sort" }
+        "dark_cloud_options" { return "dark_cloud_options" }
         "skill_picker" { return "spell_picker" }
         { $_ -in @(
             "hub_new_game",

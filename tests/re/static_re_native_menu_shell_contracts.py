@@ -1790,12 +1790,21 @@ def test_native_menu_browser_tab_measurement_records_are_aggregable() -> str:
         "both their active native action identity and exact measured modal "
         "chrome before replacing the unobscured browser classification",
     )
+    _require_regex(
+        support,
+        r"function Get-NativeMenuMachineSurfaceId.*?"
+        r'"dark_cloud_sort"\s*\{\s*return "dark_cloud_sort"\s*\}.*?'
+        r'"dark_cloud_options"\s*\{\s*return "dark_cloud_options"\s*\}',
+        "blocking Dark Cloud Sort and Options classifications can no longer "
+        "be collapsed back to the unobscured browser while their native "
+        "action dispatch remains inside the modal loop",
+    )
     return (
         "browser-tab geometry is aggregated from typed measured records and "
         "shared roster text cannot masquerade as the login modal; the guest "
         "search panel resolves from live in-panel text and draw witnesses; "
         "blocking Sort and Options require active native actions plus exact "
-        "modal chrome"
+        "modal chrome and retain their classified identities through dispatch"
     )
 
 
