@@ -9,6 +9,15 @@ from pathlib import Path
 from unittest.mock import patch
 
 from tools import native_menu_settlement_v2 as settlement_v2
+from tools import resolve_native_menu_ambient_campaign as ambient_campaign
+from tools.native_menu_profile_state import (
+    BASELINE_REPO_PATH,
+    FRESH_BASELINE_ID,
+    HUB_BINDINGS_REPO_PATH,
+    RECEIPT_SCHEMA,
+    load_hub_binding_contract,
+    load_profile_state_baseline,
+)
 from tools.native_menu_settlement_v2 import (
     OVERLAY_REFERENCE_SCHEMA,
     SettlementV2Error,
@@ -284,6 +293,45 @@ def _overlay_override_inputs() -> tuple[
 
 
 class NativeMenuSettlementV2Tests(unittest.TestCase):
+    def test_resolver_cli_passes_repo_root_to_campaign(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            args = type(
+                "Arguments",
+                (),
+                {
+                    "repo_root": root / "repo",
+                    "candidate_root": root / "candidates",
+                    "evidence_root": root / "evidence",
+                    "primary_navigation": root / "primary.json",
+                    "confirmation_navigation": root / "confirmation.json",
+                    "motion_observation_root": root / "motion",
+                    "resolved_navigation_output": root / "resolved.json",
+                    "audit_output": root / "audit.json",
+                    "apply": False,
+                    "verify": False,
+                    "supplemental_settled_pair_manifest": None,
+                    "asset_manifest": root / "asset-manifest.json",
+                },
+            )()
+            with (
+                patch.object(ambient_campaign, "parse_args", return_value=args),
+                patch.object(
+                    ambient_campaign,
+                    "resolve_campaign",
+                    return_value={},
+                ) as resolver,
+                patch("builtins.print"),
+            ):
+                self.assertEqual(ambient_campaign.main(), 0)
+
+            resolver.assert_called_once()
+            self.assertEqual(
+                resolver.call_args.args[0],
+                args.repo_root.resolve(),
+                "the resolver CLI must pass the repository root used for asset-manifest validation",
+            )
+
     def test_measures_animation_anchor_and_envelope(self) -> None:
         classified = classify_window(_samples())
 
@@ -816,6 +864,7 @@ class NativeMenuSettlementV2Tests(unittest.TestCase):
     def test_campaign_resolver_applies_and_rederives_every_pair(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             evidence_root = Path(temporary)
+            repo_root = Path(__file__).resolve().parents[1]
             candidate_root = evidence_root / "candidate"
             layout_root = candidate_root / "menu-layouts"
             confirmation_root = candidate_root / "menu-animation-confirmations"
@@ -841,13 +890,18 @@ class NativeMenuSettlementV2Tests(unittest.TestCase):
                 for key, value in classified.items()
                 if key != "layout"
             }
-            trace_path = raw_root / "screen.settlement.json"
+            baseline = load_profile_state_baseline(repo_root)
+            contract = load_hub_binding_contract(repo_root)
+            profile_receipt_path = raw_root / "capture.profile-state.json"
             write(
-                trace_path,
+                profile_receipt_path,
                 {
-                    "schema": "solomon-dark-native-menu-settlement-trace-v2",
-                    "structural_phases": [],
-                    "settled_window_samples": samples,
+                    "schema": RECEIPT_SCHEMA,
+                    "profile_state_identity_sha256": baseline["identity"],
+                    "baseline_mode": "fresh_install",
+                    "source_sandbox_excluded": True,
+                    "retail_appdata_seeded": False,
+                    "files": [],
                 },
             )
             source = {
@@ -855,7 +909,44 @@ class NativeMenuSettlementV2Tests(unittest.TestCase):
                 "source_tree_sha": "2" * 40,
                 "game_executable_sha256": "3" * 64,
                 "loader_dll_sha256": "4" * 64,
+                "profile_state_identity_sha256": baseline["identity"],
             }
+            profile_state = {
+                "schema": RECEIPT_SCHEMA,
+                "profile_state_identity_sha256": baseline["identity"],
+                "baseline_id": FRESH_BASELINE_ID,
+                "baseline_mode": "fresh_install",
+                "source_sandbox_excluded": True,
+                "retail_appdata_seeded": False,
+                "durable_file_count": 0,
+                "baseline_fixture": {
+                    "repo_relative_path": BASELINE_REPO_PATH.as_posix(),
+                    "sha256": baseline["sha256"],
+                    "bytes": baseline["bytes"],
+                },
+                "binding_contract": {
+                    "repo_relative_path": HUB_BINDINGS_REPO_PATH.as_posix(),
+                    "sha256": contract["sha256"],
+                    "bytes": contract["bytes"],
+                },
+                "launch_receipt": receipt(profile_receipt_path),
+            }
+            trace_path = raw_root / "screen.settlement.json"
+            write(
+                trace_path,
+                {
+                    "schema": "solomon-dark-native-menu-settlement-trace-v2",
+                    "header": {
+                        "label": "screen",
+                        "instance": "menufx-primary",
+                        "process_id": 101,
+                        "source": source,
+                        "profile_state": profile_state,
+                    },
+                    "structural_phases": [],
+                    "settled_window_samples": samples,
+                },
+            )
             confirmation_path = confirmation_root / "screen.confirmation.json"
             confirmation_samples = _reordered_samples()
             confirmation_classified = classify_window(confirmation_samples)
@@ -866,6 +957,7 @@ class NativeMenuSettlementV2Tests(unittest.TestCase):
                     "instance": "menufx-confirmation",
                     "process_id": 202,
                     "source": source,
+                    "profile_state": profile_state,
                 },
                 "settlement": {
                     key: copy.deepcopy(value)
@@ -885,6 +977,7 @@ class NativeMenuSettlementV2Tests(unittest.TestCase):
                     "instance": "menufx-primary",
                     "process_id": 101,
                     "source": source,
+                    "profile_state": profile_state,
                     "settlement": settlement,
                     "raw_recording": receipt(trace_path),
                     "animation_confirmation": {
@@ -954,6 +1047,7 @@ class NativeMenuSettlementV2Tests(unittest.TestCase):
                                     "instance": instance,
                                     "process_id": process_id,
                                     "source": source,
+                                    "profile_state": profile_state,
                                     "settlement": {},
                                 },
                                 "before": endpoint(layout_samples),
@@ -965,6 +1059,7 @@ class NativeMenuSettlementV2Tests(unittest.TestCase):
             resolved_navigation = raw_root / "navigation-resolved.json"
             audit = raw_root / "motion-audit.json"
             result = resolve_campaign(
+                repo_root,
                 candidate_root,
                 evidence_root,
                 primary_navigation_path,
@@ -995,6 +1090,7 @@ class NativeMenuSettlementV2Tests(unittest.TestCase):
                 240,
             )
             resolve_campaign(
+                repo_root,
                 candidate_root,
                 evidence_root,
                 primary_navigation_path,

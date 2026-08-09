@@ -1446,6 +1446,7 @@ def settlement_summary(
 
 
 def resolve_campaign(
+    repo_root: Path,
     candidate_root: Path,
     evidence_root: Path,
     primary_navigation_path: Path,
@@ -1844,6 +1845,7 @@ def resolve_campaign(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--repo-root", type=Path, required=True)
     parser.add_argument("--candidate-root", type=Path, required=True)
     parser.add_argument("--evidence-root", type=Path, required=True)
     parser.add_argument("--primary-navigation", type=Path, required=True)
@@ -1862,6 +1864,7 @@ def main() -> int:
     args = parse_args()
     try:
         result = resolve_campaign(
+            args.repo_root.resolve(),
             args.candidate_root.resolve(),
             args.evidence_root.resolve(),
             args.primary_navigation.resolve(),

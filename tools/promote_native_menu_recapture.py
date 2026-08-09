@@ -643,6 +643,7 @@ def validate_and_promote_v24_legacy(
         raise PromotionError("motion observation directory escapes the evidence root")
     try:
         resolve_campaign(
+            repo_root,
             candidate_root,
             evidence_root,
             raw_primary_navigation,
@@ -2083,6 +2084,7 @@ def validate_and_promote(
     )
     try:
         resolve_campaign(
+            repo_root,
             candidate_root,
             evidence_root,
             primary_navigation,
