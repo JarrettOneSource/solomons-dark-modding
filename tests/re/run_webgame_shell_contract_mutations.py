@@ -85,20 +85,6 @@ def text_mutation(mutation: TextMutation) -> Iterator[None]:
 
 
 @contextmanager
-def simulation_directory_present() -> Iterator[None]:
-    original_exists = Path.exists
-    sim = (contracts.WEBGAME / "sim").resolve()
-
-    def mutated_exists(path: Path) -> bool:
-        if path.resolve() == sim:
-            return True
-        return original_exists(path)
-
-    with patch.object(Path, "exists", mutated_exists):
-        yield
-
-
-@contextmanager
 def production_witness_missing() -> Iterator[None]:
     original_rglob = Path.rglob
     witness = (contracts.INPUT / "intent.ts").resolve()
@@ -169,12 +155,6 @@ BOOT = "test_webgame_shell_boot_capture_performance_and_ci_are_wired"
 
 
 MUTATIONS: tuple[Mutation, ...] = (
-    SpecialMutation(
-        "architecture.no-sim",
-        ARCHITECTURE,
-        simulation_directory_present,
-        "P0 browser shell grew webgame/sim and now implies simulation fidelity",
-    ),
     SpecialMutation(
         "architecture.source-witness",
         ARCHITECTURE,

@@ -91,6 +91,14 @@ from static_re_webgame_shell_contracts import (
     test_webgame_shell_twin_stick_and_focus_follow_landed_contracts,
     test_webgame_shell_visual_waiver_is_exact_two_directional_and_self_expiring,
 )
+from static_re_webgame_sim_core_contracts import (
+    test_webgame_sim_core_is_pure_single_path_and_actor_model_pinned,
+    test_webgame_sim_fire_projectile_replays_the_landed_g2_contract,
+    test_webgame_sim_movement_and_collision_replay_the_landed_t2_contract,
+    test_webgame_sim_replay_determinism_and_ci_gates_are_wired,
+    test_webgame_sim_rng_is_bit_exact_for_integer_and_sealed_float_corpora,
+    test_webgame_sim_tick_graph_and_cadences_match_g1_tables,
+)
 from static_re_native_hub_economy_contracts import (
     test_native_hub_dig_and_run_boundary_fields_are_pinned,
     test_native_hub_entity_census_and_interactions_are_pinned,
@@ -1035,6 +1043,30 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Webgame shell boot capture performance and CI are wired",
         test_webgame_shell_boot_capture_performance_and_ci_are_wired,
+    ),
+    (
+        "Webgame P2 sim core is pure, single-path, and actor-model pinned",
+        test_webgame_sim_core_is_pure_single_path_and_actor_model_pinned,
+    ),
+    (
+        "Webgame P2 tick graph and cadences match G1 tables",
+        test_webgame_sim_tick_graph_and_cadences_match_g1_tables,
+    ),
+    (
+        "Webgame P2 movement and collision replay landed T2",
+        test_webgame_sim_movement_and_collision_replay_the_landed_t2_contract,
+    ),
+    (
+        "Webgame P2 RNG is bit-exact for integer and sealed float corpora",
+        test_webgame_sim_rng_is_bit_exact_for_integer_and_sealed_float_corpora,
+    ),
+    (
+        "Webgame P2 FIRE projectile replays landed G2",
+        test_webgame_sim_fire_projectile_replays_the_landed_g2_contract,
+    ),
+    (
+        "Webgame P2 replay, determinism, and CI gates are wired",
+        test_webgame_sim_replay_determinism_and_ci_gates_are_wired,
     ),
     (
         "Native hub entity census and interactions are pinned",

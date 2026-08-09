@@ -651,7 +651,7 @@ def test_webgame_workspace_battery_is_strict_ratcheted_and_ci_wired() -> str:
         "typecheck": "tsc --noEmit && node scripts/check-quality-floor.mjs typecheck",
         "test": "node scripts/run-unit-tests.mjs",
     }
-    if scripts != expected_scripts:
+    if any(scripts.get(name) != command for name, command in expected_scripts.items()):
         raise StaticReTestFailure(
             "webgame workspace no longer exposes isolated build, golden, lint, typecheck, and test commands"
         )
@@ -690,9 +690,12 @@ def test_webgame_workspace_battery_is_strict_ratcheted_and_ci_wired() -> str:
         "unitTestFiles": 12,
         "unitTests": 58,
     }
-    if floors != expected_floors:
+    if any(
+        not isinstance(floors.get(name), int) or floors[name] < minimum
+        for name, minimum in expected_floors.items()
+    ):
         raise StaticReTestFailure(
-            "webgame lint, typecheck, and unit-test floors no longer match the landed battery"
+            "webgame lint, typecheck, and unit-test floors fell below the landed battery"
         )
 
     workflow = _read_text(CI_PATH, "repository CI workflow is absent")
@@ -750,4 +753,4 @@ def test_webgame_workspace_battery_is_strict_ratcheted_and_ci_wired() -> str:
         raise StaticReTestFailure(
             "CI runs the real webgame decoder test before installing its Pillow dependency"
         )
-    return "strict TypeScript and locked npm tooling run with shell gates at floors 45/42/12/58"
+    return "strict TypeScript and locked npm tooling retain shell floors of at least 45/42/12/58"

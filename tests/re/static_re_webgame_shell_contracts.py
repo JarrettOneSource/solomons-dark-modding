@@ -99,11 +99,6 @@ def _production_typescript() -> dict[str, str]:
 
 def test_webgame_shell_architecture_keeps_devices_inside_input() -> str:
     sources = _production_typescript()
-    if (WEBGAME / "sim").exists():
-        raise StaticReTestFailure(
-            "P0 browser shell grew webgame/sim and now implies simulation fidelity"
-        )
-
     intent = sources["input/intent.ts"]
     for kind in ("MoveIntent", "AimIntent", "CastIntent", "InteractIntent", "MenuNavIntent"):
         if f"export type {kind}" not in intent:
@@ -150,7 +145,7 @@ def test_webgame_shell_architecture_keeps_devices_inside_input() -> str:
         r"const sink = \(intent: Intent\): void => \{\s*controller\.handle\(intent\);\s*\};",
         "browser client no longer joins both device producers through the G14 Intent sink",
     )
-    return "webgame/input exclusively owns raw devices and emits the five-member G14 Intent union; webgame/sim remains absent"
+    return "webgame/input exclusively owns raw devices and emits the five-member G14 Intent union"
 
 
 def test_webgame_shell_twin_stick_and_focus_follow_landed_contracts() -> str:

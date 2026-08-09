@@ -25,6 +25,7 @@
     "client/**/*.ts",
     "conformance/**/*.ts",
     "input/**/*.ts",
+    "sim/**/*.ts",
     "scripts/**/*.ts",
     "vite.config.ts"
   ]
