@@ -812,6 +812,15 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             "mouse_event",
         ):
             self.assertIn(token, helper)
+        self.assertRegex(
+            helper,
+            r"(?s)keybd_event\(.*?0x12,.*?0,.*?0,.*?"
+            r"keybd_event\(.*?0x12,.*?0,.*?0x0002,.*?"
+            r"SetForegroundWindow\(\$window\).*?"
+            r"\$foregroundProcessId -ne \$ProcessId.*?throw",
+            "the exact-process click helper must release the Windows "
+            "foreground lock and still prove target ownership before input",
+        )
 
 
 if __name__ == "__main__":

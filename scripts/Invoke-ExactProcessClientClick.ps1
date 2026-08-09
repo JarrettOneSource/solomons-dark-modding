@@ -87,6 +87,14 @@ public static class MenureNativeInput
     public static extern bool ShowWindow(IntPtr window, int command);
 
     [DllImport("user32.dll")]
+    public static extern void keybd_event(
+        byte virtualKey,
+        byte scanCode,
+        uint flags,
+        UIntPtr extraInfo
+    );
+
+    [DllImport("user32.dll")]
     public static extern void mouse_event(
         uint flags,
         uint x,
@@ -124,6 +132,22 @@ $attached = [MenureNativeInput]::AttachThreadInput(
     $true
 )
 try {
+    # A synthetic Alt press grants this exact interactive desktop process the
+    # foreground transition Windows otherwise refuses while the automation
+    # terminal owns the foreground lock. No game input is dispatched until
+    # ownership is measured below.
+    [MenureNativeInput]::keybd_event(
+        0x12,
+        0,
+        0,
+        [UIntPtr]::Zero
+    )
+    [MenureNativeInput]::keybd_event(
+        0x12,
+        0,
+        0x0002,
+        [UIntPtr]::Zero
+    )
     [MenureNativeInput]::ShowWindow($window, 5) | Out-Null
     [MenureNativeInput]::BringWindowToTop($window) | Out-Null
     $setForeground = [MenureNativeInput]::SetForegroundWindow($window)
