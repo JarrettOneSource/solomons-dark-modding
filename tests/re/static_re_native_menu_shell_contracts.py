@@ -1696,6 +1696,18 @@ def test_native_menu_browser_tab_measurement_records_are_aggregable() -> str:
         "SolomonDarkModLoader/src/debug_ui_overlay/"
         "menu_layout_capture_snapshot_and_hooks.inl"
     )
+    search_builder = _read(
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "label_resolution_and_frame_render.inl"
+    )
+    exact_text_capture = _read(
+        "SolomonDarkModLoader/src/debug_ui_overlay/exact_text_capture/"
+        "capture_session.inl"
+    )
+    panel_controls = _read(
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "control_observers_menu_and_panel_capture.inl"
+    )
     _require_regex(
         support,
         r"function Resolve-NativeMenuBrowserTabState.*?"
@@ -1718,9 +1730,52 @@ def test_native_menu_browser_tab_measurement_records_are_aggregable() -> str:
             "My Levels is again misclassified as login settings from shared "
             "roster text without the measured modal-art witness"
         )
+    _require_regex(
+        exact_text_capture,
+        r"TryGetActiveMyQuickPanel\(&quick_panel_address\).*?"
+        r"!capture\.label\.empty\(\).*?"
+        r"capture\.surface_id\s*=\s*\"quick_panel\".*?"
+        r"owned_object_address != 0.*?widget_object != 0",
+        "active QuickPanel text can no longer reach the semantic search "
+        "builder when the optional widget-owner lookup misses live controls",
+    )
+    _require_regex(
+        search_builder,
+        r"if \(name_field == nullptr \|\| search_now_button == nullptr\).*?"
+        r"build_element\(\*name_field.*?"
+        r"if \(author_field != nullptr\).*?"
+        r"build_element\(\*search_now_button",
+        "the guest Dark Cloud search panel is no longer classified from its "
+        "measured NAME and SEARCH NOW witnesses with AUTHOR remaining optional",
+    )
+    _require_regex(
+        panel_controls,
+        r"void ObserveQuickPanelRectDispatch\(.*?"
+        r"TryGetActiveMyQuickPanel\(&quick_panel_address\).*?"
+        r"TryReadQuickPanelPanelRect\(.*?"
+        r"PointInsideRect\(center_x, center_y, panel_left, panel_top, "
+        r"panel_right, panel_bottom\)",
+        "QuickPanel controls no longer classify from measured in-panel draw "
+        "geometry when synthetic widget ownership is unavailable",
+    )
+    rect_dispatch = re.search(
+        r"void ObserveQuickPanelRectDispatch\((.*?)\n\}",
+        panel_controls,
+        re.DOTALL,
+    )
+    if rect_dispatch is None:
+        raise StaticReTestFailure(
+            "QuickPanel rect-dispatch classifier body went unchecked"
+        )
+    if "IsQuickPanelOwnedObject" in rect_dispatch.group(1):
+        raise StaticReTestFailure(
+            "QuickPanel in-panel draw classification again depends on the "
+            "invalid synthetic widget-owner relation"
+        )
     return (
         "browser-tab geometry is aggregated from typed measured records and "
-        "shared roster text cannot masquerade as the login modal"
+        "shared roster text cannot masquerade as the login modal; the guest "
+        "search panel resolves from live in-panel text and draw witnesses"
     )
 
 

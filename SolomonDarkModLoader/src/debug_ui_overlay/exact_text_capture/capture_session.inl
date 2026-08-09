@@ -141,18 +141,25 @@ void BeginExactTextRenderCapture(
         uintptr_t quick_panel_address = 0;
         const auto* config = TryGetDebugUiOverlayConfig();
         uintptr_t owned_object_address = 0;
-        if (config != nullptr && TryGetActiveMyQuickPanel(&quick_panel_address) && quick_panel_address != 0 &&
-            !capture.label.empty() &&
-            TryResolveQuickPanelOwnedObject(
-                *config,
-                quick_panel_address,
-                widget_object,
-                reinterpret_cast<uintptr_t>(self),
-                &owned_object_address)) {
+        if (TryGetActiveMyQuickPanel(&quick_panel_address) && quick_panel_address != 0 &&
+            !capture.label.empty()) {
+            if (config != nullptr) {
+                (void)TryResolveQuickPanelOwnedObject(
+                    *config,
+                    quick_panel_address,
+                    widget_object,
+                    reinterpret_cast<uintptr_t>(self),
+                    &owned_object_address);
+            }
             capture.capture_enabled = true;
             capture.surface_id = "quick_panel";
             capture.surface_title = "Quick Panel";
-            capture.source_object_ptr = owned_object_address;
+            capture.source_object_ptr =
+                owned_object_address != 0
+                    ? owned_object_address
+                    : (widget_object != 0
+                           ? widget_object
+                           : reinterpret_cast<uintptr_t>(self));
             if (surface_match.has_value() && surface_match->range != nullptr) {
                 capture.surface_return_address = surface_match->return_address;
                 capture.stack_slot = surface_match->stack_slot;

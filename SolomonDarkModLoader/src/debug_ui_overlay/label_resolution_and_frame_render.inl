@@ -47,7 +47,7 @@ std::vector<OverlayRenderElement> TryBuildDarkCloudSearchOverlayRenderElements(
         }
     }
 
-    if (name_field == nullptr || author_field == nullptr || search_now_button == nullptr) {
+    if (name_field == nullptr || search_now_button == nullptr) {
         return {};
     }
 
@@ -83,7 +83,9 @@ std::vector<OverlayRenderElement> TryBuildDarkCloudSearchOverlayRenderElements(
     panel_element.bottom = panel->bottom;
     render_elements.push_back(std::move(panel_element));
     render_elements.push_back(build_element(*name_field, "dark_cloud_search", "NAME"));
-    render_elements.push_back(build_element(*author_field, "dark_cloud_search", "AUTHOR"));
+    if (author_field != nullptr) {
+        render_elements.push_back(build_element(*author_field, "dark_cloud_search", "AUTHOR"));
+    }
     render_elements.push_back(build_element(*search_now_button, "dark_cloud_search", "SEARCH NOW"));
 
     SortOverlayRenderElementsByTopLeft(&render_elements);

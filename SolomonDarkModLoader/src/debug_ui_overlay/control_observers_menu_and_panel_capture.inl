@@ -248,9 +248,6 @@ void ObserveQuickPanelRectDispatch(
     if (reinterpret_cast<uintptr_t>(control_object) == quick_panel_address) {
         return;
     }
-    if (!IsQuickPanelOwnedObject(*config, quick_panel_address, reinterpret_cast<uintptr_t>(control_object))) {
-        return;
-    }
 
     float panel_left = 0.0f;
     float panel_top = 0.0f;
