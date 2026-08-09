@@ -246,6 +246,7 @@ $summary = [ordered]@{
     success = $true
     instance = $Instance
     preset = $Preset
+    freshInstall = [bool]$FreshInstall
     processId = $processId
     participantId = $ParticipantId
     playerName = $PlayerName
