@@ -135,25 +135,21 @@ function Resolve-NativeMenuHubPathLayoutId {
     }
 
     $layoutId = ""
-    $requiredElementCount = 0
     if (
         $presentLevelPickerArts.Count -eq $requiredLevelPickerArts.Count -and
         $ui28Count -eq 1
     ) {
         $layoutId = "hub_pristine_second_new_game"
-        $requiredElementCount = 15
     } elseif (
         $presentLevelPickerArts.Count -eq $requiredLevelPickerArts.Count -and
         $ui28Count -eq 0
     ) {
         $layoutId = "hub_new_game"
-        $requiredElementCount = 14
     } elseif (
         $presentLevelPickerArts.Count -eq 0 -and
         $ui28Count -eq 1
     ) {
         $layoutId = "hub_resumed"
-        $requiredElementCount = 10
     } else {
         throw (
             "STOP: Hub path classifier measured no exact authorized v2.13 " +
@@ -161,14 +157,44 @@ function Resolve-NativeMenuHubPathLayoutId {
             ($presentLevelPickerArts -join ",") + "'."
         )
     }
+    return $layoutId
+}
+
+function Assert-NativeMenuSettledHubPathCensus {
+    param(
+        [Parameter(Mandatory = $true)][string]$ScreenId,
+        [Parameter(Mandatory = $true)][object]$Layout
+    )
+
+    if (
+        (Get-NativeMenuCaptureSurfaceId -ScreenTag $ScreenId) -cne "hub" -or
+        $ScreenId -ceq "hub"
+    ) {
+        return
+    }
+    $measuredLayoutId = Resolve-NativeMenuHubPathLayoutId -Layout $Layout
+    if ($measuredLayoutId -cne $ScreenId) {
+        throw (
+            "STOP: settled Hub path selector expected '$ScreenId' but " +
+            "machine-classified '$measuredLayoutId'."
+        )
+    }
+    $requiredElementCount = switch ($ScreenId) {
+        "hub_pristine_second_new_game" { 15; break }
+        "hub_new_game" { 14; break }
+        "hub_resumed" { 10; break }
+        default {
+            throw "BROKEN: settled Hub path has no exact authorized census."
+        }
+    }
+    $elements = @($Layout.elements)
     if ($elements.Count -ne $requiredElementCount) {
         throw (
-            "STOP: Hub path classifier measured '$layoutId' with " +
+            "STOP: settled Hub path classifier measured '$ScreenId' with " +
             "$($elements.Count) members instead of its exact authorized " +
             "$requiredElementCount-member census."
         )
     }
-    return $layoutId
 }
 
 function Get-NativeMenuMachineSurfaceId {
@@ -1909,6 +1935,9 @@ function Wait-NativeMenuLayoutSettlement {
                     "below the recorder's 40-sample/two-second floor."
                 )
             }
+            Assert-NativeMenuSettledHubPathCensus `
+                -ScreenId $ScreenId `
+                -Layout $classification.layout
             $windowAnchorProbe = $candidateProbes[$stableStartIndex]
             $structuralPhases = [Collections.Generic.List[object]]::new()
             foreach ($phaseHash in $structuralPhaseOrder) {

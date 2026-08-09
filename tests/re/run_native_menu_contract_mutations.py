@@ -1237,6 +1237,18 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "audit and two independent witness identities",
     ),
     StaticMutation(
+        "v2.13.settled-hub-census-after-settlement",
+        SURFACE_AGREEMENT,
+        "scripts/NativeMenuCaptureSupport.ps1",
+        "            Assert-NativeMenuSettledHubPathCensus `\n"
+        "                -ScreenId $ScreenId `\n"
+        "                -Layout $classification.layout",
+        "            # mutation drops the post-settlement exact Hub census",
+        "path-qualified Hub capture no longer routes population samples by "
+        "the measured selector and enforces its exact authorized census only "
+        "after settlement",
+    ),
+    StaticMutation(
         "v2.5.independent-capture-runtime-provenance",
         CAMPAIGN,
         "tools/resolve_native_menu_ambient_campaign.py",

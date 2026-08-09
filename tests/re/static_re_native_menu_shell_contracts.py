@@ -2051,18 +2051,21 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         r"function Resolve-NativeMenuHubPathLayoutId.*?"
         r"LevelPicker\.0.*?LevelPicker\.2.*?LevelPicker\.4.*?"
         r"LevelPicker\.5.*?LevelPicker\.6.*?UI\.28.*?"
-        r"hub_pristine_second_new_game.*?"
-        r"\$requiredElementCount\s*=\s*15.*?"
-        r"hub_new_game.*?\$requiredElementCount\s*=\s*14.*?"
-        r"hub_resumed.*?\$requiredElementCount\s*=\s*10.*?"
+        r"hub_pristine_second_new_game.*?hub_new_game.*?hub_resumed.*?"
         r"Hub path classifier measured no exact authorized v2\.13.*?"
+        r"function Assert-NativeMenuSettledHubPathCensus.*?"
+        r"hub_pristine_second_new_game.*?15.*?"
+        r"hub_new_game.*?14.*?hub_resumed.*?10.*?"
         r"\$elements\.Count -ne \$requiredElementCount.*?"
-        r"exact authorized.*?census.*?"
+        r"settled Hub path classifier measured.*?exact authorized.*?census.*?"
         r"\$measuredHubLayout -cne \$ScreenId.*?"
         r"Hub path selector expected.*?machine-classified.*?"
-        r"\$semanticPayload\.screen_id\s*=\s*\$ScreenId",
-        "path-qualified Hub capture no longer proves its exact authorized "
-        "member signature and census before logical retagging",
+        r"\$semanticPayload\.screen_id\s*=\s*\$ScreenId.*?"
+        r"Invoke-NativeMenuSettlementClassifier.*?"
+        r"Assert-NativeMenuSettledHubPathCensus",
+        "path-qualified Hub capture no longer routes population samples by "
+        "the measured selector and enforces its exact authorized census only "
+        "after settlement",
     )
     _require_regex(
         click_helper,

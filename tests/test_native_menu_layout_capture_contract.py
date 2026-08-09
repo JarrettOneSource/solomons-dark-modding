@@ -671,13 +671,19 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             r'(?s)function Resolve-NativeMenuHubPathLayoutId.*?'
             r'LevelPicker\.0.*?LevelPicker\.2.*?LevelPicker\.4.*?'
             r'LevelPicker\.5.*?LevelPicker\.6.*?UI\.28.*?'
+            r'hub_pristine_second_new_game.*?'
+            r'hub_new_game.*?hub_resumed.*?'
+            r'Hub path classifier measured no exact authorized v2\.13.*?'
+            r'function Assert-NativeMenuSettledHubPathCensus.*?'
             r'hub_pristine_second_new_game.*?15.*?'
             r'hub_new_game.*?14.*?hub_resumed.*?10.*?'
-            r'Hub path classifier measured no exact authorized v2\.13.*?'
             r'if \(\$elements\.Count -ne \$requiredElementCount\).*?'
-            r'Hub path classifier measured.*?exact authorized.*?census',
-            "path-qualified Hub capture must machine-classify the exact "
-            "authorized member signature and census before retagging",
+            r'settled Hub path classifier measured.*?exact authorized.*?census.*?'
+            r'Invoke-NativeMenuSettlementClassifier.*?'
+            r'Assert-NativeMenuSettledHubPathCensus',
+            "path-qualified Hub capture must route population samples by the "
+            "measured selector and enforce the exact authorized census only "
+            "after settlement",
         )
         self.assertRegex(
             support,
