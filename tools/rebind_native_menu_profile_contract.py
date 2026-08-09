@@ -211,28 +211,57 @@ def replace_receipt_in_block(
     new_hash = str(current_receipt["sha256"]).encode("ascii")
     old_bytes = str(old_receipt["bytes"]).encode("ascii")
     new_bytes = str(current_receipt["bytes"]).encode("ascii")
-    if block.count(old_hash) != 1:
+    matches = list(re.finditer(rb'"binding_contract"\s*:\s*\{', block))
+    if len(matches) != 1:
+        raise ProfileContractRebindError(
+            f"{label} binding-contract object is not uniquely replaceable"
+        )
+    opening = matches[0].end() - 1
+    depth = 0
+    in_string = False
+    escaped = False
+    closing = -1
+    for index in range(opening, len(block)):
+        byte = block[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif byte == ord("\\"):
+                escaped = True
+            elif byte == ord('"'):
+                in_string = False
+            continue
+        if byte == ord('"'):
+            in_string = True
+        elif byte == ord("{"):
+            depth += 1
+        elif byte == ord("}"):
+            depth -= 1
+            if depth == 0:
+                closing = index + 1
+                break
+    if closing < 0:
+        raise ProfileContractRebindError(
+            f"{label} binding-contract object is truncated"
+        )
+    contract = block[opening:closing]
+    hash_pattern = re.compile(
+        rb'("sha256"\s*:\s*")' + re.escape(old_hash) + rb'(")'
+    )
+    bytes_pattern = re.compile(
+        rb'("bytes"\s*:\s*)' + re.escape(old_bytes) + rb'(?=\s*[,}])'
+    )
+    if len(hash_pattern.findall(contract)) != 1:
         raise ProfileContractRebindError(
             f"{label} binding-contract hash is not uniquely replaceable"
         )
-    hash_replaced = block.replace(old_hash, new_hash, 1)
-    marker = b'"bytes"'
-    contract_at = hash_replaced.find(b'"binding_contract"')
-    bytes_at = hash_replaced.find(marker, contract_at)
-    if contract_at < 0 or bytes_at < 0:
+    if len(bytes_pattern.findall(contract)) != 1:
         raise ProfileContractRebindError(
-            f"{label} binding-contract byte receipt is absent"
+            f"{label} binding-contract byte count is not uniquely replaceable"
         )
-    value_at = hash_replaced.find(old_bytes, bytes_at)
-    if value_at < 0:
-        raise ProfileContractRebindError(
-            f"{label} binding-contract byte count is not replaceable"
-        )
-    return (
-        hash_replaced[:value_at]
-        + new_bytes
-        + hash_replaced[value_at + len(old_bytes) :]
-    )
+    contract = hash_pattern.sub(rb"\g<1>" + new_hash + rb"\g<2>", contract)
+    contract = bytes_pattern.sub(rb"\g<1>" + new_bytes, contract)
+    return block[:opening] + contract + block[closing:]
 
 
 def rebind_file(

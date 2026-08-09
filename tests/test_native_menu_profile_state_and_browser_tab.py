@@ -360,6 +360,66 @@ class NativeMenuProfileStateTests(unittest.TestCase):
                 },
             )
 
+    def test_candidate_contract_rebind_changes_only_binding_receipt(self) -> None:
+        identity = "5" * 64
+        prior_receipt = {"sha256": "6" * 64, "bytes": 123}
+        current_receipt = {"sha256": "7" * 64, "bytes": 456}
+        contract = {
+            "baselines": {
+                FRESH_BASELINE_ID: {
+                    "profile_state_identity_sha256": identity,
+                },
+                "hub_new_game_two_action_v213": {"witnesses": []},
+            }
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "candidate.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "header": {
+                            "profile_state": {
+                                "profile_state_identity_sha256": identity,
+                                "baseline_id": FRESH_BASELINE_ID,
+                                "baseline_fixture": prior_receipt,
+                                "binding_contract": {
+                                    "repo_relative_path": HUB_BINDINGS_REPO_PATH.as_posix(),
+                                    **prior_receipt,
+                                },
+                            }
+                        }
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = rebind_file(
+                path,
+                {
+                    (prior_receipt["sha256"], prior_receipt["bytes"]): {
+                        "kind": "committed_predecessor",
+                        "value": contract,
+                    }
+                },
+                contract,
+                current_receipt,
+                apply=True,
+            )
+
+            rebound = json.loads(path.read_text(encoding="utf-8"))
+            profile = rebound["header"]["profile_state"]
+            self.assertEqual(profile["baseline_fixture"], prior_receipt)
+            self.assertEqual(
+                profile["binding_contract"],
+                {
+                    "repo_relative_path": HUB_BINDINGS_REPO_PATH.as_posix(),
+                    **current_receipt,
+                },
+            )
+            self.assertEqual(result["rebound_blocks"], 1)
+
     def test_candidate_contract_rebind_rejects_baseline_identity_drift(self) -> None:
         identity = "5" * 64
         prior_receipt = {"sha256": "6" * 64, "bytes": 123}
