@@ -27,6 +27,12 @@
         "sha256": "e52c22e9e46ad95f7762391617b453bef61a61fec0ca60db2a709cd2aa6b8c1f",
         "bytes": 13633
       },
+      "identity_phase": "post_final_settled_route",
+      "recapture_refresh_audit": {
+        "evidence_path": "raw-v9/hub-restart-v212/hub-v213-recapture-baseline-refresh-audit.json",
+        "sha256": "3bc66d600353dfe681cb99d0348524c2167711cb26ae8574e216ddac541a8125",
+        "bytes": 6553
+      },
       "procedure": [
         "start from the pinned pristine fresh_install baseline",
         "reach the first-run Hub, return to Main Menu, and enter New Game",
@@ -70,10 +76,10 @@
         {
           "role": "primary",
           "instance": "menufx-v9p16",
-          "profile_state_identity_sha256": "631e106b4174952e10fc74ff51e1930548b3b5c70cb4398c64ba1ea4a943c94f",
+          "profile_state_identity_sha256": "620351471780d185ae6dd4502ba74b45218de6e8c61c9c48cd3297419909eae5",
           "profile_state_receipt": {
-            "evidence_path": "raw-v9/hub-restart-v212/profile-state-v213/menufx-v9p16/menufx-v9p16.derived-profile-state.json",
-            "sha256": "90dadd803ff31089c80f666ee72a18a8efada9bc9da6afaf9c0873114e003b90",
+            "evidence_path": "raw-v9/hub-restart-v212/profile-state-v213-recapture/menufx-v9p16/menufx-v9p16.derived-profile-state.json",
+            "sha256": "b4a1fbc833c7f02b9540155e8c609b1522684e165d01901a96c3964df99efd1d",
             "bytes": 1994
           },
           "potionguy_action_receipt": {
@@ -96,10 +102,10 @@
         {
           "role": "confirmation",
           "instance": "menufx-v9p17",
-          "profile_state_identity_sha256": "378eaedc9a20a56ada7805efcb91253cacab0de87cb18642a58ec2536df3cbbc",
+          "profile_state_identity_sha256": "a61dda7a6878ed5f1731e2f2ad65f14481d60550a5f6e5b7d77a26b2ae9c0093",
           "profile_state_receipt": {
-            "evidence_path": "raw-v9/hub-restart-v212/profile-state-v213/menufx-v9p17/menufx-v9p17.derived-profile-state.json",
-            "sha256": "39663d4b2af3ec4504a4441d7df1b40215cfb23bf41ea37be32b36be219de2cf",
+            "evidence_path": "raw-v9/hub-restart-v212/profile-state-v213-recapture/menufx-v9p17/menufx-v9p17.derived-profile-state.json",
+            "sha256": "9bbe38dd012a29b54edb54ce951007e6919c12312137c6273cf8356d9fcc8e5f",
             "bytes": 1992
           },
           "potionguy_action_receipt": {
