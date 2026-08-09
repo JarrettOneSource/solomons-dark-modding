@@ -1376,6 +1376,15 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "foreground lock and proves target ownership before input",
     ),
     StaticMutation(
+        "recorder.passive-ui-driver-preset",
+        SURFACE_AGREEMENT,
+        "scripts/NativeMenuCaptureSupport.ps1",
+        'if ($preset -cne "idle") {',
+        'if ($preset -cne "native_menu_capture_idle") {',
+        "native-menu capture can run beside an autonomous UI driver instead "
+        "of proving and recording the exact passive preset",
+    ),
+    StaticMutation(
         "recorder.extended-observed-span",
         RECORDER,
         "scripts/Observe-NativeMenuMotionCapability.ps1",

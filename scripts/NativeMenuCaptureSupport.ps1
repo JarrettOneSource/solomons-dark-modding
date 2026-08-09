@@ -715,6 +715,27 @@ function Copy-NativeMenuProfileStateEvidence {
     return $value
 }
 
+function Assert-NativeMenuCaptureDriverQuiescent {
+    param([Parameter(Mandatory = $true)][object]$Context)
+
+    $result = Invoke-NativeMenuLua `
+        -Context $Context `
+        -LuaCode @'
+return tostring(
+  sd.runtime.get_environment_variable('SDMOD_UI_SANDBOX_PRESET') or ''
+)
+'@
+    $preset = $result.Text.Trim()
+    if ($preset -cne "idle") {
+        throw (
+            "STOP: native-menu capture driver quiescence rejected: " +
+            "SDMOD_UI_SANDBOX_PRESET '$preset' is not the exact passive " +
+            "'idle' preset."
+        )
+    }
+    return $preset
+}
+
 function New-NativeMenuCaptureContext {
     param(
         [Parameter(Mandatory = $true)][string]$Root,
@@ -849,7 +870,7 @@ function New-NativeMenuCaptureContext {
             [string]$profileState.Value.profile_state_identity_sha256
         )
     }
-    return [pscustomobject]@{
+    $context = [pscustomobject]@{
         Root = $Root
         Instance = $Instance
         ProcessId = $ProcessId
@@ -865,6 +886,12 @@ function New-NativeMenuCaptureContext {
         ProfileState = $profileState.Value
         ProfileStateBindingContract = $profileState.BindingContract
     }
+    $captureDriverPreset = Assert-NativeMenuCaptureDriverQuiescent `
+        -Context $context
+    $source["capture_driver_preset"] = $captureDriverPreset
+    $context | Add-Member -NotePropertyName CaptureDriverPreset `
+        -NotePropertyValue $captureDriverPreset
+    return $context
 }
 
 function Assert-NativeMenuOverlayHygiene {

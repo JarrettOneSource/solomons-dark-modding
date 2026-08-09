@@ -1732,11 +1732,35 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         "menu_layout_capture_art_observation.inl"
     )
     support = _read("scripts/NativeMenuCaptureSupport.ps1")
+    sandbox_setup = _read("mods/lua_ui_sandbox_lab/scripts/lib/setup.lua")
     click_helper = _read("scripts/Invoke-ExactProcessClientClick.ps1")
     standalone = _read("scripts/Record-NativeMenuLayout.ps1")
     transition = _read("scripts/Record-NativeMenuTransition.ps1")
     confirmation = _read("scripts/Confirm-NativeMenuLayoutAnimation.ps1")
     motion = _read("scripts/Observe-NativeMenuMotionCapability.ps1")
+
+    _require_regex(
+        support,
+        r"function Assert-NativeMenuCaptureDriverQuiescent.*?"
+        r"get_environment_variable\('SDMOD_UI_SANDBOX_PRESET'\).*?"
+        r'if \(\$preset -cne "idle"\).*?'
+        r"STOP: native-menu capture driver quiescence rejected.*?"
+        r"\$captureDriverPreset\s*=\s*"
+        r"Assert-NativeMenuCaptureDriverQuiescent\s+`\s*"
+        r"-Context \$context.*?"
+        r'\$source\["capture_driver_preset"\]\s*=\s*'
+        r"\$captureDriverPreset.*?return \$context",
+        "native-menu capture can run beside an autonomous UI driver instead "
+        "of proving and recording the exact passive preset",
+    )
+    _require_regex(
+        sandbox_setup,
+        r'if active_preset == "native_menu_capture_idle" then\s*'
+        r"return native_menu_capture_idle_steps\s*end.*?"
+        r"return \{\}\s*end",
+        "native-menu capture can run beside an autonomous UI driver instead "
+        "of proving and recording the exact passive preset",
+    )
 
     _require_regex(
         api,
