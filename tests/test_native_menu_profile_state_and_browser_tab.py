@@ -34,6 +34,10 @@ from tools.native_menu_profile_state import (
     validate_exact_hub_layout_pair,
     validate_capture_profile_state,
 )
+from tools.rebind_native_menu_profile_contract import (
+    ProfileContractRebindError,
+    rebind_file,
+)
 
 
 def _profile_fixture(repo_root: Path, evidence_root: Path) -> dict[str, object]:
@@ -299,6 +303,117 @@ def _exact_hub_layout(repo_root: Path, layout_id: str) -> dict[str, object]:
 
 
 class NativeMenuProfileStateTests(unittest.TestCase):
+    def test_candidate_contract_rebind_preserves_exact_baseline_identity(self) -> None:
+        identity = "5" * 64
+        prior_receipt = {"sha256": "6" * 64, "bytes": 123}
+        current_receipt = {"sha256": "7" * 64, "bytes": 456}
+        contract = {
+            "baselines": {
+                FRESH_BASELINE_ID: {
+                    "profile_state_identity_sha256": identity,
+                },
+                "hub_new_game_two_action_v213": {"witnesses": []},
+            }
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "candidate.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "header": {
+                            "profile_state": {
+                                "profile_state_identity_sha256": identity,
+                                "baseline_id": FRESH_BASELINE_ID,
+                                "binding_contract": {
+                                    "repo_relative_path": HUB_BINDINGS_REPO_PATH.as_posix(),
+                                    **prior_receipt,
+                                },
+                            }
+                        }
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            result = rebind_file(
+                path,
+                {
+                    (prior_receipt["sha256"], prior_receipt["bytes"]): {
+                        "kind": "committed_predecessor",
+                        "value": contract,
+                    }
+                },
+                contract,
+                current_receipt,
+                apply=True,
+            )
+
+            rebound = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(result["profile_state_blocks"], 1)
+            self.assertEqual(result["rebound_blocks"], 1)
+            self.assertEqual(
+                rebound["header"]["profile_state"]["binding_contract"],
+                {
+                    "repo_relative_path": HUB_BINDINGS_REPO_PATH.as_posix(),
+                    **current_receipt,
+                },
+            )
+
+    def test_candidate_contract_rebind_rejects_baseline_identity_drift(self) -> None:
+        identity = "5" * 64
+        prior_receipt = {"sha256": "6" * 64, "bytes": 123}
+        current_receipt = {"sha256": "7" * 64, "bytes": 456}
+        prior_contract = {
+            "baselines": {
+                FRESH_BASELINE_ID: {
+                    "profile_state_identity_sha256": identity,
+                },
+                "hub_new_game_two_action_v213": {"witnesses": []},
+            }
+        }
+        current_contract = copy.deepcopy(prior_contract)
+        current_contract["baselines"][FRESH_BASELINE_ID][
+            "profile_state_identity_sha256"
+        ] = "8" * 64
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "candidate.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "header": {
+                            "profile_state": {
+                                "profile_state_identity_sha256": identity,
+                                "baseline_id": FRESH_BASELINE_ID,
+                                "binding_contract": {
+                                    "repo_relative_path": HUB_BINDINGS_REPO_PATH.as_posix(),
+                                    **prior_receipt,
+                                },
+                            }
+                        }
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ProfileContractRebindError,
+                "profile binding contract rebind changed the capture's baseline identity",
+            ):
+                rebind_file(
+                    path,
+                    {
+                        (prior_receipt["sha256"], prior_receipt["bytes"]): {
+                            "kind": "committed_predecessor",
+                            "value": prior_contract,
+                        }
+                    },
+                    current_contract,
+                    current_receipt,
+                    apply=True,
+                )
+
     def test_matching_pristine_state_is_accepted(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

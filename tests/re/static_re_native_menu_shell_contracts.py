@@ -1141,6 +1141,9 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
     hub_binding_generator = _read(
         "tools/derive_native_menu_hub_bindings_v213.py"
     )
+    contract_rebinder = _read(
+        "tools/rebind_native_menu_profile_contract.py"
+    )
     browser_python = _read("tools/native_menu_browser_tab.py")
     attributes = _read(".gitattributes")
     support = _read("scripts/NativeMenuCaptureSupport.ps1")
@@ -1286,6 +1289,27 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
         r"\"`r`n\", \"`n\"\).*?\$serialized \+ \"`n\"",
         "the committed profile-state baseline no longer has identical LF bytes "
         "on Windows capture hosts and CI checkouts",
+    )
+    _require_regex(
+        attributes + "\n" + contract_rebinder,
+        r"^tests/fixtures/webgame/native-menu-hub-bindings-v213\.json "
+        r"text eol=lf$.*?"
+        r"def git_contract_versions\(.*?git.*?rev-list.*?--all.*?git.*?show.*?"
+        r"def baseline_for_identity\(.*?"
+        r"prior_baseline = baseline_for_identity\(.*?"
+        r"current_baseline = baseline_for_identity\(.*?"
+        r"prior_baseline is None or prior_baseline != current_baseline.*?"
+        r"profile binding contract rebind changed the capture.*?baseline.*?identity.*?"
+        r"parser\.add_argument\(\"--repo-root\".*?"
+        r"parser\.add_argument\(\"--candidate-root\".*?"
+        r"parser\.add_argument\(\"--primary-navigation\".*?"
+        r"parser\.add_argument\(\"--confirmation-navigation\".*?"
+        r"parser\.add_argument\(\"--audit-output\".*?"
+        r"parser\.add_argument\(\"--apply\".*?"
+        r"parser\.add_argument\(\"--verify\"",
+        "derived menu candidates can no longer rebind a changed profile "
+        "contract from exact repository history without preserving the same "
+        "baseline identity, or can accept operator-supplied provenance",
     )
     _require_regex(
         profile_python,
