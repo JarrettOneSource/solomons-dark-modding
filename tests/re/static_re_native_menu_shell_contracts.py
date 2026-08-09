@@ -1714,6 +1714,10 @@ def test_native_menu_hall_layout_retention_is_native_owner_bounded() -> str:
         "SolomonDarkModLoader/src/debug_ui_overlay/"
         "tracked_surfaces_and_main_menu.inl"
     )
+    capture_session = _read(
+        "SolomonDarkModLoader/src/debug_ui_overlay/exact_text_capture/"
+        "capture_session.inl"
+    )
     _require_regex(
         layout_snapshot,
         r"bool TryReadCurrentHallOfFameController\(.*?"
@@ -1739,6 +1743,13 @@ def test_native_menu_hall_layout_retention_is_native_owner_bounded() -> str:
         r"kTrackedHallOfFameMaximumIdleMs.*?return false;",
         "Hall surface ownership no longer prefers the durable validated "
         "controller before its bounded render-transition fallback",
+    )
+    _require_regex(
+        capture_session,
+        r'\{"hall_of_fame",\s*"Hall of Fame",\s*'
+        r"&TryGetCurrentHallOfFame\}",
+        "Hall exact-text capture no longer uses the durable native owner, so "
+        "the one-shot title frame cannot become a retained semantic layout",
     )
     return "Hall layout retention is bounded by the exact live native owner"
 

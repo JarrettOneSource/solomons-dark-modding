@@ -243,7 +243,7 @@ void BeginExactTextRenderCapture(
     static const SimpleRenderSurface kSimpleRenderSurfaces[] = {
         {"control_scheme_picker", "Control Scheme Picker", &TryGetCurrentControlSchemePicker},
         {"dark_cloud_browser", "Dark Cloud Browser", &TryGetActiveDarkCloudBrowserRender},
-        {"hall_of_fame",       "Hall of Fame",       &TryGetActiveHallOfFameRender},
+        {"hall_of_fame",       "Hall of Fame",       &TryGetCurrentHallOfFame},
         {"spell_picker",       "Spell Picker",       &TryGetActiveSpellPickerRender},
     };
     for (const auto& surface : kSimpleRenderSurfaces) {
