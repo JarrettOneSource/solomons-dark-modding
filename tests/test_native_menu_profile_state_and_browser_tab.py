@@ -360,7 +360,7 @@ class NativeMenuProfileStateTests(unittest.TestCase):
                 },
             )
 
-    def test_candidate_contract_rebind_changes_only_binding_receipt(self) -> None:
+    def test_candidate_contract_rebind_updates_derived_baseline_receipt(self) -> None:
         identity = "5" * 64
         prior_receipt = {"sha256": "6" * 64, "bytes": 123}
         current_receipt = {"sha256": "7" * 64, "bytes": 456}
@@ -381,10 +381,13 @@ class NativeMenuProfileStateTests(unittest.TestCase):
                             "profile_state": {
                                 "profile_state_identity_sha256": identity,
                                 "baseline_id": FRESH_BASELINE_ID,
-                                "baseline_fixture": prior_receipt,
-                                "binding_contract": {
+                                "baseline_fixture": {
                                     "repo_relative_path": HUB_BINDINGS_REPO_PATH.as_posix(),
                                     **prior_receipt,
+                                },
+                                "binding_contract": {
+                                    "repo_relative_path": HUB_BINDINGS_REPO_PATH.as_posix(),
+                                    **current_receipt,
                                 },
                             }
                         }
@@ -410,7 +413,13 @@ class NativeMenuProfileStateTests(unittest.TestCase):
 
             rebound = json.loads(path.read_text(encoding="utf-8"))
             profile = rebound["header"]["profile_state"]
-            self.assertEqual(profile["baseline_fixture"], prior_receipt)
+            self.assertEqual(
+                profile["baseline_fixture"],
+                {
+                    "repo_relative_path": HUB_BINDINGS_REPO_PATH.as_posix(),
+                    **current_receipt,
+                },
+            )
             self.assertEqual(
                 profile["binding_contract"],
                 {

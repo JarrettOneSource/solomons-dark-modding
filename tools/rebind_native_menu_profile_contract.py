@@ -4,8 +4,8 @@
 This does not alter capture provenance.  It verifies each prior contract receipt
 against repository history (or the byte-exact CRLF representation of the
 current committed JSON), proves that the recorded profile identity is still a
-member of the same baseline, and then updates only the derived candidate's
-binding-contract receipt.  Raw recorder artifacts outside the candidate root
+member of the same baseline, and then updates the derived candidate's named
+binding-contract receipts.  Raw recorder artifacts outside the candidate root
 are never edited.
 """
 
@@ -201,8 +201,9 @@ def profile_object_from_block(block: bytes, label: str) -> dict[str, Any]:
     return read_object_bytes(block[opening:closing], f"{label} profile state")
 
 
-def replace_receipt_in_block(
+def replace_named_receipt_in_block(
     block: bytes,
+    field: str,
     old_receipt: dict[str, Any],
     current_receipt: dict[str, Any],
     label: str,
@@ -211,10 +212,13 @@ def replace_receipt_in_block(
     new_hash = str(current_receipt["sha256"]).encode("ascii")
     old_bytes = str(old_receipt["bytes"]).encode("ascii")
     new_bytes = str(current_receipt["bytes"]).encode("ascii")
-    matches = list(re.finditer(rb'"binding_contract"\s*:\s*\{', block))
+    field_bytes = field.encode("ascii")
+    matches = list(
+        re.finditer(rb'"' + re.escape(field_bytes) + rb'"\s*:\s*\{', block)
+    )
     if len(matches) != 1:
         raise ProfileContractRebindError(
-            f"{label} binding-contract object is not uniquely replaceable"
+            f"{label} {field} object is not uniquely replaceable"
         )
     opening = matches[0].end() - 1
     depth = 0
@@ -242,7 +246,7 @@ def replace_receipt_in_block(
                 break
     if closing < 0:
         raise ProfileContractRebindError(
-            f"{label} binding-contract object is truncated"
+            f"{label} {field} object is truncated"
         )
     contract = block[opening:closing]
     hash_pattern = re.compile(
@@ -253,11 +257,11 @@ def replace_receipt_in_block(
     )
     if len(hash_pattern.findall(contract)) != 1:
         raise ProfileContractRebindError(
-            f"{label} binding-contract hash is not uniquely replaceable"
+            f"{label} {field} hash is not uniquely replaceable"
         )
     if len(bytes_pattern.findall(contract)) != 1:
         raise ProfileContractRebindError(
-            f"{label} binding-contract byte count is not uniquely replaceable"
+            f"{label} {field} byte count is not uniquely replaceable"
         )
     contract = hash_pattern.sub(rb"\g<1>" + new_hash + rb"\g<2>", contract)
     contract = bytes_pattern.sub(rb"\g<1>" + new_bytes, contract)
@@ -325,14 +329,64 @@ def rebind_file(
                     raise ProfileContractRebindError(
                         f"{path} profile-state block records a false baseline id"
                     )
+                baseline_fixture = profile_state.get("baseline_fixture")
+                baseline_key: tuple[str, int] | None = None
+                if (
+                    isinstance(baseline_fixture, dict)
+                    and baseline_fixture.get("repo_relative_path")
+                    == HUB_BINDINGS_REPO_PATH.as_posix()
+                ):
+                    baseline_key = (
+                        baseline_fixture.get("sha256"),
+                        baseline_fixture.get("bytes"),
+                    )
+                    if baseline_key == current_key:
+                        baseline_version = {
+                            "kind": "current_committed_contract",
+                            "value": current_contract,
+                        }
+                    else:
+                        baseline_version = known_versions.get(baseline_key)
+                    if baseline_version is None:
+                        raise ProfileContractRebindError(
+                            f"{path} profile-state block records an unproven "
+                            f"baseline-fixture receipt {baseline_key}"
+                        )
+                    baseline_identity = baseline_for_identity(
+                        baseline_version["value"], identity
+                    )
+                    if baseline_identity is None or (
+                        baseline_identity != current_baseline
+                    ):
+                        raise ProfileContractRebindError(
+                            "profile binding contract rebind changed the capture's "
+                            f"baseline-fixture identity for {path}: {identity}"
+                        )
                 occurrence_count += 1
                 identities[identity] += 1
                 classifications[version["kind"]] += 1
-                if key != current_key:
+                binding_changed = key != current_key
+                baseline_changed = (
+                    baseline_key is not None and baseline_key != current_key
+                )
+                if binding_changed or baseline_changed:
                     changed_count += 1
-                    block = replace_receipt_in_block(
-                        block, recorded, current_receipt, str(path)
-                    )
+                    if binding_changed:
+                        block = replace_named_receipt_in_block(
+                            block,
+                            "binding_contract",
+                            recorded,
+                            current_receipt,
+                            str(path),
+                        )
+                    if baseline_changed:
+                        block = replace_named_receipt_in_block(
+                            block,
+                            "baseline_fixture",
+                            baseline_fixture,
+                            current_receipt,
+                            str(path),
+                        )
                 destination.write(block)
         if occurrence_count == 0:
             raise ProfileContractRebindError(
