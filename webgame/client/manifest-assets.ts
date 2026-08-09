@@ -49,6 +49,9 @@ export class ManifestAssets {
   }
 
   public resolve(id: string): ResolvedAsset {
+    if (this.#manifest.specialDraws[id] !== undefined) {
+      throw new Error(`assetpack manifest is ambiguous for ${id}: special draw and sprite lookup both apply`);
+    }
     const direct = this.#manifest.entries[id];
     const aliasTarget = this.#manifest.aliases[id];
     if (direct !== undefined && aliasTarget !== undefined) {
@@ -67,6 +70,37 @@ export class ManifestAssets {
       throw new Error(`assetpack asset ${id} names missing atlas ${entry.atlas}`);
     }
     return { requestedId: id, canonicalId, entry, atlas };
+  }
+
+  public special(id: string): SpecialDrawResolver {
+    const special = this.#manifest.specialDraws[id];
+    const direct = this.#manifest.entries[id];
+    const alias = this.#manifest.aliases[id];
+    if (special !== undefined && (direct !== undefined || alias !== undefined)) {
+      throw new Error(`assetpack manifest is ambiguous for ${id}: special draw and sprite lookup both apply`);
+    }
+    if (special === undefined) {
+      throw new Error(`assetpack manifest is missing required special draw id ${id}`);
+    }
+    return special;
+  }
+
+  public assertHubSceneAssets(draws: readonly Readonly<{ sprite: Readonly<{ id: string }> }>[]): void {
+    if (draws.length !== 1319 || draws[0]?.sprite.id !== "native.framebuffer-clear") {
+      throw new Error("assetpack hub audit did not reach the canonical 1,319-draw G12 witness");
+    }
+    let checked = 0;
+    for (const draw of draws) {
+      if (this.#manifest.specialDraws[draw.sprite.id] !== undefined) {
+        this.special(draw.sprite.id);
+      } else {
+        this.resolve(draw.sprite.id);
+      }
+      checked += 1;
+    }
+    if (checked !== draws.length) {
+      throw new Error("assetpack hub audit did not check every G12 draw");
+    }
   }
 
   public font(id: string): FontGroup | SpecialDrawResolver {

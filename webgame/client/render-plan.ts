@@ -16,7 +16,7 @@ export type G12Layer = typeof G12_LAYER_ORDER[number];
 
 interface DrawBase {
   readonly elementId: string;
-  readonly layer: "screen-overlay";
+  readonly layer: G12Layer;
   readonly drawOrder: number;
   readonly rect: NativeRect;
   readonly unclippedRect: NativeRect;
@@ -25,6 +25,40 @@ interface DrawBase {
 export interface SpriteDraw extends DrawBase {
   readonly kind: "sprite";
   readonly asset: ResolvedAsset;
+}
+
+export type ScreenQuad = readonly [
+  number, number,
+  number, number,
+  number, number,
+  number, number,
+];
+
+export interface SceneSpriteDraw extends DrawBase {
+  readonly kind: "scene-sprite";
+  readonly asset: ResolvedAsset;
+  readonly screenQuad: ScreenQuad;
+  readonly tint: readonly [number, number, number, number];
+  readonly blend: Readonly<{
+    enabled: boolean;
+    source: number;
+    destination: number;
+    operation: number;
+  }>;
+  readonly sourceSpriteId: string;
+  readonly nativeTransform: unknown;
+  readonly sortKey: unknown;
+}
+
+export interface SceneSpecialDraw extends DrawBase {
+  readonly kind: "scene-special";
+  readonly specialKind: "framebuffer-clear" | "textured-quad";
+  readonly screenQuad: ScreenQuad;
+  readonly tint: readonly [number, number, number, number];
+  readonly blend: SceneSpriteDraw["blend"];
+  readonly sourceSpriteId: string;
+  readonly nativeTransform: unknown;
+  readonly sortKey: unknown;
 }
 
 export interface SolidDraw extends DrawBase {
@@ -59,7 +93,14 @@ export interface FocusDraw {
   readonly colorBottom: readonly [number, number, number, number];
 }
 
-export type DrawCommand = SpriteDraw | SolidDraw | AtlasTextDraw | SystemTextDraw | FocusDraw;
+export type DrawCommand =
+  | SpriteDraw
+  | SceneSpriteDraw
+  | SceneSpecialDraw
+  | SolidDraw
+  | AtlasTextDraw
+  | SystemTextDraw
+  | FocusDraw;
 
 export interface PlannedElement {
   readonly id: string;

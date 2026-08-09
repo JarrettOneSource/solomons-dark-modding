@@ -51,6 +51,14 @@ jobs:
         run: npm --prefix webgame run conformance:self-trace
       - name: Prove cross-process simulation determinism
         run: npm --prefix webgame run determinism
+      - name: Replay P1 hub scene and economy
+        run: npm --prefix webgame run hub-conformance
+      - name: Replay P1 wizard presentation
+        run: npm --prefix webgame run animation-conformance
+      - name: Replay P1 session transitions
+        run: npm --prefix webgame run transition-conformance
+      - name: Traverse P1 hub with synthetic gamepad
+        run: npm --prefix webgame run hub-traversal
       - name: Test repository identity contract
         # Push events only: a pull_request build checks out a synthetic
         # merge commit that GitHub itself authors, which is not a project

@@ -1,10 +1,14 @@
 import type { AssetEntry, AtlasDescriptor, FontGroup } from "../assets/types.js";
 import type { NativeRect } from "./menu-catalog.js";
-import type { ManifestAssets } from "./manifest-assets.js";
+import { wizardAuraSpriteId } from "./hub-contracts.js";
+import type { ManifestAssets, ResolvedAsset } from "./manifest-assets.js";
 import type {
   AtlasTextDraw,
   DrawCommand,
   RenderPlan,
+  SceneSpecialDraw,
+  SceneSpriteDraw,
+  ScreenQuad,
   SolidDraw,
   SpriteDraw,
   SystemTextDraw,
@@ -124,6 +128,66 @@ function rectVertices(
   ]);
 }
 
+function quadVertices(
+  quad: ScreenQuad,
+  uv: readonly [number, number, number, number, number, number, number, number],
+  color: readonly [number, number, number, number],
+): Float32Array {
+  const [x0, y0, x1, y1, x2, y2, x3, y3] = quad;
+  const [u0, v0, u1, v1, u2, v2, u3, v3] = uv;
+  return new Float32Array([
+    x0, y0, u0, v0, ...color,
+    x1, y1, u1, v1, ...color,
+    x2, y2, u2, v2, ...color,
+    x2, y2, u2, v2, ...color,
+    x1, y1, u1, v1, ...color,
+    x3, y3, u3, v3, ...color,
+  ]);
+}
+
+function writeVertex(
+  target: Float32Array,
+  offset: number,
+  x: number,
+  y: number,
+  u: number,
+  v: number,
+  color: readonly [number, number, number, number],
+): number {
+  target[offset] = x;
+  target[offset + 1] = y;
+  target[offset + 2] = u;
+  target[offset + 3] = v;
+  target[offset + 4] = color[0];
+  target[offset + 5] = color[1];
+  target[offset + 6] = color[2];
+  target[offset + 7] = color[3];
+  return offset + 8;
+}
+
+function writeSceneQuad(
+  target: Float32Array,
+  offset: number,
+  quad: ScreenQuad,
+  u0: number,
+  v0: number,
+  u1: number,
+  v1: number,
+  u2: number,
+  v2: number,
+  u3: number,
+  v3: number,
+  color: readonly [number, number, number, number],
+): void {
+  let cursor = offset;
+  cursor = writeVertex(target, cursor, quad[0], quad[1], u0, v0, color);
+  cursor = writeVertex(target, cursor, quad[2], quad[3], u1, v1, color);
+  cursor = writeVertex(target, cursor, quad[4], quad[5], u2, v2, color);
+  cursor = writeVertex(target, cursor, quad[4], quad[5], u2, v2, color);
+  cursor = writeVertex(target, cursor, quad[2], quad[3], u1, v1, color);
+  writeVertex(target, cursor, quad[6], quad[7], u3, v3, color);
+}
+
 interface SpriteSlice {
   readonly rectangle: NativeRect;
   readonly uv: readonly [number, number, number, number, number, number, number, number];
@@ -175,9 +239,13 @@ export class WebGlShellRenderer {
   readonly #resolution: WebGLUniformLocation;
   readonly #atlasImages = new Map<string, HTMLImageElement>();
   readonly #loading = new Map<string, Promise<HTMLImageElement>>();
+  readonly #atlasTextures = new Map<string, TextureRecord>();
   readonly #assetTextures = new Map<string, TextureRecord>();
   readonly #systemTextures = new Map<string, TextureRecord>();
   readonly #whiteTexture: TextureRecord;
+  #sceneVertexScratch = new Float32Array(0);
+  #hubPresentationMilliseconds = 0;
+  readonly #hubAuraAssets = new Map<string, ResolvedAsset>();
 
   public constructor(
     canvas: HTMLCanvasElement,
@@ -222,10 +290,13 @@ export class WebGlShellRenderer {
   }
 
   public async prepare(plan: RenderPlan): Promise<void> {
-    const requestedAssets = new Map<string, SpriteDraw["asset"]>();
+    const croppedAssets = new Map<string, SpriteDraw["asset"]>();
+    const sceneAtlases = new Map<string, AtlasDescriptor>();
     for (const command of plan.commands) {
       if (command.kind === "sprite") {
-        requestedAssets.set(command.asset.canonicalId, command.asset);
+        croppedAssets.set(command.asset.canonicalId, command.asset);
+      } else if (command.kind === "scene-sprite") {
+        sceneAtlases.set(command.asset.atlas.id, command.asset.atlas);
       }
     }
     for (const command of plan.commands) {
@@ -235,11 +306,14 @@ export class WebGlShellRenderer {
       for (const character of command.text) {
         const glyph = this.#assets.glyph(command.fontId, character);
         if (glyph !== null) {
-          requestedAssets.set(glyph.canonicalId, glyph);
+          croppedAssets.set(glyph.canonicalId, glyph);
         }
       }
     }
-    const atlasIds = new Set([...requestedAssets.values()].map((asset) => asset.atlas.id));
+    const atlasIds = new Set([
+      ...[...croppedAssets.values()].map((asset) => asset.atlas.id),
+      ...sceneAtlases.keys(),
+    ]);
     await Promise.all([...atlasIds].map(async (atlasId) => {
       const atlas = this.#assets.manifest.atlases.find((candidate) => candidate.id === atlasId);
       if (atlas === undefined) {
@@ -247,9 +321,19 @@ export class WebGlShellRenderer {
       }
       await this.#atlasImage(atlas);
     }));
-    for (const asset of requestedAssets.values()) {
+    for (const atlas of sceneAtlases.values()) {
+      this.#atlasTexture(atlas);
+    }
+    for (const asset of croppedAssets.values()) {
       this.#assetTexture(asset);
     }
+  }
+
+  public setHubPresentationMilliseconds(milliseconds: number): void {
+    if (!Number.isFinite(milliseconds) || milliseconds < 0) {
+      throw new Error("G4 renderer presentation clock must be finite and nonnegative");
+    }
+    this.#hubPresentationMilliseconds = milliseconds;
   }
 
   public render(plan: RenderPlan): void {
@@ -259,14 +343,43 @@ export class WebGlShellRenderer {
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.useProgram(this.#program);
     gl.uniform2f(this.#resolution, plan.nativeViewport[0], plan.nativeViewport[1]);
-    for (const command of plan.commands) {
-      this.#draw(command);
+    for (let index = 0; index < plan.commands.length;) {
+      const command = plan.commands[index];
+      if (command === undefined) {
+        throw new Error(`render plan lost command ${index} during draw`);
+      }
+      if (command.kind !== "scene-sprite") {
+        this.#draw(command);
+        index += 1;
+        continue;
+      }
+      let nextIndex = index + 1;
+      while (nextIndex < plan.commands.length) {
+        const next = plan.commands[nextIndex];
+        if (
+          next?.kind !== "scene-sprite"
+          || next.asset.atlas.id !== command.asset.atlas.id
+          || next.blend.enabled !== command.blend.enabled
+          || next.blend.source !== command.blend.source
+          || next.blend.destination !== command.blend.destination
+          || next.blend.operation !== command.blend.operation
+        ) {
+          break;
+        }
+        nextIndex += 1;
+      }
+      this.#drawSceneBatch(plan.commands, index, nextIndex, command);
+      index = nextIndex;
     }
   }
 
   #draw(command: DrawCommand): void {
     if (command.kind === "sprite") {
       this.#drawSprite(command);
+    } else if (command.kind === "scene-sprite") {
+      this.#drawSceneSprite(command);
+    } else if (command.kind === "scene-special") {
+      this.#drawSceneSpecial(command);
     } else if (command.kind === "solid") {
       this.#drawSolid(command);
     } else if (command.kind === "atlas-text") {
@@ -292,6 +405,150 @@ export class WebGlShellRenderer {
         );
       }
     }
+  }
+
+  #drawSceneSprite(command: SceneSpriteDraw): void {
+    this.#drawSceneBatch([command], 0, 1, command);
+  }
+
+  #drawSceneBatch(
+    commands: readonly DrawCommand[],
+    start: number,
+    end: number,
+    first: SceneSpriteDraw,
+  ): void {
+    const commandCount = end - start;
+    if (commandCount <= 0) {
+      throw new Error("G12 batch cannot submit an empty draw range");
+    }
+    const texture = this.#atlasTextures.get(first.asset.atlas.id);
+    if (texture === undefined) {
+      throw new Error(
+        `assetpack hub atlas ${first.asset.atlas.id} was not prepared before drawing ${first.elementId}`,
+      );
+    }
+    const floatCount = commandCount * 6 * 8;
+    const vertices = this.#sceneScratch(floatCount);
+    for (let commandIndex = start; commandIndex < end; commandIndex += 1) {
+      const command = commands[commandIndex];
+      if (command?.kind !== "scene-sprite") {
+        throw new Error(`G12 batch range ${start}..${end} contains a non-scene draw at ${commandIndex}`);
+      }
+      if (command.asset.atlas.id !== first.asset.atlas.id) {
+        throw new Error(`G12 batch mixed atlas ${command.asset.atlas.id} after ${first.asset.atlas.id}`);
+      }
+      const presentationAsset = this.#scenePresentationAsset(command);
+      const { x, y, width, height } = presentationAsset.entry.rect;
+      const left = (x + 0.5) / presentationAsset.atlas.width;
+      const top = (y + 0.5) / presentationAsset.atlas.height;
+      const right = (x + width - 0.5) / presentationAsset.atlas.width;
+      const bottom = (y + height - 0.5) / presentationAsset.atlas.height;
+      if (presentationAsset.entry.rotated) {
+        writeSceneQuad(
+          vertices,
+          (commandIndex - start) * 6 * 8,
+          command.screenQuad,
+          left, bottom, left, top, right, bottom, right, top,
+          command.tint,
+        );
+      } else {
+        writeSceneQuad(
+          vertices,
+          (commandIndex - start) * 6 * 8,
+          command.screenQuad,
+          left, top, right, top, left, bottom, right, bottom,
+          command.tint,
+        );
+      }
+    }
+    this.#applySceneBlend(first.blend);
+    const gl = this.#gl;
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texture.texture);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.#buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, floatCount * Float32Array.BYTES_PER_ELEMENT, gl.STREAM_DRAW);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, vertices, 0, floatCount);
+    gl.drawArrays(gl.TRIANGLES, 0, commandCount * 6);
+    this.#restoreOverlayBlend();
+  }
+
+  #sceneScratch(floatCount: number): Float32Array {
+    if (this.#sceneVertexScratch.length < floatCount) {
+      let capacity = Math.max(48, this.#sceneVertexScratch.length);
+      while (capacity < floatCount) {
+        capacity *= 2;
+      }
+      this.#sceneVertexScratch = new Float32Array(capacity);
+    }
+    return this.#sceneVertexScratch;
+  }
+
+  #scenePresentationAsset(command: SceneSpriteDraw): ResolvedAsset {
+    if (
+      command.nativeTransform !== null
+      && typeof command.nativeTransform === "object"
+      && (command.nativeTransform as { object?: { type_id?: unknown } | null }).object?.type_id === 1
+      && (command.drawOrder === 107 || command.drawOrder === 108)
+    ) {
+      const auraId = wizardAuraSpriteId(this.#hubPresentationMilliseconds);
+      let asset = this.#hubAuraAssets.get(auraId);
+      if (asset === undefined) {
+        asset = this.#assets.resolve(auraId);
+        this.#hubAuraAssets.set(auraId, asset);
+      }
+      if (asset.atlas.id !== command.asset.atlas.id) {
+        throw new Error(`G4 aura frame ${auraId} escaped its prepared native atlas`);
+      }
+      return asset;
+    }
+    return command.asset;
+  }
+
+  #drawSceneSpecial(command: SceneSpecialDraw): void {
+    if (command.specialKind === "framebuffer-clear") {
+      return;
+    }
+    this.#applySceneBlend(command.blend);
+    this.#drawScreenQuad(
+      command.screenQuad,
+      [0, 0, 1, 0, 0, 1, 1, 1],
+      command.tint,
+      this.#whiteTexture,
+    );
+    this.#restoreOverlayBlend();
+  }
+
+  #applySceneBlend(blend: SceneSpriteDraw["blend"]): void {
+    const gl = this.#gl;
+    if (!blend.enabled) {
+      gl.disable(gl.BLEND);
+      return;
+    }
+    gl.enable(gl.BLEND);
+    if (blend.operation !== 1) {
+      throw new Error(
+        `G12 draw requests unsupported blend tuple ${blend.source}/${blend.destination}/${blend.operation}`,
+      );
+    }
+    gl.blendEquation(gl.FUNC_ADD);
+    if (blend.source === 5 && blend.destination === 6) {
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    } else if (blend.source === 5 && blend.destination === 2) {
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+    } else if (blend.source === 1 && blend.destination === 3) {
+      gl.blendFunc(gl.ZERO, gl.SRC_COLOR);
+    } else {
+      throw new Error(
+        `G12 draw requests unsupported blend tuple ${blend.source}/${blend.destination}/${blend.operation}`,
+      );
+    }
+  }
+
+  #restoreOverlayBlend(): void {
+    const gl = this.#gl;
+    gl.enable(gl.BLEND);
+    gl.blendEquation(gl.FUNC_ADD);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   }
 
   #drawSprite(command: SpriteDraw): void {
@@ -427,6 +684,20 @@ export class WebGlShellRenderer {
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
 
+  #drawScreenQuad(
+    quad: ScreenQuad,
+    uv: readonly [number, number, number, number, number, number, number, number],
+    color: readonly [number, number, number, number],
+    texture: TextureRecord,
+  ): void {
+    const gl = this.#gl;
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texture.texture);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.#buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, quadVertices(quad, uv, color), gl.STREAM_DRAW);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+
   #atlasImage(atlas: AtlasDescriptor): Promise<HTMLImageElement> {
     const present = this.#atlasImages.get(atlas.id);
     if (present !== undefined) {
@@ -480,6 +751,27 @@ export class WebGlShellRenderer {
     const texture = this.#createPixelTexture(new Uint8Array(pixels), source.width, source.height);
     this.#assetTextures.set(asset.canonicalId, texture);
     return texture;
+  }
+
+  #atlasTexture(atlas: AtlasDescriptor): TextureRecord {
+    const present = this.#atlasTextures.get(atlas.id);
+    if (present !== undefined) {
+      return present;
+    }
+    const image = this.#atlasImages.get(atlas.id);
+    if (image === undefined) {
+      throw new Error(`assetpack atlas ${atlas.id} was not loaded before GPU upload`);
+    }
+    const gl = this.#gl;
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, 0);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    this.#setTextureParameters();
+    const record = { texture, width: atlas.width, height: atlas.height };
+    this.#atlasTextures.set(atlas.id, record);
+    return record;
   }
 
   #createPixelTexture(bytes: Uint8Array, width: number, height: number): TextureRecord {

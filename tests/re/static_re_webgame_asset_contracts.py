@@ -684,15 +684,15 @@ def test_webgame_workspace_battery_is_strict_ratcheted_and_ci_wired() -> str:
         raise StaticReTestFailure(
             "webgame TypeScript strictness lost required option(s): " + ", ".join(missing_strict)
         )
-    expected_floors = {
-        "lintFiles": 45,
-        "typecheckedFiles": 42,
-        "unitTestFiles": 12,
-        "unitTests": 58,
+    minimum_floors = {
+        "lintFiles": 89,
+        "typecheckedFiles": 86,
+        "unitTestFiles": 26,
+        "unitTests": 99,
     }
     if any(
         not isinstance(floors.get(name), int) or floors[name] < minimum
-        for name, minimum in expected_floors.items()
+        for name, minimum in minimum_floors.items()
     ):
         raise StaticReTestFailure(
             "webgame lint, typecheck, and unit-test floors fell below the landed battery"
@@ -753,4 +753,4 @@ def test_webgame_workspace_battery_is_strict_ratcheted_and_ci_wired() -> str:
         raise StaticReTestFailure(
             "CI runs the real webgame decoder test before installing its Pillow dependency"
         )
-    return "strict TypeScript and locked npm tooling retain shell floors of at least 45/42/12/58"
+    return "strict TypeScript and locked npm tooling run with shell, P1 hub, and P2 sim gates at floors at least 89/86/26/99"

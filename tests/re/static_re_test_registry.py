@@ -99,6 +99,13 @@ from static_re_webgame_sim_core_contracts import (
     test_webgame_sim_rng_is_bit_exact_for_integer_and_sealed_float_corpora,
     test_webgame_sim_tick_graph_and_cadences_match_g1_tables,
 )
+from static_re_webgame_hub_contracts import (
+    test_webgame_hub_architecture_is_client_owned_provisional_and_sim_independent,
+    test_webgame_hub_capture_assets_performance_provenance_and_ci_are_wired,
+    test_webgame_hub_controller_traversal_covers_every_talk_purchase_and_run_boundary,
+    test_webgame_hub_scene_economy_animation_and_manifest_replays_are_strict,
+    test_webgame_hub_session_graph_phase_order_and_fixture_timings_are_pinned,
+)
 from static_re_native_hub_economy_contracts import (
     test_native_hub_dig_and_run_boundary_fields_are_pinned,
     test_native_hub_entity_census_and_interactions_are_pinned,
@@ -1067,6 +1074,26 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Webgame P2 replay, determinism, and CI gates are wired",
         test_webgame_sim_replay_determinism_and_ci_gates_are_wired,
+    ),
+    (
+        "Webgame P1 hub architecture is client-owned, provisional, and sim-independent",
+        test_webgame_hub_architecture_is_client_owned_provisional_and_sim_independent,
+    ),
+    (
+        "Webgame P1 hub scene, economy, animation, and manifest replays are strict",
+        test_webgame_hub_scene_economy_animation_and_manifest_replays_are_strict,
+    ),
+    (
+        "Webgame P1 hub session graph, phase order, and fixture timings are pinned",
+        test_webgame_hub_session_graph_phase_order_and_fixture_timings_are_pinned,
+    ),
+    (
+        "Webgame P1 hub controller traversal covers talk, purchase, and run boundaries",
+        test_webgame_hub_controller_traversal_covers_every_talk_purchase_and_run_boundary,
+    ),
+    (
+        "Webgame P1 hub capture, assets, performance, provenance, and CI are wired",
+        test_webgame_hub_capture_assets_performance_provenance_and_ci_are_wired,
     ),
     (
         "Native hub entity census and interactions are pinned",

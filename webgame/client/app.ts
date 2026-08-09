@@ -8,6 +8,9 @@ import { KeyboardMouseProducer } from "../input/keyboard-mouse-producer.js";
 import { DEFAULT_HUB_CAMERA_SCALE } from "../input/twin-stick.js";
 import { loadManifestAssets } from "./manifest-assets.js";
 import { parseMenuCatalog } from "./menu-catalog.js";
+import { HubController, type HubSnapshot } from "./hub-controller.js";
+import { buildHubRenderPlan } from "./hub-render-plan.js";
+import { buildHubScenePlan } from "./hub-scene.js";
 import {
   buildOutOfScopePlan,
   buildRenderPlan,
@@ -31,10 +34,17 @@ export interface FrameTimeReport {
 export interface WebShellHarness {
   readonly ready: true;
   snapshot(): ShellSnapshot;
+  hubSnapshot(): HubSnapshot;
   renderPlan(): RenderPlan;
   dispatch(value: unknown): void;
   showLayout(layoutId: string, preferredFocus?: string): Promise<void>;
   showHub(): Promise<void>;
+  showHubReference(): Promise<void>;
+  showHubNpc(npcId: string): Promise<void>;
+  showHubService(npcId: string): Promise<void>;
+  showRunShell(): Promise<void>;
+  setHubCaptureFreeze(frozen: boolean): Promise<void>;
+  advanceHub(milliseconds: number): Promise<void>;
   setEligibility(values: Parameters<ShellController["setEligibilityForConformance"]>[0]): Promise<void>;
   measureFrameTimes(sampleCount: number): Promise<FrameTimeReport>;
 }
@@ -83,6 +93,14 @@ async function main(): Promise<void> {
   assets.assertShellAssets(catalog);
   const renderer = new WebGlShellRenderer(canvas, assets);
   const controller = new ShellController(catalog, focusModel, { store: browserStore() });
+  const hub = new HubController({
+    openPause: () => {
+      controller.handle({ kind: "interact", target: "pause", phase: "press" });
+    },
+    openMapPicker: () => {
+      controller.showLayoutForConformance("map-picker");
+    },
+  });
 
   const loaderLayout = catalog.layouts.get("native-loader");
   if (loaderLayout === undefined) {
@@ -117,8 +135,16 @@ async function main(): Promise<void> {
   const showFocus = parameters.get("focus") !== "0";
   let activePlan = loaderPlan;
   let currentSnapshot = controller.snapshot();
+  let bareHubReference = false;
+  let preparedHubWorldKey: string | null = null;
   let renderGeneration = 0;
   let renderSettled: Promise<void> = Promise.resolve();
+
+  const hubWorldDependencyKey = (snapshot: HubSnapshot): string | null => (
+    snapshot.surface.kind === "world"
+      ? `${bareHubReference ? "reference" : "hub"}\0${snapshot.region}\0${snapshot.gold}\0${snapshot.nearestTargetId ?? ""}`
+      : null
+  );
 
   const installSnapshot = async (snapshot: ShellSnapshot): Promise<void> => {
     const generation = ++renderGeneration;
@@ -138,10 +164,15 @@ async function main(): Promise<void> {
         showFocus,
       );
     } else if (snapshot.surface.kind === "hub-stub") {
-      nextPlan = buildOutOfScopePlan(
-        "GAMEPLAY IS OUTSIDE THIS SIM-LESS PHASE",
-        "SHELL READY",
-      );
+      const hubSnapshot = hub.snapshot();
+      nextPlan = bareHubReference
+        ? buildHubScenePlan(assets, {
+          player: hubSnapshot.player,
+          heading: hubSnapshot.player.heading,
+          moving: hubSnapshot.player.moving,
+          presentationMilliseconds: hubSnapshot.presentationMilliseconds,
+        }, [], "hub.g12-reference")
+        : buildHubRenderPlan(assets, hubSnapshot);
     } else {
       nextPlan = buildOutOfScopePlan(snapshot.surface.message);
     }
@@ -150,6 +181,9 @@ async function main(): Promise<void> {
       return;
     }
     activePlan = nextPlan;
+    if (snapshot.surface.kind === "hub-stub") {
+      preparedHubWorldKey = hubWorldDependencyKey(hub.snapshot());
+    }
     inputs.update(snapshot);
     renderer.render(activePlan);
   };
@@ -157,8 +191,52 @@ async function main(): Promise<void> {
     renderSettled = installSnapshot(snapshot);
   });
 
+  hub.subscribe((snapshot) => {
+    if (controller.snapshot().surface.kind === "hub-stub") {
+      const generation = ++renderGeneration;
+      const nextPlan = bareHubReference
+        ? buildHubScenePlan(assets, {
+          player: snapshot.player,
+          heading: snapshot.player.heading,
+          moving: snapshot.player.moving,
+          presentationMilliseconds: snapshot.presentationMilliseconds,
+        }, [], "hub.g12-reference")
+        : buildHubRenderPlan(assets, snapshot);
+      const worldKey = hubWorldDependencyKey(snapshot);
+      if (worldKey !== null && worldKey === preparedHubWorldKey) {
+        activePlan = nextPlan;
+        renderSettled = Promise.resolve();
+        return;
+      }
+      renderSettled = renderer.prepare(nextPlan).then(() => {
+        if (generation !== renderGeneration) {
+          return;
+        }
+        activePlan = nextPlan;
+        preparedHubWorldKey = worldKey;
+      });
+    }
+  });
+
   const sink = (intent: Intent): void => {
     controller.handle(intent);
+  };
+  const routeIntent = (intent: Intent): void => {
+    const before = controller.snapshot();
+    if (before.surface.kind === "hub-stub") {
+      hub.handle(intent);
+      return;
+    }
+    sink(intent);
+    const after = controller.snapshot();
+    if (
+      before.surface.kind === "layout"
+      && before.surface.layoutId === "map-picker"
+      && after.surface.kind === "out-of-scope"
+    ) {
+      controller.showHubForConformance();
+      hub.beginRunEntry();
+    }
   };
   const menuTargetAt = (point: Point2): string | null => {
     const native = toNative(canvas, point);
@@ -170,24 +248,37 @@ async function main(): Promise<void> {
       && native.y <= node.nativeRect[3]
     ))?.id ?? null;
   };
-  const keyboardMouse = new KeyboardMouseProducer(sink, () => ({
-    surface: controller.inputSurface,
+  const keyboardMouse = new KeyboardMouseProducer(routeIntent, () => ({
+    surface: controller.snapshot().surface.kind === "hub-stub"
+      ? hub.inputSurface
+      : controller.inputSurface,
     screenToWorld: (point) => toNative(canvas, point),
     menuTargetAt,
   }));
-  const gamepad = new GamepadProducer(sink, () => ({
-    surface: controller.inputSurface,
-    aimProjection: {
-      playerWorld: { x: 0, y: 0 },
-      projectedPlayerPx: { x: 800, y: 450 },
-      viewportPx: { width: 1600, height: 900 },
-      cameraScale: DEFAULT_HUB_CAMERA_SCALE,
-    },
-  }));
+  const gamepad = new GamepadProducer(routeIntent, () => {
+    const interactTarget = hub.interactTarget;
+    return {
+      surface: controller.snapshot().surface.kind === "hub-stub"
+        ? hub.inputSurface
+        : controller.inputSurface,
+      aimProjection: {
+        playerWorld: hub.snapshot().player,
+        projectedPlayerPx: {
+          x: (hub.snapshot().player.x - 333.333374) * DEFAULT_HUB_CAMERA_SCALE,
+          y: hub.snapshot().player.y * DEFAULT_HUB_CAMERA_SCALE,
+        },
+        viewportPx: { width: 1600, height: 900 },
+        cameraScale: DEFAULT_HUB_CAMERA_SCALE,
+      },
+      ...(interactTarget === null ? {} : { interactTarget }),
+    };
+  });
   keyboardMouse.start();
 
   const requestedLayout = parameters.get("screen");
-  if (requestedLayout !== null) {
+  if (parameters.get("hub") === "1") {
+    controller.showHubForConformance();
+  } else if (requestedLayout !== null) {
     controller.showLayoutForConformance(requestedLayout);
   } else {
     controller.completeBoot(browserStore().get("control_scheme") === null);
@@ -231,9 +322,10 @@ async function main(): Promise<void> {
   window.__webshell = {
     ready: true,
     snapshot: () => controller.snapshot(),
+    hubSnapshot: () => hub.snapshot(),
     renderPlan: () => activePlan,
     dispatch: (value) => {
-      controller.handle(parseIntent(value));
+      routeIntent(parseIntent(value));
     },
     showLayout: async (layoutId, preferredFocus) => {
       controller.showLayoutForConformance(layoutId, preferredFocus);
@@ -241,7 +333,50 @@ async function main(): Promise<void> {
       renderer.render(activePlan);
     },
     showHub: async () => {
+      bareHubReference = false;
+      hub.showCourtyardForConformance();
       controller.showHubForConformance();
+      await renderSettled;
+      renderer.render(activePlan);
+    },
+    showHubReference: async () => {
+      bareHubReference = true;
+      hub.showCourtyardForConformance();
+      controller.showHubForConformance();
+      await renderSettled;
+      renderer.render(activePlan);
+    },
+    showHubNpc: async (npcId) => {
+      bareHubReference = false;
+      controller.showHubForConformance();
+      hub.showNpcForConformance(npcId);
+      await renderSettled;
+      renderer.render(activePlan);
+    },
+    showHubService: async (npcId) => {
+      bareHubReference = false;
+      controller.showHubForConformance();
+      hub.showServiceForConformance(npcId);
+      await renderSettled;
+      renderer.render(activePlan);
+    },
+    showRunShell: async () => {
+      bareHubReference = false;
+      controller.showHubForConformance();
+      hub.showCourtyardForConformance();
+      hub.beginRunEntry();
+      hub.advance(1000);
+      hub.advance(270);
+      await renderSettled;
+      renderer.render(activePlan);
+    },
+    setHubCaptureFreeze: async (frozen) => {
+      hub.setPresentationFrozenForCapture(frozen);
+      await renderSettled;
+      renderer.render(activePlan);
+    },
+    advanceHub: async (milliseconds) => {
+      hub.advance(milliseconds);
       await renderSettled;
       renderer.render(activePlan);
     },
@@ -253,13 +388,20 @@ async function main(): Promise<void> {
     measureFrameTimes,
   };
 
-  const frame = (): void => {
+  let previousFrame = performance.now();
+  const frame = (timestamp: number): void => {
+    const delta = Math.min(100, Math.max(0, timestamp - previousFrame));
+    previousFrame = timestamp;
     controller.tick();
+    if (controller.snapshot().surface.kind === "hub-stub") {
+      hub.advance(delta);
+      renderer.setHubPresentationMilliseconds(hub.snapshot().presentationMilliseconds);
+      // P1 exercises the complete G12 draw list in the live frame loop. The
+      // measured 60 Hz gate therefore includes real hub WebGL work.
+      renderer.render(activePlan);
+    }
     gamepad.pollBrowserGamepads();
     keyboardMouse.tick();
-    // The P0 shell has no simulated or animated scene. State changes render in
-    // installSnapshot; the 60Hz loop remains responsible only for input and
-    // time-gated shell transitions, avoiding redundant static WebGL uploads.
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
