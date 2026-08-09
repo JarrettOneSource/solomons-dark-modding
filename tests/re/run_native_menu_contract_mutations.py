@@ -1228,6 +1228,15 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "v2.12/v2.13 Hub baselines, paths, and accepted STOP mechanism",
     ),
     StaticMutation(
+        "v2.13.post-route-baseline-phase",
+        RECORDER,
+        "tests/fixtures/webgame/native-menu-hub-bindings-v213.json",
+        '"identity_phase": "post_final_settled_route"',
+        '"identity_phase": "pre_final_settled_route"',
+        "the v2.13 derived baseline does not pin its post-route refresh "
+        "audit and two independent witness identities",
+    ),
+    StaticMutation(
         "v2.5.independent-capture-runtime-provenance",
         CAMPAIGN,
         "tools/resolve_native_menu_ambient_campaign.py",

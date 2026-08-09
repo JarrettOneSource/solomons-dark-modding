@@ -1491,11 +1491,20 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
         raise StaticReTestFailure(
             "the v2.13 registry records false pristine baseline identity or bytes"
         )
-    derived_witnesses = baseline_registry["hub_new_game_two_action_v213"].get(
-        "witnesses"
-    )
+    derived_contract = baseline_registry["hub_new_game_two_action_v213"]
+    derived_witnesses = derived_contract.get("witnesses")
+    refresh_audit = derived_contract.get("recapture_refresh_audit")
     if (
-        not isinstance(derived_witnesses, list)
+        derived_contract.get("identity_phase") != "post_final_settled_route"
+        or not isinstance(refresh_audit, dict)
+        or refresh_audit.get("evidence_path")
+        != "raw-v9/hub-restart-v212/"
+        "hub-v213-recapture-baseline-refresh-audit.json"
+        or re.fullmatch(r"[0-9a-f]{64}", str(refresh_audit.get("sha256", "")))
+        is None
+        or not isinstance(refresh_audit.get("bytes"), int)
+        or refresh_audit["bytes"] <= 0
+        or not isinstance(derived_witnesses, list)
         or len(derived_witnesses) != 2
         or {witness.get("role") for witness in derived_witnesses}
         != {"primary", "confirmation"}
@@ -1508,7 +1517,8 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
         != 2
     ):
         raise StaticReTestFailure(
-            "the v2.13 derived baseline does not pin two independent witness identities"
+            "the v2.13 derived baseline does not pin its post-route refresh "
+            "audit and two independent witness identities"
         )
     for layout_id in (
         "hub_pristine_second_new_game",

@@ -94,6 +94,16 @@ geometry. Write watches observed exactly one native change for each action,
 and an isolated two-field replay reproduced the same result. Thus the v7
 content is vindicated while its copied-profile provenance remains invalid.
 
+The derived baseline identity is pinned after that final settled New Game
+route, not before it. The first capture pass proved that entering New Game
+rewrites only `settings.txt`; its other five durable files remain byte-identical,
+and each post-route file set reproduced the separately recorded route-complete
+receipt. The recapture registry therefore uses those post-route identities and
+cites `hub-v213-recapture-baseline-refresh-audit.json`. This keeps the baseline
+pristine-derived and action-receipted without copying durable state, while
+avoiding a one-use pre-route identity that the capture itself necessarily
+supersedes.
+
 No capture baseline may be made by copying profile or durable state from any
 install. A baseline is either the pinned pristine `fresh_install` state or is
 derived from it by a documented, deterministic, receipted in-game procedure.

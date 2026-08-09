@@ -25,6 +25,9 @@ CONTRACT_REPO_PATH = Path(
     "tests/fixtures/webgame/native-menu-hub-bindings-v213.json"
 )
 CASE_A_AUDIT = Path("raw-v9/hub-restart-v212/hub-v213-case-a-audit.json")
+RECAPTURE_REFRESH_AUDIT = Path(
+    "raw-v9/hub-restart-v212/hub-v213-recapture-baseline-refresh-audit.json"
+)
 V212_AUDIT = Path("raw-v9/diagnostics/hub-profile-path-v26-question-audit.json")
 V26_AUDIT = Path(
     "raw-v9/raw-final/diagnostics/hub-path-dependent-core-stop-audit.json"
@@ -108,6 +111,32 @@ def receipt_state(receipt: dict[str, Any], label: str) -> dict[str, Any]:
             f"{label} records a false derived profile-state identity"
         )
     return {"identity": identity, "files": files}
+
+
+def normalized_file_set(files: object, label: str) -> tuple[tuple[object, ...], ...]:
+    if not isinstance(files, list) or not files:
+        raise HubBindingDerivationError(f"{label} has no durable file set")
+    rows: list[tuple[object, ...]] = []
+    for row in files:
+        if not isinstance(row, dict):
+            raise HubBindingDerivationError(f"{label} has a malformed durable file")
+        root = row.get("root")
+        relative_path = row.get("relative_path")
+        size = row.get("bytes")
+        digest = row.get("sha256")
+        if (
+            not isinstance(root, str)
+            or not isinstance(relative_path, str)
+            or not isinstance(size, int)
+            or size < 0
+            or not isinstance(digest, str)
+            or len(digest) != 64
+        ):
+            raise HubBindingDerivationError(f"{label} has a malformed durable file")
+        rows.append((root, relative_path.replace("\\", "/"), size, digest))
+    if len(rows) != len(set(rows)):
+        raise HubBindingDerivationError(f"{label} has duplicate durable files")
+    return tuple(sorted(rows))
 
 
 def resolved_multiset(layout: dict[str, Any], label: str) -> dict[str, Any]:
@@ -194,6 +223,20 @@ def derive(repo_root: Path, evidence_root: Path) -> dict[str, Any]:
         raise HubBindingDerivationError(
             "v2.13 Case A audit does not prove the authorized two-action derivation"
         )
+    refresh_path = evidence_root / RECAPTURE_REFRESH_AUDIT
+    refresh = read_object(refresh_path, "v2.13 recapture baseline refresh audit")
+    refresh_rows = refresh.get("instances")
+    if (
+        refresh.get("schema")
+        != "solomon-dark-hub-v213-recapture-baseline-refresh-audit-v1"
+        or not isinstance(refresh_rows, list)
+        or len(refresh_rows) != 2
+        or {row.get("instance") for row in refresh_rows if isinstance(row, dict)}
+        != {"menufx-v9p16", "menufx-v9p17"}
+    ):
+        raise HubBindingDerivationError(
+            "v2.13 recapture refresh does not name exactly two derived witnesses"
+        )
 
     primary_observation = evidence_root / (
         "raw-v9/menufx-v9p16/annalist-derivation/relaunch-two-action-1/"
@@ -262,15 +305,73 @@ def derive(repo_root: Path, evidence_root: Path) -> dict[str, Any]:
         raise HubBindingDerivationError("v2.13 audit lost profile identities")
     witnesses: list[dict[str, Any]] = []
     for role, instance in witness_specs:
+        matching_refresh_rows = [
+            row
+            for row in refresh_rows
+            if isinstance(row, dict) and row.get("instance") == instance
+        ]
+        if len(matching_refresh_rows) != 1:
+            raise HubBindingDerivationError(
+                f"v2.13 recapture refresh lookup is ambiguous for {instance}"
+            )
+        refresh_row = matching_refresh_rows[0]
         profile_path = evidence_root / (
-            f"raw-v9/hub-restart-v212/profile-state-v213/{instance}/"
+            f"raw-v9/hub-restart-v212/profile-state-v213-recapture/{instance}/"
             f"{instance}.derived-profile-state.json"
         )
         profile = read_object(profile_path, f"{instance} derived profile receipt")
         state = receipt_state(profile, f"{instance} derived profile receipt")
-        if audit_identities.get(instance) != state["identity"]:
+        original_profile_path = evidence_root / (
+            f"raw-v9/hub-restart-v212/profile-state-v213/{instance}/"
+            f"{instance}.derived-profile-state.json"
+        )
+        original_profile = read_object(
+            original_profile_path,
+            f"{instance} original derived profile receipt",
+        )
+        original_state = receipt_state(
+            original_profile,
+            f"{instance} original derived profile receipt",
+        )
+        route_complete_path = evidence_root / (
+            f"raw-v9/{instance}/annalist-derivation/relaunch-two-action-1/"
+            "direct-new-game-route/99-route-complete.profile-state.json"
+        )
+        route_complete = read_object(
+            route_complete_path,
+            f"{instance} prior route-complete profile state",
+        )
+        recapture_receipt = refresh_row.get("recapture_receipt")
+        route_receipt = refresh_row.get("prior_route_completion")
+        differences = refresh_row.get("difference")
+        if (
+            audit_identities.get(instance) != original_state["identity"]
+            or refresh_row.get("prior_launch_profile_state_identity_sha256")
+            != original_state["identity"]
+            or refresh_row.get("recapture_profile_state_identity_sha256")
+            != state["identity"]
+            or not isinstance(recapture_receipt, dict)
+            or recapture_receipt.get("sha256") != sha256_file(profile_path)
+            or recapture_receipt.get("bytes") != profile_path.stat().st_size
+            or not isinstance(route_receipt, dict)
+            or route_receipt.get("sha256") != sha256_file(route_complete_path)
+            or route_receipt.get("bytes") != route_complete_path.stat().st_size
+            or normalized_file_set(
+                route_complete.get("files"),
+                f"{instance} prior route-complete profile state",
+            )
+            != normalized_file_set(
+                state["files"],
+                f"{instance} recapture profile state",
+            )
+            or refresh_row.get("unchanged_non_settings_file_count") != 5
+            or not isinstance(differences, list)
+            or len(differences) != 1
+            or differences[0].get("relative_path") != "settings.txt"
+        ):
             raise HubBindingDerivationError(
-                f"v2.13 audit and copied {instance} profile receipt disagree"
+                f"v2.13 recapture refresh does not prove the exact post-route "
+                f"derived profile for {instance}"
             )
         action_path = evidence_root / (
             f"raw-v9/{instance}/annalist-derivation/"
@@ -363,6 +464,10 @@ def derive(repo_root: Path, evidence_root: Path) -> dict[str, Any]:
                 "kind": "documented_deterministic_receipted_in_game_derivation",
                 "parent_baseline_id": FRESH_BASELINE_ID,
                 "case_a_audit": case_a_receipt,
+                "identity_phase": "post_final_settled_route",
+                "recapture_refresh_audit": evidence_receipt(
+                    refresh_path, evidence_root
+                ),
                 "procedure": case_a.get("diagnosed_mechanism", {}).get(
                     "documented_in_game_derivation"
                 ),
