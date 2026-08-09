@@ -229,6 +229,10 @@ bool TryGetCurrentHallOfFame(uintptr_t* hof_address) {
         return false;
     }
 
+    if (TryReadCurrentHallOfFameController(hof_address)) {
+        return true;
+    }
+
     const auto now = GetTickCount64();
     std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
     auto& tracked_hof = g_debug_ui_overlay_state.hall_of_fame_render;

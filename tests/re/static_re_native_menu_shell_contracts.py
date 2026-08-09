@@ -1689,6 +1689,60 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
     )
 
 
+def test_native_menu_browser_tab_measurement_records_are_aggregable() -> str:
+    assert_module_runs_in_ci("test_native_menu_layout_capture_contract")
+    support = _read("scripts/NativeMenuCaptureSupport.ps1")
+    _require_regex(
+        support,
+        r"function Resolve-NativeMenuBrowserTabState.*?"
+        r"\$measurements\.Add\(\[pscustomobject\]\[ordered\]@\{.*?"
+        r"bracket_top\s*=\s*\[double\]\$leftRect\[1\].*?"
+        r"\$measurements \| Measure-Object -Property bracket_top -Minimum",
+        "browser-tab geometry measurements are no longer typed records that "
+        "Windows PowerShell can aggregate before enforcing the selected tab",
+    )
+    return "browser-tab geometry is aggregated from typed measured records"
+
+
+def test_native_menu_hall_layout_retention_is_native_owner_bounded() -> str:
+    assert_module_runs_in_ci("test_native_menu_layout_capture_contract")
+    layout_snapshot = _read(
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "menu_layout_capture_snapshot_and_hooks.inl"
+    )
+    tracked_surfaces = _read(
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "tracked_surfaces_and_main_menu.inl"
+    )
+    _require_regex(
+        layout_snapshot,
+        r"bool TryReadCurrentHallOfFameController\(.*?"
+        r'"application_global".*?'
+        r'"application_hall_of_fame_offset".*?'
+        r'"hall_of_fame_vftable".*?'
+        r"TryReadResolvedGamePointer\(application_global, &application\).*?"
+        r"TryReadPointerValueDirect\(\s*application \+ hall_of_fame_offset,.*?"
+        r"TryReadPointerField\(.*?hall_of_fame.*?&object_vftable\).*?"
+        r"object_vftable != expected_vftable.*?"
+        r"snapshot\.elements\.empty\(\) &&\s*"
+        r'state->latest_layout_snapshot\.screen_id == "hall_of_fame" &&\s*'
+        r"TryReadCurrentHallOfFameController\(&hall_of_fame\)\) \{\s*"
+        r"return;\s*\}\s*"
+        r"state->latest_layout_snapshot = std::move\(snapshot\);",
+        "the one-shot Hall renderer can no longer retain its last measured "
+        "layout only while the exact native controller and vtable remain active",
+    )
+    _require_regex(
+        tracked_surfaces,
+        r"bool TryGetCurrentHallOfFame\(.*?"
+        r"TryReadCurrentHallOfFameController\(hof_address\).*?return true;.*?"
+        r"kTrackedHallOfFameMaximumIdleMs.*?return false;",
+        "Hall surface ownership no longer prefers the durable validated "
+        "controller before its bounded render-transition fallback",
+    )
+    return "Hall layout retention is bounded by the exact live native owner"
+
+
 def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
     assert_module_runs_in_ci("test_native_menu_layout_capture_contract")
     api = _read(

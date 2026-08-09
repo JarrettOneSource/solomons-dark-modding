@@ -44,6 +44,7 @@ bool TryGetActiveMyQuickPanel(uintptr_t* quick_panel_address);
 bool TryReadTrackedMyQuickPanel(uintptr_t* quick_panel_address);
 bool TryGetActiveSimpleMenu(uintptr_t* simple_menu_address);
 bool TryGetActiveHallOfFameRender(uintptr_t* hof_address);
+bool TryReadCurrentHallOfFameController(uintptr_t* hof_address);
 bool TryGetCurrentHallOfFame(uintptr_t* hof_address);
 bool TryGetActiveSpellPickerRender(uintptr_t* picker_address);
 bool TryGetCurrentSpellPicker(uintptr_t* picker_address);

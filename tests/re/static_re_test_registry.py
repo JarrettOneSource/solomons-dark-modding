@@ -128,7 +128,9 @@ from static_re_native_progression_contracts import (
 )
 from static_re_native_menu_shell_contracts import (
     test_designed_menu_focus_model_consumes_g14_intents,
+    test_native_menu_browser_tab_measurement_records_are_aggregable,
     test_native_menu_capture_surface_agreement_is_fail_closed,
+    test_native_menu_hall_layout_retention_is_native_owner_bounded,
     test_native_menu_live_transition_graph_is_pinned,
     test_native_menu_landed_population_override_is_fail_closed,
     test_native_menu_motion_capability_campaign_resolution_is_fail_closed,
@@ -1174,6 +1176,14 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native menu profile state and browser tab are pinned",
         test_native_menu_profile_state_and_browser_tab_are_pinned,
+    ),
+    (
+        "Native menu browser tab measurement records are aggregable",
+        test_native_menu_browser_tab_measurement_records_are_aggregable,
+    ),
+    (
+        "Native menu Hall layout retention is native-owner bounded",
+        test_native_menu_hall_layout_retention_is_native_owner_bounded,
     ),
     (
         "Native menu capture surface agreement is fail closed",

@@ -10,6 +10,56 @@ std::string LowerAsciiCopy(std::string_view value) {
     return result;
 }
 
+bool TryReadCurrentHallOfFameController(uintptr_t* hof_address) {
+    if (hof_address == nullptr) {
+        return false;
+    }
+
+    uintptr_t application_global = 0;
+    uintptr_t hall_of_fame_offset = 0;
+    uintptr_t hall_of_fame_vftable = 0;
+    if (!TryGetBinaryLayoutNumericValue(
+            "game_over.native",
+            "application_global",
+            &application_global) ||
+        !TryGetBinaryLayoutNumericValue(
+            "game_over.native",
+            "application_hall_of_fame_offset",
+            &hall_of_fame_offset) ||
+        !TryGetBinaryLayoutNumericValue(
+            "game_over.native",
+            "hall_of_fame_vftable",
+            &hall_of_fame_vftable) ||
+        application_global == 0 || hall_of_fame_offset == 0 ||
+        hall_of_fame_vftable == 0) {
+        return false;
+    }
+
+    uintptr_t application = 0;
+    uintptr_t hall_of_fame = 0;
+    uintptr_t object_vftable = 0;
+    const auto expected_vftable =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(
+            hall_of_fame_vftable);
+    if (expected_vftable == 0 ||
+        !TryReadResolvedGamePointer(application_global, &application) ||
+        application == 0 ||
+        !TryReadPointerValueDirect(
+            application + hall_of_fame_offset,
+            &hall_of_fame) ||
+        hall_of_fame == 0 ||
+        !TryReadPointerField(
+            reinterpret_cast<const void*>(hall_of_fame),
+            0,
+            &object_vftable) ||
+        object_vftable != expected_vftable) {
+        return false;
+    }
+
+    *hof_address = hall_of_fame;
+    return true;
+}
+
 bool ContainsObservedText(
     const std::vector<ObservedUiElement>& elements,
     std::string_view expected) {
@@ -346,6 +396,13 @@ void StoreLatestMenuLayoutSnapshotUnlocked(
     if (!snapshot.screen_id.empty() && !snapshot.elements.empty()) {
         state->layout_snapshots_by_screen[snapshot.screen_id] = snapshot;
     }
+    uintptr_t hall_of_fame = 0;
+    if (snapshot.elements.empty() &&
+        state->latest_layout_snapshot.screen_id == "hall_of_fame" &&
+        TryReadCurrentHallOfFameController(&hall_of_fame)) {
+        return;
+    }
+
     state->latest_layout_snapshot = std::move(snapshot);
 }
 

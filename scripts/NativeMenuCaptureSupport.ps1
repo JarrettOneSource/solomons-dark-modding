@@ -283,7 +283,7 @@ function Resolve-NativeMenuBrowserTabState {
         }
         $geometryMembers.Add($leftMatches[0])
         $geometryMembers.Add($rightMatches[0])
-        $measurements.Add([ordered]@{
+        $measurements.Add([pscustomobject][ordered]@{
             tab = [string]$entry.Key
             action_id = [string]$entry.Value
             control_id = [string]$controls[0].id
