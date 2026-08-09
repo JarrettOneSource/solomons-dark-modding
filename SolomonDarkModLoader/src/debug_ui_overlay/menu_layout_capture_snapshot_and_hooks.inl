@@ -91,7 +91,8 @@ bool ContainsObservedTextAbove(
 std::string ResolveCapturedLayoutScreenId(
     const std::vector<OverlayRenderElement>& semantic_elements,
     const std::vector<ObservedUiElement>& exact_text_elements,
-    const std::vector<CapturedMenuArtElement>& art_elements) {
+    const std::vector<CapturedMenuArtElement>& art_elements,
+    std::string_view active_action_id) {
     const auto semantic_root = semantic_elements.empty()
         ? std::string{}
         : GetOverlaySurfaceRootId(semantic_elements.front().surface_id);
@@ -126,6 +127,17 @@ std::string ResolveCapturedLayoutScreenId(
         [&](std::string_view art_id) {
             return visible_art_count(art_id) != 0;
         };
+    const auto has_dark_cloud_blocking_modal_chrome =
+        visible_art_count("UI.18") == 2 &&
+        visible_art_count("UI.17") == 12;
+    if (has_dark_cloud_blocking_modal_chrome) {
+        if (active_action_id == "dark_cloud_browser.sort") {
+            return "dark_cloud_sort";
+        }
+        if (active_action_id == "dark_cloud_browser.options") {
+            return "dark_cloud_options";
+        }
+    }
     const auto contains_text =
         [&](std::string_view expected) {
             if (ContainsObservedText(exact_text_elements, expected)) {
@@ -265,10 +277,16 @@ void StoreLatestMenuLayoutSnapshotUnlocked(
     DebugUiLayoutSnapshot snapshot;
     snapshot.generation = state->latest_surface_snapshot_generation;
     snapshot.captured_at_milliseconds = GetTickCount64();
+    const auto active_action_id =
+        state->active_semantic_ui_action_dispatch.active &&
+            state->active_semantic_ui_action_dispatch.status == "dispatching"
+        ? state->active_semantic_ui_action_dispatch.action_id
+        : std::string{};
     snapshot.screen_id = ResolveCapturedLayoutScreenId(
         semantic_elements,
         exact_text_elements,
-        art_elements);
+        art_elements,
+        active_action_id);
     if (!semantic_elements.empty()) {
         snapshot.screen_title = semantic_elements.front().surface_title;
     }

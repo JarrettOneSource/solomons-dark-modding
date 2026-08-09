@@ -1772,10 +1772,30 @@ def test_native_menu_browser_tab_measurement_records_are_aggregable() -> str:
             "QuickPanel in-panel draw classification again depends on the "
             "invalid synthetic widget-owner relation"
         )
+    _require_regex(
+        layout_capture,
+        r"ResolveCapturedLayoutScreenId\(.*?"
+        r"std::string_view active_action_id.*?"
+        r'visible_art_count\("UI\.18"\) == 2\s*&&\s*'
+        r'visible_art_count\("UI\.17"\) == 12.*?'
+        r'active_action_id == "dark_cloud_browser\.sort".*?'
+        r'return "dark_cloud_sort".*?'
+        r'active_action_id == "dark_cloud_browser\.options".*?'
+        r'return "dark_cloud_options".*?'
+        r"state->active_semantic_ui_action_dispatch\.active\s*&&\s*"
+        r'state->active_semantic_ui_action_dispatch\.status == "dispatching".*?'
+        r"active_semantic_ui_action_dispatch\.action_id.*?"
+        r"ResolveCapturedLayoutScreenId\(.*?active_action_id",
+        "blocking Dark Cloud Sort and Options panels can no longer require "
+        "both their active native action identity and exact measured modal "
+        "chrome before replacing the unobscured browser classification",
+    )
     return (
         "browser-tab geometry is aggregated from typed measured records and "
         "shared roster text cannot masquerade as the login modal; the guest "
-        "search panel resolves from live in-panel text and draw witnesses"
+        "search panel resolves from live in-panel text and draw witnesses; "
+        "blocking Sort and Options require active native actions plus exact "
+        "modal chrome"
     )
 
 
