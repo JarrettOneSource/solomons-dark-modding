@@ -790,6 +790,16 @@ class NativeMenuProfileStateTests(unittest.TestCase):
 
 
 class NativeMenuBrowserTabTests(unittest.TestCase):
+    def test_geometry_receipt_matches_recorder_json_contract(self) -> None:
+        measured = resolve_browser_tab(
+            _browser_layout("online_levels"), "online entry"
+        )
+
+        self.assertEqual(
+            measured["geometry_sha256"],
+            "35c191ac3b90546682b03da48b2bc5eb761e95a2bc075771ab44088c1168ff9f",
+        )
+
     def test_pristine_online_entry_and_exact_receipt_are_accepted(self) -> None:
         layout = _browser_layout("online_levels")
         measured = resolve_browser_tab(layout, "online entry")

@@ -29,6 +29,17 @@ class NativeMenuBrowserTabError(RuntimeError):
     """A browser layout does not prove one expected selected tab."""
 
 
+def _recorder_json_value(value: Any) -> Any:
+    """Match PowerShell ConvertTo-Json's representation of integral doubles."""
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, list):
+        return [_recorder_json_value(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _recorder_json_value(item) for key, item in value.items()}
+    return value
+
+
 def _rect(element: dict[str, Any], label: str) -> list[int | float]:
     value = element.get("rect")
     if (
@@ -124,9 +135,8 @@ def resolve_browser_tab(layout: dict[str, Any], label: str) -> dict[str, Any]:
             f"{label} did not resolve one selected tab from bracket geometry"
         )
     geometry_bytes = json.dumps(
-        measurements,
+        _recorder_json_value(measurements),
         ensure_ascii=False,
-        sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
     return {
