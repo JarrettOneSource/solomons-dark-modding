@@ -834,7 +834,11 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
         confirmation_recorder,
         r"primary\.header\.instance\s+-eq\s+\$Instance.*?"
         r"primary\.header\.process_id\s+-eq\s+\$ProcessId.*?"
-        r"primarySourceJson\s+-cne\s+\$confirmationSourceJson.*?"
+        r'foreach \(\$field in @\(\s*"base_commit_sha",\s*'
+        r'"source_tree_sha",\s*"game_executable_sha256",\s*'
+        r'"loader_dll_sha256"\s*\)\).*?'
+        r"primary\.header\.source\.\$field\s+-cne\s+"
+        r"\[string\]\$context\.Source\.\$field.*?"
         r"Get-SettledNativeMenuObservation.*?"
         r"\$rawSetsMatchNoncontractual\s*=\s*\$primaryIdsJson\s+-ceq\s+"
         r"\$confirmationIdsJson.*?"
