@@ -98,6 +98,79 @@ function Get-NativeMenuCaptureSurfaceId {
     return $ScreenTag
 }
 
+function Resolve-NativeMenuHubPathLayoutId {
+    param([Parameter(Mandatory = $true)][object]$Layout)
+
+    $elements = @($Layout.elements)
+    $requiredLevelPickerArts = @(
+        "LevelPicker.0",
+        "LevelPicker.2",
+        "LevelPicker.4",
+        "LevelPicker.5",
+        "LevelPicker.6"
+    )
+    $levelPickerCounts = [ordered]@{}
+    foreach ($artId in $requiredLevelPickerArts) {
+        $levelPickerCounts[$artId] = @($elements | Where-Object {
+            [string]$_.kind -ceq "art" -and
+            [string]$_.art_id -ceq $artId
+        }).Count
+    }
+    $presentLevelPickerArts = @($requiredLevelPickerArts | Where-Object {
+        [int]$levelPickerCounts[$_] -eq 1
+    })
+    $ambiguousLevelPickerArts = @($requiredLevelPickerArts | Where-Object {
+        [int]$levelPickerCounts[$_] -gt 1
+    })
+    $ui28Count = @($elements | Where-Object {
+        [string]$_.kind -ceq "art" -and
+        [string]$_.art_id -ceq "UI.28"
+    }).Count
+    if ($ambiguousLevelPickerArts.Count -ne 0 -or $ui28Count -gt 1) {
+        throw (
+            "STOP: Hub path classifier found ambiguous path members: " +
+            "LevelPicker='$($ambiguousLevelPickerArts -join ',')' " +
+            "UI.28_count=$ui28Count."
+        )
+    }
+
+    $layoutId = ""
+    $requiredElementCount = 0
+    if (
+        $presentLevelPickerArts.Count -eq $requiredLevelPickerArts.Count -and
+        $ui28Count -eq 1
+    ) {
+        $layoutId = "hub_pristine_second_new_game"
+        $requiredElementCount = 15
+    } elseif (
+        $presentLevelPickerArts.Count -eq $requiredLevelPickerArts.Count -and
+        $ui28Count -eq 0
+    ) {
+        $layoutId = "hub_new_game"
+        $requiredElementCount = 14
+    } elseif (
+        $presentLevelPickerArts.Count -eq 0 -and
+        $ui28Count -eq 1
+    ) {
+        $layoutId = "hub_resumed"
+        $requiredElementCount = 10
+    } else {
+        throw (
+            "STOP: Hub path classifier measured no exact authorized v2.13 " +
+            "layout: UI.28_count=$ui28Count LevelPicker='" +
+            ($presentLevelPickerArts -join ",") + "'."
+        )
+    }
+    if ($elements.Count -ne $requiredElementCount) {
+        throw (
+            "STOP: Hub path classifier measured '$layoutId' with " +
+            "$($elements.Count) members instead of its exact authorized " +
+            "$requiredElementCount-member census."
+        )
+    }
+    return $layoutId
+}
+
 function Get-NativeMenuMachineSurfaceId {
     param([Parameter(Mandatory = $true)][string]$ScreenTag)
 
@@ -1223,6 +1296,61 @@ return table.concat({
             $nonGeometryJson = $nonGeometryJson.Replace($from, $to)
             $semanticPayload.screen_id = $ScreenId
         }
+    }
+    if (
+        $captureSurfaceId -ceq "hub" -and
+        $ScreenId -cne $captureSurfaceId
+    ) {
+        try {
+            $measuredHubLayout = Resolve-NativeMenuHubPathLayoutId `
+                -Layout $semanticPayload
+        } catch {
+            return [pscustomobject]@{
+                Status = "wrong_surface"
+                Detail = [string]$_.Exception.Message
+                SemanticSurface = $machineSurface
+                MachineClassifiedSurface = $machineSurface
+                NativeSurface = $parts[2].Substring("__NATIVE_SURFACE__=".Length)
+                NativeGeneration = [uint64]$parts[3].Substring(
+                    "__NATIVE_GENERATION__=".Length
+                )
+            }
+        }
+        if ($measuredHubLayout -cne $ScreenId) {
+            return [pscustomobject]@{
+                Status = "wrong_surface"
+                Detail = (
+                    "STOP: Hub path selector expected '$ScreenId' but " +
+                    "machine-classified '$measuredHubLayout'."
+                )
+                SemanticSurface = $measuredHubLayout
+                MachineClassifiedSurface = $machineSurface
+                NativeSurface = $parts[2].Substring("__NATIVE_SURFACE__=".Length)
+                NativeGeneration = [uint64]$parts[3].Substring(
+                    "__NATIVE_GENERATION__=".Length
+                )
+            }
+        }
+        $from = '"screen_id":"hub"'
+        $to = '"screen_id":"' + $ScreenId + '"'
+        if (
+            ([regex]::Matches(
+                $semanticJson,
+                [regex]::Escape($from)
+            )).Count -ne 1 -or
+            ([regex]::Matches(
+                $nonGeometryJson,
+                [regex]::Escape($from)
+            )).Count -ne 1
+        ) {
+            throw (
+                "BROKEN: Hub path classifier could not re-tag one exact " +
+                "machine-classified semantic payload."
+            )
+        }
+        $semanticJson = $semanticJson.Replace($from, $to)
+        $nonGeometryJson = $nonGeometryJson.Replace($from, $to)
+        $semanticPayload.screen_id = $ScreenId
     }
     return [pscustomobject]@{
         Status = "ready"

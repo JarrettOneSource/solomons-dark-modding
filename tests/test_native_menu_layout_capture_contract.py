@@ -659,6 +659,29 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             "browser layouts must be selected by the six measured bracket "
             "members and reject a wrong operator tab",
         )
+        self.assertRegex(
+            support,
+            r'(?s)function Resolve-NativeMenuHubPathLayoutId.*?'
+            r'LevelPicker\.0.*?LevelPicker\.2.*?LevelPicker\.4.*?'
+            r'LevelPicker\.5.*?LevelPicker\.6.*?UI\.28.*?'
+            r'hub_pristine_second_new_game.*?15.*?'
+            r'hub_new_game.*?14.*?hub_resumed.*?10.*?'
+            r'Hub path classifier measured no exact authorized v2\.13.*?'
+            r'if \(\$elements\.Count -ne \$requiredElementCount\).*?'
+            r'Hub path classifier measured.*?exact authorized.*?census',
+            "path-qualified Hub capture must machine-classify the exact "
+            "authorized member signature and census before retagging",
+        )
+        self.assertRegex(
+            support,
+            r'(?s)\$captureSurfaceId -ceq "hub".*?'
+            r'Resolve-NativeMenuHubPathLayoutId.*?'
+            r'\$measuredHubLayout -cne \$ScreenId.*?'
+            r'Hub path selector expected.*?machine-classified.*?'
+            r'\$semanticPayload\.screen_id = \$ScreenId',
+            "the Hub parent screen must be retagged only after its measured "
+            "path layout equals the requested qualifier",
+        )
         self.assertIn(
             "-TransitionalSourceScreen $SourceScreen",
             transition,
