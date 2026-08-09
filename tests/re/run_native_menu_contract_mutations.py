@@ -1358,6 +1358,24 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "native-menu Settlement v2 no longer requires 40 samples over at least two seconds",
     ),
     StaticMutation(
+        "recorder.hub-qualified-census",
+        SURFACE_AGREEMENT,
+        "scripts/NativeMenuCaptureSupport.ps1",
+        "$requiredElementCount = 15",
+        "$requiredElementCount = 16",
+        "path-qualified Hub capture no longer proves its exact authorized "
+        "member signature and census before logical retagging",
+    ),
+    StaticMutation(
+        "recorder.exact-click-foreground-ownership",
+        SURFACE_AGREEMENT,
+        "scripts/Invoke-ExactProcessClientClick.ps1",
+        "        0x0002,",
+        "        0x0003,",
+        "the exact-process click helper no longer releases the Windows "
+        "foreground lock and proves target ownership before input",
+    ),
+    StaticMutation(
         "recorder.extended-observed-span",
         RECORDER,
         "scripts/Observe-NativeMenuMotionCapability.ps1",

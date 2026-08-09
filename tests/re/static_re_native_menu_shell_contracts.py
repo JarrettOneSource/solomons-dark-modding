@@ -1732,6 +1732,7 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         "menu_layout_capture_art_observation.inl"
     )
     support = _read("scripts/NativeMenuCaptureSupport.ps1")
+    click_helper = _read("scripts/Invoke-ExactProcessClientClick.ps1")
     standalone = _read("scripts/Record-NativeMenuLayout.ps1")
     transition = _read("scripts/Record-NativeMenuTransition.ps1")
     confirmation = _read("scripts/Confirm-NativeMenuLayoutAnimation.ps1")
@@ -1829,6 +1830,33 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         r".*?\}\s*\}",
         "the recorder agreement gate no longer names and rejects unequal "
         "machine surface and operator tag",
+    )
+    _require_regex(
+        support,
+        r"function Resolve-NativeMenuHubPathLayoutId.*?"
+        r"LevelPicker\.0.*?LevelPicker\.2.*?LevelPicker\.4.*?"
+        r"LevelPicker\.5.*?LevelPicker\.6.*?UI\.28.*?"
+        r"hub_pristine_second_new_game.*?"
+        r"\$requiredElementCount\s*=\s*15.*?"
+        r"hub_new_game.*?\$requiredElementCount\s*=\s*14.*?"
+        r"hub_resumed.*?\$requiredElementCount\s*=\s*10.*?"
+        r"Hub path classifier measured no exact authorized v2\.13.*?"
+        r"\$elements\.Count -ne \$requiredElementCount.*?"
+        r"exact authorized.*?census.*?"
+        r"\$measuredHubLayout -cne \$ScreenId.*?"
+        r"Hub path selector expected.*?machine-classified.*?"
+        r"\$semanticPayload\.screen_id\s*=\s*\$ScreenId",
+        "path-qualified Hub capture no longer proves its exact authorized "
+        "member signature and census before logical retagging",
+    )
+    _require_regex(
+        click_helper,
+        r"keybd_event\(\s*0x12,\s*0,\s*0,.*?"
+        r"keybd_event\(\s*0x12,\s*0,\s*0x0002,.*?"
+        r"SetForegroundWindow\(\$window\).*?"
+        r"\$foregroundProcessId -ne \$ProcessId.*?throw",
+        "the exact-process click helper no longer releases the Windows "
+        "foreground lock and proves target ownership before input",
     )
     _require_regex(
         support,
