@@ -168,7 +168,13 @@ if (Test-Path $instanceRoot) {
     Remove-Item $instanceRoot -Recurse -Force
 }
 
-& $sourceOrganizationScript
+$powerShellExecutable = (
+    [Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+)
+& $powerShellExecutable `
+    -NoProfile `
+    -ExecutionPolicy Bypass `
+    -File $sourceOrganizationScript
 Assert-LastExitCode "Source organization check"
 
 & $buildScript -Configuration $Configuration

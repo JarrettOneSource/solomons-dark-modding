@@ -56,6 +56,15 @@ class LocalMultiplayerProcessIsolationTests(unittest.TestCase):
         self.assertIn(". $launcherProcessHelpers", verify)
         self.assertIn("Invoke-LauncherWithEnvironment `", verify)
         self.assertNotIn("$output = & $launcher", verify)
+        self.assertIn(
+            "[Diagnostics.Process]::GetCurrentProcess().MainModule.FileName",
+            verify,
+        )
+        self.assertRegex(
+            verify,
+            r"(?s)& \$powerShellExecutable.*?-File \$sourceOrganizationScript.*?"
+            r'Assert-LastExitCode "Source organization check"',
+        )
 
     def test_pair_launcher_owns_navigation_without_the_ui_sandbox_mod(
         self,
