@@ -1,0 +1,13 @@
+{
+  "schema": "solomon-dark-menufix-preview-overlay-v1",
+  "source_store_path": "D:\\codex-evidence\\menufix-20260805\\raw-v9\\candidates\\candidate-v214-profile-final\\menu-goldens.json",
+  "source_ledger_path": "D:\\codex-evidence\\menufix-20260805\\SHA256SUMS-v9",
+  "vendored_path": "tests/fixtures/webgame/menufix-preview-overlay/menu-goldens.json",
+  "authorized_artifact_sha": "574785f257a915777d3ef151a3c79ac704a5b3b096aa83ed446315a216bcfec3",
+  "authorized_artifact_bytes": 10143049,
+  "source_ledger_sha_at_vendoring": "e1ae8d9ef74eb6ca353cc1d72a6b999c604449e68ae68615ba6e0d88ec987a9b",
+  "source_ledger_entry_line": "574785f257a915777d3ef151a3c79ac704a5b3b096aa83ed446315a216bcfec3  raw-v9/candidates/candidate-v214-profile-final/menu-goldens.json",
+  "source_ledger_note": "SHA256SUMS-v9 is a living menufix evidence ledger. Its whole-file identity is provenance metadata only; the authorized artifact SHA and byte count are the sole integrity gate.",
+  "preview_overlay_of_menufix_evidence": true,
+  "vendored_at": "2026-08-10T00:25:00.8872031Z"
+}
