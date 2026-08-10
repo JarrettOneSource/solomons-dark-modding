@@ -251,6 +251,14 @@ MUTATIONS: tuple[Mutation, ...] = (
         "P1 hub traversal no longer enters through the real G14 gamepad producer",
     ),
     TextMutation(
+        "traversal.shell-baseline",
+        TRAVERSAL,
+        contracts.HUB_TRAVERSAL,
+        'path.join(repository, "webgame-contracts", "baseline-snapshots", "menu-goldens.json")',
+        'path.join(repository, "tests", "fixtures", "webgame", "menu-goldens.json")',
+        "P1 hub traversal no longer keeps shell input bound to the immutable shellfix baseline",
+    ),
+    TextMutation(
         "traversal.synthetic-analog-walk",
         TRAVERSAL,
         contracts.HUB_TRAVERSAL,
@@ -305,6 +313,14 @@ MUTATIONS: tuple[Mutation, ...] = (
         "two independent captures; 41 samples each; 40 consecutive byte-identical structural payloads spanning at least 2 seconds",
         "two independent captures; 40 samples each; 39 consecutive byte-identical structural payloads spanning at least 1 second",
         "P1 capture no longer records the mandatory two-run 41/40/2-second settle rule",
+    ),
+    TextMutation(
+        "capture.shell-baseline",
+        CAPTURE,
+        contracts.CAPTURE,
+        'path.join(REPO_ROOT, "webgame-contracts", "baseline-snapshots", "menu-goldens.json")',
+        'path.join(REPO_ROOT, "tests", "fixtures", "webgame", "menu-goldens.json")',
+        "P1 hub capture no longer keeps shell references bound to the immutable shellfix baseline",
     ),
     TextMutation(
         "capture.surface-census",

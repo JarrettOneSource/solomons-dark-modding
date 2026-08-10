@@ -25,7 +25,10 @@ function gamepad(axes: readonly number[] = [0, 0, 0, 0], buttonIndex: number | n
 
 async function main(): Promise<void> {
   const menuGolden = JSON.parse(
-    await readFile(path.join(repository, "tests", "fixtures", "webgame", "menu-goldens.json"), "utf8"),
+    await readFile(
+      path.join(repository, "webgame-contracts", "baseline-snapshots", "menu-goldens.json"),
+      "utf8",
+    ),
   ) as unknown;
   const focusGolden = JSON.parse(
     await readFile(path.join(repository, "webgame-contracts", "menu-focus-model.json"), "utf8"),

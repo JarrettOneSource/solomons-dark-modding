@@ -419,6 +419,12 @@ def test_webgame_hub_session_graph_phase_order_and_fixture_timings_are_pinned() 
 
 def test_webgame_hub_controller_traversal_covers_every_talk_purchase_and_run_boundary() -> str:
     traversal = _read_text(HUB_TRAVERSAL, "P1 controller-only hub traversal is absent")
+    _require_regex(
+        traversal,
+        r'await readFile\(\s*path\.join\(repository,\s*"webgame-contracts",\s*'
+        r'"baseline-snapshots",\s*"menu-goldens\.json"\),\s*"utf8",?\s*\)',
+        "P1 hub traversal no longer keeps shell input bound to the immutable shellfix baseline",
+    )
     _require_tokens(
         traversal,
         (
@@ -476,6 +482,13 @@ def test_webgame_hub_capture_assets_performance_provenance_and_ci_are_wired() ->
     package = _read_json(PACKAGE, "P1 webgame package scripts are absent or malformed")
     floors = _read_json(QUALITY_FLOORS, "P1 webgame quality floors are absent or malformed")
     workflow = _read_text(CI, "P1 repository workflow is absent")
+
+    _require_regex(
+        capture,
+        r'await readFile\(\s*path\.join\(REPO_ROOT,\s*"webgame-contracts",\s*'
+        r'"baseline-snapshots",\s*"menu-goldens\.json"\),\s*"utf8",?\s*\)',
+        "P1 hub capture no longer keeps shell references bound to the immutable shellfix baseline",
+    )
 
     _require_tokens(
         capture,

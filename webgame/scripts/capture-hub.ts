@@ -437,7 +437,10 @@ async function main(): Promise<void> {
   assertAssetWitnesses(allowedAssetpackPaths);
 
   const menuGolden = JSON.parse(
-    await readFile(path.join(REPO_ROOT, "tests", "fixtures", "webgame", "menu-goldens.json"), "utf8"),
+    await readFile(
+      path.join(REPO_ROOT, "webgame-contracts", "baseline-snapshots", "menu-goldens.json"),
+      "utf8",
+    ),
   ) as unknown;
   const catalog = parseMenuCatalog(menuGolden);
   const pauseLayout = catalog.layouts.get("pause-menu");
