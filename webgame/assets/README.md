@@ -67,7 +67,7 @@ Two production builds from the pinned retail inventory produced the same 46-file
 
 The committed
 `webgame/assets/fixtures/asset-manifest-goldens.json` SHA-256 is
-`df6db22e0f549f6653c0f55dccb1b9264e10b1052f9fab0ab7cba77b834dbde2`.
+`98ba420fec144bec90b4dc61f4106dda69395ba7196f32185178de39b722262f`.
 It pins counts, every atlas dimension/hash, every output-file hash, one record from each bundle
 family, and every record needed by the landed scene and menu goldens. The fixture lives here
 rather than under `tests/fixtures/` because this workspace owns its schema, generator, and unit

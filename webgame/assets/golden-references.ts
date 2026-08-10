@@ -5,7 +5,8 @@ import { sha256Bytes } from "./hash.js";
 import { expectArray, expectObject, expectString } from "./validation.js";
 
 export const SCENE_GOLDEN_PATH = "tests/fixtures/webgame/scene-composition-goldens.json";
-export const MENU_GOLDEN_PATH = "tests/fixtures/webgame/menu-goldens.json";
+export const MENU_GOLDEN_PATH =
+  "tests/fixtures/webgame/menufix-preview-overlay/menu-goldens.json";
 
 export interface GoldenReferences {
   readonly sceneSpriteIds: ReadonlySet<string>;
@@ -88,17 +89,26 @@ export async function collectGoldenReferences(repoRoot: string): Promise<GoldenR
   }
 
   const menu = expectObject(menuSource.value, "menu golden");
-  if (menu.schema !== "solomon-dark-menu-goldens-v1") {
+  if (menu.schema !== "solomon-dark-menu-goldens-v3") {
     throw new Error("menu golden schema drifted");
   }
   const layouts = expectArray(menu.layouts, "menu golden layouts");
-  if (layouts.length === 0) {
+  const transitionLayouts = expectArray(
+    menu.transition_endpoint_layouts,
+    "menu golden transition endpoint layouts",
+  );
+  const composites = expectArray(
+    menu.semantic_dialog_composite_records,
+    "menu golden semantic dialog composites",
+  );
+  if (layouts.length === 0 || transitionLayouts.length === 0 || composites.length === 0) {
     throw new Error("menu golden contains no layouts to resolve");
   }
   const menuArtIds = new Set<string>();
   const menuFontIds = new Set<string>();
-  collectStringFields(layouts, new Set(["art_id"]), menuArtIds);
-  collectStringFields(layouts, new Set(["font_id"]), menuFontIds);
+  const renderedRecords = [...layouts, ...transitionLayouts, ...composites];
+  collectStringFields(renderedRecords, new Set(["art_id"]), menuArtIds);
+  collectStringFields(renderedRecords, new Set(["font_id"]), menuFontIds);
   if (!menuArtIds.has("Wizards_dire_BG") || !menuArtIds.has("Title.0")) {
     throw new Error("menu art reference sweep missed required native witnesses");
   }

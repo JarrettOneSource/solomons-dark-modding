@@ -1,4 +1,4 @@
-import type { AssetEntry, AtlasDescriptor, FontGroup } from "../assets/types.js";
+import type { AtlasDescriptor, FontGroup } from "../assets/types.js";
 import type { NativeRect } from "./menu-catalog.js";
 import { wizardAuraSpriteId } from "./hub-contracts.js";
 import type { ManifestAssets, ResolvedAsset } from "./manifest-assets.js";
@@ -128,23 +128,6 @@ function rectVertices(
   ]);
 }
 
-function quadVertices(
-  quad: ScreenQuad,
-  uv: readonly [number, number, number, number, number, number, number, number],
-  color: readonly [number, number, number, number],
-): Float32Array {
-  const [x0, y0, x1, y1, x2, y2, x3, y3] = quad;
-  const [u0, v0, u1, v1, u2, v2, u3, v3] = uv;
-  return new Float32Array([
-    x0, y0, u0, v0, ...color,
-    x1, y1, u1, v1, ...color,
-    x2, y2, u2, v2, ...color,
-    x2, y2, u2, v2, ...color,
-    x1, y1, u1, v1, ...color,
-    x3, y3, u3, v3, ...color,
-  ]);
-}
-
 function writeVertex(
   target: Float32Array,
   offset: number,
@@ -193,6 +176,21 @@ interface SpriteSlice {
   readonly uv: readonly [number, number, number, number, number, number, number, number];
 }
 
+function flipSpriteUv(
+  uv: SpriteSlice["uv"],
+  flipX: boolean,
+  flipY: boolean,
+): SpriteSlice["uv"] {
+  let result = uv;
+  if (flipX) {
+    result = [result[2], result[3], result[0], result[1], result[6], result[7], result[4], result[5]];
+  }
+  if (flipY) {
+    result = [result[6], result[7], result[4], result[5], result[2], result[3], result[0], result[1]];
+  }
+  return result;
+}
+
 function spriteSlice(
   clipped: NativeRect,
   unclipped: NativeRect,
@@ -222,8 +220,8 @@ function spriteSlice(
   return { rectangle: [left, top, right, bottom], uv };
 }
 
-function glyphAdvance(entry: AssetEntry): number {
-  return Math.max(1, entry.logicalSize.width);
+function glyphAdvance(font: FontGroup): number {
+  return Math.max(1, font.metrics[0]);
 }
 
 function kerning(font: FontGroup, left: number, right: number): number {
@@ -505,17 +503,8 @@ export class WebGlShellRenderer {
   }
 
   #drawSceneSpecial(command: SceneSpecialDraw): void {
-    if (command.specialKind === "framebuffer-clear") {
-      return;
-    }
-    this.#applySceneBlend(command.blend);
-    this.#drawScreenQuad(
-      command.screenQuad,
-      [0, 0, 1, 0, 0, 1, 1, 1],
-      command.tint,
-      this.#whiteTexture,
-    );
-    this.#restoreOverlayBlend();
+    void command;
+    return;
   }
 
   #applySceneBlend(blend: SceneSpriteDraw["blend"]): void {
@@ -569,14 +558,16 @@ export class WebGlShellRenderer {
     }
     const movingTitleScenery = /^Title\.(1[6-9]|2[0-4])$/.test(command.asset.canonicalId);
     const titleSky = /^Title\.[0-4]$/.test(command.asset.canonicalId);
-    const tint: readonly [number, number, number, number] = movingTitleScenery
-      ? [0.56, 0.59, 0.72, 1]
-      : titleSky
-        ? [0.62, 0.64, 0.75, 1]
-        : [1, 1, 1, 1];
+    const tint: readonly [number, number, number, number] = command.asset.canonicalId === "Create.7"
+      ? [0.35, 0.4, 0.42, 0.18]
+      : movingTitleScenery
+        ? [0.56, 0.59, 0.72, 1]
+        : titleSky
+          ? [0.62, 0.64, 0.75, 1]
+          : [1, 1, 1, 1];
     this.#drawQuad(
       slice.rectangle,
-      slice.uv,
+      flipSpriteUv(slice.uv, command.flipX, command.flipY),
       tint,
       tint,
       texture,
@@ -598,43 +589,48 @@ export class WebGlShellRenderer {
     if (!("glyphs" in font)) {
       throw new Error(`${command.elementId} expected an assetpack bitmap font group`);
     }
-    const glyphs = Array.from(command.text, (character) => ({
+    const lines = command.text.split("\n").map((line) => Array.from(line, (character) => ({
       character,
       asset: this.#assets.glyph(command.fontId, character),
-    }));
-    const rawWidth = glyphs.reduce((total, glyph, index) => {
+    })));
+    const rawWidths = lines.map((glyphs) => glyphs.reduce((total, glyph, index) => {
       const previous = glyphs[index - 1];
       const kern = previous === undefined
         ? 0
         : kerning(font, previous.character.codePointAt(0) ?? 0, glyph.character.codePointAt(0) ?? 0);
-      return total + kern + (glyph.asset === null ? font.metrics[1] : glyphAdvance(glyph.asset.entry));
-    }, 0);
-    if (rawWidth <= 0) {
+      return total + kern + (glyph.asset === null ? font.metrics[1] : glyphAdvance(font));
+    }, 0));
+    const maximumRawWidth = Math.max(...rawWidths);
+    if (maximumRawWidth <= 0 || lines.length === 0) {
       return;
     }
     const [left, top, right, bottom] = command.unclippedRect;
-    const scale = (right - left) / rawWidth;
-    let x = left;
-    for (const [index, glyph] of glyphs.entries()) {
-      const previous = glyphs[index - 1];
-      if (previous !== undefined) {
-        x += kerning(font, previous.character.codePointAt(0) ?? 0, glyph.character.codePointAt(0) ?? 0) * scale;
-      }
-      const width = (glyph.asset === null ? font.metrics[1] : glyphAdvance(glyph.asset.entry)) * scale;
-      if (glyph.asset !== null) {
-        const texture = this.#assetTextures.get(glyph.asset.canonicalId);
-        if (texture === undefined) {
-          throw new Error(`assetpack glyph ${glyph.asset.requestedId} was not prepared for ${command.elementId}`);
+    const scale = (right - left) / maximumRawWidth;
+    const lineHeight = (bottom - top) / lines.length;
+    for (const [lineIndex, glyphs] of lines.entries()) {
+      let x = left;
+      const lineTop = top + lineIndex * lineHeight;
+      for (const [index, glyph] of glyphs.entries()) {
+        const previous = glyphs[index - 1];
+        if (previous !== undefined) {
+          x += kerning(font, previous.character.codePointAt(0) ?? 0, glyph.character.codePointAt(0) ?? 0) * scale;
         }
-        this.#drawQuad(
-          [x, top, x + width, bottom],
-          [0, 0, 1, 0, 1, 1, 0, 1],
-          [0.86, 0.74, 0.42, 1],
-          [0.86, 0.74, 0.42, 1],
-          texture,
-        );
+        const width = (glyph.asset === null ? font.metrics[1] : glyphAdvance(font)) * scale;
+        if (glyph.asset !== null) {
+          const texture = this.#assetTextures.get(glyph.asset.canonicalId);
+          if (texture === undefined) {
+            throw new Error(`assetpack glyph ${glyph.asset.requestedId} was not prepared for ${command.elementId}`);
+          }
+          this.#drawQuad(
+            [x, lineTop, x + width, lineTop + lineHeight],
+            [0, 0, 1, 0, 1, 1, 0, 1],
+            command.tint,
+            command.tint,
+            texture,
+          );
+        }
+        x += width;
       }
-      x += width;
     }
   }
 
@@ -655,7 +651,7 @@ export class WebGlShellRenderer {
       context.font = `${command.fontWeight} ${command.fontHeight}px "Segoe UI", sans-serif`;
       context.textAlign = "center";
       context.textBaseline = "middle";
-      context.fillText(command.text, width / 2, height / 2);
+      context.fillText(command.text, width / 2, height / 2, Math.max(1, width - 2));
       const pixels = context.getImageData(0, 0, width, height).data;
       texture = this.#createPixelTexture(new Uint8Array(pixels), width, height);
       this.#systemTextures.set(key, texture);
@@ -681,20 +677,6 @@ export class WebGlShellRenderer {
     gl.bindTexture(gl.TEXTURE_2D, texture.texture);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.#buffer);
     gl.bufferData(gl.ARRAY_BUFFER, rectVertices(rectangle, uv, topColor, bottomColor), gl.STREAM_DRAW);
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
-  }
-
-  #drawScreenQuad(
-    quad: ScreenQuad,
-    uv: readonly [number, number, number, number, number, number, number, number],
-    color: readonly [number, number, number, number],
-    texture: TextureRecord,
-  ): void {
-    const gl = this.#gl;
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, texture.texture);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.#buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, quadVertices(quad, uv, color), gl.STREAM_DRAW);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
 

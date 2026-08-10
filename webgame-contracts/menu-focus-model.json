@@ -3,7 +3,7 @@
   "contract": "solomon-dark-menu-focus-model-v1",
   "provenance": "DESIGN_NOT_OBSERVED",
   "intent_ref": "webgame-contracts/intent-schema.json#/$defs/menuNavIntent",
-  "coordinate_fixture": "tests/fixtures/webgame/menu-goldens.json",
+    "coordinate_fixture": "tests/fixtures/webgame/menufix-preview-overlay/menu-goldens.json",
   "modal_policy": {
     "provenance": "DESIGN_NOT_OBSERVED",
     "trap_focus": true,
@@ -118,7 +118,7 @@
         "settings.fullscreen",
         "settings.resolution",
         "settings.login_info",
-        "settings.customize_keyboard",
+        "settings.controls",
         "settings.tweak_game",
         "settings.done"
       ],
@@ -135,7 +135,7 @@
         "settings.music_volume",
         "settings.fullscreen",
         "settings.login_info",
-        "settings.customize_keyboard",
+        "settings.controls",
         "settings.tweak_game",
         "settings.done"
       ],
@@ -152,7 +152,7 @@
         "settings.music_volume",
         "settings.fullscreen",
         "settings.login_info",
-        "settings.customize_keyboard",
+        "settings.controls",
         "settings.tweak_game",
         "settings.done"
       ],

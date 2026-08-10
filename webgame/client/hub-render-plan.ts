@@ -3,13 +3,41 @@ import type { HubSnapshot } from "./hub-controller.js";
 import { HUB_NPCS, offersForService, type HubServiceId } from "./hub-data.js";
 import { buildHubScenePlan } from "./hub-scene.js";
 import type { ManifestAssets } from "./manifest-assets.js";
+import type { MenuLayout, NativeRect } from "./menu-catalog.js";
 import {
+  buildRenderPlan,
   G12_LAYER_ORDER,
   type AtlasTextDraw,
   type DrawCommand,
   type RenderPlan,
   type SolidDraw,
 } from "./render-plan.js";
+
+export function buildHubLayoutRenderPlan(
+  assets: ManifestAssets,
+  snapshot: HubSnapshot,
+  layout: MenuLayout,
+  focused: Readonly<{ id: string; rect: NativeRect }> | null,
+  showFocus: boolean,
+): RenderPlan {
+  const menu = buildRenderPlan(layout, assets, focused, showFocus);
+  const scene = buildHubScenePlan(
+    assets,
+    {
+      player: snapshot.player,
+      heading: snapshot.player.heading,
+      moving: snapshot.player.moving,
+      presentationMilliseconds: snapshot.presentationMilliseconds,
+    },
+    menu.commands,
+    `hub.${snapshot.region}.${layout.id}`,
+  );
+  return {
+    ...scene,
+    layoutId: layout.id,
+    elements: menu.elements,
+  };
+}
 
 const BODY_FONT = "Fonts.216-307";
 const TITLE_FONT = "Fonts.308-349";
@@ -49,6 +77,7 @@ function text(
     unclippedRect: rect,
     fontId,
     text: value.toUpperCase(),
+    tint: fontId === "Fonts.93-184" ? [1, 1, 1, 1] : [0.86, 0.74, 0.42, 1],
   };
 }
 

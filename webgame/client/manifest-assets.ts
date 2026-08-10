@@ -135,8 +135,22 @@ export class ManifestAssets {
   public assertShellAssets(catalog: MenuCatalog): void {
     let checkedElements = 0;
     for (const layout of catalog.layouts.values()) {
-      for (const element of layout.elements) {
+      for (const element of [
+        ...layout.elements,
+        ...layout.ambientElements,
+        ...layout.semanticDialogElements,
+      ]) {
         this.#assertElement(element, layout.id);
+        checkedElements += 1;
+      }
+    }
+    for (const composite of catalog.dialogComposites.values()) {
+      for (const element of [
+        ...composite.layout.elements,
+        ...composite.layout.ambientElements,
+        ...composite.layout.semanticDialogElements,
+      ]) {
+        this.#assertElement(element, composite.id);
         checkedElements += 1;
       }
     }

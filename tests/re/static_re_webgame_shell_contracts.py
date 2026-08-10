@@ -252,9 +252,10 @@ def test_webgame_shell_manifest_renderer_and_layout_replay_are_strict() -> str:
 
     _require_regex(
         app,
-        r'import menuGoldenJson from "\.\./\.\./tests/fixtures/webgame/menu-goldens\.json" with \{ type: "json" \};\s*'
+        r'import menuGoldenJson from "\.\./\.\./tests/fixtures/webgame/menufix-preview-overlay/menu-goldens\.json" with \{ type: "json" \};\s*'
+        r'import inertControlsJson from "\.\./\.\./webgame-contracts/inert-controls\.json" with \{ type: "json" \};\s*'
         r'import focusModelJson from "\.\./\.\./webgame-contracts/menu-focus-model\.json" with \{ type: "json" \};',
-        "browser shell no longer imports the landed menu and focus recordings directly and adjacently",
+        "browser shell no longer imports the preview aggregate, inert worklist, and focus recording directly and adjacently",
     )
     copied_goldens = sorted(
         path.relative_to(WEBGAME).as_posix()
@@ -311,9 +312,12 @@ def test_webgame_shell_manifest_renderer_and_layout_replay_are_strict() -> str:
 
     replay_claims = (
         ("const POSITION_EPSILON = 0;", "T2 replay no longer declares exact zero position epsilon"),
-        ("standalone.layout", "T2 replay no longer compares standalone and embedded layout copies"),
+        ("assertLayoutReplay(layout, wrapper, assets)", "T2 replay no longer consumes every embedded aggregate layout"),
         ("assets.assertShellAssets(catalog);", "T2 replay no longer audits every shell asset through the manifest"),
-        ("screens=${catalog.layouts.size}/28", "T2 replay no longer reports the complete 28-screen census"),
+        ("layouts=${conformed.size}/${catalog.screenCensus.length}", "T2 replay no longer reports the complete aggregate census"),
+        ("ambient_members=${ambientCount}", "T2 replay no longer reports exact ambient-member replay coverage"),
+        ("critical_layouts=${criticalLayouts.size}/${criticalLayouts.size}; waivers=0", "T2 replay no longer proves zero critical-layout waivers"),
+        ("beta_residue=0", "T2 replay no longer proves zero-residue first-boot decomposition"),
         ("safe_area_1280x800=1280x720+40px_top+40px_bottom", "T2 replay no longer pins the 16:10 safe area"),
     )
     for token, consequence in replay_claims:
@@ -334,33 +338,33 @@ def test_webgame_shell_controller_traversal_covers_live_graph() -> str:
     required = (
         ("new GamepadProducer", "controller traversal no longer enters through the gamepad Intent producer"),
         ("producer.sample(snapshot(index));", "controller traversal no longer presses synthetic standard-gamepad snapshots"),
-        ("assert.equal(edges.size, 39", "controller traversal no longer ingests the 39-edge live G11 graph"),
-        ("assert.deepEqual(\n    [...visited].sort(),\n    [...edges.keys()].sort()", "controller traversal no longer proves exact live-edge set equality"),
+        ("[...CRITICAL_MENU_EDGE_IDS].sort()", "controller traversal no longer proves exact equality with the ruled critical-edge set"),
+        ("visited.size}/${CRITICAL_MENU_EDGE_IDS.length", "controller traversal no longer reports exact critical-edge coverage"),
         ("WEBGAME_TRAVERSAL_LOG", "controller traversal no longer emits human-readable evidence"),
-        ("branch resets are test setup, never edge triggers", "traversal evidence no longer distinguishes branch setup from gamepad edges"),
+        ("setup resets never count as graph edges", "traversal evidence no longer distinguishes setup from gamepad edges"),
         (
-            "G11 28-SCREEN CONTROLLER OPERABILITY CENSUS",
-            "controller traversal no longer emits a human-readable all-screen operability census",
+            "CRITICAL ACTION FAMILIES",
+            "controller traversal no longer emits the complete scheme/element/discipline family sweep",
         ),
         (
-            "assert.equal(expectedDefault.size, 28",
-            "controller traversal no longer pins one designed default for each G11 layout",
+            "actionId.startsWith(family.prefix)",
+            "controller traversal no longer discovers every selectable action-family member",
         ),
         (
-            "controller screen census did not cover the exact 28 G11 layouts",
-            "controller traversal no longer proves exact all-screen census equality",
+            "MANIFEST-DRIVEN INERT SWEEP",
+            "controller traversal no longer activates the machine-readable inert worklist",
         ),
         (
-            "DESIGNED skill-picker: Back ignored; Confirm -> hub-stub",
-            "controller traversal no longer proves mandatory skill-picker Back and Confirm semantics",
+            "controller.snapshot(),\n      before",
+            "inert sweep no longer proves navigation and state remain unchanged",
         ),
         (
-            "DESIGNED map-picker: Back -> hub-stub; Start -> visible P0 boundary",
-            "controller traversal no longer proves map-picker Back and Start semantics",
+            'assert.equal(pendingCapture, 1, "inert sweep must contain exactly the ruled NEW GAME capture gap")',
+            "inert sweep no longer distinguishes the pending-capture NEW GAME entry",
         ),
         (
-            "DESIGNED game-over: early Confirm ignored; armed Confirm -> hall-of-fame",
-            "controller traversal no longer proves the game-over input-arm behavior",
+            "owner_descoped, ${pendingCapture} pending_capture",
+            "inert sweep no longer reports both machine disposition tags",
         ),
     )
     for token, consequence in required:
@@ -370,21 +374,43 @@ def test_webgame_shell_controller_traversal_covers_live_graph() -> str:
         raise StaticReTestFailure(
             "synthetic gamepad traversal no longer routes emitted Intents into shell state"
         )
-    if "visited.add(edgeId);" not in traversal or "traversed twice instead of exactly once" not in traversal:
+    if "visited.add(edgeId);" not in traversal or "was recorded twice" not in traversal:
         raise StaticReTestFailure(
-            "controller traversal no longer makes duplicate or omitted live edges fail by name"
+            "controller traversal no longer makes duplicate or omitted critical edges fail by name"
         )
-    _require_regex(
-        controller,
-        r'else if \(actionId\.startsWith\("map_picker\.story\["\)\) \{\s*'
-        r'this\.#selectedMap = actionId;\s*this\.#enterOutOfScope\("Gameplay and Boneyard startup are outside P0;',
-        "map Start no longer terminates visibly at the explicit P0 gameplay boundary",
+    if "if (this.#inert.has(screen, actionId)) {\n      return;" not in controller:
+        raise StaticReTestFailure(
+            "shell controller no longer consumes the inert manifest before dispatch"
+        )
+    expected_critical_edges = (
+        "beta_notice_first_boot_to_control_scheme_picker",
+        "control_scheme_picker_to_create",
+        "create_element_to_discipline",
+        "create_discipline_to_hub",
+        "hub_to_pause",
+        "pause_to_hub_resume",
+        "pause_to_beta_notice",
+        "beta_notice_to_main",
+        "main_to_profile_select",
+        "profile_select_to_main",
+        "profile_select_resume_to_hub",
     )
-    if "Multiplayer, rooms, hub gameplay, and Boneyard gameplay are outside P0." not in controller:
-        raise StaticReTestFailure(
-            "Dark Cloud Play/Edit no longer terminates visibly at the P0 multiplayer/gameplay boundary"
+    critical_declaration = re.search(
+        r"export const CRITICAL_MENU_EDGE_IDS = \[([\s\S]*?)\] as const;",
+        controller,
+    )
+    if critical_declaration is None:
+        raise StaticReTestFailure("shell controller lost its ruled critical-edge declaration")
+    observed_critical_edges = tuple(
+        re.findall(r'"([a-z0-9_]+)"', critical_declaration.group(1))
+    )
+    if observed_critical_edges != expected_critical_edges:
+        missing = next(
+            (edge_id for edge_id in expected_critical_edges if edge_id not in observed_critical_edges),
+            "exact ordered set",
         )
-    return "synthetic standard-gamepad Intents traverse all 39 live G11 edges, probe defaults and wrap/input seals on all 28 layouts, and end gameplay starts at visible P0 boundaries"
+        raise StaticReTestFailure(f"shell controller lost ruled critical edge {missing}")
+    return "synthetic standard-gamepad Intents traverse the 11 ruled graph edges, every selection-family member, and every manifest-classified inert control"
 
 
 def test_webgame_shell_visual_waiver_is_exact_two_directional_and_self_expiring() -> str:
@@ -629,16 +655,20 @@ def test_webgame_shell_visual_waiver_is_exact_two_directional_and_self_expiring(
             raise StaticReTestFailure(consequence)
     capture_claims = (
         (
-            "validateMenuVisualGate(menuVisualGateJson, catalog)",
-            "live capture no longer applies the enumerated visual gate",
+            "criticalWaivers: 0",
+            "preview capture no longer records that critical layouts use zero waivers",
         ),
         (
-            "visualGate: { ...visualGate, artifacts: visualArtifacts }",
-            "live capture no longer records all visual dispositions and artifact hashes",
+            'disposition: isCritical ? "critical_exact_review_required" : "inert_rendered"',
+            "preview capture no longer distinguishes critical comparisons from inert render proofs",
         ),
         (
             "referenceSha256 !== layout.referenceSha256",
             "live visual evidence no longer binds each comparison to its committed reference",
+        ),
+        (
+            "criticalCompositeIds: compositeArtifacts.map",
+            "live visual evidence no longer includes the first-boot semantic dialog composite",
         ),
     )
     for token, consequence in capture_claims:

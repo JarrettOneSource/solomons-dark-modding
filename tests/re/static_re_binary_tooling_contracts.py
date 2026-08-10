@@ -1800,6 +1800,21 @@ RECORDED_CAPTURE_SHAS: dict[str, tuple[str, int]] = {
     "933fdd99f0bf85ef06b9ef04c25990bff79966f4": ("absent", 5),
     "d28f98a190d69662c8e6e691484b4d4e0dc939b9": ("absent", 3),
     "f9cac8783e72e7423a2d952987fa169fa84f3dcb": ("absent", 52),
+    # Phase-1 menufix preview aggregate. These source commits belong to the
+    # still-running evidence campaign and are intentionally not imported into
+    # this clone; the byte-pinned aggregate preserves their measured headers.
+    "18a23950d98f22a2eee61302f29c4e7a7c03069a": ("preview-absent", 4),
+    "1c009e2eb79c9dfdc6d22a71bfb2c14b8969ac34": ("preview-absent", 9),
+    "3a12f89bb61f788f2b1c9dca140cd556a2448a7d": ("preview-absent", 33),
+    "405bb0f697fcdf484f304f0d5f38224d39a6ae70": ("preview-absent", 30),
+    "433162e0f78ce421211d65dc693fedfe2630e357": ("preview-absent", 4),
+    "4ae5370977019c1c20813fa17d5141f32cd50968": ("preview-absent", 9),
+    "6363b637a5d2840d23f31430eaf0ed9bf32ae63b": ("preview-absent", 33),
+    "68a3735ae342561623fa135b2c0e1243c673e111": ("preview-absent", 53),
+    "7210d566ffe62a526eb6018f5e5fa86aaa458dbd": ("preview-absent", 53),
+    "b6aaa8f1f9752963b570384a29a6082228c2cbfa": ("preview-absent", 30),
+    "dbf36ac822163bd3ef8308994ee666a1963792bc": ("preview-absent", 6),
+    "fe13cd29846a7c4b3e450b1a4b312fccda65944b": ("preview-absent", 6),
 }
 
 # The G10 Region1 payload happens to be exactly twenty bytes, so its ordinary
@@ -1832,6 +1847,14 @@ UNRECOVERABLE_CAPTURE_COMMITS: dict[str, str] = {
     "d28f98a190d69662c8e6e691484b4d4e0dc939b9": "G11 menu capture, isolated-clone HEAD, never pushed",
     "f9cac8783e72e7423a2d952987fa169fa84f3dcb": "G11 menu capture, isolated-clone HEAD, never pushed",
 }
+
+PREVIEW_OVERLAY_CAPTURE_COMMITS = frozenset(
+    sha for sha, (kind, _) in RECORDED_CAPTURE_SHAS.items()
+    if kind == "preview-absent"
+)
+PREVIEW_OVERLAY_FIXTURE_PREFIX = (
+    "tests/fixtures/webgame/menufix-preview-overlay/menu-goldens.json"
+)
 
 # The float capture ran after float-only code and contemporaneous menu-recorder
 # work had been committed together in the isolated campaign clone. Rebasing
@@ -1990,6 +2013,11 @@ def test_recorded_capture_provenance_resolves_or_is_declared() -> str:
                 )
             continue
         declared = sha in UNRECOVERABLE_CAPTURE_COMMITS
+        preview = sha in PREVIEW_OVERLAY_CAPTURE_COMMITS
+        if (kind == "preview-absent") != preview:
+            raise StaticReTestFailure(
+                f"{sha} has an inconsistent menufix preview classification"
+            )
         if (kind == "absent") != declared:
             raise StaticReTestFailure(
                 f"{sha} is recorded as {kind!r} but "
@@ -1997,6 +2025,17 @@ def test_recorded_capture_provenance_resolves_or_is_declared() -> str:
             )
         probe = _git_capture("cat-file", "-t", sha)
         actual = probe.stdout.strip() if probe.returncode == 0 else "absent"
+        if preview:
+            locations = found[sha]
+            if not all(location.startswith(PREVIEW_OVERLAY_FIXTURE_PREFIX) for location in locations):
+                raise StaticReTestFailure(
+                    f"menufix preview provenance {sha} escaped its byte-pinned overlay fixture"
+                )
+            if actual != "absent":
+                raise StaticReTestFailure(
+                    f"menufix preview provenance {sha} unexpectedly resolves to {actual}; drop the overlay classification when menufix lands"
+                )
+            continue
         if declared:
             if actual != "absent":
                 raise StaticReTestFailure(
@@ -2083,12 +2122,14 @@ def test_recorded_capture_provenance_resolves_or_is_declared() -> str:
         len(RECORDED_CAPTURE_SHAS)
         - len(UNRECOVERABLE_CAPTURE_COMMITS)
         - len(ARCHIVED_CAPTURE_OBJECTS)
+        - len(PREVIEW_OVERLAY_CAPTURE_COMMITS)
     )
     return (
         f"{live} of {len(RECORDED_CAPTURE_SHAS)} recorded capture object ids "
         f"resolve and are ancestors of HEAD, {len(ARCHIVED_CAPTURE_OBJECTS)} "
         f"float capture objects are externally archived, {len(checked)} commit/tree pairs "
         f"agree (including all {len(COMMIT_TREE_PAIRED_FIXTURES)} named), "
+        f"{len(PREVIEW_OVERLAY_CAPTURE_COMMITS)} menufix source commits are confined to the byte-pinned preview overlay, "
         f"and the {len(UNRECOVERABLE_CAPTURE_COMMITS)} G11 capture commits are "
         "declared unrecoverable and still absent"
     )

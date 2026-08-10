@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { HubController } from "../client/hub-controller.js";
 import { HUB_NPCS, HUB_PORTALS, type HubNpc, type HubPortal, type HubRegionId } from "../client/hub-data.js";
+import { parseInertControls } from "../client/inert-controls.js";
 import { parseMenuCatalog } from "../client/menu-catalog.js";
 import { ShellController } from "../client/shell-controller.js";
 import { GamepadProducer, type GamepadSnapshot } from "../input/gamepad-producer.js";
@@ -25,12 +26,19 @@ function gamepad(axes: readonly number[] = [0, 0, 0, 0], buttonIndex: number | n
 
 async function main(): Promise<void> {
   const menuGolden = JSON.parse(
-    await readFile(path.join(repository, "tests", "fixtures", "webgame", "menu-goldens.json"), "utf8"),
+    await readFile(path.join(repository, "tests", "fixtures", "webgame", "menufix-preview-overlay", "menu-goldens.json"), "utf8"),
   ) as unknown;
   const focusGolden = JSON.parse(
     await readFile(path.join(repository, "webgame-contracts", "menu-focus-model.json"), "utf8"),
   ) as unknown;
-  const shell = new ShellController(parseMenuCatalog(menuGolden), parseFocusModel(focusGolden));
+  const inertGolden = JSON.parse(
+    await readFile(path.join(repository, "webgame-contracts", "inert-controls.json"), "utf8"),
+  ) as unknown;
+  const shell = new ShellController(
+    parseMenuCatalog(menuGolden),
+    parseFocusModel(focusGolden),
+    parseInertControls(inertGolden),
+  );
   const lines = [
     "P1 HUB CONTROLLER-ONLY WALKTHROUGH",
     "All locomotion and actions below came from synthetic standard-gamepad snapshots.",
@@ -54,15 +62,6 @@ async function main(): Promise<void> {
       return;
     }
     shell.handle(intent);
-    const shellAfter = shell.snapshot().surface;
-    if (
-      shellBefore.kind === "layout"
-      && shellBefore.layoutId === "map-picker"
-      && shellAfter.kind === "out-of-scope"
-    ) {
-      shell.showHubForConformance();
-      hub.beginRunEntry();
-    }
   };
 
   shell.showHubForConformance();
@@ -194,7 +193,11 @@ async function main(): Promise<void> {
     "Start did not reuse the frozen P0 pause-menu surface",
   );
   south();
-  assert.deepEqual(shell.snapshot().surface, { kind: "hub-stub" }, "pause-menu resume did not return to the hub");
+  assert.deepEqual(
+    shell.snapshot().surface,
+    { kind: "hub-stub", endpointLayoutId: "hub_resumed" },
+    "pause-menu resume did not return to the measured resumed hub endpoint",
+  );
   lines.push("PAUSE frozen P0 pause-menu opened with Start and resumed with South.");
 
   for (const npc of HUB_NPCS.filter((candidate) => candidate.region === "courtyard")) {
@@ -241,45 +244,12 @@ async function main(): Promise<void> {
     { kind: "layout", layoutId: "map-picker" },
     "run entry substituted a portal actor for the landed MapPicker UI",
   );
-  lines.push("RUN ENTRY: Courtyard interact opened frozen map-picker with its default story selection.");
+  lines.push("RUN ENTRY: Courtyard interact opened the rendered, owner-descoped map-picker.");
+  const beforeMapConfirm = structuredClone(shell.snapshot());
   south();
-  const runTransition = hub.snapshot().transition;
-  assert(runTransition !== null, "MapPicker confirmation did not start the G13 run-entry transition");
-  assert.equal(runTransition.replay.edge, "start_run", "MapPicker confirmation started the wrong G13 edge");
-  hub.advance(1000);
-  assert.equal(
-    hub.snapshot().sessionState,
-    "gameplay.courtyard",
-    "start_run published loading before G13's publish-target phase",
-  );
-  hub.advance(20);
-  assert.equal(
-    hub.snapshot().sessionState,
-    "loading.boneyard",
-    "start_run did not publish the covered loading state at G13's publish-target phase",
-  );
-  hub.advance(250);
-  assert.deepEqual(
-    hub.snapshot().surface,
-    { kind: "run-shell" },
-    "MapPicker confirmation did not end at the visible P2/P3 run-shell boundary",
-  );
-  assert.equal(hub.snapshot().sessionState, "gameplay.arena", "run shell did not publish the Arena session state");
-  assert.deepEqual(
-    hub.snapshot().completedSessionEdges.slice(-2),
-    [
-      "gameplay.courtyard --start_run--> loading.boneyard",
-      "loading.boneyard --arena_materialized--> gameplay.arena",
-    ],
-    "run entry did not record both normative G13 edges",
-  );
-  lines.push(
-    "G13 gameplay.courtyard --start_run--> loading.boneyard --arena_materialized--> gameplay.arena; 1270 ms composite; phases=14.",
-  );
-  lines.push("RUN SHELL ENTERED: visible P2/P3 dead end reached after the 250 ms solo exact-set barrier.");
-  south();
-  finishTransition("courtyard");
-  lines.push("RUN SHELL LEFT: South triggered scripted_terminal_reset and returned to Courtyard.");
+  assert.deepEqual(shell.snapshot(), beforeMapConfirm, "owner-descoped MapPicker confirmation mutated shell state");
+  assert.equal(hub.snapshot().transition, null, "owner-descoped MapPicker confirmation started a session edge");
+  lines.push("MAP PICKER INERT: controller confirmation caused no navigation or state mutation.");
 
   assert.deepEqual(
     hub.snapshot().completedTalkFlows,
@@ -292,7 +262,7 @@ async function main(): Promise<void> {
   assert.equal(hub.snapshot().inventory["7001:0:0:-1"], 1, "controller-only walkthrough did not retain the purchased Health Potion");
   assert(analogSamples > 0, "controller-only walkthrough did not exercise the analog movement producer");
   lines.push(
-    `PASS: 20/20 talk targets; 1 pinned purchase; run shell entered/left; ${analogSamples} analog samples; ${simulatedWalkDistance.toFixed(2)} world units walked.`,
+    `PASS: 20/20 talk targets; 1 pinned purchase; map picker inert; ${analogSamples} analog samples; ${simulatedWalkDistance.toFixed(2)} world units walked.`,
   );
 
   const report = `${lines.join("\n")}\n`;
