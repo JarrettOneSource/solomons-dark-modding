@@ -785,6 +785,7 @@ OVERLAY = "test_native_menu_overlay_contamination_override_is_fail_closed"
 CLASSIFIER = "test_native_menu_settlement_v2_classifier_is_strict_and_ci_wired"
 CAMPAIGN = "test_native_menu_motion_capability_campaign_resolution_is_fail_closed"
 PATH_FORK = "test_native_menu_path_dependent_core_fork_is_exact"
+PROFILE_STATE = "test_native_menu_profile_state_and_browser_tab_are_pinned"
 SURFACE_AGREEMENT = "test_native_menu_capture_surface_agreement_is_fail_closed"
 TITLE_V210 = "test_native_menu_v210_controls_title_correction_is_exact"
 CORE_V211 = "test_native_menu_v211_controls_core_supersession_is_exact"
@@ -1077,8 +1078,14 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "v2.11.controls-layout-scope",
         CORE_V211,
         "tools/native_menu_landed_diagnosis_v25.py",
-        'layout_id != contract["layout_id"]',
-        '"controls" != contract["layout_id"]',
+        "if not _v211_receipt_matches(recorded_landed, landed_fixture_receipt):\n"
+        "        return None\n"
+        "    if (\n"
+        '        layout_id != contract["layout_id"]',
+        "if not _v211_receipt_matches(recorded_landed, landed_fixture_receipt):\n"
+        "        return None\n"
+        "    if (\n"
+        '        "controls" != contract["layout_id"]',
         "Settlement v2.11 runtime can accept a non-exact receipt, layout, or "
         "semantic multiset",
     ),
@@ -1104,8 +1111,8 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "v2.11.versioned-specification",
         CORE_V211,
         "docs/reverse-engineering/native-menu-settlement.md",
-        "# Native menu settlement specification v2.11",
-        "# Native menu settlement specification v2.10",
+        "## Controls structural-core capture defect",
+        "## Controls core capture defect disabled",
         "the versioned settlement specification no longer records the exact "
         "Controls structural STOP and bounded v2.11 supersession",
     ),
@@ -1131,8 +1138,8 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "v2.10.versioned-specification",
         TITLE_V210,
         "docs/reverse-engineering/native-menu-settlement.md",
-        "# Native menu settlement specification v2.11",
-        "# Native menu settlement specification v2.9",
+        "## Controls title capture defect",
+        "## Controls capture defect disabled",
         "the versioned settlement specification no longer records the exact "
         "Controls title STOP and bounded v2.10 correction",
     ),
@@ -1194,8 +1201,10 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "v2.13.hub-route-exact-mapping",
         PATH_FORK,
         "tools/resolve_native_menu_ambient_campaign.py",
-        '("create_discipline_to_hub", "after"): "hub_pristine_second_new_game",',
-        '("create_discipline_to_hub", "after"): "hub_resumed",',
+        '        "pristine_fresh_install",\n'
+        '    ): "hub_pristine_second_new_game",',
+        '        "pristine_fresh_install",\n'
+        '    ): "hub_resumed",',
         "Settlement v2.13 no longer names exactly three Hub layouts or binds "
         "the fresh navigation graph to its deterministic path/session state",
     ),
@@ -1222,14 +1231,14 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "v2.13.spec-version-and-stop-changelog",
         PATH_FORK,
         "docs/reverse-engineering/native-menu-settlement.md",
-        "# Native menu settlement specification v2.13",
-        "# Native menu settlement specification v2.8",
+        "## Hub baseline legitimacy and exact path bindings",
+        "## Hub baseline records disabled",
         "the versioned settlement specification no longer records the exact "
         "v2.12/v2.13 Hub baselines, paths, and accepted STOP mechanism",
     ),
     StaticMutation(
         "v2.13.post-route-baseline-phase",
-        RECORDER,
+        PROFILE_STATE,
         "tests/fixtures/webgame/native-menu-hub-bindings-v213.json",
         '"identity_phase": "post_final_settled_route"',
         '"identity_phase": "pre_final_settled_route"',
@@ -1244,9 +1253,8 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "                -ScreenId $ScreenId `\n"
         "                -Layout $classification.layout",
         "            # mutation drops the post-settlement exact Hub census",
-        "path-qualified Hub capture no longer routes population samples by "
-        "the measured selector and enforces its exact authorized census only "
-        "after settlement",
+        "path-qualified Hub census is no longer enforced on the exact "
+        "classifier-selected settled window",
     ),
     StaticMutation(
         "v2.5.independent-capture-runtime-provenance",
@@ -1382,10 +1390,10 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "recorder.hub-qualified-census",
         SURFACE_AGREEMENT,
         "scripts/NativeMenuCaptureSupport.ps1",
-        "$requiredElementCount = 15",
-        "$requiredElementCount = 16",
-        "path-qualified Hub capture no longer proves its exact authorized "
-        "member signature and census before logical retagging",
+        '"hub_pristine_second_new_game" { 15; break }',
+        '"hub_pristine_second_new_game" { 16; break }',
+        "path-qualified Hub capture no longer classifies and enforces all "
+        "three exact authorized censuses",
     ),
     StaticMutation(
         "recorder.exact-click-foreground-ownership",
@@ -1428,7 +1436,7 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "special.loader-full-progress-settle-hold",
         RECORDER,
         "SolomonDarkModLoader/src/debug_ui_overlay/"
-        "menu_layout_capture_snapshot_and_hooks.inl",
+        "menu_layout_capture_hooks.inl",
         "g_native_boot_capture_samples.back().progress >= 1.0",
         "g_native_boot_capture_samples.back().progress < 1.0",
         "native-loader capture no longer holds and settle-samples the real "
@@ -1500,7 +1508,7 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "recorder.settings-current-frame-panel-art",
         SURFACE_AGREEMENT,
         "SolomonDarkModLoader/src/debug_ui_overlay/"
-        "overlay_surface_builders_settings_surfaces.inl",
+        "overlay_surface_builders_settings_tracking.inl",
         "!HasCurrentSettingsPanelArt(current_elements)",
         "false && !HasCurrentSettingsPanelArt(current_elements)",
         "Settings cached art is no longer extracted from one complete live "
@@ -1510,7 +1518,7 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "recorder.settings-idle-owner-retention",
         SURFACE_AGREEMENT,
         "SolomonDarkModLoader/src/debug_ui_overlay/"
-        "tracked_surfaces_and_main_menu.inl",
+        "tracked_surfaces.inl",
         "if (now - g_debug_ui_overlay_state.settings_render.captured_at > "
         "kTrackedSettingsMaximumIdleMs) {\n        return false;\n    }",
         "if (now - g_debug_ui_overlay_state.settings_render.captured_at > "
@@ -1524,7 +1532,7 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "recorder.controls-underlay-multiset-difference",
         SURFACE_AGREEMENT,
         "SolomonDarkModLoader/src/debug_ui_overlay/"
-        "overlay_surface_builders_settings_surfaces.inl",
+        "overlay_surface_builders_settings_tracking.inl",
         'if (element.art_id.rfind("Title.", 0) == 0) {',
         'if (element.art_id.rfind("Title.", 0) != 0) {',
         "Controls cached art is no longer the non-ID/non-draw-order semantic "
@@ -1535,7 +1543,7 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "recorder.controls-refuses-settings-panel-cache",
         SURFACE_AGREEMENT,
         "SolomonDarkModLoader/src/debug_ui_overlay/"
-        "overlay_surface_builders_settings_surfaces.inl",
+        "overlay_surface_builders_settings_tracking.inl",
         "if (page_observation.page == "
         "SettingsRolloutPageState::Settings &&\n"
         "        TryExtractSettingsFamilyOverlayArt(",
@@ -1549,7 +1557,7 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "recorder.controls-quarantines-unresolved-settings-panel",
         SURFACE_AGREEMENT,
         "SolomonDarkModLoader/src/debug_ui_overlay/"
-        "overlay_surface_builders_settings_surfaces.inl",
+        "overlay_surface_builders_settings_tracking.inl",
         "cache_state.settings.settings_address = settings_address;\n"
         "            cache_state.settings.elements =\n"
         "                std::move(transition_overlay);\n"
@@ -1565,7 +1573,7 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "recorder.settings-unresolved-cache-expiry",
         SURFACE_AGREEMENT,
         "SolomonDarkModLoader/src/debug_ui_overlay/"
-        "overlay_surface_builders_settings_surfaces.inl",
+        "overlay_surface_builders_settings_tracking.inl",
         "now - cache_state.transition_started_at >\n"
         "                kTrackedSettingsMaximumIdleMs",
         "now - cache_state.transition_started_at <=\n"
@@ -1588,7 +1596,7 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "recorder.controls-current-frame-rollout",
         SURFACE_AGREEMENT,
         "SolomonDarkModLoader/src/debug_ui_overlay/"
-        "overlay_surface_builders_settings_surfaces.inl",
+        "overlay_surface_builders_settings_layouts.inl",
         "page_observation.page == SettingsRolloutPageState::Controls;",
         "page_observation.page == SettingsRolloutPageState::Controls &&\n"
         "        !GetSettingsFamilyOverlayArtCacheState().controls.elements.empty();",
@@ -1599,7 +1607,7 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "recorder.controls-transition-source-surface",
         SURFACE_AGREEMENT,
         "SolomonDarkModLoader/src/debug_ui_overlay/"
-        "overlay_surface_builders_settings_surfaces.inl",
+        "overlay_surface_builders_settings_layouts.inl",
         "cache_state.last_page == SettingsRolloutPageState::Controls &&\n"
         "        ShouldRetainSettingsTrackingAcrossMainMenuFallback() &&",
         "cache_state.last_page != SettingsRolloutPageState::Controls &&\n"
@@ -1622,7 +1630,7 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "recorder.settings-cached-overlay-owner",
         SURFACE_AGREEMENT,
         "SolomonDarkModLoader/src/debug_ui_overlay/"
-        "overlay_surface_builders_settings_surfaces.inl",
+        "overlay_surface_builders_settings_tracking.inl",
         "cache.settings_address != settings_address",
         "cache.settings_address == settings_address",
         "Settings-family cached page art can leak across an owner or "
@@ -1633,7 +1641,7 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "recorder.settings-transition-cache-adoption",
         SURFACE_AGREEMENT,
         "SolomonDarkModLoader/src/debug_ui_overlay/"
-        "overlay_surface_builders_settings_surfaces.inl",
+        "overlay_surface_builders_settings_tracking.inl",
         "if (cache_state.last_page != page_observation.page &&\n"
         "        cache_state.transition.settings_address == settings_address &&",
         "if (cache_state.last_page == page_observation.page &&\n"
@@ -1655,7 +1663,7 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "recorder.settings-live-rollout-affordance-pairing",
         SURFACE_AGREEMENT,
         "SolomonDarkModLoader/src/debug_ui_overlay/"
-        "overlay_surface_builders_settings_surfaces.inl",
+        "overlay_surface_builders_settings_tracking.inl",
         "rollout_rows.size() != marker_draws.size()",
         "rollout_rows.size() == marker_draws.size()",
         "Settings navigation can lose its unambiguous machine-measured "
@@ -1686,7 +1694,7 @@ STATIC_MUTATIONS: tuple[StaticMutation, ...] = (
         "recorder.foreign-exact-text-filter",
         SURFACE_AGREEMENT,
         "SolomonDarkModLoader/src/debug_ui_overlay/"
-        "menu_layout_capture_snapshot_and_hooks.inl",
+        "menu_layout_capture_snapshot.inl",
         "source_root != semantic_root &&",
         "source_root == semantic_root &&",
         "a selected native menu layout can inherit hidden exact text from a "

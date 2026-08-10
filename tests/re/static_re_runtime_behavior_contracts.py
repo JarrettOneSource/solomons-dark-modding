@@ -315,9 +315,14 @@ def test_semantic_ui_actions_dispatch_only_on_app_update_thread() -> str:
         ROOT
         / "SolomonDarkModLoader/src/debug_ui_overlay/state_and_actions_surface_owner_resolution.inl"
     )
-    tracked_surfaces_text = read_text(
-        ROOT
-        / "SolomonDarkModLoader/src/debug_ui_overlay/tracked_surfaces_and_main_menu.inl"
+    tracked_surfaces_text = "".join(
+        read_text(
+            ROOT / "SolomonDarkModLoader/src/debug_ui_overlay" / name
+        )
+        for name in (
+            "tracked_surfaces.inl",
+            "main_menu_and_text_helpers.inl",
+        )
     )
     overlay_source_text = read_source_unit(
         ROOT / "SolomonDarkModLoader/src/debug_ui_overlay.cpp"
@@ -540,9 +545,14 @@ def test_exact_text_capture_does_not_read_retired_ui_trees() -> str:
         ROOT
         / "SolomonDarkModLoader/src/debug_ui_overlay/exact_widget_resolution/owned_text_rects.inl"
     )
-    tracked_surfaces_text = read_text(
-        ROOT
-        / "SolomonDarkModLoader/src/debug_ui_overlay/tracked_surfaces_and_main_menu.inl"
+    tracked_surfaces_text = "".join(
+        read_text(
+            ROOT / "SolomonDarkModLoader/src/debug_ui_overlay" / name
+        )
+        for name in (
+            "tracked_surfaces.inl",
+            "main_menu_and_text_helpers.inl",
+        )
     )
     surface_hooks_text = read_text(
         ROOT

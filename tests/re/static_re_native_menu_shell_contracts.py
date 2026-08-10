@@ -579,6 +579,10 @@ def _read(relative_path: str) -> str:
     return (ROOT / relative_path).read_text(encoding="utf-8")
 
 
+def _read_many(*relative_paths: str) -> str:
+    return "".join(_read(path) for path in relative_paths)
+
+
 def _json(relative_path: str) -> object:
     return json.loads(_read(relative_path))
 
@@ -674,9 +678,11 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
     debug_ui_ini = _read("config/debug-ui.ini")
     debug_ui_header = _read("SolomonDarkModLoader/include/debug_ui_config.h")
     debug_ui_parser = _read("SolomonDarkModLoader/src/debug_ui_config.cpp")
-    loader_capture = _read(
+    loader_capture = _read_many(
         "SolomonDarkModLoader/src/debug_ui_overlay/"
-        "menu_layout_capture_snapshot_and_hooks.inl"
+        "menu_layout_capture_snapshot.inl",
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "menu_layout_capture_hooks.inl",
     )
     loading_capture = _read(
         "SolomonDarkModLoader/src/loading_screen_native_present.cpp"
@@ -1555,7 +1561,9 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
         raise StaticReTestFailure(
             "the committed v2.12/v2.13 Hub baseline/binding contract is absent"
         )
-    bindings = json.loads(binding_path.read_text(encoding="utf-8"))
+    bindings = json.loads(
+        _read("tests/fixtures/webgame/native-menu-hub-bindings-v213.json")
+    )
     baseline_registry = bindings.get("baselines")
     hub_layouts = bindings.get("layouts")
     endpoint_bindings = bindings.get("bindings")
@@ -1823,9 +1831,11 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
 def test_native_menu_browser_tab_measurement_records_are_aggregable() -> str:
     assert_module_runs_in_ci("test_native_menu_layout_capture_contract")
     support = _read("scripts/NativeMenuCaptureSupport.ps1")
-    layout_capture = _read(
+    layout_capture = _read_many(
         "SolomonDarkModLoader/src/debug_ui_overlay/"
-        "menu_layout_capture_snapshot_and_hooks.inl"
+        "menu_layout_capture_snapshot.inl",
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "menu_layout_capture_hooks.inl",
     )
     search_builder = _read(
         "SolomonDarkModLoader/src/debug_ui_overlay/"
@@ -1941,13 +1951,17 @@ def test_native_menu_browser_tab_measurement_records_are_aggregable() -> str:
 
 def test_native_menu_hall_layout_retention_is_native_owner_bounded() -> str:
     assert_module_runs_in_ci("test_native_menu_layout_capture_contract")
-    layout_snapshot = _read(
+    layout_snapshot = _read_many(
         "SolomonDarkModLoader/src/debug_ui_overlay/"
-        "menu_layout_capture_snapshot_and_hooks.inl"
+        "menu_layout_capture_snapshot.inl",
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "menu_layout_capture_hooks.inl",
     )
-    tracked_surfaces = _read(
+    tracked_surfaces = _read_many(
         "SolomonDarkModLoader/src/debug_ui_overlay/"
-        "tracked_surfaces_and_main_menu.inl"
+        "tracked_surfaces.inl",
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "main_menu_and_text_helpers.inl",
     )
     capture_session = _read(
         "SolomonDarkModLoader/src/debug_ui_overlay/exact_text_capture/"
@@ -1996,9 +2010,11 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         "public_api_surface_dispatch.inl"
     )
     bindings = _read("SolomonDarkModLoader/src/lua_engine_bindings_ui.cpp")
-    settings_builder = _read(
+    settings_builder = _read_many(
         "SolomonDarkModLoader/src/debug_ui_overlay/"
-        "overlay_surface_builders_settings_surfaces.inl"
+        "overlay_surface_builders_settings_tracking.inl",
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "overlay_surface_builders_settings_layouts.inl",
     )
     settings_helpers = _read(
         "SolomonDarkModLoader/src/debug_ui_overlay/"
@@ -2009,9 +2025,11 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         "label_resolution_surface_registry_and_frame_render.inl"
     )
     binary_layout = _read("config/binary-layout.ini")
-    settings_tracking = _read(
+    settings_tracking = _read_many(
         "SolomonDarkModLoader/src/debug_ui_overlay/"
-        "tracked_surfaces_and_main_menu.inl"
+        "tracked_surfaces.inl",
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "main_menu_and_text_helpers.inl",
     )
     overlay_state = _read("SolomonDarkModLoader/src/debug_ui_overlay.cpp")
     frame_capture = _read(
@@ -2022,9 +2040,11 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         "SolomonDarkModLoader/src/debug_ui_overlay/"
         "state_actions_activation/resolved_action_activation.inl"
     )
-    layout_snapshot = _read(
+    layout_snapshot = _read_many(
         "SolomonDarkModLoader/src/debug_ui_overlay/"
-        "menu_layout_capture_snapshot_and_hooks.inl"
+        "menu_layout_capture_snapshot.inl",
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "menu_layout_capture_hooks.inl",
     )
     menu_capture_state = _read("SolomonDarkModLoader/src/debug_ui_overlay.cpp")
     menu_capture_resolvers = _read(
