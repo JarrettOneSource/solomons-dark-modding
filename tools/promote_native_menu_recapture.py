@@ -8,9 +8,11 @@ import copy
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
-from pathlib import Path
+from collections import Counter
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 from native_menu_settlement_v2 import (
@@ -32,9 +34,37 @@ from native_menu_ambient_lifecycle import (
 from native_menu_landed_diagnosis_v25 import (
     LandedDiagnosisError,
     _population_evidence,
+    _require_v211_controls_core_contract,
+    _require_v220_dark_cloud_login_title_contract,
+    _v211_semantic_counter,
     diagnose_landed_layout,
     diagnosis_prereference_residual,
+    enumerate_unclassified_landed_differences,
     semantic_overlay_corroboration,
+)
+from native_menu_generation_v219 import (
+    V218_DISABLED_CORPUS_STOP,
+    NativeMenuGenerationV219Error,
+    derive_pair_core_equality,
+    validate_instance_local_generation_pair,
+)
+from native_menu_generation_v218 import (
+    NativeMenuGenerationV218Error,
+    compare_semantic_cores as compare_generation_cores_v218,
+    measure_generation_window,
+)
+from native_menu_census_era_v221 import (
+    CensusEraV221Error,
+    require_contract as require_census_era_contract,
+    semantic_sha256 as semantic_sha256_v221,
+    validate_dark_cloud_menu_references,
+    validate_pause_equivalence,
+)
+from native_menu_final_disposition_v222 import (
+    FinalDispositionV222Error,
+    authorize_named_endpoint_vacuity,
+    require_contract as require_final_disposition_v222_contract,
+    sequence_sha256 as sequence_sha256_v222,
 )
 from native_menu_overlay_v25 import (
     OverlayV25Error,
@@ -56,6 +86,19 @@ from native_menu_browser_tab import (
     NativeMenuBrowserTabError,
     resolve_browser_tab,
     validate_browser_tab,
+)
+from native_menu_multi_state_path_core import SETTINGS_ENDPOINT_BINDINGS
+from native_menu_nonsemantic_overlay import (
+    NativeMenuNonSemanticOverlayError,
+    validate_overlay_record,
+)
+from native_menu_semantic_dialog_composite import (
+    COMPOSITE_ID,
+    LEGACY_PROVENANCE_REASON,
+    NativeMenuSemanticDialogCompositeError,
+    validate_composite_record,
+    validate_qualified_beta_paint_order,
+    validate_qualified_beta_supersession,
 )
 from build_menu_baseline_interregnum import BaselineBuildError, build as build_menu_baseline
 
@@ -109,7 +152,12 @@ def resolve_evidence_file(
     adjacent = fixture_path if fixture_path.is_dir() else fixture_path.parent
     candidate_root = (
         adjacent.parent
-        if adjacent.name in {"menu-layouts", "menu-transition-layouts"}
+        if adjacent.name
+        in {
+            "menu-layouts",
+            "menu-transition-layouts",
+            "menu-overlay-underlays",
+        }
         else adjacent
     )
     conventional_candidates = {
@@ -589,10 +637,20 @@ def atomic_copy(source: Path, destination: Path) -> None:
             raise PromotionError(
                 f"refusing ambiguous lone carriage return in {source}"
             )
-        temporary.write_bytes(data.replace(b"\r\n", b"\n"))
+        temporary.write_bytes(data)
     else:
         shutil.copyfile(source, temporary)
     os.replace(temporary, destination)
+
+
+def atomic_write_json(path: Path, value: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".menufix.tmp")
+    temporary.write_text(
+        json.dumps(value, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    os.replace(temporary, path)
 
 
 def validate_and_promote_v24_legacy(
@@ -1054,15 +1112,27 @@ def _validate_source_v25(repo_root: Path, source: Any, label: str) -> dict[str, 
             raise PromotionError(
                 f"{label} has invalid machine-derived provenance field '{field}'"
             )
-    try:
-        committed_tree = subprocess.run(
-            [
+    git_command = ["git", "-C", str(repo_root)]
+    if os.name == "nt":
+        match = re.fullmatch(
+            r"\\\\wsl(?:\.localhost)?\\([^\\]+)\\(.+)",
+            str(repo_root),
+            flags=re.IGNORECASE,
+        )
+        if match is not None:
+            distribution, relative = match.groups()
+            git_command = [
+                "wsl.exe",
+                "-d",
+                distribution,
+                "--",
                 "git",
                 "-C",
-                str(repo_root),
-                "rev-parse",
-                f"{source['base_commit_sha']}^{{tree}}",
-            ],
+                "/" + relative.replace("\\", "/"),
+            ]
+    try:
+        committed_tree = subprocess.run(
+            [*git_command, "rev-parse", f"{source['base_commit_sha']}^{{tree}}"],
             check=True,
             capture_output=True,
             text=True,
@@ -1084,6 +1154,7 @@ def _validate_profile_state_v25(
     header: dict[str, Any],
     label: str,
     *,
+    receipt_search_roots: tuple[Path, ...] | None = None,
     required_baseline_id: str | None = None,
     binding_label: str | None = None,
 ) -> dict[str, Any]:
@@ -1093,6 +1164,7 @@ def _validate_profile_state_v25(
             header=header,
             label=label,
             evidence_root=evidence_root,
+            receipt_search_roots=receipt_search_roots,
             required_baseline_id=required_baseline_id,
             binding_label=binding_label,
         )
@@ -1136,6 +1208,7 @@ def _validate_navigation_profile_state_v25(
     evidence_root: Path,
     recording: dict[str, Any],
     label: str,
+    receipt_search_roots: tuple[Path, ...],
 ) -> None:
     edges = recording.get("edges")
     if not isinstance(edges, list) or not edges:
@@ -1164,6 +1237,7 @@ def _validate_navigation_profile_state_v25(
             evidence_root,
             header,
             f"{label} edge {edge_id}",
+            receipt_search_roots=receipt_search_roots,
         )
         try:
             assert_navigation_baseline_allowed(
@@ -1226,6 +1300,101 @@ def _validate_navigation_profile_state_v25(
         )
 
 
+def _navigation_profile_receipt_roots_v25(
+    evidence_root: Path,
+    recording_path: Path,
+    recording: dict[str, Any],
+    label: str,
+) -> tuple[Path, ...]:
+    """Resolve only the receipt directories that built this merged recording."""
+
+    chartered_addition = recording.get("header", {}).get("chartered_addition")
+    if chartered_addition is None:
+        receipt_directory = "navigation-v214-profile-state-receipts"
+    elif chartered_addition == {
+        "edge_id": "profile_select_new_game_to_create",
+        "source": "profile_save_select",
+        "destination": "create_element",
+        "measurement": "paired pristine route; destination machine-classified",
+        "old_navigation_edge_count": 39,
+        "new_navigation_edge_count": 40,
+    }:
+        receipt_directory = "navigation-v219-profile-state-receipts"
+    else:
+        raise PromotionError(
+            f"{label} navigation carries an unrecognized chartered addition"
+        )
+    roots = {
+        (recording_path.parent / receipt_directory).resolve()
+    }
+    replacement = recording.get("header", {}).get("navigation_edge_replacement")
+    if replacement is not None:
+        replacement_receipt = (
+            replacement.get("replacement")
+            if isinstance(replacement, dict)
+            else None
+        )
+        if not isinstance(replacement_receipt, dict):
+            raise PromotionError(
+                f"{label} navigation replacement has no exact source receipt"
+            )
+        path_value = replacement_receipt.get("path")
+        if not isinstance(path_value, str) or not path_value:
+            raise PromotionError(
+                f"{label} navigation replacement source path is absent"
+            )
+        resolved_evidence_root = evidence_root.resolve()
+        if re.fullmatch(r"[A-Za-z]:[\\/].+", path_value):
+            windows_path = PureWindowsPath(path_value)
+            if os.name == "nt":
+                windows_root = PureWindowsPath(str(resolved_evidence_root))
+                if not windows_path.is_relative_to(windows_root):
+                    raise PromotionError(
+                        f"{label} navigation replacement Windows path does not name the evidence root"
+                    )
+                replacement_path = resolved_evidence_root.joinpath(
+                    *windows_path.relative_to(windows_root).parts
+                ).resolve()
+            else:
+                root_parts = resolved_evidence_root.parts
+                if (
+                    len(root_parts) < 5
+                    or root_parts[1] != "mnt"
+                    or windows_path.drive.lower() != f"{root_parts[2]}:"
+                    or tuple(part.lower() for part in windows_path.parts[1:3])
+                    != tuple(part.lower() for part in root_parts[3:5])
+                ):
+                    raise PromotionError(
+                        f"{label} navigation replacement Windows path does not name the evidence root"
+                    )
+                replacement_path = resolved_evidence_root.joinpath(
+                    *windows_path.parts[3:]
+                ).resolve()
+        else:
+            replacement_path = Path(path_value).resolve()
+        if (
+            not replacement_path.is_relative_to(resolved_evidence_root)
+            or not replacement_path.is_file()
+            or replacement_path.stat().st_size != replacement_receipt.get("bytes")
+            or file_sha256(replacement_path) != replacement_receipt.get("sha256")
+        ):
+            raise PromotionError(
+                f"{label} navigation replacement source receipt is false"
+            )
+        roots.add(
+            (
+                replacement_path.parent
+                / f"{replacement_path.stem}..profile-state"
+            ).resolve()
+        )
+    resolved_roots = tuple(sorted(roots))
+    if not resolved_roots or any(not root.is_dir() for root in resolved_roots):
+        raise PromotionError(
+            f"{label} navigation receipt roots reach no real content"
+        )
+    return resolved_roots
+
+
 def _settled_samples_v25(trace: dict[str, Any], label: str) -> list[dict[str, Any]]:
     samples = trace.get("settled_window_samples")
     if (
@@ -1253,16 +1422,6 @@ def validate_settlement_fixture_v25(
     if header.get("recorded_live") is not True:
         raise PromotionError(f"{fixture_path} is not marked as a live recording")
     source = _validate_source_v25(repo_root, header.get("source"), str(fixture_path))
-    profile_state = _validate_profile_state_v25(
-        repo_root,
-        evidence_root,
-        header,
-        str(fixture_path),
-        required_baseline_id=required_baseline_for_layout(
-            repo_root, layout_id
-        ),
-        binding_label=f"layout '{layout_id}'",
-    )
     settlement = header.get("settlement")
     if not isinstance(settlement, dict) or settlement.get("settlement_spec") != "2.9":
         raise PromotionError(f"{fixture_path} does not identify Settlement v2.9")
@@ -1423,6 +1582,22 @@ def validate_settlement_fixture_v25(
         f"{fixture_path} primary trace",
     )
     raw_trace = read_json(raw_path)
+    candidate_fixture_root = fixture_path.parent.parent
+    primary_receipt_roots = (
+        raw_path.parent,
+        candidate_fixture_root / "menu-profile-state-receipts",
+    )
+    profile_state = _validate_profile_state_v25(
+        repo_root,
+        evidence_root,
+        header,
+        str(fixture_path),
+        receipt_search_roots=primary_receipt_roots,
+        required_baseline_id=required_baseline_for_layout(
+            repo_root, layout_id
+        ),
+        binding_label=f"layout '{layout_id}'",
+    )
     raw_header = raw_trace.get("header")
     if not isinstance(raw_header, dict):
         raise PromotionError(f"{fixture_path} primary trace has no capture header")
@@ -1431,6 +1606,7 @@ def validate_settlement_fixture_v25(
         evidence_root,
         raw_header,
         f"{fixture_path} primary trace",
+        receipt_search_roots=primary_receipt_roots,
         required_baseline_id=profile_state["baseline_id"],
         binding_label=f"layout '{layout_id}' primary trace",
     )
@@ -1464,6 +1640,10 @@ def validate_settlement_fixture_v25(
         f"{fixture_path} confirmation",
     )
     confirmation_trace = read_json(confirmation_path)
+    confirmation_receipt_roots = (
+        confirmation_path.parent,
+        candidate_fixture_root / "menu-profile-state-receipts",
+    )
     confirmation_header = confirmation_trace.get("header")
     if not isinstance(confirmation_header, dict):
         raise PromotionError(f"{fixture_path} confirmation has no capture header")
@@ -1472,6 +1652,7 @@ def validate_settlement_fixture_v25(
         evidence_root,
         confirmation_header,
         f"{fixture_path} confirmation",
+        receipt_search_roots=confirmation_receipt_roots,
         required_baseline_id=profile_state["baseline_id"],
         binding_label=f"layout '{layout_id}' confirmation",
     )
@@ -1528,11 +1709,35 @@ def validate_settlement_fixture_v25(
         confirmation_header.get("browser_tab_verification"),
         f"{fixture_path} confirmation",
     )
+    try:
+        paired_core_equality = derive_pair_core_equality(
+            primary_samples,
+            confirmation_samples,
+            layout,
+            label=str(fixture_path),
+            bound_endpoints=[],
+            bound_endpoint_census_complete=True,
+        )
+        generation_metadata = validate_instance_local_generation_pair(
+            primary_samples,
+            confirmation_samples,
+            layout.get("generation"),
+            paired_core_equality,
+            label=str(fixture_path),
+        )
+    except NativeMenuGenerationV219Error as error:
+        raise PromotionError(str(error)) from error
     hub_contract = load_hub_binding_contract(repo_root)["value"]
     if layout_id in hub_contract["layouts"]:
         contract_layout = hub_contract["layouts"][layout_id]
         expected_count = contract_layout["measured_settled_element_count"]
-        if layout.get("peak_element_count") != expected_count:
+        fork = header.get("path_dependent_core")
+        if (
+            not isinstance(fork, dict)
+            or fork.get("measured_settled_element_count") != expected_count
+            or settlement.get("minimum_element_count") != expected_count
+            or layout.get("peak_element_count", 0) < expected_count
+        ):
             raise PromotionError(
                 f"v2.12/v2.13 exact Hub layout '{layout_id}' changed its settled census"
             )
@@ -1566,12 +1771,158 @@ def validate_settlement_fixture_v25(
         "confirmation_samples": confirmation_samples,
         "primary_trace_path": raw_path,
         "confirmation_trace_path": confirmation_path,
+        "path_local_generation": generation_metadata,
+    }
+
+
+def validate_semantic_underlay_v215(
+    repo_root: Path,
+    evidence_root: Path,
+    fixture_path: Path,
+    fixture: dict[str, Any],
+) -> dict[str, Any]:
+    header = fixture.get("header")
+    layout = fixture.get("layout")
+    if (
+        fixture.get("schema") != "solomon-dark-native-menu-layout-v2"
+        or not isinstance(header, dict)
+        or not isinstance(layout, dict)
+        or header.get("recorded_live") is not True
+        or layout.get("screen_id") != "dark_cloud_settings"
+        or not isinstance(layout.get("elements"), list)
+        or len(layout["elements"]) != 16
+    ):
+        raise PromotionError(
+            "Settlement v2.15 semantic underlay is not the exact 16-member gate-agreeing layout"
+        )
+    source = _validate_source_v25(
+        repo_root, header.get("source"), f"{fixture_path} semantic underlay"
+    )
+    settlement = header.get("settlement")
+    if (
+        not isinstance(settlement, dict)
+        or settlement.get("settlement_spec") != "2.9"
+        or settlement.get("consecutive_structural_samples", 0) < 40
+        or settlement.get("stable_span_milliseconds", 0) < 2_000
+        or settlement.get("element_count") != 16
+    ):
+        raise PromotionError(
+            "Settlement v2.15 semantic underlay lacks its exact settled census"
+        )
+
+    def trace(
+        receipt: Any, role: str
+    ) -> tuple[Path, dict[str, Any], list[dict[str, Any]]]:
+        if not isinstance(receipt, dict):
+            raise PromotionError(
+                f"Settlement v2.15 semantic underlay has no {role} receipt"
+            )
+        path = _receipt_path_v25(
+            evidence_root,
+            fixture_path.parent,
+            receipt,
+            f"{fixture_path} semantic underlay {role}",
+        )
+        recording = read_json(path)
+        recording_header = recording.get("header")
+        if not isinstance(recording_header, dict):
+            raise PromotionError(
+                f"Settlement v2.15 semantic underlay {role} has no capture header"
+            )
+        _validate_source_v25(
+            repo_root,
+            recording_header.get("source"),
+            f"{fixture_path} semantic underlay {role}",
+        )
+        _validate_profile_state_v25(
+            repo_root,
+            evidence_root,
+            recording_header,
+            f"{fixture_path} semantic underlay {role}",
+            receipt_search_roots=(
+                path.parent,
+                fixture_path.parent.parent / "menu-profile-state-receipts",
+            ),
+            required_baseline_id=FRESH_BASELINE_ID,
+            binding_label="v2.15 semantic underlay",
+        )
+        samples = _settled_samples_v25(
+            recording, f"{fixture_path} semantic underlay {role}"
+        )
+        for sample in samples:
+            payload = sample.get("payload") if isinstance(sample, dict) else None
+            if (
+                sample.get("semantic_surface") != "dark_cloud_settings"
+                or not isinstance(payload, dict)
+                or payload.get("screen_id") != "dark_cloud_settings"
+                or not isinstance(payload.get("elements"), list)
+                or len(payload["elements"]) != 16
+            ):
+                raise PromotionError(
+                    "Settlement v2.15 semantic underlay trace lost capture-time tag agreement"
+                )
+        return path, recording_header, samples
+
+    primary_path, primary_header, primary_samples = trace(
+        header.get("raw_recording"), "primary"
+    )
+    confirmation_path, confirmation_header, confirmation_samples = trace(
+        header.get("animation_confirmation"), "confirmation"
+    )
+    if (
+        (primary_header.get("instance"), primary_header.get("process_id"))
+        == (
+            confirmation_header.get("instance"),
+            confirmation_header.get("process_id"),
+        )
+        or primary_header.get("source") != confirmation_header.get("source")
+        or source != primary_header.get("source")
+    ):
+        raise PromotionError(
+            "Settlement v2.15 semantic underlay did not reproduce in two exact fresh instances"
+        )
+    try:
+        primary_generation = measure_generation_window(
+            primary_samples, f"{fixture_path} semantic underlay primary"
+        )
+        confirmation_generation = measure_generation_window(
+            confirmation_samples,
+            f"{fixture_path} semantic underlay confirmation",
+        )
+    except NativeMenuGenerationV218Error as error:
+        raise PromotionError(str(error)) from error
+    if layout.get("generation") != primary_generation["generation"]:
+        raise PromotionError(
+            "Settlement v2.19 recorded generation receipt chain: semantic "
+            "underlay fixture does not carry its primary trace's measured value"
+        )
+    generation_metadata = {
+        "settlement_spec": "2.19",
+        "endpoint_type": "typed_non_layout_semantic_underlay",
+        "recorded_generation": layout["generation"],
+        "primary": primary_generation,
+        "confirmation": confirmation_generation,
+        "paired_generation_exclusion_invoked": False,
+        "reason": (
+            "Settlement v2.15 qualifies this as supporting underlay evidence, "
+            "not one of the 30 layouts or 78 layout endpoints"
+        ),
+    }
+    return {
+        "fixture": fixture,
+        "header": header,
+        "layout": layout,
+        "primary_samples": primary_samples,
+        "confirmation_samples": confirmation_samples,
+        "primary_trace_path": primary_path,
+        "confirmation_trace_path": confirmation_path,
+        "instance_local_generation": generation_metadata,
     }
 
 
 def _resolved_navigation_inputs_v25(
     evidence_root: Path, navigation_path: Path, navigation: dict[str, Any]
-) -> tuple[Path, Path, Path, Path | None, Path]:
+) -> tuple[Path, Path, list[Path], Path | None, Path]:
     resolution = navigation.get("header", {}).get("ambient_lifecycle_resolution")
     if not isinstance(resolution, dict) or resolution.get("settlement_spec") != "2.9":
         raise PromotionError(
@@ -1589,12 +1940,24 @@ def _resolved_navigation_inputs_v25(
         resolution.get("confirmation_raw_recording", {}),
         "v2.9 confirmation navigation",
     )
-    relative_motion = resolution.get("motion_observation_directory")
-    if not isinstance(relative_motion, str) or not relative_motion:
-        raise PromotionError("ambient lifecycle resolution lost its motion observation directory")
+    relative_motions = resolution.get("motion_observation_directories")
+    if relative_motions is None:
+        relative_motions = [resolution.get("motion_observation_directory")]
+    if (
+        not isinstance(relative_motions, list)
+        or not relative_motions
+        or not all(
+            isinstance(relative, str) and relative
+            for relative in relative_motions
+        )
+        or len(set(relative_motions)) != len(relative_motions)
+    ):
+        raise PromotionError(
+            "ambient lifecycle resolution lost its unambiguous motion observation directories"
+        )
     root = evidence_root.resolve()
-    motion_root = (root / relative_motion).resolve()
-    if not motion_root.is_relative_to(root):
+    motion_roots = [(root / relative).resolve() for relative in relative_motions]
+    if any(not motion_root.is_relative_to(root) for motion_root in motion_roots):
         raise PromotionError("motion observation directory escapes the evidence root")
     supplemental_receipt = resolution.get("supplemental_settled_pair_manifest")
     supplemental = (
@@ -1613,7 +1976,7 @@ def _resolved_navigation_inputs_v25(
         resolution.get("choice_slot_asset_manifest", {}),
         "v2.9 choice-slot asset manifest",
     )
-    return primary, confirmation, motion_root, supplemental, asset_manifest
+    return primary, confirmation, motion_roots, supplemental, asset_manifest
 
 
 def _aggregate_wrapper_map(
@@ -1637,6 +2000,128 @@ def _aggregate_wrapper_map(
     return result
 
 
+def _validate_overlay_evidence_receipts_v215(
+    repo_root: Path,
+    evidence_root: Path,
+    record: dict[str, Any],
+) -> list[dict[str, Any]]:
+    reached: list[tuple[str, dict[str, Any]]] = []
+
+    def walk(value: Any, field: str) -> None:
+        if isinstance(value, dict):
+            if {"evidence_path", "sha256", "bytes"} <= set(value):
+                reached.append((field, value))
+            for key, child in value.items():
+                walk(child, f"{field}.{key}")
+        elif isinstance(value, list):
+            for index, child in enumerate(value):
+                walk(child, f"{field}[{index}]")
+
+    walk(record, "overlay_record")
+    required_witnesses = {
+        "overlay_record.overlay.observations[0].recording",
+        "overlay_record.overlay.observations[1].recording",
+        "overlay_record.overlay.semantic_underlay_binding.primary_fixture",
+        "overlay_record.overlay.supersession.retired_landed_screen_fixture",
+        "overlay_record.overlay.supersession.stop_audit",
+    }
+    reached_fields = {field for field, _ in reached}
+    if not required_witnesses <= reached_fields:
+        raise PromotionError(
+            "Settlement v2.15 overlay receipt sweep did not reach every named witness"
+        )
+    validated: list[dict[str, Any]] = []
+    for field, receipt in reached:
+        relative = receipt.get("evidence_path")
+        if not isinstance(relative, str) or not relative:
+            raise PromotionError(f"{field} has no exact evidence path")
+        if relative.startswith("webgame-contracts/"):
+            root = repo_root.resolve()
+        else:
+            root = evidence_root.resolve()
+        path = (root / relative).resolve()
+        if not path.is_relative_to(root) or not path.is_file():
+            raise PromotionError(f"{field} evidence is absent or escapes its root")
+        if (
+            path.stat().st_size != receipt.get("bytes")
+            or file_sha256(path) != receipt.get("sha256")
+        ):
+            raise PromotionError(f"{field} evidence receipt is false")
+        validated.append(
+            {
+                "field": field,
+                "evidence_path": relative,
+                "sha256": receipt["sha256"],
+                "bytes": receipt["bytes"],
+            }
+        )
+    return validated
+
+
+def _settings_state_layout_v216(
+    record: dict[str, Any], endpoint: dict[str, Any], edge_id: str, side: str
+) -> tuple[str, dict[str, Any]]:
+    endpoint_key = "before" if side == "before" else "after"
+    expected_state = SETTINGS_ENDPOINT_BINDINGS.get((edge_id, endpoint_key))
+    if expected_state is None:
+        raise PromotionError(
+            "multi-state path-dependent core contract: unbound Settings navigation endpoint"
+        )
+    contract = endpoint.get("path_dependent_core")
+    states = record.get("fixture", {}).get("path_dependent_cores")
+    state = states.get(expected_state) if isinstance(states, dict) else None
+    layout = state.get("layout") if isinstance(state, dict) else None
+    if (
+        not isinstance(contract, dict)
+        or not isinstance(state, dict)
+        or not isinstance(layout, dict)
+        or contract.get("settlement_spec") != "2.16"
+        or contract.get("parent_layout_id") != "game-settings-gameplay"
+        or contract.get("edge_id") != edge_id
+        or contract.get("endpoint") != endpoint_key
+        or contract.get("state_id") != expected_state
+        or contract.get("measured_element_count")
+        != state.get("measured_element_count")
+        or contract.get("structural_core_sha256")
+        != state.get("structural_core_sha256")
+        or endpoint.get("element_count")
+        != state.get("structural_core_element_count")
+        or canonical_bytes(endpoint.get("layout")) != canonical_bytes(layout)
+    ):
+        raise PromotionError(
+            "multi-state path-dependent core contract: bound endpoint presented a different Settings core"
+        )
+    return expected_state, layout
+
+
+def _validate_pre_promotion_baselines(
+    repo_root: Path, landed_layout_entries: list[dict[str, Any]]
+) -> None:
+    snapshot_root = repo_root / "webgame-contracts/baseline-snapshots"
+    reached: set[str] = set()
+    for entry in landed_layout_entries:
+        fixture = entry.get("fixture") if isinstance(entry, dict) else None
+        if not isinstance(fixture, str) or fixture in reached:
+            raise PromotionError(
+                "shellfix baseline verification reached an absent or ambiguous landed fixture"
+            )
+        reached.add(fixture)
+        landed = repo_root / "tests/fixtures/webgame" / fixture
+        snapshot = snapshot_root / fixture
+        if (
+            not landed.is_file()
+            or not snapshot.is_file()
+            or landed.read_bytes() != snapshot.read_bytes()
+        ):
+            raise PromotionError(
+                f"shellfix baseline snapshot does not byte-equal pre-menufix {fixture}"
+            )
+    if len(reached) != 28 or "menu-layouts/dark-cloud-settings.json" not in reached:
+        raise PromotionError(
+            "shellfix baseline verification did not reach the exact historical 28-layout census"
+        )
+
+
 def _navigation_endpoint_signature_v25(endpoint: dict[str, Any]) -> dict[str, Any]:
     return {
         field: endpoint.get(field)
@@ -1648,6 +2133,276 @@ def _navigation_endpoint_signature_v25(endpoint: dict[str, Any]) -> dict[str, An
             "element_count",
         )
     }
+
+
+def _validate_navigation_generation_v219(
+    resolved_navigation: dict[str, Any],
+    confirmation_navigation: dict[str, Any],
+) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
+    """Pin each instance's counter and prove each paired endpoint core exact."""
+
+    def edge_map(
+        recording: dict[str, Any], label: str
+    ) -> dict[str, dict[str, Any]]:
+        edges = recording.get("edges")
+        if not isinstance(edges, list) or len(edges) != 40:
+            raise PromotionError(
+                f"{label} v2.19 generation sweep did not reach the exact 40-edge census"
+            )
+        result: dict[str, dict[str, Any]] = {}
+        for edge in edges:
+            edge_id = edge.get("id") if isinstance(edge, dict) else None
+            if not isinstance(edge_id, str) or not edge_id or edge_id in result:
+                raise PromotionError(
+                    f"{label} v2.19 generation sweep found an absent or ambiguous edge"
+                )
+            result[edge_id] = edge
+        if "control_scheme_picker_to_create" not in result:
+            raise PromotionError(
+                f"{label} v2.19 generation sweep missed the picker witness edge"
+            )
+        return result
+
+    primary_by_id = edge_map(resolved_navigation, "primary resolved navigation")
+    confirmation_by_id = edge_map(
+        confirmation_navigation, "confirmation raw navigation"
+    )
+    if set(primary_by_id) != set(confirmation_by_id):
+        raise PromotionError(
+            "Settlement v2.19 paired navigation generation edge census differs"
+        )
+    result: dict[str, dict[str, Any]] = {}
+    generation_mismatches: list[str] = []
+    typed_nonlayout: list[str] = []
+    expected_nonlayout = {
+        "dark_cloud_settings_to_settings.before",
+        "settings_to_dark_cloud_settings.after",
+    }
+    for edge_id in sorted(primary_by_id):
+        for side in ("before", "after"):
+            primary = primary_by_id[edge_id].get(side)
+            confirmation = confirmation_by_id[edge_id].get(side)
+            if not isinstance(primary, dict) or not isinstance(confirmation, dict):
+                raise PromotionError(
+                    f"Settlement v2.19 edge {edge_id} {side} endpoint is absent"
+                )
+            endpoint_id = f"{edge_id}.{side}"
+            recorded_generation = primary.get("layout_generation")
+            if recorded_generation is None:
+                if endpoint_id not in expected_nonlayout:
+                    raise PromotionError(
+                        "Settlement v2.19 generation sweep found an unclassified "
+                        f"non-layout endpoint: {endpoint_id}"
+                    )
+                typed_nonlayout.append(endpoint_id)
+                continue
+            primary_trace = primary.get("settlement_trace")
+            confirmation_trace = confirmation.get("settlement_trace")
+            if not isinstance(primary_trace, dict) or not isinstance(
+                confirmation_trace, dict
+            ):
+                raise PromotionError(
+                    f"Settlement v2.19 edge {edge_id} {side} trace is absent"
+                )
+            primary_samples = _settled_samples_v25(
+                primary_trace, f"edge {edge_id} {side} primary"
+            )
+            confirmation_samples = _settled_samples_v25(
+                confirmation_trace, f"edge {edge_id} {side} confirmation"
+            )
+            if (
+                primary.get("semantic_generation") != recorded_generation
+                or confirmation.get("semantic_generation")
+                != confirmation.get("layout_generation")
+            ):
+                raise PromotionError(
+                    "Settlement v2.19 endpoint generation is not its semantic mirror: "
+                    f"edge {edge_id} {side}"
+                )
+            layout = primary.get("layout")
+            if not isinstance(layout, dict):
+                raise PromotionError(
+                    f"Settlement v2.19 edge {edge_id} {side} has no resolved layout"
+                )
+            try:
+                paired_core_equality = derive_pair_core_equality(
+                    primary_samples,
+                    confirmation_samples,
+                    layout,
+                    label=f"edge {edge_id} {side}",
+                    bound_endpoints=[endpoint_id],
+                    bound_endpoint_census_complete=True,
+                )
+                receipt = validate_instance_local_generation_pair(
+                    primary_samples,
+                    confirmation_samples,
+                    recorded_generation,
+                    paired_core_equality,
+                    label=f"edge {edge_id} {side}",
+                )
+            except NativeMenuGenerationV219Error as error:
+                raise PromotionError(str(error)) from error
+            if receipt["primary"]["generation"] != receipt["confirmation"][
+                "generation"
+            ]:
+                generation_mismatches.append(endpoint_id)
+            receipt.update(
+                {
+                    "edge_id": edge_id,
+                    "side": side,
+                    "layout_id": primary.get("layout_id"),
+                }
+            )
+            result[endpoint_id] = receipt
+    if len(result) != 78 or set(typed_nonlayout) != expected_nonlayout:
+        raise PromotionError(
+            "Settlement v2.19 generation sweep did not validate 78 layout and two typed non-layout endpoints"
+        )
+    return result, {
+        "layout_endpoint_count": len(result),
+        "typed_nonlayout_endpoints": sorted(typed_nonlayout),
+        "generation_mismatch_count": len(generation_mismatches),
+        "generation_mismatch_endpoints": generation_mismatches,
+        "all_layout_endpoint_cores_equal": True,
+    }
+
+
+def _bound_generation_endpoints_v219(
+    layout_id: str,
+    layout: dict[str, Any],
+    resolved_navigation: dict[str, Any],
+    navigation_generation_receipts: dict[str, dict[str, Any]],
+    semantic_dialog_composite_record: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Enumerate every navigation binding for one generation-only correction."""
+
+    edges = resolved_navigation.get("edges")
+    if not isinstance(edges, list) or len(edges) != 40:
+        raise PromotionError(
+            "Settlement v2.19 bound-endpoint sweep did not reach the exact navigation census"
+        )
+    bound: list[dict[str, Any]] = []
+    for edge in edges:
+        edge_id = edge.get("id") if isinstance(edge, dict) else None
+        if not isinstance(edge_id, str):
+            raise PromotionError(
+                "Settlement v2.19 bound-endpoint sweep reached an unresolvable edge"
+            )
+        for side in ("before", "after"):
+            endpoint = edge.get(side)
+            if not isinstance(endpoint, dict) or endpoint.get("layout_id") != layout_id:
+                continue
+            endpoint_layout = endpoint.get("layout")
+            if not isinstance(endpoint_layout, dict):
+                raise PromotionError(
+                    f"Settlement v2.19 bound endpoint {edge_id} {side} has no layout"
+                )
+            comparison = compare_generation_cores_v218(
+                layout,
+                endpoint_layout,
+                label=f"{edge_id}.{side}",
+            )
+            generation_receipt = navigation_generation_receipts.get(
+                f"{edge_id}.{side}"
+            )
+            generation_recorded = isinstance(
+                generation_receipt, dict
+            ) and generation_receipt.get("instance_local_generation") is True
+            comparison.update(
+                {
+                    "edge_id": edge_id,
+                    "side": side,
+                    "layout_id": layout_id,
+                    "generation_is_instance_local": generation_recorded,
+                    "exact": comparison["exact"] and generation_recorded,
+                }
+            )
+            bound.append(comparison)
+
+    if layout_id == "control-scheme-picker":
+        composite = semantic_dialog_composite_record.get("composite", {})
+        composite_binding = (
+            composite.get("underlay_binding", {})
+            if isinstance(composite, dict)
+            else {}
+        )
+        navigation = semantic_dialog_composite_record.get("navigation", {})
+        comparison = compare_generation_cores_v218(
+            layout,
+            layout,
+            label="beta_notice_first_boot_to_control_scheme_picker.after",
+        )
+        fixture_receipt = composite_binding.get("fixture")
+        exact_binding = (
+            composite_binding.get("layout_id") == layout_id
+            and navigation.get("dismissal_edge_id")
+            == "beta_notice_first_boot_to_control_scheme_picker"
+            and navigation.get("destination_layout_id") == layout_id
+            and isinstance(fixture_receipt, dict)
+        )
+        comparison.update(
+            {
+                "edge_id": "beta_notice_first_boot_to_control_scheme_picker",
+                "side": "after",
+                "layout_id": layout_id,
+                "generation_is_instance_local": exact_binding,
+                "exact": comparison["exact"] and exact_binding,
+                "binding_kind": "dialog_composite_dismissal",
+            }
+        )
+        bound.append(comparison)
+
+    if layout_id == "control-scheme-picker" and not any(
+        endpoint.get("edge_id") == "control_scheme_picker_to_create"
+        for endpoint in bound
+    ):
+        raise PromotionError(
+            "Settlement v2.19 bound-endpoint sweep missed the picker-to-create witness"
+        )
+    return bound
+
+
+def _assert_generation_v219_enabled(
+    records: dict[str, dict[str, Any]],
+    navigation_summary: dict[str, Any],
+    *,
+    enabled: bool,
+) -> dict[str, Any]:
+    if len(records) != 30 or "control-scheme-picker" not in records:
+        raise PromotionError(
+            "Settlement v2.19 generation census did not reach the exact 30-layout corpus"
+        )
+    standalone_mismatches = sorted(
+        layout_id
+        for layout_id, record in records.items()
+        if record.get("path_local_generation", {}).get("primary", {}).get(
+            "generation"
+        )
+        != record.get("path_local_generation", {}).get("confirmation", {}).get(
+            "generation"
+        )
+    )
+    summary = {
+        "standalone_pair_count": len(records),
+        "standalone_generation_mismatch_count": len(standalone_mismatches),
+        "standalone_generation_mismatch_layouts": standalone_mismatches,
+        **copy.deepcopy(navigation_summary),
+    }
+    if not enabled:
+        if (
+            len(standalone_mismatches) == 10
+            and navigation_summary.get("layout_endpoint_count") == 76
+            and navigation_summary.get("generation_mismatch_count") == 24
+            and "dark_cloud_login_to_browser.before"
+            in navigation_summary.get("generation_mismatch_endpoints", [])
+        ):
+            raise PromotionError(V218_DISABLED_CORPUS_STOP)
+        raise PromotionError(
+            "Settlement v2.19 disabled replay no longer reproduces the sealed v2.18 STOP census"
+        )
+    summary["v219_enabled"] = True
+    summary["all_pair_cores_equal"] = True
+    return summary
 
 
 def _navigation_population_trace_pairs_v25(
@@ -1724,6 +2479,8 @@ def _navigation_population_trace_pairs_v25(
                     f"edge {edge_id} {side} population-witness endpoint is absent"
                 )
             layout_id = primary_endpoint.get("layout_id")
+            if layout_id not in required_layouts:
+                continue
             primary_trace = primary_endpoint.get("settlement_trace")
             confirmation_trace = confirmation_endpoint.get("settlement_trace")
             if (
@@ -1734,15 +2491,10 @@ def _navigation_population_trace_pairs_v25(
                 raise PromotionError(
                     f"edge {edge_id} {side} population-witness trace is incomplete"
                 )
-            if layout_id not in required_layouts:
-                continue
             if canonical_bytes(primary_endpoint.get("layout")) != canonical_bytes(
                 required_layouts[layout_id]
             ):
-                raise PromotionError(
-                    f"edge {edge_id} {side} population witness does not bind "
-                    f"the resolved standalone {layout_id}"
-                )
+                continue
             result.setdefault(layout_id, []).append(
                 {
                     "edge_id": edge_id,
@@ -1767,7 +2519,66 @@ def _select_population_trace_pair_v25(
     standalone_primary: dict[str, Any],
     standalone_confirmation: dict[str, Any],
     navigation_pairs: dict[str, list[dict[str, Any]]],
+    *,
+    diagnostic_allow_equivalent: bool = False,
+    class_f_witness: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    def capacity_rows(evidence: dict[str, Any]) -> list[dict[str, Any]]:
+        signatures = {
+            signature
+            for counter in (
+                *evidence["phase_counters"],
+                *evidence["settled_counters"],
+            )
+            for signature in counter
+        }
+        rows: list[dict[str, Any]] = []
+        for signature in sorted(signatures):
+            settled_max = max(
+                counter[signature]
+                for counter in evidence["settled_counters"]
+            )
+            phase_max = max(
+                counter[signature] for counter in evidence["phase_counters"]
+            )
+            excess = max(0, phase_max - settled_max)
+            if excess:
+                rows.append(
+                    {
+                        "semantic_payload": json.loads(
+                            signature.decode("utf-8")
+                        ),
+                        "maximum_population_excess": excess,
+                    }
+                )
+        return rows
+
+    def classifier_capacity_sha256(
+        primary_trace: dict[str, Any], confirmation_trace: dict[str, Any]
+    ) -> str:
+        primary = _population_evidence(
+            primary_trace, f"{layout_id} diagnostic primary"
+        )
+        confirmation = _population_evidence(
+            confirmation_trace, f"{layout_id} diagnostic confirmation"
+        )
+        return hashlib.sha256(
+            canonical_bytes(
+                {
+                    "primary_population_capacity": capacity_rows(primary),
+                    "confirmation_population_capacity": capacity_rows(
+                        confirmation
+                    ),
+                    "landed_generation_witnessed_in_primary": (
+                        landed_generation in primary["generation_trace"]
+                    ),
+                    "landed_generation_witnessed_in_confirmation": (
+                        landed_generation in confirmation["generation_trace"]
+                    ),
+                }
+            )
+        ).hexdigest()
+
     def qualifies(
         primary_trace: dict[str, Any], confirmation_trace: dict[str, Any], label: str
     ) -> tuple[bool, dict[str, Any]]:
@@ -1814,6 +2625,24 @@ def _select_population_trace_pair_v25(
             standalone_confirmation,
             {"source": "standalone_pair", "generation_witness_required": False},
         )
+    if class_f_witness is not None:
+        return (
+            standalone_primary,
+            standalone_confirmation,
+            {
+                "source": "census_era_class_f_paired_population_witness",
+                "generation_witness_required": True,
+                "generation_counter_selection_performed": False,
+                "edge_id": class_f_witness["edge_id"],
+                "projected_core_sha256": class_f_witness[
+                    "projected_core_sha256"
+                ],
+                "projected_core_element_count": class_f_witness[
+                    "projected_core_element_count"
+                ],
+                "witness_pair": copy.deepcopy(class_f_witness["pair"]),
+            },
+        )
     standalone_qualifies, standalone_detail = qualifies(
         standalone_primary,
         standalone_confirmation,
@@ -1843,6 +2672,38 @@ def _select_population_trace_pair_v25(
             (pair["edge_id"], pair["side"])
             for pair, _ in qualifying_navigation
         ]
+        if diagnostic_allow_equivalent:
+            pair, detail = qualifying_navigation[0]
+            return (
+                pair["primary_trace"],
+                pair["confirmation_trace"],
+                {
+                    "source": (
+                        "diagnostic_all_qualifying_navigation_endpoints"
+                    ),
+                    "candidate_bindings": [
+                        {
+                            "edge_id": candidate["edge_id"],
+                            "side": candidate["side"],
+                            "population_classifier_capacity_sha256": (
+                                classifier_capacity_sha256(
+                                    candidate["primary_trace"],
+                                    candidate["confirmation_trace"],
+                                )
+                            ),
+                        }
+                        for candidate, _ in qualifying_navigation
+                    ],
+                    "selection_performed": False,
+                    "diagnosis_convergence_required": True,
+                    "production_verdict": (
+                        f"{layout_id} population-witness routing is "
+                        f"ambiguous: {identities}"
+                    ),
+                    "generation_witness_required": True,
+                    **detail,
+                },
+            )
         raise PromotionError(
             f"{layout_id} population-witness routing is ambiguous: {identities}"
         )
@@ -1923,18 +2784,34 @@ def _validate_controls_context_v211(
     candidate_path: Path,
     evidence_root: Path,
     resolved_navigation: dict[str, Any],
+    navigation_generation_receipts: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     if contract.get("schema") != (
         "solomon-dark-native-menu-controls-core-supersession-v211"
     ):
         raise PromotionError("v2.11 Controls structural contract schema is invalid")
     expected_candidate = contract.get("superseding_candidate_fixture")
-    if not isinstance(expected_candidate, dict) or file_receipt(candidate_path) != {
-        "sha256": expected_candidate.get("sha256"),
-        "bytes": expected_candidate.get("bytes"),
-    }:
+    if not isinstance(expected_candidate, dict):
         raise PromotionError(
-            "v2.11 exact Controls candidate receipt does not match the authorized core"
+            "v2.11 exact Controls source candidate receipt is absent"
+        )
+    try:
+        _, expected_settled_counter = _require_v211_controls_core_contract(
+            contract
+        )
+    except LandedDiagnosisError as error:
+        raise PromotionError(str(error)) from error
+    if (
+        _v211_semantic_counter(
+            record.get("layout", {}), "v2.11 qualified Controls re-emission"
+        )
+        != expected_settled_counter
+        or record.get("layout", {}).get("structural_core_sha256")
+        != expected_candidate.get("structural_core_sha256")
+    ):
+        raise PromotionError(
+            "v2.11 exact Controls qualified re-emission does not match the "
+            "authorized semantic core"
         )
     audits = contract.get("source_audits")
     if not isinstance(audits, dict) or set(audits) != {"title", "structural_core"}:
@@ -1976,15 +2853,28 @@ def _validate_controls_context_v211(
         confirmation_header,
         "confirmation settlement",
     )
+    source_primary = paired.get("primary")
+    source_confirmation = paired.get("confirmation")
     if (
-        primary != paired.get("primary")
-        or confirmation != paired.get("confirmation")
+        not isinstance(source_primary, dict)
+        or not isinstance(source_confirmation, dict)
         or paired.get("classifier_and_tag_agree") is not True
         or (primary["instance"], primary["process_id"])
         == (confirmation["instance"], confirmation["process_id"])
     ):
         raise PromotionError(
-            "v2.11 Controls paired settlement does not reproduce the authorized instances"
+            "v2.11 Controls qualified re-emission did not reproduce in two "
+            "classifier-agreed instances"
+        )
+    pair_core = record.get("path_local_generation", {}).get(
+        "paired_core_equality", {}
+    )
+    if (
+        pair_core.get("core_equal") is not True
+        or pair_core.get("zero_residual") is not True
+    ):
+        raise PromotionError(
+            "v2.11 Controls qualified re-emission lacks exact paired-core proof"
         )
 
     edges = resolved_navigation.get("edges")
@@ -2027,18 +2917,845 @@ def _validate_controls_context_v211(
                 "element_count": endpoint.get("element_count"),
                 "frame_sha256": endpoint.get("frame_sha256"),
             }
-    if set(observed) != set(expected_by_identity) or any(
-        observed[identity] != expected_by_identity[identity]
-        for identity in observed
-    ):
+    if set(observed) != set(expected_by_identity):
         raise PromotionError(
             "v2.11 Controls endpoints do not reproduce both exact standalone bindings"
         )
+    for identity, value in observed.items():
+        endpoint_id = f"{identity[0]}.{identity[1]}"
+        generation_receipt = navigation_generation_receipts.get(endpoint_id)
+        if (
+            value.get("semantic_surface") != "controls"
+            or value.get("tagged_screen") != "controls"
+            or isinstance(value.get("layout_generation"), bool)
+            or not isinstance(value.get("layout_generation"), int)
+            or value.get("element_count") != len(record["layout"]["elements"])
+            or not isinstance(value.get("frame_sha256"), str)
+            or not re.fullmatch(r"[0-9a-f]{64}", value["frame_sha256"])
+            or not isinstance(generation_receipt, dict)
+            or generation_receipt.get("primary", {}).get("generation")
+            != value.get("layout_generation")
+            or generation_receipt.get("paired_core_equality", {}).get(
+                "core_equal"
+            )
+            is not True
+            or generation_receipt.get("paired_core_equality", {}).get(
+                "zero_residual"
+            )
+            is not True
+        ):
+            raise PromotionError(
+                f"v2.11 Controls endpoint {identity} changed its qualified "
+                "standalone binding or lost its v2.19 exact-core receipt"
+            )
     return {
-        "candidate_receipt": file_receipt(candidate_path),
+        "source_candidate_receipt": {
+            "sha256": expected_candidate.get("sha256"),
+            "bytes": expected_candidate.get("bytes"),
+        },
+        "qualified_candidate_receipt": file_receipt(candidate_path),
+        "qualified_reemission": file_receipt(candidate_path)
+        != {
+            "sha256": expected_candidate.get("sha256"),
+            "bytes": expected_candidate.get("bytes"),
+        },
+        "source_paired_settlement": {
+            "primary": copy.deepcopy(source_primary),
+            "confirmation": copy.deepcopy(source_confirmation),
+        },
         "paired_settlement": {"primary": primary, "confirmation": confirmation},
         "endpoint_count": len(observed),
         "destination_equals_standalone": True,
+    }
+
+
+def _validate_dark_cloud_login_title_context_v220(
+    repo_root: Path,
+    contract: dict[str, Any],
+    record: dict[str, Any],
+    candidate_path: Path,
+    evidence_root: Path,
+    resolved_navigation: dict[str, Any],
+    navigation_generation_receipts: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    try:
+        _require_v220_dark_cloud_login_title_contract(contract)
+    except LandedDiagnosisError as error:
+        raise PromotionError(str(error)) from error
+
+    def repo_receipt(field: str) -> Path:
+        receipt = contract.get(field)
+        if not isinstance(receipt, dict) or set(receipt) != {
+            "repo_relative_path",
+            "sha256",
+            "bytes",
+        }:
+            raise PromotionError(
+                f"v2.20 Dark Cloud login title {field.replace('_', ' ')} receipt is malformed"
+            )
+        relative = Path(str(receipt["repo_relative_path"]))
+        root = repo_root.resolve()
+        path = (root / relative).resolve()
+        if (
+            relative.is_absolute()
+            or ".." in relative.parts
+            or not path.is_relative_to(root)
+            or not path.is_file()
+            or file_receipt(path)
+            != {"sha256": receipt.get("sha256"), "bytes": receipt.get("bytes")}
+        ):
+            raise PromotionError(
+                f"v2.20 Dark Cloud login title {field.replace('_', ' ')} receipt is false"
+            )
+        return path
+
+    landed_path = repo_receipt("landed_fixture")
+    baseline_path = repo_receipt("baseline_snapshot")
+    if landed_path.read_bytes() != baseline_path.read_bytes():
+        raise PromotionError(
+            "v2.20 Dark Cloud login title baseline no longer preserves the exact landed bytes"
+        )
+
+    expected_candidate = contract.get("superseding_candidate")
+    if (
+        not isinstance(expected_candidate, dict)
+        or _receipt_path_v25(
+            evidence_root,
+            candidate_path.parent,
+            expected_candidate,
+            "v2.20 Dark Cloud login title candidate",
+        ).resolve()
+        != candidate_path.resolve()
+        or expected_candidate.get("element_count")
+        != len(record.get("layout", {}).get("elements", []))
+        or expected_candidate.get("structural_core_sha256")
+        != record.get("layout", {}).get("structural_core_sha256")
+    ):
+        raise PromotionError(
+            "v2.20 Dark Cloud login title candidate receipt does not bind the exact settled core"
+        )
+
+    audit_path = _receipt_path_v25(
+        evidence_root,
+        candidate_path.parent,
+        contract.get("source_stop_audit", {}),
+        "v2.20 Dark Cloud login title source STOP audit",
+    )
+    promoter_stop_path = _receipt_path_v25(
+        evidence_root,
+        candidate_path.parent,
+        contract.get("source_promoter_stop", {}),
+        "v2.20 Dark Cloud login title source promoter STOP",
+    )
+    audit = read_json(audit_path)
+    expected_stop = contract["source_promoter_stop"].get("message")
+    if (
+        audit.get("schema")
+        != "solomon-dark-native-menu-dark-cloud-login-title-stop-audit-v1"
+        or audit.get("status") != "QUESTION"
+        or audit.get("layout_id") != contract["layout_id"]
+        or audit.get("screen_id") != contract["screen_id"]
+        or audit.get("landed_screen_title") != contract["landed_value"]
+        or audit.get("settled_screen_title") != contract["settled_value"]
+        or audit.get("candidate_applied") is not False
+        or read_json(promoter_stop_path)
+        != {"success": False, "error": expected_stop}
+    ):
+        raise PromotionError(
+            "v2.20 Dark Cloud login title accepted STOP finding no longer reproduces"
+        )
+
+    header = record.get("header")
+    if not isinstance(header, dict):
+        raise PromotionError("v2.20 Dark Cloud login title candidate has no header")
+    profile_identity = contract.get("profile_state_identity_sha256")
+    if (
+        header.get("source") != contract.get("source_provenance")
+        or header.get("source", {}).get("profile_state_identity_sha256")
+        != profile_identity
+        or header.get("profile_state", {}).get(
+            "profile_state_identity_sha256"
+        )
+        != profile_identity
+    ):
+        raise PromotionError(
+            "v2.20 Dark Cloud login title candidate lost its pinned machine-derived provenance"
+        )
+
+    paired = contract.get("paired_settlement")
+    if not isinstance(paired, dict):
+        raise PromotionError(
+            "v2.20 Dark Cloud login title paired-settlement receipt is absent"
+        )
+    roles = (
+        (
+            "primary",
+            record.get("primary_trace_path"),
+            record.get("primary_trace"),
+            record.get("primary_samples"),
+        ),
+        (
+            "confirmation",
+            record.get("confirmation_trace_path"),
+            record.get("confirmation_trace"),
+            record.get("confirmation_samples"),
+        ),
+    )
+    identities: list[tuple[Any, Any]] = []
+    for role, observed_path, trace, samples in roles:
+        expected = paired.get(role)
+        if (
+            not isinstance(expected, dict)
+            or not isinstance(observed_path, Path)
+            or _receipt_path_v25(
+                evidence_root,
+                candidate_path.parent,
+                expected.get("recording", {}),
+                f"v2.20 Dark Cloud login title {role} trace",
+            ).resolve()
+            != observed_path.resolve()
+            or not isinstance(trace, dict)
+            or not isinstance(samples, list)
+            or len(samples) != expected.get("sample_count")
+            or len(samples) < 40
+        ):
+            raise PromotionError(
+                f"v2.20 Dark Cloud login title {role} trace receipt is incomplete"
+            )
+        trace_header = trace.get("header")
+        if not isinstance(trace_header, dict):
+            raise PromotionError(
+                f"v2.20 Dark Cloud login title {role} trace has no capture header"
+            )
+        elapsed = [sample.get("elapsed_milliseconds") for sample in samples]
+        payloads = [sample.get("payload") for sample in samples]
+        if (
+            trace_header.get("instance") != expected.get("instance")
+            or trace_header.get("process_id") != expected.get("process_id")
+            or trace_header.get("source") != contract.get("source_provenance")
+            or not all(isinstance(value, (int, float)) for value in elapsed)
+            or elapsed[-1] - elapsed[0]
+            != expected.get("stable_span_milliseconds")
+            or not all(isinstance(payload, dict) for payload in payloads)
+            or {payload.get("screen_id") for payload in payloads}
+            != {contract["screen_id"]}
+            or {payload.get("screen_title") for payload in payloads}
+            != {contract["settled_value"]}
+            or {payload.get("generation") for payload in payloads}
+            != {expected.get("measured_generation")}
+        ):
+            raise PromotionError(
+                f"v2.20 Dark Cloud login title {role} trace does not reproduce the pinned title window"
+            )
+        identities.append((trace_header.get("instance"), trace_header.get("process_id")))
+    if len(set(identities)) != 2:
+        raise PromotionError(
+            "v2.20 Dark Cloud login title evidence does not use two independent instances"
+        )
+    pair_core = record.get("path_local_generation", {}).get(
+        "paired_core_equality", {}
+    )
+    expected_core = paired.get("core_equality", {}).get("expected_core")
+    if (
+        not isinstance(expected_core, dict)
+        or pair_core.get("core_equal") is not True
+        or pair_core.get("zero_residual") is not True
+        or pair_core.get("expected_core") != expected_core
+    ):
+        raise PromotionError(
+            "v2.20 Dark Cloud login title pair lost exact cross-instance core equality"
+        )
+
+    expected_endpoints = contract.get("bound_endpoints")
+    expected_by_identity = {
+        (entry.get("edge_id"), entry.get("side"), entry.get("trigger")): entry
+        for entry in expected_endpoints
+        if isinstance(entry, dict)
+    }
+    if len(expected_by_identity) != 2:
+        raise PromotionError(
+            "v2.20 Dark Cloud login title endpoint contract is absent or ambiguous"
+        )
+    observed: dict[tuple[Any, Any, Any], dict[str, Any]] = {}
+    edges = resolved_navigation.get("edges")
+    if not isinstance(edges, list) or not edges:
+        raise PromotionError(
+            "v2.20 Dark Cloud login title endpoint audit reached no navigation edges"
+        )
+    for edge in edges:
+        if not isinstance(edge, dict):
+            continue
+        for side in ("before", "after"):
+            endpoint = edge.get(side)
+            if (
+                not isinstance(endpoint, dict)
+                or endpoint.get("layout_id") != contract["layout_id"]
+            ):
+                continue
+            identity = (edge.get("id"), side, edge.get("trigger"))
+            if identity in observed:
+                raise PromotionError(
+                    "v2.20 Dark Cloud login title endpoint lookup is ambiguous"
+                )
+            layout = endpoint.get("layout")
+            if canonical_bytes(layout) != canonical_bytes(record["layout"]):
+                raise PromotionError(
+                    f"v2.20 Dark Cloud login title endpoint {identity} does not equal its standalone"
+                )
+            observed[identity] = {
+                "edge_id": identity[0],
+                "side": side,
+                "trigger": identity[2],
+                "semantic_surface": endpoint.get("semantic_surface"),
+                "tagged_screen": endpoint.get("tagged_screen"),
+                "layout_generation": endpoint.get("layout_generation"),
+                "element_count": endpoint.get("element_count"),
+                "screen_title": layout.get("screen_title"),
+                "structural_core_sha256": layout.get("structural_core_sha256"),
+                "frame_sha256": endpoint.get("frame_sha256"),
+            }
+    if set(observed) != set(expected_by_identity):
+        raise PromotionError(
+            "v2.20 Dark Cloud login title did not reproduce both exact endpoint bindings"
+        )
+    for identity, endpoint in observed.items():
+        endpoint_id = f"{identity[0]}.{identity[1]}"
+        generation_receipt = navigation_generation_receipts.get(endpoint_id)
+        if (
+            endpoint != expected_by_identity[identity]
+            or not isinstance(generation_receipt, dict)
+            or generation_receipt.get("paired_core_equality", {}).get(
+                "core_equal"
+            )
+            is not True
+            or generation_receipt.get("paired_core_equality", {}).get(
+                "zero_residual"
+            )
+            is not True
+        ):
+            raise PromotionError(
+                f"v2.20 Dark Cloud login title endpoint {identity} lost its exact-core receipt"
+            )
+    return {
+        "contract": file_receipt(
+            repo_root
+            / "tests/fixtures/webgame/native-menu-dark-cloud-login-title-v220.json"
+        ),
+        "candidate": file_receipt(candidate_path),
+        "source_stop_audit": file_receipt(audit_path),
+        "source_promoter_stop": file_receipt(promoter_stop_path),
+        "paired_instances": [list(identity) for identity in identities],
+        "endpoint_count": len(observed),
+        "destination_equals_standalone": True,
+    }
+
+
+def _validate_census_era_context_v221(
+    repo_root: Path,
+    evidence_root: Path,
+    contract_path: Path,
+    contract: dict[str, Any],
+    records: dict[str, dict[str, Any]],
+    path_by_layout_id: dict[str, Path],
+    landed_path_by_layout_id: dict[str, Path],
+) -> dict[str, Any]:
+    try:
+        view = require_census_era_contract(contract)
+    except CensusEraV221Error as error:
+        raise PromotionError(str(error)) from error
+
+    def evidence_path(recorded: dict[str, Any], label: str) -> Path:
+        relative = recorded.get("evidence_path")
+        if not isinstance(relative, str) or not relative:
+            raise PromotionError(f"v2.21 {label} has no evidence path")
+        path = (evidence_root / relative).resolve()
+        root = evidence_root.resolve()
+        if not path.is_relative_to(root) or not path.is_file():
+            raise PromotionError(f"v2.21 {label} escapes or is absent")
+        if file_receipt(path) != {
+            "sha256": recorded.get("sha256"),
+            "bytes": recorded.get("bytes"),
+        }:
+            raise PromotionError(f"v2.21 {label} receipt is false")
+        return path
+
+    source_census = evidence_path(contract["source_census"], "source census")
+    occurrence_audit = evidence_path(
+        contract["occurrence_audit"], "qualified-occurrence audit"
+    )
+    class_f_audit_path = evidence_path(
+        contract["class_f_witnesses"]["source_audit"],
+        "bounded Class-F witness audit",
+    )
+    class_f_audit = read_json(class_f_audit_path)
+    class_f_layouts = class_f_audit.get("layouts")
+    if (
+        class_f_audit.get("schema")
+        != "solomon-dark-native-menu-census-era-class-f-audit-v221"
+        or not isinstance(class_f_layouts, dict)
+        or set(class_f_layouts) != set(view["class_f"])
+    ):
+        raise PromotionError("v2.21 bounded Class-F audit changed scope")
+    reached: set[str] = set()
+    for class_name in ("class_a", "class_b"):
+        for layout_id, entry in view[class_name].items():
+            record = records.get(layout_id)
+            candidate_path = path_by_layout_id.get(layout_id)
+            landed_path = landed_path_by_layout_id.get(layout_id)
+            if (
+                not isinstance(record, dict)
+                or not isinstance(candidate_path, Path)
+                or not isinstance(landed_path, Path)
+                or file_receipt(landed_path)
+                != {
+                    "sha256": entry["landed_fixture"]["sha256"],
+                    "bytes": entry["landed_fixture"]["bytes"],
+                }
+                or file_receipt(candidate_path)
+                != {
+                    "sha256": entry["candidate_fixture"]["sha256"],
+                    "bytes": entry["candidate_fixture"]["bytes"],
+                }
+                or file_receipt(record["primary_trace_path"])
+                != {
+                    "sha256": entry["primary_trace"]["sha256"],
+                    "bytes": entry["primary_trace"]["bytes"],
+                }
+                or file_receipt(record["confirmation_trace_path"])
+                != {
+                    "sha256": entry["confirmation_trace"]["sha256"],
+                    "bytes": entry["confirmation_trace"]["bytes"],
+                }
+                or record["header"].get("profile_state", {}).get(
+                    "profile_state_identity_sha256"
+                )
+                != entry["profile_state_identity_sha256"]
+            ):
+                raise PromotionError(
+                    f"v2.21 {class_name} receipt chain differs for {layout_id}"
+                )
+            reached.add(layout_id)
+    if reached != set(view["class_a"]) | set(view["class_b"]):
+        raise PromotionError("v2.21 receipt sweep reached no complete layout census")
+
+    for correction in contract["field_corrections"]:
+        layout_id = correction["layout_id"]
+        if (
+            file_receipt(landed_path_by_layout_id[layout_id])
+            != {
+                "sha256": correction["landed_fixture"]["sha256"],
+                "bytes": correction["landed_fixture"]["bytes"],
+            }
+            or file_receipt(path_by_layout_id[layout_id])
+            != {
+                "sha256": correction["candidate_fixture"]["sha256"],
+                "bytes": correction["candidate_fixture"]["bytes"],
+            }
+        ):
+            raise PromotionError(
+                f"v2.21 field correction receipt differs for {layout_id}"
+            )
+    class_f_receipt_fields = (
+        "navigation_recording",
+        "launch",
+        "launch_profile_state",
+        "stage_report",
+        "pre_navigation_durable_census",
+        "post_capture_durable_census",
+        "exact_pid_disposal",
+        "host_quiescence_after",
+    )
+    for layout_id, entry in view["class_f"].items():
+        candidate_path = path_by_layout_id.get(layout_id)
+        audit_entry = class_f_layouts.get(layout_id)
+        if (
+            not isinstance(candidate_path, Path)
+            or not isinstance(audit_entry, dict)
+            or file_receipt(candidate_path)
+            != {
+                "sha256": entry["qualified_candidate"]["sha256"],
+                "bytes": entry["qualified_candidate"]["bytes"],
+            }
+            or audit_entry.get("status")
+            != "class_f_population_witness_satisfied"
+            or audit_entry.get("projected_core_sha256")
+            != entry["projected_core_sha256"]
+            or audit_entry.get("projected_core_element_count")
+            != entry["projected_core_element_count"]
+        ):
+            raise PromotionError(
+                f"v2.21 bounded Class-F candidate/core differs for {layout_id}"
+            )
+        audit_pair = audit_entry.get("pair")
+        if not isinstance(audit_pair, list) or len(audit_pair) != 2:
+            raise PromotionError(
+                f"v2.21 bounded Class-F pair is absent for {layout_id}"
+            )
+        contract_pair_projection = [
+            {
+                key: copy.deepcopy(row[key])
+                for key in (
+                    "instance",
+                    "process_id",
+                    "measured_generation",
+                    "settled_sample_count",
+                    "settled_span_milliseconds",
+                    "projected_core_sha256",
+                    *class_f_receipt_fields,
+                )
+            }
+            for row in audit_pair
+        ]
+        if canonical_bytes(contract_pair_projection) != canonical_bytes(entry["pair"]):
+            raise PromotionError(
+                f"v2.21 bounded Class-F audit/contract pair differs for {layout_id}"
+            )
+        for role_index, observation in enumerate(entry["pair"]):
+            for field in class_f_receipt_fields:
+                evidence_path(
+                    observation[field],
+                    f"Class-F {layout_id} role {role_index} {field}",
+                )
+    return {
+        "contract": {
+            "repo_relative_path": contract_path.relative_to(repo_root).as_posix(),
+            **file_receipt(contract_path),
+        },
+        "source_census": file_receipt(source_census),
+        "occurrence_audit": file_receipt(occurrence_audit),
+        "class_f_witness_audit": file_receipt(class_f_audit_path),
+        "class_a_layout_count": len(view["class_a"]),
+        "class_b_layout_count": len(view["class_b"]),
+        "choice_slot_row_count": 2,
+        "field_correction_count": len(view["field_corrections"]),
+        "class_f_witness_count": len(view["class_f"]),
+    }
+
+
+def _validate_final_disposition_context_v222(
+    repo_root: Path,
+    evidence_root: Path,
+    contract_path: Path,
+    contract: dict[str, Any],
+    census_era_contract: dict[str, Any],
+    records: dict[str, dict[str, Any]],
+    path_by_layout_id: dict[str, Path],
+    landed_path_by_layout_id: dict[str, Path],
+    resolved_navigation: dict[str, Any],
+    navigation_path: Path,
+) -> dict[str, Any]:
+    try:
+        view = require_final_disposition_v222_contract(contract)
+        census_view = require_census_era_contract(census_era_contract)
+    except (FinalDispositionV222Error, CensusEraV221Error) as error:
+        raise PromotionError(str(error)) from error
+
+    def evidence_path(recorded: dict[str, Any], label: str) -> Path:
+        relative = recorded.get("evidence_path")
+        if not isinstance(relative, str) or not relative:
+            raise PromotionError(f"v2.22 {label} has no evidence path")
+        path = (evidence_root / relative).resolve()
+        if (
+            not path.is_relative_to(evidence_root.resolve())
+            or not path.is_file()
+            or file_receipt(path)
+            != {
+                "sha256": recorded.get("sha256"),
+                "bytes": recorded.get("bytes"),
+            }
+        ):
+            raise PromotionError(f"v2.22 {label} receipt is false")
+        return path
+
+    source_census = evidence_path(contract["source_census"], "source census")
+    recorded_navigation = evidence_path(
+        contract["resolved_navigation"], "resolved navigation"
+    )
+    if recorded_navigation != navigation_path.resolve():
+        raise PromotionError("v2.22 promotion is using another navigation graph")
+
+    def without_class_b(
+        layout_id: str, elements: list[dict[str, Any]], label: str
+    ) -> list[dict[str, Any]]:
+        class_b = census_view["class_b"].get(layout_id)
+        if class_b is None:
+            raise PromotionError(f"v2.22 {label} has no exact Class-B basis")
+        remaining = Counter(
+            member["semantic_sha256"] for member in class_b["members"]
+        )
+        result: list[dict[str, Any]] = []
+        for element in elements:
+            signature = semantic_sha256_v221(element)
+            if remaining[signature] > 0:
+                remaining[signature] -= 1
+            else:
+                result.append(element)
+        if any(remaining.values()):
+            raise PromotionError(f"v2.22 {label} omitted a Class-B member")
+        return result
+
+    sequence_occurrence_count = 0
+    for layout_id, entry in view["sequences"].items():
+        record = records.get(layout_id)
+        candidate_path = path_by_layout_id.get(layout_id)
+        landed_path = landed_path_by_layout_id.get(layout_id)
+        baseline_path = (
+            repo_root
+            / f"webgame-contracts/baseline-snapshots/menu-layouts/{layout_id}.json"
+        )
+        if (
+            not isinstance(record, dict)
+            or not isinstance(candidate_path, Path)
+            or not isinstance(landed_path, Path)
+            or file_receipt(landed_path)
+            != {
+                "sha256": entry["landed_fixture"]["sha256"],
+                "bytes": entry["landed_fixture"]["bytes"],
+            }
+            or file_receipt(baseline_path)
+            != {
+                "sha256": entry["landed_baseline_snapshot"]["sha256"],
+                "bytes": entry["landed_baseline_snapshot"]["bytes"],
+            }
+            or file_receipt(candidate_path)
+            != {
+                "sha256": entry["candidate_fixture"]["sha256"],
+                "bytes": entry["candidate_fixture"]["bytes"],
+            }
+            or file_receipt(record["primary_trace_path"])
+            != {
+                "sha256": entry["primary_trace"]["sha256"],
+                "bytes": entry["primary_trace"]["bytes"],
+            }
+            or file_receipt(record["confirmation_trace_path"])
+            != {
+                "sha256": entry["confirmation_trace"]["sha256"],
+                "bytes": entry["confirmation_trace"]["bytes"],
+            }
+            or record["header"].get("profile_state", {}).get(
+                "profile_state_identity_sha256"
+            )
+            != entry["profile_state_identity_sha256"]
+        ):
+            raise PromotionError(f"v2.22 sequence receipt chain differs for {layout_id}")
+        candidate_elements = record["layout"].get("elements")
+        if not isinstance(candidate_elements, list) or not candidate_elements:
+            raise PromotionError(f"v2.22 sequence candidate is empty for {layout_id}")
+        standalone_sha = sequence_sha256_v222(
+            without_class_b(layout_id, candidate_elements, f"{layout_id} standalone")
+        )
+        transition_occurrences = [
+            occurrence
+            for occurrence in entry["occurrences"]
+            if occurrence.get("scope") == "transition_source"
+        ]
+        if len(transition_occurrences) != 1:
+            raise PromotionError(
+                f"v2.22 transition occurrence is absent or ambiguous for {layout_id}"
+            )
+        occurrence = transition_occurrences[0]
+        edge_matches = [
+            edge
+            for edge in resolved_navigation.get("edges", [])
+            if isinstance(edge, dict) and edge.get("id") == occurrence.get("edge_id")
+        ]
+        if len(edge_matches) != 1:
+            raise PromotionError(f"v2.22 sequence edge lookup is ambiguous for {layout_id}")
+        endpoint = edge_matches[0].get(occurrence.get("side"))
+        endpoint_layout = endpoint.get("layout") if isinstance(endpoint, dict) else None
+        endpoint_elements = (
+            endpoint_layout.get("elements")
+            if isinstance(endpoint_layout, dict)
+            else None
+        )
+        if (
+            not isinstance(endpoint, dict)
+            or endpoint.get("layout_id") != layout_id
+            or not isinstance(endpoint_elements, list)
+            or sequence_sha256_v222(
+                without_class_b(
+                    layout_id,
+                    endpoint_elements,
+                    f"{occurrence.get('edge_id')}.{occurrence.get('side')}",
+                )
+            )
+            != entry["settled_sequence_sha256"]
+            or standalone_sha != entry["settled_sequence_sha256"]
+        ):
+            raise PromotionError(
+                f"v2.22 every qualified occurrence does not reproduce {layout_id}"
+            )
+        sequence_occurrence_count += 2
+
+    for layout_id, entry in view["endpoint_vacuity"].items():
+        record = records.get(layout_id)
+        candidate_path = path_by_layout_id.get(layout_id)
+        if (
+            not isinstance(record, dict)
+            or not isinstance(candidate_path, Path)
+            or file_receipt(candidate_path)
+            != {
+                "sha256": entry["candidate_fixture"]["sha256"],
+                "bytes": entry["candidate_fixture"]["bytes"],
+            }
+            or file_receipt(record["primary_trace_path"])
+            != {
+                "sha256": entry["primary_trace"]["sha256"],
+                "bytes": entry["primary_trace"]["bytes"],
+            }
+            or file_receipt(record["confirmation_trace_path"])
+            != {
+                "sha256": entry["confirmation_trace"]["sha256"],
+                "bytes": entry["confirmation_trace"]["bytes"],
+            }
+            or record["layout"].get("structural_core_sha256")
+            != entry["structural_core_sha256"]
+            or record["header"].get("profile_state", {}).get(
+                "profile_state_identity_sha256"
+            )
+            != entry["profile_state_identity_sha256"]
+        ):
+            raise PromotionError(f"v2.22 vacuity receipt/core differs for {layout_id}")
+        try:
+            authorize_named_endpoint_vacuity(
+                layout_id,
+                resolved_navigation,
+                contract,
+                record["layout"]["structural_core_sha256"],
+            )
+        except FinalDispositionV222Error as error:
+            raise PromotionError(str(error)) from error
+
+    return {
+        "contract": {
+            "repo_relative_path": contract_path.relative_to(repo_root).as_posix(),
+            **file_receipt(contract_path),
+        },
+        "source_census": file_receipt(source_census),
+        "resolved_navigation": file_receipt(recorded_navigation),
+        "sequence_supersession_count": len(view["sequences"]),
+        "sequence_reproduction_occurrence_count": sequence_occurrence_count,
+        "named_endpoint_vacuity_count": len(view["endpoint_vacuity"]),
+        "promotion_time_graph_rechecked": True,
+    }
+
+
+def _fixture_receipt_v217(path: Path, fixture: str) -> dict[str, Any]:
+    return {"fixture": fixture, **file_receipt(path)}
+
+
+def validate_semantic_dialog_composite_v217(
+    repo_root: Path,
+    candidate_root: Path,
+    evidence_root: Path,
+    composite_path: Path,
+    record: dict[str, Any],
+    picker_record: dict[str, Any],
+    beta_record: dict[str, Any],
+    overlay_reference: dict[str, Any],
+) -> dict[str, Any]:
+    try:
+        classification = validate_composite_record(
+            record,
+            picker_record["layout"],
+            overlay_reference,
+            beta_record["layout"],
+        )
+    except NativeMenuSemanticDialogCompositeError as error:
+        raise PromotionError(str(error)) from error
+    header = record.get("header")
+    composite = record.get("composite")
+    observations = composite.get("observations") if isinstance(composite, dict) else None
+    if not isinstance(header, dict) or not isinstance(observations, list):
+        raise PromotionError("semantic dialog composite record has no evidence header")
+    for label in ("question_audit", "question_manifest"):
+        receipt = header.get(label)
+        if not isinstance(receipt, dict):
+            raise PromotionError(
+                f"semantic dialog composite has no {label.replace('_', ' ')} receipt"
+            )
+        _receipt_path_v25(
+            evidence_root,
+            composite_path.parent,
+            receipt,
+            f"semantic dialog composite {label}",
+        )
+    reference_path = candidate_root / "menu-reference-captures/beta-notice-first-boot.png"
+    if header.get("reference_capture") != _fixture_receipt_v217(
+        reference_path, "menu-reference-captures/beta-notice-first-boot.png"
+    ):
+        raise PromotionError(
+            "semantic dialog composite reference capture receipt is false"
+        )
+    for observation in observations:
+        role = observation.get("role") if isinstance(observation, dict) else None
+        if role not in {"primary", "confirmation"}:
+            raise PromotionError(
+                "semantic dialog composite evidence role is absent or ambiguous"
+            )
+        recording_path = _receipt_path_v25(
+            evidence_root,
+            composite_path.parent,
+            observation["recording"],
+            f"semantic dialog composite {role} recording",
+        )
+        for field in (
+            "observation",
+            "dismissal_receipt",
+            "player_visible_dialog_frame",
+            "post_dismissal_underlay_frame",
+        ):
+            _receipt_path_v25(
+                evidence_root,
+                composite_path.parent,
+                observation[field],
+                f"semantic dialog composite {role} {field}",
+            )
+        _validate_source_v25(
+            repo_root,
+            observation.get("source"),
+            f"semantic dialog composite {role}",
+        )
+        _validate_profile_state_v25(
+            repo_root,
+            evidence_root,
+            {
+                "source": observation.get("source"),
+                "profile_state": observation.get("profile_state"),
+            },
+            f"semantic dialog composite {role}",
+            receipt_search_roots=(recording_path.parent,),
+            required_baseline_id=FRESH_BASELINE_ID,
+            binding_label=f"semantic dialog composite {role}",
+        )
+    bindings = {
+        "underlay_binding": (
+            candidate_root / "menu-layouts/control-scheme-picker.json",
+            "menu-layouts/control-scheme-picker.json",
+        ),
+        "derived_overlay_reference": (
+            candidate_root / "menu-overlay-reference.json",
+            "menu-overlay-reference.json",
+        ),
+        "qualified_beta_screen": (
+            candidate_root / "menu-layouts/beta-notice.json",
+            "menu-layouts/beta-notice.json",
+        ),
+    }
+    for field, (path, fixture) in bindings.items():
+        binding = composite.get(field)
+        if (
+            not isinstance(binding, dict)
+            or binding.get("fixture") != _fixture_receipt_v217(path, fixture)
+        ):
+            raise PromotionError(
+                f"semantic dialog composite {field.replace('_', ' ')} receipt is false"
+            )
+    return {
+        "classification": classification,
+        "record": file_receipt(composite_path),
+        "reference_capture": file_receipt(reference_path),
+        "validated_evidence_receipt_count": 2 + len(observations) * 5,
     }
 
 
@@ -2048,39 +3765,96 @@ def validate_and_promote(
     evidence_root: Path,
     navigation_path: Path,
     dry_run: bool,
+    *,
+    generation_v219_enabled: bool = True,
+    enumerate_all_unclassified: bool = False,
 ) -> dict[str, Any]:
+    if enumerate_all_unclassified and not dry_run:
+        raise PromotionError(
+            "enumerate-all landed-difference diagnostics require --dry-run"
+        )
     landed_root = repo_root / "tests/fixtures/webgame"
     landed_golden = read_json(landed_root / "menu-goldens.json")
-    order_override_contract = read_json(
-        landed_root / "native-menu-beta-notice-order-v29.json"
+    beta_supersession_contract = read_json(
+        landed_root / "native-menu-beta-notice-supersession-v217.json"
+    )
+    beta_paint_order_contract = read_json(
+        landed_root / "native-menu-beta-notice-paint-order-v217.json"
     )
     controls_title_contract = read_json(
         landed_root / "native-menu-controls-title-v210.json"
     )
+    dark_cloud_login_title_contract = read_json(
+        landed_root / "native-menu-dark-cloud-login-title-v220.json"
+    )
     controls_core_contract = read_json(
         landed_root / "native-menu-controls-core-v211.json"
     )
+    item_row_supersession_contract = read_json(
+        landed_root / "native-menu-dark-cloud-item-row-supersession-v219.json"
+    )
+    browser_chrome_supersession_contract = read_json(
+        landed_root
+        / "native-menu-dark-cloud-browser-chrome-supersession-v219.json"
+    )
+    census_era_contract_path = (
+        landed_root / "native-menu-census-era-disposition-v221.json"
+    )
+    census_era_contract = read_json(census_era_contract_path)
+    try:
+        census_era_view = require_census_era_contract(census_era_contract)
+    except CensusEraV221Error as error:
+        raise PromotionError(str(error)) from error
+    final_disposition_contract_path = (
+        landed_root / "native-menu-final-disposition-v222.json"
+    )
+    final_disposition_contract = read_json(final_disposition_contract_path)
+    try:
+        require_final_disposition_v222_contract(final_disposition_contract)
+    except FinalDispositionV222Error as error:
+        raise PromotionError(str(error)) from error
     resolved_navigation = read_json(navigation_path)
     (
         primary_navigation,
         confirmation_navigation,
-        motion_root,
+        motion_roots,
         supplemental_manifest,
         asset_manifest,
     ) = _resolved_navigation_inputs_v25(
         evidence_root, navigation_path, resolved_navigation
     )
+    primary_recording = read_json(primary_navigation)
+    confirmation_recording = read_json(confirmation_navigation)
     _validate_navigation_profile_state_v25(
         repo_root,
         evidence_root,
-        read_json(primary_navigation),
+        primary_recording,
         "primary navigation",
+        _navigation_profile_receipt_roots_v25(
+            evidence_root,
+            primary_navigation,
+            primary_recording,
+            "primary navigation",
+        ),
+    )
+    (
+        navigation_generation_receipts,
+        navigation_generation_summary,
+    ) = _validate_navigation_generation_v219(
+        resolved_navigation,
+        confirmation_recording,
     )
     _validate_navigation_profile_state_v25(
         repo_root,
         evidence_root,
-        read_json(confirmation_navigation),
+        confirmation_recording,
         "confirmation navigation",
+        _navigation_profile_receipt_roots_v25(
+            evidence_root,
+            confirmation_navigation,
+            confirmation_recording,
+            "confirmation navigation",
+        ),
     )
     try:
         resolve_campaign(
@@ -2089,13 +3863,14 @@ def validate_and_promote(
             evidence_root,
             primary_navigation,
             confirmation_navigation,
-            motion_root,
+            motion_roots[0],
             navigation_path,
             evidence_root / "ambient-resolution-verification-unused.json",
             False,
             True,
             supplemental_manifest,
             asset_manifest,
+            motion_roots[1:],
         )
     except (ResolutionError, SettlementV2Error) as error:
         raise PromotionError(
@@ -2112,8 +3887,14 @@ def validate_and_promote(
     }
     if len(layout_names) != 28 or "main-menu-root.json" not in layout_names:
         raise PromotionError("landed menu layout lookup is absent or ambiguous")
+    if "dark-cloud-settings.json" not in layout_names:
+        raise PromotionError(
+            "Settlement v2.15 supersession lost the exact retired Dark Cloud Settings fixture"
+        )
+    _validate_pre_promotion_baselines(repo_root, landed_layout_entries)
+    candidate_layout_names = layout_names - {"dark-cloud-settings.json"}
     candidate_layout_paths = require_unique_files(
-        candidate_root / "menu-layouts", "*.json", layout_names
+        candidate_root / "menu-layouts", "*.json", candidate_layout_names
     )
     candidate_transition_paths = require_unique_files(
         candidate_root / "menu-transition-layouts",
@@ -2135,13 +3916,56 @@ def validate_and_promote(
             raise PromotionError(f"candidate standalone id '{layout_id}' is ambiguous")
         records[layout_id] = record
         path_by_layout_id[layout_id] = path
-    if len(records) != 31 or not {
+    if len(records) != 30 or not {
         "hub_new_game",
         "hub_pristine_second_new_game",
         "hub_resumed",
     } <= set(records):
         raise PromotionError(
-            "candidate standalone sweep did not reach 28 menus plus three Hub layouts"
+            "candidate standalone sweep did not reach 27 menus plus three Hub layouts"
+        )
+    generation_v219_census = _assert_generation_v219_enabled(
+        records,
+        navigation_generation_summary,
+        enabled=generation_v219_enabled,
+    )
+
+    overlay_paths = require_unique_files(
+        candidate_root / "menu-overlays", "*.json", {"dark-cloud-settings.json"}
+    )
+    underlay_paths = require_unique_files(
+        candidate_root / "menu-overlay-underlays",
+        "*.json",
+        {"dark-cloud-settings.json"},
+    )
+    composite_paths = require_unique_files(
+        candidate_root / "menu-dialog-composites",
+        "*.json",
+        {"beta-notice-first-boot.json"},
+    )
+    overlay_path = overlay_paths["dark-cloud-settings.json"]
+    underlay_path = underlay_paths["dark-cloud-settings.json"]
+    overlay_record = read_json(overlay_path)
+    try:
+        overlay_classification = validate_overlay_record(overlay_record)
+    except NativeMenuNonSemanticOverlayError as error:
+        raise PromotionError(str(error)) from error
+    overlay_evidence_receipts = _validate_overlay_evidence_receipts_v215(
+        repo_root, evidence_root, overlay_record
+    )
+    underlay_record = validate_semantic_underlay_v215(
+        repo_root, evidence_root, underlay_path, read_json(underlay_path)
+    )
+    underlay_receipt = overlay_record["overlay"]["semantic_underlay_binding"][
+        "primary_fixture"
+    ]
+    if (
+        underlay_record["layout"].get("screen_id") != "dark_cloud_settings"
+        or underlay_receipt.get("sha256") != file_sha256(underlay_path)
+        or underlay_receipt.get("bytes") != underlay_path.stat().st_size
+    ):
+        raise PromotionError(
+            "Settlement v2.15 semantic underlay does not reproduce its exact gate-agreeing fixture"
         )
 
     landed_by_layout_id: dict[str, dict[str, Any]] = {}
@@ -2157,6 +3981,38 @@ def validate_and_promote(
             )
         landed_by_layout_id[layout_id] = layout
         landed_path_by_layout_id[layout_id] = landed_root / entry["fixture"]
+    census_era_context = _validate_census_era_context_v221(
+        repo_root,
+        evidence_root,
+        census_era_contract_path,
+        census_era_contract,
+        records,
+        path_by_layout_id,
+        landed_path_by_layout_id,
+    )
+    final_disposition_context = _validate_final_disposition_context_v222(
+        repo_root,
+        evidence_root,
+        final_disposition_contract_path,
+        final_disposition_contract,
+        census_era_contract,
+        records,
+        path_by_layout_id,
+        landed_path_by_layout_id,
+        resolved_navigation,
+        navigation_path,
+    )
+    dark_cloud_login_title_context = (
+        _validate_dark_cloud_login_title_context_v220(
+            repo_root,
+            dark_cloud_login_title_contract,
+            records["dark-cloud-login-settings"],
+            path_by_layout_id["dark-cloud-login-settings"],
+            evidence_root,
+            resolved_navigation,
+            navigation_generation_receipts,
+        )
+    )
     generation_changed_layout_ids = {
         layout_id
         for layout_id in set(landed_by_layout_id) & set(records)
@@ -2217,6 +4073,34 @@ def validate_and_promote(
         raise PromotionError(
             "candidate overlay reference is not the derived beta_notice-minus-main_menu_root result"
         )
+    composite_path = composite_paths["beta-notice-first-boot.json"]
+    composite_record = read_json(composite_path)
+    semantic_dialog_composite = validate_semantic_dialog_composite_v217(
+        repo_root,
+        candidate_root,
+        evidence_root,
+        composite_path,
+        composite_record,
+        records["control-scheme-picker"],
+        records["beta-notice"],
+        derived_overlay_reference,
+    )
+    path_local_generation_contracts = {
+        layout_id: {
+            "enabled": True,
+            "paired_generation": copy.deepcopy(
+                records[layout_id]["path_local_generation"]
+            ),
+            "bound_endpoints": _bound_generation_endpoints_v219(
+                layout_id,
+                records[layout_id]["layout"],
+                resolved_navigation,
+                navigation_generation_receipts,
+                composite_record,
+            ),
+        }
+        for layout_id in sorted(generation_changed_layout_ids)
+    }
 
     for layout_id, record in records.items():
         try:
@@ -2233,6 +4117,158 @@ def validate_and_promote(
                 assert_overlay_hygiene_v25(payload, derived_overlay_reference)
         except OverlayV25Error as error:
             raise PromotionError(f"{layout_id}: {error}") from error
+
+    unclassified_by_key: dict[bytes, dict[str, Any]] = {}
+    unclassified_stop_messages: list[str] = []
+
+    def evidence_receipt(path: Path) -> dict[str, Any]:
+        resolved = path.resolve()
+        root = evidence_root.resolve()
+        if not resolved.is_relative_to(root):
+            raise PromotionError(
+                f"landed-difference census evidence escapes its root: {path}"
+            )
+        return {
+            "evidence_path": resolved.relative_to(root).as_posix(),
+            **file_receipt(resolved),
+        }
+
+    def bound_endpoint_labels(layout_id: str) -> list[str]:
+        labels: list[str] = []
+        edges = resolved_navigation.get("edges")
+        if not isinstance(edges, list) or not edges:
+            raise PromotionError(
+                "landed-difference census reached no navigation endpoints"
+            )
+        for edge in edges:
+            if not isinstance(edge, dict) or not isinstance(edge.get("id"), str):
+                raise PromotionError(
+                    "landed-difference census found an ambiguous navigation edge"
+                )
+            for side in ("before", "after"):
+                endpoint = edge.get(side)
+                if isinstance(endpoint, dict) and endpoint.get("layout_id") == layout_id:
+                    labels.append(f"{edge['id']}.{side}")
+        if len(labels) != len(set(labels)):
+            raise PromotionError(
+                f"landed-difference census endpoint lookup is ambiguous for {layout_id}"
+            )
+        return sorted(labels)
+
+    def record_unclassified(
+        layout_id: str,
+        differences: list[dict[str, Any]],
+        *,
+        occurrence: dict[str, Any],
+        stop_message: str,
+    ) -> None:
+        if not differences:
+            raise PromotionError(
+                f"enumerate-all diagnostic could not resolve the claim behind: {stop_message}"
+            )
+        record = records[layout_id]
+        receipts = {
+            "landed_fixture": {
+                "repo_relative_path": landed_path_by_layout_id[
+                    layout_id
+                ].relative_to(repo_root).as_posix(),
+                **file_receipt(landed_path_by_layout_id[layout_id]),
+            },
+            "candidate_fixture": evidence_receipt(path_by_layout_id[layout_id]),
+            "primary_trace": evidence_receipt(record["primary_trace_path"]),
+            "confirmation_trace": evidence_receipt(
+                record["confirmation_trace_path"]
+            ),
+            "profile_state_identity_sha256": record["header"]
+            .get("profile_state", {})
+            .get("profile_state_identity_sha256"),
+            "structural_core_sha256": record["layout"].get(
+                "structural_core_sha256"
+            ),
+            "bound_endpoints": bound_endpoint_labels(layout_id),
+        }
+        unclassified_stop_messages.append(stop_message)
+        for difference in differences:
+            key = canonical_bytes(
+                {"layout_id": layout_id, "difference": difference}
+            )
+            entry = unclassified_by_key.get(key)
+            if entry is None:
+                entry = {
+                    "layout_id": layout_id,
+                    "difference": copy.deepcopy(difference),
+                    "receipts": receipts,
+                    "occurrences": [],
+                }
+                unclassified_by_key[key] = entry
+            if occurrence not in entry["occurrences"]:
+                entry["occurrences"].append(copy.deepcopy(occurrence))
+
+    def diagnose_record(
+        layout_id: str,
+        primary_trace: dict[str, Any],
+        confirmation_trace: dict[str, Any],
+    ) -> dict[str, Any]:
+        return diagnose_landed_layout(
+            layout_id,
+            landed_by_layout_id[layout_id],
+            records[layout_id]["layout"],
+            primary_trace,
+            confirmation_trace,
+            derived_overlay_reference,
+            controls_title_contract=controls_title_contract,
+            dark_cloud_login_title_contract=(
+                dark_cloud_login_title_contract
+            ),
+            controls_core_contract=controls_core_contract,
+            landed_fixture_receipt=file_receipt(
+                landed_path_by_layout_id[layout_id]
+            ),
+            candidate_fixture_receipt=file_receipt(path_by_layout_id[layout_id]),
+            path_local_generation_contract=path_local_generation_contracts.get(
+                layout_id
+            ),
+            item_row_supersession_contract=item_row_supersession_contract,
+            browser_chrome_supersession_contract=(
+                browser_chrome_supersession_contract
+            ),
+            census_era_contract=census_era_contract,
+            final_disposition_contract=final_disposition_contract,
+            generation_navigation=resolved_navigation,
+        )
+
+    def enumerate_record(
+        layout_id: str,
+        primary_trace: dict[str, Any],
+        confirmation_trace: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        return enumerate_unclassified_landed_differences(
+            layout_id,
+            landed_by_layout_id[layout_id],
+            records[layout_id]["layout"],
+            primary_trace,
+            confirmation_trace,
+            derived_overlay_reference,
+            controls_title_contract=controls_title_contract,
+            dark_cloud_login_title_contract=(
+                dark_cloud_login_title_contract
+            ),
+            controls_core_contract=controls_core_contract,
+            landed_fixture_receipt=file_receipt(
+                landed_path_by_layout_id[layout_id]
+            ),
+            candidate_fixture_receipt=file_receipt(path_by_layout_id[layout_id]),
+            path_local_generation_contract=path_local_generation_contracts.get(
+                layout_id
+            ),
+            item_row_supersession_contract=item_row_supersession_contract,
+            browser_chrome_supersession_contract=(
+                browser_chrome_supersession_contract
+            ),
+            census_era_contract=census_era_contract,
+            final_disposition_contract=final_disposition_contract,
+            generation_navigation=resolved_navigation,
+        )
 
     standalone_diagnoses: dict[str, dict[str, Any]] = {}
     for layout_id in sorted(records):
@@ -2256,6 +4292,31 @@ def validate_and_promote(
                 "fork_decision": copy.deepcopy(fork.get("fork_decision")),
             }
             continue
+        if layout_id == "beta-notice":
+            try:
+                validate_qualified_beta_paint_order(
+                    records[layout_id]["layout"], beta_paint_order_contract
+                )
+                standalone_diagnoses[layout_id] = (
+                    validate_qualified_beta_supersession(
+                        beta_supersession_contract,
+                        landed_fixture_receipt=_fixture_receipt_v217(
+                            landed_path_by_layout_id[layout_id],
+                            "menu-layouts/beta-notice.json",
+                        ),
+                        candidate_fixture_receipt=_fixture_receipt_v217(
+                            path_by_layout_id[layout_id],
+                            "menu-layouts/beta-notice.json",
+                        ),
+                        candidate_fixture=records[layout_id]["fixture"],
+                    )
+                )
+            except NativeMenuSemanticDialogCompositeError as error:
+                raise PromotionError(f"STOP: standalone beta-notice: {error}") from error
+            standalone_diagnoses[layout_id]["paint_order_contract"] = copy.deepcopy(
+                beta_paint_order_contract
+            )
+            continue
         (
             population_primary_trace,
             population_confirmation_trace,
@@ -2267,26 +4328,173 @@ def validate_and_promote(
             records[layout_id]["primary_trace"],
             records[layout_id]["confirmation_trace"],
             navigation_population_pairs,
+            diagnostic_allow_equivalent=(
+                enumerate_all_unclassified or layout_id == "pause-menu"
+            ),
+            class_f_witness=census_era_view["class_f"].get(layout_id),
         )
+        if (
+            population_trace_selection.get("source")
+            == "diagnostic_all_qualifying_navigation_endpoints"
+        ):
+            candidate_outcomes: list[dict[str, Any]] = []
+            first_diagnosis: dict[str, Any] | None = None
+            common_differences: list[dict[str, Any]] | None = None
+            outcome_keys: set[bytes] = set()
+            for binding in population_trace_selection["candidate_bindings"]:
+                matches = [
+                    pair
+                    for pair in navigation_population_pairs.get(layout_id, [])
+                    if pair["edge_id"] == binding["edge_id"]
+                    and pair["side"] == binding["side"]
+                ]
+                if len(matches) != 1:
+                    raise PromotionError(
+                        f"{layout_id} diagnostic population binding is absent or ambiguous"
+                    )
+                pair = matches[0]
+                try:
+                    diagnosis = diagnose_record(
+                        layout_id,
+                        pair["primary_trace"],
+                        pair["confirmation_trace"],
+                    )
+                    differences: list[dict[str, Any]] = []
+                    if first_diagnosis is None:
+                        first_diagnosis = diagnosis
+                except LandedDiagnosisError:
+                    differences = enumerate_record(
+                        layout_id,
+                        pair["primary_trace"],
+                        pair["confirmation_trace"],
+                    )
+                key = canonical_bytes(differences)
+                outcome_keys.add(key)
+                if common_differences is None:
+                    common_differences = differences
+                candidate_outcomes.append(
+                    {
+                        **copy.deepcopy(binding),
+                        "unclassified_difference_count": len(differences),
+                        "unclassified_differences_sha256": hashlib.sha256(
+                            key
+                        ).hexdigest(),
+                    }
+                )
+            population_trace_selection["candidate_outcomes"] = candidate_outcomes
+            population_trace_selection["diagnosis_converged"] = (
+                len(outcome_keys) == 1
+            )
+            if len(outcome_keys) != 1:
+                if not enumerate_all_unclassified:
+                    raise PromotionError(
+                        f"STOP: standalone {layout_id}: "
+                        "v2.21 pause-menu population-witness equivalence did not converge exactly"
+                    )
+                differences = [
+                    {
+                        "difference_type": "diagnostic_blocker",
+                        "field": "population_witness_routing",
+                        "message": population_trace_selection[
+                            "production_verdict"
+                        ],
+                        "candidate_outcomes": candidate_outcomes,
+                    }
+                ]
+                record_unclassified(
+                    layout_id,
+                    differences,
+                    occurrence={"scope": "standalone", "layout_id": layout_id},
+                    stop_message=population_trace_selection["production_verdict"],
+                )
+                standalone_diagnoses[layout_id] = {
+                    "status": "diagnostic_unclassified",
+                    "original_stop": population_trace_selection[
+                        "production_verdict"
+                    ],
+                    "unclassified_difference_count": 1,
+                    "population_trace_selection": population_trace_selection,
+                }
+                continue
+            if common_differences:
+                stop_message = population_trace_selection["production_verdict"]
+                if not enumerate_all_unclassified:
+                    raise PromotionError(f"STOP: standalone {layout_id}: {stop_message}")
+                record_unclassified(
+                    layout_id,
+                    common_differences,
+                    occurrence={"scope": "standalone", "layout_id": layout_id},
+                    stop_message=stop_message,
+                )
+                standalone_diagnoses[layout_id] = {
+                    "status": "diagnostic_unclassified",
+                    "original_stop": stop_message,
+                    "unclassified_difference_count": len(common_differences),
+                    "population_trace_selection": population_trace_selection,
+                }
+                continue
+            if first_diagnosis is None:
+                raise PromotionError(
+                    f"{layout_id} diagnostic population outcomes reached no diagnosis"
+                )
+            if layout_id == "pause-menu":
+                try:
+                    population_trace_selection["proven_equivalence"] = (
+                        validate_pause_equivalence(
+                            census_era_contract, candidate_outcomes
+                        )
+                    )
+                except CensusEraV221Error as error:
+                    raise PromotionError(str(error)) from error
+            standalone_diagnoses[layout_id] = first_diagnosis
+            standalone_diagnoses[layout_id][
+                "population_trace_selection"
+            ] = population_trace_selection
+            continue
         try:
-            standalone_diagnoses[layout_id] = diagnose_landed_layout(
+            standalone_diagnoses[layout_id] = diagnose_record(
                 layout_id,
-                landed_by_layout_id[layout_id],
-                records[layout_id]["layout"],
                 population_primary_trace,
                 population_confirmation_trace,
-                derived_overlay_reference,
-                order_override_contract,
-                controls_title_contract,
-                controls_core_contract,
-                file_receipt(landed_path_by_layout_id[layout_id]),
-                file_receipt(path_by_layout_id[layout_id]),
             )
             standalone_diagnoses[layout_id][
                 "population_trace_selection"
             ] = population_trace_selection
         except LandedDiagnosisError as error:
-            raise PromotionError(f"STOP: standalone {layout_id}: {error}") from error
+            stop_message = f"STOP: standalone {layout_id}: {error}"
+            if not enumerate_all_unclassified:
+                raise PromotionError(stop_message) from error
+            differences = enumerate_record(
+                layout_id,
+                population_primary_trace,
+                population_confirmation_trace,
+            )
+            record_unclassified(
+                layout_id,
+                differences,
+                occurrence={"scope": "standalone", "layout_id": layout_id},
+                stop_message=stop_message,
+            )
+            standalone_diagnoses[layout_id] = {
+                "status": "diagnostic_unclassified",
+                "original_stop": stop_message,
+                "unclassified_difference_count": len(differences),
+                "population_trace_selection": population_trace_selection,
+            }
+
+    standalone_diagnoses["dark-cloud-settings"] = {
+        "status": "corrected_to_nonsemantic_overlay",
+        "settlement_spec": "2.15",
+        "retired_fixture": file_receipt(
+            landed_path_by_layout_id["dark-cloud-settings"]
+        ),
+        "overlay_record": file_receipt(overlay_path),
+        "semantic_underlay": file_receipt(underlay_path),
+        "classification": copy.deepcopy(overlay_classification),
+        "stop_audit": copy.deepcopy(
+            overlay_record["overlay"]["supersession"]["stop_audit"]
+        ),
+    }
 
     controls_core_context = _validate_controls_context_v211(
         controls_core_contract,
@@ -2294,6 +4502,7 @@ def validate_and_promote(
         path_by_layout_id["controls"],
         evidence_root,
         resolved_navigation,
+        navigation_generation_receipts,
     )
 
     candidate_golden_path = candidate_root / "menu-goldens.json"
@@ -2316,17 +4525,102 @@ def validate_and_promote(
         expected_transition_fixtures,
         "candidate embedded transition layouts",
     )
+    embedded_overlays = _aggregate_wrapper_map(
+        candidate_golden.get("overlay_records"),
+        {"menu-overlays/dark-cloud-settings.json"},
+        "candidate embedded overlay records",
+    )
+    embedded_composites = _aggregate_wrapper_map(
+        candidate_golden.get("semantic_dialog_composite_records"),
+        {"menu-dialog-composites/beta-notice-first-boot.json"},
+        "candidate embedded semantic-dialog composite records",
+    )
     for fixture_name, wrapper in {**embedded, **embedded_transition}.items():
         layout_id = Path(fixture_name).stem
         fixture = records[layout_id]["fixture"]
-        if fixture != {
+        embedded_fixture = {
             "schema": fixture["schema"],
             "header": wrapper.get("header"),
             "layout": wrapper.get("layout"),
-        }:
+        }
+        if "path_dependent_cores" in fixture:
+            embedded_fixture["path_dependent_cores"] = wrapper.get(
+                "path_dependent_cores"
+            )
+        if fixture != embedded_fixture:
             raise PromotionError(
                 f"candidate embedded golden and standalone {fixture_name} disagree"
             )
+    embedded_overlay = embedded_overlays[
+        "menu-overlays/dark-cloud-settings.json"
+    ]
+    expected_embedded_overlay = {
+        "fixture": "menu-overlays/dark-cloud-settings.json",
+        "underlay_fixture": "menu-overlay-underlays/dark-cloud-settings.json",
+        "overlay_id": overlay_record["overlay_id"],
+        "settlement_spec": overlay_record["settlement_spec"],
+        "record": overlay_record,
+        "sha256": file_sha256(overlay_path),
+        "bytes": overlay_path.stat().st_size,
+        "underlay_sha256": file_sha256(underlay_path),
+        "underlay_bytes": underlay_path.stat().st_size,
+    }
+    if canonical_bytes(embedded_overlay) != canonical_bytes(
+        expected_embedded_overlay
+    ):
+        raise PromotionError(
+            "candidate embedded overlay and standalone overlay record disagree"
+        )
+    embedded_composite = embedded_composites[
+        "menu-dialog-composites/beta-notice-first-boot.json"
+    ]
+    composite_reference_path = (
+        candidate_root / "menu-reference-captures/beta-notice-first-boot.png"
+    )
+    expected_embedded_composite = {
+        "fixture": "menu-dialog-composites/beta-notice-first-boot.json",
+        "composite_id": COMPOSITE_ID,
+        "settlement_spec": "2.17",
+        "record": composite_record,
+        "sha256": file_sha256(composite_path),
+        "bytes": composite_path.stat().st_size,
+        "reference_capture": (
+            "menu-reference-captures/beta-notice-first-boot.png"
+        ),
+        "reference_sha256": file_sha256(composite_reference_path),
+    }
+    if canonical_bytes(embedded_composite) != canonical_bytes(
+        expected_embedded_composite
+    ):
+        raise PromotionError(
+            "candidate embedded semantic-dialog composite disagrees with its standalone record"
+        )
+    header_counts = candidate_golden.get("header", {})
+    if (
+        header_counts.get("screen_count") != 30
+        or header_counts.get("standalone_layout_count") != 27
+        or header_counts.get("path_dependent_layout_count") != 3
+        or header_counts.get("layout_count") != 30
+        or header_counts.get("overlay_count") != 1
+        or header_counts.get("semantic_dialog_composite_count") != 1
+        or header_counts.get("state_count") != 32
+        or header_counts.get("edge_count") != 41
+        or candidate_golden.get("screen_census") != sorted(records)
+        or candidate_golden.get("overlay_census")
+        != ["dark_cloud_settings_credentials"]
+        or candidate_golden.get("semantic_dialog_composite_census")
+        != [COMPOSITE_ID]
+    ):
+        raise PromotionError(
+            "candidate aggregate does not pin the exact 30-layout, one-overlay, "
+            "one-dialog-composite, 32-state/41-edge census"
+        )
+    try:
+        dark_cloud_menu_reference_context = validate_dark_cloud_menu_references(
+            candidate_golden, resolved_navigation
+        )
+    except CensusEraV221Error as error:
+        raise PromotionError(str(error)) from error
 
     overlay_receipt = candidate_golden.get("header", {}).get("overlay_reference")
     expected_overlay_receipt = {
@@ -2393,6 +4687,33 @@ def validate_and_promote(
         reference_path = candidate_root / "menu-reference-captures" / name
         if not reference_path.is_file() or file_sha256(reference_path) != reference_sha256:
             raise PromotionError(f"{fixture_name} visual reference hash is false")
+    underlay_reference = underlay_record["header"].get("reference_capture")
+    if (
+        underlay_reference != "../menu-reference-captures/dark-cloud-settings.png"
+        or "dark-cloud-settings.png" in reference_names
+    ):
+        raise PromotionError(
+            "Settlement v2.15 semantic underlay visual reference is absent or ambiguous"
+        )
+    underlay_reference_path = (
+        underlay_path.parent / underlay_reference
+    ).resolve()
+    expected_reference_root = (
+        candidate_root / "menu-reference-captures"
+    ).resolve()
+    if (
+        not underlay_reference_path.is_relative_to(expected_reference_root)
+        or not underlay_reference_path.is_file()
+    ):
+        raise PromotionError(
+            "Settlement v2.15 semantic underlay visual reference escapes its candidate root"
+        )
+    reference_names.add(underlay_reference_path.name)
+    if composite_reference_path.name in reference_names:
+        raise PromotionError(
+            "semantic dialog composite visual reference is ambiguous"
+        )
+    reference_names.add(composite_reference_path.name)
     candidate_references = require_unique_files(
         candidate_root / "menu-reference-captures", "*.png", reference_names
     )
@@ -2405,22 +4726,131 @@ def validate_and_promote(
     old_by_id = {
         edge.get("id"): edge for edge in landed_edges if isinstance(edge, dict)
     }
-    candidate_by_id = {
+    all_candidate_by_id = {
         edge.get("id"): edge for edge in candidate_edges if isinstance(edge, dict)
+    }
+    composite_edge_id = "beta_notice_first_boot_to_control_scheme_picker"
+    chartered_edge_identity = {
+        "id": "profile_select_new_game_to_create",
+        "source": "profile_save_select",
+        "trigger": "new_game_click",
+        "action_id": "main_menu.new_game",
+        "destination": "create_element",
+    }
+    chartered_edge_id = chartered_edge_identity["id"]
+    composite_edge = all_candidate_by_id.get(composite_edge_id)
+    candidate_by_id = {
+        edge_id: edge
+        for edge_id, edge in all_candidate_by_id.items()
+        if edge_id != composite_edge_id
     }
     resolved_by_id = {
         edge.get("id"): edge for edge in resolved_edges if isinstance(edge, dict)
     }
+    expected_native_edge_ids = set(old_by_id) | {chartered_edge_id}
     if (
         len(old_by_id) != len(landed_edges)
-        or len(candidate_by_id) != len(candidate_edges)
+        or len(all_candidate_by_id) != len(candidate_edges)
+        or chartered_edge_id in old_by_id
+        or len(candidate_edges) != len(landed_edges) + 2
         or len(resolved_by_id) != len(resolved_edges)
-        or set(candidate_by_id) != set(old_by_id)
-        or set(resolved_by_id) != set(old_by_id)
+        or set(candidate_by_id) != expected_native_edge_ids
+        or set(resolved_by_id) != expected_native_edge_ids
     ):
         raise PromotionError("candidate navigation edge census is absent, duplicate, or changed")
+    resolved_chartered_edge = resolved_by_id[chartered_edge_id]
+    if any(
+        resolved_chartered_edge.get(field) != expected
+        for field, expected in chartered_edge_identity.items()
+    ):
+        raise PromotionError(
+            "chartered profile-save-select New Game resolved edge changed its measured identity"
+        )
+    aggregate_chartered_edge = candidate_by_id[chartered_edge_id]
+    aggregate_chartered_identity = {
+        "id": chartered_edge_id,
+        "screen": chartered_edge_identity["source"],
+        "edge": chartered_edge_identity["trigger"],
+        "trigger": chartered_edge_identity["trigger"],
+        "action_id": chartered_edge_identity["action_id"],
+        "destination": chartered_edge_identity["destination"],
+        "destination_type": "layout",
+        "destination_layout_fixture": "menu-layouts/create-element.json",
+    }
+    if any(
+        aggregate_chartered_edge.get(field) != expected
+        for field, expected in aggregate_chartered_identity.items()
+    ):
+        raise PromotionError(
+            "chartered profile-save-select New Game aggregate edge changed its measured identity"
+        )
     source_audit: list[dict[str, Any]] = []
     destination_audit: list[dict[str, Any]] = []
+    if not isinstance(composite_edge, dict):
+        raise PromotionError(
+            "semantic dialog composite dismissal edge is absent or ambiguous"
+        )
+    composite_before = composite_edge.get("before")
+    composite_after = composite_edge.get("after")
+    if (
+        composite_edge.get("action_id") != "dialog.primary"
+        or composite_edge.get("destination_type") != "layout"
+        or composite_edge.get("destination_layout_fixture")
+        != "menu-layouts/control-scheme-picker.json"
+        or not isinstance(composite_before, dict)
+        or composite_before.get("type") != "dialog_composite"
+        or composite_before.get("composite_id") != COMPOSITE_ID
+        or composite_before.get("composite_fixture")
+        != {
+            "fixture": "menu-dialog-composites/beta-notice-first-boot.json",
+            "sha256": file_sha256(composite_path),
+            "bytes": composite_path.stat().st_size,
+        }
+        or not isinstance(composite_after, dict)
+        or composite_after.get("layout_id") != "control-scheme-picker"
+        or canonical_bytes(composite_after.get("layout"))
+        != canonical_bytes(records["control-scheme-picker"]["layout"])
+        or composite_after.get("frame_sha256")
+        != semantic_dialog_composite["classification"][
+            "post_dismissal_underlay_frame_sha256"
+        ]
+    ):
+        raise PromotionError(
+            "semantic dialog composite dismissal edge changed its measured binding"
+        )
+    source_audit.append(
+        {
+            "edge": composite_edge_id,
+            "layout_id": COMPOSITE_ID,
+            "diagnosis": {
+                "status": "v2.17_semantic_dialog_composite",
+                "record": file_receipt(composite_path),
+            },
+            "signature_bit_match": None,
+            "frame_bit_match": True,
+        }
+    )
+    destination_audit.append(
+        {
+            "edge": composite_edge_id,
+            "destination_type": "layout",
+            "standalone_fixture": "menu-layouts/control-scheme-picker.json",
+            "path_dependent_state_id": None,
+            "structural_core_sha256": records["control-scheme-picker"][
+                "layout"
+            ]["structural_core_sha256"],
+            "classification_map_sha256": ambient_sha256_json(
+                records["control-scheme-picker"]["layout"]["classification_map"]
+            ),
+            "settle_latency_milliseconds": composite_after["settlement"][
+                "settle_latency_milliseconds"
+            ],
+            "old_generation": None,
+            "new_generation": composite_after.get("layout_generation"),
+            "old_element_count": None,
+            "new_element_count": composite_after.get("element_count"),
+        }
+    )
     fixture_for_layout_id = {
         layout_id: (
             f"menu-transition-layouts/{path.name}"
@@ -2432,57 +4862,212 @@ def validate_and_promote(
     for edge_id in sorted(candidate_by_id):
         edge = candidate_by_id[edge_id]
         raw_edge = resolved_by_id[edge_id]
-        old_edge = old_by_id[edge_id]
+        old_edge = old_by_id.get(edge_id)
+        endpoint_kinds: dict[str, str] = {}
+        endpoint_layouts: dict[str, dict[str, Any]] = {}
+        endpoint_state_ids: dict[str, str | None] = {}
         for side in ("before", "after"):
             endpoint = edge.get(side)
             raw_endpoint = raw_edge.get(side)
             if not isinstance(endpoint, dict) or not isinstance(raw_endpoint, dict):
                 raise PromotionError(f"edge {edge_id} {side} is incomplete")
+            if raw_endpoint.get("type") == "overlay":
+                expected_overlay_receipt = {
+                    "candidate_relative_path": "menu-overlays/dark-cloud-settings.json",
+                    "evidence_path": overlay_record["overlay"][
+                        "semantic_underlay_binding"
+                    ]["primary_fixture"]["evidence_path"].replace(
+                        "menu-overlay-underlays", "menu-overlays"
+                    ),
+                    "sha256": file_sha256(overlay_path),
+                    "bytes": overlay_path.stat().st_size,
+                }
+                observed_underlay_receipt = raw_endpoint.get(
+                    "underlying_surface", {}
+                ).get("fixture")
+                if (
+                    not isinstance(observed_underlay_receipt, dict)
+                    or raw_endpoint.get("overlay_id")
+                    != "dark_cloud_settings_credentials"
+                    or raw_endpoint.get("members_semantically_observable") is not False
+                    or raw_endpoint.get("semantic_member_count") != 0
+                    or raw_endpoint.get("semantic_members") != []
+                    or raw_endpoint.get("overlay_fixture") != expected_overlay_receipt
+                    or observed_underlay_receipt.get("sha256")
+                    != file_sha256(underlay_path)
+                    or observed_underlay_receipt.get("bytes")
+                    != underlay_path.stat().st_size
+                    or canonical_bytes(endpoint) != canonical_bytes(raw_endpoint)
+                ):
+                    raise PromotionError(
+                        f"Settlement v2.15 overlay endpoint {edge_id} {side} changed its exact record"
+                    )
+                endpoint_kinds[side] = "overlay"
+                endpoint_state_ids[side] = None
+                continue
             layout_id = raw_endpoint.get("layout_id")
             if not isinstance(layout_id, str) or layout_id not in records:
                 raise PromotionError(f"edge {edge_id} {side} has no unique standalone layout")
-            standalone = records[layout_id]["layout"]
-            if canonical_bytes(raw_endpoint.get("layout")) != canonical_bytes(standalone):
+            expected_layout = records[layout_id]["layout"]
+            state_id: str | None = None
+            if layout_id == "game-settings-gameplay":
+                state_id, expected_layout = _settings_state_layout_v216(
+                    records[layout_id], raw_endpoint, edge_id, side
+                )
+                aggregate_state_id, aggregate_layout = _settings_state_layout_v216(
+                    records[layout_id], endpoint, edge_id, side
+                )
+                if state_id != aggregate_state_id or canonical_bytes(
+                    aggregate_layout
+                ) != canonical_bytes(expected_layout):
+                    raise PromotionError(
+                        f"aggregate edge {edge_id} {side} changed its v2.16 Settings binding"
+                    )
+            elif canonical_bytes(raw_endpoint.get("layout")) != canonical_bytes(
+                expected_layout
+            ):
                 raise PromotionError(
                     f"resolved edge {edge_id} {side} does not equal standalone {layout_id}"
                 )
-            if canonical_bytes(endpoint.get("layout")) != canonical_bytes(standalone):
+            if canonical_bytes(endpoint.get("layout")) != canonical_bytes(
+                expected_layout
+            ):
                 raise PromotionError(
-                    f"aggregate edge {edge_id} {side} does not equal standalone {layout_id}"
+                    f"aggregate edge {edge_id} {side} does not equal its bound layout {layout_id}"
                 )
             if endpoint.get("layout_id") != layout_id:
                 raise PromotionError(f"aggregate edge {edge_id} {side} changed layout identity")
             try:
-                assert_overlay_hygiene_v25(standalone, derived_overlay_reference)
+                assert_overlay_hygiene_v25(expected_layout, derived_overlay_reference)
             except OverlayV25Error as error:
                 raise PromotionError(f"edge {edge_id} {side}: {error}") from error
-        destination_layout_id = raw_edge["after"]["layout_id"]
-        destination_fixture = fixture_for_layout_id[destination_layout_id]
-        if edge.get("destination_layout_fixture") != destination_fixture:
-            raise PromotionError(
-                f"edge {edge_id} destination fixture does not derive from its standalone"
+            endpoint_kinds[side] = "layout"
+            endpoint_layouts[side] = expected_layout
+            endpoint_state_ids[side] = state_id
+
+        if endpoint_kinds["after"] == "overlay":
+            destination_fixture = "menu-overlays/dark-cloud-settings.json"
+            if (
+                edge.get("destination_type") != "overlay"
+                or edge.get("destination_layout_fixture") != destination_fixture
+                or "destination_layout_state_id" in edge
+            ):
+                raise PromotionError(
+                    f"edge {edge_id} overlay destination changed its typed fixture binding"
+                )
+            destination_audit.append(
+                {
+                    "edge": edge_id,
+                    "destination_type": "overlay",
+                    "standalone_fixture": destination_fixture,
+                    "overlay_sha256": file_sha256(overlay_path),
+                    "underlay_sha256": file_sha256(underlay_path),
+                    "settle_latency_milliseconds": None,
+                    "typed_overlay_settlement": copy.deepcopy(
+                        edge["after"]["settlement"]
+                    ),
+                    "old_generation": (
+                        old_edge["after"].get("layout_generation")
+                        if old_edge is not None
+                        else None
+                    ),
+                    "new_generation": None,
+                    "old_element_count": (
+                        old_edge["after"].get("element_count")
+                        if old_edge is not None
+                        else None
+                    ),
+                    "new_element_count": 0,
+                }
             )
-        destination_audit.append(
-            {
-                "edge": edge_id,
-                "standalone_fixture": destination_fixture,
-                "structural_core_sha256": records[destination_layout_id]["layout"][
+        else:
+            destination_layout_id = raw_edge["after"]["layout_id"]
+            destination_fixture = fixture_for_layout_id[destination_layout_id]
+            destination_state_id = endpoint_state_ids["after"]
+            expected_destination_type = "layout"
+            if edge.get("destination_type") != expected_destination_type:
+                raise PromotionError(
+                    f"edge {edge_id} destination changed its layout type"
+                )
+            if destination_state_id is None:
+                if "destination_layout_state_id" in edge:
+                    raise PromotionError(
+                        f"edge {edge_id} gained an unmeasured path-state binding"
+                    )
+            elif edge.get("destination_layout_state_id") != destination_state_id:
+                raise PromotionError(
+                    f"edge {edge_id} destination changed its exact v2.16 state binding"
+                )
+            if edge.get("destination_layout_fixture") != destination_fixture:
+                raise PromotionError(
+                    f"edge {edge_id} destination fixture does not derive from its bound layout"
+                )
+            destination_layout = endpoint_layouts["after"]
+            destination_audit.append(
+                {
+                    "edge": edge_id,
+                    "destination_type": "layout",
+                    "standalone_fixture": destination_fixture,
+                    "path_dependent_state_id": destination_state_id,
+                    "structural_core_sha256": destination_layout[
+                        "structural_core_sha256"
+                    ],
+                    "classification_map_sha256": ambient_sha256_json(
+                        destination_layout["classification_map"]
+                    ),
+                    "settle_latency_milliseconds": edge["after"]["settlement"][
+                        "settle_latency_milliseconds"
+                    ],
+                    "old_generation": (
+                        old_edge["after"].get("layout_generation")
+                        if old_edge is not None
+                        else None
+                    ),
+                    "new_generation": edge["after"].get("layout_generation"),
+                    "old_element_count": (
+                        old_edge["after"].get("element_count")
+                        if old_edge is not None
+                        else None
+                    ),
+                    "new_element_count": edge["after"].get("element_count"),
+                }
+            )
+
+        if endpoint_kinds["before"] == "overlay":
+            source_layout_id = "dark_cloud_settings_credentials"
+            source_diagnosis = {
+                "status": "v2.15_nonsemantic_overlay_supersession",
+                "retired_screen_fixture": file_receipt(
+                    landed_path_by_layout_id["dark-cloud-settings"]
+                ),
+                "overlay_record": file_receipt(overlay_path),
+                "semantic_member_count": 0,
+            }
+        else:
+            source_layout_id = raw_edge["before"]["layout_id"]
+        if (
+            endpoint_kinds["before"] == "layout"
+            and source_layout_id == "game-settings-gameplay"
+            and endpoint_state_ids["before"] != "base"
+        ):
+            source_diagnosis = {
+                "status": "v2.16_multi_state_path_dependent_core",
+                "state_id": endpoint_state_ids["before"],
+                "base_layout_diagnosis": copy.deepcopy(
+                    standalone_diagnoses[source_layout_id]
+                ),
+                "structural_core_sha256": endpoint_layouts["before"][
                     "structural_core_sha256"
                 ],
-                "classification_map_sha256": ambient_sha256_json(
-                    records[destination_layout_id]["layout"]["classification_map"]
-                ),
-                "settle_latency_milliseconds": edge["after"]["settlement"][
-                    "settle_latency_milliseconds"
-                ],
-                "old_generation": old_edge["after"].get("layout_generation"),
-                "new_generation": edge["after"].get("layout_generation"),
-                "old_element_count": old_edge["after"].get("element_count"),
-                "new_element_count": edge["after"].get("element_count"),
             }
-        )
-        source_layout_id = raw_edge["before"]["layout_id"]
-        if source_layout_id in landed_by_layout_id:
+        elif (
+            endpoint_kinds["before"] == "layout"
+            and source_layout_id == "beta-notice"
+        ):
+            source_diagnosis = copy.deepcopy(
+                standalone_diagnoses["beta-notice"]
+            )
+        elif endpoint_kinds["before"] == "layout" and source_layout_id in landed_by_layout_id:
             (
                 population_primary_trace,
                 population_confirmation_trace,
@@ -2494,29 +5079,110 @@ def validate_and_promote(
                 records[source_layout_id]["primary_trace"],
                 records[source_layout_id]["confirmation_trace"],
                 navigation_population_pairs,
+                diagnostic_allow_equivalent=(
+                    enumerate_all_unclassified or source_layout_id == "pause-menu"
+                ),
+                class_f_witness=census_era_view["class_f"].get(
+                    source_layout_id
+                ),
             )
-            try:
-                source_diagnosis = diagnose_landed_layout(
-                    source_layout_id,
-                    landed_by_layout_id[source_layout_id],
-                    records[source_layout_id]["layout"],
-                    population_primary_trace,
-                    population_confirmation_trace,
-                    derived_overlay_reference,
-                    order_override_contract,
-                    controls_title_contract,
-                    controls_core_contract,
-                    file_receipt(landed_path_by_layout_id[source_layout_id]),
-                    file_receipt(path_by_layout_id[source_layout_id]),
-                )
-                source_diagnosis[
+            if (
+                population_trace_selection.get("source")
+                == "diagnostic_all_qualifying_navigation_endpoints"
+            ):
+                standalone_selection = standalone_diagnoses[source_layout_id].get(
                     "population_trace_selection"
-                ] = population_trace_selection
-            except LandedDiagnosisError as error:
-                raise PromotionError(
-                    f"STOP: transition source {edge_id}: {error}"
-                ) from error
-        else:
+                )
+                if (
+                    not isinstance(standalone_selection, dict)
+                    or standalone_selection.get("source")
+                    != "diagnostic_all_qualifying_navigation_endpoints"
+                    or canonical_bytes(
+                        standalone_selection.get("candidate_bindings")
+                    )
+                    != canonical_bytes(
+                        population_trace_selection.get("candidate_bindings")
+                    )
+                ):
+                    raise PromotionError(
+                        f"{source_layout_id} diagnostic population-witness "
+                        "evaluation was not reused consistently at transition sources"
+                    )
+                source_diagnosis = copy.deepcopy(
+                    standalone_diagnoses[source_layout_id]
+                )
+                population_trace_selection = copy.deepcopy(standalone_selection)
+                if source_diagnosis.get("status") == "diagnostic_unclassified":
+                    binding = population_trace_selection["candidate_bindings"][0]
+                    matches = [
+                        pair
+                        for pair in navigation_population_pairs.get(
+                            source_layout_id, []
+                        )
+                        if pair["edge_id"] == binding["edge_id"]
+                        and pair["side"] == binding["side"]
+                    ]
+                    if len(matches) != 1:
+                        raise PromotionError(
+                            f"{source_layout_id} diagnostic population binding "
+                            "is absent or ambiguous at a transition source"
+                        )
+                    differences = enumerate_record(
+                        source_layout_id,
+                        matches[0]["primary_trace"],
+                        matches[0]["confirmation_trace"],
+                    )
+                    stop_message = (
+                        f"STOP: transition source {edge_id}: "
+                        f"{source_diagnosis['original_stop']}"
+                    )
+                    record_unclassified(
+                        source_layout_id,
+                        differences,
+                        occurrence={
+                            "scope": "transition_source",
+                            "edge_id": edge_id,
+                            "side": "before",
+                        },
+                        stop_message=stop_message,
+                    )
+                    source_diagnosis["original_stop"] = stop_message
+            else:
+                try:
+                    source_diagnosis = diagnose_record(
+                        source_layout_id,
+                        population_primary_trace,
+                        population_confirmation_trace,
+                    )
+                    source_diagnosis[
+                        "population_trace_selection"
+                    ] = population_trace_selection
+                except LandedDiagnosisError as error:
+                    stop_message = f"STOP: transition source {edge_id}: {error}"
+                    if not enumerate_all_unclassified:
+                        raise PromotionError(stop_message) from error
+                    differences = enumerate_record(
+                        source_layout_id,
+                        population_primary_trace,
+                        population_confirmation_trace,
+                    )
+                    record_unclassified(
+                        source_layout_id,
+                        differences,
+                        occurrence={
+                            "scope": "transition_source",
+                            "edge_id": edge_id,
+                            "side": "before",
+                        },
+                        stop_message=stop_message,
+                    )
+                    source_diagnosis = {
+                        "status": "diagnostic_unclassified",
+                        "original_stop": stop_message,
+                        "unclassified_difference_count": len(differences),
+                        "population_trace_selection": population_trace_selection,
+                    }
+        elif endpoint_kinds["before"] == "layout":
             source_diagnosis = {
                 "status": "new_path_dependent_layout",
                 "landed_payload": "not_embedded_in_v1_navigation_aggregate",
@@ -2526,18 +5192,76 @@ def validate_and_promote(
                     ]
                 ),
             }
-        signature_match = _navigation_endpoint_signature_v25(
-            edge["before"]
-        ) == _navigation_endpoint_signature_v25(old_edge["before"])
-        frame_match = edge["before"].get("frame_sha256") == old_edge["before"].get(
-            "frame_sha256"
+        signature_match = (
+            _navigation_endpoint_signature_v25(edge["before"])
+            == _navigation_endpoint_signature_v25(old_edge["before"])
+            if old_edge is not None
+            else None
         )
+        frame_match = (
+            edge["before"].get("frame_sha256")
+            == old_edge["before"].get("frame_sha256")
+            if old_edge is not None
+            else None
+        )
+        if old_edge is None:
+            if edge_id != chartered_edge_id:
+                raise PromotionError(
+                    f"navigation edge {edge_id} has no landed comparison or charter"
+                )
+            source_diagnosis = {
+                "status": "chartered_new_edge_source_exact_standalone",
+                "layout_id": source_layout_id,
+                "landed_edge_comparison": "not_applicable_edge_did_not_exist",
+                "standalone_diagnosis": source_diagnosis,
+            }
         if source_diagnosis["status"] == "strict_structural_bit_match" and (
             not signature_match or not frame_match
         ):
-            raise PromotionError(
-                f"STOP: strict transition source {edge_id} does not bit-match its landed signature/frame"
+            stop_message = (
+                f"STOP: strict transition source {edge_id} does not bit-match "
+                "its landed signature/frame"
             )
+            if not enumerate_all_unclassified:
+                raise PromotionError(stop_message)
+            differences: list[dict[str, Any]] = []
+            if not signature_match:
+                differences.append(
+                    {
+                        "difference_type": "transition_source_field",
+                        "field": "endpoint_signature",
+                        "landed_value": _navigation_endpoint_signature_v25(
+                            old_edge["before"]
+                        ),
+                        "settled_value": _navigation_endpoint_signature_v25(
+                            edge["before"]
+                        ),
+                    }
+                )
+            if not frame_match:
+                differences.append(
+                    {
+                        "difference_type": "transition_source_field",
+                        "field": "frame_sha256",
+                        "landed_value": old_edge["before"].get("frame_sha256"),
+                        "settled_value": edge["before"].get("frame_sha256"),
+                    }
+                )
+            record_unclassified(
+                source_layout_id,
+                differences,
+                occurrence={
+                    "scope": "transition_source",
+                    "edge_id": edge_id,
+                    "side": "before",
+                },
+                stop_message=stop_message,
+            )
+            source_diagnosis = {
+                "status": "diagnostic_unclassified",
+                "original_stop": stop_message,
+                "unclassified_difference_count": len(differences),
+            }
         source_audit.append(
             {
                 "edge": edge_id,
@@ -2547,6 +5271,100 @@ def validate_and_promote(
                 "frame_bit_match": frame_match,
             }
         )
+
+    if enumerate_all_unclassified:
+        diagnostic_population_equivalences = [
+            {
+                "layout_id": layout_id,
+                "selection": copy.deepcopy(
+                    diagnosis["population_trace_selection"]
+                ),
+            }
+            for layout_id, diagnosis in sorted(standalone_diagnoses.items())
+            if isinstance(diagnosis, dict)
+            and isinstance(diagnosis.get("population_trace_selection"), dict)
+            and diagnosis["population_trace_selection"].get("source")
+            == "diagnostic_all_qualifying_navigation_endpoints"
+        ]
+        entries = sorted(
+            unclassified_by_key.values(),
+            key=lambda value: (
+                value["layout_id"],
+                str(value["difference"].get("difference_type", "")),
+                str(value["difference"].get("field", "")),
+                str(value["difference"].get("element_id", "")),
+                str(value["difference"].get("semantic_sha256", "")),
+            ),
+        )
+        for entry in entries:
+            entry["occurrences"] = sorted(
+                entry["occurrences"],
+                key=lambda value: (
+                    str(value.get("scope", "")),
+                    str(value.get("edge_id", "")),
+                    str(value.get("side", "")),
+                ),
+            )
+        navigation_layout_endpoint_count = sum(
+            1
+            for edge in resolved_navigation["edges"]
+            for side in ("before", "after")
+            if isinstance(edge.get(side), dict)
+            and edge[side].get("type") != "overlay"
+        )
+        return {
+            "schema": "solomon-dark-native-menu-landed-difference-census-v1",
+            "mode": "enumerate_all_unclassified",
+            "success": True,
+            "dry_run": True,
+            "writes_performed": False,
+            "candidate_applied": False,
+            "production_behavior": "stop_at_first_unclassified_difference",
+            "all_corpus_gates_completed": True,
+            "authorized_v220_title_context": copy.deepcopy(
+                dark_cloud_login_title_context
+            ),
+            "authorized_v221_census_era_context": copy.deepcopy(
+                census_era_context
+            ),
+            "authorized_v222_final_disposition_context": copy.deepcopy(
+                final_disposition_context
+            ),
+            "inputs": {
+                "landed_aggregate": {
+                    "repo_relative_path": (
+                        landed_root / "menu-goldens.json"
+                    ).relative_to(repo_root).as_posix(),
+                    **file_receipt(landed_root / "menu-goldens.json"),
+                },
+                "candidate_aggregate": evidence_receipt(candidate_golden_path),
+                "resolved_navigation": evidence_receipt(navigation_path),
+                "derived_overlay_reference": evidence_receipt(
+                    candidate_overlay_path
+                ),
+            },
+            "census": {
+                "landed_layout_count_examined": len(landed_by_layout_id),
+                "qualified_standalone_count_examined": len(records),
+                "native_navigation_edge_count_examined": len(resolved_by_id),
+                "navigation_layout_endpoint_count_examined": (
+                    navigation_layout_endpoint_count
+                ),
+                "unclassified_layout_count": len(
+                    {entry["layout_id"] for entry in entries}
+                ),
+                "unclassified_difference_count": len(entries),
+            },
+            "first_production_stop": (
+                unclassified_stop_messages[0]
+                if unclassified_stop_messages
+                else None
+            ),
+            "diagnostic_population_witness_equivalence_classes": (
+                diagnostic_population_equivalences
+            ),
+            "unclassified_differences": entries,
+        }
 
     promotion_pairs: list[tuple[Path, Path]] = [
         *(
@@ -2562,11 +5380,77 @@ def validate_and_promote(
             for name, source in candidate_references.items()
         ),
         (candidate_overlay_path, landed_root / "menu-overlay-reference.json"),
+        (overlay_path, landed_root / "menu-overlays/dark-cloud-settings.json"),
+        (
+            underlay_path,
+            landed_root / "menu-overlay-underlays/dark-cloud-settings.json",
+        ),
+        (
+            composite_path,
+            landed_root
+            / "menu-dialog-composites/beta-notice-first-boot.json",
+        ),
         (candidate_golden_path, landed_root / "menu-goldens.json"),
     ]
+    retired_screen_path = landed_root / "menu-layouts/dark-cloud-settings.json"
+    retired_v29_contract_path = (
+        landed_root / "native-menu-beta-notice-order-v29.json"
+    )
     if not dry_run:
+        superseded_v29 = beta_paint_order_contract.get("superseded_contract")
+        if (
+            not isinstance(superseded_v29, dict)
+            or set(superseded_v29)
+            != {"evidence_path", "sha256", "bytes"}
+        ):
+            raise PromotionError(
+                "Settlement v2.17 qualified paint-order contract lost its exact retired v2.9 receipt"
+            )
+        archived_v29_path = evidence_root / str(
+            superseded_v29["evidence_path"]
+        )
+        archived_v29_receipt = evidence_receipt(archived_v29_path)
+        if archived_v29_receipt != {
+            "evidence_path": superseded_v29["evidence_path"],
+            "sha256": superseded_v29["sha256"],
+            "bytes": superseded_v29["bytes"],
+        }:
+            raise PromotionError(
+                "Settlement v2.17 archived v2.9 contract receipt changed before retirement"
+            )
+        destinations_already_promoted = all(
+            destination.is_file()
+            and file_receipt(destination) == file_receipt(source)
+            for source, destination in promotion_pairs
+        )
+        retired_screen_present = retired_screen_path.is_file()
+        if retired_screen_present:
+            if file_receipt(retired_screen_path) != standalone_diagnoses[
+                "dark-cloud-settings"
+            ]["retired_fixture"]:
+                raise PromotionError(
+                    "Settlement v2.15 refused to retire a changed Dark Cloud Settings screen fixture"
+                )
+        elif not destinations_already_promoted:
+            raise PromotionError(
+                "Settlement v2.15 retired screen is absent before an incomplete promotion transaction"
+            )
+        retired_v29_present = retired_v29_contract_path.is_file()
+        if retired_v29_present and file_receipt(
+            retired_v29_contract_path
+        ) != {
+            "sha256": superseded_v29["sha256"],
+            "bytes": superseded_v29["bytes"],
+        }:
+            raise PromotionError(
+                "Settlement v2.17 refused to retire a changed 34-member v2.9 contract"
+            )
         for source, destination in promotion_pairs:
             atomic_copy(source, destination)
+        if retired_screen_present:
+            retired_screen_path.unlink()
+        if retired_v29_present:
+            retired_v29_contract_path.unlink()
         try:
             build_menu_baseline(repo_root, False)
         except BaselineBuildError as error:
@@ -2577,15 +5461,34 @@ def validate_and_promote(
     corrected = {
         layout_id: diagnosis
         for layout_id, diagnosis in standalone_diagnoses.items()
-        if diagnosis["status"] == "corrected"
+        if diagnosis["status"]
+        in {"corrected", "corrected_to_nonsemantic_overlay"}
     }
     return {
         "success": True,
         "dry_run": dry_run,
-        "settlement_spec": "2.13",
+        "settlement_spec": "2.22",
+        "census_era_disposition_v221": census_era_context,
+        "final_four_disposition_v222": final_disposition_context,
+        "dark_cloud_menu_screen_id_references_v221": (
+            dark_cloud_menu_reference_context
+        ),
+        "dark_cloud_login_title_correction_v220": (
+            dark_cloud_login_title_context
+        ),
         "controls_core_supersession": controls_core_context,
         "standalone_count": len(records),
         "standalone_diagnoses": standalone_diagnoses,
+        "nonsemantic_overlay": {
+            "overlay_id": overlay_record["overlay_id"],
+            "record": file_receipt(overlay_path),
+            "semantic_underlay": file_receipt(underlay_path),
+            "validated_evidence_receipt_count": len(
+                overlay_evidence_receipts
+            ),
+        },
+        "semantic_dialog_composite": semantic_dialog_composite,
+        "instance_local_generation_v219": generation_v219_census,
         "corrected_screen_count": len(corrected),
         "corrected_screens": sorted(corrected),
         "derived_overlay_reference": {
@@ -2602,7 +5505,11 @@ def validate_and_promote(
         "transition_destination_count": len(destination_audit),
         "transition_destinations_equal_standalones": destination_audit,
         "promoted_files": [str(destination) for _, destination in promotion_pairs],
-        "shellfix_pending_fixture_count": 28,
+        "retired_files": [
+            str(retired_screen_path),
+            str(retired_v29_contract_path),
+        ],
+        "shellfix_pending_fixture_count": 29,
     }
 
 
@@ -2613,23 +5520,57 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--evidence-root", type=Path, required=True)
     parser.add_argument("--navigation-recording", type=Path, required=True)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--enumerate-all-unclassified-output",
+        type=Path,
+        help=(
+            "write a no-promotion census of every unclassified landed-vs-settled "
+            "difference; requires --dry-run"
+        ),
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     try:
+        evidence_root = args.evidence_root.resolve()
         result = validate_and_promote(
             args.repo_root.resolve(),
             args.candidate_root.resolve(),
-            args.evidence_root.resolve(),
+            evidence_root,
             args.navigation_recording.resolve(),
             args.dry_run,
+            enumerate_all_unclassified=(
+                args.enumerate_all_unclassified_output is not None
+            ),
         )
+        if args.enumerate_all_unclassified_output is not None:
+            output = args.enumerate_all_unclassified_output.resolve()
+            if not output.is_relative_to(evidence_root):
+                raise PromotionError(
+                    "landed-difference census output escapes the evidence root"
+                )
+            atomic_write_json(output, result)
     except PromotionError as error:
         print(json.dumps({"success": False, "error": str(error)}))
         return 1
-    print(json.dumps(result, indent=2))
+    if args.enumerate_all_unclassified_output is not None:
+        print(
+            json.dumps(
+                {
+                    "success": True,
+                    "mode": result["mode"],
+                    "audit_output": str(output),
+                    "audit_receipt": file_receipt(output),
+                    "census": result["census"],
+                    "first_production_stop": result["first_production_stop"],
+                },
+                indent=2,
+            )
+        )
+    else:
+        print(json.dumps(result, indent=2))
     return 0
 
 

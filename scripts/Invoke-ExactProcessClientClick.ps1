@@ -58,6 +58,9 @@ public static class MenureNativeInput
     [DllImport("user32.dll", SetLastError = true)]
     public static extern bool SetCursorPos(int x, int y);
 
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool GetCursorPos(out Point point);
+
     [DllImport("user32.dll")]
     public static extern IntPtr GetForegroundWindow();
 
@@ -186,6 +189,24 @@ if (-not [MenureNativeInput]::SetCursorPos($point.X, $point.Y)) {
     [UIntPtr]::Zero
 )
 Start-Sleep -Milliseconds 1000
+$hoverPoint = [MenureNativeInput+Point]::new()
+if (-not [MenureNativeInput]::GetCursorPos([ref]$hoverPoint)) {
+    throw 'GetCursorPos failed after measured-control hover.'
+}
+
+# The one-second hover lets the native UI resolve its hot control. Recompute
+# the client-to-screen point after foreground activation and reassert it
+# immediately before button-down: another interactive process can otherwise
+# move the shared desktop cursor during that hover without changing ownership
+# of the exact game window.
+$point.X = [int][Math]::Round($ClientX)
+$point.Y = [int][Math]::Round($ClientY)
+if (-not [MenureNativeInput]::ClientToScreen($window, [ref]$point)) {
+    throw 'ClientToScreen failed after measured-control hover.'
+}
+if (-not [MenureNativeInput]::SetCursorPos($point.X, $point.Y)) {
+    throw 'SetCursorPos failed immediately before button-down.'
+}
 [MenureNativeInput]::mouse_event(
     0x0002,
     0,
@@ -209,6 +230,9 @@ Start-Sleep -Milliseconds 250
     client_y = [double]$ClientY
     screen_x = $point.X
     screen_y = $point.Y
+    hover_end_screen_x = $hoverPoint.X
+    hover_end_screen_y = $hoverPoint.Y
+    click_point_reasserted_after_hover = $true
     foreground_process_id = $foregroundProcessId
     capture_method = 'queried live control rect center + exact-PID Windows client click'
 } | ConvertTo-Json -Compress

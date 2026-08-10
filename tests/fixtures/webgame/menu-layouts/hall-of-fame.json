@@ -1,1246 +1,879 @@
 {
-    "schema":  "solomon-dark-native-menu-layout-v1",
-    "header":  {
-                   "instance":  "men-title",
-                   "process_id":  16140,
-                   "capture_commit":  "f9cac8783e72e7423a2d952987fa169fa84f3dcb",
-                   "native_exe_sha256":  "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
-                   "loader_dll_sha256":  "f21d10e327e576ce2aed02a0626507143a9104c181d6694e2111d102433b52ec",
-                   "captured_at_utc":  "2026-08-05T07:25:44.9513915Z",
-                   "capture_method":  "live native UI tree + exact text/font hooks + native Sprite draw hooks + exact live-navigation screen tag (stale controls omitted)",
-                   "reference_capture":  "../menu-reference-captures/hall-of-fame.png"
-               },
-    "layout":  {
-                   "generation":  24,
-                   "captured_at_milliseconds":  1147987359,
-                   "screen_id":  "hall_of_fame",
-                   "screen_title":  "",
-                   "capture_method":  "live native UI tree + exact text/font hooks + native Sprite draw hooks + exact live-navigation screen tag (stale controls omitted)",
-                   "elements":  [
-                                    {
-                                        "id":  "hall_of_fame.art.ui_17.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.17",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  42,
-                                        "rect":  [
-                                                     0.000000,
-                                                     0.000000,
-                                                     68.000000,
-                                                     71.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               -12.000000,
-                                                               -12.000000,
-                                                               68.000000,
-                                                               71.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_32.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.32",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  32,
-                                        "rect":  [
-                                                     171.000000,
-                                                     0.000000,
-                                                     309.000000,
-                                                     86.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               171.000000,
-                                                               -86.500000,
-                                                               309.000000,
-                                                               86.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_32.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.32",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  31,
-                                        "rect":  [
-                                                     1291.000000,
-                                                     0.000000,
-                                                     1429.000000,
-                                                     86.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1291.000000,
-                                                               -86.500000,
-                                                               1429.000000,
-                                                               86.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_17.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.17",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  43,
-                                        "rect":  [
-                                                     1532.000000,
-                                                     0.000000,
-                                                     1600.000000,
-                                                     71.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1532.000000,
-                                                               -12.000000,
-                                                               1612.000000,
-                                                               71.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_107.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.107",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  33,
-                                        "rect":  [
-                                                     164.500000,
-                                                     45.500000,
-                                                     249.500000,
-                                                     134.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               164.500000,
-                                                               45.500000,
-                                                               249.500000,
-                                                               134.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_108.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.108",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  34,
-                                        "rect":  [
-                                                     1350.500000,
-                                                     45.500000,
-                                                     1435.500000,
-                                                     134.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1350.500000,
-                                                               45.500000,
-                                                               1435.500000,
-                                                               134.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_18.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.18",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  9,
-                                        "rect":  [
-                                                     669.000000,
-                                                     50.999992,
-                                                     931.000000,
-                                                     118.000015
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               669.000000,
-                                                               50.999992,
-                                                               931.000000,
-                                                               118.000015
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_17.3",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.17",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  48,
-                                        "rect":  [
-                                                     185.000000,
-                                                     65.000000,
-                                                     265.000000,
-                                                     148.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               185.000000,
-                                                               65.000000,
-                                                               265.000000,
-                                                               148.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_17.4",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.17",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  49,
-                                        "rect":  [
-                                                     1335.000000,
-                                                     65.000000,
-                                                     1415.000000,
-                                                     148.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1335.000000,
-                                                               65.000000,
-                                                               1415.000000,
-                                                               148.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_17.5",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.17",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  23,
-                                        "rect":  [
-                                                     490.000000,
-                                                     90.000000,
-                                                     570.000000,
-                                                     173.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               490.000000,
-                                                               90.000000,
-                                                               570.000000,
-                                                               173.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_17.6",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.17",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  24,
-                                        "rect":  [
-                                                     1030.000000,
-                                                     90.000000,
-                                                     1110.000000,
-                                                     173.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1030.000000,
-                                                               90.000000,
-                                                               1110.000000,
-                                                               173.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_107.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.107",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  1,
-                                        "rect":  [
-                                                     516.500000,
-                                                     99.500000,
-                                                     601.500000,
-                                                     188.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               516.500000,
-                                                               99.500000,
-                                                               601.500000,
-                                                               188.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_108.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.108",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  2,
-                                        "rect":  [
-                                                     998.500000,
-                                                     99.500000,
-                                                     1083.500000,
-                                                     188.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               998.500000,
-                                                               99.500000,
-                                                               1083.500000,
-                                                               188.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_17.7",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.17",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  5,
-                                        "rect":  [
-                                                     535.000000,
-                                                     117.000000,
-                                                     615.000000,
-                                                     200.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               535.000000,
-                                                               117.000000,
-                                                               615.000000,
-                                                               200.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_17.8",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.17",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  6,
-                                        "rect":  [
-                                                     985.000000,
-                                                     117.000000,
-                                                     1065.000000,
-                                                     200.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               985.000000,
-                                                               117.000000,
-                                                               1065.000000,
-                                                               200.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.controlpanel_18.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "ControlPanel.18",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  16,
-                                        "rect":  [
-                                                     990.000000,
-                                                     219.000000,
-                                                     1054.000000,
-                                                     244.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               990.000000,
-                                                               219.000000,
-                                                               1054.000000,
-                                                               244.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_24.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.24",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  40,
-                                        "rect":  [
-                                                     0.000000,
-                                                     240.000000,
-                                                     108.000000,
-                                                     600.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               0.000000,
-                                                               240.000000,
-                                                               108.000000,
-                                                               600.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_24.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.24",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  41,
-                                        "rect":  [
-                                                     1492.000000,
-                                                     240.000000,
-                                                     1600.000000,
-                                                     600.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1492.000000,
-                                                               240.000000,
-                                                               1600.000000,
-                                                               600.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.controlpanel_18.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "ControlPanel.18",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  17,
-                                        "rect":  [
-                                                     910.000000,
-                                                     260.000000,
-                                                     974.000000,
-                                                     285.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               910.000000,
-                                                               260.000000,
-                                                               974.000000,
-                                                               285.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_18.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.18",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  46,
-                                        "rect":  [
-                                                     120.000000,
-                                                     296.500000,
-                                                     187.000000,
-                                                     558.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               120.000000,
-                                                               296.500000,
-                                                               187.000000,
-                                                               558.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_18.3",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.18",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  47,
-                                        "rect":  [
-                                                     1413.000000,
-                                                     296.500000,
-                                                     1480.000000,
-                                                     558.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1413.000000,
-                                                               296.500000,
-                                                               1480.000000,
-                                                               558.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_18.4",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.18",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  27,
-                                        "rect":  [
-                                                     421.000000,
-                                                     319.000000,
-                                                     488.000000,
-                                                     581.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               421.000000,
-                                                               319.000000,
-                                                               488.000000,
-                                                               581.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_18.5",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.18",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  28,
-                                        "rect":  [
-                                                     1112.000000,
-                                                     319.000000,
-                                                     1179.000000,
-                                                     581.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1112.000000,
-                                                               319.000000,
-                                                               1179.000000,
-                                                               581.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.controlpanel_8.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "ControlPanel.8",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  18,
-                                        "rect":  [
-                                                     978.000000,
-                                                     348.000000,
-                                                     1060.000000,
-                                                     378.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               978.000000,
-                                                               348.000000,
-                                                               1060.000000,
-                                                               378.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.controlpanel_0.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "ControlPanel.0",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  19,
-                                        "rect":  [
-                                                     1043.000000,
-                                                     396.500000,
-                                                     1057.000000,
-                                                     411.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1043.000000,
-                                                               396.500000,
-                                                               1057.000000,
-                                                               411.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.controlpanel_0.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "ControlPanel.0",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  20,
-                                        "rect":  [
-                                                     1043.000000,
-                                                     487.500000,
-                                                     1057.000000,
-                                                     502.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1043.000000,
-                                                               487.500000,
-                                                               1057.000000,
-                                                               502.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.controlpanel_0.3",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "ControlPanel.0",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  21,
-                                        "rect":  [
-                                                     1043.000000,
-                                                     578.500000,
-                                                     1057.000000,
-                                                     593.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1043.000000,
-                                                               578.500000,
-                                                               1057.000000,
-                                                               593.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_54.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.54",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  14,
-                                        "rect":  [
-                                                     696.000000,
-                                                     637.500000,
-                                                     766.000000,
-                                                     722.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               696.000000,
-                                                               637.500000,
-                                                               766.000000,
-                                                               722.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_54.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.54",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  15,
-                                        "rect":  [
-                                                     834.000000,
-                                                     637.500000,
-                                                     904.000000,
-                                                     722.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               834.000000,
-                                                               637.500000,
-                                                               904.000000,
-                                                               722.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_101.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.101",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  13,
-                                        "rect":  [
-                                                     702.000000,
-                                                     643.500000,
-                                                     898.000000,
-                                                     712.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               623.500000,
-                                                               643.500000,
-                                                               976.500000,
-                                                               712.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.controlpanel_0.4",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "ControlPanel.0",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  22,
-                                        "rect":  [
-                                                     1043.000000,
-                                                     669.500000,
-                                                     1057.000000,
-                                                     684.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1043.000000,
-                                                               669.500000,
-                                                               1057.000000,
-                                                               684.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_17.9",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.17",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  7,
-                                        "rect":  [
-                                                     535.000000,
-                                                     700.000000,
-                                                     615.000000,
-                                                     783.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               535.000000,
-                                                               700.000000,
-                                                               615.000000,
-                                                               783.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_17.10",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.17",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  8,
-                                        "rect":  [
-                                                     985.000000,
-                                                     700.000000,
-                                                     1065.000000,
-                                                     783.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               985.000000,
-                                                               700.000000,
-                                                               1065.000000,
-                                                               783.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_17.11",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.17",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  50,
-                                        "rect":  [
-                                                     185.000000,
-                                                     707.000000,
-                                                     265.000000,
-                                                     790.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               185.000000,
-                                                               707.000000,
-                                                               265.000000,
-                                                               790.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_17.12",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.17",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  51,
-                                        "rect":  [
-                                                     1335.000000,
-                                                     707.000000,
-                                                     1415.000000,
-                                                     790.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1335.000000,
-                                                               707.000000,
-                                                               1415.000000,
-                                                               790.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_109.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.109",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  3,
-                                        "rect":  [
-                                                     516.500000,
-                                                     711.500000,
-                                                     601.500000,
-                                                     800.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               516.500000,
-                                                               711.500000,
-                                                               601.500000,
-                                                               800.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_110.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.110",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  4,
-                                        "rect":  [
-                                                     998.500000,
-                                                     711.500000,
-                                                     1083.500000,
-                                                     800.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               998.500000,
-                                                               711.500000,
-                                                               1083.500000,
-                                                               800.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_109.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.109",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  35,
-                                        "rect":  [
-                                                     164.500000,
-                                                     720.500000,
-                                                     249.500000,
-                                                     809.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               164.500000,
-                                                               720.500000,
-                                                               249.500000,
-                                                               809.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_110.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.110",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  36,
-                                        "rect":  [
-                                                     1350.500000,
-                                                     720.500000,
-                                                     1435.500000,
-                                                     809.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1350.500000,
-                                                               720.500000,
-                                                               1435.500000,
-                                                               809.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_17.13",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.17",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  25,
-                                        "rect":  [
-                                                     490.000000,
-                                                     727.000000,
-                                                     570.000000,
-                                                     810.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               490.000000,
-                                                               727.000000,
-                                                               570.000000,
-                                                               810.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_17.14",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.17",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  26,
-                                        "rect":  [
-                                                     1030.000000,
-                                                     727.000000,
-                                                     1110.000000,
-                                                     810.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1030.000000,
-                                                               727.000000,
-                                                               1110.000000,
-                                                               810.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_31.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.31",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  29,
-                                        "rect":  [
-                                                     1295.000000,
-                                                     760.000000,
-                                                     1437.000000,
-                                                     900.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1295.000000,
-                                                               760.000000,
-                                                               1437.000000,
-                                                               950.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_32.3",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.32",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  30,
-                                        "rect":  [
-                                                     171.000000,
-                                                     768.500000,
-                                                     309.000000,
-                                                     900.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               171.000000,
-                                                               768.500000,
-                                                               309.000000,
-                                                               941.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_8.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.8",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  10,
-                                        "rect":  [
-                                                     775.500000,
-                                                     782.000000,
-                                                     824.500000,
-                                                     894.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               775.500000,
-                                                               782.000000,
-                                                               824.500000,
-                                                               894.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_8.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.8",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  11,
-                                        "rect":  [
-                                                     706.625000,
-                                                     783.000000,
-                                                     743.375000,
-                                                     867.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               706.625000,
-                                                               783.000000,
-                                                               743.375000,
-                                                               867.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_8.3",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.8",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  12,
-                                        "rect":  [
-                                                     856.625000,
-                                                     783.000000,
-                                                     893.375000,
-                                                     867.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               856.625000,
-                                                               783.000000,
-                                                               893.375000,
-                                                               867.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_54.3",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.54",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  38,
-                                        "rect":  [
-                                                     617.500000,
-                                                     809.500000,
-                                                     687.500000,
-                                                     894.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               617.500000,
-                                                               809.500000,
-                                                               687.500000,
-                                                               894.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_54.4",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.54",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  39,
-                                        "rect":  [
-                                                     912.500000,
-                                                     809.500000,
-                                                     982.500000,
-                                                     894.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               912.500000,
-                                                               809.500000,
-                                                               982.500000,
-                                                               894.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_101.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.101",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  37,
-                                        "rect":  [
-                                                     623.500000,
-                                                     815.500000,
-                                                     976.500000,
-                                                     884.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               623.500000,
-                                                               815.500000,
-                                                               976.500000,
-                                                               884.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_17.15",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.17",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  44,
-                                        "rect":  [
-                                                     0.000000,
-                                                     829.000000,
-                                                     68.000000,
-                                                     900.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               -12.000000,
-                                                               829.000000,
-                                                               68.000000,
-                                                               912.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "hall_of_fame.art.ui_17.16",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.17",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  45,
-                                        "rect":  [
-                                                     1532.000000,
-                                                     829.000000,
-                                                     1600.000000,
-                                                     900.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1532.000000,
-                                                               829.000000,
-                                                               1612.000000,
-                                                               912.000000
-                                                           ]
-                                    }
-                                ]
-               }
+  "schema": "solomon-dark-native-menu-layout-v3",
+  "header": {
+    "label": "hall_of_fame",
+    "instance": "menufx-v9p37",
+    "process_id": 4696,
+    "source": {
+      "base_commit_sha": "68a3735ae342561623fa135b2c0e1243c673e111",
+      "source_tree_sha": "7210d566ffe62a526eb6018f5e5fa86aaa458dbd",
+      "capture_tree": "exact committed tree at base_commit_sha",
+      "game_executable_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+      "loader_dll_sha256": "8d01666de64a7a346a0331e48f715c8a98f8cfafb3da6419f63f1888c63327ff",
+      "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+      "capture_driver_preset": "idle"
+    },
+    "profile_state": {
+      "schema": "solomon-dark-native-menu-profile-state-v1",
+      "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+      "baseline_id": "pristine_fresh_install",
+      "baseline_mode": "fresh_install",
+      "source_sandbox_excluded": true,
+      "retail_appdata_seeded": false,
+      "durable_file_count": 0,
+      "baseline_fixture": {
+        "repo_relative_path": "tests/fixtures/webgame/native-menu-profile-state-baseline.json",
+        "sha256": "02ac22b1de367e9e94477f61c8e1144e6a5b16bd67bd418e69e9a2ec620914ff",
+        "bytes": 2155
+      },
+      "binding_contract": {
+        "repo_relative_path": "tests/fixtures/webgame/native-menu-hub-bindings-v213.json",
+        "sha256": "07c2ed2e53e997c8fb79c3d472b58d52c72c768286cad352ec1aeedaa907ef00",
+        "bytes": 21518
+      },
+      "launch_receipt": {
+        "evidence_filename": "hall-of-fame.menufx-v9p37.4696.profile-state.json",
+        "sha256": "77add6ed78415054c550a86a07db0d84d3b89b5063262cc2694aaf4ba7a76573",
+        "bytes": 694
+      }
+    },
+    "profile_state_binding": {
+      "baseline_id": "pristine_fresh_install",
+      "layout_id": "hall-of-fame",
+      "edge_id": "",
+      "derivation_witness_role": ""
+    },
+    "capture_method": "live native UI tree + exact text/font hooks + native Sprite draw hooks",
+    "recorded_live": true,
+    "captured_at_utc": "2026-08-09T05:43:35.4297888Z",
+    "settlement": {
+      "settlement_spec": "2.9",
+      "criterion": "at least 40 consecutive samples spanning at least 2 seconds with constant surface/generations and every variance assigned to one measured v2.5 member class",
+      "settle_latency_milliseconds": 16131,
+      "stable_span_milliseconds": 15794,
+      "consecutive_structural_samples": 40,
+      "minimum_element_count": 27,
+      "peak_element_count": 27,
+      "raw_window_structural_sha256": "dfe8f67309dcae11a90ff65e6f0d74cf3ff4e93fec0dc66108efa06c8b218883",
+      "resolved_structural_core_sha256": "b284e0aaf92e448267f98c91c3b401fe083b0551f7c2c66a6463ffb22e831e4a",
+      "resolved_classification_map_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "ambient_fraction": 0.0
+    },
+    "browser_tab_verification": null,
+    "raw_recording": {
+      "evidence_filename": "hall-of-fame.settlement.json",
+      "sha256": "ce8936885a2eb93a60006c5d1dae144906b2b22983718f1ab0a03fbebca4349e",
+      "bytes": 2659439
+    },
+    "reference_capture": "../menu-reference-captures/hall-of-fame.png",
+    "animation_confirmation": {
+      "evidence_filename": "hall-of-fame.confirmation.json",
+      "sha256": "68ce016965b52a405c1e021d986e0c4206319c8087f5b69fb7cde6f101043086",
+      "bytes": 2708701,
+      "instance": "menufx-v9p36",
+      "process_id": 10676,
+      "source": {
+        "base_commit_sha": "68a3735ae342561623fa135b2c0e1243c673e111",
+        "source_tree_sha": "7210d566ffe62a526eb6018f5e5fa86aaa458dbd",
+        "capture_tree": "exact committed tree at base_commit_sha",
+        "game_executable_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+        "loader_dll_sha256": "8d01666de64a7a346a0331e48f715c8a98f8cfafb3da6419f63f1888c63327ff",
+        "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+        "capture_driver_preset": "idle"
+      },
+      "profile_state": {
+        "schema": "solomon-dark-native-menu-profile-state-v1",
+        "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+        "baseline_id": "pristine_fresh_install",
+        "baseline_mode": "fresh_install",
+        "source_sandbox_excluded": true,
+        "retail_appdata_seeded": false,
+        "durable_file_count": 0,
+        "baseline_fixture": {
+          "repo_relative_path": "tests/fixtures/webgame/native-menu-profile-state-baseline.json",
+          "sha256": "02ac22b1de367e9e94477f61c8e1144e6a5b16bd67bd418e69e9a2ec620914ff",
+          "bytes": 2155
+        },
+        "binding_contract": {
+          "repo_relative_path": "tests/fixtures/webgame/native-menu-hub-bindings-v213.json",
+          "sha256": "07c2ed2e53e997c8fb79c3d472b58d52c72c768286cad352ec1aeedaa907ef00",
+          "bytes": 21518
+        },
+        "launch_receipt": {
+          "evidence_filename": "hall-of-fame.confirmation.menufx-v9p36.10676.profile-state.json",
+          "sha256": "8410804e8a0acd1cad014ff6130839a0eeb8382c9532ce7ef2dcc33617969754",
+          "bytes": 694
+        }
+      },
+      "profile_state_binding": {
+        "baseline_id": "pristine_fresh_install",
+        "layout_id": "hall_of_fame",
+        "edge_id": "",
+        "derivation_witness_role": ""
+      },
+      "confirmation_structural_sha256": "dfe8f67309dcae11a90ff65e6f0d74cf3ff4e93fec0dc66108efa06c8b218883",
+      "animated_element_ids_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "raw_primary_animated_element_ids": [],
+      "raw_confirmation_animated_element_ids": [],
+      "raw_sets_match_noncontractual": true,
+      "requires_campaign_resolution": true
+    },
+    "ambient_lifecycle": {
+      "resolution_sha256": "816b1f65ff57b1ec109821e4209fcb752b0d6967ee1cbe6c78ebd9f2fdd70e43",
+      "independent_instances": [
+        [
+          "menufx-v9p36",
+          10676
+        ],
+        [
+          "menufx-v9p37",
+          4696
+        ]
+      ],
+      "observation_receipts": [
+        {
+          "evidence_path": "raw-v9/candidates/candidate-v214-profile-final/menu-settlement-traces/hall-of-fame.settlement.json",
+          "sha256": "ce8936885a2eb93a60006c5d1dae144906b2b22983718f1ab0a03fbebca4349e",
+          "bytes": 2659439
+        },
+        {
+          "evidence_path": "raw-v9/candidates/candidate-v214-profile-final/menu-animation-confirmations/hall-of-fame.confirmation.json",
+          "sha256": "68ce016965b52a405c1e021d986e0c4206319c8087f5b69fb7cde6f101043086",
+          "bytes": 2708701
+        },
+        {
+          "evidence_path": "raw-v9/profile-select-new-game-edge/merged-v219/navigation-primary-v219-40-edges.json",
+          "sha256": "a4ad35b04deb9c2a5aaa52cb71172e32968e569f0cc47c77404544fa4dee2e29",
+          "bytes": 266236067
+        },
+        {
+          "evidence_path": "raw-v9/profile-select-new-game-edge/merged-v219/navigation-confirmation-v219-40-edges.json",
+          "sha256": "54e9571022dfa7f18b13ed8b63e6d70fadf52595de876d10453fcc9e42664cc7",
+          "bytes": 263780529
+        },
+        {
+          "evidence_path": "raw-v9/profile-select-new-game-edge/merged-v219/navigation-primary-v219-40-edges.json",
+          "sha256": "a4ad35b04deb9c2a5aaa52cb71172e32968e569f0cc47c77404544fa4dee2e29",
+          "bytes": 266236067
+        },
+        {
+          "evidence_path": "raw-v9/profile-select-new-game-edge/merged-v219/navigation-confirmation-v219-40-edges.json",
+          "sha256": "54e9571022dfa7f18b13ed8b63e6d70fadf52595de876d10453fcc9e42664cc7",
+          "bytes": 263780529
+        }
+      ],
+      "extended_observation_baseline_receipts": []
+    }
+  },
+  "layout": {
+    "generation": 11,
+    "screen_id": "hall_of_fame",
+    "screen_title": "Hall of Fame",
+    "capture_method": "live native UI tree + exact text/font hooks + native Sprite draw hooks",
+    "draw_order_semantics": "structural_core_relative_sequence",
+    "elements": [
+      {
+        "kind": "text",
+        "text": "HALL OF FAME",
+        "action_id": "",
+        "art_id": "",
+        "font_id": "",
+        "text_style": "",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          742.0,
+          11.0,
+          966.0,
+          42.0
+        ],
+        "unclipped_rect": [
+          742.0,
+          11.0,
+          966.0,
+          42.0
+        ],
+        "id": "hall_of_fame.text.hall_of_fame.1",
+        "draw_order": 0,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "text",
+        "text": "MAIN MENU",
+        "action_id": "",
+        "art_id": "",
+        "font_id": "",
+        "text_style": "",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          742.0,
+          842.0,
+          879.0,
+          862.0
+        ],
+        "unclipped_rect": [
+          742.0,
+          842.0,
+          879.0,
+          862.0
+        ],
+        "id": "hall_of_fame.text.main_menu.1",
+        "draw_order": 1,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "text",
+        "text": "MAIN MENU",
+        "action_id": "",
+        "art_id": "",
+        "font_id": "Fonts.216-307",
+        "text_style": "native_atlas_text:Fonts.216-307",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          742.0,
+          842.0,
+          879.0,
+          862.0
+        ],
+        "unclipped_rect": [
+          742.0,
+          842.0,
+          879.0,
+          862.0
+        ],
+        "id": "hall_of_fame.text.main_menu.2",
+        "draw_order": 2,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "text",
+        "text": "HALL OF FAME",
+        "action_id": "",
+        "art_id": "",
+        "font_id": "Fonts.308-349",
+        "text_style": "native_atlas_text:Fonts.308-349",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          742.0,
+          11.0,
+          966.0,
+          42.0
+        ],
+        "unclipped_rect": [
+          742.0,
+          11.0,
+          966.0,
+          42.0
+        ],
+        "id": "hall_of_fame.text.hall_of_fame.2",
+        "draw_order": 3,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.31",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          1295.0,
+          760.0,
+          1437.0,
+          900.0
+        ],
+        "unclipped_rect": [
+          1295.0,
+          760.0,
+          1437.0,
+          950.0
+        ],
+        "id": "hall_of_fame.art.ui_31.1",
+        "draw_order": 4,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.32",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          171.0,
+          768.5,
+          309.0,
+          900.0
+        ],
+        "unclipped_rect": [
+          171.0,
+          768.5,
+          309.0,
+          941.5
+        ],
+        "id": "hall_of_fame.art.ui_32.1",
+        "draw_order": 5,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.32",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          1291.0,
+          0.0,
+          1429.0,
+          86.5
+        ],
+        "unclipped_rect": [
+          1291.0,
+          -86.5,
+          1429.0,
+          86.5
+        ],
+        "id": "hall_of_fame.art.ui_32.2",
+        "draw_order": 6,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.32",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          171.0,
+          0.0,
+          309.0,
+          86.5
+        ],
+        "unclipped_rect": [
+          171.0,
+          -86.5,
+          309.0,
+          86.5
+        ],
+        "id": "hall_of_fame.art.ui_32.3",
+        "draw_order": 7,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.107",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          164.5,
+          45.5,
+          249.5,
+          134.5
+        ],
+        "unclipped_rect": [
+          164.5,
+          45.5,
+          249.5,
+          134.5
+        ],
+        "id": "hall_of_fame.art.ui_107.1",
+        "draw_order": 8,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.108",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          1350.5,
+          45.5,
+          1435.5,
+          134.5
+        ],
+        "unclipped_rect": [
+          1350.5,
+          45.5,
+          1435.5,
+          134.5
+        ],
+        "id": "hall_of_fame.art.ui_108.1",
+        "draw_order": 9,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.109",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          164.5,
+          720.5,
+          249.5,
+          809.5
+        ],
+        "unclipped_rect": [
+          164.5,
+          720.5,
+          249.5,
+          809.5
+        ],
+        "id": "hall_of_fame.art.ui_109.1",
+        "draw_order": 10,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.110",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          1350.5,
+          720.5,
+          1435.5,
+          809.5
+        ],
+        "unclipped_rect": [
+          1350.5,
+          720.5,
+          1435.5,
+          809.5
+        ],
+        "id": "hall_of_fame.art.ui_110.1",
+        "draw_order": 11,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.101",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          623.5,
+          815.5,
+          976.5,
+          884.5
+        ],
+        "unclipped_rect": [
+          623.5,
+          815.5,
+          976.5,
+          884.5
+        ],
+        "id": "hall_of_fame.art.ui_101.1",
+        "draw_order": 12,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.54",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          617.5,
+          809.5,
+          687.5,
+          894.5
+        ],
+        "unclipped_rect": [
+          617.5,
+          809.5,
+          687.5,
+          894.5
+        ],
+        "id": "hall_of_fame.art.ui_54.1",
+        "draw_order": 13,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.54",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          912.5,
+          809.5,
+          982.5,
+          894.5
+        ],
+        "unclipped_rect": [
+          912.5,
+          809.5,
+          982.5,
+          894.5
+        ],
+        "id": "hall_of_fame.art.ui_54.2",
+        "draw_order": 14,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.24",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          0.0,
+          240.0,
+          108.0,
+          600.0
+        ],
+        "unclipped_rect": [
+          0.0,
+          240.0,
+          108.0,
+          600.0
+        ],
+        "id": "hall_of_fame.art.ui_24.1",
+        "draw_order": 15,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.24",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          1492.0,
+          240.0,
+          1600.0,
+          600.0
+        ],
+        "unclipped_rect": [
+          1492.0,
+          240.0,
+          1600.0,
+          600.0
+        ],
+        "id": "hall_of_fame.art.ui_24.2",
+        "draw_order": 16,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.17",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          0.0,
+          0.0,
+          68.0,
+          71.0
+        ],
+        "unclipped_rect": [
+          -12.0,
+          -12.0,
+          68.0,
+          71.0
+        ],
+        "id": "hall_of_fame.art.ui_17.1",
+        "draw_order": 17,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.17",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          1532.0,
+          0.0,
+          1600.0,
+          71.0
+        ],
+        "unclipped_rect": [
+          1532.0,
+          -12.0,
+          1612.0,
+          71.0
+        ],
+        "id": "hall_of_fame.art.ui_17.2",
+        "draw_order": 18,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.17",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          0.0,
+          829.0,
+          68.0,
+          900.0
+        ],
+        "unclipped_rect": [
+          -12.0,
+          829.0,
+          68.0,
+          912.0
+        ],
+        "id": "hall_of_fame.art.ui_17.3",
+        "draw_order": 19,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.17",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          1532.0,
+          829.0,
+          1600.0,
+          900.0
+        ],
+        "unclipped_rect": [
+          1532.0,
+          829.0,
+          1612.0,
+          912.0
+        ],
+        "id": "hall_of_fame.art.ui_17.4",
+        "draw_order": 20,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.18",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          120.0,
+          296.5,
+          187.0,
+          558.5
+        ],
+        "unclipped_rect": [
+          120.0,
+          296.5,
+          187.0,
+          558.5
+        ],
+        "id": "hall_of_fame.art.ui_18.1",
+        "draw_order": 21,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.18",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          1413.0,
+          296.5,
+          1480.0,
+          558.5
+        ],
+        "unclipped_rect": [
+          1413.0,
+          296.5,
+          1480.0,
+          558.5
+        ],
+        "id": "hall_of_fame.art.ui_18.2",
+        "draw_order": 22,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.17",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          185.0,
+          65.0,
+          265.0,
+          148.0
+        ],
+        "unclipped_rect": [
+          185.0,
+          65.0,
+          265.0,
+          148.0
+        ],
+        "id": "hall_of_fame.art.ui_17.5",
+        "draw_order": 23,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.17",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          1335.0,
+          65.0,
+          1415.0,
+          148.0
+        ],
+        "unclipped_rect": [
+          1335.0,
+          65.0,
+          1415.0,
+          148.0
+        ],
+        "id": "hall_of_fame.art.ui_17.6",
+        "draw_order": 24,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.17",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          185.0,
+          707.0,
+          265.0,
+          790.0
+        ],
+        "unclipped_rect": [
+          185.0,
+          707.0,
+          265.0,
+          790.0
+        ],
+        "id": "hall_of_fame.art.ui_17.7",
+        "draw_order": 25,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.17",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          1335.0,
+          707.0,
+          1415.0,
+          790.0
+        ],
+        "unclipped_rect": [
+          1335.0,
+          707.0,
+          1415.0,
+          790.0
+        ],
+        "id": "hall_of_fame.art.ui_17.8",
+        "draw_order": 26,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      }
+    ],
+    "settlement_spec": "2.9",
+    "structural_core_sha256": "b284e0aaf92e448267f98c91c3b401fe083b0551f7c2c66a6463ffb22e831e4a",
+    "structural_core_element_count": 27,
+    "animated_element_ids": [],
+    "animated_family_ids": [],
+    "choice_slot_ids": [],
+    "choice_slots": [],
+    "visibility_cycling_element_ids": [],
+    "ambient_persistent_element_ids": [],
+    "classification_map": {},
+    "ambient_family_art_ids": [],
+    "ambient_members": [],
+    "ephemeral_family": {
+      "art_ids": [],
+      "union_spatial_envelope": null,
+      "observed_concurrency_range": [
+        0,
+        0
+      ],
+      "draw_bands": {},
+      "spawn_event_count": 0,
+      "despawn_event_count": 0,
+      "bidirectional_churn_witnessed": true
+    },
+    "ambient_semantic_member_count": 0,
+    "peak_element_count": 27,
+    "ambient_fraction": 0.0
+  }
 }

@@ -1794,12 +1794,23 @@ RECORDED_CAPTURE_SHAS: dict[str, tuple[str, int]] = {
     # externally sealed source bundle declared below, once in each of 9 headers.
     "04c02dc98086bc0687f1906ba644a19a059e9a45": ("archived-commit", 9),
     "495cec38cfb16fa0dfe5d4a80d0a58145a074bac": ("archived-tree", 9),
-    # G11 menu goldens -- see UNRECOVERABLE_CAPTURE_COMMITS.
-    "48a54aaf485e671e605cbf301441380f6538846f": ("absent", 3),
-    "911e3ed8345feda13929d36c5994990ef59333d9": ("absent", 3),
-    "933fdd99f0bf85ef06b9ef04c25990bff79966f4": ("absent", 5),
-    "d28f98a190d69662c8e6e691484b4d4e0dc939b9": ("absent", 3),
-    "f9cac8783e72e7423a2d952987fa169fa84f3dcb": ("absent", 52),
+    # G11 settled menu goldens: every recorder-derived commit/tree object is
+    # preserved in the evidence bundle declared below.
+    "18a23950d98f22a2eee61302f29c4e7a7c03069a": ("archived-commit", 6),
+    "1c009e2eb79c9dfdc6d22a71bfb2c14b8969ac34": ("archived-tree", 15),
+    "3a12f89bb61f788f2b1c9dca140cd556a2448a7d": ("archived-tree", 45),
+    "405bb0f697fcdf484f304f0d5f38224d39a6ae70": ("archived-commit", 50),
+    "433162e0f78ce421211d65dc693fedfe2630e357": ("archived-tree", 6),
+    "4ae5370977019c1c20813fa17d5141f32cd50968": ("archived-commit", 15),
+    "6363b637a5d2840d23f31430eaf0ed9bf32ae63b": ("archived-commit", 45),
+    "68a3735ae342561623fa135b2c0e1243c673e111": ("archived-commit", 76),
+    "70ba8c80324b23144313be6968bad9917c2b4019": ("archived-tree", 1),
+    "7210d566ffe62a526eb6018f5e5fa86aaa458dbd": ("archived-tree", 76),
+    "b3eafc6c4ebccd574f534796203c7c7bea702280": ("archived-commit", 1),
+    "b6aaa8f1f9752963b570384a29a6082228c2cbfa": ("archived-tree", 50),
+    "d709ce1b23b819cd2fda920cfc1613a773c54f5c": ("archived-commit", 1),
+    "dbf36ac822163bd3ef8308994ee666a1963792bc": ("archived-commit", 10),
+    "fe13cd29846a7c4b3e450b1a4b312fccda65944b": ("archived-tree", 10),
 }
 
 # The G10 Region1 payload happens to be exactly twenty bytes, so its ordinary
@@ -1814,24 +1825,11 @@ NON_PROVENANCE_HEX40_LOCATIONS: dict[str, tuple[str, ...]] = {
     ),
 }
 
-# The G11 menu capture ran in an isolated clone and recorded that clone's local
-# HEAD. Those commits were never pushed and did not survive the landing, so all
-# 66 `capture_commit` fields in the menu goldens name objects that exist neither
-# in this repository nor on the remote. G1, G2 and G14 all recorded commits that
-# are ancestors of main, so this is one campaign's defect, not a limit of
-# isolated-clone capture.
-#
-# The value cannot be repaired by editing: the correct SHA is unknowable and
-# substituting the landing commit would be invention, not provenance. Only a
-# re-capture fixes it. The census below requires each of these to STILL be
-# absent, so a re-capture that resolves one forces the declaration to go.
-UNRECOVERABLE_CAPTURE_COMMITS: dict[str, str] = {
-    "48a54aaf485e671e605cbf301441380f6538846f": "G11 menu capture, isolated-clone HEAD, never pushed",
-    "911e3ed8345feda13929d36c5994990ef59333d9": "G11 menu capture, isolated-clone HEAD, never pushed",
-    "933fdd99f0bf85ef06b9ef04c25990bff79966f4": "G11 menu capture, isolated-clone HEAD, never pushed",
-    "d28f98a190d69662c8e6e691484b4d4e0dc939b9": "G11 menu capture, isolated-clone HEAD, never pushed",
-    "f9cac8783e72e7423a2d952987fa169fa84f3dcb": "G11 menu capture, isolated-clone HEAD, never pushed",
-}
+# The legacy G11 capture commits were unverifiable and required this explicit
+# declaration. Settlement v2.22 replaced every active G11 fixture and archived
+# every new recorder-derived commit/tree object, so no active capture remains in
+# this exception class.
+UNRECOVERABLE_CAPTURE_COMMITS: dict[str, str] = {}
 
 # The float capture ran after float-only code and contemporaneous menu-recorder
 # work had been committed together in the isolated campaign clone. Rebasing
@@ -1851,9 +1849,43 @@ FLOAT_CAPTURE_SOURCE_ARCHIVE = {
     "capture_tree": "495cec38cfb16fa0dfe5d4a80d0a58145a074bac",
     "bundle_ref": "refs/codex-evidence/goldfix-float-source",
 }
+MENU_CAPTURE_SOURCE_ARCHIVE = {
+    "evidence_path": "raw-v9/profile-select-new-game-edge/v222-promotion/menufix-capture-source.bundle",
+    "sha256": "c9d521db6917d1ff997604aaf7038537a510673548a5bd091ad315e7ac78fb50",
+    "bytes": 634629,
+    "prerequisite_commit": "c24fc3cce419939cafe8b27565ed04308df60467",
+    "heads": {
+        "refs/codex-evidence/menufix-v222/source-18a23950d98f": "18a23950d98f22a2eee61302f29c4e7a7c03069a",
+        "refs/codex-evidence/menufix-v222/source-405bb0f697fc": "405bb0f697fcdf484f304f0d5f38224d39a6ae70",
+        "refs/codex-evidence/menufix-v222/source-4ae537097701": "4ae5370977019c1c20813fa17d5141f32cd50968",
+        "refs/codex-evidence/menufix-v222/source-6363b637a5d2": "6363b637a5d2840d23f31430eaf0ed9bf32ae63b",
+        "refs/codex-evidence/menufix-v222/source-68a3735ae342": "68a3735ae342561623fa135b2c0e1243c673e111",
+        "refs/codex-evidence/menufix-v222/source-b3eafc6c4ebc": "b3eafc6c4ebccd574f534796203c7c7bea702280",
+        "refs/codex-evidence/menufix-v222/source-d709ce1b23b8": "d709ce1b23b819cd2fda920cfc1613a773c54f5c",
+        "refs/codex-evidence/menufix-v222/source-dbf36ac82216": "dbf36ac822163bd3ef8308994ee666a1963792bc",
+    },
+    "recorded_object_types": {
+        "18a23950d98f22a2eee61302f29c4e7a7c03069a": "commit",
+        "1c009e2eb79c9dfdc6d22a71bfb2c14b8969ac34": "tree",
+        "3a12f89bb61f788f2b1c9dca140cd556a2448a7d": "tree",
+        "405bb0f697fcdf484f304f0d5f38224d39a6ae70": "commit",
+        "433162e0f78ce421211d65dc693fedfe2630e357": "tree",
+        "4ae5370977019c1c20813fa17d5141f32cd50968": "commit",
+        "6363b637a5d2840d23f31430eaf0ed9bf32ae63b": "commit",
+        "68a3735ae342561623fa135b2c0e1243c673e111": "commit",
+        "70ba8c80324b23144313be6968bad9917c2b4019": "tree",
+        "7210d566ffe62a526eb6018f5e5fa86aaa458dbd": "tree",
+        "b3eafc6c4ebccd574f534796203c7c7bea702280": "commit",
+        "b6aaa8f1f9752963b570384a29a6082228c2cbfa": "tree",
+        "d709ce1b23b819cd2fda920cfc1613a773c54f5c": "commit",
+        "dbf36ac822163bd3ef8308994ee666a1963792bc": "commit",
+        "fe13cd29846a7c4b3e450b1a4b312fccda65944b": "tree",
+    },
+}
 ARCHIVED_CAPTURE_OBJECTS = {
     FLOAT_CAPTURE_SOURCE_ARCHIVE["capture_commit"]: "commit",
     FLOAT_CAPTURE_SOURCE_ARCHIVE["capture_tree"]: "tree",
+    **MENU_CAPTURE_SOURCE_ARCHIVE["recorded_object_types"],
 }
 
 FIXTURE_ROOT = ROOT / "tests/fixtures"
@@ -1972,9 +2004,40 @@ def test_recorded_capture_provenance_resolves_or_is_declared() -> str:
         raise StaticReTestFailure(
             "float capture source archive no longer pins the exact bundle hash, prerequisite, commit, tree, and ref"
         )
+    expected_menu_archive = {
+        "evidence_path": "raw-v9/profile-select-new-game-edge/v222-promotion/menufix-capture-source.bundle",
+        "sha256": "c9d521db6917d1ff997604aaf7038537a510673548a5bd091ad315e7ac78fb50",
+        "bytes": 634629,
+        "prerequisite_commit": "c24fc3cce419939cafe8b27565ed04308df60467",
+        "heads": {
+            "refs/codex-evidence/menufix-v222/source-18a23950d98f": "18a23950d98f22a2eee61302f29c4e7a7c03069a",
+            "refs/codex-evidence/menufix-v222/source-405bb0f697fc": "405bb0f697fcdf484f304f0d5f38224d39a6ae70",
+            "refs/codex-evidence/menufix-v222/source-4ae537097701": "4ae5370977019c1c20813fa17d5141f32cd50968",
+            "refs/codex-evidence/menufix-v222/source-6363b637a5d2": "6363b637a5d2840d23f31430eaf0ed9bf32ae63b",
+            "refs/codex-evidence/menufix-v222/source-68a3735ae342": "68a3735ae342561623fa135b2c0e1243c673e111",
+            "refs/codex-evidence/menufix-v222/source-b3eafc6c4ebc": "b3eafc6c4ebccd574f534796203c7c7bea702280",
+            "refs/codex-evidence/menufix-v222/source-d709ce1b23b8": "d709ce1b23b819cd2fda920cfc1613a773c54f5c",
+            "refs/codex-evidence/menufix-v222/source-dbf36ac82216": "dbf36ac822163bd3ef8308994ee666a1963792bc",
+        },
+        "recorded_object_types": {
+            sha: recorded_kind.removeprefix("archived-")
+            for sha, (recorded_kind, _) in RECORDED_CAPTURE_SHAS.items()
+            if recorded_kind in {"archived-commit", "archived-tree"}
+            and sha
+            not in {
+                expected_archive["capture_commit"],
+                expected_archive["capture_tree"],
+            }
+        },
+    }
+    if MENU_CAPTURE_SOURCE_ARCHIVE != expected_menu_archive:
+        raise StaticReTestFailure(
+            "menufix capture source archive no longer pins the exact bundle hash, prerequisite, heads, and recorded object types"
+        )
     expected_archived_objects = {
         expected_archive["capture_commit"]: "commit",
         expected_archive["capture_tree"]: "tree",
+        **expected_menu_archive["recorded_object_types"],
     }
     if ARCHIVED_CAPTURE_OBJECTS != expected_archived_objects:
         raise StaticReTestFailure(
@@ -1986,7 +2049,7 @@ def test_recorded_capture_provenance_resolves_or_is_declared() -> str:
         if archived_kind is not None:
             if kind != f"archived-{archived_kind}":
                 raise StaticReTestFailure(
-                    f"float capture object {sha} is not classified as its archived {archived_kind}"
+                    f"archived capture object {sha} is not classified as its archived {archived_kind}"
                 )
             continue
         declared = sha in UNRECOVERABLE_CAPTURE_COMMITS
@@ -2069,13 +2132,13 @@ def test_recorded_capture_provenance_resolves_or_is_declared() -> str:
     ).read_text(encoding="utf-8")
     flattened = " ".join(findings.split())
     for token in (
-        "The recorded capture commits do not exist",
-        "never pushed",
-        "only a re-capture can fix it",
+        "menufix-capture-source.bundle",
+        "c9d521db6917d1ff997604aaf7038537a510673548a5bd091ad315e7ac78fb50",
+        "all 15 recorded commit/tree objects",
     ):
         if token not in flattened:
             raise StaticReTestFailure(
-                f"G11 must document its unverifiable capture provenance; "
+                f"G11 must document its archived capture provenance; "
                 f"missing {token!r}"
             )
 
@@ -2087,10 +2150,10 @@ def test_recorded_capture_provenance_resolves_or_is_declared() -> str:
     return (
         f"{live} of {len(RECORDED_CAPTURE_SHAS)} recorded capture object ids "
         f"resolve and are ancestors of HEAD, {len(ARCHIVED_CAPTURE_OBJECTS)} "
-        f"float capture objects are externally archived, {len(checked)} commit/tree pairs "
+        f"capture objects are externally archived, {len(checked)} commit/tree pairs "
         f"agree (including all {len(COMMIT_TREE_PAIRED_FIXTURES)} named), "
-        f"and the {len(UNRECOVERABLE_CAPTURE_COMMITS)} G11 capture commits are "
-        "declared unrecoverable and still absent"
+        f"and the {len(UNRECOVERABLE_CAPTURE_COMMITS)} active capture commits "
+        "in the unrecoverable exception class remain absent"
     )
 
 

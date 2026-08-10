@@ -15,7 +15,7 @@ import { verifyMenuBaseline } from "./menu-baseline.js";
 const POSITION_EPSILON = 0;
 
 const repository = path.resolve(import.meta.dirname, "..", "..");
-const goldenPath = path.join(repository, "tests", "fixtures", "webgame", "menu-goldens.json");
+const goldenPath = path.join(repository, "webgame-contracts", "baseline-snapshots", "menu-goldens.json");
 const menuBaselinePath = path.join(repository, "webgame-contracts", "menu-baseline.json");
 const assetGoldenPath = path.join(
   repository,
@@ -174,7 +174,9 @@ async function main(): Promise<void> {
   for (const wrapperValue of wrappers) {
     const wrapper = object(wrapperValue, "G11 embedded layout wrapper");
     const fixture = String(wrapper.fixture);
-    const standalonePath = path.join(repository, "tests", "fixtures", "webgame", fixture);
+    const receipt = baseline.snapshots.get(fixture);
+    assert(receipt !== undefined, `${fixture} lost its verified baseline receipt`);
+    const standalonePath = path.join(repository, receipt.snapshot);
     const standalone = object(
       JSON.parse(await readFile(standalonePath, "utf8")) as unknown,
       `${fixture} standalone fixture`,
@@ -184,8 +186,6 @@ async function main(): Promise<void> {
       wrapper.layout,
       `${fixture} standalone layout diverges from the embedded G11 recording`,
     );
-    const receipt = baseline.snapshots.get(fixture);
-    assert(receipt !== undefined, `${fixture} lost its verified baseline receipt`);
     const snapshot = object(
       JSON.parse(await readFile(path.join(repository, receipt.snapshot), "utf8")) as unknown,
       `${fixture} baseline snapshot`,
@@ -249,7 +249,7 @@ async function main(): Promise<void> {
     `elements=${elementCount}`,
     `art_references=${artCount}`,
     `baseline_snapshots=${baseline.snapshots.size}/28`,
-    `pending_shellfix=${baseline.pendingShellfix.size}/28`,
+    `pending_shellfix=${baseline.pendingShellfix.size}/29`,
     `position_epsilon=${POSITION_EPSILON} (same JSON numerals, no pre-assert scaling)`,
     "safe_area_1280x800=1280x720+40px_top+40px_bottom",
   ].join("\n") + "\n";

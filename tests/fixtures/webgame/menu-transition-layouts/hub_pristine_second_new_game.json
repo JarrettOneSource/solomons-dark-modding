@@ -1,0 +1,718 @@
+{
+  "schema": "solomon-dark-native-menu-layout-v3",
+  "header": {
+    "label": "hub_pristine_second_new_game",
+    "instance": "menufx-v9p73",
+    "process_id": 16152,
+    "source": {
+      "base_commit_sha": "405bb0f697fcdf484f304f0d5f38224d39a6ae70",
+      "source_tree_sha": "b6aaa8f1f9752963b570384a29a6082228c2cbfa",
+      "capture_tree": "exact committed tree at base_commit_sha",
+      "game_executable_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+      "loader_dll_sha256": "f9c3357ddce217c4f6b0c13ad2511ec4cfcbf909974c335c865f21dfae53d289",
+      "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+      "capture_driver_preset": "idle"
+    },
+    "profile_state": {
+      "schema": "solomon-dark-native-menu-profile-state-v1",
+      "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+      "baseline_id": "pristine_fresh_install",
+      "baseline_mode": "fresh_install",
+      "source_sandbox_excluded": true,
+      "retail_appdata_seeded": false,
+      "durable_file_count": 0,
+      "baseline_fixture": {
+        "repo_relative_path": "tests/fixtures/webgame/native-menu-profile-state-baseline.json",
+        "sha256": "02ac22b1de367e9e94477f61c8e1144e6a5b16bd67bd418e69e9a2ec620914ff",
+        "bytes": 2155
+      },
+      "binding_contract": {
+        "repo_relative_path": "tests/fixtures/webgame/native-menu-hub-bindings-v213.json",
+        "sha256": "07c2ed2e53e997c8fb79c3d472b58d52c72c768286cad352ec1aeedaa907ef00",
+        "bytes": 21518
+      },
+      "launch_receipt": {
+        "evidence_filename": "hub_pristine_second_new_game.menufx-v9p73.16152.profile-state.json",
+        "sha256": "c79d5cdacec3c94544415f3ff7acf8f1d19f350120d62a2d617f914cf058116e",
+        "bytes": 693
+      }
+    },
+    "profile_state_binding": {
+      "baseline_id": "pristine_fresh_install",
+      "layout_id": "hub_pristine_second_new_game",
+      "edge_id": "",
+      "derivation_witness_role": ""
+    },
+    "capture_method": "live native UI tree + exact text/font hooks + native Sprite draw hooks",
+    "recorded_live": true,
+    "captured_at_utc": "2026-08-09T13:47:43.8646472Z",
+    "settlement": {
+      "settlement_spec": "2.9",
+      "criterion": "at least 40 consecutive samples spanning at least 2 seconds with constant surface/generations and every variance assigned to one measured v2.5 member class",
+      "settle_latency_milliseconds": 15889,
+      "stable_span_milliseconds": 15540,
+      "consecutive_structural_samples": 40,
+      "minimum_element_count": 15,
+      "peak_element_count": 15,
+      "raw_window_structural_sha256": "e1d5a7039e189b290e51a8a87ca82eb0c0fe87f04c8f3e5ba38816738a730b57",
+      "resolved_structural_core_sha256": "d6218ea90c18eab53cb8be20ec0c30ede2728670ab0093a92abe3b756c9d7f7d",
+      "resolved_classification_map_sha256": "f17c275a85933ae43cca397838b61417c9924e3fc0270383fdbc59ad695a2858",
+      "ambient_fraction": 0.06666666666666667
+    },
+    "browser_tab_verification": null,
+    "raw_recording": {
+      "evidence_filename": "hub_pristine_second_new_game.settlement.json",
+      "sha256": "9d0919ddbb12b26e682478db1bbeb08a033de995b3bc93efdbe1828e63a63fa2",
+      "bytes": 385769
+    },
+    "reference_capture": "../menu-reference-captures/hub_pristine_second_new_game.png",
+    "path_dependent_core": {
+      "parent_screen_id": "hub",
+      "path_qualifier": "pristine_second_new_game",
+      "selector": "profile_baseline:pristine_fresh_install;entry_path:first_run_hub_to_main_then_new_game_create_to_hub;same_process",
+      "required_baseline_id": "pristine_fresh_install",
+      "measured_settled_element_count": 15,
+      "fork_decision": {
+        "evidence_path": "raw-v9/diagnostics/hub-profile-path-v26-question-audit.json",
+        "sha256": "0542af1cdb416133c13547b2a1015db7b2ad582b1b3dd3eda81610c9c8255871",
+        "bytes": 13459
+      }
+    },
+    "animation_confirmation": {
+      "evidence_filename": "hub_pristine_second_new_game.confirmation.json",
+      "sha256": "10ef2536869123e45aa22d1461d2c326cfb1c915497644aa5900ad3252ac905c",
+      "bytes": 394003,
+      "instance": "menufx-v9p75",
+      "process_id": 16408,
+      "source": {
+        "base_commit_sha": "405bb0f697fcdf484f304f0d5f38224d39a6ae70",
+        "source_tree_sha": "b6aaa8f1f9752963b570384a29a6082228c2cbfa",
+        "capture_tree": "exact committed tree at base_commit_sha",
+        "game_executable_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+        "loader_dll_sha256": "f9c3357ddce217c4f6b0c13ad2511ec4cfcbf909974c335c865f21dfae53d289",
+        "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+        "capture_driver_preset": "idle"
+      },
+      "profile_state": {
+        "schema": "solomon-dark-native-menu-profile-state-v1",
+        "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+        "baseline_id": "pristine_fresh_install",
+        "baseline_mode": "fresh_install",
+        "source_sandbox_excluded": true,
+        "retail_appdata_seeded": false,
+        "durable_file_count": 0,
+        "baseline_fixture": {
+          "repo_relative_path": "tests/fixtures/webgame/native-menu-profile-state-baseline.json",
+          "sha256": "02ac22b1de367e9e94477f61c8e1144e6a5b16bd67bd418e69e9a2ec620914ff",
+          "bytes": 2155
+        },
+        "binding_contract": {
+          "repo_relative_path": "tests/fixtures/webgame/native-menu-hub-bindings-v213.json",
+          "sha256": "07c2ed2e53e997c8fb79c3d472b58d52c72c768286cad352ec1aeedaa907ef00",
+          "bytes": 21518
+        },
+        "launch_receipt": {
+          "evidence_filename": "hub_pristine_second_new_game.confirmation.menufx-v9p75.16408.profile-state.json",
+          "sha256": "7ac24f5833a8b43d68fe8f692aa67d9f751656c170ecb4f0b5dcf0fba021596a",
+          "bytes": 693
+        }
+      },
+      "profile_state_binding": {
+        "baseline_id": "pristine_fresh_install",
+        "layout_id": "hub_pristine_second_new_game",
+        "edge_id": "",
+        "derivation_witness_role": "",
+        "path_dependent_core": {
+          "parent_screen_id": "hub",
+          "path_qualifier": "pristine_second_new_game",
+          "selector": "profile_baseline:pristine_fresh_install;entry_path:first_run_hub_to_main_then_new_game_create_to_hub;same_process",
+          "required_baseline_id": "pristine_fresh_install",
+          "measured_settled_element_count": 15,
+          "fork_decision": {
+            "evidence_path": "raw-v9/diagnostics/hub-profile-path-v26-question-audit.json",
+            "sha256": "0542af1cdb416133c13547b2a1015db7b2ad582b1b3dd3eda81610c9c8255871",
+            "bytes": 13459
+          }
+        }
+      },
+      "confirmation_structural_sha256": "13ca5ccac4e4b2a4c073e582568d10307774830591c23347ee6ee4b830efb7ed",
+      "animated_element_ids_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "raw_primary_animated_element_ids": [],
+      "raw_confirmation_animated_element_ids": [],
+      "raw_sets_match_noncontractual": true,
+      "requires_campaign_resolution": true
+    },
+    "ambient_lifecycle": {
+      "resolution_sha256": "15b241e87eeaae72fbfeac4beb94c9d42a6e083ec5002efdf0c0ab4eb23b2ee9",
+      "independent_instances": [
+        [
+          "menufx-v9p73",
+          16152
+        ],
+        [
+          "menufx-v9p75",
+          16408
+        ]
+      ],
+      "observation_receipts": [
+        {
+          "evidence_path": "raw-v9/candidates/candidate-v214-profile-final/menu-settlement-traces/hub_pristine_second_new_game.settlement.json",
+          "sha256": "9d0919ddbb12b26e682478db1bbeb08a033de995b3bc93efdbe1828e63a63fa2",
+          "bytes": 385769
+        },
+        {
+          "evidence_path": "raw-v9/candidates/candidate-v214-profile-final/menu-animation-confirmations/hub_pristine_second_new_game.confirmation.json",
+          "sha256": "10ef2536869123e45aa22d1461d2c326cfb1c915497644aa5900ad3252ac905c",
+          "bytes": 394003
+        },
+        {
+          "evidence_path": "raw-v9/motion-v215/final-rerun3/capture/motion-observations/hub_pristine_second_new_game.confirmation.motion.json",
+          "sha256": "1e387e9f28e19e37be7d706015f345463af135a5a4bbdf7a86309cd90f1e63fe",
+          "bytes": 2118871
+        },
+        {
+          "evidence_path": "raw-v9/motion-v215/final-rerun3/capture/motion-observations/hub_pristine_second_new_game.primary.motion.json",
+          "sha256": "dc90561dfcc9adb66836f961373030db12ec70efc3ebcaebc479fc4be8404619",
+          "bytes": 2127877
+        }
+      ],
+      "extended_observation_baseline_receipts": [
+        {
+          "evidence_path": "raw-v9/motion-v215/final-rerun3/capture/menu-animation-confirmations/hub_pristine_second_new_game.confirmation.json",
+          "sha256": "10ef2536869123e45aa22d1461d2c326cfb1c915497644aa5900ad3252ac905c",
+          "bytes": 394003
+        },
+        {
+          "evidence_path": "raw-v9/motion-v215/final-rerun3/capture/menu-transition-layouts/hub_pristine_second_new_game.json",
+          "sha256": "31df332dd697ae3ae16463ae0d662cedfd07a49427ae89085ac8466c9def81d1",
+          "bytes": 15890
+        }
+      ]
+    }
+  },
+  "layout": {
+    "generation": 18,
+    "screen_id": "hub",
+    "screen_title": "",
+    "capture_method": "live native UI tree + exact text/font hooks + native Sprite draw hooks",
+    "draw_order_semantics": "structural_core_relative_sequence",
+    "elements": [
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.47",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          735.5,
+          830.0,
+          793.5,
+          892.0
+        ],
+        "unclipped_rect": [
+          735.5,
+          830.0,
+          793.5,
+          892.0
+        ],
+        "id": "hub.art.ui_47.1",
+        "draw_order": 0,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.47",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          730.5,
+          825.0,
+          788.5,
+          887.0
+        ],
+        "unclipped_rect": [
+          730.5,
+          825.0,
+          788.5,
+          887.0
+        ],
+        "id": "hub.art.ui_47.2",
+        "draw_order": 1,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.48",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          815.5,
+          830.0,
+          873.5,
+          892.0
+        ],
+        "unclipped_rect": [
+          815.5,
+          830.0,
+          873.5,
+          892.0
+        ],
+        "id": "hub.art.ui_48.1",
+        "draw_order": 2,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.48",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          810.5,
+          825.0,
+          868.5,
+          887.0
+        ],
+        "unclipped_rect": [
+          810.5,
+          825.0,
+          868.5,
+          887.0
+        ],
+        "id": "hub.art.ui_48.2",
+        "draw_order": 3,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "Skills.48",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          480.5,
+          838.0,
+          508.5,
+          880.0
+        ],
+        "unclipped_rect": [
+          480.5,
+          838.0,
+          508.5,
+          880.0
+        ],
+        "id": "hub.art.skills_48.1",
+        "draw_order": 4,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.100",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          483.5,
+          877.0,
+          505.5,
+          900.0
+        ],
+        "unclipped_rect": [
+          483.5,
+          877.0,
+          505.5,
+          908.0
+        ],
+        "id": "hub.art.ui_100.1",
+        "draw_order": 5,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.82",
+        "font_id": "",
+        "text_style": "centered",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          794.5,
+          829.0,
+          806.5,
+          885.0
+        ],
+        "unclipped_rect": [
+          794.5,
+          829.0,
+          806.5,
+          885.0
+        ],
+        "id": "hub.art.ui_82.1",
+        "draw_order": 6,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "Skills.43",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          784.25,
+          9.75,
+          815.75,
+          41.25
+        ],
+        "unclipped_rect": [
+          784.25,
+          9.75,
+          815.75,
+          41.25
+        ],
+        "id": "hub.art.skills_43.1",
+        "draw_order": 7,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.42",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          9.5,
+          8.5,
+          40.5,
+          41.5
+        ],
+        "unclipped_rect": [
+          9.5,
+          8.5,
+          40.5,
+          41.5
+        ],
+        "id": "hub.art.ui_42.1",
+        "draw_order": 8,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "LevelPicker.0",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          1505.0,
+          55.0,
+          1600.0,
+          148.0
+        ],
+        "unclipped_rect": [
+          1505.0,
+          55.0,
+          1600.0,
+          148.0
+        ],
+        "id": "hub.art.levelpicker_0.1",
+        "draw_order": 9,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "LevelPicker.6",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          1505.0,
+          148.0,
+          1600.0,
+          241.0
+        ],
+        "unclipped_rect": [
+          1505.0,
+          148.0,
+          1600.0,
+          241.0
+        ],
+        "id": "hub.art.levelpicker_6.1",
+        "draw_order": 10,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "LevelPicker.4",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          1505.0,
+          241.0,
+          1600.0,
+          334.0
+        ],
+        "unclipped_rect": [
+          1505.0,
+          241.0,
+          1600.0,
+          334.0
+        ],
+        "id": "hub.art.levelpicker_4.1",
+        "draw_order": 11,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "LevelPicker.5",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          1505.0,
+          334.0,
+          1600.0,
+          427.0
+        ],
+        "unclipped_rect": [
+          1505.0,
+          334.0,
+          1600.0,
+          427.0
+        ],
+        "id": "hub.art.levelpicker_5.1",
+        "draw_order": 12,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "LevelPicker.2",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          1505.0,
+          427.0,
+          1600.0,
+          520.0
+        ],
+        "unclipped_rect": [
+          1505.0,
+          427.0,
+          1600.0,
+          520.0
+        ],
+        "id": "hub.art.levelpicker_2.1",
+        "draw_order": 13,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      }
+    ],
+    "settlement_spec": "2.9",
+    "structural_core_sha256": "d6218ea90c18eab53cb8be20ec0c30ede2728670ab0093a92abe3b756c9d7f7d",
+    "structural_core_element_count": 14,
+    "animated_element_ids": [
+      "hub.ambient.member_497899476eb7f2adf5d838648cfeda3b3f8a8adab660da13db2003505c3e5bf7_slot_1.1"
+    ],
+    "animated_family_ids": [],
+    "choice_slot_ids": [],
+    "choice_slots": [],
+    "visibility_cycling_element_ids": [],
+    "ambient_persistent_element_ids": [],
+    "classification_map": {
+      "hub.ambient.member_497899476eb7f2adf5d838648cfeda3b3f8a8adab660da13db2003505c3e5bf7_slot_1.1": [
+        "animated"
+      ]
+    },
+    "ambient_family_art_ids": [],
+    "ambient_members": [
+      {
+        "member_key": "member:497899476eb7f2adf5d838648cfeda3b3f8a8adab660da13db2003505c3e5bf7:slot:1",
+        "art_id": "UI.28",
+        "member_classes": [
+          "animated"
+        ],
+        "draw_bands": [
+          {
+            "below": "bottom",
+            "above": "hub.art.ui_47.1"
+          }
+        ],
+        "class_members": [
+          {
+            "classification": "animated",
+            "anchor_semantics": "first_observation_first_present_sample",
+            "anchor_payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.28",
+              "font_id": "",
+              "text_style": "transform",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                720.317322,
+                426.920807,
+                795.682678,
+                504.079193
+              ],
+              "unclipped_rect": [
+                720.317322,
+                426.920807,
+                795.682678,
+                504.079193
+              ]
+            },
+            "union_spatial_envelope": {
+              "sample_count": 539,
+              "rect": {
+                "min_x": 720.317322,
+                "max_x": 720.379456,
+                "min_y": 426.920807,
+                "max_y": 426.920807,
+                "min_width": 75.36535600000002,
+                "max_width": 75.36535600000002,
+                "min_height": 77.15838599999995,
+                "max_height": 77.15838599999995
+              },
+              "unclipped_rect": {
+                "min_x": 720.317322,
+                "max_x": 720.379456,
+                "min_y": 426.920807,
+                "max_y": 426.920807,
+                "min_width": 75.36535600000002,
+                "max_width": 75.36535600000002,
+                "min_height": 77.15838599999995,
+                "max_height": 77.15838599999995
+              }
+            },
+            "on_fraction": 1.0,
+            "dominant_visible": true,
+            "dominant_phase_payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.28",
+              "font_id": "",
+              "text_style": "transform",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                720.317322,
+                426.920807,
+                795.682678,
+                504.079193
+              ],
+              "unclipped_rect": [
+                720.317322,
+                426.920807,
+                795.682678,
+                504.079193
+              ]
+            },
+            "events": {
+              "spawn": 0,
+              "despawn": 0,
+              "visible_toggle": 0,
+              "rect_change": 1,
+              "cross_window_rect_change": 0
+            },
+            "captured_member_count": 4
+          }
+        ],
+        "union_spatial_envelope": {
+          "sample_count": 539,
+          "rect": {
+            "min_x": 720.317322,
+            "max_x": 720.379456,
+            "min_y": 426.920807,
+            "max_y": 426.920807,
+            "min_width": 75.36535600000002,
+            "max_width": 75.36535600000002,
+            "min_height": 77.15838599999995,
+            "max_height": 77.15838599999995
+          },
+          "unclipped_rect": {
+            "min_x": 720.317322,
+            "max_x": 720.379456,
+            "min_y": 426.920807,
+            "max_y": 426.920807,
+            "min_width": 75.36535600000002,
+            "max_width": 75.36535600000002,
+            "min_height": 77.15838599999995,
+            "max_height": 77.15838599999995
+          }
+        },
+        "observed_concurrency_range": [
+          1,
+          1
+        ],
+        "on_fraction": 1.0,
+        "dominant_visible": true,
+        "events": {
+          "spawn": 0,
+          "despawn": 0,
+          "visible_toggle": 0,
+          "rect_change": 1
+        },
+        "id": "hub.ambient.member_497899476eb7f2adf5d838648cfeda3b3f8a8adab660da13db2003505c3e5bf7_slot_1.1"
+      }
+    ],
+    "ephemeral_family": {
+      "art_ids": [],
+      "union_spatial_envelope": null,
+      "observed_concurrency_range": [
+        0,
+        0
+      ],
+      "draw_bands": {},
+      "spawn_event_count": 0,
+      "despawn_event_count": 0,
+      "bidirectional_churn_witnessed": true
+    },
+    "ambient_semantic_member_count": 1,
+    "peak_element_count": 15,
+    "ambient_fraction": 0.06666666666666667
+  }
+}

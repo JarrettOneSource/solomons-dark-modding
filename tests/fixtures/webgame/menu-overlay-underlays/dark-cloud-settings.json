@@ -1,0 +1,530 @@
+{
+  "schema": "solomon-dark-native-menu-layout-v2",
+  "header": {
+    "label": "dark_cloud_settings",
+    "instance": "menufx-v9p24",
+    "process_id": 15940,
+    "source": {
+      "base_commit_sha": "6363b637a5d2840d23f31430eaf0ed9bf32ae63b",
+      "source_tree_sha": "3a12f89bb61f788f2b1c9dca140cd556a2448a7d",
+      "capture_tree": "exact committed tree at base_commit_sha",
+      "game_executable_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+      "loader_dll_sha256": "0ca478db94bdb26a30b058af352445e5c49bab11fa5c743c91dbc011baad6dfc",
+      "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+      "capture_driver_preset": "idle"
+    },
+    "profile_state": {
+      "schema": "solomon-dark-native-menu-profile-state-v1",
+      "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+      "baseline_id": "pristine_fresh_install",
+      "baseline_mode": "fresh_install",
+      "source_sandbox_excluded": true,
+      "retail_appdata_seeded": false,
+      "durable_file_count": 0,
+      "baseline_fixture": {
+        "repo_relative_path": "tests/fixtures/webgame/native-menu-profile-state-baseline.json",
+        "sha256": "02ac22b1de367e9e94477f61c8e1144e6a5b16bd67bd418e69e9a2ec620914ff",
+        "bytes": 2155
+      },
+      "binding_contract": {
+        "repo_relative_path": "tests/fixtures/webgame/native-menu-hub-bindings-v213.json",
+        "sha256": "07c2ed2e53e997c8fb79c3d472b58d52c72c768286cad352ec1aeedaa907ef00",
+        "bytes": 21518
+      },
+      "launch_receipt": {
+        "evidence_filename": "dark-cloud-settings.menufx-v9p24.15940.profile-state.json",
+        "sha256": "ebcce72f26d5694e37359b9728359ae64469bb49ff42c3344f8024e4c373c887",
+        "bytes": 694
+      }
+    },
+    "profile_state_binding": {
+      "baseline_id": "pristine_fresh_install",
+      "layout_id": "dark_cloud_settings",
+      "edge_id": "",
+      "derivation_witness_role": ""
+    },
+    "capture_method": "live native UI tree + exact text/font hooks + native Sprite draw hooks",
+    "recorded_live": true,
+    "captured_at_utc": "2026-08-09T01:05:52.6538302Z",
+    "settlement": {
+      "settlement_spec": "2.9",
+      "criterion": "at least 40 consecutive samples spanning at least 2 seconds with constant surface/generations and every variance assigned to one measured v2.5 member class",
+      "structural_element_order": "core_relative_sequence_absolute_draw_order_excluded",
+      "settle_latency_milliseconds": 15852,
+      "stable_span_milliseconds": 15528,
+      "consecutive_structural_samples": 40,
+      "animated_id_set_sample_count": 40,
+      "total_semantic_samples": 40,
+      "busy_probe_count": 0,
+      "not_ready_probe_count": 0,
+      "transition_source_probe_count": 0,
+      "foreign_surface_probe_count": 0,
+      "structural_phase_count": 1,
+      "structural_sha256": "72c12485987bee18004a28d8b6e6f6b518a77113f8efcf7d2f35e8373ac7e6b9",
+      "animated_element_ids": [],
+      "visibility_cycling_element_ids": [],
+      "ephemeral_art_ids": [],
+      "animated_element_count": 0,
+      "minimum_element_count": 16,
+      "element_count": 16,
+      "animated_fraction": 0,
+      "stable_start_index": 0,
+      "stable_end_index": 39
+    },
+    "browser_tab_verification": null,
+    "raw_recording": {
+      "evidence_filename": "dark-cloud-settings.settlement.json",
+      "sha256": "394e54bd3bab9249e4689a997773210ba4a4d94afb969d29ac57644d9dc14c9e",
+      "bytes": 1599338
+    },
+    "reference_capture": "../menu-reference-captures/dark-cloud-settings.png",
+    "animation_confirmation": {
+      "evidence_filename": "dark-cloud-settings.confirmation.json",
+      "sha256": "339fb6d8b6ec4b10e7bc967c3e3faa835d690475181ac3bb3a54929f58ea6bd1",
+      "bytes": 1629282,
+      "instance": "menufx-v9p25",
+      "process_id": 16308,
+      "source": {
+        "base_commit_sha": "6363b637a5d2840d23f31430eaf0ed9bf32ae63b",
+        "source_tree_sha": "3a12f89bb61f788f2b1c9dca140cd556a2448a7d",
+        "capture_tree": "exact committed tree at base_commit_sha",
+        "game_executable_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+        "loader_dll_sha256": "0ca478db94bdb26a30b058af352445e5c49bab11fa5c743c91dbc011baad6dfc",
+        "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+        "capture_driver_preset": "idle"
+      },
+      "profile_state": {
+        "schema": "solomon-dark-native-menu-profile-state-v1",
+        "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+        "baseline_id": "pristine_fresh_install",
+        "baseline_mode": "fresh_install",
+        "source_sandbox_excluded": true,
+        "retail_appdata_seeded": false,
+        "durable_file_count": 0,
+        "baseline_fixture": {
+          "repo_relative_path": "tests/fixtures/webgame/native-menu-profile-state-baseline.json",
+          "sha256": "02ac22b1de367e9e94477f61c8e1144e6a5b16bd67bd418e69e9a2ec620914ff",
+          "bytes": 2155
+        },
+        "binding_contract": {
+          "repo_relative_path": "tests/fixtures/webgame/native-menu-hub-bindings-v213.json",
+          "sha256": "07c2ed2e53e997c8fb79c3d472b58d52c72c768286cad352ec1aeedaa907ef00",
+          "bytes": 21518
+        },
+        "launch_receipt": {
+          "evidence_filename": "dark-cloud-settings.confirmation.menufx-v9p25.16308.profile-state.json",
+          "sha256": "38869132e6b7b21341bf1538a803a54c184ea1c3a7579b0d13631ed9001aa6ae",
+          "bytes": 694
+        }
+      },
+      "profile_state_binding": {
+        "baseline_id": "pristine_fresh_install",
+        "layout_id": "dark_cloud_settings",
+        "edge_id": "",
+        "derivation_witness_role": ""
+      },
+      "confirmation_structural_sha256": "76c098f1008d2349b8bea13386eca055f6aecd9c64f52a2546638ec0f7be0cce",
+      "animated_element_ids_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "raw_primary_animated_element_ids": [],
+      "raw_confirmation_animated_element_ids": [],
+      "raw_sets_match_noncontractual": true,
+      "requires_campaign_resolution": true
+    }
+  },
+  "layout": {
+    "generation": 11,
+    "screen_id": "dark_cloud_settings",
+    "screen_title": "",
+    "capture_method": "live native UI tree + exact text/font hooks + native Sprite draw hooks",
+    "captured_at_milliseconds": 183775968,
+    "animated_element_ids": [],
+    "visibility_cycling_element_ids": [],
+    "ephemeral_art_ids": [],
+    "elements": [
+      {
+        "id": "dark_cloud_settings.art.ui_28.1",
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.28",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "draw_order": 1,
+        "rect": [
+          720.317322,
+          426.920807,
+          795.682678,
+          504.079193
+        ],
+        "unclipped_rect": [
+          720.317322,
+          426.920807,
+          795.682678,
+          504.079193
+        ]
+      },
+      {
+        "id": "dark_cloud_settings.art.ui_47.2",
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.47",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "draw_order": 2,
+        "rect": [
+          735.5,
+          830.0,
+          793.5,
+          892.0
+        ],
+        "unclipped_rect": [
+          735.5,
+          830.0,
+          793.5,
+          892.0
+        ]
+      },
+      {
+        "id": "dark_cloud_settings.art.ui_47.1",
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.47",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "draw_order": 3,
+        "rect": [
+          730.5,
+          825.0,
+          788.5,
+          887.0
+        ],
+        "unclipped_rect": [
+          730.5,
+          825.0,
+          788.5,
+          887.0
+        ]
+      },
+      {
+        "id": "dark_cloud_settings.art.ui_48.2",
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.48",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "draw_order": 4,
+        "rect": [
+          815.5,
+          830.0,
+          873.5,
+          892.0
+        ],
+        "unclipped_rect": [
+          815.5,
+          830.0,
+          873.5,
+          892.0
+        ]
+      },
+      {
+        "id": "dark_cloud_settings.art.ui_48.1",
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.48",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "draw_order": 5,
+        "rect": [
+          810.5,
+          825.0,
+          868.5,
+          887.0
+        ],
+        "unclipped_rect": [
+          810.5,
+          825.0,
+          868.5,
+          887.0
+        ]
+      },
+      {
+        "id": "dark_cloud_settings.art.skills_48.1",
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "Skills.48",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "draw_order": 6,
+        "rect": [
+          480.5,
+          838.0,
+          508.5,
+          880.0
+        ],
+        "unclipped_rect": [
+          480.5,
+          838.0,
+          508.5,
+          880.0
+        ]
+      },
+      {
+        "id": "dark_cloud_settings.art.ui_100.1",
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.100",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "draw_order": 7,
+        "rect": [
+          483.5,
+          877.0,
+          505.5,
+          900.0
+        ],
+        "unclipped_rect": [
+          483.5,
+          877.0,
+          505.5,
+          908.0
+        ]
+      },
+      {
+        "id": "dark_cloud_settings.art.ui_82.1",
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.82",
+        "font_id": "",
+        "text_style": "centered",
+        "visible": true,
+        "interactive": false,
+        "draw_order": 8,
+        "rect": [
+          794.5,
+          829.0,
+          806.5,
+          885.0
+        ],
+        "unclipped_rect": [
+          794.5,
+          829.0,
+          806.5,
+          885.0
+        ]
+      },
+      {
+        "id": "dark_cloud_settings.art.skills_43.1",
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "Skills.43",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "draw_order": 9,
+        "rect": [
+          784.25,
+          9.75,
+          815.75,
+          41.25
+        ],
+        "unclipped_rect": [
+          784.25,
+          9.75,
+          815.75,
+          41.25
+        ]
+      },
+      {
+        "id": "dark_cloud_settings.art.ui_42.1",
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.42",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "draw_order": 10,
+        "rect": [
+          9.5,
+          8.5,
+          40.5,
+          41.5
+        ],
+        "unclipped_rect": [
+          9.5,
+          8.5,
+          40.5,
+          41.5
+        ]
+      },
+      {
+        "id": "dark_cloud_settings.art.ui_17.1",
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.17",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "draw_order": 11,
+        "rect": [
+          490.0,
+          90.0,
+          570.0,
+          173.0
+        ],
+        "unclipped_rect": [
+          490.0,
+          90.0,
+          570.0,
+          173.0
+        ]
+      },
+      {
+        "id": "dark_cloud_settings.art.ui_17.2",
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.17",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "draw_order": 12,
+        "rect": [
+          1030.0,
+          90.0,
+          1110.0,
+          173.0
+        ],
+        "unclipped_rect": [
+          1030.0,
+          90.0,
+          1110.0,
+          173.0
+        ]
+      },
+      {
+        "id": "dark_cloud_settings.art.ui_17.3",
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.17",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "draw_order": 13,
+        "rect": [
+          490.0,
+          727.0,
+          570.0,
+          810.0
+        ],
+        "unclipped_rect": [
+          490.0,
+          727.0,
+          570.0,
+          810.0
+        ]
+      },
+      {
+        "id": "dark_cloud_settings.art.ui_17.4",
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.17",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "draw_order": 14,
+        "rect": [
+          1030.0,
+          727.0,
+          1110.0,
+          810.0
+        ],
+        "unclipped_rect": [
+          1030.0,
+          727.0,
+          1110.0,
+          810.0
+        ]
+      },
+      {
+        "id": "dark_cloud_settings.art.ui_18.1",
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.18",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "draw_order": 15,
+        "rect": [
+          421.0,
+          319.0,
+          488.0,
+          581.0
+        ],
+        "unclipped_rect": [
+          421.0,
+          319.0,
+          488.0,
+          581.0
+        ]
+      },
+      {
+        "id": "dark_cloud_settings.art.ui_18.2",
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.18",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "draw_order": 16,
+        "rect": [
+          1112.0,
+          319.0,
+          1179.0,
+          581.0
+        ],
+        "unclipped_rect": [
+          1112.0,
+          319.0,
+          1179.0,
+          581.0
+        ]
+      }
+    ]
+  }
+}

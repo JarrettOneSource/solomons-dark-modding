@@ -54,6 +54,67 @@ def _rect(element: dict[str, Any], label: str) -> list[int | float]:
     return value
 
 
+def _geometry_sha256(measurements: list[dict[str, Any]]) -> str:
+    geometry_bytes = json.dumps(
+        _recorder_json_value(measurements),
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(geometry_bytes).hexdigest()
+
+
+def _semantic_measurements(measurements: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Exclude screen-local synthetic ordinals from a measured tab receipt."""
+    fields = (
+        "tab",
+        "action_id",
+        "bracket_top",
+        "control_rect",
+        "bracket_rects",
+    )
+    return [{field: item.get(field) for field in fields} for item in measurements]
+
+
+def _validated_receipt_measurements(
+    receipt: dict[str, Any], label: str
+) -> list[dict[str, Any]]:
+    measurements = receipt.get("measurements")
+    member_ids = receipt.get("member_ids")
+    if (
+        not isinstance(measurements, list)
+        or len(measurements) != len(TAB_ACTIONS)
+        or not all(isinstance(item, dict) for item in measurements)
+        or not isinstance(member_ids, list)
+        or len(member_ids) != 6
+        or not all(isinstance(item, str) and item for item in member_ids)
+        or len(set(member_ids)) != 6
+    ):
+        raise NativeMenuBrowserTabError(
+            f"{label} records a malformed capture-time browser-tab verification receipt"
+        )
+    bracket_ids: list[str] = []
+    for measurement in measurements:
+        ids = measurement.get("bracket_ids")
+        if (
+            not isinstance(ids, list)
+            or len(ids) != 2
+            or not all(isinstance(item, str) and item for item in ids)
+            or not isinstance(measurement.get("control_id"), str)
+            or not measurement["control_id"]
+        ):
+            raise NativeMenuBrowserTabError(
+                f"{label} records a malformed capture-time browser-tab verification receipt"
+            )
+        bracket_ids.extend(ids)
+    if sorted(bracket_ids) != member_ids or receipt.get(
+        "geometry_sha256"
+    ) != _geometry_sha256(measurements):
+        raise NativeMenuBrowserTabError(
+            f"{label} records a false capture-time browser-tab verification receipt"
+        )
+    return measurements
+
+
 def resolve_browser_tab(layout: dict[str, Any], label: str) -> dict[str, Any]:
     elements = layout.get("elements")
     if not isinstance(elements, list) or not elements:
@@ -134,15 +195,10 @@ def resolve_browser_tab(layout: dict[str, Any], label: str) -> dict[str, Any]:
         raise NativeMenuBrowserTabError(
             f"{label} did not resolve one selected tab from bracket geometry"
         )
-    geometry_bytes = json.dumps(
-        _recorder_json_value(measurements),
-        ensure_ascii=False,
-        separators=(",", ":"),
-    ).encode("utf-8")
     return {
         "measured_tab": selected[0]["tab"],
         "member_ids": sorted(geometry_ids),
-        "geometry_sha256": hashlib.sha256(geometry_bytes).hexdigest(),
+        "geometry_sha256": _geometry_sha256(measurements),
         "measurements": measurements,
     }
 
@@ -173,12 +229,12 @@ def validate_browser_tab(
         raise NativeMenuBrowserTabError(
             f"{label} has no capture-time browser-tab verification receipt"
         )
+    receipt_measurements = _validated_receipt_measurements(receipt, label)
     if (
         receipt.get("expected_tab") != expected
         or receipt.get("measured_tab") != measured["measured_tab"]
-        or receipt.get("member_ids") != measured["member_ids"]
-        or receipt.get("geometry_sha256") != measured["geometry_sha256"]
-        or receipt.get("measurements") != measured["measurements"]
+        or _semantic_measurements(receipt_measurements)
+        != _semantic_measurements(measured["measurements"])
     ):
         raise NativeMenuBrowserTabError(
             f"{label} records a false capture-time browser-tab verification receipt"

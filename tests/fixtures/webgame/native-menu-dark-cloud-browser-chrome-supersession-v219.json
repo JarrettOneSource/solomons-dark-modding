@@ -1,0 +1,3551 @@
+{
+  "schema": "solomon-dark-native-menu-dark-cloud-browser-chrome-supersession-v1",
+  "settlement_spec": "2.19",
+  "class": "exact_landed_era_residual_supersession",
+  "affected_layouts": [
+    {
+      "layout_id": "dark-cloud-browser",
+      "screen_id": "dark_cloud_browser",
+      "superseded_landed_fixture": {
+        "path": "webgame-contracts/baseline-snapshots/menu-layouts/dark-cloud-browser.json",
+        "sha256": "24b8ad31cb35b8d8cd4ef9527777572256b9f8c9e2d5e8d39e877bcd9f7a96b2",
+        "bytes": 146648,
+        "generation": 34,
+        "element_count": 98
+      },
+      "superseding_candidate_fixture": {
+        "path": "raw-v9/candidates/candidate-v214-profile-final/menu-layouts/dark-cloud-browser.json",
+        "sha256": "f5e7d658564ce273a24d878029da55907e0f466fd4616b09fa2ecdfdc7d69cac",
+        "bytes": 52000,
+        "generation": 16,
+        "element_count": 69,
+        "structural_core_sha256": "76d1f3e1d59b6fdb93699c18097b596cc7f2af8b7aa9f04af152df16f1805b3d"
+      },
+      "residual_semantic_multiset_sha256": "8ee5570a0ff37d4992b0b7fd3ea4bed508b081ef75bfc1fba36ca373c09f5c83",
+      "residual_members": [
+        {
+          "captured_id": "dark_cloud_browser.art.ui_107.1",
+          "semantic_sha256": "63d72da34cb236853c1132ad009dc573cd891b3c779df1aec419f047a714ba21",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_browser.art.ui_107.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.107",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 1,
+            "rect": [
+              516.5,
+              99.5,
+              601.5,
+              188.5
+            ],
+            "unclipped_rect": [
+              516.5,
+              99.5,
+              601.5,
+              188.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_browser.art.ui_108.1",
+          "semantic_sha256": "56d934c6461f700748a5aa7af7f0ff9164f4cd2608caac99441702ecaabd90e8",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_browser.art.ui_108.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.108",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 2,
+            "rect": [
+              998.5,
+              99.5,
+              1083.5,
+              188.5
+            ],
+            "unclipped_rect": [
+              998.5,
+              99.5,
+              1083.5,
+              188.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_browser.art.ui_109.1",
+          "semantic_sha256": "9c39cfe623e202ff614ae0640f1dc961b294c50523db38c5dacef1692c76384a",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_browser.art.ui_109.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.109",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 3,
+            "rect": [
+              516.5,
+              711.5,
+              601.5,
+              800.5
+            ],
+            "unclipped_rect": [
+              516.5,
+              711.5,
+              601.5,
+              800.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_browser.art.ui_110.1",
+          "semantic_sha256": "93df8129723f2dea0c05a1cb5816a017e3b11d664a91ddc4af59410d00f8e4c5",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_browser.art.ui_110.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.110",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 4,
+            "rect": [
+              998.5,
+              711.5,
+              1083.5,
+              800.5
+            ],
+            "unclipped_rect": [
+              998.5,
+              711.5,
+              1083.5,
+              800.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_browser.art.ui_17.3",
+          "semantic_sha256": "cd7dde6bd054e911afc37b1d9a8ec319490ca609db067b06025dbbc31689bd63",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_browser.art.ui_17.3",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 5,
+            "rect": [
+              535.0,
+              117.0,
+              615.0,
+              200.0
+            ],
+            "unclipped_rect": [
+              535.0,
+              117.0,
+              615.0,
+              200.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_browser.art.ui_17.4",
+          "semantic_sha256": "a1446de9cbeeef6a032564480cb7d8e2727e5125638c5faba215a02aab1c3a67",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_browser.art.ui_17.4",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 6,
+            "rect": [
+              985.0,
+              117.0,
+              1065.0,
+              200.0
+            ],
+            "unclipped_rect": [
+              985.0,
+              117.0,
+              1065.0,
+              200.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_browser.art.ui_17.7",
+          "semantic_sha256": "91692510ef5468c2b7b48c50f6fd6471e13223ff3c0bf6f2364797b5a6ba26ec",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_browser.art.ui_17.7",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 7,
+            "rect": [
+              535.0,
+              700.0,
+              615.0,
+              783.0
+            ],
+            "unclipped_rect": [
+              535.0,
+              700.0,
+              615.0,
+              783.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_browser.art.ui_17.8",
+          "semantic_sha256": "ce8cae0aabe3e677c05a548a6c6cb1f910adc50f76b2d83042b82adda2825060",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_browser.art.ui_17.8",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 8,
+            "rect": [
+              985.0,
+              700.0,
+              1065.0,
+              783.0
+            ],
+            "unclipped_rect": [
+              985.0,
+              700.0,
+              1065.0,
+              783.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_browser.art.ui_18.1",
+          "semantic_sha256": "b5c70547ec01ff2fd4d1ee6ca0e24d3080b05499e3d6b89bf85ead0e5b39f707",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_browser.art.ui_18.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.18",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 9,
+            "rect": [
+              669.0,
+              50.999992,
+              931.0,
+              118.000015
+            ],
+            "unclipped_rect": [
+              669.0,
+              50.999992,
+              931.0,
+              118.000015
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_browser.art.ui_8.1",
+          "semantic_sha256": "49ddac89f4e8b0b0f82db1b89823e66b85a450e9be91e897c8869a0a4cdd9359",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_browser.art.ui_8.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.8",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 10,
+            "rect": [
+              775.5,
+              782.0,
+              824.5,
+              894.0
+            ],
+            "unclipped_rect": [
+              775.5,
+              782.0,
+              824.5,
+              894.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_browser.art.ui_8.2",
+          "semantic_sha256": "242a7c5181b0a997bff02d3c2143f4da4f884c5d7a3a774032cf0f6051d8b77e",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_browser.art.ui_8.2",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.8",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 11,
+            "rect": [
+              706.625,
+              783.0,
+              743.375,
+              867.0
+            ],
+            "unclipped_rect": [
+              706.625,
+              783.0,
+              743.375,
+              867.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_browser.art.ui_8.3",
+          "semantic_sha256": "0074a04368eac9c73bebaa86593a60fe0073db764827e92d9df140905f34b55f",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_browser.art.ui_8.3",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.8",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 12,
+            "rect": [
+              856.625,
+              783.0,
+              893.375,
+              867.0
+            ],
+            "unclipped_rect": [
+              856.625,
+              783.0,
+              893.375,
+              867.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_browser.art.ui_101.1",
+          "semantic_sha256": "34f86236f7af172702a7ec6f6ed26f425d2be6f86b7595319f666aa093f3714c",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_browser.art.ui_101.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.101",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 13,
+            "rect": [
+              702.0,
+              643.5,
+              898.0,
+              712.0
+            ],
+            "unclipped_rect": [
+              623.5,
+              643.5,
+              976.5,
+              712.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_browser.art.ui_54.1",
+          "semantic_sha256": "257971bc0a9d693bfaaa125dc751fef5581692c11df145556c15adeee78caebd",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_browser.art.ui_54.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.54",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 14,
+            "rect": [
+              696.0,
+              637.5,
+              766.0,
+              722.5
+            ],
+            "unclipped_rect": [
+              696.0,
+              637.5,
+              766.0,
+              722.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_browser.art.ui_54.2",
+          "semantic_sha256": "7ac8bd4c544d9a8dfe006d580ab42a2bcd48a44c802f23d9653f2d61d65c2a0f",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_browser.art.ui_54.2",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.54",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 15,
+            "rect": [
+              834.0,
+              637.5,
+              904.0,
+              722.5
+            ],
+            "unclipped_rect": [
+              834.0,
+              637.5,
+              904.0,
+              722.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_browser.art.controlpanel_18.1",
+          "semantic_sha256": "6bf48d43ee0fcdddcd6076ed2ef87d104ddf5ebe8128951f4ee4eb9b56bfb873",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_browser.art.controlpanel_18.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.18",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 16,
+            "rect": [
+              990.0,
+              219.0,
+              1054.0,
+              244.0
+            ],
+            "unclipped_rect": [
+              990.0,
+              219.0,
+              1054.0,
+              244.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_browser.art.controlpanel_18.2",
+          "semantic_sha256": "85b4061c82cead94694a98d8c4b2553e175a7cf04959f8046768b6416c06ee4f",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_browser.art.controlpanel_18.2",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.18",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 17,
+            "rect": [
+              910.0,
+              260.0,
+              974.0,
+              285.0
+            ],
+            "unclipped_rect": [
+              910.0,
+              260.0,
+              974.0,
+              285.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_browser.art.controlpanel_8.1",
+          "semantic_sha256": "0de35326c15bda92197d7cd60bf55102ac17a64b3672b88a5f0673307e54fb3b",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_browser.art.controlpanel_8.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.8",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 18,
+            "rect": [
+              978.0,
+              348.0,
+              1060.0,
+              378.0
+            ],
+            "unclipped_rect": [
+              978.0,
+              348.0,
+              1060.0,
+              378.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_browser.art.controlpanel_0.1",
+          "semantic_sha256": "326d195d639251cbc27c39f13dec908c4462233a7b493e5077d64edf8c9a0c5c",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_browser.art.controlpanel_0.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.0",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 19,
+            "rect": [
+              1043.0,
+              396.5,
+              1057.0,
+              411.5
+            ],
+            "unclipped_rect": [
+              1043.0,
+              396.5,
+              1057.0,
+              411.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_browser.art.controlpanel_0.2",
+          "semantic_sha256": "0257e2a93e3b2839772661b1b330cf86e98c401beda7e201c309ec13caa77dec",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_browser.art.controlpanel_0.2",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.0",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 20,
+            "rect": [
+              1043.0,
+              487.5,
+              1057.0,
+              502.5
+            ],
+            "unclipped_rect": [
+              1043.0,
+              487.5,
+              1057.0,
+              502.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_browser.art.controlpanel_0.3",
+          "semantic_sha256": "c96edbd04f1252ce021d3cdbd28282857167f1cc326423d9bb30e979b3f8b1ae",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_browser.art.controlpanel_0.3",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.0",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 21,
+            "rect": [
+              1043.0,
+              578.5,
+              1057.0,
+              593.5
+            ],
+            "unclipped_rect": [
+              1043.0,
+              578.5,
+              1057.0,
+              593.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_browser.art.controlpanel_0.4",
+          "semantic_sha256": "e0504be2b43bbbad7b9a74a4c92e177e325824812d9ba4f3d51b0804b6a34c87",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_browser.art.controlpanel_0.4",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.0",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 22,
+            "rect": [
+              1043.0,
+              669.5,
+              1057.0,
+              684.5
+            ],
+            "unclipped_rect": [
+              1043.0,
+              669.5,
+              1057.0,
+              684.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_browser.art.ui_17.1",
+          "semantic_sha256": "eb483190ad83d980f3088eed3f934cf483b2a8570ec9732b319a1b2920eef363",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_browser.art.ui_17.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 23,
+            "rect": [
+              490.0,
+              90.0,
+              570.0,
+              173.0
+            ],
+            "unclipped_rect": [
+              490.0,
+              90.0,
+              570.0,
+              173.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_browser.art.ui_17.2",
+          "semantic_sha256": "84b3136852f58f644cc773df37d94d9490962497a4e77601cf8ff724fd4fa7fe",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_browser.art.ui_17.2",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 24,
+            "rect": [
+              1030.0,
+              90.0,
+              1110.0,
+              173.0
+            ],
+            "unclipped_rect": [
+              1030.0,
+              90.0,
+              1110.0,
+              173.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_browser.art.ui_17.11",
+          "semantic_sha256": "83f9739c3eb158c867dc509fb47b904148fddd8cf971c9996200e01a44861680",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_browser.art.ui_17.11",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 25,
+            "rect": [
+              490.0,
+              727.0,
+              570.0,
+              810.0
+            ],
+            "unclipped_rect": [
+              490.0,
+              727.0,
+              570.0,
+              810.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_browser.art.ui_17.12",
+          "semantic_sha256": "0fb9025444a7a2cd4963ed0accaae085a7c0f8e6f2a4a5bc12071b2a240b198f",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_browser.art.ui_17.12",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 26,
+            "rect": [
+              1030.0,
+              727.0,
+              1110.0,
+              810.0
+            ],
+            "unclipped_rect": [
+              1030.0,
+              727.0,
+              1110.0,
+              810.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_browser.art.ui_18.2",
+          "semantic_sha256": "7e9a195198fd805e902c6c29880e5192d2aca7639278a1f1fddc9a9189e38f95",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_browser.art.ui_18.2",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.18",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 27,
+            "rect": [
+              421.0,
+              319.0,
+              488.0,
+              581.0
+            ],
+            "unclipped_rect": [
+              421.0,
+              319.0,
+              488.0,
+              581.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_browser.art.ui_18.3",
+          "semantic_sha256": "482ce83a6c9e1ca56472ecb61841450b337aac6e0b40e3ef6dd7839422a76566",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_browser.art.ui_18.3",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.18",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 28,
+            "rect": [
+              1112.0,
+              319.0,
+              1179.0,
+              581.0
+            ],
+            "unclipped_rect": [
+              1112.0,
+              319.0,
+              1179.0,
+              581.0
+            ]
+          }
+        }
+      ],
+      "fresh_pair": {
+        "primary": {
+          "instance": "menufx-v9p37",
+          "process_id": 4696,
+          "population_element_counts": [
+            69
+          ],
+          "population_generations": [
+            16
+          ],
+          "settled_sample_count": 40,
+          "all_residual_members_absent": true,
+          "trace": {
+            "path": "raw-v9/candidates/candidate-v214-profile-final/menu-settlement-traces/dark-cloud-browser.settlement.json",
+            "sha256": "1297961835f4bcb7c9a49e924c67276fae93f3a5b4bfff77396ba8e91b8c9d73",
+            "bytes": 6777053
+          }
+        },
+        "confirmation": {
+          "instance": "menufx-v9p36",
+          "process_id": 10676,
+          "population_element_counts": [
+            69
+          ],
+          "population_generations": [
+            16
+          ],
+          "settled_sample_count": 40,
+          "all_residual_members_absent": true,
+          "trace": {
+            "path": "raw-v9/candidates/candidate-v214-profile-final/menu-animation-confirmations/dark-cloud-browser.confirmation.json",
+            "sha256": "b4ee5957e288a10a6c572b5f211f329bfcebce95bdc3f776815130dec9ec9260",
+            "bytes": 6901734
+          }
+        },
+        "all_residual_members_absent": true
+      }
+    },
+    {
+      "layout_id": "dark-cloud-recent",
+      "screen_id": "dark_cloud_recent",
+      "superseded_landed_fixture": {
+        "path": "webgame-contracts/baseline-snapshots/menu-layouts/dark-cloud-recent.json",
+        "sha256": "c7ddae01f4debf8d948e0d68a35b625c45b8409ac0bf2c3da2ef34c45b355967",
+        "bytes": 146548,
+        "generation": 35,
+        "element_count": 98
+      },
+      "superseding_candidate_fixture": {
+        "path": "raw-v9/candidates/candidate-v214-profile-final/menu-layouts/dark-cloud-recent.json",
+        "sha256": "117a9c6993ef20916aba0ed8ff1fb787e298e7d6cc82ab24cdad6993634630a3",
+        "bytes": 51906,
+        "generation": 17,
+        "element_count": 69,
+        "structural_core_sha256": "ea5f4e5c39a84a8c07ce3f7fd0cd673fcbc2593a728b7503aad2c98ce6ee4893"
+      },
+      "residual_semantic_multiset_sha256": "8ee5570a0ff37d4992b0b7fd3ea4bed508b081ef75bfc1fba36ca373c09f5c83",
+      "residual_members": [
+        {
+          "captured_id": "dark_cloud_recent.art.ui_107.1",
+          "semantic_sha256": "63d72da34cb236853c1132ad009dc573cd891b3c779df1aec419f047a714ba21",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_recent.art.ui_107.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.107",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 1,
+            "rect": [
+              516.5,
+              99.5,
+              601.5,
+              188.5
+            ],
+            "unclipped_rect": [
+              516.5,
+              99.5,
+              601.5,
+              188.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_recent.art.ui_108.1",
+          "semantic_sha256": "56d934c6461f700748a5aa7af7f0ff9164f4cd2608caac99441702ecaabd90e8",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_recent.art.ui_108.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.108",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 2,
+            "rect": [
+              998.5,
+              99.5,
+              1083.5,
+              188.5
+            ],
+            "unclipped_rect": [
+              998.5,
+              99.5,
+              1083.5,
+              188.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_recent.art.ui_109.1",
+          "semantic_sha256": "9c39cfe623e202ff614ae0640f1dc961b294c50523db38c5dacef1692c76384a",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_recent.art.ui_109.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.109",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 3,
+            "rect": [
+              516.5,
+              711.5,
+              601.5,
+              800.5
+            ],
+            "unclipped_rect": [
+              516.5,
+              711.5,
+              601.5,
+              800.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_recent.art.ui_110.1",
+          "semantic_sha256": "93df8129723f2dea0c05a1cb5816a017e3b11d664a91ddc4af59410d00f8e4c5",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_recent.art.ui_110.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.110",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 4,
+            "rect": [
+              998.5,
+              711.5,
+              1083.5,
+              800.5
+            ],
+            "unclipped_rect": [
+              998.5,
+              711.5,
+              1083.5,
+              800.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_recent.art.ui_17.3",
+          "semantic_sha256": "cd7dde6bd054e911afc37b1d9a8ec319490ca609db067b06025dbbc31689bd63",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_recent.art.ui_17.3",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 5,
+            "rect": [
+              535.0,
+              117.0,
+              615.0,
+              200.0
+            ],
+            "unclipped_rect": [
+              535.0,
+              117.0,
+              615.0,
+              200.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_recent.art.ui_17.4",
+          "semantic_sha256": "a1446de9cbeeef6a032564480cb7d8e2727e5125638c5faba215a02aab1c3a67",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_recent.art.ui_17.4",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 6,
+            "rect": [
+              985.0,
+              117.0,
+              1065.0,
+              200.0
+            ],
+            "unclipped_rect": [
+              985.0,
+              117.0,
+              1065.0,
+              200.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_recent.art.ui_17.7",
+          "semantic_sha256": "91692510ef5468c2b7b48c50f6fd6471e13223ff3c0bf6f2364797b5a6ba26ec",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_recent.art.ui_17.7",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 7,
+            "rect": [
+              535.0,
+              700.0,
+              615.0,
+              783.0
+            ],
+            "unclipped_rect": [
+              535.0,
+              700.0,
+              615.0,
+              783.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_recent.art.ui_17.8",
+          "semantic_sha256": "ce8cae0aabe3e677c05a548a6c6cb1f910adc50f76b2d83042b82adda2825060",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_recent.art.ui_17.8",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 8,
+            "rect": [
+              985.0,
+              700.0,
+              1065.0,
+              783.0
+            ],
+            "unclipped_rect": [
+              985.0,
+              700.0,
+              1065.0,
+              783.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_recent.art.ui_18.1",
+          "semantic_sha256": "b5c70547ec01ff2fd4d1ee6ca0e24d3080b05499e3d6b89bf85ead0e5b39f707",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_recent.art.ui_18.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.18",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 9,
+            "rect": [
+              669.0,
+              50.999992,
+              931.0,
+              118.000015
+            ],
+            "unclipped_rect": [
+              669.0,
+              50.999992,
+              931.0,
+              118.000015
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_recent.art.ui_8.1",
+          "semantic_sha256": "49ddac89f4e8b0b0f82db1b89823e66b85a450e9be91e897c8869a0a4cdd9359",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_recent.art.ui_8.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.8",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 10,
+            "rect": [
+              775.5,
+              782.0,
+              824.5,
+              894.0
+            ],
+            "unclipped_rect": [
+              775.5,
+              782.0,
+              824.5,
+              894.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_recent.art.ui_8.2",
+          "semantic_sha256": "242a7c5181b0a997bff02d3c2143f4da4f884c5d7a3a774032cf0f6051d8b77e",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_recent.art.ui_8.2",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.8",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 11,
+            "rect": [
+              706.625,
+              783.0,
+              743.375,
+              867.0
+            ],
+            "unclipped_rect": [
+              706.625,
+              783.0,
+              743.375,
+              867.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_recent.art.ui_8.3",
+          "semantic_sha256": "0074a04368eac9c73bebaa86593a60fe0073db764827e92d9df140905f34b55f",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_recent.art.ui_8.3",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.8",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 12,
+            "rect": [
+              856.625,
+              783.0,
+              893.375,
+              867.0
+            ],
+            "unclipped_rect": [
+              856.625,
+              783.0,
+              893.375,
+              867.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_recent.art.ui_101.1",
+          "semantic_sha256": "34f86236f7af172702a7ec6f6ed26f425d2be6f86b7595319f666aa093f3714c",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_recent.art.ui_101.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.101",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 13,
+            "rect": [
+              702.0,
+              643.5,
+              898.0,
+              712.0
+            ],
+            "unclipped_rect": [
+              623.5,
+              643.5,
+              976.5,
+              712.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_recent.art.ui_54.1",
+          "semantic_sha256": "257971bc0a9d693bfaaa125dc751fef5581692c11df145556c15adeee78caebd",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_recent.art.ui_54.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.54",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 14,
+            "rect": [
+              696.0,
+              637.5,
+              766.0,
+              722.5
+            ],
+            "unclipped_rect": [
+              696.0,
+              637.5,
+              766.0,
+              722.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_recent.art.ui_54.2",
+          "semantic_sha256": "7ac8bd4c544d9a8dfe006d580ab42a2bcd48a44c802f23d9653f2d61d65c2a0f",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_recent.art.ui_54.2",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.54",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 15,
+            "rect": [
+              834.0,
+              637.5,
+              904.0,
+              722.5
+            ],
+            "unclipped_rect": [
+              834.0,
+              637.5,
+              904.0,
+              722.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_recent.art.controlpanel_18.1",
+          "semantic_sha256": "6bf48d43ee0fcdddcd6076ed2ef87d104ddf5ebe8128951f4ee4eb9b56bfb873",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_recent.art.controlpanel_18.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.18",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 16,
+            "rect": [
+              990.0,
+              219.0,
+              1054.0,
+              244.0
+            ],
+            "unclipped_rect": [
+              990.0,
+              219.0,
+              1054.0,
+              244.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_recent.art.controlpanel_18.2",
+          "semantic_sha256": "85b4061c82cead94694a98d8c4b2553e175a7cf04959f8046768b6416c06ee4f",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_recent.art.controlpanel_18.2",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.18",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 17,
+            "rect": [
+              910.0,
+              260.0,
+              974.0,
+              285.0
+            ],
+            "unclipped_rect": [
+              910.0,
+              260.0,
+              974.0,
+              285.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_recent.art.controlpanel_8.1",
+          "semantic_sha256": "0de35326c15bda92197d7cd60bf55102ac17a64b3672b88a5f0673307e54fb3b",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_recent.art.controlpanel_8.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.8",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 18,
+            "rect": [
+              978.0,
+              348.0,
+              1060.0,
+              378.0
+            ],
+            "unclipped_rect": [
+              978.0,
+              348.0,
+              1060.0,
+              378.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_recent.art.controlpanel_0.1",
+          "semantic_sha256": "326d195d639251cbc27c39f13dec908c4462233a7b493e5077d64edf8c9a0c5c",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_recent.art.controlpanel_0.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.0",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 19,
+            "rect": [
+              1043.0,
+              396.5,
+              1057.0,
+              411.5
+            ],
+            "unclipped_rect": [
+              1043.0,
+              396.5,
+              1057.0,
+              411.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_recent.art.controlpanel_0.2",
+          "semantic_sha256": "0257e2a93e3b2839772661b1b330cf86e98c401beda7e201c309ec13caa77dec",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_recent.art.controlpanel_0.2",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.0",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 20,
+            "rect": [
+              1043.0,
+              487.5,
+              1057.0,
+              502.5
+            ],
+            "unclipped_rect": [
+              1043.0,
+              487.5,
+              1057.0,
+              502.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_recent.art.controlpanel_0.3",
+          "semantic_sha256": "c96edbd04f1252ce021d3cdbd28282857167f1cc326423d9bb30e979b3f8b1ae",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_recent.art.controlpanel_0.3",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.0",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 21,
+            "rect": [
+              1043.0,
+              578.5,
+              1057.0,
+              593.5
+            ],
+            "unclipped_rect": [
+              1043.0,
+              578.5,
+              1057.0,
+              593.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_recent.art.controlpanel_0.4",
+          "semantic_sha256": "e0504be2b43bbbad7b9a74a4c92e177e325824812d9ba4f3d51b0804b6a34c87",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_recent.art.controlpanel_0.4",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.0",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 22,
+            "rect": [
+              1043.0,
+              669.5,
+              1057.0,
+              684.5
+            ],
+            "unclipped_rect": [
+              1043.0,
+              669.5,
+              1057.0,
+              684.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_recent.art.ui_17.1",
+          "semantic_sha256": "eb483190ad83d980f3088eed3f934cf483b2a8570ec9732b319a1b2920eef363",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_recent.art.ui_17.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 23,
+            "rect": [
+              490.0,
+              90.0,
+              570.0,
+              173.0
+            ],
+            "unclipped_rect": [
+              490.0,
+              90.0,
+              570.0,
+              173.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_recent.art.ui_17.2",
+          "semantic_sha256": "84b3136852f58f644cc773df37d94d9490962497a4e77601cf8ff724fd4fa7fe",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_recent.art.ui_17.2",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 24,
+            "rect": [
+              1030.0,
+              90.0,
+              1110.0,
+              173.0
+            ],
+            "unclipped_rect": [
+              1030.0,
+              90.0,
+              1110.0,
+              173.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_recent.art.ui_17.11",
+          "semantic_sha256": "83f9739c3eb158c867dc509fb47b904148fddd8cf971c9996200e01a44861680",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_recent.art.ui_17.11",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 25,
+            "rect": [
+              490.0,
+              727.0,
+              570.0,
+              810.0
+            ],
+            "unclipped_rect": [
+              490.0,
+              727.0,
+              570.0,
+              810.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_recent.art.ui_17.12",
+          "semantic_sha256": "0fb9025444a7a2cd4963ed0accaae085a7c0f8e6f2a4a5bc12071b2a240b198f",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_recent.art.ui_17.12",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 26,
+            "rect": [
+              1030.0,
+              727.0,
+              1110.0,
+              810.0
+            ],
+            "unclipped_rect": [
+              1030.0,
+              727.0,
+              1110.0,
+              810.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_recent.art.ui_18.2",
+          "semantic_sha256": "7e9a195198fd805e902c6c29880e5192d2aca7639278a1f1fddc9a9189e38f95",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_recent.art.ui_18.2",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.18",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 27,
+            "rect": [
+              421.0,
+              319.0,
+              488.0,
+              581.0
+            ],
+            "unclipped_rect": [
+              421.0,
+              319.0,
+              488.0,
+              581.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_recent.art.ui_18.3",
+          "semantic_sha256": "482ce83a6c9e1ca56472ecb61841450b337aac6e0b40e3ef6dd7839422a76566",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_recent.art.ui_18.3",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.18",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 28,
+            "rect": [
+              1112.0,
+              319.0,
+              1179.0,
+              581.0
+            ],
+            "unclipped_rect": [
+              1112.0,
+              319.0,
+              1179.0,
+              581.0
+            ]
+          }
+        }
+      ],
+      "fresh_pair": {
+        "primary": {
+          "instance": "menufx-v9p37",
+          "process_id": 4696,
+          "population_element_counts": [
+            69
+          ],
+          "population_generations": [
+            17
+          ],
+          "settled_sample_count": 40,
+          "all_residual_members_absent": true,
+          "trace": {
+            "path": "raw-v9/candidates/candidate-v214-profile-final/menu-settlement-traces/dark-cloud-recent.settlement.json",
+            "sha256": "697fda9eb471c33007bf9fd036ce940acda499f38468ec43987d9c346f133c4f",
+            "bytes": 6776955
+          }
+        },
+        "confirmation": {
+          "instance": "menufx-v9p36",
+          "process_id": 10676,
+          "population_element_counts": [
+            69
+          ],
+          "population_generations": [
+            17
+          ],
+          "settled_sample_count": 40,
+          "all_residual_members_absent": true,
+          "trace": {
+            "path": "raw-v9/candidates/candidate-v214-profile-final/menu-animation-confirmations/dark-cloud-recent.confirmation.json",
+            "sha256": "262e14cf422840e2ce998e21c334e8fffe7192239ba394d47689825c48b6f62b",
+            "bytes": 6901634
+          }
+        },
+        "all_residual_members_absent": true
+      }
+    },
+    {
+      "layout_id": "dark-cloud-online-levels",
+      "screen_id": "dark_cloud_online_levels",
+      "superseded_landed_fixture": {
+        "path": "webgame-contracts/baseline-snapshots/menu-layouts/dark-cloud-online-levels.json",
+        "sha256": "61590730b3e20d32ee77dde1d8ad12fc4b6cb5fd2e8c3c0d6396e74f31d23b16",
+        "bytes": 147248,
+        "generation": 36,
+        "element_count": 98
+      },
+      "superseding_candidate_fixture": {
+        "path": "raw-v9/candidates/candidate-v214-profile-final/menu-layouts/dark-cloud-online-levels.json",
+        "sha256": "295e3662323b49ddf826aa686e62d2d461047a41ebbd6298186f0fd696058988",
+        "bytes": 52480,
+        "generation": 18,
+        "element_count": 69,
+        "structural_core_sha256": "7c40da31527b1deae784941c212578d772375f5f603e8f191ef1bdd7d5302d10"
+      },
+      "residual_semantic_multiset_sha256": "8ee5570a0ff37d4992b0b7fd3ea4bed508b081ef75bfc1fba36ca373c09f5c83",
+      "residual_members": [
+        {
+          "captured_id": "dark_cloud_online_levels.art.ui_107.1",
+          "semantic_sha256": "63d72da34cb236853c1132ad009dc573cd891b3c779df1aec419f047a714ba21",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.ui_107.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.107",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 1,
+            "rect": [
+              516.5,
+              99.5,
+              601.5,
+              188.5
+            ],
+            "unclipped_rect": [
+              516.5,
+              99.5,
+              601.5,
+              188.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_online_levels.art.ui_108.1",
+          "semantic_sha256": "56d934c6461f700748a5aa7af7f0ff9164f4cd2608caac99441702ecaabd90e8",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.ui_108.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.108",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 2,
+            "rect": [
+              998.5,
+              99.5,
+              1083.5,
+              188.5
+            ],
+            "unclipped_rect": [
+              998.5,
+              99.5,
+              1083.5,
+              188.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_online_levels.art.ui_109.1",
+          "semantic_sha256": "9c39cfe623e202ff614ae0640f1dc961b294c50523db38c5dacef1692c76384a",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.ui_109.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.109",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 3,
+            "rect": [
+              516.5,
+              711.5,
+              601.5,
+              800.5
+            ],
+            "unclipped_rect": [
+              516.5,
+              711.5,
+              601.5,
+              800.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_online_levels.art.ui_110.1",
+          "semantic_sha256": "93df8129723f2dea0c05a1cb5816a017e3b11d664a91ddc4af59410d00f8e4c5",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.ui_110.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.110",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 4,
+            "rect": [
+              998.5,
+              711.5,
+              1083.5,
+              800.5
+            ],
+            "unclipped_rect": [
+              998.5,
+              711.5,
+              1083.5,
+              800.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_online_levels.art.ui_17.3",
+          "semantic_sha256": "cd7dde6bd054e911afc37b1d9a8ec319490ca609db067b06025dbbc31689bd63",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.ui_17.3",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 5,
+            "rect": [
+              535.0,
+              117.0,
+              615.0,
+              200.0
+            ],
+            "unclipped_rect": [
+              535.0,
+              117.0,
+              615.0,
+              200.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_online_levels.art.ui_17.4",
+          "semantic_sha256": "a1446de9cbeeef6a032564480cb7d8e2727e5125638c5faba215a02aab1c3a67",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.ui_17.4",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 6,
+            "rect": [
+              985.0,
+              117.0,
+              1065.0,
+              200.0
+            ],
+            "unclipped_rect": [
+              985.0,
+              117.0,
+              1065.0,
+              200.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_online_levels.art.ui_17.7",
+          "semantic_sha256": "91692510ef5468c2b7b48c50f6fd6471e13223ff3c0bf6f2364797b5a6ba26ec",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.ui_17.7",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 7,
+            "rect": [
+              535.0,
+              700.0,
+              615.0,
+              783.0
+            ],
+            "unclipped_rect": [
+              535.0,
+              700.0,
+              615.0,
+              783.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_online_levels.art.ui_17.8",
+          "semantic_sha256": "ce8cae0aabe3e677c05a548a6c6cb1f910adc50f76b2d83042b82adda2825060",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.ui_17.8",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 8,
+            "rect": [
+              985.0,
+              700.0,
+              1065.0,
+              783.0
+            ],
+            "unclipped_rect": [
+              985.0,
+              700.0,
+              1065.0,
+              783.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_online_levels.art.ui_18.1",
+          "semantic_sha256": "b5c70547ec01ff2fd4d1ee6ca0e24d3080b05499e3d6b89bf85ead0e5b39f707",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.ui_18.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.18",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 9,
+            "rect": [
+              669.0,
+              50.999992,
+              931.0,
+              118.000015
+            ],
+            "unclipped_rect": [
+              669.0,
+              50.999992,
+              931.0,
+              118.000015
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_online_levels.art.ui_8.1",
+          "semantic_sha256": "49ddac89f4e8b0b0f82db1b89823e66b85a450e9be91e897c8869a0a4cdd9359",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.ui_8.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.8",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 10,
+            "rect": [
+              775.5,
+              782.0,
+              824.5,
+              894.0
+            ],
+            "unclipped_rect": [
+              775.5,
+              782.0,
+              824.5,
+              894.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_online_levels.art.ui_8.2",
+          "semantic_sha256": "242a7c5181b0a997bff02d3c2143f4da4f884c5d7a3a774032cf0f6051d8b77e",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.ui_8.2",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.8",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 11,
+            "rect": [
+              706.625,
+              783.0,
+              743.375,
+              867.0
+            ],
+            "unclipped_rect": [
+              706.625,
+              783.0,
+              743.375,
+              867.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_online_levels.art.ui_8.3",
+          "semantic_sha256": "0074a04368eac9c73bebaa86593a60fe0073db764827e92d9df140905f34b55f",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.ui_8.3",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.8",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 12,
+            "rect": [
+              856.625,
+              783.0,
+              893.375,
+              867.0
+            ],
+            "unclipped_rect": [
+              856.625,
+              783.0,
+              893.375,
+              867.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_online_levels.art.ui_101.1",
+          "semantic_sha256": "34f86236f7af172702a7ec6f6ed26f425d2be6f86b7595319f666aa093f3714c",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.ui_101.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.101",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 13,
+            "rect": [
+              702.0,
+              643.5,
+              898.0,
+              712.0
+            ],
+            "unclipped_rect": [
+              623.5,
+              643.5,
+              976.5,
+              712.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_online_levels.art.ui_54.1",
+          "semantic_sha256": "257971bc0a9d693bfaaa125dc751fef5581692c11df145556c15adeee78caebd",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.ui_54.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.54",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 14,
+            "rect": [
+              696.0,
+              637.5,
+              766.0,
+              722.5
+            ],
+            "unclipped_rect": [
+              696.0,
+              637.5,
+              766.0,
+              722.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_online_levels.art.ui_54.2",
+          "semantic_sha256": "7ac8bd4c544d9a8dfe006d580ab42a2bcd48a44c802f23d9653f2d61d65c2a0f",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.ui_54.2",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.54",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 15,
+            "rect": [
+              834.0,
+              637.5,
+              904.0,
+              722.5
+            ],
+            "unclipped_rect": [
+              834.0,
+              637.5,
+              904.0,
+              722.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_online_levels.art.controlpanel_18.1",
+          "semantic_sha256": "6bf48d43ee0fcdddcd6076ed2ef87d104ddf5ebe8128951f4ee4eb9b56bfb873",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.controlpanel_18.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.18",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 16,
+            "rect": [
+              990.0,
+              219.0,
+              1054.0,
+              244.0
+            ],
+            "unclipped_rect": [
+              990.0,
+              219.0,
+              1054.0,
+              244.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_online_levels.art.controlpanel_18.2",
+          "semantic_sha256": "85b4061c82cead94694a98d8c4b2553e175a7cf04959f8046768b6416c06ee4f",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.controlpanel_18.2",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.18",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 17,
+            "rect": [
+              910.0,
+              260.0,
+              974.0,
+              285.0
+            ],
+            "unclipped_rect": [
+              910.0,
+              260.0,
+              974.0,
+              285.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_online_levels.art.controlpanel_8.1",
+          "semantic_sha256": "0de35326c15bda92197d7cd60bf55102ac17a64b3672b88a5f0673307e54fb3b",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.controlpanel_8.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.8",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 18,
+            "rect": [
+              978.0,
+              348.0,
+              1060.0,
+              378.0
+            ],
+            "unclipped_rect": [
+              978.0,
+              348.0,
+              1060.0,
+              378.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_online_levels.art.controlpanel_0.1",
+          "semantic_sha256": "326d195d639251cbc27c39f13dec908c4462233a7b493e5077d64edf8c9a0c5c",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.controlpanel_0.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.0",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 19,
+            "rect": [
+              1043.0,
+              396.5,
+              1057.0,
+              411.5
+            ],
+            "unclipped_rect": [
+              1043.0,
+              396.5,
+              1057.0,
+              411.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_online_levels.art.controlpanel_0.2",
+          "semantic_sha256": "0257e2a93e3b2839772661b1b330cf86e98c401beda7e201c309ec13caa77dec",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.controlpanel_0.2",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.0",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 20,
+            "rect": [
+              1043.0,
+              487.5,
+              1057.0,
+              502.5
+            ],
+            "unclipped_rect": [
+              1043.0,
+              487.5,
+              1057.0,
+              502.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_online_levels.art.controlpanel_0.3",
+          "semantic_sha256": "c96edbd04f1252ce021d3cdbd28282857167f1cc326423d9bb30e979b3f8b1ae",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.controlpanel_0.3",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.0",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 21,
+            "rect": [
+              1043.0,
+              578.5,
+              1057.0,
+              593.5
+            ],
+            "unclipped_rect": [
+              1043.0,
+              578.5,
+              1057.0,
+              593.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_online_levels.art.controlpanel_0.4",
+          "semantic_sha256": "e0504be2b43bbbad7b9a74a4c92e177e325824812d9ba4f3d51b0804b6a34c87",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.controlpanel_0.4",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.0",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 22,
+            "rect": [
+              1043.0,
+              669.5,
+              1057.0,
+              684.5
+            ],
+            "unclipped_rect": [
+              1043.0,
+              669.5,
+              1057.0,
+              684.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_online_levels.art.ui_17.1",
+          "semantic_sha256": "eb483190ad83d980f3088eed3f934cf483b2a8570ec9732b319a1b2920eef363",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.ui_17.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 23,
+            "rect": [
+              490.0,
+              90.0,
+              570.0,
+              173.0
+            ],
+            "unclipped_rect": [
+              490.0,
+              90.0,
+              570.0,
+              173.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_online_levels.art.ui_17.2",
+          "semantic_sha256": "84b3136852f58f644cc773df37d94d9490962497a4e77601cf8ff724fd4fa7fe",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.ui_17.2",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 24,
+            "rect": [
+              1030.0,
+              90.0,
+              1110.0,
+              173.0
+            ],
+            "unclipped_rect": [
+              1030.0,
+              90.0,
+              1110.0,
+              173.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_online_levels.art.ui_17.11",
+          "semantic_sha256": "83f9739c3eb158c867dc509fb47b904148fddd8cf971c9996200e01a44861680",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.ui_17.11",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 25,
+            "rect": [
+              490.0,
+              727.0,
+              570.0,
+              810.0
+            ],
+            "unclipped_rect": [
+              490.0,
+              727.0,
+              570.0,
+              810.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_online_levels.art.ui_17.12",
+          "semantic_sha256": "0fb9025444a7a2cd4963ed0accaae085a7c0f8e6f2a4a5bc12071b2a240b198f",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.ui_17.12",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 26,
+            "rect": [
+              1030.0,
+              727.0,
+              1110.0,
+              810.0
+            ],
+            "unclipped_rect": [
+              1030.0,
+              727.0,
+              1110.0,
+              810.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_online_levels.art.ui_18.2",
+          "semantic_sha256": "7e9a195198fd805e902c6c29880e5192d2aca7639278a1f1fddc9a9189e38f95",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.ui_18.2",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.18",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 27,
+            "rect": [
+              421.0,
+              319.0,
+              488.0,
+              581.0
+            ],
+            "unclipped_rect": [
+              421.0,
+              319.0,
+              488.0,
+              581.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_online_levels.art.ui_18.3",
+          "semantic_sha256": "482ce83a6c9e1ca56472ecb61841450b337aac6e0b40e3ef6dd7839422a76566",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_online_levels.art.ui_18.3",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.18",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 28,
+            "rect": [
+              1112.0,
+              319.0,
+              1179.0,
+              581.0
+            ],
+            "unclipped_rect": [
+              1112.0,
+              319.0,
+              1179.0,
+              581.0
+            ]
+          }
+        }
+      ],
+      "fresh_pair": {
+        "primary": {
+          "instance": "menufx-v9p37",
+          "process_id": 4696,
+          "population_element_counts": [
+            69
+          ],
+          "population_generations": [
+            18
+          ],
+          "settled_sample_count": 40,
+          "all_residual_members_absent": true,
+          "trace": {
+            "path": "raw-v9/candidates/candidate-v214-profile-final/menu-settlement-traces/dark-cloud-online-levels.settlement.json",
+            "sha256": "cdcc332d62df053ca559545d5fcf3de94c3fb26f4a893de735f07e26423a973b",
+            "bytes": 6777557
+          }
+        },
+        "confirmation": {
+          "instance": "menufx-v9p36",
+          "process_id": 10676,
+          "population_element_counts": [
+            69
+          ],
+          "population_generations": [
+            18
+          ],
+          "settled_sample_count": 40,
+          "all_residual_members_absent": true,
+          "trace": {
+            "path": "raw-v9/candidates/candidate-v214-profile-final/menu-animation-confirmations/dark-cloud-online-levels.confirmation.json",
+            "sha256": "f4cbe06dffa8ab71e1ef7655ec2338187602ddebffb63fb8b8ee35171d9202cc",
+            "bytes": 6902250
+          }
+        },
+        "all_residual_members_absent": true
+      }
+    },
+    {
+      "layout_id": "dark-cloud-my-levels",
+      "screen_id": "dark_cloud_my_levels",
+      "superseded_landed_fixture": {
+        "path": "webgame-contracts/baseline-snapshots/menu-layouts/dark-cloud-my-levels.json",
+        "sha256": "50030bb28a018a621ff40080e0366821505a72ec24d9743406f7b44bab3371fc",
+        "bytes": 140825,
+        "generation": 37,
+        "element_count": 94
+      },
+      "superseding_candidate_fixture": {
+        "path": "raw-v9/candidates/candidate-v214-profile-final/menu-layouts/dark-cloud-my-levels.json",
+        "sha256": "64173d50feb0f50ffc13da6352d42007a7543f889eefbbadeca20f5511da9528",
+        "bytes": 55497,
+        "generation": 19,
+        "element_count": 66,
+        "structural_core_sha256": "dd737c09f357c0ae607f4b0cd12c4dc03122763a7c5c65a341ffc718d3eb7a51"
+      },
+      "residual_semantic_multiset_sha256": "8ee5570a0ff37d4992b0b7fd3ea4bed508b081ef75bfc1fba36ca373c09f5c83",
+      "residual_members": [
+        {
+          "captured_id": "dark_cloud_my_levels.art.ui_107.1",
+          "semantic_sha256": "63d72da34cb236853c1132ad009dc573cd891b3c779df1aec419f047a714ba21",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.ui_107.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.107",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 1,
+            "rect": [
+              516.5,
+              99.5,
+              601.5,
+              188.5
+            ],
+            "unclipped_rect": [
+              516.5,
+              99.5,
+              601.5,
+              188.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_my_levels.art.ui_108.1",
+          "semantic_sha256": "56d934c6461f700748a5aa7af7f0ff9164f4cd2608caac99441702ecaabd90e8",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.ui_108.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.108",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 2,
+            "rect": [
+              998.5,
+              99.5,
+              1083.5,
+              188.5
+            ],
+            "unclipped_rect": [
+              998.5,
+              99.5,
+              1083.5,
+              188.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_my_levels.art.ui_109.1",
+          "semantic_sha256": "9c39cfe623e202ff614ae0640f1dc961b294c50523db38c5dacef1692c76384a",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.ui_109.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.109",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 3,
+            "rect": [
+              516.5,
+              711.5,
+              601.5,
+              800.5
+            ],
+            "unclipped_rect": [
+              516.5,
+              711.5,
+              601.5,
+              800.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_my_levels.art.ui_110.1",
+          "semantic_sha256": "93df8129723f2dea0c05a1cb5816a017e3b11d664a91ddc4af59410d00f8e4c5",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.ui_110.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.110",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 4,
+            "rect": [
+              998.5,
+              711.5,
+              1083.5,
+              800.5
+            ],
+            "unclipped_rect": [
+              998.5,
+              711.5,
+              1083.5,
+              800.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_my_levels.art.ui_17.3",
+          "semantic_sha256": "cd7dde6bd054e911afc37b1d9a8ec319490ca609db067b06025dbbc31689bd63",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.ui_17.3",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 5,
+            "rect": [
+              535.0,
+              117.0,
+              615.0,
+              200.0
+            ],
+            "unclipped_rect": [
+              535.0,
+              117.0,
+              615.0,
+              200.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_my_levels.art.ui_17.4",
+          "semantic_sha256": "a1446de9cbeeef6a032564480cb7d8e2727e5125638c5faba215a02aab1c3a67",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.ui_17.4",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 6,
+            "rect": [
+              985.0,
+              117.0,
+              1065.0,
+              200.0
+            ],
+            "unclipped_rect": [
+              985.0,
+              117.0,
+              1065.0,
+              200.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_my_levels.art.ui_17.7",
+          "semantic_sha256": "91692510ef5468c2b7b48c50f6fd6471e13223ff3c0bf6f2364797b5a6ba26ec",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.ui_17.7",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 7,
+            "rect": [
+              535.0,
+              700.0,
+              615.0,
+              783.0
+            ],
+            "unclipped_rect": [
+              535.0,
+              700.0,
+              615.0,
+              783.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_my_levels.art.ui_17.8",
+          "semantic_sha256": "ce8cae0aabe3e677c05a548a6c6cb1f910adc50f76b2d83042b82adda2825060",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.ui_17.8",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 8,
+            "rect": [
+              985.0,
+              700.0,
+              1065.0,
+              783.0
+            ],
+            "unclipped_rect": [
+              985.0,
+              700.0,
+              1065.0,
+              783.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_my_levels.art.ui_18.1",
+          "semantic_sha256": "b5c70547ec01ff2fd4d1ee6ca0e24d3080b05499e3d6b89bf85ead0e5b39f707",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.ui_18.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.18",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 9,
+            "rect": [
+              669.0,
+              50.999992,
+              931.0,
+              118.000015
+            ],
+            "unclipped_rect": [
+              669.0,
+              50.999992,
+              931.0,
+              118.000015
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_my_levels.art.ui_8.1",
+          "semantic_sha256": "49ddac89f4e8b0b0f82db1b89823e66b85a450e9be91e897c8869a0a4cdd9359",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.ui_8.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.8",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 10,
+            "rect": [
+              775.5,
+              782.0,
+              824.5,
+              894.0
+            ],
+            "unclipped_rect": [
+              775.5,
+              782.0,
+              824.5,
+              894.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_my_levels.art.ui_8.2",
+          "semantic_sha256": "242a7c5181b0a997bff02d3c2143f4da4f884c5d7a3a774032cf0f6051d8b77e",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.ui_8.2",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.8",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 11,
+            "rect": [
+              706.625,
+              783.0,
+              743.375,
+              867.0
+            ],
+            "unclipped_rect": [
+              706.625,
+              783.0,
+              743.375,
+              867.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_my_levels.art.ui_8.3",
+          "semantic_sha256": "0074a04368eac9c73bebaa86593a60fe0073db764827e92d9df140905f34b55f",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.ui_8.3",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.8",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 12,
+            "rect": [
+              856.625,
+              783.0,
+              893.375,
+              867.0
+            ],
+            "unclipped_rect": [
+              856.625,
+              783.0,
+              893.375,
+              867.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_my_levels.art.ui_101.1",
+          "semantic_sha256": "34f86236f7af172702a7ec6f6ed26f425d2be6f86b7595319f666aa093f3714c",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.ui_101.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.101",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 13,
+            "rect": [
+              702.0,
+              643.5,
+              898.0,
+              712.0
+            ],
+            "unclipped_rect": [
+              623.5,
+              643.5,
+              976.5,
+              712.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_my_levels.art.ui_54.1",
+          "semantic_sha256": "257971bc0a9d693bfaaa125dc751fef5581692c11df145556c15adeee78caebd",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.ui_54.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.54",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 14,
+            "rect": [
+              696.0,
+              637.5,
+              766.0,
+              722.5
+            ],
+            "unclipped_rect": [
+              696.0,
+              637.5,
+              766.0,
+              722.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_my_levels.art.ui_54.2",
+          "semantic_sha256": "7ac8bd4c544d9a8dfe006d580ab42a2bcd48a44c802f23d9653f2d61d65c2a0f",
+          "classification": "beta_dialog_overlay",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.ui_54.2",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.54",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 15,
+            "rect": [
+              834.0,
+              637.5,
+              904.0,
+              722.5
+            ],
+            "unclipped_rect": [
+              834.0,
+              637.5,
+              904.0,
+              722.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_my_levels.art.controlpanel_18.1",
+          "semantic_sha256": "6bf48d43ee0fcdddcd6076ed2ef87d104ddf5ebe8128951f4ee4eb9b56bfb873",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.controlpanel_18.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.18",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 16,
+            "rect": [
+              990.0,
+              219.0,
+              1054.0,
+              244.0
+            ],
+            "unclipped_rect": [
+              990.0,
+              219.0,
+              1054.0,
+              244.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_my_levels.art.controlpanel_18.2",
+          "semantic_sha256": "85b4061c82cead94694a98d8c4b2553e175a7cf04959f8046768b6416c06ee4f",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.controlpanel_18.2",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.18",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 17,
+            "rect": [
+              910.0,
+              260.0,
+              974.0,
+              285.0
+            ],
+            "unclipped_rect": [
+              910.0,
+              260.0,
+              974.0,
+              285.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_my_levels.art.controlpanel_8.1",
+          "semantic_sha256": "0de35326c15bda92197d7cd60bf55102ac17a64b3672b88a5f0673307e54fb3b",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.controlpanel_8.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.8",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 18,
+            "rect": [
+              978.0,
+              348.0,
+              1060.0,
+              378.0
+            ],
+            "unclipped_rect": [
+              978.0,
+              348.0,
+              1060.0,
+              378.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_my_levels.art.controlpanel_0.1",
+          "semantic_sha256": "326d195d639251cbc27c39f13dec908c4462233a7b493e5077d64edf8c9a0c5c",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.controlpanel_0.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.0",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 19,
+            "rect": [
+              1043.0,
+              396.5,
+              1057.0,
+              411.5
+            ],
+            "unclipped_rect": [
+              1043.0,
+              396.5,
+              1057.0,
+              411.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_my_levels.art.controlpanel_0.2",
+          "semantic_sha256": "0257e2a93e3b2839772661b1b330cf86e98c401beda7e201c309ec13caa77dec",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.controlpanel_0.2",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.0",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 20,
+            "rect": [
+              1043.0,
+              487.5,
+              1057.0,
+              502.5
+            ],
+            "unclipped_rect": [
+              1043.0,
+              487.5,
+              1057.0,
+              502.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_my_levels.art.controlpanel_0.3",
+          "semantic_sha256": "c96edbd04f1252ce021d3cdbd28282857167f1cc326423d9bb30e979b3f8b1ae",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.controlpanel_0.3",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.0",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 21,
+            "rect": [
+              1043.0,
+              578.5,
+              1057.0,
+              593.5
+            ],
+            "unclipped_rect": [
+              1043.0,
+              578.5,
+              1057.0,
+              593.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_my_levels.art.controlpanel_0.4",
+          "semantic_sha256": "e0504be2b43bbbad7b9a74a4c92e177e325824812d9ba4f3d51b0804b6a34c87",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.controlpanel_0.4",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "ControlPanel.0",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 22,
+            "rect": [
+              1043.0,
+              669.5,
+              1057.0,
+              684.5
+            ],
+            "unclipped_rect": [
+              1043.0,
+              669.5,
+              1057.0,
+              684.5
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_my_levels.art.ui_17.1",
+          "semantic_sha256": "eb483190ad83d980f3088eed3f934cf483b2a8570ec9732b319a1b2920eef363",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.ui_17.1",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 23,
+            "rect": [
+              490.0,
+              90.0,
+              570.0,
+              173.0
+            ],
+            "unclipped_rect": [
+              490.0,
+              90.0,
+              570.0,
+              173.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_my_levels.art.ui_17.2",
+          "semantic_sha256": "84b3136852f58f644cc773df37d94d9490962497a4e77601cf8ff724fd4fa7fe",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.ui_17.2",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 24,
+            "rect": [
+              1030.0,
+              90.0,
+              1110.0,
+              173.0
+            ],
+            "unclipped_rect": [
+              1030.0,
+              90.0,
+              1110.0,
+              173.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_my_levels.art.ui_17.11",
+          "semantic_sha256": "83f9739c3eb158c867dc509fb47b904148fddd8cf971c9996200e01a44861680",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.ui_17.11",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 25,
+            "rect": [
+              490.0,
+              727.0,
+              570.0,
+              810.0
+            ],
+            "unclipped_rect": [
+              490.0,
+              727.0,
+              570.0,
+              810.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_my_levels.art.ui_17.12",
+          "semantic_sha256": "0fb9025444a7a2cd4963ed0accaae085a7c0f8e6f2a4a5bc12071b2a240b198f",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.ui_17.12",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 26,
+            "rect": [
+              1030.0,
+              727.0,
+              1110.0,
+              810.0
+            ],
+            "unclipped_rect": [
+              1030.0,
+              727.0,
+              1110.0,
+              810.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_my_levels.art.ui_18.2",
+          "semantic_sha256": "7e9a195198fd805e902c6c29880e5192d2aca7639278a1f1fddc9a9189e38f95",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.ui_18.2",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.18",
+            "font_id": "",
+            "text_style": "position",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 27,
+            "rect": [
+              421.0,
+              319.0,
+              488.0,
+              581.0
+            ],
+            "unclipped_rect": [
+              421.0,
+              319.0,
+              488.0,
+              581.0
+            ]
+          }
+        },
+        {
+          "captured_id": "dark_cloud_my_levels.art.ui_18.3",
+          "semantic_sha256": "482ce83a6c9e1ca56472ecb61841450b337aac6e0b40e3ef6dd7839422a76566",
+          "classification": "browser_chrome_era",
+          "payload": {
+            "id": "dark_cloud_my_levels.art.ui_18.3",
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.18",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false,
+            "draw_order": 28,
+            "rect": [
+              1112.0,
+              319.0,
+              1179.0,
+              581.0
+            ],
+            "unclipped_rect": [
+              1112.0,
+              319.0,
+              1179.0,
+              581.0
+            ]
+          }
+        }
+      ],
+      "fresh_pair": {
+        "primary": {
+          "instance": "menufx-v9p37",
+          "process_id": 4696,
+          "population_element_counts": [
+            66
+          ],
+          "population_generations": [
+            19
+          ],
+          "settled_sample_count": 40,
+          "all_residual_members_absent": true,
+          "trace": {
+            "path": "raw-v9/candidates/candidate-v214-profile-final/menu-settlement-traces/dark-cloud-my-levels.settlement.json",
+            "sha256": "c99a81f3e052807ff1518856f6e3ffe4ac0d9acb7c99116fd406ad6ca3aa6d49",
+            "bytes": 6481922
+          }
+        },
+        "confirmation": {
+          "instance": "menufx-v9p36",
+          "process_id": 10676,
+          "population_element_counts": [
+            66
+          ],
+          "population_generations": [
+            19
+          ],
+          "settled_sample_count": 40,
+          "all_residual_members_absent": true,
+          "trace": {
+            "path": "raw-v9/candidates/candidate-v214-profile-final/menu-animation-confirmations/dark-cloud-my-levels.confirmation.json",
+            "sha256": "62bf8714329c85679af7faa3751e152fcbaa9b0cc786617deeed91ec93d3adbb",
+            "bytes": 6601172
+          }
+        },
+        "all_residual_members_absent": true
+      }
+    }
+  ],
+  "source_audit": {
+    "path": "raw-v9/dark-cloud-post-item-question/dark-cloud-post-item-stop-audit.json",
+    "sha256": "1f7b27b7611ecc06de2b0e831861588a983b73fda138eb6613eb9c3951bd5a67",
+    "bytes": 81088
+  },
+  "item_row_contract": {
+    "path": "tests/fixtures/webgame/native-menu-dark-cloud-item-row-supersession-v219.json",
+    "sha256": "977bd63d1ca0d8e6e7eb8a117e6960384788f4e0d662ffb2b2a024bb15c13f4d",
+    "bytes": 14976
+  },
+  "overlay_reference": {
+    "path": "raw-v9/candidates/candidate-v214-profile-final/menu-overlay-reference.json",
+    "sha256": "fd497695f9ea5186da98abb2179077100d7513459de538e22f7763b4743c938a",
+    "bytes": 7766
+  },
+  "landed_era_capture_identity": {
+    "instance": "men-title",
+    "process_id": 16140,
+    "profile_state_provenance_present": false,
+    "layout_generations": {
+      "dark-cloud-browser": 34,
+      "dark-cloud-recent": 35,
+      "dark-cloud-online-levels": 36,
+      "dark-cloud-my-levels": 37
+    }
+  },
+  "mechanistic_split": {
+    "total_residual_count": 28,
+    "beta_dialog_overlay_count": 15,
+    "browser_chrome_era_count": 13,
+    "browser_chrome_art_id_multiplicities": {
+      "ControlPanel.0": 4,
+      "ControlPanel.18": 2,
+      "ControlPanel.8": 1,
+      "UI.17": 4,
+      "UI.18": 2
+    },
+    "browser_chrome_semantic_multiset_sha256": "f66bc15eb13d049982f5f0b89c26f0e7d221b631602793ba284b883181b160ac",
+    "v2_4_overlay_gate_unchanged": true
+  },
+  "application": {
+    "side": "landed_residual_only",
+    "mode": "all_or_nothing_per_layout",
+    "candidate_member_removed": false,
+    "fresh_member_presence": "stop_not_filter"
+  },
+  "forbidden": [
+    "candidate_member_removal",
+    "fresh_member_filter",
+    "partial_residual_application",
+    "count_tolerance",
+    "another_layout",
+    "v2_4_overlay_gate_change"
+  ],
+  "derivation": {
+    "machine_derived": true,
+    "canonical_member_identity": "semantic_payload_excluding_synthetic_id_and_absolute_draw_order",
+    "unclassified_audit_sha256": "f66bc15eb13d049982f5f0b89c26f0e7d221b631602793ba284b883181b160ac",
+    "candidate_applied_during_derivation": false
+  }
+}

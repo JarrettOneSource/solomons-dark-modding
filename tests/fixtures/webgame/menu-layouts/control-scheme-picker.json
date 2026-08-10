@@ -1,142 +1,319 @@
 {
-    "schema":  "solomon-dark-native-menu-layout-v1",
-    "header":  {
-                   "instance":  "men-title",
-                   "process_id":  19752,
-                   "capture_commit":  "f9cac8783e72e7423a2d952987fa169fa84f3dcb",
-                   "native_exe_sha256":  "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
-                   "loader_dll_sha256":  "f21d10e327e576ce2aed02a0626507143a9104c181d6694e2111d102433b52ec",
-                   "captured_at_utc":  "2026-08-05T06:59:15.1618896Z",
-                   "capture_method":  "live native UI tree + exact text/font hooks + native Sprite draw hooks",
-                   "reference_capture":  "../menu-reference-captures/control-scheme-picker.png"
-               },
-    "layout":  {
-                   "generation":  2,
-                   "captured_at_milliseconds":  1146397171,
-                   "screen_id":  "control_scheme_picker",
-                   "screen_title":  "Control Scheme Picker",
-                   "capture_method":  "live native UI tree + exact text/font hooks + native Sprite draw hooks",
-                   "elements":  [
-                                    {
-                                        "id":  "control_scheme_picker.art.controls_1.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "Controls.1",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  false,
-                                        "interactive":  false,
-                                        "draw_order":  3,
-                                        "rect":  [
-                                                     0.000000,
-                                                     0.000000,
-                                                     -9826.000000,
-                                                     -9850.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               -10171.000000,
-                                                               -10146.500000,
-                                                               -9826.000000,
-                                                               -9850.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "control_scheme_picker.art.controls_0.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "Controls.0",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  1,
-                                        "rect":  [
-                                                     477.500000,
-                                                     290.000000,
-                                                     722.500000,
-                                                     610.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               477.500000,
-                                                               290.000000,
-                                                               722.500000,
-                                                               610.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "control_scheme_picker.art.controls_2.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "Controls.2",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  2,
-                                        "rect":  [
-                                                     850.500000,
-                                                     324.000000,
-                                                     1149.500000,
-                                                     576.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               850.500000,
-                                                               324.000000,
-                                                               1149.500000,
-                                                               576.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "control_scheme_picker.control.control_scheme_picker_select_wasd.1",
-                                        "kind":  "control",
-                                        "text":  "WASD + MOUSE",
-                                        "action_id":  "control_scheme_picker.select_wasd",
-                                        "art_id":  "",
-                                        "font_id":  "",
-                                        "text_style":  "",
-                                        "visible":  true,
-                                        "interactive":  true,
-                                        "draw_order":  0,
-                                        "rect":  [
-                                                     850.500000,
-                                                     324.000000,
-                                                     1149.500000,
-                                                     576.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               850.500000,
-                                                               324.000000,
-                                                               1149.500000,
-                                                               576.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "control_scheme_picker.text.select_a_control_scheme.1",
-                                        "kind":  "text",
-                                        "text":  "SELECT A CONTROL SCHEME",
-                                        "action_id":  "",
-                                        "art_id":  "",
-                                        "font_id":  "Fonts.308-349",
-                                        "text_style":  "native_atlas_text:Fonts.308-349",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  0,
-                                        "rect":  [
-                                                     751.000000,
-                                                     21.000000,
-                                                     1127.000000,
-                                                     52.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               751.000000,
-                                                               21.000000,
-                                                               1127.000000,
-                                                               52.000000
-                                                           ]
-                                    }
-                                ]
-               }
+  "schema": "solomon-dark-native-menu-layout-v3",
+  "header": {
+    "label": "control_scheme_picker",
+    "instance": "menufx-v9p24",
+    "process_id": 15940,
+    "source": {
+      "base_commit_sha": "6363b637a5d2840d23f31430eaf0ed9bf32ae63b",
+      "source_tree_sha": "3a12f89bb61f788f2b1c9dca140cd556a2448a7d",
+      "capture_tree": "exact committed tree at base_commit_sha",
+      "game_executable_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+      "loader_dll_sha256": "0ca478db94bdb26a30b058af352445e5c49bab11fa5c743c91dbc011baad6dfc",
+      "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+      "capture_driver_preset": "idle"
+    },
+    "profile_state": {
+      "schema": "solomon-dark-native-menu-profile-state-v1",
+      "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+      "baseline_id": "pristine_fresh_install",
+      "baseline_mode": "fresh_install",
+      "source_sandbox_excluded": true,
+      "retail_appdata_seeded": false,
+      "durable_file_count": 0,
+      "baseline_fixture": {
+        "repo_relative_path": "tests/fixtures/webgame/native-menu-profile-state-baseline.json",
+        "sha256": "02ac22b1de367e9e94477f61c8e1144e6a5b16bd67bd418e69e9a2ec620914ff",
+        "bytes": 2155
+      },
+      "binding_contract": {
+        "repo_relative_path": "tests/fixtures/webgame/native-menu-hub-bindings-v213.json",
+        "sha256": "07c2ed2e53e997c8fb79c3d472b58d52c72c768286cad352ec1aeedaa907ef00",
+        "bytes": 21518
+      },
+      "launch_receipt": {
+        "evidence_filename": "control-scheme-picker.menufx-v9p24.15940.profile-state.json",
+        "sha256": "ebcce72f26d5694e37359b9728359ae64469bb49ff42c3344f8024e4c373c887",
+        "bytes": 694
+      }
+    },
+    "profile_state_binding": {
+      "baseline_id": "pristine_fresh_install",
+      "layout_id": "control-scheme-picker",
+      "edge_id": "",
+      "derivation_witness_role": ""
+    },
+    "capture_method": "live native UI tree + exact text/font hooks + native Sprite draw hooks",
+    "recorded_live": true,
+    "captured_at_utc": "2026-08-09T00:57:35.3902951Z",
+    "settlement": {
+      "settlement_spec": "2.9",
+      "criterion": "at least 40 consecutive samples spanning at least 2 seconds with constant surface/generations and every variance assigned to one measured v2.5 member class",
+      "settle_latency_milliseconds": 17033,
+      "stable_span_milliseconds": 16675,
+      "consecutive_structural_samples": 40,
+      "minimum_element_count": 5,
+      "peak_element_count": 5,
+      "raw_window_structural_sha256": "17382597187710f54ea35cad66b12bc2f49d3be995d2aa48ccb808ac56edc005",
+      "resolved_structural_core_sha256": "d3a90c851a66c5fb4530664bc9103728331db4e31cbb8c81e3128eb0d1e75d5d",
+      "resolved_classification_map_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "ambient_fraction": 0.0
+    },
+    "browser_tab_verification": null,
+    "raw_recording": {
+      "evidence_filename": "control-scheme-picker.settlement.json",
+      "sha256": "b5f70f35fba4483a0f065c6d12accfe819a4c24e717afa1065861741c3cbe94c",
+      "bytes": 545631
+    },
+    "reference_capture": "../menu-reference-captures/control-scheme-picker.png",
+    "animation_confirmation": {
+      "evidence_filename": "control-scheme-picker.confirmation.json",
+      "sha256": "df2f57ce4ecb75b4f240eea9953fff8c68b9be9c311c10cde864ae32f8c8abd4",
+      "bytes": 556285,
+      "instance": "menufx-v9p25",
+      "process_id": 16308,
+      "source": {
+        "base_commit_sha": "6363b637a5d2840d23f31430eaf0ed9bf32ae63b",
+        "source_tree_sha": "3a12f89bb61f788f2b1c9dca140cd556a2448a7d",
+        "capture_tree": "exact committed tree at base_commit_sha",
+        "game_executable_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+        "loader_dll_sha256": "0ca478db94bdb26a30b058af352445e5c49bab11fa5c743c91dbc011baad6dfc",
+        "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+        "capture_driver_preset": "idle"
+      },
+      "profile_state": {
+        "schema": "solomon-dark-native-menu-profile-state-v1",
+        "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+        "baseline_id": "pristine_fresh_install",
+        "baseline_mode": "fresh_install",
+        "source_sandbox_excluded": true,
+        "retail_appdata_seeded": false,
+        "durable_file_count": 0,
+        "baseline_fixture": {
+          "repo_relative_path": "tests/fixtures/webgame/native-menu-profile-state-baseline.json",
+          "sha256": "02ac22b1de367e9e94477f61c8e1144e6a5b16bd67bd418e69e9a2ec620914ff",
+          "bytes": 2155
+        },
+        "binding_contract": {
+          "repo_relative_path": "tests/fixtures/webgame/native-menu-hub-bindings-v213.json",
+          "sha256": "07c2ed2e53e997c8fb79c3d472b58d52c72c768286cad352ec1aeedaa907ef00",
+          "bytes": 21518
+        },
+        "launch_receipt": {
+          "evidence_filename": "control-scheme-picker.confirmation.menufx-v9p25.16308.profile-state.json",
+          "sha256": "38869132e6b7b21341bf1538a803a54c184ea1c3a7579b0d13631ed9001aa6ae",
+          "bytes": 694
+        }
+      },
+      "profile_state_binding": {
+        "baseline_id": "pristine_fresh_install",
+        "layout_id": "control_scheme_picker",
+        "edge_id": "",
+        "derivation_witness_role": ""
+      },
+      "confirmation_structural_sha256": "17382597187710f54ea35cad66b12bc2f49d3be995d2aa48ccb808ac56edc005",
+      "animated_element_ids_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "raw_primary_animated_element_ids": [],
+      "raw_confirmation_animated_element_ids": [],
+      "raw_sets_match_noncontractual": true,
+      "requires_campaign_resolution": true
+    },
+    "ambient_lifecycle": {
+      "resolution_sha256": "90d8190d0259488833a68d73c17ef643620a62af3dc16c8f02e5ef191b70676e",
+      "independent_instances": [
+        [
+          "menufx-v9p24",
+          15940
+        ],
+        [
+          "menufx-v9p25",
+          16308
+        ]
+      ],
+      "observation_receipts": [
+        {
+          "evidence_path": "raw-v9/candidates/candidate-v214-profile-final/menu-settlement-traces/control-scheme-picker.settlement.json",
+          "sha256": "b5f70f35fba4483a0f065c6d12accfe819a4c24e717afa1065861741c3cbe94c",
+          "bytes": 545631
+        },
+        {
+          "evidence_path": "raw-v9/candidates/candidate-v214-profile-final/menu-animation-confirmations/control-scheme-picker.confirmation.json",
+          "sha256": "df2f57ce4ecb75b4f240eea9953fff8c68b9be9c311c10cde864ae32f8c8abd4",
+          "bytes": 556285
+        },
+        {
+          "evidence_path": "raw-v9/profile-select-new-game-edge/merged-v219/navigation-primary-v219-40-edges.json",
+          "sha256": "a4ad35b04deb9c2a5aaa52cb71172e32968e569f0cc47c77404544fa4dee2e29",
+          "bytes": 266236067
+        },
+        {
+          "evidence_path": "raw-v9/profile-select-new-game-edge/merged-v219/navigation-confirmation-v219-40-edges.json",
+          "sha256": "54e9571022dfa7f18b13ed8b63e6d70fadf52595de876d10453fcc9e42664cc7",
+          "bytes": 263780529
+        }
+      ],
+      "extended_observation_baseline_receipts": []
+    }
+  },
+  "layout": {
+    "generation": 1,
+    "screen_id": "control_scheme_picker",
+    "screen_title": "Control Scheme Picker",
+    "capture_method": "live native UI tree + exact text/font hooks + native Sprite draw hooks",
+    "draw_order_semantics": "structural_core_relative_sequence",
+    "elements": [
+      {
+        "kind": "text",
+        "text": "SELECT A CONTROL SCHEME",
+        "action_id": "",
+        "art_id": "",
+        "font_id": "Fonts.308-349",
+        "text_style": "native_atlas_text:Fonts.308-349",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          751.0,
+          21.0,
+          1127.0,
+          52.0
+        ],
+        "unclipped_rect": [
+          751.0,
+          21.0,
+          1127.0,
+          52.0
+        ],
+        "id": "control_scheme_picker.text.select_a_control_scheme.1",
+        "draw_order": 0,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "control",
+        "text": "WASD + MOUSE",
+        "action_id": "control_scheme_picker.select_wasd",
+        "art_id": "",
+        "font_id": "",
+        "text_style": "",
+        "visible": true,
+        "interactive": true,
+        "rect": [
+          850.5,
+          324.0,
+          1149.5,
+          576.0
+        ],
+        "unclipped_rect": [
+          850.5,
+          324.0,
+          1149.5,
+          576.0
+        ],
+        "id": "control_scheme_picker.control.control_scheme_picker_select_wasd.1",
+        "draw_order": 1,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "Controls.0",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          477.5,
+          290.0,
+          722.5,
+          610.0
+        ],
+        "unclipped_rect": [
+          477.5,
+          290.0,
+          722.5,
+          610.0
+        ],
+        "id": "control_scheme_picker.art.controls_0.1",
+        "draw_order": 2,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "Controls.2",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          850.5,
+          324.0,
+          1149.5,
+          576.0
+        ],
+        "unclipped_rect": [
+          850.5,
+          324.0,
+          1149.5,
+          576.0
+        ],
+        "id": "control_scheme_picker.art.controls_2.1",
+        "draw_order": 3,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "Controls.1",
+        "font_id": "",
+        "text_style": "position",
+        "visible": false,
+        "interactive": false,
+        "rect": [
+          0.0,
+          0.0,
+          -9826.0,
+          -9850.5
+        ],
+        "unclipped_rect": [
+          -10171.0,
+          -10146.5,
+          -9826.0,
+          -9850.5
+        ],
+        "id": "control_scheme_picker.art.controls_1.1",
+        "draw_order": 4,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      }
+    ],
+    "settlement_spec": "2.9",
+    "structural_core_sha256": "d3a90c851a66c5fb4530664bc9103728331db4e31cbb8c81e3128eb0d1e75d5d",
+    "structural_core_element_count": 5,
+    "animated_element_ids": [],
+    "animated_family_ids": [],
+    "choice_slot_ids": [],
+    "choice_slots": [],
+    "visibility_cycling_element_ids": [],
+    "ambient_persistent_element_ids": [],
+    "classification_map": {},
+    "ambient_family_art_ids": [],
+    "ambient_members": [],
+    "ephemeral_family": {
+      "art_ids": [],
+      "union_spatial_envelope": null,
+      "observed_concurrency_range": [
+        0,
+        0
+      ],
+      "draw_bands": {},
+      "spawn_event_count": 0,
+      "despawn_event_count": 0,
+      "bidirectional_churn_witnessed": true
+    },
+    "ambient_semantic_member_count": 0,
+    "peak_element_count": 5,
+    "ambient_fraction": 0.0
+  }
 }

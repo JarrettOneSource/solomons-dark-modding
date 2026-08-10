@@ -1,0 +1,221 @@
+{
+  "schema": "solomon-dark-native-menu-nonsemantic-overlay-v1",
+  "settlement_spec": "2.15",
+  "overlay_id": "dark_cloud_settings_credentials",
+  "overlay": {
+    "classification": {
+      "classification": "non_semantic_overlay",
+      "operator_tag": "dark_cloud_settings",
+      "underlying_surface_id": "main_menu",
+      "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+      "text_action_payload_sha256": "7a49cad69518fc5cecac514a38385b3737c45eddbd47d546cd933b5221389898",
+      "independent_instance_count": 2
+    },
+    "members_semantically_observable": false,
+    "semantic_member_count": 0,
+    "semantic_members": [],
+    "observations": [
+      {
+        "role": "primary",
+        "instance": "menufx-v9p61",
+        "process_id": 16928,
+        "operator_tag": "dark_cloud_settings",
+        "machine_surface": "main_menu",
+        "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+        "settled_sample_count": 40,
+        "stable_span_milliseconds": 15883,
+        "text_action_member_count": 11,
+        "text_action_payload_sha256": "7a49cad69518fc5cecac514a38385b3737c45eddbd47d546cd933b5221389898",
+        "recording": {
+          "evidence_path": "raw-v9/motion-v214/dark-cloud-settings/menu-settlement-traces/unexpected-post-modify-main-menu.settlement.json",
+          "sha256": "d72a2b0bf5c9e74a58c4cf0c8cb6c9de8216062ffb2743019ef988677ab8871d",
+          "bytes": 16392403
+        },
+        "gate_transcript": {
+          "evidence_path": "raw-v9/motion-v214/dark-cloud-settings/primary/dark-cloud-settings-tag-gate-repro2.log",
+          "sha256": "f7c013fcd54a92dad457be84c9b4f778f57e39115040e1cb92313063c74d1b07",
+          "bytes": 1612
+        },
+        "player_visible_frame": {
+          "overlay": {
+            "evidence_path": "raw-v9/motion-v214/dark-cloud-settings/primary/unexpected-post-modify-main-menu.png",
+            "sha256": "cb46bd3a440af2f77b8eccd651c43a469cfc5ea758e67abd20fa4b5dcb923607",
+            "bytes": 660845
+          },
+          "accepted_underlying_surface": {
+            "evidence_path": "raw-v9/motion-v214/dark-cloud-settings/primary/route-to-main/beta-to-main.bmp",
+            "sha256": "4ec0469de29ae75391e3966b31ac0e102f152ccfdf4c6aceb2f61707f59ca585",
+            "bytes": 4320054
+          },
+          "comparison_crop": [
+            492,
+            92,
+            1108,
+            808
+          ],
+          "crop_difference_bbox": [
+            0,
+            0,
+            616,
+            716
+          ],
+          "differing_pixel_count": 438793,
+          "differs": true
+        }
+      },
+      {
+        "role": "confirmation",
+        "instance": "menufx-v9p62",
+        "process_id": 10864,
+        "operator_tag": "dark_cloud_settings",
+        "machine_surface": "main_menu",
+        "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+        "settled_sample_count": 40,
+        "stable_span_milliseconds": 15835,
+        "text_action_member_count": 11,
+        "text_action_payload_sha256": "7a49cad69518fc5cecac514a38385b3737c45eddbd47d546cd933b5221389898",
+        "recording": {
+          "evidence_path": "raw-v9/motion-v214/dark-cloud-settings/confirmation/unexpected-post-modify-main-menu.confirmation.json",
+          "sha256": "e87cb52c1c98ed866e9f941a20d49404c763b4113ed18a09b31bae4fd1eeeff4",
+          "bytes": 16236082
+        },
+        "gate_transcript": {
+          "evidence_path": "raw-v9/motion-v214/dark-cloud-settings/confirmation/dark-cloud-settings-tag-gate-repro2.log",
+          "sha256": "f7c013fcd54a92dad457be84c9b4f778f57e39115040e1cb92313063c74d1b07",
+          "bytes": 1612
+        },
+        "player_visible_frame": {
+          "overlay": {
+            "evidence_path": "raw-v9/motion-v214/dark-cloud-settings/confirmation/frames/unexpected-post-modify-main-menu.confirmation.bmp",
+            "sha256": "d78ce317b46f3d962c49e17ccf1af049c9c3a7166e6033e57a4c70c848c47a4f",
+            "bytes": 4320054
+          },
+          "accepted_underlying_surface": {
+            "evidence_path": "raw-v9/motion-v214/dark-cloud-settings/confirmation/route-to-main/beta-to-main.bmp",
+            "sha256": "587197a46f664f95af0b19ffd55142c635521a114df24864bf2860d62d292e17",
+            "bytes": 4320054
+          },
+          "comparison_crop": [
+            492,
+            92,
+            1108,
+            808
+          ],
+          "crop_difference_bbox": [
+            0,
+            0,
+            616,
+            716
+          ],
+          "differing_pixel_count": 438734,
+          "differs": true
+        }
+      }
+    ],
+    "activation": {
+      "edge_id": "settings_to_dark_cloud_settings",
+      "trigger": "login_info_modify_click",
+      "route": "main menu -> title settings -> measured MODIFY -> credentials overlay",
+      "measured_control": {
+        "source_layout_id": "game-settings-title",
+        "member_id": "settings.text.dark_cloud_settings.1",
+        "text": "DARK CLOUD SETTINGS",
+        "rect": [
+          1043.0,
+          487.5,
+          1057.0,
+          502.5
+        ],
+        "click_point": [
+          1050.0,
+          495.0
+        ],
+        "point_derivation": "center of the unique visible measured row member"
+      },
+      "source_frames": [
+        {
+          "evidence_path": "raw-v9/motion-v214/dark-cloud-settings/primary/route-settings-to-dark-cloud-settings.measured.source.bmp",
+          "sha256": "d5405fcf318a8554b245d11ebd53133a46cca50e3e591c7e21a8a88abe125dd7",
+          "bytes": 4320054
+        },
+        {
+          "evidence_path": "raw-v9/motion-v214/dark-cloud-settings/confirmation/route-settings-to-dark-cloud-settings.measured.source.bmp",
+          "sha256": "bc49b902fd999473cd4535eaf6aa7e943a77c63795eb3d88489f688e16f7f6cc",
+          "bytes": 4320054
+        }
+      ],
+      "evidence_only": true,
+      "typed_into_credentials": false,
+      "durable_dark_cloud_state_mutated": false
+    },
+    "semantic_underlay_binding": {
+      "screen_id": "dark_cloud_settings",
+      "operator_machine_tag_agreement": true,
+      "route": "pause -> game settings -> measured MODIFY -> credentials overlay",
+      "layout_fixture": "menu-overlay-underlays/dark-cloud-settings.json",
+      "primary_fixture": {
+        "evidence_path": "raw-v9/candidates/candidate-v214-profile-final/menu-overlay-underlays/dark-cloud-settings.json",
+        "sha256": "147e74b7142d48df30525433bb629b3bcbf5171af6696a1ce850da4ab9b3f2af",
+        "bytes": 14658
+      },
+      "primary_trace": {
+        "evidence_path": "raw-v9/candidates/candidate-v214-profile-final/menu-settlement-traces/dark-cloud-settings.settlement.json",
+        "sha256": "394e54bd3bab9249e4689a997773210ba4a4d94afb969d29ac57644d9dc14c9e",
+        "bytes": 1599338
+      },
+      "confirmation": {
+        "evidence_path": "raw-v9/candidates/candidate-v214-profile-final/menu-animation-confirmations/dark-cloud-settings.confirmation.json",
+        "sha256": "339fb6d8b6ec4b10e7bc967c3e3faa835d690475181ac3bb3a54929f58ea6bd1",
+        "bytes": 1629282
+      },
+      "route_receipts": [
+        {
+          "evidence_path": "raw-v9/recorder/profile-pinned/v213-p24-route-final.log",
+          "sha256": "ea529883de901131eb0b3350cc7fd94f98dcd9bf82a709a4b4c7ea569186f8f4",
+          "bytes": 56568
+        },
+        {
+          "evidence_path": "raw-v9/recorder/profile-pinned/v213-p25-route-phase1.log",
+          "sha256": "ad1f0b73ff9627f3b879aae2ba61e8ad16632a5152ce823dfa49b7cc849c6177",
+          "bytes": 56592
+        }
+      ],
+      "bound_endpoints": [
+        "settings_to_dark_cloud_settings.after",
+        "dark_cloud_settings_to_settings.before"
+      ],
+      "primary_instance": "menufx-v9p24",
+      "confirmation_instance": "menufx-v9p25",
+      "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+      "raw_element_count": 16,
+      "primary_structural_sha256": "72c12485987bee18004a28d8b6e6f6b518a77113f8efcf7d2f35e8373ac7e6b9",
+      "confirmation_structural_sha256": "76c098f1008d2349b8bea13386eca055f6aecd9c64f52a2546638ec0f7be0cce",
+      "payload_role": "route-qualified machine semantic underlay; never player-visible credentials-panel semantics"
+    },
+    "supersession": {
+      "retired_landed_screen_fixture": {
+        "evidence_path": "webgame-contracts/baseline-snapshots/menu-layouts/dark-cloud-settings.json",
+        "sha256": "992453b07293525b48de059b3bc29e0c3010505a9840495a7977523cb44803f4",
+        "bytes": 46931
+      },
+      "retired_element_count": 31,
+      "replacement_kind": "overlay_record",
+      "reason": "the contaminated-era fixture describes neither the settled underlying main_menu semantics nor observable credentials-panel members",
+      "stop_audit": {
+        "evidence_path": "raw-v9/dark-cloud-settings-surface-stop-audit.json",
+        "sha256": "4274d651affec09ba419aa5d094f1fcf92ecd81e7873b72255edd768f514d552",
+        "bytes": 23312
+      }
+    },
+    "motion_witness_disposition": {
+      "element_id": "dark_cloud_settings.art.ui_28.1",
+      "disposition": "retired_with_nonsemantic_screen_fixture",
+      "reason": "the member belongs to the route-qualified semantic underlay; the credentials overlay has no observable members and its visual truth is pinned by settled frames"
+    },
+    "navigation": {
+      "destination_edge": "settings_to_dark_cloud_settings",
+      "source_edge": "dark_cloud_settings_to_settings",
+      "endpoint_type": "overlay"
+    }
+  }
+}

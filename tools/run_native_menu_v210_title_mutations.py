@@ -90,9 +90,6 @@ def main() -> int:
     output_directory = args.output_directory.resolve()
     aggregate = read_json(repo / "tests/fixtures/webgame/menu-goldens.json")
     overlay = read_json(candidate_root / "menu-overlay-reference.json")
-    order_contract = read_json(
-        repo / "tests/fixtures/webgame/native-menu-beta-notice-order-v29.json"
-    )
     title_contract = read_json(
         repo / "tests/fixtures/webgame/native-menu-controls-title-v210.json"
     )
@@ -123,15 +120,14 @@ def main() -> int:
             record["primary_trace"],
             record["confirmation_trace"],
             overlay,
-            order_contract,
-            title_contract,
-            core_contract,
-            file_receipt(
+            controls_title_contract=title_contract,
+            controls_core_contract=core_contract,
+            landed_fixture_receipt=file_receipt(
                 repo
                 / "tests/fixtures/webgame/menu-layouts"
                 / f"{layout_id}.json"
             ),
-            file_receipt(candidate_paths[layout_id]),
+            candidate_fixture_receipt=file_receipt(candidate_paths[layout_id]),
         )
 
     def controls_green() -> dict[str, Any]:

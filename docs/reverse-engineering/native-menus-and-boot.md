@@ -19,13 +19,19 @@ website.
 
 The canonical live artifact is
 [`menu-goldens.json`](../../tests/fixtures/webgame/menu-goldens.json). Its
-header names every native instance, process, capture commit, executable/DLL
-SHA, capture method, capture time, and the SHA-256 of the raw live navigation
-recording. It embeds 28 layouts and 39 observed edges. Each layout also exists
-as a smaller JSON file under `tests/fixtures/webgame/menu-layouts/`, and each
-has a matching PNG under `tests/fixtures/webgame/menu-reference-captures/`.
-The settle and classification rules are normative in the
-[`native menu settlement specification v2.6`](native-menu-settlement.md).
+header names every native instance, process, machine-derived capture commit and
+tree, executable/DLL SHA, profile-state identity, capture method, capture time,
+and the SHA-256 of the raw live navigation recording. It embeds 27 ordinary
+standalone layouts, three path-qualified Hub layouts, one non-semantic overlay,
+one semantic-dialog composite, and 40 observed edges. Layout records also exist as smaller JSON files
+under `tests/fixtures/webgame/menu-layouts/` or
+`tests/fixtures/webgame/menu-transition-layouts/`, with matching native frames
+under `tests/fixtures/webgame/menu-reference-captures/`. The overlay pins its
+own paired player-visible frames and explicitly has no semantic members. The
+composite pins its semantic underlay, complete dialog contribution, measured
+dismissal control, and zero-residual decomposition. The
+settle and classification rules are normative in the
+[`native menu settlement specification v2.19`](native-menu-settlement.md).
 
 Unless a section explicitly says otherwise:
 
@@ -88,9 +94,9 @@ The exact layout and reference frame are
 [`menu-layouts/native-loader.json`](../../tests/fixtures/webgame/menu-layouts/native-loader.json)
 and
 [`menu-reference-captures/native-loader.png`](../../tests/fixtures/webgame/menu-reference-captures/native-loader.png).
-That fixture was recorded from instance `men-boot1` at capture commit
-`d28f98a190d69662c8e6e691484b4d4e0dc939b9` by the live D3D9 Sprite-render
-geometry seam.
+The paired fixture headers record their current machine-derived commit/tree,
+binary hashes, pristine profile identity, and live D3D9 Sprite-render geometry
+seam.
 
 Duration is load-bound. There is no minimum splash time, no independent
 splash timer, and no input branch in `MyLoader::Render` that skips the screen.
@@ -150,8 +156,8 @@ The exact live `materializing_participants` frame is:
 
 See
 [`menu-layouts/loading-screen.json`](../../tests/fixtures/webgame/menu-layouts/loading-screen.json)
-and its reference PNG. The source was live instance `men-load2`, PID `34424`,
-at capture commit `933fdd99f0bf85ef06b9ef04c25990bff79966f4`.
+and its reference PNG. Its paired special-capture headers carry the same
+machine-derived provenance and settle receipts as the ordinary menu corpus.
 
 Loading owns input. The already-landed uigate contract is authoritative:
 [`beta32-ungated-client-interactions-2026-08-04.md`](../bugs/beta32-ungated-client-interactions-2026-08-04.md)
@@ -190,7 +196,7 @@ sprite-baked glyphs; no OS font substitution is implied. The exact font ABI is
 in
 [`native-presentation-ui-fonts-and-loader.md`](native-presentation-ui-fonts-and-loader.md).
 
-### Canonical 28-layout census
+### Canonical 30-layout, one-overlay, and one-composite census
 
 Each row below names the exact JSON/PNG basename. The layout file is the
 lossless layout specification: it contains every element id, clipped and
@@ -201,16 +207,18 @@ interaction flag, action id, and draw order.
 | --- | --- | --- |
 | `native-loader` | Raptisoft boot loader | No controls; exits only when real startup work completes. |
 | `loading-screen` | Match/Boneyard loading | No controls; exits only when the lifecycle barrier completes. |
-| `beta-notice` | `BETA VERSION V.0.72` modal | `OK` / `dialog.primary` dismisses the modal. |
+| `beta-notice` | Qualified pause-entry `BETA VERSION V.0.72` screen | `OK` / `dialog.primary` dismisses the modal. |
 | `control-scheme-picker` | First-run control scheme | Arrow Keys + Mouse and `WASD + MOUSE`; choosing a scheme persists bindings and advances to Create/main flow. The live semantic hit tag covers WASD; both illustrations are exact in the fixture. |
 | `main-menu-root` | Main menu | Play, Explore the Dark Cloud, Settings, Hall of Fame, and the visible lower-right Quit affordance. |
 | `profile-save-select` | Play/profile/save branch | Last Game resumes the saved session; New Game starts onboarding; Hall of Fame opens scores; Back returns to main. |
 | `create-element` | Class/loadout element step | Ether, Earth, Fire, Water, Air; commits one element and exposes the discipline step. |
 | `create-discipline` | Class/loadout discipline step | Mind, Body, Arcane; commits the loadout and enters the hub/session. Element hit regions remain attached but are not the active step. |
+| `hub_pristine_second_new_game` | Hub reached by first-run Hub -> Main Menu -> New Game -> Create -> Hub in one pristine process | Exact 15-member settled state before projection; includes the five full-presence LevelPicker members and motion-capable `UI.28`. |
+| `hub_new_game` | Hub reached by direct New Game under the pristine-derived Annalist/Fomentius baseline | Exact 14-member minimum settled state; `UI.27`/`UI.88` ambient draws may raise the raw sample census without changing the path core. |
+| `hub_resumed` | Hub reached from durable resumed-run state | Exact 10-member settled state before projection; contains motion-capable `UI.28`. |
 | `game-settings-title` | Settings over title | Sound/music, fullscreen, selectable resolution, login info, controls, performance, Done. |
-| `game-settings-gameplay` | Settings over gameplay | Same, but resolution is the noninteractive message `RESOLUTION AVAILABLE FROM MAIN MENU ONLY`. |
+| `game-settings-gameplay` | Settings over gameplay | Same, but resolution is the noninteractive message `RESOLUTION AVAILABLE FROM MAIN MENU ONLY`. It has three exact history-bound cores because visited child headings remain visible. |
 | `game-settings-dark-cloud` | Settings over Dark Cloud | Same gameplay-context restriction; Done restores the Dark Cloud browser. |
-| `dark-cloud-settings` | Gameplay Login Info child | Dark Name, Password, Back. |
 | `controls` | Customize Keyboard | Movement, menu/inventory/skills, belt slots 1-8, Back. |
 | `performance` | Tweak Performance | Lighting/shadow/play-style/effect toggles, optional Light Quality, Back. |
 | `dark-cloud-browser` | Initial Dark Cloud list | Menu, login identity link, tabs, level list, Play, Search, Sort, Options. The browser opens **on the Online Levels tab**, so this capture and `dark-cloud-online-levels` are the same rendered state and their reference captures are byte-identical. Do not go looking for a difference. |
@@ -227,6 +235,45 @@ interaction flag, action id, and draw order.
 | `map-picker` | Stock story/Boneyard picker | One control per unlocked story index; clicking resolves `data\\levels\\story<index>.boneyard`; the start control cancels/toggles the picker. |
 | `game-over` | Full story Game Over | Armed input continues the native post-death flow. Boneyard mode intentionally uses the fade-only branch. |
 | `hall-of-fame` | Hall of Fame | Main Menu/continue action closes the score screen and reinstalls the title front end. |
+
+`dark_cloud_settings_credentials` is the separate overlay record. Activating
+the measured Login Info / Modify row displays the credentials panel, but the
+menu-member hook continues to expose the underlying surface and cannot observe
+the panel's widgets. The record therefore pins its frames, route, settled
+underlay agreement, and zero semantic members; it is not counted as a layout.
+
+`beta_notice_first_boot` is the semantic-dialog composite. On pristine first
+boot the same 28-member dialog is drawn over the five-member
+`control_scheme_picker` underlay. Both fresh instances reproduce the exact
+33-member decomposition, dialog frame, post-dismissal picker frame, and
+measured `dialog.primary` control. It is a typed state and is not another
+layout fixture.
+
+The following bounds are the larger measured settle latency from each
+layout's primary/confirmation pair. They are evidence-derived recorder times,
+not animation durations or fixed waits:
+
+| Layout | Paired settle-latency bound (ms) | Layout | Paired settle-latency bound (ms) |
+| --- | ---: | --- | ---: |
+| `beta-notice` | 16114 | `control-scheme-picker` | 17033 |
+| `controls` | 16355 | `create-discipline` | 15950 |
+| `create-element` | 16022 | `dark-cloud-browser` | 16327 |
+| `dark-cloud-login-settings` | 16105 | `dark-cloud-menu` | 16091 |
+| `dark-cloud-my-levels` | 16524 | `dark-cloud-online-levels` | 16309 |
+| `dark-cloud-options` | 16129 | `dark-cloud-recent` | 16406 |
+| `dark-cloud-search` | 16167 | `dark-cloud-sort` | 16242 |
+| `game-over` | 16042 | `game-settings-dark-cloud` | 16124 |
+| `game-settings-gameplay` | 16035 | `game-settings-title` | 16172 |
+| `hall-of-fame` | 16241 | `loading-screen` | 2469 |
+| `main-menu-root` | 16162 | `map-picker` | 16165 |
+| `native-loader` | 2407 | `pause-menu` | 16513 |
+| `performance` | 15869 | `profile-save-select` | 16188 |
+| `skill-picker` | 17181 | `hub_new_game` | 16095 |
+| `hub_pristine_second_new_game` | 15889 | `hub_resumed` | 15910 |
+
+The credentials-overlay underlay held its equal text/action payload across
+15,883 ms and 15,835 ms paired 40-sample spans. Its player-visible truth is
+the paired frame record, not a synthetic member-layout latency.
 
 **How the Dark Cloud shell marks its selected tab (observed).** Selection is
 carried by **two signals that move together**, not one:
@@ -298,7 +345,7 @@ instances and exact rectangles remain ordered in the corresponding fixture.
 | Dark Cloud | Recent / Online / My Levels tabs | `[460,128,630,197]`; `[630,128,970,197]`; `[970,128,1140,197]` |
 | Dark Cloud | Play/Edit / Search / Sort / Options | `[623.5,809.5,976.5,878.5]`; `[390,818,480,870]`; `[495,818,585,870]`; `[1017.5,818,1202.5,870]` |
 | Dark Cloud menu | Resume / Settings / Sign Out / Main | `[623.5,301.5,976.5,370.5]`; `[623.5,377.5,976.5,446.5]`; `[623.5,453.5,976.5,522.5]`; `[623.5,529.5,976.5,598.5]` |
-| Skill picker | Three visible offer tiles | `Skills.5` at `[556.5,338.5,643.5,426.5]`, `[756.5,338.5,843.5,426.5]`, `[956.5,338.5,1043.5,426.5]`; the complete 47-element composition is in the fixture. |
+| Skill picker | Three visible offer tiles | `Skills.5` at `[556.5,338.5,643.5,426.5]`, `[756.5,338.5,843.5,426.5]`, `[956.5,338.5,1043.5,426.5]`; the complete fresh-baseline composition, animated family, and choice slots are in the fixture. |
 | Map picker | Parchment / captured unlocked marker | `LevelPicker.3` `[324,85.5,1276,799.5]`; `UI.28` `[720.317,426.921,795.683,504.079]`; map-specific marker `LevelPicker.1` `[817,457.5,890,511.5]`. |
 | Game Over | title art / continue art | `GameOver.0` `[646.5,215.5,953.5,334.5]`; `GameOver.1` `[647,515,953,635]`. |
 | Hall of Fame | Main Menu button body | `UI.101` `[623.5,815.5,976.5,884.5]`. |
@@ -377,24 +424,26 @@ destination.
 
 | Edge id | Source | Trigger | Destination |
 | --- | --- | --- | --- |
+| `beta_notice_first_boot_to_control_scheme_picker` | first-boot beta dialog composite | measured `dialog.primary` | control scheme picker |
 | `control_scheme_picker_to_create` | control scheme | `control_scheme_picker.select_wasd` | create element |
 | `create_element_to_discipline` | create element | `create.select_element_fire` | create discipline |
-| `create_discipline_to_hub` | create discipline | `create.select_discipline_mind` | hub |
+| `create_discipline_to_hub` | create discipline | `select_discipline_mind` | baseline-qualified `hub_new_game` or `hub_pristine_second_new_game` |
 | `hub_to_pause` | hub | Menu key | pause |
 | `pause_to_hub_resume` | pause | `pause_menu.resume_game` | hub |
-| `pause_to_game_settings` | pause | `pause_menu.game_settings` | settings |
+| `pause_to_game_settings` | pause | `pause_menu.game_settings` | gameplay settings `base` |
 | `settings_to_controls` | settings | Customize Keyboard | controls |
 | `controls_to_settings` | controls | Back | settings |
-| `settings_to_performance` | settings | Tweak Game | performance |
-| `performance_to_settings` | performance | Back | settings |
-| `settings_to_dark_cloud_settings` | settings | Login Info / Modify | Dark Cloud settings |
-| `dark_cloud_settings_to_settings` | Dark Cloud settings | Back | settings |
-| `settings_to_hub` | settings | Done | hub |
+| `settings_to_performance` | gameplay settings `base` | Tweak Game | performance |
+| `performance_to_settings` | performance | Back | gameplay settings `performance_retained` |
+| `settings_to_dark_cloud_settings` | gameplay settings `performance_retained` | Login Info / Modify | typed credentials overlay |
+| `dark_cloud_settings_to_settings` | typed credentials overlay | Back | gameplay settings `performance_dark_cloud_retained` |
+| `settings_to_hub` | gameplay settings `performance_dark_cloud_retained` | Done | `hub_resumed` |
 | `pause_to_beta_notice` | pause | `pause_menu.leave_game` | beta notice |
 | `beta_notice_to_main` | beta notice | `dialog.primary` | main menu |
 | `main_to_profile_select` | main | `main_menu.play` | profile/save select |
 | `profile_select_to_main` | profile/save | `main_menu.back` | main menu |
-| `main_to_settings` | main | `main_menu.settings` | settings |
+| `profile_select_new_game_to_create` | profile/save | `main_menu.new_game` | create element |
+| `main_to_settings` | main | `settings_click` | settings |
 | `settings_to_main` | settings | Done | main menu |
 | `main_to_hall_of_fame` | main | `main_menu.hall_of_fame` | Hall of Fame |
 | `hall_of_fame_to_beta_notice` | Hall of Fame | Main Menu | beta notice |
@@ -417,70 +466,157 @@ destination.
 | `dark_cloud_menu_to_beta_notice` | Dark Cloud menu | Main Menu | beta notice |
 | `profile_select_resume_to_hub` | profile/save | Last Game | hub |
 
-### Provenance of the recorded screen tags
+### Capture-time identity and route guardrails
 
-Each endpoint in the graph carries a `tagged_screen`, and it **is not an
-observation** — it is the string the operator passed to
-`sd.ui.capture_current_layout`, handed straight back. The binding ends with
-`captured.screen_id = std::string(screen_id)`, so the field can never disagree
-with whoever ran the recorder. Read it as a label, never as evidence of which
-screen the game thought it was on.
+The recorder now treats an operator screen tag only as an expectation. It
+accepts a standalone or edge endpoint only after the machine classifier reports
+the same semantic surface (through the bounded native alias table), and every
+navigation step verifies its intended destination before the next action can
+run. A mismatch aborts immediately with the measured point, machine surface,
+operator tag, and frame. The recorder never strips controls, retags a foreign
+surface, or continues a route after an unverified dispatch.
 
-The game's own classification is not lost entirely, but it survives in only one
-bit. Before stamping the label, `TryCaptureCurrentDebugUiLayoutSnapshot`
-compares it against the classifier's `screen_id` through a small alias table
-(`profile_save_select`→`main_menu`, `beta_notice` and
-`leave_game_confirmation`→`dialog`, the eight Dark Cloud sub-screens→
-`dark_cloud_browser`). When they disagree it does two things: it appends
-`+ exact live-navigation screen tag (stale controls omitted)` to
-`capture_method`, and it **deletes every element that is not `art` or `text`**.
+This closes the failure that produced the rejected Controls candidate. The old
+driver queued `main_menu.settings` but retained only a request id; its source
+capture already classified as `main_menu` even though a Settings panel was
+visible. It then reused the operator-supplied point `(1015,586)`. On the
+machine-classified payload that point intersected only the main menu's third
+button plate and ornament, with no interactive control. The native modal owner
+still displayed Customize Keyboard, while the old capture API rewrote a stable
+`main_menu` remnant to the operator tags `settings` and then `controls`. The new
+destination check and classifier/tag agreement gate reject that sequence before
+any fixture exists. The clean rerun instead binds both Controls edges and the
+standalone to the same reproduced 55-member core and exact `Wizard Controls`
+title.
 
-That suffix therefore reads like a stronger provenance claim while actually
-marking a weaker capture, and it is the one field that tells you so. **34 of the
-78 recorded endpoints carry it.** For those, only `art` and `text` elements
-survive, so `element_count` is a stripped remnant of the screen and must not be
-read as a census of it. The clearest case is `hall_of_fame_to_beta_notice`,
-whose after-state was captured under the label `main_menu` on a state the game
-classified `dialog`: its 124 elements are an art/text remnant of a dialog, not a
-main-menu layout.
+Click coordinates are now derived from the unique visible live member or
+control being activated and are stored with the route. Semantic actions are
+accepted only with their completed app-tick dispatch receipt. Browser endpoints
+add the measured six-member tab-state check because the broad surface
+classifier cannot distinguish Recent from Online Levels. Every header also
+pins the machine-derived profile-state identity. The pristine baseline contains
+no copied durable files; another baseline is legal only when deterministic,
+receipted in-game actions derive it from pristine state and its resulting file
+identity is registered for that exact layout or edge binding.
 
-Two further consequences worth stating plainly. `semantic_generation` is `0` on
-19 endpoints — there `sd.ui.get_snapshot()` returned nothing, so
-`semantic_surface` is empty and only the tagged layout is available. And
-`element_count`/`layout_generation` come from the loader's most recently cached
-layout snapshot, while `frame_sha256` hashes the backbuffer at the moment of the
-call; the two are not sampled atomically. Identical frames can therefore pair
-with different counts, and do — `dark_cloud_search` shares one frame hash across
-generations 147 and 3345 at 95 and 96 elements, and `dark_cloud_menu` across
-generations 3387/3389/3393 at 101 and 100.
+### Why the old snapshots were wrong
 
-### The recorded capture commits do not exist
+The earlier four-second capture raced two different mechanisms on Create. A
+fresh `control_scheme_picker_to_create` trace first populated the destination:
+at its earliest measured phase, the settled layout was still missing the exact
+art members `Create.21/.9/.23/.13/.10/.12/.20/.11/.15/.3/.22/.14` and all eight
+Create element/discipline controls. That one-way ramp is late population. Once
+the 30-member destination existed, the native transition spawned 66 temporary
+`Create.4` draws, captured as
+`create_element.art.create_4.1` through `.66`, then destroyed them one by one;
+the final transient phase contained only `.1` before the stable 30-member
+window. Both fresh instances reproduced that sequence. The landed 34-member
+edge destination was therefore the settled destination plus four of these
+transition-overlay draws—not outgoing control-scheme members and not late rows.
 
-Every session header and every layout header in the G11 goldens carries a
-`capture_commit`, and none of the five distinct values is a commit. They are
-absent from this repository's full history and the remote returns `422 No commit
-found` for each. All 66 occurrences are affected:
-`f9cac8783e72e7423a2d952987fa169fa84f3dcb` (52),
-`933fdd99f0bf85ef06b9ef04c25990bff79966f4` (5),
-`48a54aaf485e671e605cbf301441380f6538846f`,
-`911e3ed8345feda13929d36c5994990ef59333d9` and
-`d28f98a190d69662c8e6e691484b4d4e0dc939b9` (3 each).
+The old 45-member Create standalone had a separate defect. Its 15 extra
+`UI.107/.108/.109/.110`, four `UI.17`, `UI.18`, three `UI.8`, `UI.101`, and two
+`UI.54` draws never appeared in any Create population or settled window. Their
+complete non-id semantic multiset equals the independently captured beta-dialog
+chrome, and removing that multiset deterministically recompacts the surviving
+draw sequence to the settled layout. Thus the standalone was captured with the
+stock beta dialog undismissed; it was overlay contamination, not transition
+population. Overlay matching is semantic because screen-local ordinal ids are
+positional bookkeeping. Pause legitimately shares 11 of the same atlas
+suffixes, so suffix intersection is not identity; only the complete overlay
+semantic multiset triggers hygiene rejection.
 
-The capture ran in an isolated clone and recorded that clone's local `HEAD`; the
-commits were **never pushed** and did not survive the squash on landing. This is
-not a limit of isolated-clone capture — G1's movement and RNG goldens
-(`51d81ed3`, with `source_tree_sha` `55ea6c0c` correctly equal to that commit's
-tree), G2's projectile goldens (`1b9d454d`) and G14's input goldens (`2bc3ab13`)
-all recorded commits that are ancestors of `main`.
+The beta notice itself has two qualified forms, not one path-tolerant screen.
+On pristine first boot, the member system reports `control_scheme_picker` and
+the dialog contributes an exact 28-member semantic multiset above its
+five-member underlay; dismissing the measured `dialog.primary` control reveals
+the picker. That 33-member state is therefore a v2.17 semantic-dialog
+composite. The pause-menu Leave Game route instead produces the qualified
+28-member `beta_notice` screen. The old 34-member fixture was a main-menu
+underlay capture from the contaminated era and is retired, not generalized.
 
-The field cannot be repaired by editing: the correct SHA is unknowable, and
-substituting the landing commit would be invention rather than provenance, so
-**only a re-capture can fix it**. Until then, treat the G11 loader source state
-as unpinned and rely on the identities that did survive — the retail EXE sha256
-`03a83456…` and the per-session `loader_dll_sha256`, both recorded in the header.
-The contract that used to accept any forty hex characters here now requires each
-recorded object id to resolve and to be an ancestor of `HEAD`, with these five
-declared absent, so a re-capture that resolves one forces the declaration out.
+Create's stable census still moves. In both instances the seven full-presence
+members `create_element.art.create_7.1`, `.14.1`, `.15.1`, `.20.1`, `.21.1`,
+`.22.1`, and `.23.1` varied only in `rect`/`unclipped_rect`; every other field
+and the member set remained fixed. The fixture pins their identities, static
+payloads, first-window anchors, and union motion envelopes. It does not freeze
+one arbitrary frame. Animation waveform and period remain the G4/animre seam.
+
+Title surfaces need the wider ambient-lifecycle model. `Title.11`-`.15`
+sparkle/ember draws spawn and despawn; higher `Title.17`-`.24` ordinals are
+instance-local particles; scroll-wrap members can toggle visibility; and those
+changes uniformly displace absolute draw-order numbers beneath stable dialog
+chrome. Contracts therefore assert the reproduced structural core and its
+relative paint sequence, while ambient members carry draw bands, anchors,
+events, and union envelopes. Absolute draw order and raw element-list position
+are excluded. The five-minute paired Settings-title extension additionally
+observed `Title.5` disappear and reappear in both instances, proving a real
+scroll-wrap lifecycle rather than a quiet-window constant.
+
+Motion capability is asymmetric. Hub's `UI.28` stayed stationary in one short
+window but moved in another; an 85.8-second, 200-sample corroboration then
+recorded two motion events. One real event proves capability, while a quiet
+window cannot prove immobility. The resolved animated classification is shared
+by every fixture of that screen. Skill Picker adds the one authorized animated
+family: eight byte-identical `UI.3` draws exchange synthetic ordinals and cross
+geometry ranks in both instances, so the fixture pins their collective count,
+slot set, payload, and union envelope. Its two roster-dependent offer positions
+are separate v2.8 choice slots whose anchors, offsets, atlas namespace, and
+asset-manifest centering reproduce even when skill art differs.
+
+Finally, gameplay Settings has deterministic structural history rather than
+animation. Returning from Performance retains the exact `TWEAK PERFORMANCE`
+heading; opening and returning from Login Info then also retains `DARK CLOUD
+SETTINGS`. Each 28/29/30-member state settles in both instances and each graph
+endpoint binds to one exact state. No filter removes these player-visible
+members, and no state binding is inferred from time.
+
+The absolute `generation` counter is different: it does not render and is not
+screen identity. The first picker pair both measured 1, but deeper equal-route
+pairs showed session-cumulative, instance-timing-sensitive drift from -2
+through +2 in both directions. Ten of 30 standalone pairs and 24 of 76 layout
+edge endpoints differed while each individual 40-sample window held its own
+value constant. Settlement v2.19 therefore records the primary fixture value
+and both observation values as provenance, but excludes only `generation` and
+its semantic mirror from cross-instance identity after projecting both sealed
+windows to an exact-equal core multiset and relative sequence with zero
+residual. All 34 disagreeing pairs pass that machine proof, including the
+fresh Skill Picker pair at 18 and 20. A mid-window change, a hand-edited
+fixture value, or any non-generation core difference still stops; recapturing
+until counters happen to agree is forbidden counter-shopping.
+
+All current provenance is recorder-derived. Each fixture carries the actual
+repository commit and tree plus hashes computed from the staged game executable
+and loader DLL. Operators cannot supply or override those values. Each header
+also cites the exact profile-state receipt, traces, confirmation, reference
+frame, and measured settle latency; contracts re-hash every committed file and
+refuse duplicate or ambiguous evidence lookup.
+
+The capture commits came from several isolated, qualified campaign worktrees,
+so their exact objects are preserved rather than replaced with the eventual
+landing commit. Evidence artifact `menufix-capture-source.bundle`, Windows
+SHA-256
+`c9d521db6917d1ff997604aaf7038537a510673548a5bd091ad315e7ac78fb50`,
+is a thin Git bundle over prerequisite `c24fc3cc`. A prerequisite-only replica
+was proven not to contain the capture objects; importing the eight exact bundle
+heads then recovered all 15 recorded commit/tree objects with their declared
+Git types. This makes the machine-derived revisions re-inspectable without
+pretending the final landing commit existed at capture time.
+
+The web shell is intentionally not rewritten by this campaign. During the
+shellfix task #101 interregnum, the exact pre-menufix bytes of all 28 historical
+menu fixtures, their 28 reference captures, and the embedded shell aggregate
+live under `webgame-contracts/baseline-snapshots/`. Each committed file is
+hash-pinned by `webgame-contracts/menu-baseline.json`. Existing shell replay
+and human visual attestations remain bound to those exact snapshot hashes.
+Settled truth is separately enumerated as exactly 29 `pending_shellfix` states:
+27 screen fixtures, the Dark Cloud Settings non-semantic overlay, and the
+first-boot beta-notice composite. That is the exact old-28-minus-retired-screen-
+plus-overlay-plus-composite delta. A changed snapshot, a missing or wrong
+pending hash, or any census other than 28 historical snapshots and 29 settled
+states fails. The old ten-screen stale-control waiver no longer exists; task
+#101 must consume the settled fixtures and then remove this explicit
+compatibility boundary.
 
 Presentation rules recovered to a trustworthy level are:
 

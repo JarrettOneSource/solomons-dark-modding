@@ -364,8 +364,9 @@
     "assets/loading/Wizards_dire_BG.png": "251365e025129972707b436d441d52ae2c5f8199bc3f80a1c4e03b2a28a1180c",
     "docs/reverse-engineering/native-asset-object-map.json": "f3059a8c15e4377e23e5e6054c3b9e0209917da640f671341e7c0ab4c96c0044",
     "docs/reverse-engineering/native-content-inventory.json": "21499a46b56c690c95abb6fd22a02f91df141f7a5d7da16276a11fdbe496fa88",
-    "tests/fixtures/webgame/menu-goldens.json": "9f142fb6c4be2e3a0db0db28ebdee961a66650bf45e4dc2602481b5f1dbd600f",
+    "tests/fixtures/webgame/menu-goldens.json": "19949349ec140751136f0dc45a442bd99a74dc413fe7bc5a0d94b9dd99c3fe18",
     "tests/fixtures/webgame/scene-composition-goldens.json": "7bf5adec2f4425e07d42465b7dc3cefbab004dd7133b951a06ebccedeb3885c2",
+    "webgame-contracts/baseline-snapshots/menu-goldens.json": "9f142fb6c4be2e3a0db0db28ebdee961a66650bf45e4dc2602481b5f1dbd600f",
     "webgame/assets/asset-manifest.schema.json": "95f73048a839cdf811578232e0a87d6fc7ea82cd44d226f6340d5de17cc02de0"
   },
   "counts": {
@@ -628,6 +629,7 @@
       "Create.22",
       "Create.23",
       "Create.3",
+      "Create.4",
       "Create.5",
       "Create.6",
       "Create.7",
@@ -648,10 +650,12 @@
       "Skills.13",
       "Skills.164",
       "Skills.43",
+      "Skills.45",
       "Skills.48",
       "Skills.5",
       "Skills.83",
       "Skills.84",
+      "Skills.94",
       "Title.0",
       "Title.1",
       "Title.11",
@@ -1738,6 +1742,9 @@
       "Create.3": {
         "kind": "entry"
       },
+      "Create.4": {
+        "kind": "entry"
+      },
       "Create.5": {
         "kind": "entry"
       },
@@ -1996,6 +2003,9 @@
       "Skills.43": {
         "kind": "entry"
       },
+      "Skills.45": {
+        "kind": "entry"
+      },
       "Skills.48": {
         "kind": "entry"
       },
@@ -2006,6 +2016,9 @@
         "kind": "entry"
       },
       "Skills.84": {
+        "kind": "entry"
+      },
+      "Skills.94": {
         "kind": "entry"
       },
       "Solomon.13": {
@@ -2932,6 +2945,7 @@
       "Create.22": "90d205ad5de0697dc74eb837c0ec84de915390cf502f1384637b7f3982ab379f",
       "Create.23": "c2f7d69bdc1c957667ae7c2435b93614dfd8b17ffefcbdace054112c9d5f50a6",
       "Create.3": "36075d9f05d0b24d8a0cc4b16860568818322aed70c2a22b9179f89121735d33",
+      "Create.4": "69ae71ff01ffe6d4415df3f56eda8b9af07523af5acec94c947c4cd89de2d4c0",
       "Create.5": "10783db2f5d99c853f3c153b93f659344d49ddd84ccb874db5689d893d5382c6",
       "Create.6": "ad59ad73621d074e9dfffa23675ba02d6e827d50eb7162317416af962fb02e52",
       "Create.7": "c4a203cd5fde8cfcda00a12fc46a70753c43d73448e290fdb76ecdfac4c663c3",
@@ -3021,10 +3035,12 @@
       "Skills.13": "740bc105c7b19ae47c653a7e13762bd8b7310df13cc46faf7064180109f08d34",
       "Skills.164": "a1a832843e2a76d483a2d84087fbe83469e058270213f8b8d5788a68ec64ccfd",
       "Skills.43": "1550201b0b8a58656d46cd50b28737dfb1168b4ebb27a305912b70a8200daa28",
+      "Skills.45": "433c24773462be9ec33c1e9193cdb59395f62978993badcdefd54a9971fb96f2",
       "Skills.48": "e42fb6bd83ac8bbadc07b65876002cc61202d5ac978dbc3b66d0fd6b19b3b3de",
       "Skills.5": "eb88b29d7300fa7d3f1cec8f6ed1c1949ba35680bb702de5e9105f22171e2cff",
       "Skills.83": "cee813584c38f5c1995ed2fc75416db5f3c43ecbb7c0d931e9bff4bb4af3ba39",
       "Skills.84": "e0e390491bc17127475f04bc0bcf81d017abebcd32070561e202800ffc794258",
+      "Skills.94": "384cfafd5a91f36d669cb9c978c12c66c3026d02cee589355f92028bd5d4bec3",
       "Solomon.0": "bc93627d236569dffad3badfdddfb08983b53fb38e685461892018e626c72fab",
       "Solomon.13": "c11289d4fd3fe919a7965d70c1f838707bd85f0cf627bcbe3a0cd2ebb30fa033",
       "SolomonRiff.0": "d5f44334c1c8c851945e43a3c97f0cfc5f4cd95d9d0eeffc1b4fbd350da6f1c2",
@@ -3091,7 +3107,7 @@
     "fontGroupHashes": {
       "Fonts.216-307": "3288b5c4da6160c2e75924d5f42a2737dc83f08b23d7d09143234ff44a1f7858",
       "Fonts.308-349": "5879b0e45327f4cb9dc7d3a7c869858b9dabd195fdbc835fa611132cc366078c",
-      "Fonts.93-184": "bc4245f0a411217cce8a58ba87c9727c6f3eff899df7ffddf6718c9ee6a3c6bd"
+      "Fonts.93-184": "646b8b40f4c0bebbfecedcab46e2ae0e9aff85a26576caa20ae467f8b6a22d4e"
     },
     "specialDrawHashes": {
       "Segoe UI": "9a9c41ad933964fbcd7ef35de1cff8fcab4265697dd393f8704c61e491fbbabd",
@@ -3101,6 +3117,7 @@
   },
   "sourceGoldenPaths": [
     "tests/fixtures/webgame/scene-composition-goldens.json",
-    "tests/fixtures/webgame/menu-goldens.json"
+    "tests/fixtures/webgame/menu-goldens.json",
+    "webgame-contracts/baseline-snapshots/menu-goldens.json"
   ]
 }

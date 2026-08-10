@@ -1,4 +1,4 @@
-import menuGoldenJson from "../../tests/fixtures/webgame/menu-goldens.json" with { type: "json" };
+import menuGoldenJson from "../../webgame-contracts/baseline-snapshots/menu-goldens.json" with { type: "json" };
 import { describe, expect, it } from "vitest";
 
 import { parseMenuCatalog } from "./menu-catalog.js";

@@ -141,7 +141,6 @@ def run_diagnosis(
     settled: dict[str, Any],
     record: dict[str, Any],
     overlay: dict[str, Any],
-    order_contract: dict[str, Any],
     title_contract: dict[str, Any],
 ) -> str:
     try:
@@ -152,8 +151,7 @@ def run_diagnosis(
             record["primary_trace"],
             record["confirmation_trace"],
             overlay,
-            order_contract,
-            title_contract,
+            controls_title_contract=title_contract,
         )
     except LandedDiagnosisError as error:
         return str(error)
@@ -189,13 +187,9 @@ def main() -> int:
         raise ValueError("Controls post-v2.10 audit has no compared layouts")
     overlay_path = candidate_root / "menu-overlay-reference.json"
     overlay = read_json(overlay_path)
-    order_contract_path = (
-        repo / "tests/fixtures/webgame/native-menu-beta-notice-order-v29.json"
-    )
     title_contract_path = (
         repo / "tests/fixtures/webgame/native-menu-controls-title-v210.json"
     )
-    order_contract = read_json(order_contract_path)
     title_contract = read_json(title_contract_path)
 
     identity_correction = _diagnose_layout_identity_v210(
@@ -208,7 +202,6 @@ def main() -> int:
         settled,
         record,
         overlay,
-        order_contract,
         title_contract,
     )
     if promoter_stop != EXPECTED_STOP:

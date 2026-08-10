@@ -81,7 +81,7 @@ describe("asset-manifest golden fixture", () => {
     expect(representatives.Unholy).toBe("Unholy.0");
     const selected = expectObject(fixture.selected, "selected fixture records");
     const entryHashes = expectObject(selected.entryHashes, "selected entry hashes");
-    expect(Object.keys(entryHashes)).toHaveLength(499);
+    expect(Object.keys(entryHashes)).toHaveLength(502);
     expect(entryHashes["DeadHawg.12"]).toBeDefined();
     for (const id of Object.values(representatives)) {
       expect(entryHashes[expectString(id, "bundle representative id")]).toBeDefined();
@@ -98,11 +98,14 @@ describe("asset-manifest golden fixture", () => {
     const menuArtIds = expectArray(references.menuArtIds, "menu art ids");
     const menuFontIds = expectArray(references.menuFontIds, "menu font ids");
     expect(sceneIds).toHaveLength(378);
-    expect(menuArtIds).toHaveLength(104);
+    expect(menuArtIds).toHaveLength(107);
     expect(menuFontIds).toHaveLength(4);
     expect(sceneIds).toContain("DeadHawg.12");
     expect(sceneIds).toContain("native.framebuffer-clear");
     expect(menuArtIds).toContain("Wizards_dire_BG");
+    expect(menuArtIds).toContain("Create.4");
+    expect(menuArtIds).toContain("LevelPicker.1");
+    expect(menuFontIds).toContain("Fonts.308-349");
     expect(menuFontIds).toContain("Fonts.93-184");
     expect(menuFontIds).toContain("Segoe UI");
     expect(expectArray(references.unresolved, "unresolved references")).toEqual([]);
@@ -113,8 +116,8 @@ describe("asset-manifest golden fixture", () => {
       ),
     );
     const resolutions = expectObject(references.resolutions, "golden resolutions");
-    expect(ids.size).toBe(485);
-    expect(Object.keys(resolutions)).toHaveLength(485);
+    expect(ids.size).toBe(488);
+    expect(Object.keys(resolutions)).toHaveLength(488);
     expect(resolutions["native.framebuffer-clear"]).toEqual({ kind: "special-draw" });
     for (const id of ids) {
       expect(resolutions[id], `golden asset reference does not resolve: ${id}`).toBeDefined();
@@ -124,12 +127,14 @@ describe("asset-manifest golden fixture", () => {
   it("matches every recorded hash for a committed source file", async () => {
     const fixture = await loadFixture();
     const hashes = expectObject(fixture.committedSourceHashes, "committed source hashes");
-    expect(Object.keys(hashes)).toHaveLength(7);
+    expect(Object.keys(hashes)).toHaveLength(8);
     expect(hashes["SolomonDarkModLoader/src/native_scene_capture/generated_atlas_spans.inl"])
       .toBeDefined();
     expect(hashes["tests/fixtures/webgame/scene-composition-goldens.json"])
       .toBeDefined();
     expect(hashes["tests/fixtures/webgame/menu-goldens.json"]).toBeDefined();
+    expect(hashes["webgame-contracts/baseline-snapshots/menu-goldens.json"])
+      .toBeDefined();
     expect(hashes["webgame/assets/asset-manifest.schema.json"]).toBeDefined();
     for (const [relativePath, recordedHash] of Object.entries(hashes)) {
       expect(await sha256File(path.join(REPO_ROOT, ...relativePath.split("/"))))

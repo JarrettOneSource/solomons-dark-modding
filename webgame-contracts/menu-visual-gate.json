@@ -147,143 +147,148 @@
   ],
   "pending_shellfix": [
     {
+      "fixture": "menu-dialog-composites/beta-notice-first-boot.json",
+      "settled_fixture_sha256": "c859bf1ad208bbdb7d9b808478ec5a81ea8afbc63ba22de1c479c9099691318f",
+      "corrective": "shellfix task #101"
+    },
+    {
       "fixture": "menu-layouts/beta-notice.json",
-      "settled_fixture_sha256": "3079989caa69579ea0d4eebf863fb3f26a86a24be40eff4459263f735d6f6042",
+      "settled_fixture_sha256": "0fd6739d87a2fed5819951a48aacc0ba60e1354518b5c9339264d3b8b25115ba",
       "corrective": "shellfix task #101"
     },
     {
       "fixture": "menu-layouts/control-scheme-picker.json",
-      "settled_fixture_sha256": "0ca9c1eb2004e4c07ee4d48628ccbc42b27ff118a786ccd12b2b5a23e3180b58",
+      "settled_fixture_sha256": "b128864939e255ff63b3ca95cfc825a4de2c72578c2846b5aac223d8a8fe767d",
       "corrective": "shellfix task #101"
     },
     {
       "fixture": "menu-layouts/controls.json",
-      "settled_fixture_sha256": "0684f577292d191165dafa059eb626a52b467b165b18e126fb2a261ed4f2fd1a",
+      "settled_fixture_sha256": "9b0270614d0ed6ff94792498d6bff928153bf896990a25d477c8440b7f04cd52",
       "corrective": "shellfix task #101"
     },
     {
       "fixture": "menu-layouts/create-discipline.json",
-      "settled_fixture_sha256": "37cf978409cadcceba49c03e3ee4cd06feece8eb5774e08dad6eaa00ca71db56",
+      "settled_fixture_sha256": "ba11ca2607a3ee8620fec59eadb31f1acb6e78ad10a1d8b93da0371cbcf30240",
       "corrective": "shellfix task #101"
     },
     {
       "fixture": "menu-layouts/create-element.json",
-      "settled_fixture_sha256": "83a5301856952dcf885a52d50001e1c5e9e98ff78ee6929d8d3b3fca487676a2",
+      "settled_fixture_sha256": "636ff98c6bdc1f6ed4e19da12fa19ac96b8417c78503edb1ca539a4c9922f687",
       "corrective": "shellfix task #101"
     },
     {
       "fixture": "menu-layouts/dark-cloud-browser.json",
-      "settled_fixture_sha256": "24b8ad31cb35b8d8cd4ef9527777572256b9f8c9e2d5e8d39e877bcd9f7a96b2",
+      "settled_fixture_sha256": "f5e7d658564ce273a24d878029da55907e0f466fd4616b09fa2ecdfdc7d69cac",
       "corrective": "shellfix task #101"
     },
     {
       "fixture": "menu-layouts/dark-cloud-login-settings.json",
-      "settled_fixture_sha256": "1844ec5571122e4fed8fa0f15c7ebdc1a6ee3200ef5ee347b3d6d1034799a25a",
+      "settled_fixture_sha256": "7c729a2b52b72ba8fa7d3108ce2e61340bd735c5e5a63db491232e5caf6538fd",
       "corrective": "shellfix task #101"
     },
     {
       "fixture": "menu-layouts/dark-cloud-menu.json",
-      "settled_fixture_sha256": "ce7840aaa7b34185ec4345132a7b5704765130878a42e0b9a4c31b285bc2af94",
+      "settled_fixture_sha256": "5519b636f8370058bdf494381a51223da48923146d370d1ad4de286abb190a5c",
       "corrective": "shellfix task #101"
     },
     {
       "fixture": "menu-layouts/dark-cloud-my-levels.json",
-      "settled_fixture_sha256": "50030bb28a018a621ff40080e0366821505a72ec24d9743406f7b44bab3371fc",
+      "settled_fixture_sha256": "64173d50feb0f50ffc13da6352d42007a7543f889eefbbadeca20f5511da9528",
       "corrective": "shellfix task #101"
     },
     {
       "fixture": "menu-layouts/dark-cloud-online-levels.json",
-      "settled_fixture_sha256": "61590730b3e20d32ee77dde1d8ad12fc4b6cb5fd2e8c3c0d6396e74f31d23b16",
+      "settled_fixture_sha256": "295e3662323b49ddf826aa686e62d2d461047a41ebbd6298186f0fd696058988",
       "corrective": "shellfix task #101"
     },
     {
       "fixture": "menu-layouts/dark-cloud-options.json",
-      "settled_fixture_sha256": "526881ea2946db3fd9bcaf26543fceda351e955190d917cbbfe82c2006f7576a",
+      "settled_fixture_sha256": "96e75c5868371fbcfaf24bec9b20123c4a86019ee24ff9bc7410878d2cc73168",
       "corrective": "shellfix task #101"
     },
     {
       "fixture": "menu-layouts/dark-cloud-recent.json",
-      "settled_fixture_sha256": "c7ddae01f4debf8d948e0d68a35b625c45b8409ac0bf2c3da2ef34c45b355967",
+      "settled_fixture_sha256": "117a9c6993ef20916aba0ed8ff1fb787e298e7d6cc82ab24cdad6993634630a3",
       "corrective": "shellfix task #101"
     },
     {
       "fixture": "menu-layouts/dark-cloud-search.json",
-      "settled_fixture_sha256": "1af0160eff69d47433b4dcb44a542e3bb9888587ce069d934a1efea6b1f8c843",
-      "corrective": "shellfix task #101"
-    },
-    {
-      "fixture": "menu-layouts/dark-cloud-settings.json",
-      "settled_fixture_sha256": "992453b07293525b48de059b3bc29e0c3010505a9840495a7977523cb44803f4",
+      "settled_fixture_sha256": "35a7571aa77a7bc18758154d91aeae9dc334e85d13be52512ceaf441389626f9",
       "corrective": "shellfix task #101"
     },
     {
       "fixture": "menu-layouts/dark-cloud-sort.json",
-      "settled_fixture_sha256": "b8727e72c0874e43136f9996bd54376a02d8fde2ca03cbaf5aea08fc93f24be8",
+      "settled_fixture_sha256": "0f424ef3358851f87af5ca8b290b4c5f9ce0fd395bd636d04003285d0f7c79b5",
       "corrective": "shellfix task #101"
     },
     {
       "fixture": "menu-layouts/game-over.json",
-      "settled_fixture_sha256": "189d460b1c3e61487abadabe996b224f56baa3ff0374f5a15a1ab3d58e8d6dd2",
+      "settled_fixture_sha256": "2026c2d16b555ec1f8e8f1caca7ba98409ea0e236f321184db2f939dc5c9f40e",
       "corrective": "shellfix task #101"
     },
     {
       "fixture": "menu-layouts/game-settings-dark-cloud.json",
-      "settled_fixture_sha256": "73732db0a3687479667aae816227456941fd9d30c5063afe586cd3fb1a446bf9",
+      "settled_fixture_sha256": "ba7c1d7be2eb2a1a187bd1d12b2b29ea580ed6d0b2fe1877da56e1e866f447a7",
       "corrective": "shellfix task #101"
     },
     {
       "fixture": "menu-layouts/game-settings-gameplay.json",
-      "settled_fixture_sha256": "fe27915bee5364b1ca8bb9cb4922ce99aeefe2d16be5c5e6b9582f8519a29439",
+      "settled_fixture_sha256": "eaa023f2af7a781527cd33364e07917286c1f993177748e24cf17b63af319265",
       "corrective": "shellfix task #101"
     },
     {
       "fixture": "menu-layouts/game-settings-title.json",
-      "settled_fixture_sha256": "22e26ab5568b80c77cb7ccde2dbeed9ae25098026c5687b2f189795fc3a3a7f5",
+      "settled_fixture_sha256": "8b23eb908a32290d55c8de609546ec552a821595de7089e3b2b481591b3f6d7b",
       "corrective": "shellfix task #101"
     },
     {
       "fixture": "menu-layouts/hall-of-fame.json",
-      "settled_fixture_sha256": "4d657306692a4b4cb107fd815308913bfaa1df53c1e0bea5f43b6c47ebaaea1b",
+      "settled_fixture_sha256": "fe884631a6b6cae716d2b67d184ca6506377cb0ecc7a1ad0a91fe410bdcac06a",
       "corrective": "shellfix task #101"
     },
     {
       "fixture": "menu-layouts/loading-screen.json",
-      "settled_fixture_sha256": "3cf436e3b1c8d11fd6da831e19a3241daa1cef8e47c2ec7a79b3b84733d76b8b",
+      "settled_fixture_sha256": "31d133a1e905904c0d2923775afd5bd2e73e44f1afff29e25bdc5f832a332f94",
       "corrective": "shellfix task #101"
     },
     {
       "fixture": "menu-layouts/main-menu-root.json",
-      "settled_fixture_sha256": "c2d296d678773c2e291b2cabc115871e3d624cca8a8bd98da1ee7c44ca04a42b",
+      "settled_fixture_sha256": "70b0f0030e5ee942dcb21d401f7e16d79c6526065259e540d23183a11a23fa9f",
       "corrective": "shellfix task #101"
     },
     {
       "fixture": "menu-layouts/map-picker.json",
-      "settled_fixture_sha256": "cca51909f8a58a7edbe22eab16be1f156daab56902348a8a6aebe3aef4047bc8",
+      "settled_fixture_sha256": "38d24500b7cc93e5efb869c2f81ab0c56bdb7978dcc98fbb73066ec1caf06d97",
       "corrective": "shellfix task #101"
     },
     {
       "fixture": "menu-layouts/native-loader.json",
-      "settled_fixture_sha256": "0688ae736d0ec542b137ac80a8664dc91746ab3ac097b443c653d9ba26c1526b",
+      "settled_fixture_sha256": "95c79c66f463a13c56b7178f9fb725f215f6a122897dfb99d52f28e8a057dbab",
       "corrective": "shellfix task #101"
     },
     {
       "fixture": "menu-layouts/pause-menu.json",
-      "settled_fixture_sha256": "f8407307ea4b12ffe0d519bc7bc16215879ca761fbac51144941bb951c22faca",
+      "settled_fixture_sha256": "03fd2de8e7870da4de014e92bc70994fc27c9e1ee43ca51b228fac7360243120",
       "corrective": "shellfix task #101"
     },
     {
       "fixture": "menu-layouts/performance.json",
-      "settled_fixture_sha256": "344b967e458092bf00af290fb088edcd4a5bf1315806983e93c11b6b3303313c",
+      "settled_fixture_sha256": "e64e328df4df668f794ad56e70f43628bbba3a4e4bd781fd05d0b73729e157e5",
       "corrective": "shellfix task #101"
     },
     {
       "fixture": "menu-layouts/profile-save-select.json",
-      "settled_fixture_sha256": "31fcb5ea0025a2dcdc9658d71549367d784f8a5d78699eeb277ff228cc2b01fc",
+      "settled_fixture_sha256": "bdc90bcfdbc1b52e0f3e6904d970ceb8e3d6c19c436046dbe007023c16fb68b6",
       "corrective": "shellfix task #101"
     },
     {
       "fixture": "menu-layouts/skill-picker.json",
-      "settled_fixture_sha256": "24c27be90449a3344203f4e80c55be181573dcda9ff58c43c30012185ebd4559",
+      "settled_fixture_sha256": "8faee0467e1414c2b8efdb24c53dcac5bd3c6151bd8b93e0b7b394c16fbb455d",
+      "corrective": "shellfix task #101"
+    },
+    {
+      "fixture": "menu-overlays/dark-cloud-settings.json",
+      "settled_fixture_sha256": "f04e8fe89379c2acd9e51a7b1f3ea33b336ee58963b78b25e976009e92a756a0",
       "corrective": "shellfix task #101"
     }
   ]

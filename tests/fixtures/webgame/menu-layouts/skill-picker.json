@@ -1,1150 +1,2555 @@
 {
-    "schema":  "solomon-dark-native-menu-layout-v1",
-    "header":  {
-                   "instance":  "men-title",
-                   "process_id":  15160,
-                   "capture_commit":  "48a54aaf485e671e605cbf301441380f6538846f",
-                   "native_exe_sha256":  "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
-                   "loader_dll_sha256":  "54d5056a1da5e03a8ea943de5301f8401797a7045845d7ba11f308743dfdb160",
-                   "captured_at_utc":  "2026-08-05T06:30:55.1544422Z",
-                   "capture_method":  "live native UI tree + exact text/font hooks + native Sprite draw hooks + exact live-navigation screen tag (stale semantics omitted)",
-                   "reference_capture":  "../menu-reference-captures/skill-picker.png"
-               },
-    "layout":  {
-                   "generation":  3794,
-                   "captured_at_milliseconds":  1144697453,
-                   "screen_id":  "skill_picker",
-                   "screen_title":  "",
-                   "capture_method":  "live native UI tree + exact text/font hooks + native Sprite draw hooks + exact live-navigation screen tag (stale semantics omitted)",
-                   "elements":  [
-                                    {
-                                        "id":  "skill_picker.art.ui_3.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.3",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  17,
-                                        "rect":  [
-                                                     484.176331,
-                                                     0.000000,
-                                                     914.936035,
-                                                     158.658997
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               484.176331,
-                                                               -105.373047,
-                                                               914.936035,
-                                                               158.658997
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.ui_3.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.3",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  18,
-                                        "rect":  [
-                                                     811.037109,
-                                                     0.000000,
-                                                     1245.632812,
-                                                     261.631287
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               811.037109,
-                                                               -102.396484,
-                                                               1245.632812,
-                                                               261.631287
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.ui_3.3",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.3",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  24,
-                                        "rect":  [
-                                                     247.603271,
-                                                     4.367859,
-                                                     611.630615,
-                                                     438.963684
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               247.603271,
-                                                               4.367859,
-                                                               611.630615,
-                                                               438.963684
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.ui_42.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.42",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  11,
-                                        "rect":  [
-                                                     9.500000,
-                                                     8.500000,
-                                                     40.500000,
-                                                     41.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               9.500000,
-                                                               8.500000,
-                                                               40.500000,
-                                                               41.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.skills_43.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "Skills.43",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  10,
-                                        "rect":  [
-                                                     784.250000,
-                                                     9.750000,
-                                                     815.750000,
-                                                     41.250000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               784.250000,
-                                                               9.750000,
-                                                               815.750000,
-                                                               41.250000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.levelpicker_0.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "LevelPicker.0",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  12,
-                                        "rect":  [
-                                                     1505.000000,
-                                                     55.000000,
-                                                     1600.000000,
-                                                     148.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1505.000000,
-                                                               55.000000,
-                                                               1600.000000,
-                                                               148.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.ui_62.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.62",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  25,
-                                        "rect":  [
-                                                     555.672119,
-                                                     105.672134,
-                                                     1044.327881,
-                                                     594.327881
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               555.672119,
-                                                               105.672134,
-                                                               1044.327881,
-                                                               594.327881
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.ui_3.4",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.3",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  19,
-                                        "rect":  [
-                                                     1091.341187,
-                                                     134.176605,
-                                                     1355.373047,
-                                                     564.936279
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1091.341187,
-                                                               134.176605,
-                                                               1355.373047,
-                                                               564.936279
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.levelpicker_6.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "LevelPicker.6",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  13,
-                                        "rect":  [
-                                                     1505.000000,
-                                                     148.000000,
-                                                     1600.000000,
-                                                     241.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1505.000000,
-                                                               148.000000,
-                                                               1600.000000,
-                                                               241.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.ui_37.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.37",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  32,
-                                        "rect":  [
-                                                     593.500000,
-                                                     182.000000,
-                                                     1006.500000,
-                                                     257.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               593.500000,
-                                                               182.000000,
-                                                               1006.500000,
-                                                               257.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.levelpicker_4.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "LevelPicker.4",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  14,
-                                        "rect":  [
-                                                     1505.000000,
-                                                     241.000000,
-                                                     1600.000000,
-                                                     334.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1505.000000,
-                                                               241.000000,
-                                                               1600.000000,
-                                                               334.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.ui_107.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.107",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  27,
-                                        "rect":  [
-                                                     464.500000,
-                                                     265.000000,
-                                                     549.500000,
-                                                     354.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               464.500000,
-                                                               265.000000,
-                                                               549.500000,
-                                                               354.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.ui_108.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.108",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  28,
-                                        "rect":  [
-                                                     1050.500000,
-                                                     265.000000,
-                                                     1135.500000,
-                                                     354.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1050.500000,
-                                                               265.000000,
-                                                               1135.500000,
-                                                               354.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.ui_62.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.62",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  26,
-                                        "rect":  [
-                                                     555.672119,
-                                                     305.672119,
-                                                     1044.327881,
-                                                     794.327881
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               555.672119,
-                                                               305.672119,
-                                                               1044.327881,
-                                                               794.327881
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.levelpicker_5.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "LevelPicker.5",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  15,
-                                        "rect":  [
-                                                     1505.000000,
-                                                     334.000000,
-                                                     1600.000000,
-                                                     427.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1505.000000,
-                                                               334.000000,
-                                                               1600.000000,
-                                                               427.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.ui_3.5",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.3",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  23,
-                                        "rect":  [
-                                                     244.626831,
-                                                     335.064697,
-                                                     508.659546,
-                                                     765.824585
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               244.626831,
-                                                               335.064697,
-                                                               508.659546,
-                                                               765.824585
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.skills_5.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "Skills.5",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  35,
-                                        "rect":  [
-                                                     556.500000,
-                                                     338.500000,
-                                                     643.500000,
-                                                     426.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               556.500000,
-                                                               338.500000,
-                                                               643.500000,
-                                                               426.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.skills_5.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "Skills.5",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  40,
-                                        "rect":  [
-                                                     756.500000,
-                                                     338.500000,
-                                                     843.500000,
-                                                     426.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               756.500000,
-                                                               338.500000,
-                                                               843.500000,
-                                                               426.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.skills_5.3",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "Skills.5",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  45,
-                                        "rect":  [
-                                                     956.500000,
-                                                     338.500000,
-                                                     1043.500000,
-                                                     426.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               956.500000,
-                                                               338.500000,
-                                                               1043.500000,
-                                                               426.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.skills_13.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "Skills.13",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  33,
-                                        "rect":  [
-                                                     561.474976,
-                                                     343.975006,
-                                                     638.525024,
-                                                     421.024994
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               561.474976,
-                                                               343.975006,
-                                                               638.525024,
-                                                               421.024994
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.skills_13.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "Skills.13",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  38,
-                                        "rect":  [
-                                                     761.474976,
-                                                     343.975006,
-                                                     838.525024,
-                                                     421.024994
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               761.474976,
-                                                               343.975006,
-                                                               838.525024,
-                                                               421.024994
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.skills_13.3",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "Skills.13",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  43,
-                                        "rect":  [
-                                                     961.474976,
-                                                     343.975006,
-                                                     1038.525024,
-                                                     421.024994
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               961.474976,
-                                                               343.975006,
-                                                               1038.525024,
-                                                               421.024994
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.skills_164.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "Skills.164",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  34,
-                                        "rect":  [
-                                                     567.224976,
-                                                     349.725006,
-                                                     632.775024,
-                                                     415.274994
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               567.224976,
-                                                               349.725006,
-                                                               632.775024,
-                                                               415.274994
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.skills_164.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "Skills.164",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  39,
-                                        "rect":  [
-                                                     767.224976,
-                                                     349.725006,
-                                                     832.775024,
-                                                     415.274994
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               767.224976,
-                                                               349.725006,
-                                                               832.775024,
-                                                               415.274994
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.skills_164.3",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "Skills.164",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  44,
-                                        "rect":  [
-                                                     967.224976,
-                                                     349.725006,
-                                                     1032.775024,
-                                                     415.274994
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               967.224976,
-                                                               349.725006,
-                                                               1032.775024,
-                                                               415.274994
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.skills_83.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "Skills.83",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  47,
-                                        "rect":  [
-                                                     978.500000,
-                                                     361.000000,
-                                                     1021.500000,
-                                                     404.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               978.500000,
-                                                               361.000000,
-                                                               1021.500000,
-                                                               404.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.skills_43.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "Skills.43",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  42,
-                                        "rect":  [
-                                                     779.000000,
-                                                     361.500000,
-                                                     821.000000,
-                                                     403.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               779.000000,
-                                                               361.500000,
-                                                               821.000000,
-                                                               403.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.skills_84.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "Skills.84",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  37,
-                                        "rect":  [
-                                                     579.000000,
-                                                     362.500000,
-                                                     621.000000,
-                                                     402.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               579.000000,
-                                                               362.500000,
-                                                               621.000000,
-                                                               402.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.skills_83.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "Skills.83",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  46,
-                                        "rect":  [
-                                                     982.500000,
-                                                     365.000000,
-                                                     1025.500000,
-                                                     408.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               982.500000,
-                                                               365.000000,
-                                                               1025.500000,
-                                                               408.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.skills_43.3",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "Skills.43",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  41,
-                                        "rect":  [
-                                                     783.000000,
-                                                     365.500000,
-                                                     825.000000,
-                                                     407.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               783.000000,
-                                                               365.500000,
-                                                               825.000000,
-                                                               407.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.skills_84.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "Skills.84",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  36,
-                                        "rect":  [
-                                                     583.000000,
-                                                     366.500000,
-                                                     625.000000,
-                                                     406.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               583.000000,
-                                                               366.500000,
-                                                               625.000000,
-                                                               406.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.ui_28.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.28",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  1,
-                                        "rect":  [
-                                                     720.317322,
-                                                     426.920807,
-                                                     795.682678,
-                                                     504.079193
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               720.317322,
-                                                               426.920807,
-                                                               795.682678,
-                                                               504.079193
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.levelpicker_2.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "LevelPicker.2",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  16,
-                                        "rect":  [
-                                                     1505.000000,
-                                                     427.000000,
-                                                     1600.000000,
-                                                     520.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1505.000000,
-                                                               427.000000,
-                                                               1600.000000,
-                                                               520.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.ui_3.6",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.3",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  20,
-                                        "rect":  [
-                                                     988.368530,
-                                                     461.037323,
-                                                     1352.396484,
-                                                     895.633057
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               988.368530,
-                                                               461.037323,
-                                                               1352.396484,
-                                                               895.633057
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.ui_109.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.109",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  29,
-                                        "rect":  [
-                                                     464.500000,
-                                                     546.000000,
-                                                     549.500000,
-                                                     635.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               464.500000,
-                                                               546.000000,
-                                                               549.500000,
-                                                               635.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.ui_110.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.110",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  30,
-                                        "rect":  [
-                                                     1050.500000,
-                                                     546.000000,
-                                                     1135.500000,
-                                                     635.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1050.500000,
-                                                               546.000000,
-                                                               1135.500000,
-                                                               635.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.ui_59.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.59",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  31,
-                                        "rect":  [
-                                                     594.000000,
-                                                     622.500000,
-                                                     1006.000000,
-                                                     682.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               594.000000,
-                                                               622.500000,
-                                                               1006.000000,
-                                                               682.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.ui_3.7",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.3",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  22,
-                                        "rect":  [
-                                                     354.366760,
-                                                     638.368286,
-                                                     788.962402,
-                                                     900.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               354.366760,
-                                                               638.368286,
-                                                               788.962402,
-                                                               1002.396423
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.ui_3.8",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.3",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  21,
-                                        "rect":  [
-                                                     685.063477,
-                                                     741.341370,
-                                                     1115.823120,
-                                                     900.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               685.063477,
-                                                               741.341370,
-                                                               1115.823120,
-                                                               1005.372986
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.ui_51.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.51",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  6,
-                                        "rect":  [
-                                                     806.500000,
-                                                     823.000000,
-                                                     872.500000,
-                                                     889.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               806.500000,
-                                                               823.000000,
-                                                               872.500000,
-                                                               889.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.ui_47.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.47",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  3,
-                                        "rect":  [
-                                                     730.500000,
-                                                     825.000000,
-                                                     788.500000,
-                                                     887.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               730.500000,
-                                                               825.000000,
-                                                               788.500000,
-                                                               887.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.ui_48.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.48",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  5,
-                                        "rect":  [
-                                                     810.500000,
-                                                     825.000000,
-                                                     868.500000,
-                                                     887.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               810.500000,
-                                                               825.000000,
-                                                               868.500000,
-                                                               887.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.ui_82.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.82",
-                                        "font_id":  "",
-                                        "text_style":  "centered",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  9,
-                                        "rect":  [
-                                                     794.500000,
-                                                     829.000000,
-                                                     806.500000,
-                                                     885.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               794.500000,
-                                                               829.000000,
-                                                               806.500000,
-                                                               885.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.ui_47.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.47",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  2,
-                                        "rect":  [
-                                                     735.500000,
-                                                     830.000000,
-                                                     793.500000,
-                                                     892.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               735.500000,
-                                                               830.000000,
-                                                               793.500000,
-                                                               892.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.ui_48.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.48",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  4,
-                                        "rect":  [
-                                                     815.500000,
-                                                     830.000000,
-                                                     873.500000,
-                                                     892.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               815.500000,
-                                                               830.000000,
-                                                               873.500000,
-                                                               892.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.skills_48.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "Skills.48",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  7,
-                                        "rect":  [
-                                                     480.500000,
-                                                     838.000000,
-                                                     508.500000,
-                                                     880.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               480.500000,
-                                                               838.000000,
-                                                               508.500000,
-                                                               880.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "skill_picker.art.ui_100.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.100",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  8,
-                                        "rect":  [
-                                                     483.500000,
-                                                     877.000000,
-                                                     505.500000,
-                                                     900.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               483.500000,
-                                                               877.000000,
-                                                               505.500000,
-                                                               908.000000
-                                                           ]
-                                    }
-                                ]
-               }
+  "schema": "solomon-dark-native-menu-layout-v3",
+  "header": {
+    "label": "skill_picker",
+    "instance": "menufx-v9p73",
+    "process_id": 16152,
+    "source": {
+      "base_commit_sha": "405bb0f697fcdf484f304f0d5f38224d39a6ae70",
+      "source_tree_sha": "b6aaa8f1f9752963b570384a29a6082228c2cbfa",
+      "capture_tree": "exact committed tree at base_commit_sha",
+      "game_executable_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+      "loader_dll_sha256": "f9c3357ddce217c4f6b0c13ad2511ec4cfcbf909974c335c865f21dfae53d289",
+      "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+      "capture_driver_preset": "idle"
+    },
+    "profile_state": {
+      "schema": "solomon-dark-native-menu-profile-state-v1",
+      "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+      "baseline_id": "pristine_fresh_install",
+      "baseline_mode": "fresh_install",
+      "source_sandbox_excluded": true,
+      "retail_appdata_seeded": false,
+      "durable_file_count": 0,
+      "baseline_fixture": {
+        "repo_relative_path": "tests/fixtures/webgame/native-menu-profile-state-baseline.json",
+        "sha256": "02ac22b1de367e9e94477f61c8e1144e6a5b16bd67bd418e69e9a2ec620914ff",
+        "bytes": 2155
+      },
+      "binding_contract": {
+        "repo_relative_path": "tests/fixtures/webgame/native-menu-hub-bindings-v213.json",
+        "sha256": "07c2ed2e53e997c8fb79c3d472b58d52c72c768286cad352ec1aeedaa907ef00",
+        "bytes": 21518
+      },
+      "launch_receipt": {
+        "evidence_filename": "skill-picker.menufx-v9p73.16152.profile-state.json",
+        "sha256": "c79d5cdacec3c94544415f3ff7acf8f1d19f350120d62a2d617f914cf058116e",
+        "bytes": 693
+      }
+    },
+    "profile_state_binding": {
+      "baseline_id": "pristine_fresh_install",
+      "layout_id": "skill-picker",
+      "edge_id": "",
+      "derivation_witness_role": ""
+    },
+    "capture_method": "live native UI tree + exact text/font hooks + native Sprite draw hooks",
+    "recorded_live": true,
+    "captured_at_utc": "2026-08-09T13:54:14.9453312Z",
+    "settlement": {
+      "settlement_spec": "2.9",
+      "criterion": "at least 40 consecutive samples spanning at least 2 seconds with constant surface/generations and every variance assigned to one measured v2.5 member class",
+      "settle_latency_milliseconds": 17175,
+      "stable_span_milliseconds": 15633,
+      "consecutive_structural_samples": 40,
+      "minimum_element_count": 41,
+      "peak_element_count": 41,
+      "raw_window_structural_sha256": "cee01ed75c929a89fb5f3f715b28ae1404240c31167d8b09929532157c36c601",
+      "resolved_structural_core_sha256": "fb4fa855f9f0b2ea82d2661d0ca252846f3c0e9f48926965b30a8a183efc576c",
+      "resolved_classification_map_sha256": "12f3d8f6d5976ce2cc2dc716c58887fff5a6570e98d54db2c0e7bbe3fecc1921",
+      "ambient_fraction": 0.21951219512195122
+    },
+    "browser_tab_verification": null,
+    "raw_recording": {
+      "evidence_filename": "skill-picker.settlement.json",
+      "sha256": "3758d17dee4944287dbc1fa4f78c637dd24ad16a32478f891bbbebb3b6b1f710",
+      "bytes": 4288301
+    },
+    "reference_capture": "../menu-reference-captures/skill-picker.png",
+    "animation_confirmation": {
+      "evidence_filename": "skill-picker.confirmation.json",
+      "sha256": "d41ce2267b8cf80333275ee7a1222260bb226a174e9ab09be2840c9b3f3b0392",
+      "bytes": 4407237,
+      "instance": "menufx-v9p75",
+      "process_id": 16408,
+      "source": {
+        "base_commit_sha": "405bb0f697fcdf484f304f0d5f38224d39a6ae70",
+        "source_tree_sha": "b6aaa8f1f9752963b570384a29a6082228c2cbfa",
+        "capture_tree": "exact committed tree at base_commit_sha",
+        "game_executable_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+        "loader_dll_sha256": "f9c3357ddce217c4f6b0c13ad2511ec4cfcbf909974c335c865f21dfae53d289",
+        "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+        "capture_driver_preset": "idle"
+      },
+      "profile_state": {
+        "schema": "solomon-dark-native-menu-profile-state-v1",
+        "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+        "baseline_id": "pristine_fresh_install",
+        "baseline_mode": "fresh_install",
+        "source_sandbox_excluded": true,
+        "retail_appdata_seeded": false,
+        "durable_file_count": 0,
+        "baseline_fixture": {
+          "repo_relative_path": "tests/fixtures/webgame/native-menu-profile-state-baseline.json",
+          "sha256": "02ac22b1de367e9e94477f61c8e1144e6a5b16bd67bd418e69e9a2ec620914ff",
+          "bytes": 2155
+        },
+        "binding_contract": {
+          "repo_relative_path": "tests/fixtures/webgame/native-menu-hub-bindings-v213.json",
+          "sha256": "07c2ed2e53e997c8fb79c3d472b58d52c72c768286cad352ec1aeedaa907ef00",
+          "bytes": 21518
+        },
+        "launch_receipt": {
+          "evidence_filename": "skill-picker.confirmation.menufx-v9p75.16408.profile-state.json",
+          "sha256": "7ac24f5833a8b43d68fe8f692aa67d9f751656c170ecb4f0b5dcf0fba021596a",
+          "bytes": 693
+        }
+      },
+      "profile_state_binding": {
+        "baseline_id": "pristine_fresh_install",
+        "layout_id": "skill_picker",
+        "edge_id": "",
+        "derivation_witness_role": ""
+      },
+      "confirmation_structural_sha256": "4c7cbea59f204d34e7ca0244ea6191f48bc1141d35a5a524870cd9c81e49a29e",
+      "animated_element_ids_sha256": "d2db797404cbe1055c597d2a0095f5b864f48a31c9e8a7b38c2c3077dc72e7b6",
+      "raw_primary_animated_element_ids": [
+        "skill_picker.art.ui_107.1",
+        "skill_picker.art.ui_108.1",
+        "skill_picker.art.ui_109.1",
+        "skill_picker.art.ui_110.1",
+        "skill_picker.art.ui_3.1",
+        "skill_picker.art.ui_3.2",
+        "skill_picker.art.ui_3.3",
+        "skill_picker.art.ui_3.4",
+        "skill_picker.art.ui_3.5",
+        "skill_picker.art.ui_3.6",
+        "skill_picker.art.ui_3.7",
+        "skill_picker.art.ui_3.8",
+        "skill_picker.art.ui_37.1",
+        "skill_picker.art.ui_59.1",
+        "skill_picker.art.ui_62.1",
+        "skill_picker.art.ui_62.2"
+      ],
+      "raw_confirmation_animated_element_ids": [
+        "skill_picker.art.ui_107.1",
+        "skill_picker.art.ui_108.1",
+        "skill_picker.art.ui_109.1",
+        "skill_picker.art.ui_110.1",
+        "skill_picker.art.ui_3.1",
+        "skill_picker.art.ui_3.2",
+        "skill_picker.art.ui_3.3",
+        "skill_picker.art.ui_3.4",
+        "skill_picker.art.ui_3.5",
+        "skill_picker.art.ui_3.6",
+        "skill_picker.art.ui_3.7",
+        "skill_picker.art.ui_3.8",
+        "skill_picker.art.ui_37.1",
+        "skill_picker.art.ui_59.1",
+        "skill_picker.art.ui_62.1",
+        "skill_picker.art.ui_62.2"
+      ],
+      "raw_sets_match_noncontractual": true,
+      "requires_campaign_resolution": true
+    },
+    "ambient_lifecycle": {
+      "resolution_sha256": "90768ba65536c15925a25a064c1971ae35dd6f261582ac6810f394b5cb5dc53a",
+      "independent_instances": [
+        [
+          "menufx-v9p73",
+          16152
+        ],
+        [
+          "menufx-v9p75",
+          16408
+        ]
+      ],
+      "observation_receipts": [
+        {
+          "evidence_path": "raw-v9/candidates/candidate-v214-profile-final/menu-settlement-traces/skill-picker.settlement.json",
+          "sha256": "3758d17dee4944287dbc1fa4f78c637dd24ad16a32478f891bbbebb3b6b1f710",
+          "bytes": 4288301
+        },
+        {
+          "evidence_path": "raw-v9/candidates/candidate-v214-profile-final/menu-animation-confirmations/skill-picker.confirmation.json",
+          "sha256": "d41ce2267b8cf80333275ee7a1222260bb226a174e9ab09be2840c9b3f3b0392",
+          "bytes": 4407237
+        },
+        {
+          "evidence_path": "raw-v9/motion-v215/final-rerun3/capture/motion-observations/skill-picker.confirmation.motion.json",
+          "sha256": "bfe053ab62db2fe26ad6922f2378b19b7fd2d6b6d0f19de287f2194d56233502",
+          "bytes": 19835305
+        },
+        {
+          "evidence_path": "raw-v9/motion-v215/final-rerun3/capture/motion-observations/skill-picker.primary.motion.json",
+          "sha256": "cf7ef570089fb46bb95baf2a2a1609e2739733a0e2e0937d9f03f6764397a422",
+          "bytes": 19835257
+        }
+      ],
+      "extended_observation_baseline_receipts": [
+        {
+          "evidence_path": "raw-v9/motion-v215/final-rerun3/capture/menu-animation-confirmations/skill-picker.confirmation.json",
+          "sha256": "d41ce2267b8cf80333275ee7a1222260bb226a174e9ab09be2840c9b3f3b0392",
+          "bytes": 4407237
+        },
+        {
+          "evidence_path": "raw-v9/motion-v215/final-rerun3/capture/preconfirmation-baselines/skill-picker.json",
+          "sha256": "3aa471aa2228137dd673e096dda1992c2a9519fbb595dab4b496521726f22340",
+          "bytes": 105915
+        }
+      ]
+    },
+    "choice_slots": {
+      "settlement_spec": "2.9",
+      "promotion": "reused_stopped_settled_windows_rederived_under_v2.8",
+      "asset_manifest": {
+        "evidence_path": "raw-v9/raw-final/asset-manifest/asset-manifest.json",
+        "sha256": "11e3d2041abb5117228064e73fcd02b9beb3b40dfeed735eafb7133ffd0c5fa3",
+        "bytes": 7125414
+      },
+      "diagnostic_receipts": {
+        "choice_core_stop_audit": {
+          "evidence_path": "raw-v9/raw-final/diagnostics/skill-picker-v27-choice-core-stop-audit.json",
+          "sha256": "f7669f7bebeaa0703af9af2fb49c86e59ccb62e9906e185c3f657ad8b90bbb5e",
+          "bytes": 11258
+        },
+        "choice_core_resolver_transcript": {
+          "evidence_path": "raw-v9/raw-final/diagnostics/skill-picker-v27-choice-core-full-resolver-stop.log",
+          "sha256": "da11a6d91171a0fec54cb414de2f4f1a6d88c3dcc8d4719a8476b09f0c2e2b22",
+          "bytes": 404
+        },
+        "choice_core_stop_manifest": {
+          "evidence_path": "raw-v9/raw-final/diagnostics/skill-picker-v27-choice-core-stop-manifest.json",
+          "sha256": "6231eeda4710d557b99cbf6f7144c80635ceaf03b34f6c5dbe951e653b24d4a0",
+          "bytes": 3601
+        }
+      },
+      "choice_slot_ids": [
+        "skill_picker.choice_slot.1",
+        "skill_picker.choice_slot.2",
+        "skill_picker.choice_slot.3"
+      ]
+    }
+  },
+  "layout": {
+    "generation": 18,
+    "screen_id": "skill_picker",
+    "screen_title": "",
+    "capture_method": "live native UI tree + exact text/font hooks + native Sprite draw hooks",
+    "draw_order_semantics": "structural_core_relative_sequence",
+    "elements": [
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.47",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          735.5,
+          830.0,
+          793.5,
+          892.0
+        ],
+        "unclipped_rect": [
+          735.5,
+          830.0,
+          793.5,
+          892.0
+        ],
+        "id": "skill_picker.art.ui_47.1",
+        "draw_order": 0,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.47",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          730.5,
+          825.0,
+          788.5,
+          887.0
+        ],
+        "unclipped_rect": [
+          730.5,
+          825.0,
+          788.5,
+          887.0
+        ],
+        "id": "skill_picker.art.ui_47.2",
+        "draw_order": 1,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.48",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          815.5,
+          830.0,
+          873.5,
+          892.0
+        ],
+        "unclipped_rect": [
+          815.5,
+          830.0,
+          873.5,
+          892.0
+        ],
+        "id": "skill_picker.art.ui_48.1",
+        "draw_order": 2,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.48",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          810.5,
+          825.0,
+          868.5,
+          887.0
+        ],
+        "unclipped_rect": [
+          810.5,
+          825.0,
+          868.5,
+          887.0
+        ],
+        "id": "skill_picker.art.ui_48.2",
+        "draw_order": 3,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.51",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          806.5,
+          823.0,
+          872.5,
+          889.0
+        ],
+        "unclipped_rect": [
+          806.5,
+          823.0,
+          872.5,
+          889.0
+        ],
+        "id": "skill_picker.art.ui_51.1",
+        "draw_order": 4,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "Skills.48",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          480.5,
+          838.0,
+          508.5,
+          880.0
+        ],
+        "unclipped_rect": [
+          480.5,
+          838.0,
+          508.5,
+          880.0
+        ],
+        "id": "skill_picker.art.skills_48.1",
+        "draw_order": 5,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.100",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          483.5,
+          877.0,
+          505.5,
+          900.0
+        ],
+        "unclipped_rect": [
+          483.5,
+          877.0,
+          505.5,
+          908.0
+        ],
+        "id": "skill_picker.art.ui_100.1",
+        "draw_order": 6,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.82",
+        "font_id": "",
+        "text_style": "centered",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          794.5,
+          829.0,
+          806.5,
+          885.0
+        ],
+        "unclipped_rect": [
+          794.5,
+          829.0,
+          806.5,
+          885.0
+        ],
+        "id": "skill_picker.art.ui_82.1",
+        "draw_order": 7,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "Skills.43",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          784.25,
+          9.75,
+          815.75,
+          41.25
+        ],
+        "unclipped_rect": [
+          784.25,
+          9.75,
+          815.75,
+          41.25
+        ],
+        "id": "skill_picker.art.skills_43.1",
+        "draw_order": 8,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.42",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          9.5,
+          8.5,
+          40.5,
+          41.5
+        ],
+        "unclipped_rect": [
+          9.5,
+          8.5,
+          40.5,
+          41.5
+        ],
+        "id": "skill_picker.art.ui_42.1",
+        "draw_order": 9,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "Skills.13",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          561.474976,
+          343.975006,
+          638.525024,
+          421.024994
+        ],
+        "unclipped_rect": [
+          561.474976,
+          343.975006,
+          638.525024,
+          421.024994
+        ],
+        "id": "skill_picker.art.skills_13.1",
+        "draw_order": 10,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "Skills.164",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          567.224976,
+          349.725006,
+          632.775024,
+          415.274994
+        ],
+        "unclipped_rect": [
+          567.224976,
+          349.725006,
+          632.775024,
+          415.274994
+        ],
+        "id": "skill_picker.art.skills_164.1",
+        "draw_order": 11,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "Skills.5",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          556.5,
+          338.5,
+          643.5,
+          426.5
+        ],
+        "unclipped_rect": [
+          556.5,
+          338.5,
+          643.5,
+          426.5
+        ],
+        "id": "skill_picker.art.skills_5.1",
+        "draw_order": 12,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "Skills.13",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          761.474976,
+          343.975006,
+          838.525024,
+          421.024994
+        ],
+        "unclipped_rect": [
+          761.474976,
+          343.975006,
+          838.525024,
+          421.024994
+        ],
+        "id": "skill_picker.art.skills_13.2",
+        "draw_order": 13,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "Skills.164",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          767.224976,
+          349.725006,
+          832.775024,
+          415.274994
+        ],
+        "unclipped_rect": [
+          767.224976,
+          349.725006,
+          832.775024,
+          415.274994
+        ],
+        "id": "skill_picker.art.skills_164.2",
+        "draw_order": 14,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "Skills.5",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          756.5,
+          338.5,
+          843.5,
+          426.5
+        ],
+        "unclipped_rect": [
+          756.5,
+          338.5,
+          843.5,
+          426.5
+        ],
+        "id": "skill_picker.art.skills_5.2",
+        "draw_order": 15,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "Skills.13",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          961.474976,
+          343.975006,
+          1038.525024,
+          421.024994
+        ],
+        "unclipped_rect": [
+          961.474976,
+          343.975006,
+          1038.525024,
+          421.024994
+        ],
+        "id": "skill_picker.art.skills_13.3",
+        "draw_order": 16,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "Skills.164",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          967.224976,
+          349.725006,
+          1032.775024,
+          415.274994
+        ],
+        "unclipped_rect": [
+          967.224976,
+          349.725006,
+          1032.775024,
+          415.274994
+        ],
+        "id": "skill_picker.art.skills_164.3",
+        "draw_order": 17,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "Skills.5",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          956.5,
+          338.5,
+          1043.5,
+          426.5
+        ],
+        "unclipped_rect": [
+          956.5,
+          338.5,
+          1043.5,
+          426.5
+        ],
+        "id": "skill_picker.art.skills_5.3",
+        "draw_order": 18,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      }
+    ],
+    "settlement_spec": "2.9",
+    "structural_core_sha256": "fb4fa855f9f0b2ea82d2661d0ca252846f3c0e9f48926965b30a8a183efc576c",
+    "structural_core_element_count": 19,
+    "animated_element_ids": [
+      "skill_picker.ambient.animated_family_c4544bcee9b754f449aeb28709162630caef5c8b00e9c42c6b9c3657209597ef.1",
+      "skill_picker.ambient.member_023dee8c1564d0aed0869f8b556d9ab2728cc3a6df6ea614c335a56d0298338d_slot_1.1",
+      "skill_picker.ambient.member_023dee8c1564d0aed0869f8b556d9ab2728cc3a6df6ea614c335a56d0298338d_slot_2.1",
+      "skill_picker.ambient.member_0ca51af4f73c74e1c9b8b8de9a5d8023aaeb38496c82cb522e6c4a3235a2e827_slot_1.1",
+      "skill_picker.ambient.member_1a293f0155b9680c0b4b2f0e9ec50f1b31de0236f5ac4b62e0478a0706c2a1a3_slot_1.1",
+      "skill_picker.ambient.member_49b2ba624d73100b27330990ffe455db6d55a52ee42ef41859a69ef22c415079_slot_1.1",
+      "skill_picker.ambient.member_4cc27c6d29ac20f1f6b721a7d865dd1d5080eb3b0df03cd2f9ecdd81d9fb6906_slot_1.1",
+      "skill_picker.ambient.member_5280a9c235ea835f158248496ff0ea3bca9fac6d32274bb33c769288954d9b96_slot_1.1",
+      "skill_picker.ambient.member_e2767c0bf398b1dd712e21af3f70871e227fb28fa07bc17f546d042c3af307d9_slot_1.1"
+    ],
+    "animated_family_ids": [
+      "skill_picker.ambient.animated_family_c4544bcee9b754f449aeb28709162630caef5c8b00e9c42c6b9c3657209597ef.1"
+    ],
+    "choice_slot_ids": [
+      "skill_picker.choice_slot.1",
+      "skill_picker.choice_slot.2",
+      "skill_picker.choice_slot.3"
+    ],
+    "choice_slots": [
+      {
+        "member_key": "choice-slot:30-31",
+        "choice_dependent": true,
+        "relative_draw_positions": [
+          30,
+          31
+        ],
+        "draw_position_semantics": "one_based_full_relative_draw_sequence",
+        "anchor": {
+          "x": 604,
+          "y": 386.5
+        },
+        "inter_draw_offset_vectors": [
+          {
+            "relative_draw_position": 30,
+            "x": 0,
+            "y": 0
+          },
+          {
+            "relative_draw_position": 31,
+            "x": -4,
+            "y": -4
+          }
+        ],
+        "atlas_namespace": "Skills",
+        "exact_per_sample_member_count": 2,
+        "exemplar_art_id": "Skills.94",
+        "exemplar_payloads": [
+          {
+            "relative_draw_position": 30,
+            "choice_dependent": true,
+            "payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "Skills.94",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                581.5,
+                366.0,
+                626.5,
+                407.0
+              ],
+              "unclipped_rect": [
+                581.5,
+                366.0,
+                626.5,
+                407.0
+              ]
+            }
+          },
+          {
+            "relative_draw_position": 31,
+            "choice_dependent": true,
+            "payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "Skills.94",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                577.5,
+                362.0,
+                622.5,
+                403.0
+              ],
+              "unclipped_rect": [
+                577.5,
+                362.0,
+                622.5,
+                403.0
+              ]
+            }
+          }
+        ],
+        "observed_roster_evidence": [
+          {
+            "observation": "standalone:skill-picker:primary",
+            "instance": "menufx-v9p73",
+            "process_id": 16152,
+            "observed_art_ids": [
+              "Skills.94"
+            ]
+          },
+          {
+            "observation": "standalone:skill-picker:confirmation",
+            "instance": "menufx-v9p75",
+            "process_id": 16408,
+            "observed_art_ids": [
+              "Skills.84"
+            ]
+          },
+          {
+            "observation": "extended:skill-picker:menufx-v9p75:16408",
+            "instance": "menufx-v9p75",
+            "process_id": 16408,
+            "observed_art_ids": [
+              "Skills.84"
+            ]
+          },
+          {
+            "observation": "extended:skill-picker:menufx-v9p73:16152",
+            "instance": "menufx-v9p73",
+            "process_id": 16152,
+            "observed_art_ids": [
+              "Skills.94"
+            ]
+          }
+        ],
+        "manifest_logical_sizes": {
+          "Skills.84": {
+            "width": 42,
+            "height": 40
+          },
+          "Skills.94": {
+            "width": 45,
+            "height": 41
+          }
+        },
+        "trim_centering_verified_member_count": 8,
+        "id": "skill_picker.choice_slot.1",
+        "draw_bands": [
+          {
+            "below": "skill_picker.art.skills_5.1",
+            "above": "skill_picker.art.skills_13.2"
+          }
+        ]
+      },
+      {
+        "member_key": "choice-slot:35-36",
+        "choice_dependent": true,
+        "relative_draw_positions": [
+          35,
+          36
+        ],
+        "draw_position_semantics": "one_based_full_relative_draw_sequence",
+        "anchor": {
+          "x": 804,
+          "y": 386.5
+        },
+        "inter_draw_offset_vectors": [
+          {
+            "relative_draw_position": 35,
+            "x": 0,
+            "y": 0
+          },
+          {
+            "relative_draw_position": 36,
+            "x": -4,
+            "y": -4
+          }
+        ],
+        "atlas_namespace": "Skills",
+        "exact_per_sample_member_count": 2,
+        "exemplar_art_id": "Skills.48",
+        "exemplar_payloads": [
+          {
+            "relative_draw_position": 35,
+            "choice_dependent": true,
+            "payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "Skills.48",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                790.0,
+                365.5,
+                818.0,
+                407.5
+              ],
+              "unclipped_rect": [
+                790.0,
+                365.5,
+                818.0,
+                407.5
+              ]
+            }
+          },
+          {
+            "relative_draw_position": 36,
+            "choice_dependent": true,
+            "payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "Skills.48",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                786.0,
+                361.5,
+                814.0,
+                403.5
+              ],
+              "unclipped_rect": [
+                786.0,
+                361.5,
+                814.0,
+                403.5
+              ]
+            }
+          }
+        ],
+        "observed_roster_evidence": [
+          {
+            "observation": "standalone:skill-picker:primary",
+            "instance": "menufx-v9p73",
+            "process_id": 16152,
+            "observed_art_ids": [
+              "Skills.48"
+            ]
+          },
+          {
+            "observation": "standalone:skill-picker:confirmation",
+            "instance": "menufx-v9p75",
+            "process_id": 16408,
+            "observed_art_ids": [
+              "Skills.83"
+            ]
+          },
+          {
+            "observation": "extended:skill-picker:menufx-v9p75:16408",
+            "instance": "menufx-v9p75",
+            "process_id": 16408,
+            "observed_art_ids": [
+              "Skills.83"
+            ]
+          },
+          {
+            "observation": "extended:skill-picker:menufx-v9p73:16152",
+            "instance": "menufx-v9p73",
+            "process_id": 16152,
+            "observed_art_ids": [
+              "Skills.48"
+            ]
+          }
+        ],
+        "manifest_logical_sizes": {
+          "Skills.48": {
+            "width": 28,
+            "height": 42
+          },
+          "Skills.83": {
+            "width": 43,
+            "height": 43
+          }
+        },
+        "trim_centering_verified_member_count": 8,
+        "id": "skill_picker.choice_slot.2",
+        "draw_bands": [
+          {
+            "below": "skill_picker.art.skills_5.2",
+            "above": "skill_picker.art.skills_13.3"
+          }
+        ]
+      },
+      {
+        "member_key": "choice-slot:40-41",
+        "choice_dependent": true,
+        "relative_draw_positions": [
+          40,
+          41
+        ],
+        "draw_position_semantics": "one_based_full_relative_draw_sequence",
+        "anchor": {
+          "x": 1004,
+          "y": 386.5
+        },
+        "inter_draw_offset_vectors": [
+          {
+            "relative_draw_position": 40,
+            "x": 0,
+            "y": 0
+          },
+          {
+            "relative_draw_position": 41,
+            "x": -4,
+            "y": -4
+          }
+        ],
+        "atlas_namespace": "Skills",
+        "exact_per_sample_member_count": 2,
+        "exemplar_art_id": "Skills.45",
+        "exemplar_payloads": [
+          {
+            "relative_draw_position": 40,
+            "choice_dependent": true,
+            "payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "Skills.45",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                981.0,
+                363.5,
+                1027.0,
+                409.5
+              ],
+              "unclipped_rect": [
+                981.0,
+                363.5,
+                1027.0,
+                409.5
+              ]
+            }
+          },
+          {
+            "relative_draw_position": 41,
+            "choice_dependent": true,
+            "payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "Skills.45",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                977.0,
+                359.5,
+                1023.0,
+                405.5
+              ],
+              "unclipped_rect": [
+                977.0,
+                359.5,
+                1023.0,
+                405.5
+              ]
+            }
+          }
+        ],
+        "observed_roster_evidence": [
+          {
+            "observation": "standalone:skill-picker:primary",
+            "instance": "menufx-v9p73",
+            "process_id": 16152,
+            "observed_art_ids": [
+              "Skills.45"
+            ]
+          },
+          {
+            "observation": "standalone:skill-picker:confirmation",
+            "instance": "menufx-v9p75",
+            "process_id": 16408,
+            "observed_art_ids": [
+              "Skills.91"
+            ]
+          },
+          {
+            "observation": "extended:skill-picker:menufx-v9p75:16408",
+            "instance": "menufx-v9p75",
+            "process_id": 16408,
+            "observed_art_ids": [
+              "Skills.91"
+            ]
+          },
+          {
+            "observation": "extended:skill-picker:menufx-v9p73:16152",
+            "instance": "menufx-v9p73",
+            "process_id": 16152,
+            "observed_art_ids": [
+              "Skills.45"
+            ]
+          }
+        ],
+        "manifest_logical_sizes": {
+          "Skills.45": {
+            "width": 46,
+            "height": 46
+          },
+          "Skills.91": {
+            "width": 45,
+            "height": 39
+          }
+        },
+        "trim_centering_verified_member_count": 8,
+        "id": "skill_picker.choice_slot.3",
+        "draw_bands": [
+          {
+            "below": "skill_picker.art.skills_5.3",
+            "above": "top"
+          }
+        ]
+      }
+    ],
+    "visibility_cycling_element_ids": [],
+    "ambient_persistent_element_ids": [],
+    "classification_map": {
+      "skill_picker.ambient.animated_family_c4544bcee9b754f449aeb28709162630caef5c8b00e9c42c6b9c3657209597ef.1": [
+        "animated_family"
+      ],
+      "skill_picker.ambient.member_023dee8c1564d0aed0869f8b556d9ab2728cc3a6df6ea614c335a56d0298338d_slot_1.1": [
+        "animated"
+      ],
+      "skill_picker.ambient.member_023dee8c1564d0aed0869f8b556d9ab2728cc3a6df6ea614c335a56d0298338d_slot_2.1": [
+        "animated"
+      ],
+      "skill_picker.ambient.member_0ca51af4f73c74e1c9b8b8de9a5d8023aaeb38496c82cb522e6c4a3235a2e827_slot_1.1": [
+        "animated"
+      ],
+      "skill_picker.ambient.member_1a293f0155b9680c0b4b2f0e9ec50f1b31de0236f5ac4b62e0478a0706c2a1a3_slot_1.1": [
+        "animated"
+      ],
+      "skill_picker.ambient.member_49b2ba624d73100b27330990ffe455db6d55a52ee42ef41859a69ef22c415079_slot_1.1": [
+        "animated"
+      ],
+      "skill_picker.ambient.member_4cc27c6d29ac20f1f6b721a7d865dd1d5080eb3b0df03cd2f9ecdd81d9fb6906_slot_1.1": [
+        "animated"
+      ],
+      "skill_picker.ambient.member_5280a9c235ea835f158248496ff0ea3bca9fac6d32274bb33c769288954d9b96_slot_1.1": [
+        "animated"
+      ],
+      "skill_picker.ambient.member_e2767c0bf398b1dd712e21af3f70871e227fb28fa07bc17f546d042c3af307d9_slot_1.1": [
+        "animated"
+      ],
+      "skill_picker.choice_slot.1": [
+        "choice_slot"
+      ],
+      "skill_picker.choice_slot.2": [
+        "choice_slot"
+      ],
+      "skill_picker.choice_slot.3": [
+        "choice_slot"
+      ]
+    },
+    "ambient_family_art_ids": [],
+    "ambient_members": [
+      {
+        "member_key": "animated-family:c4544bcee9b754f449aeb28709162630caef5c8b00e9c42c6b9c3657209597ef",
+        "art_id": "UI.3",
+        "member_classes": [
+          "animated_family"
+        ],
+        "draw_bands": [
+          {
+            "below": "skill_picker.art.ui_42.1",
+            "above": "skill_picker.art.skills_13.1"
+          }
+        ],
+        "class_members": [
+          {
+            "classification": "animated_family",
+            "anchor_semantics": "first_observation_first_present_sample",
+            "anchor_payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.3",
+              "font_id": "",
+              "text_style": "transform",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                408.162567,
+                0.0,
+                846.973633,
+                210.964844
+              ],
+              "unclipped_rect": [
+                408.162567,
+                -109.932556,
+                846.973633,
+                210.964844
+              ]
+            },
+            "union_spatial_envelope": {
+              "sample_count": 4320,
+              "rect": {
+                "min_x": 237.571106,
+                "max_x": 1145.799316,
+                "min_y": 0.0,
+                "max_y": 795.7995,
+                "min_width": 178.600708,
+                "max_width": 438.88324,
+                "min_height": 104.200043,
+                "max_height": 438.883179
+              },
+              "unclipped_rect": {
+                "min_x": 237.571106,
+                "max_x": 1145.799316,
+                "min_y": -112.428894,
+                "max_y": 795.7995,
+                "min_width": 178.600708,
+                "max_width": 438.88324,
+                "min_height": 178.600067,
+                "max_height": 438.883179
+              }
+            },
+            "on_fraction": 1.0,
+            "dominant_visible": true,
+            "dominant_phase_payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.3",
+              "font_id": "",
+              "text_style": "transform",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                408.162567,
+                0.0,
+                846.973633,
+                210.964844
+              ],
+              "unclipped_rect": [
+                408.162567,
+                -109.932556,
+                846.973633,
+                210.964844
+              ]
+            },
+            "events": {
+              "spawn": 0,
+              "despawn": 0,
+              "visible_toggle": 0,
+              "rect_change": 4288,
+              "cross_window_rect_change": 0
+            },
+            "captured_member_count": 32
+          }
+        ],
+        "union_spatial_envelope": {
+          "sample_count": 4320,
+          "rect": {
+            "min_x": 237.571106,
+            "max_x": 1145.799316,
+            "min_y": 0.0,
+            "max_y": 795.7995,
+            "min_width": 178.600708,
+            "max_width": 438.88324,
+            "min_height": 104.200043,
+            "max_height": 438.883179
+          },
+          "unclipped_rect": {
+            "min_x": 237.571106,
+            "max_x": 1145.799316,
+            "min_y": -112.428894,
+            "max_y": 795.7995,
+            "min_width": 178.600708,
+            "max_width": 438.88324,
+            "min_height": 178.600067,
+            "max_height": 438.883179
+          }
+        },
+        "observed_concurrency_range": [
+          8,
+          8
+        ],
+        "on_fraction": 1.0,
+        "dominant_visible": true,
+        "events": {
+          "spawn": 0,
+          "despawn": 0,
+          "visible_toggle": 0,
+          "rect_change": 4288
+        },
+        "animated_family": {
+          "member_key": "animated-family:c4544bcee9b754f449aeb28709162630caef5c8b00e9c42c6b9c3657209597ef",
+          "art_id": "UI.3",
+          "exact_per_sample_member_count": 8,
+          "non_geometric_payload": {
+            "kind": "art",
+            "text": "",
+            "action_id": "",
+            "art_id": "UI.3",
+            "font_id": "",
+            "text_style": "transform",
+            "visible": true,
+            "interactive": false
+          },
+          "non_geometric_payload_sha256": "c4544bcee9b754f449aeb28709162630caef5c8b00e9c42c6b9c3657209597ef",
+          "relative_draw_slots": [
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17
+          ],
+          "slot_index_semantics": "zero_based_full_relative_draw_sequence",
+          "fresh_instance_rank_crossing_witnesses": [
+            {
+              "observation": "standalone:skill-picker:primary",
+              "instance": "menufx-v9p73",
+              "process_id": 16152,
+              "crossed_rank_pairs": [
+                {
+                  "left_captured_element_id": "skill_picker.art.ui_3.1",
+                  "left_geometry_rank": 0,
+                  "right_captured_element_id": "skill_picker.art.ui_3.3",
+                  "right_geometry_rank": 2
+                }
+              ]
+            },
+            {
+              "observation": "standalone:skill-picker:confirmation",
+              "instance": "menufx-v9p75",
+              "process_id": 16408,
+              "crossed_rank_pairs": [
+                {
+                  "left_captured_element_id": "skill_picker.art.ui_3.1",
+                  "left_geometry_rank": 0,
+                  "right_captured_element_id": "skill_picker.art.ui_3.3",
+                  "right_geometry_rank": 2
+                }
+              ]
+            }
+          ],
+          "relative_draw_slot_witnesses": [
+            {
+              "observation": "standalone:skill-picker:primary",
+              "instance": "menufx-v9p73",
+              "process_id": 16152,
+              "relative_draw_slots": [
+                10,
+                11,
+                12,
+                13,
+                14,
+                15,
+                16,
+                17
+              ],
+              "slot_index_semantics": "zero_based_full_relative_draw_sequence",
+              "captured_ordinal_slot_change_counts": {
+                "skill_picker.art.ui_3.1": 1,
+                "skill_picker.art.ui_3.2": 1,
+                "skill_picker.art.ui_3.3": 2,
+                "skill_picker.art.ui_3.4": 2,
+                "skill_picker.art.ui_3.5": 2,
+                "skill_picker.art.ui_3.6": 2,
+                "skill_picker.art.ui_3.7": 2,
+                "skill_picker.art.ui_3.8": 1
+              },
+              "captured_ordinal_rotation_event_count": 13
+            },
+            {
+              "observation": "standalone:skill-picker:confirmation",
+              "instance": "menufx-v9p75",
+              "process_id": 16408,
+              "relative_draw_slots": [
+                10,
+                11,
+                12,
+                13,
+                14,
+                15,
+                16,
+                17
+              ],
+              "slot_index_semantics": "zero_based_full_relative_draw_sequence",
+              "captured_ordinal_slot_change_counts": {
+                "skill_picker.art.ui_3.1": 1,
+                "skill_picker.art.ui_3.2": 1,
+                "skill_picker.art.ui_3.3": 2,
+                "skill_picker.art.ui_3.4": 2,
+                "skill_picker.art.ui_3.5": 2,
+                "skill_picker.art.ui_3.6": 2,
+                "skill_picker.art.ui_3.7": 2,
+                "skill_picker.art.ui_3.8": 1
+              },
+              "captured_ordinal_rotation_event_count": 13
+            },
+            {
+              "observation": "extended:skill-picker:menufx-v9p75:16408",
+              "instance": "menufx-v9p75",
+              "process_id": 16408,
+              "relative_draw_slots": [
+                10,
+                11,
+                12,
+                13,
+                14,
+                15,
+                16,
+                17
+              ],
+              "slot_index_semantics": "zero_based_full_relative_draw_sequence",
+              "captured_ordinal_slot_change_counts": {
+                "skill_picker.art.ui_3.1": 10,
+                "skill_picker.art.ui_3.2": 10,
+                "skill_picker.art.ui_3.3": 20,
+                "skill_picker.art.ui_3.4": 20,
+                "skill_picker.art.ui_3.5": 20,
+                "skill_picker.art.ui_3.6": 20,
+                "skill_picker.art.ui_3.7": 20,
+                "skill_picker.art.ui_3.8": 10
+              },
+              "captured_ordinal_rotation_event_count": 130
+            },
+            {
+              "observation": "extended:skill-picker:menufx-v9p73:16152",
+              "instance": "menufx-v9p73",
+              "process_id": 16152,
+              "relative_draw_slots": [
+                10,
+                11,
+                12,
+                13,
+                14,
+                15,
+                16,
+                17
+              ],
+              "slot_index_semantics": "zero_based_full_relative_draw_sequence",
+              "captured_ordinal_slot_change_counts": {
+                "skill_picker.art.ui_3.1": 10,
+                "skill_picker.art.ui_3.2": 10,
+                "skill_picker.art.ui_3.3": 20,
+                "skill_picker.art.ui_3.4": 20,
+                "skill_picker.art.ui_3.5": 20,
+                "skill_picker.art.ui_3.6": 20,
+                "skill_picker.art.ui_3.7": 20,
+                "skill_picker.art.ui_3.8": 10
+              },
+              "captured_ordinal_rotation_event_count": 130
+            }
+          ]
+        },
+        "id": "skill_picker.ambient.animated_family_c4544bcee9b754f449aeb28709162630caef5c8b00e9c42c6b9c3657209597ef.1"
+      },
+      {
+        "member_key": "member:023dee8c1564d0aed0869f8b556d9ab2728cc3a6df6ea614c335a56d0298338d:slot:1",
+        "art_id": "UI.62",
+        "member_classes": [
+          "animated"
+        ],
+        "draw_bands": [
+          {
+            "below": "skill_picker.art.ui_42.1",
+            "above": "skill_picker.art.skills_13.1"
+          }
+        ],
+        "class_members": [
+          {
+            "classification": "animated",
+            "anchor_semantics": "first_observation_first_present_sample",
+            "anchor_payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.62",
+              "font_id": "",
+              "text_style": "transform",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                541.082581,
+                291.082581,
+                1058.91748,
+                808.917419
+              ],
+              "unclipped_rect": [
+                541.082581,
+                291.082581,
+                1058.91748,
+                808.917419
+              ]
+            },
+            "union_spatial_envelope": {
+              "sample_count": 540,
+              "rect": {
+                "min_x": 487.741821,
+                "max_x": 579.199951,
+                "min_y": 237.741821,
+                "max_y": 329.199982,
+                "min_width": 441.6000979999999,
+                "max_width": 624.5163579999999,
+                "min_height": 441.60006699999997,
+                "max_height": 624.5163580000001
+              },
+              "unclipped_rect": {
+                "min_x": 487.741821,
+                "max_x": 579.199951,
+                "min_y": 237.741821,
+                "max_y": 329.199982,
+                "min_width": 441.6000979999999,
+                "max_width": 624.5163579999999,
+                "min_height": 441.60006699999997,
+                "max_height": 624.5163580000001
+              }
+            },
+            "on_fraction": 1.0,
+            "dominant_visible": true,
+            "dominant_phase_payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.62",
+              "font_id": "",
+              "text_style": "transform",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                541.082581,
+                291.082581,
+                1058.91748,
+                808.917419
+              ],
+              "unclipped_rect": [
+                541.082581,
+                291.082581,
+                1058.91748,
+                808.917419
+              ]
+            },
+            "events": {
+              "spawn": 0,
+              "despawn": 0,
+              "visible_toggle": 0,
+              "rect_change": 536,
+              "cross_window_rect_change": 0
+            },
+            "captured_member_count": 4
+          }
+        ],
+        "union_spatial_envelope": {
+          "sample_count": 540,
+          "rect": {
+            "min_x": 487.741821,
+            "max_x": 579.199951,
+            "min_y": 237.741821,
+            "max_y": 329.199982,
+            "min_width": 441.6000979999999,
+            "max_width": 624.5163579999999,
+            "min_height": 441.60006699999997,
+            "max_height": 624.5163580000001
+          },
+          "unclipped_rect": {
+            "min_x": 487.741821,
+            "max_x": 579.199951,
+            "min_y": 237.741821,
+            "max_y": 329.199982,
+            "min_width": 441.6000979999999,
+            "max_width": 624.5163579999999,
+            "min_height": 441.60006699999997,
+            "max_height": 624.5163580000001
+          }
+        },
+        "observed_concurrency_range": [
+          1,
+          1
+        ],
+        "on_fraction": 1.0,
+        "dominant_visible": true,
+        "events": {
+          "spawn": 0,
+          "despawn": 0,
+          "visible_toggle": 0,
+          "rect_change": 536
+        },
+        "id": "skill_picker.ambient.member_023dee8c1564d0aed0869f8b556d9ab2728cc3a6df6ea614c335a56d0298338d_slot_1.1"
+      },
+      {
+        "member_key": "member:023dee8c1564d0aed0869f8b556d9ab2728cc3a6df6ea614c335a56d0298338d:slot:2",
+        "art_id": "UI.62",
+        "member_classes": [
+          "animated"
+        ],
+        "draw_bands": [
+          {
+            "below": "skill_picker.art.ui_42.1",
+            "above": "skill_picker.art.skills_13.1"
+          }
+        ],
+        "class_members": [
+          {
+            "classification": "animated",
+            "anchor_semantics": "first_observation_first_present_sample",
+            "anchor_payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.62",
+              "font_id": "",
+              "text_style": "transform",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                541.082581,
+                91.082581,
+                1058.91748,
+                608.917419
+              ],
+              "unclipped_rect": [
+                541.082581,
+                91.082581,
+                1058.91748,
+                608.917419
+              ]
+            },
+            "union_spatial_envelope": {
+              "sample_count": 540,
+              "rect": {
+                "min_x": 487.741821,
+                "max_x": 579.199951,
+                "min_y": 37.741821,
+                "max_y": 129.199982,
+                "min_width": 441.6000979999999,
+                "max_width": 624.5163579999999,
+                "min_height": 441.60006699999997,
+                "max_height": 624.5163580000001
+              },
+              "unclipped_rect": {
+                "min_x": 487.741821,
+                "max_x": 579.199951,
+                "min_y": 37.741821,
+                "max_y": 129.199982,
+                "min_width": 441.6000979999999,
+                "max_width": 624.5163579999999,
+                "min_height": 441.60006699999997,
+                "max_height": 624.5163580000001
+              }
+            },
+            "on_fraction": 1.0,
+            "dominant_visible": true,
+            "dominant_phase_payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.62",
+              "font_id": "",
+              "text_style": "transform",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                541.082581,
+                91.082581,
+                1058.91748,
+                608.917419
+              ],
+              "unclipped_rect": [
+                541.082581,
+                91.082581,
+                1058.91748,
+                608.917419
+              ]
+            },
+            "events": {
+              "spawn": 0,
+              "despawn": 0,
+              "visible_toggle": 0,
+              "rect_change": 536,
+              "cross_window_rect_change": 0
+            },
+            "captured_member_count": 4
+          }
+        ],
+        "union_spatial_envelope": {
+          "sample_count": 540,
+          "rect": {
+            "min_x": 487.741821,
+            "max_x": 579.199951,
+            "min_y": 37.741821,
+            "max_y": 129.199982,
+            "min_width": 441.6000979999999,
+            "max_width": 624.5163579999999,
+            "min_height": 441.60006699999997,
+            "max_height": 624.5163580000001
+          },
+          "unclipped_rect": {
+            "min_x": 487.741821,
+            "max_x": 579.199951,
+            "min_y": 37.741821,
+            "max_y": 129.199982,
+            "min_width": 441.6000979999999,
+            "max_width": 624.5163579999999,
+            "min_height": 441.60006699999997,
+            "max_height": 624.5163580000001
+          }
+        },
+        "observed_concurrency_range": [
+          1,
+          1
+        ],
+        "on_fraction": 1.0,
+        "dominant_visible": true,
+        "events": {
+          "spawn": 0,
+          "despawn": 0,
+          "visible_toggle": 0,
+          "rect_change": 536
+        },
+        "id": "skill_picker.ambient.member_023dee8c1564d0aed0869f8b556d9ab2728cc3a6df6ea614c335a56d0298338d_slot_2.1"
+      },
+      {
+        "member_key": "member:0ca51af4f73c74e1c9b8b8de9a5d8023aaeb38496c82cb522e6c4a3235a2e827:slot:1",
+        "art_id": "UI.110",
+        "member_classes": [
+          "animated"
+        ],
+        "draw_bands": [
+          {
+            "below": "skill_picker.art.ui_42.1",
+            "above": "skill_picker.art.skills_13.1"
+          }
+        ],
+        "class_members": [
+          {
+            "classification": "animated",
+            "anchor_semantics": "first_observation_first_present_sample",
+            "anchor_payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.110",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                1056.75,
+                552.25,
+                1141.75,
+                641.25
+              ],
+              "unclipped_rect": [
+                1056.75,
+                552.25,
+                1141.75,
+                641.25
+              ]
+            },
+            "union_spatial_envelope": {
+              "sample_count": 540,
+              "rect": {
+                "min_x": 1050.5,
+                "max_x": 1058.0,
+                "min_y": 546.0,
+                "max_y": 553.5,
+                "min_width": 85.0,
+                "max_width": 85.0,
+                "min_height": 89.0,
+                "max_height": 89.0
+              },
+              "unclipped_rect": {
+                "min_x": 1050.5,
+                "max_x": 1058.0,
+                "min_y": 546.0,
+                "max_y": 553.5,
+                "min_width": 85.0,
+                "max_width": 85.0,
+                "min_height": 89.0,
+                "max_height": 89.0
+              }
+            },
+            "on_fraction": 1.0,
+            "dominant_visible": true,
+            "dominant_phase_payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.110",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                1056.75,
+                552.25,
+                1141.75,
+                641.25
+              ],
+              "unclipped_rect": [
+                1056.75,
+                552.25,
+                1141.75,
+                641.25
+              ]
+            },
+            "events": {
+              "spawn": 0,
+              "despawn": 0,
+              "visible_toggle": 0,
+              "rect_change": 2,
+              "cross_window_rect_change": 0
+            },
+            "captured_member_count": 4
+          }
+        ],
+        "union_spatial_envelope": {
+          "sample_count": 540,
+          "rect": {
+            "min_x": 1050.5,
+            "max_x": 1058.0,
+            "min_y": 546.0,
+            "max_y": 553.5,
+            "min_width": 85.0,
+            "max_width": 85.0,
+            "min_height": 89.0,
+            "max_height": 89.0
+          },
+          "unclipped_rect": {
+            "min_x": 1050.5,
+            "max_x": 1058.0,
+            "min_y": 546.0,
+            "max_y": 553.5,
+            "min_width": 85.0,
+            "max_width": 85.0,
+            "min_height": 89.0,
+            "max_height": 89.0
+          }
+        },
+        "observed_concurrency_range": [
+          1,
+          1
+        ],
+        "on_fraction": 1.0,
+        "dominant_visible": true,
+        "events": {
+          "spawn": 0,
+          "despawn": 0,
+          "visible_toggle": 0,
+          "rect_change": 2
+        },
+        "id": "skill_picker.ambient.member_0ca51af4f73c74e1c9b8b8de9a5d8023aaeb38496c82cb522e6c4a3235a2e827_slot_1.1"
+      },
+      {
+        "member_key": "member:1a293f0155b9680c0b4b2f0e9ec50f1b31de0236f5ac4b62e0478a0706c2a1a3:slot:1",
+        "art_id": "UI.59",
+        "member_classes": [
+          "animated"
+        ],
+        "draw_bands": [
+          {
+            "below": "skill_picker.art.ui_42.1",
+            "above": "skill_picker.art.skills_13.1"
+          }
+        ],
+        "class_members": [
+          {
+            "classification": "animated",
+            "anchor_semantics": "first_observation_first_present_sample",
+            "anchor_payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.59",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                594.0,
+                627.5,
+                1006.0,
+                687.5
+              ],
+              "unclipped_rect": [
+                594.0,
+                627.5,
+                1006.0,
+                687.5
+              ]
+            },
+            "union_spatial_envelope": {
+              "sample_count": 540,
+              "rect": {
+                "min_x": 594.0,
+                "max_x": 594.0,
+                "min_y": 622.5,
+                "max_y": 628.5,
+                "min_width": 412.0,
+                "max_width": 412.0,
+                "min_height": 60.0,
+                "max_height": 60.0
+              },
+              "unclipped_rect": {
+                "min_x": 594.0,
+                "max_x": 594.0,
+                "min_y": 622.5,
+                "max_y": 628.5,
+                "min_width": 412.0,
+                "max_width": 412.0,
+                "min_height": 60.0,
+                "max_height": 60.0
+              }
+            },
+            "on_fraction": 1.0,
+            "dominant_visible": true,
+            "dominant_phase_payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.59",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                594.0,
+                627.5,
+                1006.0,
+                687.5
+              ],
+              "unclipped_rect": [
+                594.0,
+                627.5,
+                1006.0,
+                687.5
+              ]
+            },
+            "events": {
+              "spawn": 0,
+              "despawn": 0,
+              "visible_toggle": 0,
+              "rect_change": 2,
+              "cross_window_rect_change": 0
+            },
+            "captured_member_count": 4
+          }
+        ],
+        "union_spatial_envelope": {
+          "sample_count": 540,
+          "rect": {
+            "min_x": 594.0,
+            "max_x": 594.0,
+            "min_y": 622.5,
+            "max_y": 628.5,
+            "min_width": 412.0,
+            "max_width": 412.0,
+            "min_height": 60.0,
+            "max_height": 60.0
+          },
+          "unclipped_rect": {
+            "min_x": 594.0,
+            "max_x": 594.0,
+            "min_y": 622.5,
+            "max_y": 628.5,
+            "min_width": 412.0,
+            "max_width": 412.0,
+            "min_height": 60.0,
+            "max_height": 60.0
+          }
+        },
+        "observed_concurrency_range": [
+          1,
+          1
+        ],
+        "on_fraction": 1.0,
+        "dominant_visible": true,
+        "events": {
+          "spawn": 0,
+          "despawn": 0,
+          "visible_toggle": 0,
+          "rect_change": 2
+        },
+        "id": "skill_picker.ambient.member_1a293f0155b9680c0b4b2f0e9ec50f1b31de0236f5ac4b62e0478a0706c2a1a3_slot_1.1"
+      },
+      {
+        "member_key": "member:49b2ba624d73100b27330990ffe455db6d55a52ee42ef41859a69ef22c415079:slot:1",
+        "art_id": "UI.37",
+        "member_classes": [
+          "animated"
+        ],
+        "draw_bands": [
+          {
+            "below": "skill_picker.art.ui_42.1",
+            "above": "skill_picker.art.skills_13.1"
+          }
+        ],
+        "class_members": [
+          {
+            "classification": "animated",
+            "anchor_semantics": "first_observation_first_present_sample",
+            "anchor_payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.37",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                593.5,
+                174.5,
+                1006.5,
+                249.5
+              ],
+              "unclipped_rect": [
+                593.5,
+                174.5,
+                1006.5,
+                249.5
+              ]
+            },
+            "union_spatial_envelope": {
+              "sample_count": 540,
+              "rect": {
+                "min_x": 593.5,
+                "max_x": 593.5,
+                "min_y": 173.0,
+                "max_y": 182.0,
+                "min_width": 413.0,
+                "max_width": 413.0,
+                "min_height": 75.0,
+                "max_height": 75.0
+              },
+              "unclipped_rect": {
+                "min_x": 593.5,
+                "max_x": 593.5,
+                "min_y": 173.0,
+                "max_y": 182.0,
+                "min_width": 413.0,
+                "max_width": 413.0,
+                "min_height": 75.0,
+                "max_height": 75.0
+              }
+            },
+            "on_fraction": 1.0,
+            "dominant_visible": true,
+            "dominant_phase_payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.37",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                593.5,
+                174.5,
+                1006.5,
+                249.5
+              ],
+              "unclipped_rect": [
+                593.5,
+                174.5,
+                1006.5,
+                249.5
+              ]
+            },
+            "events": {
+              "spawn": 0,
+              "despawn": 0,
+              "visible_toggle": 0,
+              "rect_change": 2,
+              "cross_window_rect_change": 0
+            },
+            "captured_member_count": 4
+          }
+        ],
+        "union_spatial_envelope": {
+          "sample_count": 540,
+          "rect": {
+            "min_x": 593.5,
+            "max_x": 593.5,
+            "min_y": 173.0,
+            "max_y": 182.0,
+            "min_width": 413.0,
+            "max_width": 413.0,
+            "min_height": 75.0,
+            "max_height": 75.0
+          },
+          "unclipped_rect": {
+            "min_x": 593.5,
+            "max_x": 593.5,
+            "min_y": 173.0,
+            "max_y": 182.0,
+            "min_width": 413.0,
+            "max_width": 413.0,
+            "min_height": 75.0,
+            "max_height": 75.0
+          }
+        },
+        "observed_concurrency_range": [
+          1,
+          1
+        ],
+        "on_fraction": 1.0,
+        "dominant_visible": true,
+        "events": {
+          "spawn": 0,
+          "despawn": 0,
+          "visible_toggle": 0,
+          "rect_change": 2
+        },
+        "id": "skill_picker.ambient.member_49b2ba624d73100b27330990ffe455db6d55a52ee42ef41859a69ef22c415079_slot_1.1"
+      },
+      {
+        "member_key": "member:4cc27c6d29ac20f1f6b721a7d865dd1d5080eb3b0df03cd2f9ecdd81d9fb6906:slot:1",
+        "art_id": "UI.107",
+        "member_classes": [
+          "animated"
+        ],
+        "draw_bands": [
+          {
+            "below": "skill_picker.art.ui_42.1",
+            "above": "skill_picker.art.skills_13.1"
+          }
+        ],
+        "class_members": [
+          {
+            "classification": "animated",
+            "anchor_semantics": "first_observation_first_present_sample",
+            "anchor_payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.107",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                458.25,
+                258.75,
+                543.25,
+                347.75
+              ],
+              "unclipped_rect": [
+                458.25,
+                258.75,
+                543.25,
+                347.75
+              ]
+            },
+            "union_spatial_envelope": {
+              "sample_count": 540,
+              "rect": {
+                "min_x": 457.0,
+                "max_x": 464.5,
+                "min_y": 257.5,
+                "max_y": 265.0,
+                "min_width": 85.0,
+                "max_width": 85.0,
+                "min_height": 89.0,
+                "max_height": 89.0
+              },
+              "unclipped_rect": {
+                "min_x": 457.0,
+                "max_x": 464.5,
+                "min_y": 257.5,
+                "max_y": 265.0,
+                "min_width": 85.0,
+                "max_width": 85.0,
+                "min_height": 89.0,
+                "max_height": 89.0
+              }
+            },
+            "on_fraction": 1.0,
+            "dominant_visible": true,
+            "dominant_phase_payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.107",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                458.25,
+                258.75,
+                543.25,
+                347.75
+              ],
+              "unclipped_rect": [
+                458.25,
+                258.75,
+                543.25,
+                347.75
+              ]
+            },
+            "events": {
+              "spawn": 0,
+              "despawn": 0,
+              "visible_toggle": 0,
+              "rect_change": 2,
+              "cross_window_rect_change": 0
+            },
+            "captured_member_count": 4
+          }
+        ],
+        "union_spatial_envelope": {
+          "sample_count": 540,
+          "rect": {
+            "min_x": 457.0,
+            "max_x": 464.5,
+            "min_y": 257.5,
+            "max_y": 265.0,
+            "min_width": 85.0,
+            "max_width": 85.0,
+            "min_height": 89.0,
+            "max_height": 89.0
+          },
+          "unclipped_rect": {
+            "min_x": 457.0,
+            "max_x": 464.5,
+            "min_y": 257.5,
+            "max_y": 265.0,
+            "min_width": 85.0,
+            "max_width": 85.0,
+            "min_height": 89.0,
+            "max_height": 89.0
+          }
+        },
+        "observed_concurrency_range": [
+          1,
+          1
+        ],
+        "on_fraction": 1.0,
+        "dominant_visible": true,
+        "events": {
+          "spawn": 0,
+          "despawn": 0,
+          "visible_toggle": 0,
+          "rect_change": 2
+        },
+        "id": "skill_picker.ambient.member_4cc27c6d29ac20f1f6b721a7d865dd1d5080eb3b0df03cd2f9ecdd81d9fb6906_slot_1.1"
+      },
+      {
+        "member_key": "member:5280a9c235ea835f158248496ff0ea3bca9fac6d32274bb33c769288954d9b96:slot:1",
+        "art_id": "UI.108",
+        "member_classes": [
+          "animated"
+        ],
+        "draw_bands": [
+          {
+            "below": "skill_picker.art.ui_42.1",
+            "above": "skill_picker.art.skills_13.1"
+          }
+        ],
+        "class_members": [
+          {
+            "classification": "animated",
+            "anchor_semantics": "first_observation_first_present_sample",
+            "anchor_payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.108",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                1056.75,
+                258.75,
+                1141.75,
+                347.75
+              ],
+              "unclipped_rect": [
+                1056.75,
+                258.75,
+                1141.75,
+                347.75
+              ]
+            },
+            "union_spatial_envelope": {
+              "sample_count": 540,
+              "rect": {
+                "min_x": 1050.5,
+                "max_x": 1058.0,
+                "min_y": 257.5,
+                "max_y": 265.0,
+                "min_width": 85.0,
+                "max_width": 85.0,
+                "min_height": 89.0,
+                "max_height": 89.0
+              },
+              "unclipped_rect": {
+                "min_x": 1050.5,
+                "max_x": 1058.0,
+                "min_y": 257.5,
+                "max_y": 265.0,
+                "min_width": 85.0,
+                "max_width": 85.0,
+                "min_height": 89.0,
+                "max_height": 89.0
+              }
+            },
+            "on_fraction": 1.0,
+            "dominant_visible": true,
+            "dominant_phase_payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.108",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                1056.75,
+                258.75,
+                1141.75,
+                347.75
+              ],
+              "unclipped_rect": [
+                1056.75,
+                258.75,
+                1141.75,
+                347.75
+              ]
+            },
+            "events": {
+              "spawn": 0,
+              "despawn": 0,
+              "visible_toggle": 0,
+              "rect_change": 2,
+              "cross_window_rect_change": 0
+            },
+            "captured_member_count": 4
+          }
+        ],
+        "union_spatial_envelope": {
+          "sample_count": 540,
+          "rect": {
+            "min_x": 1050.5,
+            "max_x": 1058.0,
+            "min_y": 257.5,
+            "max_y": 265.0,
+            "min_width": 85.0,
+            "max_width": 85.0,
+            "min_height": 89.0,
+            "max_height": 89.0
+          },
+          "unclipped_rect": {
+            "min_x": 1050.5,
+            "max_x": 1058.0,
+            "min_y": 257.5,
+            "max_y": 265.0,
+            "min_width": 85.0,
+            "max_width": 85.0,
+            "min_height": 89.0,
+            "max_height": 89.0
+          }
+        },
+        "observed_concurrency_range": [
+          1,
+          1
+        ],
+        "on_fraction": 1.0,
+        "dominant_visible": true,
+        "events": {
+          "spawn": 0,
+          "despawn": 0,
+          "visible_toggle": 0,
+          "rect_change": 2
+        },
+        "id": "skill_picker.ambient.member_5280a9c235ea835f158248496ff0ea3bca9fac6d32274bb33c769288954d9b96_slot_1.1"
+      },
+      {
+        "member_key": "member:e2767c0bf398b1dd712e21af3f70871e227fb28fa07bc17f546d042c3af307d9:slot:1",
+        "art_id": "UI.109",
+        "member_classes": [
+          "animated"
+        ],
+        "draw_bands": [
+          {
+            "below": "skill_picker.art.ui_42.1",
+            "above": "skill_picker.art.skills_13.1"
+          }
+        ],
+        "class_members": [
+          {
+            "classification": "animated",
+            "anchor_semantics": "first_observation_first_present_sample",
+            "anchor_payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.109",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                458.25,
+                552.25,
+                543.25,
+                641.25
+              ],
+              "unclipped_rect": [
+                458.25,
+                552.25,
+                543.25,
+                641.25
+              ]
+            },
+            "union_spatial_envelope": {
+              "sample_count": 540,
+              "rect": {
+                "min_x": 457.0,
+                "max_x": 464.5,
+                "min_y": 546.0,
+                "max_y": 553.5,
+                "min_width": 85.0,
+                "max_width": 85.0,
+                "min_height": 89.0,
+                "max_height": 89.0
+              },
+              "unclipped_rect": {
+                "min_x": 457.0,
+                "max_x": 464.5,
+                "min_y": 546.0,
+                "max_y": 553.5,
+                "min_width": 85.0,
+                "max_width": 85.0,
+                "min_height": 89.0,
+                "max_height": 89.0
+              }
+            },
+            "on_fraction": 1.0,
+            "dominant_visible": true,
+            "dominant_phase_payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.109",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                458.25,
+                552.25,
+                543.25,
+                641.25
+              ],
+              "unclipped_rect": [
+                458.25,
+                552.25,
+                543.25,
+                641.25
+              ]
+            },
+            "events": {
+              "spawn": 0,
+              "despawn": 0,
+              "visible_toggle": 0,
+              "rect_change": 2,
+              "cross_window_rect_change": 0
+            },
+            "captured_member_count": 4
+          }
+        ],
+        "union_spatial_envelope": {
+          "sample_count": 540,
+          "rect": {
+            "min_x": 457.0,
+            "max_x": 464.5,
+            "min_y": 546.0,
+            "max_y": 553.5,
+            "min_width": 85.0,
+            "max_width": 85.0,
+            "min_height": 89.0,
+            "max_height": 89.0
+          },
+          "unclipped_rect": {
+            "min_x": 457.0,
+            "max_x": 464.5,
+            "min_y": 546.0,
+            "max_y": 553.5,
+            "min_width": 85.0,
+            "max_width": 85.0,
+            "min_height": 89.0,
+            "max_height": 89.0
+          }
+        },
+        "observed_concurrency_range": [
+          1,
+          1
+        ],
+        "on_fraction": 1.0,
+        "dominant_visible": true,
+        "events": {
+          "spawn": 0,
+          "despawn": 0,
+          "visible_toggle": 0,
+          "rect_change": 2
+        },
+        "id": "skill_picker.ambient.member_e2767c0bf398b1dd712e21af3f70871e227fb28fa07bc17f546d042c3af307d9_slot_1.1"
+      }
+    ],
+    "ephemeral_family": {
+      "art_ids": [],
+      "union_spatial_envelope": null,
+      "observed_concurrency_range": [
+        0,
+        0
+      ],
+      "draw_bands": {},
+      "spawn_event_count": 0,
+      "despawn_event_count": 0,
+      "bidirectional_churn_witnessed": true
+    },
+    "ambient_semantic_member_count": 9,
+    "peak_element_count": 41,
+    "ambient_fraction": 0.21951219512195122
+  }
 }

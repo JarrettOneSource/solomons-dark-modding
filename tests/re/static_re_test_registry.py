@@ -145,6 +145,9 @@ from static_re_native_menu_shell_contracts import (
     test_native_menu_transition_endpoint_provenance_is_pinned,
     test_native_menu_v210_controls_title_correction_is_exact,
     test_native_menu_v211_controls_core_supersession_is_exact,
+    test_native_menu_v220_dark_cloud_login_title_correction_is_exact,
+    test_native_menu_v221_census_era_disposition_is_exact,
+    test_native_menu_v222_final_four_disposition_is_exact,
 )
 from static_re_boneyard_lighting_contracts import (
     test_boneyard_tree_last_writer_render_path_is_registered,
@@ -1204,6 +1207,18 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native menu v2.11 Controls structural supersession is exact",
         test_native_menu_v211_controls_core_supersession_is_exact,
+    ),
+    (
+        "Native menu v2.20 Dark Cloud login title correction is exact",
+        test_native_menu_v220_dark_cloud_login_title_correction_is_exact,
+    ),
+    (
+        "Native menu v2.21 census-era disposition is exact",
+        test_native_menu_v221_census_era_disposition_is_exact,
+    ),
+    (
+        "Native menu v2.22 final four-row disposition is exact",
+        test_native_menu_v222_final_four_disposition_is_exact,
     ),
     (
         "Native menu path-dependent core fork is exact",

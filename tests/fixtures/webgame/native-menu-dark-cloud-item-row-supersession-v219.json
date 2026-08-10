@@ -1,0 +1,456 @@
+{
+  "schema": "solomon-dark-native-menu-dark-cloud-item-row-supersession-v1",
+  "settlement_spec": "2.19",
+  "class": "evidence_of_era_exact_member_supersession",
+  "affected_layouts": [
+    {
+      "layout_id": "dark-cloud-browser",
+      "screen_id": "dark_cloud_browser",
+      "superseded_landed_fixture": {
+        "path": "webgame-contracts/baseline-snapshots/menu-layouts/dark-cloud-browser.json",
+        "sha256": "24b8ad31cb35b8d8cd4ef9527777572256b9f8c9e2d5e8d39e877bcd9f7a96b2",
+        "bytes": 146648,
+        "generation": 34,
+        "element_count": 98
+      },
+      "superseding_candidate_fixture": {
+        "path": "raw-v9/candidates/candidate-v214-profile-final/menu-layouts/dark-cloud-browser.json",
+        "sha256": "f5e7d658564ce273a24d878029da55907e0f466fd4616b09fa2ecdfdc7d69cac",
+        "bytes": 52000,
+        "generation": 16,
+        "element_count": 69,
+        "structural_core_sha256": "76d1f3e1d59b6fdb93699c18097b596cc7f2af8b7aa9f04af152df16f1805b3d"
+      },
+      "superseded_member": {
+        "id": "dark_cloud_browser.text.item_1.1",
+        "semantic_sha256": "72b806d6ce642eeba9f3411e7ca930586c0df10bc602a27f380a387f9f2253b5",
+        "payload": {
+          "id": "dark_cloud_browser.text.item_1.1",
+          "kind": "text",
+          "text": "Item 1",
+          "action_id": "",
+          "art_id": "",
+          "font_id": "",
+          "text_style": "",
+          "visible": true,
+          "interactive": false,
+          "draw_order": 0,
+          "rect": [
+            105.0,
+            285.0,
+            1495.0,
+            310.0
+          ],
+          "unclipped_rect": [
+            105.0,
+            285.0,
+            1495.0,
+            310.0
+          ]
+        }
+      },
+      "fresh_pair": {
+        "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+        "primary": {
+          "recording": {
+            "path": "D:\\codex-evidence\\menufix-20260805\\raw-v9\\candidates\\candidate-v214-profile-final\\menu-settlement-traces\\dark-cloud-browser.settlement.json",
+            "sha256": "1297961835f4bcb7c9a49e924c67276fae93f3a5b4bfff77396ba8e91b8c9d73",
+            "bytes": 6777053
+          },
+          "population_phase_count": 1,
+          "population_element_counts": [
+            69
+          ],
+          "population_generations": [
+            16
+          ],
+          "population_item_row_counts": [
+            0
+          ],
+          "settled_sample_count": 40,
+          "settled_span_milliseconds": 15883,
+          "settled_generations": [
+            16
+          ],
+          "settled_element_counts": [
+            69
+          ],
+          "settled_item_row_counts": [
+            0
+          ]
+        },
+        "confirmation": {
+          "recording": {
+            "path": "D:\\codex-evidence\\menufix-20260805\\raw-v9\\candidates\\candidate-v214-profile-final\\menu-animation-confirmations\\dark-cloud-browser.confirmation.json",
+            "sha256": "b4ee5957e288a10a6c572b5f211f329bfcebce95bdc3f776815130dec9ec9260",
+            "bytes": 6901734
+          },
+          "population_phase_count": 1,
+          "population_element_counts": [
+            69
+          ],
+          "population_generations": [
+            16
+          ],
+          "population_item_row_counts": [
+            0
+          ],
+          "settled_sample_count": 40,
+          "settled_span_milliseconds": 15980,
+          "settled_generations": [
+            16
+          ],
+          "settled_element_counts": [
+            69
+          ],
+          "settled_item_row_counts": [
+            0
+          ]
+        },
+        "settled_item_row_count": 0
+      }
+    },
+    {
+      "layout_id": "dark-cloud-recent",
+      "screen_id": "dark_cloud_recent",
+      "superseded_landed_fixture": {
+        "path": "webgame-contracts/baseline-snapshots/menu-layouts/dark-cloud-recent.json",
+        "sha256": "c7ddae01f4debf8d948e0d68a35b625c45b8409ac0bf2c3da2ef34c45b355967",
+        "bytes": 146548,
+        "generation": 35,
+        "element_count": 98
+      },
+      "superseding_candidate_fixture": {
+        "path": "raw-v9/candidates/candidate-v214-profile-final/menu-layouts/dark-cloud-recent.json",
+        "sha256": "117a9c6993ef20916aba0ed8ff1fb787e298e7d6cc82ab24cdad6993634630a3",
+        "bytes": 51906,
+        "generation": 17,
+        "element_count": 69,
+        "structural_core_sha256": "ea5f4e5c39a84a8c07ce3f7fd0cd673fcbc2593a728b7503aad2c98ce6ee4893"
+      },
+      "superseded_member": {
+        "id": "dark_cloud_recent.text.item_1.1",
+        "semantic_sha256": "72b806d6ce642eeba9f3411e7ca930586c0df10bc602a27f380a387f9f2253b5",
+        "payload": {
+          "id": "dark_cloud_recent.text.item_1.1",
+          "kind": "text",
+          "text": "Item 1",
+          "action_id": "",
+          "art_id": "",
+          "font_id": "",
+          "text_style": "",
+          "visible": true,
+          "interactive": false,
+          "draw_order": 0,
+          "rect": [
+            105.0,
+            285.0,
+            1495.0,
+            310.0
+          ],
+          "unclipped_rect": [
+            105.0,
+            285.0,
+            1495.0,
+            310.0
+          ]
+        }
+      },
+      "fresh_pair": {
+        "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+        "primary": {
+          "recording": {
+            "path": "D:\\codex-evidence\\menufix-20260805\\raw-v9\\candidates\\candidate-v214-profile-final\\menu-settlement-traces\\dark-cloud-recent.settlement.json",
+            "sha256": "697fda9eb471c33007bf9fd036ce940acda499f38468ec43987d9c346f133c4f",
+            "bytes": 6776955
+          },
+          "population_phase_count": 1,
+          "population_element_counts": [
+            69
+          ],
+          "population_generations": [
+            17
+          ],
+          "population_item_row_counts": [
+            0
+          ],
+          "settled_sample_count": 40,
+          "settled_span_milliseconds": 16061,
+          "settled_generations": [
+            17
+          ],
+          "settled_element_counts": [
+            69
+          ],
+          "settled_item_row_counts": [
+            0
+          ]
+        },
+        "confirmation": {
+          "recording": {
+            "path": "D:\\codex-evidence\\menufix-20260805\\raw-v9\\candidates\\candidate-v214-profile-final\\menu-animation-confirmations\\dark-cloud-recent.confirmation.json",
+            "sha256": "262e14cf422840e2ce998e21c334e8fffe7192239ba394d47689825c48b6f62b",
+            "bytes": 6901634
+          },
+          "population_phase_count": 1,
+          "population_element_counts": [
+            69
+          ],
+          "population_generations": [
+            17
+          ],
+          "population_item_row_counts": [
+            0
+          ],
+          "settled_sample_count": 40,
+          "settled_span_milliseconds": 15995,
+          "settled_generations": [
+            17
+          ],
+          "settled_element_counts": [
+            69
+          ],
+          "settled_item_row_counts": [
+            0
+          ]
+        },
+        "settled_item_row_count": 0
+      }
+    },
+    {
+      "layout_id": "dark-cloud-online-levels",
+      "screen_id": "dark_cloud_online_levels",
+      "superseded_landed_fixture": {
+        "path": "webgame-contracts/baseline-snapshots/menu-layouts/dark-cloud-online-levels.json",
+        "sha256": "61590730b3e20d32ee77dde1d8ad12fc4b6cb5fd2e8c3c0d6396e74f31d23b16",
+        "bytes": 147248,
+        "generation": 36,
+        "element_count": 98
+      },
+      "superseding_candidate_fixture": {
+        "path": "raw-v9/candidates/candidate-v214-profile-final/menu-layouts/dark-cloud-online-levels.json",
+        "sha256": "295e3662323b49ddf826aa686e62d2d461047a41ebbd6298186f0fd696058988",
+        "bytes": 52480,
+        "generation": 18,
+        "element_count": 69,
+        "structural_core_sha256": "7c40da31527b1deae784941c212578d772375f5f603e8f191ef1bdd7d5302d10"
+      },
+      "superseded_member": {
+        "id": "dark_cloud_online_levels.text.item_1.1",
+        "semantic_sha256": "72b806d6ce642eeba9f3411e7ca930586c0df10bc602a27f380a387f9f2253b5",
+        "payload": {
+          "id": "dark_cloud_online_levels.text.item_1.1",
+          "kind": "text",
+          "text": "Item 1",
+          "action_id": "",
+          "art_id": "",
+          "font_id": "",
+          "text_style": "",
+          "visible": true,
+          "interactive": false,
+          "draw_order": 0,
+          "rect": [
+            105.0,
+            285.0,
+            1495.0,
+            310.0
+          ],
+          "unclipped_rect": [
+            105.0,
+            285.0,
+            1495.0,
+            310.0
+          ]
+        }
+      },
+      "fresh_pair": {
+        "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+        "primary": {
+          "recording": {
+            "path": "D:\\codex-evidence\\menufix-20260805\\raw-v9\\candidates\\candidate-v214-profile-final\\menu-settlement-traces\\dark-cloud-online-levels.settlement.json",
+            "sha256": "cdcc332d62df053ca559545d5fcf3de94c3fb26f4a893de735f07e26423a973b",
+            "bytes": 6777557
+          },
+          "population_phase_count": 1,
+          "population_element_counts": [
+            69
+          ],
+          "population_generations": [
+            18
+          ],
+          "population_item_row_counts": [
+            0
+          ],
+          "settled_sample_count": 40,
+          "settled_span_milliseconds": 15966,
+          "settled_generations": [
+            18
+          ],
+          "settled_element_counts": [
+            69
+          ],
+          "settled_item_row_counts": [
+            0
+          ]
+        },
+        "confirmation": {
+          "recording": {
+            "path": "D:\\codex-evidence\\menufix-20260805\\raw-v9\\candidates\\candidate-v214-profile-final\\menu-animation-confirmations\\dark-cloud-online-levels.confirmation.json",
+            "sha256": "f4cbe06dffa8ab71e1ef7655ec2338187602ddebffb63fb8b8ee35171d9202cc",
+            "bytes": 6902250
+          },
+          "population_phase_count": 1,
+          "population_element_counts": [
+            69
+          ],
+          "population_generations": [
+            18
+          ],
+          "population_item_row_counts": [
+            0
+          ],
+          "settled_sample_count": 40,
+          "settled_span_milliseconds": 15938,
+          "settled_generations": [
+            18
+          ],
+          "settled_element_counts": [
+            69
+          ],
+          "settled_item_row_counts": [
+            0
+          ]
+        },
+        "settled_item_row_count": 0
+      }
+    }
+  ],
+  "control_layout": {
+    "layout_id": "dark-cloud-my-levels",
+    "screen_id": "dark_cloud_my_levels",
+    "landed_fixture": {
+      "path": "webgame-contracts/baseline-snapshots/menu-layouts/dark-cloud-my-levels.json",
+      "sha256": "50030bb28a018a621ff40080e0366821505a72ec24d9743406f7b44bab3371fc",
+      "bytes": 140825
+    },
+    "candidate_fixture": {
+      "path": "raw-v9/candidates/candidate-v214-profile-final/menu-layouts/dark-cloud-my-levels.json",
+      "sha256": "64173d50feb0f50ffc13da6352d42007a7543f889eefbbadeca20f5511da9528",
+      "bytes": 55497
+    },
+    "retained_member": {
+      "id": "dark_cloud_my_levels.text.item_1.1",
+      "semantic_sha256": "72b806d6ce642eeba9f3411e7ca930586c0df10bc602a27f380a387f9f2253b5",
+      "payload": {
+        "kind": "text",
+        "text": "Item 1",
+        "action_id": "",
+        "art_id": "",
+        "font_id": "",
+        "text_style": "",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          105.0,
+          285.0,
+          1495.0,
+          310.0
+        ],
+        "unclipped_rect": [
+          105.0,
+          285.0,
+          1495.0,
+          310.0
+        ],
+        "id": "dark_cloud_my_levels.text.item_1.1",
+        "draw_order": 2,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      }
+    },
+    "fresh_pair": {
+      "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+      "primary": {
+        "recording": {
+          "path": "D:\\codex-evidence\\menufix-20260805\\raw-v9\\candidates\\candidate-v214-profile-final\\menu-settlement-traces\\dark-cloud-my-levels.settlement.json",
+          "sha256": "c99a81f3e052807ff1518856f6e3ffe4ac0d9acb7c99116fd406ad6ca3aa6d49",
+          "bytes": 6481922
+        },
+        "population_phase_count": 1,
+        "population_element_counts": [
+          66
+        ],
+        "population_generations": [
+          19
+        ],
+        "population_item_row_counts": [
+          1
+        ],
+        "settled_sample_count": 40,
+        "settled_span_milliseconds": 16187,
+        "settled_generations": [
+          19
+        ],
+        "settled_element_counts": [
+          66
+        ],
+        "settled_item_row_counts": [
+          1
+        ]
+      },
+      "confirmation": {
+        "recording": {
+          "path": "D:\\codex-evidence\\menufix-20260805\\raw-v9\\candidates\\candidate-v214-profile-final\\menu-animation-confirmations\\dark-cloud-my-levels.confirmation.json",
+          "sha256": "62bf8714329c85679af7faa3751e152fcbaa9b0cc786617deeed91ec93d3adbb",
+          "bytes": 6601172
+        },
+        "population_phase_count": 1,
+        "population_element_counts": [
+          66
+        ],
+        "population_generations": [
+          19
+        ],
+        "population_item_row_counts": [
+          1
+        ],
+        "settled_sample_count": 40,
+        "settled_span_milliseconds": 15980,
+        "settled_generations": [
+          19
+        ],
+        "settled_element_counts": [
+          66
+        ],
+        "settled_item_row_counts": [
+          1
+        ]
+      },
+      "settled_item_row_count": 1
+    }
+  },
+  "source_audit": {
+    "path": "raw-v9/dark-cloud-item-row-question/dark-cloud-item-row-stop-audit.json",
+    "sha256": "b88b9014d08b357fb03127410ed1cc19bc43ad1a303ef0762d1ca0d318b17127",
+    "bytes": 19850
+  },
+  "promoter_stop": {
+    "path": "raw-v9/dark-cloud-item-row-question/promoter-dark-cloud-item-row-stop.log",
+    "sha256": "5757d6122a77ef83877864341864dc8d2f1f0423e40dffaf4b7778b7747f70e5",
+    "bytes": 414
+  },
+  "landed_era_capture_identity": {
+    "instance": "men-title",
+    "process_id": 16140,
+    "profile_state_provenance_present": false
+  },
+  "diagnostic_role": "documentation-only My Levels to Browser read-only tab switch; outcome never changes this exact supersession",
+  "forbidden": [
+    "text_filter",
+    "candidate_member_removal",
+    "dark_cloud_my_levels_removal",
+    "another_layout",
+    "another_member_id",
+    "another_semantic_payload"
+  ],
+  "derivation": "exactly three unprovenance'd landed-era Item 1 members are superseded by two-instance pristine zero-row captures; My Levels retains its independently reproduced row"
+}

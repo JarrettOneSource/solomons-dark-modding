@@ -1,7 +1,7 @@
 import path from "node:path";
 
 import menuBaselineJson from "../../webgame-contracts/menu-baseline.json" with { type: "json" };
-import menuGoldenJson from "../../tests/fixtures/webgame/menu-goldens.json" with { type: "json" };
+import menuGoldenJson from "../../webgame-contracts/baseline-snapshots/menu-goldens.json" with { type: "json" };
 import menuVisualGateJson from "../../webgame-contracts/menu-visual-gate.json" with { type: "json" };
 import { describe, expect, it } from "vitest";
 
@@ -20,21 +20,21 @@ async function baseline() {
 }
 
 describe("G11 shellfix baseline-snapshot interregnum", () => {
-  it("preserves 28 exact visual attestations while all 28 settled fixtures await shellfix", async () => {
+  it("preserves 28 exact visual attestations while all 29 settled states await shellfix", async () => {
     const result = validateMenuVisualGate(menuVisualGateJson, catalog, await baseline());
     expect(result.status).toBe("pass_against_baseline_snapshots");
     expect(result.reviewedPassFixtures).toHaveLength(18);
     expect(result.reviewedDivergentFixtures).toHaveLength(10);
-    expect(result.pendingShellfixFixtures).toHaveLength(28);
+    expect(result.pendingShellfixFixtures).toHaveLength(29);
     expect(result.corrective).toBe("shellfix task #101");
   });
 
-  it("rejects a dropped pending_shellfix entry by the exact 28-fixture census", async () => {
+  it("rejects a dropped pending_shellfix entry by the exact 29-state census", async () => {
     const scratch = structuredClone(menuVisualGateJson);
     scratch.pending_shellfix.pop();
     const verified = await baseline();
     expect(() => validateMenuVisualGate(scratch, catalog, verified))
-      .toThrow("menu visual gate pending_shellfix census must remain exactly 28");
+      .toThrow("menu visual gate pending_shellfix census must remain exactly 29");
   });
 
   it("rejects a pending entry pinned to the wrong settled fixture hash", async () => {

@@ -1,0 +1,159 @@
+{
+  "schema": "solomon-dark-native-menu-dark-cloud-login-title-v220",
+  "settlement_spec": "2.20",
+  "layout_id": "dark-cloud-login-settings",
+  "screen_id": "dark_cloud_login_settings",
+  "field": "screen_title",
+  "landed_value": "",
+  "settled_value": "Dark Cloud Browser",
+  "landed_fixture": {
+    "repo_relative_path": "tests/fixtures/webgame/menu-layouts/dark-cloud-login-settings.json",
+    "sha256": "1844ec5571122e4fed8fa0f15c7ebdc1a6ee3200ef5ee347b3d6d1034799a25a",
+    "bytes": 142553
+  },
+  "baseline_snapshot": {
+    "repo_relative_path": "webgame-contracts/baseline-snapshots/menu-layouts/dark-cloud-login-settings.json",
+    "sha256": "1844ec5571122e4fed8fa0f15c7ebdc1a6ee3200ef5ee347b3d6d1034799a25a",
+    "bytes": 142553
+  },
+  "superseding_candidate": {
+    "evidence_path": "raw-v9/candidates/candidate-v214-profile-final/menu-layouts/dark-cloud-login-settings.json",
+    "sha256": "7c729a2b52b72ba8fa7d3108ce2e61340bd735c5e5a63db491232e5caf6538fd",
+    "bytes": 54457,
+    "element_count": 77,
+    "structural_core_sha256": "bb948ffc51266fe4e09947b96dff37847bc099a2d4e791d4b3fc44485f98dae4"
+  },
+  "source_stop_audit": {
+    "evidence_path": "raw-v9/profile-select-new-game-edge/dark-cloud-login-title-stop-audit.json",
+    "sha256": "4eb60e30e5f5e9d1db77fd9ae67fbba2d445077007d26b60cc08eefbb1ce4f5a",
+    "bytes": 6525
+  },
+  "source_promoter_stop": {
+    "evidence_path": "raw-v9/profile-select-new-game-edge/merged-v219/promoter-dry-run-v219-40-edges-rerun3.log",
+    "sha256": "345c23749b086b4d2c952062980f8015f71b9ad77cc83ca7b7157de3d5ce96e0",
+    "bytes": 166,
+    "message": "STOP: standalone dark-cloud-login-settings: landed-vs-settled mismatch outside authorized classes: layout field 'screen_title' differs"
+  },
+  "source_provenance": {
+    "base_commit_sha": "68a3735ae342561623fa135b2c0e1243c673e111",
+    "source_tree_sha": "7210d566ffe62a526eb6018f5e5fa86aaa458dbd",
+    "capture_tree": "exact committed tree at base_commit_sha",
+    "game_executable_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+    "loader_dll_sha256": "8d01666de64a7a346a0331e48f715c8a98f8cfafb3da6419f63f1888c63327ff",
+    "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+    "capture_driver_preset": "idle"
+  },
+  "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+  "paired_settlement": {
+    "primary": {
+      "instance": "menufx-v9p35",
+      "process_id": 1340,
+      "sample_count": 40,
+      "stable_span_milliseconds": 15309,
+      "measured_generation": 25,
+      "recording": {
+        "evidence_path": "raw-v9/candidates/candidate-v214-profile-final/menu-settlement-traces/dark-cloud-login-settings.settlement.json",
+        "sha256": "23b230917daa6bee891159bdb8a47c303a6f1522df1374742636426268d83c66",
+        "bytes": 7558370
+      }
+    },
+    "confirmation": {
+      "instance": "menufx-v9p36",
+      "process_id": 10676,
+      "sample_count": 40,
+      "stable_span_milliseconds": 15770,
+      "measured_generation": 24,
+      "recording": {
+        "evidence_path": "raw-v9/candidates/candidate-v214-profile-final/menu-animation-confirmations/dark-cloud-login-settings.confirmation.json",
+        "sha256": "67102dcc16e74a1bf42e97295378346cf483f97dc700f640321189fb133f7fb7",
+        "bytes": 7697659
+      }
+    },
+    "core_equality": {
+      "schema": "solomon-dark-native-menu-paired-core-equality-v219",
+      "settlement_spec": "2.19",
+      "label": "standalone dark-cloud-login-settings title audit",
+      "expected_core": {
+        "member_count": 77,
+        "member_multiset_sha256": "bd8b9ec1cff0ad0b0ef9eb67762f1e4241d123c5be1d917b29ce442df085c006",
+        "relative_sequence_sha256": "dd8ffc7656ad082ef664fac09b775d2711db8cc6174e34db510930b03143b499"
+      },
+      "primary": {
+        "generation": 25,
+        "semantic_generation": 25,
+        "sample_count": 40,
+        "stable_span_milliseconds": 15309,
+        "window_constant": true,
+        "semantic_mirror": true,
+        "member_count": 77,
+        "member_multiset_sha256": "bd8b9ec1cff0ad0b0ef9eb67762f1e4241d123c5be1d917b29ce442df085c006",
+        "relative_sequence_sha256": "dd8ffc7656ad082ef664fac09b775d2711db8cc6174e34db510930b03143b499",
+        "all_samples_project_exactly": true
+      },
+      "confirmation": {
+        "generation": 24,
+        "semantic_generation": 24,
+        "sample_count": 40,
+        "stable_span_milliseconds": 15770,
+        "window_constant": true,
+        "semantic_mirror": true,
+        "member_count": 77,
+        "member_multiset_sha256": "bd8b9ec1cff0ad0b0ef9eb67762f1e4241d123c5be1d917b29ce442df085c006",
+        "relative_sequence_sha256": "dd8ffc7656ad082ef664fac09b775d2711db8cc6174e34db510930b03143b499",
+        "all_samples_project_exactly": true
+      },
+      "generation_values_may_differ": true,
+      "generation_excluded_field_scope": [
+        "generation",
+        "semantic_generation"
+      ],
+      "core_equal": true,
+      "zero_residual": true,
+      "bound_endpoints": [
+        "dark_cloud_to_login_settings.after",
+        "dark_cloud_login_to_browser.before"
+      ],
+      "bound_endpoint_census_complete": true,
+      "verdict": "exact_core_generation_instance_local"
+    }
+  },
+  "bound_endpoints": [
+    {
+      "edge_id": "dark_cloud_login_to_browser",
+      "side": "before",
+      "trigger": "done_button_click",
+      "semantic_surface": "dark_cloud_login_settings",
+      "tagged_screen": "dark_cloud_login_settings",
+      "layout_generation": 25,
+      "element_count": 77,
+      "screen_title": "Dark Cloud Browser",
+      "structural_core_sha256": "bb948ffc51266fe4e09947b96dff37847bc099a2d4e791d4b3fc44485f98dae4",
+      "frame_sha256": "5b408a3a50391b51a4157e739b485d87f19ae8f0a3f2777d0a38522e42c1671a"
+    },
+    {
+      "edge_id": "dark_cloud_to_login_settings",
+      "side": "after",
+      "trigger": "dark_cloud_browser.login",
+      "semantic_surface": "dark_cloud_login_settings",
+      "tagged_screen": "dark_cloud_login_settings",
+      "layout_generation": 25,
+      "element_count": 77,
+      "screen_title": "Dark Cloud Browser",
+      "structural_core_sha256": "bb948ffc51266fe4e09947b96dff37847bc099a2d4e791d4b3fc44485f98dae4",
+      "frame_sha256": "5b408a3a50391b51a4157e739b485d87f19ae8f0a3f2777d0a38522e42c1671a"
+    }
+  ],
+  "authorization": "exactly one field on exactly dark-cloud-login-settings: layout.screen_title empty to Dark Cloud Browser",
+  "forbidden": [
+    "title tolerance",
+    "another layout",
+    "another field",
+    "another settled title value",
+    "candidate rewriting"
+  ],
+  "derivation": {
+    "tool": "tools/derive_native_menu_dark_cloud_login_title_v220.py",
+    "tool_sha256": "e490aeed79933d129af3cbbae1348ac03bcd7ca329673f70e7e05884f750ad89",
+    "method": "machine-derived from the committed landed fixture, byte-identical baseline snapshot, qualified candidate, two settled traces, and both measured navigation bindings"
+  }
+}

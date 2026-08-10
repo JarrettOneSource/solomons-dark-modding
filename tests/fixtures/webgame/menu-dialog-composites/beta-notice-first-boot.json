@@ -1,0 +1,2735 @@
+{
+  "schema": "solomon-dark-native-menu-semantic-dialog-composite-v1",
+  "settlement_spec": "2.17",
+  "composite_id": "beta_notice_first_boot",
+  "header": {
+    "campaign": "menufix",
+    "gap": "G11",
+    "recorded_live": true,
+    "source": {
+      "base_commit_sha": "4ae5370977019c1c20813fa17d5141f32cd50968",
+      "source_tree_sha": "1c009e2eb79c9dfdc6d22a71bfb2c14b8969ac34",
+      "capture_tree": "exact committed tree at base_commit_sha",
+      "game_executable_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+      "loader_dll_sha256": "f9c3357ddce217c4f6b0c13ad2511ec4cfcbf909974c335c865f21dfae53d289",
+      "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+      "capture_driver_preset": "idle"
+    },
+    "profile_state": {
+      "schema": "solomon-dark-native-menu-profile-state-v1",
+      "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+      "baseline_id": "pristine_fresh_install",
+      "baseline_mode": "fresh_install",
+      "source_sandbox_excluded": true,
+      "retail_appdata_seeded": false,
+      "durable_file_count": 0,
+      "baseline_fixture": {
+        "repo_relative_path": "tests/fixtures/webgame/native-menu-profile-state-baseline.json",
+        "sha256": "02ac22b1de367e9e94477f61c8e1144e6a5b16bd67bd418e69e9a2ec620914ff",
+        "bytes": 2155
+      },
+      "binding_contract": {
+        "repo_relative_path": "tests/fixtures/webgame/native-menu-hub-bindings-v213.json",
+        "sha256": "07c2ed2e53e997c8fb79c3d472b58d52c72c768286cad352ec1aeedaa907ef00",
+        "bytes": 21518
+      },
+      "launch_receipt": {
+        "evidence_filename": "beta-notice-overlay.menufx-v9p90.18648.profile-state.json",
+        "sha256": "b394a50d05a8a71bf7a6c9f8122a13f405a3248bba7c49378aae7b5177f24c1f",
+        "bytes": 693
+      }
+    },
+    "captured_at_utc": "2026-08-09T19:15:59.0050519Z",
+    "question_audit": {
+      "evidence_path": "raw-v9/beta-notice-path-core-question/beta-notice-path-state-question-audit.json",
+      "sha256": "7253b6e0d853182aa7ea73500e4753eec5892a2a7ad449bfbdc23c4792073857",
+      "bytes": 75641
+    },
+    "question_manifest": {
+      "evidence_path": "raw-v9/beta-notice-path-core-question/beta-notice-path-state-question-manifest.json",
+      "sha256": "8c0d5646e24230f1e2ebf5d4f236048de74adf0388ed233a1cd03551f22e26ae",
+      "bytes": 4195
+    },
+    "reference_capture": {
+      "fixture": "menu-reference-captures/beta-notice-first-boot.png",
+      "sha256": "f849db2c28048e3b58a927082d4f3ef9fbf62eb4a629cf573399a620d2638fdb",
+      "bytes": 482019
+    }
+  },
+  "composite": {
+    "classification": {
+      "classification": "semantic_dialog_composite",
+      "composite_id": "beta_notice_first_boot",
+      "operator_tag": "beta_notice",
+      "capture_surface": "dialog",
+      "underlay_surface_id": "control_scheme_picker",
+      "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+      "independent_instance_count": 2,
+      "composite_member_count": 33,
+      "underlay_member_count": 5,
+      "dialog_member_count": 28,
+      "dialog_art_member_count": 15,
+      "dialog_text_member_count": 13,
+      "full_semantic_multiset_sha256": "cbb936c2336ea634c84b50d19bdf3e4ac51e788d1425c64eb82cdd03e8840cd2",
+      "underlay_semantic_multiset_sha256": "ce24242914af0c497747f55343934cdf7290844060a9aeb0aaf7c5456de8d2bf",
+      "dialog_semantic_multiset_sha256": "740448cb0e560917b3a9318972d3a01837d596ab2fefa635a5195fd1b2fd0aa4",
+      "player_visible_dialog_frame_sha256": "cb5c1cb2e247fee16dac2f22f20e836d27274baf9d59686136fbd54cb28475b0",
+      "post_dismissal_underlay_frame_sha256": "8a559e50e65ae987b96d1a5c1e2091cdc47f39c95b86973e5d8ac724cf6da12e"
+    },
+    "underlay_binding": {
+      "layout_id": "control-scheme-picker",
+      "screen_id": "control_scheme_picker",
+      "fixture": {
+        "fixture": "menu-layouts/control-scheme-picker.json",
+        "sha256": "b128864939e255ff63b3ca95cfc825a4de2c72578c2846b5aac223d8a8fe767d",
+        "bytes": 11577
+      },
+      "member_count": 5,
+      "semantic_multiset_sha256": "ce24242914af0c497747f55343934cdf7290844060a9aeb0aaf7c5456de8d2bf"
+    },
+    "derived_overlay_reference": {
+      "fixture": {
+        "fixture": "menu-overlay-reference.json",
+        "sha256": "b2230ab26e31de9300a556288b44e7cbaa21bb4e44084cb3838109fbb1d57db4",
+        "bytes": 8155
+      },
+      "semantic_draw_count": 15,
+      "corroboration": {
+        "derivation": "beta_notice structural art core minus embedded main_menu_root structural art core",
+        "ordinal_identity": "positional_bookkeeping_excluded",
+        "beta_notice_core_sha256": "43d196a3fcb90fdeb302c0354108405d23b45a25cadecfecce4327bd1f3ab67e",
+        "main_menu_root_core_sha256": "e7be7910e18045266a0dbad95fcbf8459f95bd62ceb187bcf6e378b88de4fa14",
+        "create_corroboration_sha256": "1ea41ccb4447c20981d400a8754b752aeb5f06d0dfb313a0cff248471f03ec8c",
+        "pause_corroboration_sha256": "1ea41ccb4447c20981d400a8754b752aeb5f06d0dfb313a0cff248471f03ec8c"
+      }
+    },
+    "qualified_beta_screen": {
+      "fixture": {
+        "fixture": "menu-layouts/beta-notice.json",
+        "sha256": "0fd6739d87a2fed5819951a48aacc0ba60e1354518b5c9339264d3b8b25115ba",
+        "bytes": 219886
+      },
+      "route": "pause_menu.leave_game -> beta_notice",
+      "source_audit": {
+        "evidence_path": "raw-v9/beta-notice-path-core-question/beta-notice-path-state-question-audit.json",
+        "sha256": "7253b6e0d853182aa7ea73500e4753eec5892a2a7ad449bfbdc23c4792073857",
+        "bytes": 75641
+      }
+    },
+    "dialog_semantic_multiset": {
+      "member_count": 28,
+      "art_member_count": 15,
+      "text_member_count": 13,
+      "semantic_multiset_sha256": "740448cb0e560917b3a9318972d3a01837d596ab2fefa635a5195fd1b2fd0aa4",
+      "entries": [
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "",
+            "font_id": "Fonts.216-307",
+            "interactive": false,
+            "kind": "text",
+            "rect": [
+              605.0,
+              188.0,
+              893.0,
+              208.0
+            ],
+            "text": "BETA VERSION V.0.72",
+            "text_style": "native_atlas_text:Fonts.216-307",
+            "unclipped_rect": [
+              605.0,
+              188.0,
+              893.0,
+              208.0
+            ],
+            "visible": true
+          }
+        },
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "",
+            "font_id": "Fonts.216-307",
+            "interactive": false,
+            "kind": "text",
+            "rect": [
+              782.0,
+              669.0,
+              823.0,
+              687.0
+            ],
+            "text": "OK",
+            "text_style": "native_atlas_text:Fonts.216-307",
+            "unclipped_rect": [
+              782.0,
+              669.0,
+              823.0,
+              687.0
+            ],
+            "visible": true
+          }
+        },
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "",
+            "font_id": "Fonts.93-184",
+            "interactive": false,
+            "kind": "text",
+            "rect": [
+              604.0,
+              228.0,
+              969.0,
+              259.0
+            ],
+            "text": "This is an incomplete version of Solomon\nDark",
+            "text_style": "native_atlas_text:Fonts.93-184",
+            "unclipped_rect": [
+              604.0,
+              228.0,
+              969.0,
+              259.0
+            ],
+            "visible": true
+          }
+        },
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "",
+            "font_id": "Fonts.93-184",
+            "interactive": false,
+            "kind": "text",
+            "rect": [
+              604.0,
+              283.0,
+              704.0,
+              296.0
+            ],
+            "text": "It contains:",
+            "text_style": "native_atlas_text:Fonts.93-184",
+            "unclipped_rect": [
+              604.0,
+              283.0,
+              704.0,
+              296.0
+            ],
+            "visible": true
+          }
+        },
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "",
+            "font_id": "Fonts.93-184",
+            "interactive": false,
+            "kind": "text",
+            "rect": [
+              604.0,
+              439.0,
+              996.0,
+              504.0
+            ],
+            "text": "Sadly, this game has been derailed and will\nnot be becompleted.  Although it has\npassed preliminary testing, you will likely\nfind a glitch or two!",
+            "text_style": "native_atlas_text:Fonts.93-184",
+            "unclipped_rect": [
+              604.0,
+              439.0,
+              996.0,
+              504.0
+            ],
+            "visible": true
+          }
+        },
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "",
+            "font_id": "Fonts.93-184",
+            "interactive": false,
+            "kind": "text",
+            "rect": [
+              604.0,
+              527.0,
+              992.0,
+              609.0
+            ],
+            "text": "When closed, game will open a link to\nwww.raptisoft.com news.  Please read the\nnews there and vote on any greenlights\nor take advantage of any special offers\nthat I have up!  I'd appreciate it!",
+            "text_style": "native_atlas_text:Fonts.93-184",
+            "unclipped_rect": [
+              604.0,
+              527.0,
+              992.0,
+              609.0
+            ],
+            "visible": true
+          }
+        },
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "",
+            "font_id": "Fonts.93-184",
+            "interactive": false,
+            "kind": "text",
+            "rect": [
+              605.0,
+              299.0,
+              768.0,
+              314.0
+            ],
+            "text": "ONE story level",
+            "text_style": "native_atlas_text:Fonts.93-184",
+            "unclipped_rect": [
+              605.0,
+              299.0,
+              768.0,
+              314.0
+            ],
+            "visible": true
+          }
+        },
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "",
+            "font_id": "Fonts.93-184",
+            "interactive": false,
+            "kind": "text",
+            "rect": [
+              605.0,
+              316.0,
+              840.0,
+              331.0
+            ],
+            "text": "UNLIMITED survival play",
+            "text_style": "native_atlas_text:Fonts.93-184",
+            "unclipped_rect": [
+              605.0,
+              316.0,
+              840.0,
+              331.0
+            ],
+            "visible": true
+          }
+        },
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "",
+            "font_id": "Fonts.93-184",
+            "interactive": false,
+            "kind": "text",
+            "rect": [
+              605.0,
+              333.0,
+              739.0,
+              348.0
+            ],
+            "text": "LIMITED items",
+            "text_style": "native_atlas_text:Fonts.93-184",
+            "unclipped_rect": [
+              605.0,
+              333.0,
+              739.0,
+              348.0
+            ],
+            "visible": true
+          }
+        },
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "",
+            "font_id": "Fonts.93-184",
+            "interactive": false,
+            "kind": "text",
+            "rect": [
+              605.0,
+              350.0,
+              799.0,
+              365.0
+            ],
+            "text": "LIMITED Dark Cloud",
+            "text_style": "native_atlas_text:Fonts.93-184",
+            "unclipped_rect": [
+              605.0,
+              350.0,
+              799.0,
+              365.0
+            ],
+            "visible": true
+          }
+        },
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "",
+            "font_id": "Fonts.93-184",
+            "interactive": false,
+            "kind": "text",
+            "rect": [
+              605.0,
+              367.0,
+              813.0,
+              382.0
+            ],
+            "text": "UNREFINED Dialogue",
+            "text_style": "native_atlas_text:Fonts.93-184",
+            "unclipped_rect": [
+              605.0,
+              367.0,
+              813.0,
+              382.0
+            ],
+            "visible": true
+          }
+        },
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "",
+            "font_id": "Fonts.93-184",
+            "interactive": false,
+            "kind": "text",
+            "rect": [
+              605.0,
+              384.0,
+              864.0,
+              399.0
+            ],
+            "text": "PLACEHOLDER voice work",
+            "text_style": "native_atlas_text:Fonts.93-184",
+            "unclipped_rect": [
+              605.0,
+              384.0,
+              864.0,
+              399.0
+            ],
+            "visible": true
+          }
+        },
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "",
+            "font_id": "Fonts.93-184",
+            "interactive": false,
+            "kind": "text",
+            "rect": [
+              605.0,
+              401.0,
+              888.0,
+              416.0
+            ],
+            "text": "UNFINISHED memorial screen",
+            "text_style": "native_atlas_text:Fonts.93-184",
+            "unclipped_rect": [
+              605.0,
+              401.0,
+              888.0,
+              416.0
+            ],
+            "visible": true
+          }
+        },
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "UI.101",
+            "font_id": "",
+            "interactive": false,
+            "kind": "art",
+            "rect": [
+              702.0,
+              643.5,
+              898.0,
+              712.0
+            ],
+            "text": "",
+            "text_style": "position",
+            "unclipped_rect": [
+              623.5,
+              643.5,
+              976.5,
+              712.5
+            ],
+            "visible": true
+          }
+        },
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "UI.107",
+            "font_id": "",
+            "interactive": false,
+            "kind": "art",
+            "rect": [
+              516.5,
+              99.5,
+              601.5,
+              188.5
+            ],
+            "text": "",
+            "text_style": "position",
+            "unclipped_rect": [
+              516.5,
+              99.5,
+              601.5,
+              188.5
+            ],
+            "visible": true
+          }
+        },
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "UI.108",
+            "font_id": "",
+            "interactive": false,
+            "kind": "art",
+            "rect": [
+              998.5,
+              99.5,
+              1083.5,
+              188.5
+            ],
+            "text": "",
+            "text_style": "position",
+            "unclipped_rect": [
+              998.5,
+              99.5,
+              1083.5,
+              188.5
+            ],
+            "visible": true
+          }
+        },
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "UI.109",
+            "font_id": "",
+            "interactive": false,
+            "kind": "art",
+            "rect": [
+              516.5,
+              711.5,
+              601.5,
+              800.5
+            ],
+            "text": "",
+            "text_style": "position",
+            "unclipped_rect": [
+              516.5,
+              711.5,
+              601.5,
+              800.5
+            ],
+            "visible": true
+          }
+        },
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "UI.110",
+            "font_id": "",
+            "interactive": false,
+            "kind": "art",
+            "rect": [
+              998.5,
+              711.5,
+              1083.5,
+              800.5
+            ],
+            "text": "",
+            "text_style": "position",
+            "unclipped_rect": [
+              998.5,
+              711.5,
+              1083.5,
+              800.5
+            ],
+            "visible": true
+          }
+        },
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "interactive": false,
+            "kind": "art",
+            "rect": [
+              535.0,
+              117.0,
+              615.0,
+              200.0
+            ],
+            "text": "",
+            "text_style": "position",
+            "unclipped_rect": [
+              535.0,
+              117.0,
+              615.0,
+              200.0
+            ],
+            "visible": true
+          }
+        },
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "interactive": false,
+            "kind": "art",
+            "rect": [
+              535.0,
+              700.0,
+              615.0,
+              783.0
+            ],
+            "text": "",
+            "text_style": "transform",
+            "unclipped_rect": [
+              535.0,
+              700.0,
+              615.0,
+              783.0
+            ],
+            "visible": true
+          }
+        },
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "interactive": false,
+            "kind": "art",
+            "rect": [
+              985.0,
+              117.0,
+              1065.0,
+              200.0
+            ],
+            "text": "",
+            "text_style": "transform",
+            "unclipped_rect": [
+              985.0,
+              117.0,
+              1065.0,
+              200.0
+            ],
+            "visible": true
+          }
+        },
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "UI.17",
+            "font_id": "",
+            "interactive": false,
+            "kind": "art",
+            "rect": [
+              985.0,
+              700.0,
+              1065.0,
+              783.0
+            ],
+            "text": "",
+            "text_style": "transform",
+            "unclipped_rect": [
+              985.0,
+              700.0,
+              1065.0,
+              783.0
+            ],
+            "visible": true
+          }
+        },
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "UI.18",
+            "font_id": "",
+            "interactive": false,
+            "kind": "art",
+            "rect": [
+              669.0,
+              50.999992,
+              931.0,
+              118.000015
+            ],
+            "text": "",
+            "text_style": "transform",
+            "unclipped_rect": [
+              669.0,
+              50.999992,
+              931.0,
+              118.000015
+            ],
+            "visible": true
+          }
+        },
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "UI.54",
+            "font_id": "",
+            "interactive": false,
+            "kind": "art",
+            "rect": [
+              696.0,
+              637.5,
+              766.0,
+              722.5
+            ],
+            "text": "",
+            "text_style": "position",
+            "unclipped_rect": [
+              696.0,
+              637.5,
+              766.0,
+              722.5
+            ],
+            "visible": true
+          }
+        },
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "UI.54",
+            "font_id": "",
+            "interactive": false,
+            "kind": "art",
+            "rect": [
+              834.0,
+              637.5,
+              904.0,
+              722.5
+            ],
+            "text": "",
+            "text_style": "transform",
+            "unclipped_rect": [
+              834.0,
+              637.5,
+              904.0,
+              722.5
+            ],
+            "visible": true
+          }
+        },
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "UI.8",
+            "font_id": "",
+            "interactive": false,
+            "kind": "art",
+            "rect": [
+              706.625,
+              783.0,
+              743.375,
+              867.0
+            ],
+            "text": "",
+            "text_style": "transform",
+            "unclipped_rect": [
+              706.625,
+              783.0,
+              743.375,
+              867.0
+            ],
+            "visible": true
+          }
+        },
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "UI.8",
+            "font_id": "",
+            "interactive": false,
+            "kind": "art",
+            "rect": [
+              775.5,
+              782.0,
+              824.5,
+              894.0
+            ],
+            "text": "",
+            "text_style": "position",
+            "unclipped_rect": [
+              775.5,
+              782.0,
+              824.5,
+              894.0
+            ],
+            "visible": true
+          }
+        },
+        {
+          "count": 1,
+          "payload": {
+            "action_id": "",
+            "art_id": "UI.8",
+            "font_id": "",
+            "interactive": false,
+            "kind": "art",
+            "rect": [
+              856.625,
+              783.0,
+              893.375,
+              867.0
+            ],
+            "text": "",
+            "text_style": "transform",
+            "unclipped_rect": [
+              856.625,
+              783.0,
+              893.375,
+              867.0
+            ],
+            "visible": true
+          }
+        }
+      ]
+    },
+    "decomposition": {
+      "equation": "composite = qualified underlay + dialog multiset",
+      "composite_member_count": 33,
+      "underlay_member_count": 5,
+      "dialog_member_count": 28,
+      "residual_member_count": 0,
+      "full_semantic_multiset_sha256": "cbb936c2336ea634c84b50d19bdf3e4ac51e788d1425c64eb82cdd03e8840cd2"
+    },
+    "observations": [
+      {
+        "role": "primary",
+        "instance": "menufx-v9p90",
+        "process_id": 18648,
+        "source": {
+          "base_commit_sha": "4ae5370977019c1c20813fa17d5141f32cd50968",
+          "source_tree_sha": "1c009e2eb79c9dfdc6d22a71bfb2c14b8969ac34",
+          "capture_tree": "exact committed tree at base_commit_sha",
+          "game_executable_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+          "loader_dll_sha256": "f9c3357ddce217c4f6b0c13ad2511ec4cfcbf909974c335c865f21dfae53d289",
+          "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+          "capture_driver_preset": "idle"
+        },
+        "profile_state": {
+          "schema": "solomon-dark-native-menu-profile-state-v1",
+          "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+          "baseline_id": "pristine_fresh_install",
+          "baseline_mode": "fresh_install",
+          "source_sandbox_excluded": true,
+          "retail_appdata_seeded": false,
+          "durable_file_count": 0,
+          "baseline_fixture": {
+            "repo_relative_path": "tests/fixtures/webgame/native-menu-profile-state-baseline.json",
+            "sha256": "02ac22b1de367e9e94477f61c8e1144e6a5b16bd67bd418e69e9a2ec620914ff",
+            "bytes": 2155
+          },
+          "binding_contract": {
+            "repo_relative_path": "tests/fixtures/webgame/native-menu-hub-bindings-v213.json",
+            "sha256": "07c2ed2e53e997c8fb79c3d472b58d52c72c768286cad352ec1aeedaa907ef00",
+            "bytes": 21518
+          },
+          "launch_receipt": {
+            "evidence_filename": "beta-notice-overlay.menufx-v9p90.18648.profile-state.json",
+            "sha256": "b394a50d05a8a71bf7a6c9f8122a13f405a3248bba7c49378aae7b5177f24c1f",
+            "bytes": 693
+          }
+        },
+        "captured_at_utc": "2026-08-09T19:15:59.0050519Z",
+        "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+        "operator_tag": "beta_notice",
+        "capture_surface": "dialog",
+        "machine_classified_surface": "control_scheme_picker",
+        "gate_result": "STOP: native-menu capture surface agreement rejected: operator tag 'beta_notice' does not equal machine-classified surface 'control_scheme_picker' through capture surface 'dialog'.",
+        "settled_sample_count": 40,
+        "stable_span_milliseconds": 15341,
+        "settle_latency_milliseconds": 16844,
+        "semantic_generation": 2,
+        "layout_generation": 2,
+        "settled_payload": {
+          "generation": 2,
+          "screen_id": "control_scheme_picker",
+          "screen_title": "Control Scheme Picker",
+          "capture_method": "live native UI tree + exact text/font hooks + native Sprite draw hooks",
+          "elements": [
+            {
+              "id": "control_scheme_picker.art.controls_1.1",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "Controls.1",
+              "font_id": "",
+              "text_style": "position",
+              "visible": false,
+              "interactive": false,
+              "draw_order": 3,
+              "rect": [
+                0.0,
+                0.0,
+                -9826.0,
+                -9850.5
+              ],
+              "unclipped_rect": [
+                -10171.0,
+                -10146.5,
+                -9826.0,
+                -9850.5
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_18.1",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.18",
+              "font_id": "",
+              "text_style": "transform",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 12,
+              "rect": [
+                669.0,
+                50.999992,
+                931.0,
+                118.000015
+              ],
+              "unclipped_rect": [
+                669.0,
+                50.999992,
+                931.0,
+                118.000015
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_107.1",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.107",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 4,
+              "rect": [
+                516.5,
+                99.5,
+                601.5,
+                188.5
+              ],
+              "unclipped_rect": [
+                516.5,
+                99.5,
+                601.5,
+                188.5
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_108.1",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.108",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 5,
+              "rect": [
+                998.5,
+                99.5,
+                1083.5,
+                188.5
+              ],
+              "unclipped_rect": [
+                998.5,
+                99.5,
+                1083.5,
+                188.5
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_17.1",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.17",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 8,
+              "rect": [
+                535.0,
+                117.0,
+                615.0,
+                200.0
+              ],
+              "unclipped_rect": [
+                535.0,
+                117.0,
+                615.0,
+                200.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_17.2",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.17",
+              "font_id": "",
+              "text_style": "transform",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 9,
+              "rect": [
+                985.0,
+                117.0,
+                1065.0,
+                200.0
+              ],
+              "unclipped_rect": [
+                985.0,
+                117.0,
+                1065.0,
+                200.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.controls_0.1",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "Controls.0",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 1,
+              "rect": [
+                477.5,
+                290.0,
+                722.5,
+                610.0
+              ],
+              "unclipped_rect": [
+                477.5,
+                290.0,
+                722.5,
+                610.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.controls_2.1",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "Controls.2",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 2,
+              "rect": [
+                850.5,
+                324.0,
+                1149.5,
+                576.0
+              ],
+              "unclipped_rect": [
+                850.5,
+                324.0,
+                1149.5,
+                576.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_54.1",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.54",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 17,
+              "rect": [
+                696.0,
+                637.5,
+                766.0,
+                722.5
+              ],
+              "unclipped_rect": [
+                696.0,
+                637.5,
+                766.0,
+                722.5
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_54.2",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.54",
+              "font_id": "",
+              "text_style": "transform",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 18,
+              "rect": [
+                834.0,
+                637.5,
+                904.0,
+                722.5
+              ],
+              "unclipped_rect": [
+                834.0,
+                637.5,
+                904.0,
+                722.5
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_101.1",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.101",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 16,
+              "rect": [
+                702.0,
+                643.5,
+                898.0,
+                712.0
+              ],
+              "unclipped_rect": [
+                623.5,
+                643.5,
+                976.5,
+                712.5
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_17.3",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.17",
+              "font_id": "",
+              "text_style": "transform",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 10,
+              "rect": [
+                535.0,
+                700.0,
+                615.0,
+                783.0
+              ],
+              "unclipped_rect": [
+                535.0,
+                700.0,
+                615.0,
+                783.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_17.4",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.17",
+              "font_id": "",
+              "text_style": "transform",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 11,
+              "rect": [
+                985.0,
+                700.0,
+                1065.0,
+                783.0
+              ],
+              "unclipped_rect": [
+                985.0,
+                700.0,
+                1065.0,
+                783.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_109.1",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.109",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 6,
+              "rect": [
+                516.5,
+                711.5,
+                601.5,
+                800.5
+              ],
+              "unclipped_rect": [
+                516.5,
+                711.5,
+                601.5,
+                800.5
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_110.1",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.110",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 7,
+              "rect": [
+                998.5,
+                711.5,
+                1083.5,
+                800.5
+              ],
+              "unclipped_rect": [
+                998.5,
+                711.5,
+                1083.5,
+                800.5
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_8.1",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.8",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 13,
+              "rect": [
+                775.5,
+                782.0,
+                824.5,
+                894.0
+              ],
+              "unclipped_rect": [
+                775.5,
+                782.0,
+                824.5,
+                894.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_8.2",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.8",
+              "font_id": "",
+              "text_style": "transform",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 14,
+              "rect": [
+                706.625,
+                783.0,
+                743.375,
+                867.0
+              ],
+              "unclipped_rect": [
+                706.625,
+                783.0,
+                743.375,
+                867.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_8.3",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.8",
+              "font_id": "",
+              "text_style": "transform",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 15,
+              "rect": [
+                856.625,
+                783.0,
+                893.375,
+                867.0
+              ],
+              "unclipped_rect": [
+                856.625,
+                783.0,
+                893.375,
+                867.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.control.control_scheme_picker_select_wasd.1",
+              "kind": "control",
+              "text": "WASD + MOUSE",
+              "action_id": "control_scheme_picker.select_wasd",
+              "art_id": "",
+              "font_id": "",
+              "text_style": "",
+              "visible": true,
+              "interactive": true,
+              "draw_order": 0,
+              "rect": [
+                850.5,
+                324.0,
+                1149.5,
+                576.0
+              ],
+              "unclipped_rect": [
+                850.5,
+                324.0,
+                1149.5,
+                576.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.select_a_control_scheme.1",
+              "kind": "text",
+              "text": "SELECT A CONTROL SCHEME",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.308-349",
+              "text_style": "native_atlas_text:Fonts.308-349",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                751.0,
+                21.0,
+                1127.0,
+                52.0
+              ],
+              "unclipped_rect": [
+                751.0,
+                21.0,
+                1127.0,
+                52.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.beta_version_v_0_72.1",
+              "kind": "text",
+              "text": "BETA VERSION V.0.72",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.216-307",
+              "text_style": "native_atlas_text:Fonts.216-307",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                605.0,
+                188.0,
+                893.0,
+                208.0
+              ],
+              "unclipped_rect": [
+                605.0,
+                188.0,
+                893.0,
+                208.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.this_is_an_incomplete_version_of_solomon_dark.1",
+              "kind": "text",
+              "text": "This is an incomplete version of Solomon\nDark",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.93-184",
+              "text_style": "native_atlas_text:Fonts.93-184",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                604.0,
+                228.0,
+                969.0,
+                259.0
+              ],
+              "unclipped_rect": [
+                604.0,
+                228.0,
+                969.0,
+                259.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.it_contains.1",
+              "kind": "text",
+              "text": "It contains:",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.93-184",
+              "text_style": "native_atlas_text:Fonts.93-184",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                604.0,
+                283.0,
+                704.0,
+                296.0
+              ],
+              "unclipped_rect": [
+                604.0,
+                283.0,
+                704.0,
+                296.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.one_story_level.1",
+              "kind": "text",
+              "text": "ONE story level",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.93-184",
+              "text_style": "native_atlas_text:Fonts.93-184",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                605.0,
+                299.0,
+                768.0,
+                314.0
+              ],
+              "unclipped_rect": [
+                605.0,
+                299.0,
+                768.0,
+                314.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.unlimited_survival_play.1",
+              "kind": "text",
+              "text": "UNLIMITED survival play",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.93-184",
+              "text_style": "native_atlas_text:Fonts.93-184",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                605.0,
+                316.0,
+                840.0,
+                331.0
+              ],
+              "unclipped_rect": [
+                605.0,
+                316.0,
+                840.0,
+                331.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.limited_items.1",
+              "kind": "text",
+              "text": "LIMITED items",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.93-184",
+              "text_style": "native_atlas_text:Fonts.93-184",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                605.0,
+                333.0,
+                739.0,
+                348.0
+              ],
+              "unclipped_rect": [
+                605.0,
+                333.0,
+                739.0,
+                348.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.limited_dark_cloud.1",
+              "kind": "text",
+              "text": "LIMITED Dark Cloud",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.93-184",
+              "text_style": "native_atlas_text:Fonts.93-184",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                605.0,
+                350.0,
+                799.0,
+                365.0
+              ],
+              "unclipped_rect": [
+                605.0,
+                350.0,
+                799.0,
+                365.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.unrefined_dialogue.1",
+              "kind": "text",
+              "text": "UNREFINED Dialogue",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.93-184",
+              "text_style": "native_atlas_text:Fonts.93-184",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                605.0,
+                367.0,
+                813.0,
+                382.0
+              ],
+              "unclipped_rect": [
+                605.0,
+                367.0,
+                813.0,
+                382.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.placeholder_voice_work.1",
+              "kind": "text",
+              "text": "PLACEHOLDER voice work",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.93-184",
+              "text_style": "native_atlas_text:Fonts.93-184",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                605.0,
+                384.0,
+                864.0,
+                399.0
+              ],
+              "unclipped_rect": [
+                605.0,
+                384.0,
+                864.0,
+                399.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.unfinished_memorial_screen.1",
+              "kind": "text",
+              "text": "UNFINISHED memorial screen",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.93-184",
+              "text_style": "native_atlas_text:Fonts.93-184",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                605.0,
+                401.0,
+                888.0,
+                416.0
+              ],
+              "unclipped_rect": [
+                605.0,
+                401.0,
+                888.0,
+                416.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.sadly_this_game_has_been_derailed_and_will_not_be_becompleted_although_it_has_passed_preliminary_testing_you_will_likely_find_a_glitch_or_two.1",
+              "kind": "text",
+              "text": "Sadly, this game has been derailed and will\nnot be becompleted.  Although it has\npassed preliminary testing, you will likely\nfind a glitch or two!",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.93-184",
+              "text_style": "native_atlas_text:Fonts.93-184",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                604.0,
+                439.0,
+                996.0,
+                504.0
+              ],
+              "unclipped_rect": [
+                604.0,
+                439.0,
+                996.0,
+                504.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.when_closed_game_will_open_a_link_to_www_raptisoft_com_news_please_read_the_news_there_and_vote_on_any_greenlights_or_take_advantage_of_any_special_offers_that_i_have_up_i_d_appreciate_it.1",
+              "kind": "text",
+              "text": "When closed, game will open a link to\nwww.raptisoft.com news.  Please read the\nnews there and vote on any greenlights\nor take advantage of any special offers\nthat I have up!  I'd appreciate it!",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.93-184",
+              "text_style": "native_atlas_text:Fonts.93-184",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                604.0,
+                527.0,
+                992.0,
+                609.0
+              ],
+              "unclipped_rect": [
+                604.0,
+                527.0,
+                992.0,
+                609.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.ok.1",
+              "kind": "text",
+              "text": "OK",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.216-307",
+              "text_style": "native_atlas_text:Fonts.216-307",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                782.0,
+                669.0,
+                823.0,
+                687.0
+              ],
+              "unclipped_rect": [
+                782.0,
+                669.0,
+                823.0,
+                687.0
+              ]
+            }
+          ]
+        },
+        "semantic_multiset_sha256": "cbb936c2336ea634c84b50d19bdf3e4ac51e788d1425c64eb82cdd03e8840cd2",
+        "recording": {
+          "evidence_path": "raw-v9/beta-notice-path-core-question/diagnostic2-primary/beta-notice-overlay.settlement.json",
+          "sha256": "575f23eb83b1fd176c4ddd9699bf1a7999c00b8d9a7710efdda4bafd6ff1d06d",
+          "bytes": 3363852
+        },
+        "observation": {
+          "evidence_path": "raw-v9/beta-notice-path-core-question/diagnostic2-primary/beta-notice-overlay-observation.json",
+          "sha256": "e4212f55cabda35230eebb14620cb687155248383cd5bd73548fda30498a75cd",
+          "bytes": 6293
+        },
+        "dismissal_receipt": {
+          "evidence_path": "raw-v9/beta-notice-path-core-question/diagnostic2-primary/initial-beta-dismissal/receipt.json",
+          "sha256": "2d7d9cae703e5339a051bbaff9a6263b0a48943851ac5fcb3f577e12cb948e08",
+          "bytes": 4010
+        },
+        "player_visible_dialog_frame": {
+          "evidence_path": "raw-v9/beta-notice-path-core-question/diagnostic2-primary/beta-notice-overlay.bmp",
+          "sha256": "cb5c1cb2e247fee16dac2f22f20e836d27274baf9d59686136fbd54cb28475b0",
+          "bytes": 4320054
+        },
+        "post_dismissal_underlay_frame": {
+          "evidence_path": "raw-v9/beta-notice-path-core-question/diagnostic2-primary/initial-beta-dismissal/dismiss-initial-beta.bmp",
+          "sha256": "8a559e50e65ae987b96d1a5c1e2091cdc47f39c95b86973e5d8ac724cf6da12e",
+          "bytes": 4320054
+        },
+        "pixel_delta": {
+          "frame_size": [
+            1600,
+            900
+          ],
+          "bounding_box": [
+            472,
+            22,
+            1144,
+            893
+          ],
+          "differing_pixel_count": 405383
+        },
+        "measured_click": {
+          "result": "clicked_measured_top_plate",
+          "element_id": "control_scheme_picker.art.ui_101.1",
+          "rect": [
+            702.0,
+            643.5,
+            898.0,
+            712.0
+          ],
+          "client_point": [
+            800,
+            677.75
+          ],
+          "frame_sha256": "8a559e50e65ae987b96d1a5c1e2091cdc47f39c95b86973e5d8ac724cf6da12e",
+          "settle_latency_milliseconds": 15829
+        }
+      },
+      {
+        "role": "confirmation",
+        "instance": "menufx-v9p91",
+        "process_id": 20312,
+        "source": {
+          "base_commit_sha": "4ae5370977019c1c20813fa17d5141f32cd50968",
+          "source_tree_sha": "1c009e2eb79c9dfdc6d22a71bfb2c14b8969ac34",
+          "capture_tree": "exact committed tree at base_commit_sha",
+          "game_executable_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+          "loader_dll_sha256": "f9c3357ddce217c4f6b0c13ad2511ec4cfcbf909974c335c865f21dfae53d289",
+          "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+          "capture_driver_preset": "idle"
+        },
+        "profile_state": {
+          "schema": "solomon-dark-native-menu-profile-state-v1",
+          "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+          "baseline_id": "pristine_fresh_install",
+          "baseline_mode": "fresh_install",
+          "source_sandbox_excluded": true,
+          "retail_appdata_seeded": false,
+          "durable_file_count": 0,
+          "baseline_fixture": {
+            "repo_relative_path": "tests/fixtures/webgame/native-menu-profile-state-baseline.json",
+            "sha256": "02ac22b1de367e9e94477f61c8e1144e6a5b16bd67bd418e69e9a2ec620914ff",
+            "bytes": 2155
+          },
+          "binding_contract": {
+            "repo_relative_path": "tests/fixtures/webgame/native-menu-hub-bindings-v213.json",
+            "sha256": "07c2ed2e53e997c8fb79c3d472b58d52c72c768286cad352ec1aeedaa907ef00",
+            "bytes": 21518
+          },
+          "launch_receipt": {
+            "evidence_filename": "beta-notice-overlay.menufx-v9p91.20312.profile-state.json",
+            "sha256": "6cf0c00dcf47506700bcb145da2543085232a2a120b69cf4bba13f5ea8e54f3c",
+            "bytes": 694
+          }
+        },
+        "captured_at_utc": "2026-08-09T19:16:50.0936402Z",
+        "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+        "operator_tag": "beta_notice",
+        "capture_surface": "dialog",
+        "machine_classified_surface": "control_scheme_picker",
+        "gate_result": "STOP: native-menu capture surface agreement rejected: operator tag 'beta_notice' does not equal machine-classified surface 'control_scheme_picker' through capture surface 'dialog'.",
+        "settled_sample_count": 40,
+        "stable_span_milliseconds": 15521,
+        "settle_latency_milliseconds": 17082,
+        "semantic_generation": 2,
+        "layout_generation": 2,
+        "settled_payload": {
+          "generation": 2,
+          "screen_id": "control_scheme_picker",
+          "screen_title": "Control Scheme Picker",
+          "capture_method": "live native UI tree + exact text/font hooks + native Sprite draw hooks",
+          "elements": [
+            {
+              "id": "control_scheme_picker.art.controls_1.1",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "Controls.1",
+              "font_id": "",
+              "text_style": "position",
+              "visible": false,
+              "interactive": false,
+              "draw_order": 3,
+              "rect": [
+                0.0,
+                0.0,
+                -9826.0,
+                -9850.5
+              ],
+              "unclipped_rect": [
+                -10171.0,
+                -10146.5,
+                -9826.0,
+                -9850.5
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_18.1",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.18",
+              "font_id": "",
+              "text_style": "transform",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 12,
+              "rect": [
+                669.0,
+                50.999992,
+                931.0,
+                118.000015
+              ],
+              "unclipped_rect": [
+                669.0,
+                50.999992,
+                931.0,
+                118.000015
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_107.1",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.107",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 4,
+              "rect": [
+                516.5,
+                99.5,
+                601.5,
+                188.5
+              ],
+              "unclipped_rect": [
+                516.5,
+                99.5,
+                601.5,
+                188.5
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_108.1",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.108",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 5,
+              "rect": [
+                998.5,
+                99.5,
+                1083.5,
+                188.5
+              ],
+              "unclipped_rect": [
+                998.5,
+                99.5,
+                1083.5,
+                188.5
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_17.1",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.17",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 8,
+              "rect": [
+                535.0,
+                117.0,
+                615.0,
+                200.0
+              ],
+              "unclipped_rect": [
+                535.0,
+                117.0,
+                615.0,
+                200.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_17.2",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.17",
+              "font_id": "",
+              "text_style": "transform",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 9,
+              "rect": [
+                985.0,
+                117.0,
+                1065.0,
+                200.0
+              ],
+              "unclipped_rect": [
+                985.0,
+                117.0,
+                1065.0,
+                200.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.controls_0.1",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "Controls.0",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 1,
+              "rect": [
+                477.5,
+                290.0,
+                722.5,
+                610.0
+              ],
+              "unclipped_rect": [
+                477.5,
+                290.0,
+                722.5,
+                610.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.controls_2.1",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "Controls.2",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 2,
+              "rect": [
+                850.5,
+                324.0,
+                1149.5,
+                576.0
+              ],
+              "unclipped_rect": [
+                850.5,
+                324.0,
+                1149.5,
+                576.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_54.1",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.54",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 17,
+              "rect": [
+                696.0,
+                637.5,
+                766.0,
+                722.5
+              ],
+              "unclipped_rect": [
+                696.0,
+                637.5,
+                766.0,
+                722.5
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_54.2",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.54",
+              "font_id": "",
+              "text_style": "transform",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 18,
+              "rect": [
+                834.0,
+                637.5,
+                904.0,
+                722.5
+              ],
+              "unclipped_rect": [
+                834.0,
+                637.5,
+                904.0,
+                722.5
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_101.1",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.101",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 16,
+              "rect": [
+                702.0,
+                643.5,
+                898.0,
+                712.0
+              ],
+              "unclipped_rect": [
+                623.5,
+                643.5,
+                976.5,
+                712.5
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_17.3",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.17",
+              "font_id": "",
+              "text_style": "transform",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 10,
+              "rect": [
+                535.0,
+                700.0,
+                615.0,
+                783.0
+              ],
+              "unclipped_rect": [
+                535.0,
+                700.0,
+                615.0,
+                783.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_17.4",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.17",
+              "font_id": "",
+              "text_style": "transform",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 11,
+              "rect": [
+                985.0,
+                700.0,
+                1065.0,
+                783.0
+              ],
+              "unclipped_rect": [
+                985.0,
+                700.0,
+                1065.0,
+                783.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_109.1",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.109",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 6,
+              "rect": [
+                516.5,
+                711.5,
+                601.5,
+                800.5
+              ],
+              "unclipped_rect": [
+                516.5,
+                711.5,
+                601.5,
+                800.5
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_110.1",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.110",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 7,
+              "rect": [
+                998.5,
+                711.5,
+                1083.5,
+                800.5
+              ],
+              "unclipped_rect": [
+                998.5,
+                711.5,
+                1083.5,
+                800.5
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_8.1",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.8",
+              "font_id": "",
+              "text_style": "position",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 13,
+              "rect": [
+                775.5,
+                782.0,
+                824.5,
+                894.0
+              ],
+              "unclipped_rect": [
+                775.5,
+                782.0,
+                824.5,
+                894.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_8.2",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.8",
+              "font_id": "",
+              "text_style": "transform",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 14,
+              "rect": [
+                706.625,
+                783.0,
+                743.375,
+                867.0
+              ],
+              "unclipped_rect": [
+                706.625,
+                783.0,
+                743.375,
+                867.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.art.ui_8.3",
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.8",
+              "font_id": "",
+              "text_style": "transform",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 15,
+              "rect": [
+                856.625,
+                783.0,
+                893.375,
+                867.0
+              ],
+              "unclipped_rect": [
+                856.625,
+                783.0,
+                893.375,
+                867.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.control.control_scheme_picker_select_wasd.1",
+              "kind": "control",
+              "text": "WASD + MOUSE",
+              "action_id": "control_scheme_picker.select_wasd",
+              "art_id": "",
+              "font_id": "",
+              "text_style": "",
+              "visible": true,
+              "interactive": true,
+              "draw_order": 0,
+              "rect": [
+                850.5,
+                324.0,
+                1149.5,
+                576.0
+              ],
+              "unclipped_rect": [
+                850.5,
+                324.0,
+                1149.5,
+                576.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.select_a_control_scheme.1",
+              "kind": "text",
+              "text": "SELECT A CONTROL SCHEME",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.308-349",
+              "text_style": "native_atlas_text:Fonts.308-349",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                751.0,
+                21.0,
+                1127.0,
+                52.0
+              ],
+              "unclipped_rect": [
+                751.0,
+                21.0,
+                1127.0,
+                52.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.beta_version_v_0_72.1",
+              "kind": "text",
+              "text": "BETA VERSION V.0.72",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.216-307",
+              "text_style": "native_atlas_text:Fonts.216-307",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                605.0,
+                188.0,
+                893.0,
+                208.0
+              ],
+              "unclipped_rect": [
+                605.0,
+                188.0,
+                893.0,
+                208.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.this_is_an_incomplete_version_of_solomon_dark.1",
+              "kind": "text",
+              "text": "This is an incomplete version of Solomon\nDark",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.93-184",
+              "text_style": "native_atlas_text:Fonts.93-184",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                604.0,
+                228.0,
+                969.0,
+                259.0
+              ],
+              "unclipped_rect": [
+                604.0,
+                228.0,
+                969.0,
+                259.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.it_contains.1",
+              "kind": "text",
+              "text": "It contains:",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.93-184",
+              "text_style": "native_atlas_text:Fonts.93-184",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                604.0,
+                283.0,
+                704.0,
+                296.0
+              ],
+              "unclipped_rect": [
+                604.0,
+                283.0,
+                704.0,
+                296.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.one_story_level.1",
+              "kind": "text",
+              "text": "ONE story level",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.93-184",
+              "text_style": "native_atlas_text:Fonts.93-184",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                605.0,
+                299.0,
+                768.0,
+                314.0
+              ],
+              "unclipped_rect": [
+                605.0,
+                299.0,
+                768.0,
+                314.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.unlimited_survival_play.1",
+              "kind": "text",
+              "text": "UNLIMITED survival play",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.93-184",
+              "text_style": "native_atlas_text:Fonts.93-184",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                605.0,
+                316.0,
+                840.0,
+                331.0
+              ],
+              "unclipped_rect": [
+                605.0,
+                316.0,
+                840.0,
+                331.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.limited_items.1",
+              "kind": "text",
+              "text": "LIMITED items",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.93-184",
+              "text_style": "native_atlas_text:Fonts.93-184",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                605.0,
+                333.0,
+                739.0,
+                348.0
+              ],
+              "unclipped_rect": [
+                605.0,
+                333.0,
+                739.0,
+                348.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.limited_dark_cloud.1",
+              "kind": "text",
+              "text": "LIMITED Dark Cloud",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.93-184",
+              "text_style": "native_atlas_text:Fonts.93-184",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                605.0,
+                350.0,
+                799.0,
+                365.0
+              ],
+              "unclipped_rect": [
+                605.0,
+                350.0,
+                799.0,
+                365.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.unrefined_dialogue.1",
+              "kind": "text",
+              "text": "UNREFINED Dialogue",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.93-184",
+              "text_style": "native_atlas_text:Fonts.93-184",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                605.0,
+                367.0,
+                813.0,
+                382.0
+              ],
+              "unclipped_rect": [
+                605.0,
+                367.0,
+                813.0,
+                382.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.placeholder_voice_work.1",
+              "kind": "text",
+              "text": "PLACEHOLDER voice work",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.93-184",
+              "text_style": "native_atlas_text:Fonts.93-184",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                605.0,
+                384.0,
+                864.0,
+                399.0
+              ],
+              "unclipped_rect": [
+                605.0,
+                384.0,
+                864.0,
+                399.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.unfinished_memorial_screen.1",
+              "kind": "text",
+              "text": "UNFINISHED memorial screen",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.93-184",
+              "text_style": "native_atlas_text:Fonts.93-184",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                605.0,
+                401.0,
+                888.0,
+                416.0
+              ],
+              "unclipped_rect": [
+                605.0,
+                401.0,
+                888.0,
+                416.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.sadly_this_game_has_been_derailed_and_will_not_be_becompleted_although_it_has_passed_preliminary_testing_you_will_likely_find_a_glitch_or_two.1",
+              "kind": "text",
+              "text": "Sadly, this game has been derailed and will\nnot be becompleted.  Although it has\npassed preliminary testing, you will likely\nfind a glitch or two!",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.93-184",
+              "text_style": "native_atlas_text:Fonts.93-184",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                604.0,
+                439.0,
+                996.0,
+                504.0
+              ],
+              "unclipped_rect": [
+                604.0,
+                439.0,
+                996.0,
+                504.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.when_closed_game_will_open_a_link_to_www_raptisoft_com_news_please_read_the_news_there_and_vote_on_any_greenlights_or_take_advantage_of_any_special_offers_that_i_have_up_i_d_appreciate_it.1",
+              "kind": "text",
+              "text": "When closed, game will open a link to\nwww.raptisoft.com news.  Please read the\nnews there and vote on any greenlights\nor take advantage of any special offers\nthat I have up!  I'd appreciate it!",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.93-184",
+              "text_style": "native_atlas_text:Fonts.93-184",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                604.0,
+                527.0,
+                992.0,
+                609.0
+              ],
+              "unclipped_rect": [
+                604.0,
+                527.0,
+                992.0,
+                609.0
+              ]
+            },
+            {
+              "id": "control_scheme_picker.text.ok.1",
+              "kind": "text",
+              "text": "OK",
+              "action_id": "",
+              "art_id": "",
+              "font_id": "Fonts.216-307",
+              "text_style": "native_atlas_text:Fonts.216-307",
+              "visible": true,
+              "interactive": false,
+              "draw_order": 0,
+              "rect": [
+                782.0,
+                669.0,
+                823.0,
+                687.0
+              ],
+              "unclipped_rect": [
+                782.0,
+                669.0,
+                823.0,
+                687.0
+              ]
+            }
+          ]
+        },
+        "semantic_multiset_sha256": "cbb936c2336ea634c84b50d19bdf3e4ac51e788d1425c64eb82cdd03e8840cd2",
+        "recording": {
+          "evidence_path": "raw-v9/beta-notice-path-core-question/diagnostic2-confirmation/beta-notice-overlay.settlement.json",
+          "sha256": "d229d5dcff4e919696003297f80ed75feb8089daff2784e9779871e20183da3c",
+          "bytes": 3363852
+        },
+        "observation": {
+          "evidence_path": "raw-v9/beta-notice-path-core-question/diagnostic2-confirmation/beta-notice-overlay-observation.json",
+          "sha256": "b3d383d610c1cb63716454fd5a6130ecbe55a06b45cb0e5ca3fc51402835874d",
+          "bytes": 6313
+        },
+        "dismissal_receipt": {
+          "evidence_path": "raw-v9/beta-notice-path-core-question/diagnostic2-confirmation/initial-beta-dismissal/receipt.json",
+          "sha256": "0b2842113409fe6e5beba1b637200bc39b190f2258284474f556b7296a0f5305",
+          "bytes": 4010
+        },
+        "player_visible_dialog_frame": {
+          "evidence_path": "raw-v9/beta-notice-path-core-question/diagnostic2-confirmation/beta-notice-overlay.bmp",
+          "sha256": "cb5c1cb2e247fee16dac2f22f20e836d27274baf9d59686136fbd54cb28475b0",
+          "bytes": 4320054
+        },
+        "post_dismissal_underlay_frame": {
+          "evidence_path": "raw-v9/beta-notice-path-core-question/diagnostic2-confirmation/initial-beta-dismissal/dismiss-initial-beta.bmp",
+          "sha256": "8a559e50e65ae987b96d1a5c1e2091cdc47f39c95b86973e5d8ac724cf6da12e",
+          "bytes": 4320054
+        },
+        "pixel_delta": {
+          "frame_size": [
+            1600,
+            900
+          ],
+          "bounding_box": [
+            472,
+            22,
+            1144,
+            893
+          ],
+          "differing_pixel_count": 405383
+        },
+        "measured_click": {
+          "result": "clicked_measured_top_plate",
+          "element_id": "control_scheme_picker.art.ui_101.1",
+          "rect": [
+            702.0,
+            643.5,
+            898.0,
+            712.0
+          ],
+          "client_point": [
+            800,
+            677.75
+          ],
+          "frame_sha256": "8a559e50e65ae987b96d1a5c1e2091cdc47f39c95b86973e5d8ac724cf6da12e",
+          "settle_latency_milliseconds": 15752
+        }
+      }
+    ],
+    "frames": {
+      "player_visible_dialog_sha256": "cb5c1cb2e247fee16dac2f22f20e836d27274baf9d59686136fbd54cb28475b0",
+      "post_dismissal_underlay_sha256": "8a559e50e65ae987b96d1a5c1e2091cdc47f39c95b86973e5d8ac724cf6da12e",
+      "cross_instance_bit_equal": true
+    },
+    "dismissal": {
+      "action_id": "dialog.primary",
+      "measured_plate_payload": {
+        "action_id": "",
+        "art_id": "UI.101",
+        "font_id": "",
+        "interactive": false,
+        "kind": "art",
+        "rect": [
+          702.0,
+          643.5,
+          898.0,
+          712.0
+        ],
+        "text": "",
+        "text_style": "position",
+        "unclipped_rect": [
+          623.5,
+          643.5,
+          976.5,
+          712.5
+        ],
+        "visible": true
+      },
+      "qualified_action_member": {
+        "kind": "control",
+        "text": "OK",
+        "action_id": "dialog.primary",
+        "art_id": "",
+        "font_id": "",
+        "text_style": "",
+        "visible": true,
+        "interactive": true,
+        "rect": [
+          702.0,
+          643.5,
+          898.0,
+          712.5
+        ],
+        "unclipped_rect": [
+          702.0,
+          643.5,
+          898.0,
+          712.5
+        ]
+      },
+      "measured_member_id": "control_scheme_picker.art.ui_101.1",
+      "measured_rect": [
+        702.0,
+        643.5,
+        898.0,
+        712.0
+      ],
+      "measured_client_point": [
+        800,
+        677.75
+      ],
+      "action_measurement_source": "unique visible interactive dialog.primary member in the qualified pause-entry beta_notice screen",
+      "pixel_delta": {
+        "frame_size": [
+          1600,
+          900
+        ],
+        "bounding_box": [
+          472,
+          22,
+          1144,
+          893
+        ],
+        "differing_pixel_count": 405383
+      },
+      "evidence_only_interaction": true
+    }
+  },
+  "navigation": {
+    "type": "dialog_composite",
+    "entry_state_id": "beta_notice_first_boot",
+    "entry_selector": "pristine fresh process launch",
+    "dismissal_edge_id": "beta_notice_first_boot_to_control_scheme_picker",
+    "trigger": "dialog_primary",
+    "action_id": "dialog.primary",
+    "destination_layout_id": "control-scheme-picker",
+    "destination_surface_id": "control_scheme_picker",
+    "destination_fixture": "menu-layouts/control-scheme-picker.json"
+  }
+}

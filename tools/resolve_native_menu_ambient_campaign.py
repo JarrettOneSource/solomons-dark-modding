@@ -35,6 +35,19 @@ if __package__:
         NativeMenuBrowserTabError,
         validate_browser_tab,
     )
+    from .native_menu_nonsemantic_overlay import (
+        NativeMenuNonSemanticOverlayError,
+        TAG_DISAGREEMENT_REASON,
+        canonical_sha256 as overlay_canonical_sha256,
+        validate_overlay_record,
+    )
+    from .native_menu_multi_state_path_core import (
+        MultiStatePathCoreError,
+        SETTINGS_ENDPOINT_BINDINGS,
+        SETTINGS_LAYOUT_ID,
+        resolve_settings_path_dependent_cores,
+        state_layout as multi_state_layout,
+    )
 else:
     from native_menu_ambient_lifecycle import (  # type: ignore[no-redef]
         AmbientLifecycleError,
@@ -57,6 +70,19 @@ else:
     from native_menu_browser_tab import (  # type: ignore[no-redef]
         NativeMenuBrowserTabError,
         validate_browser_tab,
+    )
+    from native_menu_nonsemantic_overlay import (  # type: ignore[no-redef]
+        NativeMenuNonSemanticOverlayError,
+        TAG_DISAGREEMENT_REASON,
+        canonical_sha256 as overlay_canonical_sha256,
+        validate_overlay_record,
+    )
+    from native_menu_multi_state_path_core import (  # type: ignore[no-redef]
+        MultiStatePathCoreError,
+        SETTINGS_ENDPOINT_BINDINGS,
+        SETTINGS_LAYOUT_ID,
+        resolve_settings_path_dependent_cores,
+        state_layout as multi_state_layout,
     )
 
 
@@ -81,6 +107,15 @@ NAVIGATION_ENDPOINT_LAYOUT_IDS = {
     ("pause_to_hub_resume", "after"): "hub_resumed",
     ("profile_select_resume_to_hub", "after"): "hub_resumed",
     ("settings_to_hub", "after"): "hub_resumed",
+}
+
+NONSEMANTIC_OVERLAY_ENDPOINTS = {
+    ("settings_to_dark_cloud_settings", "after"): (
+        "dark_cloud_settings_credentials"
+    ),
+    ("dark_cloud_settings_to_settings", "before"): (
+        "dark_cloud_settings_credentials"
+    ),
 }
 
 PATH_DEPENDENT_CORE_LAYOUTS = {
@@ -111,11 +146,28 @@ PATH_DEPENDENT_CORE_LAYOUTS = {
 }
 
 PATH_DEPENDENT_CORE_ENDPOINTS = {
-    ("create_discipline_to_hub", "after"): "hub_pristine_second_new_game",
-    ("hub_to_pause", "before"): "hub_resumed",
-    ("pause_to_hub_resume", "after"): "hub_resumed",
-    ("profile_select_resume_to_hub", "after"): "hub_resumed",
-    ("settings_to_hub", "after"): "hub_resumed",
+    (
+        "create_discipline_to_hub",
+        "after",
+        "pristine_fresh_install",
+    ): "hub_pristine_second_new_game",
+    (
+        "create_discipline_to_hub",
+        "after",
+        "hub_new_game_two_action_v213",
+    ): "hub_new_game",
+    ("hub_to_pause", "before", "pristine_fresh_install"): "hub_resumed",
+    (
+        "pause_to_hub_resume",
+        "after",
+        "pristine_fresh_install",
+    ): "hub_resumed",
+    (
+        "profile_select_resume_to_hub",
+        "after",
+        "pristine_fresh_install",
+    ): "hub_resumed",
+    ("settings_to_hub", "after", "pristine_fresh_install"): "hub_resumed",
 }
 
 PATH_DEPENDENT_BASELINE_ALIASES = {
@@ -135,13 +187,13 @@ NAVIGATION_GAME_PROVENANCE_FIELD = "game_executable_sha256"
 
 CHOICE_SLOT_RULING_EVIDENCE = {
     "choice_core_stop_audit": (
-        "raw-final/diagnostics/skill-picker-v27-choice-core-stop-audit.json"
+        "raw-v9/raw-final/diagnostics/skill-picker-v27-choice-core-stop-audit.json"
     ),
     "choice_core_resolver_transcript": (
-        "raw-final/diagnostics/skill-picker-v27-choice-core-full-resolver-stop.log"
+        "raw-v9/raw-final/diagnostics/skill-picker-v27-choice-core-full-resolver-stop.log"
     ),
     "choice_core_stop_manifest": (
-        "raw-final/diagnostics/skill-picker-v27-choice-core-stop-manifest.json"
+        "raw-v9/raw-final/diagnostics/skill-picker-v27-choice-core-stop-manifest.json"
     ),
 }
 
@@ -436,6 +488,33 @@ def _resolve_layout_id(
     endpoint_key: str,
     baseline_id: str,
 ) -> tuple[str, bool]:
+    mapping_key = (edge_id, endpoint_key)
+    path_binding_key = (edge_id, endpoint_key, baseline_id)
+    path_qualified_layout = PATH_DEPENDENT_CORE_ENDPOINTS.get(path_binding_key)
+    if path_qualified_layout is not None:
+        record = fixtures.get(path_qualified_layout)
+        if record is None:
+            raise CampaignResolutionError(
+                "path-dependent navigation endpoint maps to absent fixture "
+                f"'{path_qualified_layout}'"
+            )
+        if record["native_screen_id"] != native_screen_id:
+            raise CampaignResolutionError(
+                "path-dependent navigation endpoint maps "
+                f"'{logical_name}' to '{path_qualified_layout}', but its native "
+                f"screen is '{record['native_screen_id']}' instead of "
+                f"'{native_screen_id}'"
+            )
+        return path_qualified_layout, True
+    if any(
+        key[:2] == mapping_key for key in PATH_DEPENDENT_CORE_ENDPOINTS
+    ):
+        raise CampaignResolutionError(
+            "path-dependent navigation endpoint has no exact baseline-qualified "
+            f"binding for edge '{edge_id}' side '{endpoint_key}' baseline "
+            f"'{baseline_id}'"
+        )
+
     logical_candidates = [
         layout_id
         for layout_id, record in fixtures.items()
@@ -467,7 +546,6 @@ def _resolve_layout_id(
                 )
             except NativeMenuProfileStateError as error:
                 raise CampaignResolutionError(str(error)) from error
-            mapping_key = (edge_id, endpoint_key)
             layout_id = profile_layout_id or NAVIGATION_ENDPOINT_LAYOUT_IDS.get(
                 mapping_key, ""
             )
@@ -516,6 +594,63 @@ def _validate_profile_state(
         raise CampaignResolutionError(str(error)) from error
 
 
+def resolve_profile_state_receipt_parent(
+    header: dict[str, Any], allowed_roots: list[Path], label: str
+) -> Path:
+    profile_state = header.get("profile_state")
+    launch_receipt = (
+        profile_state.get("launch_receipt")
+        if isinstance(profile_state, dict)
+        else None
+    )
+    if not isinstance(launch_receipt, dict):
+        raise CampaignResolutionError(
+            f"{label} has no exact pre-launch profile-state receipt"
+        )
+    filename = launch_receipt.get("evidence_filename")
+    expected_sha256 = launch_receipt.get("sha256")
+    expected_bytes = launch_receipt.get("bytes")
+    if (
+        not isinstance(filename, str)
+        or Path(filename).name != filename
+        or not isinstance(expected_sha256, str)
+        or not re.fullmatch(r"[0-9a-f]{64}", expected_sha256)
+        or isinstance(expected_bytes, bool)
+        or not isinstance(expected_bytes, int)
+        or expected_bytes <= 0
+    ):
+        raise CampaignResolutionError(
+            f"{label} profile-state receipt selector is malformed"
+        )
+    roots = sorted({root.resolve() for root in allowed_roots if root.is_dir()})
+    if not roots:
+        raise CampaignResolutionError(
+            f"{label} profile-state receipt search reached no allowed root"
+        )
+    examined = 0
+    matches: set[Path] = set()
+    for root in roots:
+        for path in root.rglob(filename):
+            if not path.is_file():
+                continue
+            examined += 1
+            if (
+                path.stat().st_size == expected_bytes
+                and file_sha256(path) == expected_sha256
+            ):
+                matches.add(path.resolve())
+    if examined == 0:
+        raise CampaignResolutionError(
+            f"{label} profile-state receipt sweep reached no real content"
+        )
+    if len(matches) != 1:
+        raise CampaignResolutionError(
+            f"{label} profile-state receipt lookup is absent or ambiguous: "
+            f"{sorted(str(path) for path in matches)}"
+        )
+    return next(iter(matches)).parent
+
+
 def _validate_browser_tab(
     screen_tag: str,
     layout: dict[str, Any],
@@ -533,8 +668,335 @@ def _validate_browser_tab(
         raise CampaignResolutionError(str(error)) from error
 
 
+def _overlay_text_action_payload(
+    payload: dict[str, Any], label: str
+) -> list[dict[str, Any]]:
+    elements = payload.get("elements")
+    if not isinstance(elements, list) or not elements or not all(
+        isinstance(element, dict) for element in elements
+    ):
+        raise CampaignResolutionError(
+            f"{label} overlay underlying surface reached no semantic members"
+        )
+    fields = (
+        "kind",
+        "text",
+        "action_id",
+        "art_id",
+        "font_id",
+        "text_style",
+        "visible",
+        "interactive",
+        "rect",
+        "unclipped_rect",
+    )
+    selected = [
+        {field: element.get(field) for field in fields}
+        for element in elements
+        if element.get("text") or element.get("action_id")
+    ]
+    if not selected:
+        raise CampaignResolutionError(
+            f"{label} overlay underlying surface reached no text/action payload"
+        )
+    selected.sort(key=lambda item: canonical_bytes(item))
+    return selected
+
+
+def _read_evidence_text(path: Path) -> str:
+    data = path.read_bytes()
+    if data.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return data.decode("utf-16")
+    return data.decode("utf-8-sig", errors="replace")
+
+
+def _validate_overlay_observation_artifact(
+    repo_root: Path,
+    evidence_root: Path,
+    observation: dict[str, Any],
+) -> dict[str, Any]:
+    role = observation["role"]
+    recording_path = resolve_exact_evidence_receipt(
+        evidence_root,
+        observation.get("recording"),
+        f"non-semantic overlay {role} recording",
+    )
+    recording = read_object(recording_path)
+    header = recording.get("header")
+    if not isinstance(header, dict):
+        raise CampaignResolutionError(
+            f"non-semantic overlay {role} recording has no capture header"
+        )
+    profile_root = (
+        evidence_root / "raw-v9/motion-v214/dark-cloud-settings"
+    )
+    profile = _validate_profile_state(
+        repo_root,
+        profile_root,
+        header,
+        f"non-semantic overlay {role} recording",
+        required_baseline_id=FRESH_BASELINE_ID,
+        binding_label="Settlement v2.15 non-semantic overlay",
+    )
+    if (
+        _identity(header, f"non-semantic overlay {role}")
+        != (observation.get("instance"), observation.get("process_id"))
+        or profile["identity"]
+        != observation.get("profile_state_identity_sha256")
+    ):
+        raise CampaignResolutionError(
+            f"non-semantic overlay {role} observation records false process/profile identity"
+        )
+    samples = _settled_samples(recording, str(recording_path))
+    if len(samples) != observation.get("settled_sample_count"):
+        raise CampaignResolutionError(
+            f"non-semantic overlay {role} observation records a false sample census"
+        )
+    payload_hashes: set[str] = set()
+    for sample in samples:
+        if _screen_id([sample], str(recording_path)) != "main_menu":
+            raise CampaignResolutionError(
+                f"non-semantic overlay {role} recording changed underlying surface"
+            )
+        payload = sample.get("payload")
+        if not isinstance(payload, dict):
+            raise CampaignResolutionError(
+                f"non-semantic overlay {role} sample lost its payload"
+            )
+        payload_hashes.add(
+            overlay_canonical_sha256(
+                _overlay_text_action_payload(payload, str(recording_path))
+            )
+        )
+    if payload_hashes != {observation.get("text_action_payload_sha256")}:
+        raise CampaignResolutionError(
+            "non-semantic overlay underlying surface text/action agreement failed"
+        )
+    gate_path = resolve_exact_evidence_receipt(
+        evidence_root,
+        observation.get("gate_transcript"),
+        f"non-semantic overlay {role} gate transcript",
+    )
+    if TAG_DISAGREEMENT_REASON not in " ".join(
+        _read_evidence_text(gate_path).split()
+    ):
+        raise CampaignResolutionError(
+            f"non-semantic overlay {role} gate transcript lost the exact tag mismatch"
+        )
+    frame = observation.get("player_visible_frame")
+    if not isinstance(frame, dict):
+        raise CampaignResolutionError(
+            f"non-semantic overlay {role} has no visual receipts"
+        )
+    resolve_exact_evidence_receipt(
+        evidence_root,
+        frame.get("overlay"),
+        f"non-semantic overlay {role} visible frame",
+    )
+    resolve_exact_evidence_receipt(
+        evidence_root,
+        frame.get("accepted_underlying_surface"),
+        f"non-semantic overlay {role} accepted underlying frame",
+    )
+    return {
+        "recording": evidence_receipt(recording_path, evidence_root),
+        "text_action_payload_sha256": next(iter(payload_hashes)),
+    }
+
+
+def collect_nonsemantic_overlays(
+    repo_root: Path,
+    candidate_root: Path,
+    evidence_root: Path,
+) -> dict[str, dict[str, Any]]:
+    overlay_root = candidate_root / "menu-overlays"
+    paths = sorted(overlay_root.glob("*.json")) if overlay_root.exists() else []
+    if not paths:
+        if (candidate_root / "menu-layouts/main-menu-root.json").is_file():
+            raise CampaignResolutionError(
+                "Settlement v2.15 overlay sweep reached no candidate content"
+            )
+        return {}
+    overlays: dict[str, dict[str, Any]] = {}
+    for path in paths:
+        record = read_object(path)
+        try:
+            classification = validate_overlay_record(record)
+        except NativeMenuNonSemanticOverlayError as error:
+            raise CampaignResolutionError(str(error)) from error
+        overlay_id = record.get("overlay_id")
+        if not isinstance(overlay_id, str) or overlay_id in overlays:
+            raise CampaignResolutionError(
+                "Settlement v2.15 overlay ids are absent or ambiguous"
+            )
+        if overlay_id != "dark_cloud_settings_credentials" or len(paths) != 1:
+            raise CampaignResolutionError(
+                "Settlement v2.15 authorizes exactly the Dark Cloud credentials overlay"
+            )
+        overlay = record["overlay"]
+        artifact_audit = [
+            _validate_overlay_observation_artifact(
+                repo_root, evidence_root, observation
+            )
+            for observation in overlay["observations"]
+        ]
+        if {
+            row["text_action_payload_sha256"] for row in artifact_audit
+        } != {classification["text_action_payload_sha256"]}:
+            raise CampaignResolutionError(
+                "non-semantic overlay artifact pair changed text/action payload"
+            )
+        activation = overlay["activation"]
+        source_frames = activation.get("source_frames")
+        if not isinstance(source_frames, list) or len(source_frames) != 2:
+            raise CampaignResolutionError(
+                "non-semantic overlay activation lost its two measured source frames"
+            )
+        for index, source_frame in enumerate(source_frames):
+            resolve_exact_evidence_receipt(
+                evidence_root,
+                source_frame,
+                f"non-semantic overlay activating source frame {index}",
+            )
+        underlay = overlay["semantic_underlay_binding"]
+        underlay_path = resolve_exact_evidence_receipt(
+            evidence_root,
+            underlay.get("primary_fixture"),
+            "non-semantic overlay semantic underlay fixture",
+        )
+        expected_underlay_path = (
+            candidate_root / underlay["layout_fixture"]
+        ).resolve()
+        if underlay_path != expected_underlay_path:
+            raise CampaignResolutionError(
+                "non-semantic overlay semantic underlay receipt points outside its candidate slot"
+            )
+        underlay_fixture = read_object(underlay_path)
+        underlay_header = underlay_fixture.get("header")
+        if not isinstance(underlay_header, dict):
+            raise CampaignResolutionError(
+                "non-semantic overlay semantic underlay has no capture header"
+            )
+        _validate_profile_state(
+            repo_root,
+            candidate_root,
+            underlay_header,
+            str(underlay_path),
+            required_baseline_id=FRESH_BASELINE_ID,
+            binding_label="dark_cloud_settings semantic underlay",
+        )
+        trace_path = resolve_exact_evidence_receipt(
+            evidence_root,
+            underlay.get("primary_trace"),
+            "non-semantic overlay semantic underlay primary trace",
+        )
+        confirmation_path = resolve_exact_evidence_receipt(
+            evidence_root,
+            underlay.get("confirmation"),
+            "non-semantic overlay semantic underlay confirmation",
+        )
+        trace = read_object(trace_path)
+        confirmation = read_object(confirmation_path)
+        structural_by_role: dict[str, str] = {}
+        identities: set[tuple[str, int]] = set()
+        for role, recording, recorded_hash in (
+            (
+                "primary",
+                trace,
+                underlay.get("primary_structural_sha256"),
+            ),
+            (
+                "confirmation",
+                confirmation,
+                underlay.get("confirmation_structural_sha256"),
+            ),
+        ):
+            header = recording.get("header")
+            if not isinstance(header, dict):
+                raise CampaignResolutionError(
+                    f"semantic underlay {role} has no capture header"
+                )
+            _validate_profile_state(
+                repo_root,
+                candidate_root,
+                header,
+                f"semantic underlay {role}",
+                required_baseline_id=FRESH_BASELINE_ID,
+                binding_label="dark_cloud_settings semantic underlay",
+            )
+            identities.add(_identity(header, f"semantic underlay {role}"))
+            samples = _settled_samples(recording, f"semantic underlay {role}")
+            if _screen_id(samples, f"semantic underlay {role}") != "dark_cloud_settings":
+                raise CampaignResolutionError(
+                    f"semantic underlay {role} did not retain machine/tag agreement"
+                )
+            try:
+                classified = classify_ambient_window(
+                    samples, label=f"semantic underlay {role}"
+                )
+            except AmbientLifecycleError as error:
+                raise CampaignResolutionError(str(error)) from error
+            if classified["structural_sha256"] != recorded_hash:
+                raise CampaignResolutionError(
+                    f"semantic underlay {role} records a false structural settlement hash"
+                )
+            structural_by_role[role] = classified["structural_sha256"]
+        if len(identities) != 2:
+            raise CampaignResolutionError(
+                "semantic underlay confirmation did not use an independent instance"
+            )
+        route_receipts = underlay.get("route_receipts")
+        for index, route_receipt in enumerate(route_receipts):
+            route_path = resolve_exact_evidence_receipt(
+                evidence_root,
+                route_receipt,
+                f"semantic underlay route receipt {index}",
+            )
+            text = _read_evidence_text(route_path)
+            for token in (
+                '"step":"edge:settings_to_dark_cloud_settings","status":"captured"',
+                '"step":"layout:dark-cloud-settings","status":"captured"',
+                '"step":"edge:dark_cloud_settings_to_settings","status":"captured"',
+            ):
+                if token not in text:
+                    raise CampaignResolutionError(
+                        "semantic underlay route receipt lost one required capture step"
+                    )
+        supersession = overlay["supersession"]
+        retired = supersession["retired_landed_screen_fixture"]
+        retired_path = (repo_root / retired["evidence_path"]).resolve()
+        if (
+            not retired_path.is_relative_to(repo_root.resolve())
+            or not retired_path.is_file()
+        ):
+            raise CampaignResolutionError(
+                "non-semantic overlay retired fixture receipt is absent"
+            )
+        validate_receipt(
+            retired_path, retired, "non-semantic overlay retired fixture"
+        )
+        resolve_exact_evidence_receipt(
+            evidence_root,
+            supersession.get("stop_audit"),
+            "non-semantic overlay stop audit",
+        )
+        overlays[overlay_id] = {
+            "path": path,
+            "value": record,
+            "classification": classification,
+            "underlay_path": underlay_path,
+            "underlay_fixture": underlay_fixture,
+            "structural_by_role": structural_by_role,
+            "artifact_audit": artifact_audit,
+        }
+    return overlays
+
+
 def collect_standalones(
-    repo_root: Path, candidate_root: Path, evidence_root: Path
+    repo_root: Path,
+    candidate_root: Path,
+    evidence_root: Path,
+    profile_receipt_roots: list[Path],
 ) -> tuple[dict[str, dict[str, Any]], dict[str, list[dict[str, Any]]]]:
     paths = sorted((candidate_root / "menu-layouts").glob("*.json"))
     paths += sorted((candidate_root / "menu-transition-layouts").glob("*.json"))
@@ -557,7 +1019,9 @@ def collect_standalones(
             raise CampaignResolutionError(f"{path} has no capture header")
         profile_state = _validate_profile_state(
             repo_root,
-            evidence_root,
+            resolve_profile_state_receipt_parent(
+                header, profile_receipt_roots, str(path)
+            ),
             header,
             str(path),
             required_baseline_id=required_baseline_for_layout(
@@ -581,7 +1045,9 @@ def collect_standalones(
             raise CampaignResolutionError(f"{raw_path} has no capture header")
         _validate_profile_state(
             repo_root,
-            evidence_root,
+            resolve_profile_state_receipt_parent(
+                raw_header, profile_receipt_roots, str(raw_path)
+            ),
             raw_header,
             str(raw_path),
             required_baseline_id=profile_state["baseline_id"],
@@ -684,7 +1150,11 @@ def collect_standalones(
         )
         confirmation_profile_state = _validate_profile_state(
             repo_root,
-            evidence_root,
+            resolve_profile_state_receipt_parent(
+                confirmation_header,
+                profile_receipt_roots,
+                str(confirmation_path),
+            ),
             confirmation_header,
             str(confirmation_path),
             required_baseline_id=profile_state["baseline_id"],
@@ -755,6 +1225,50 @@ def collect_standalones(
     return fixtures, observations
 
 
+def resolve_navigation_profile_receipt_root(
+    primary_path: Path, confirmation_path: Path
+) -> Path:
+    if primary_path.parent.resolve() != confirmation_path.parent.resolve():
+        raise CampaignResolutionError(
+            "navigation recordings do not share one candidate evidence directory"
+        )
+    roots = sorted(
+        path.resolve()
+        for path in primary_path.parent.glob(
+            "navigation-*-profile-state-receipts"
+        )
+        if path.is_dir()
+    )
+    if len(roots) != 1:
+        raise CampaignResolutionError(
+            "navigation profile-state receipt root is absent or ambiguous: "
+            f"{[str(path) for path in roots]}"
+        )
+    witnesses = sorted(path.name for path in roots[0].glob("*.json"))
+    if not witnesses:
+        raise CampaignResolutionError(
+            "navigation profile-state receipt root reached no real content"
+        )
+    return roots[0]
+
+
+def navigation_profile_receipt_roots(
+    primary_path: Path, confirmation_path: Path, evidence_root: Path
+) -> list[Path]:
+    roots = [
+        resolve_navigation_profile_receipt_root(
+            primary_path, confirmation_path
+        )
+    ]
+    derived_hub_root = (
+        evidence_root
+        / "raw-v9/hub-restart-v212/v213-compliant-recapture-committed2"
+    ).resolve()
+    if derived_hub_root.is_dir():
+        roots.append(derived_hub_root)
+    return roots
+
+
 def collect_navigation(
     repo_root: Path,
     primary_path: Path,
@@ -762,12 +1276,21 @@ def collect_navigation(
     evidence_root: Path,
     fixtures: dict[str, dict[str, Any]],
     observations: dict[str, list[dict[str, Any]]],
-) -> tuple[dict[str, Any], dict[tuple[str, str], str]]:
+    overlays: dict[str, dict[str, Any]],
+) -> tuple[
+    dict[str, Any],
+    dict[tuple[str, str], str],
+    dict[tuple[str, str], str],
+    dict[tuple[str, str], str],
+]:
     recordings = {
         "primary": read_object(primary_path),
         "confirmation": read_object(confirmation_path),
     }
     paths = {"primary": primary_path, "confirmation": confirmation_path}
+    profile_receipt_roots = navigation_profile_receipt_roots(
+        primary_path, confirmation_path, evidence_root
+    )
     by_label: dict[str, dict[str, dict[str, Any]]] = {}
     for label, recording in recordings.items():
         if recording.get("schema") != "solomon-dark-native-menu-navigation-v2":
@@ -793,6 +1316,8 @@ def collect_navigation(
         )
 
     endpoint_layouts: dict[tuple[str, str], str] = {}
+    endpoint_overlays: dict[tuple[str, str], str] = {}
+    endpoint_baselines: dict[tuple[str, str], str] = {}
     explicit_layout_ids: set[tuple[str, str]] = set()
     for edge_id in sorted(by_label["primary"]):
         for side, endpoint_key, logical_field in (
@@ -800,6 +1325,7 @@ def collect_navigation(
             ("destination", "after", "destination"),
         ):
             resolved_ids: set[str] = set()
+            resolved_baselines: set[str] = set()
             for label in ("primary", "confirmation"):
                 edge = by_label[label][edge_id]
                 header = edge.get("header")
@@ -810,7 +1336,11 @@ def collect_navigation(
                     )
                 profile_state = _validate_profile_state(
                     repo_root,
-                    evidence_root,
+                    resolve_profile_state_receipt_parent(
+                        header,
+                        profile_receipt_roots,
+                        f"edge {edge_id} {label}",
+                    ),
                     header,
                     f"edge {edge_id} {label}",
                 )
@@ -822,6 +1352,7 @@ def collect_navigation(
                     )
                 except NativeMenuProfileStateError as error:
                     raise CampaignResolutionError(str(error)) from error
+                resolved_baselines.add(profile_state["baseline_id"])
                 _source(header, f"edge {edge_id} {label}")
                 trace = endpoint.get("settlement_trace")
                 if not isinstance(trace, dict):
@@ -860,6 +1391,49 @@ def collect_navigation(
                     raise CampaignResolutionError(
                         f"edge {edge_id} has no logical {side} screen name"
                     )
+                overlay_key = (edge_id, endpoint_key)
+                overlay_id = NONSEMANTIC_OVERLAY_ENDPOINTS.get(overlay_key)
+                if overlay_id is not None:
+                    overlay_record = overlays.get(overlay_id)
+                    if overlay_record is None:
+                        raise CampaignResolutionError(
+                            f"edge {edge_id} {side} maps to absent overlay '{overlay_id}'"
+                        )
+                    if (
+                        logical_name != "dark_cloud_settings"
+                        or native_screen_id != "dark_cloud_settings"
+                        or endpoint.get("tagged_screen") != "dark_cloud_settings"
+                        or endpoint.get("machine_classified_surface")
+                        != "dark_cloud_settings"
+                    ):
+                        raise CampaignResolutionError(
+                            f"edge {edge_id} {label} {side} does not prove the "
+                            "gate-agreeing dark_cloud_settings semantic underlay"
+                        )
+                    try:
+                        classified_underlay = classify_ambient_window(
+                            samples,
+                            label=f"edge {edge_id} {label} semantic underlay",
+                        )
+                    except AmbientLifecycleError as error:
+                        raise CampaignResolutionError(str(error)) from error
+                    if classified_underlay["structural_sha256"] != (
+                        overlay_record["structural_by_role"][label]
+                    ):
+                        raise CampaignResolutionError(
+                            f"edge {edge_id} {label} {side} changed the exact "
+                            "route-qualified semantic underlay"
+                        )
+                    _assert_game_executable_matches(
+                        _source(header, str(paths[label])),
+                        _source(
+                            overlay_record["underlay_fixture"]["header"],
+                            str(overlay_record["underlay_path"]),
+                        ),
+                        f"edge {edge_id} {label} semantic underlay",
+                    )
+                    resolved_ids.add(overlay_id)
+                    continue
                 layout_id, used_explicit_mapping = _resolve_layout_id(
                     repo_root,
                     logical_name,
@@ -890,15 +1464,27 @@ def collect_navigation(
                 raise CampaignResolutionError(
                     f"edge {edge_id} independent {side} captures resolve different layouts"
                 )
-            endpoint_layouts[(edge_id, endpoint_key)] = resolved_ids.pop()
+            if len(resolved_baselines) != 1:
+                raise CampaignResolutionError(
+                    f"edge {edge_id} independent {side} captures changed "
+                    "their profile-state baseline"
+                )
+            resolved_id = resolved_ids.pop()
+            endpoint_baselines[(edge_id, endpoint_key)] = (
+                resolved_baselines.pop()
+            )
+            if (edge_id, endpoint_key) in NONSEMANTIC_OVERLAY_ENDPOINTS:
+                endpoint_overlays[(edge_id, endpoint_key)] = resolved_id
+            else:
+                endpoint_layouts[(edge_id, endpoint_key)] = resolved_id
     applicable_explicit_layout_ids = {
         key
         for key in NAVIGATION_ENDPOINT_LAYOUT_IDS
         if key[0] in by_label["primary"]
     } | {
-        key
-        for key in PATH_DEPENDENT_CORE_ENDPOINTS
-        if key[0] in by_label["primary"]
+        (edge_id, endpoint)
+        for edge_id, endpoint, _baseline_id in PATH_DEPENDENT_CORE_ENDPOINTS
+        if edge_id in by_label["primary"]
     }
     if explicit_layout_ids != applicable_explicit_layout_ids:
         raise CampaignResolutionError(
@@ -906,7 +1492,22 @@ def collect_navigation(
             f"missing={sorted(applicable_explicit_layout_ids - explicit_layout_ids)} "
             f"unexpected={sorted(explicit_layout_ids - applicable_explicit_layout_ids)}"
         )
-    return recordings["primary"], endpoint_layouts
+    applicable_overlay_endpoints = {
+        key: overlay_id
+        for key, overlay_id in NONSEMANTIC_OVERLAY_ENDPOINTS.items()
+        if key[0] in by_label["primary"]
+    }
+    if endpoint_overlays != applicable_overlay_endpoints:
+        raise CampaignResolutionError(
+            "non-semantic overlay endpoint binding census changed: "
+            f"actual={endpoint_overlays}"
+        )
+    return (
+        recordings["primary"],
+        endpoint_layouts,
+        endpoint_overlays,
+        endpoint_baselines,
+    )
 
 
 def build_extended_baseline_filename_map(
@@ -961,7 +1562,7 @@ def collect_extended(
         if not isinstance(header, dict) or not isinstance(samples, list):
             raise CampaignResolutionError(f"extended observation {path} is incomplete")
         _validate_profile_state(
-            repo_root, evidence_root, header, f"extended observation {path}"
+            repo_root, observation_root, header, f"extended observation {path}"
         )
         instance, process_id = _identity(header, str(path))
         motion_source = _source(header, str(path))
@@ -1270,6 +1871,7 @@ def validate_path_dependent_core_forks(
     fixtures: dict[str, dict[str, Any]],
     resolutions: dict[str, dict[str, Any]],
     endpoint_layouts: dict[tuple[str, str], str],
+    endpoint_baselines: dict[tuple[str, str], str],
     repo_root: Path | None = None,
 ) -> list[dict[str, Any]]:
     """Prove the exact v2.6-v2.13 Hub fork and baseline-qualified routes."""
@@ -1295,10 +1897,33 @@ def validate_path_dependent_core_forks(
             f"expected={sorted(expected_layouts)} observed={sorted(reached_layouts)}"
         )
 
-    observed_bindings = {
-        key: endpoint_layouts.get(key) for key in PATH_DEPENDENT_CORE_ENDPOINTS
+    contract_bindings = {
+        (
+            binding["edge_id"],
+            binding["endpoint"],
+            binding["required_baseline_id"],
+        ): binding["layout_id"]
+        for binding in binding_contract["bindings"]
     }
-    if observed_bindings != PATH_DEPENDENT_CORE_ENDPOINTS:
+    if contract_bindings != PATH_DEPENDENT_CORE_ENDPOINTS:
+        raise CampaignResolutionError(
+            "path-dependent core contract: code and generated Hub binding "
+            "registries disagree"
+        )
+    declared_endpoint_pairs = {
+        key[:2] for key in PATH_DEPENDENT_CORE_ENDPOINTS
+    }
+    observed_bindings = {
+        (*key, endpoint_baselines.get(key)): endpoint_layouts.get(key)
+        for key in declared_endpoint_pairs
+    }
+    if (
+        any(None in key or layout_id is None for key, layout_id in observed_bindings.items())
+        or any(
+            PATH_DEPENDENT_CORE_ENDPOINTS.get(key) != layout_id
+            for key, layout_id in observed_bindings.items()
+        )
+    ):
         raise CampaignResolutionError(
             "path-dependent core contract: one or more Hub navigation endpoints "
             f"remain ambiguous: {observed_bindings}"
@@ -1306,7 +1931,7 @@ def validate_path_dependent_core_forks(
     unexpected_hub_endpoints = sorted(
         key
         for key, layout_id in endpoint_layouts.items()
-        if layout_id in expected_layouts and key not in PATH_DEPENDENT_CORE_ENDPOINTS
+        if layout_id in expected_layouts and key not in declared_endpoint_pairs
     )
     if unexpected_hub_endpoints:
         raise CampaignResolutionError(
@@ -1324,18 +1949,51 @@ def validate_path_dependent_core_forks(
             raise CampaignResolutionError(
                 f"path-dependent core contract: '{layout_id}' was not resolved"
             )
-        settled_count = resolution.get("peak_element_count")
         expected_count = metadata.get("measured_settled_element_count")
+        observed_counts: set[int] = set()
+        for observation_key in (
+            "primary_observation",
+            "confirmation_observation",
+        ):
+            observation = record.get(observation_key)
+            samples = (
+                observation.get("samples")
+                if isinstance(observation, dict)
+                else None
+            )
+            if not isinstance(samples, list) or len(samples) < 40:
+                raise CampaignResolutionError(
+                    "path-dependent core contract: "
+                    f"'{layout_id}' lost a 40-sample raw census witness"
+                )
+            for sample in samples:
+                payload = sample.get("payload") if isinstance(sample, dict) else None
+                elements = (
+                    payload.get("elements")
+                    if isinstance(payload, dict)
+                    else None
+                )
+                if not isinstance(elements, list):
+                    raise CampaignResolutionError(
+                        "path-dependent core contract: "
+                        f"'{layout_id}' raw census witness has no element set"
+                    )
+                observed_counts.add(len(elements))
         if (
-            isinstance(settled_count, bool)
-            or not isinstance(settled_count, int)
-            or settled_count <= 0
-            or expected_count != settled_count
+            isinstance(expected_count, bool)
+            or not isinstance(expected_count, int)
+            or expected_count <= 0
+            or not observed_counts
+            or min(observed_counts) != expected_count
+            or max(observed_counts) != resolution.get("peak_element_count")
         ):
             raise CampaignResolutionError(
                 "path-dependent core contract: "
-                f"'{layout_id}' no longer reproduces its measured element census"
+                f"'{layout_id}' no longer reproduces its measured element "
+                f"census: observed={sorted(observed_counts)} "
+                f"expected={expected_count!r}"
             )
+        settled_count = expected_count
         counts[layout_id] = settled_count
         receipt = record.get("fork_decision_receipt")
         if not isinstance(receipt, dict):
@@ -1388,6 +2046,8 @@ def validate_path_dependent_core_forks(
                 "layout_id": layout_id,
                 **copy.deepcopy(policy),
                 "settled_element_count": settled_count,
+                "observed_settled_element_counts": sorted(observed_counts),
+                "observed_peak_element_count": resolution["peak_element_count"],
                 "structural_core_element_count": resolution[
                     "structural_core_element_count"
                 ],
@@ -1458,17 +2118,30 @@ def resolve_campaign(
     verify: bool = False,
     supplemental_pair_manifest: Path | None = None,
     asset_manifest_path: Path | None = None,
+    additional_motion_observation_roots: list[Path] | None = None,
+    enable_settings_path_dependent_core: bool = True,
 ) -> dict[str, Any]:
     if apply and verify:
         raise CampaignResolutionError(
             "ambient campaign cannot apply and verify simultaneously"
         )
     evidence_resolved = evidence_root.resolve()
-    motion_resolved = motion_observation_root.resolve()
-    if not motion_resolved.is_relative_to(evidence_resolved):
+    motion_resolved_roots = [
+        motion_observation_root.resolve(),
+        *(
+            root.resolve()
+            for root in (additional_motion_observation_roots or [])
+        ),
+    ]
+    if len(set(motion_resolved_roots)) != len(motion_resolved_roots):
         raise CampaignResolutionError(
-            "motion observation directory escapes the evidence root"
+            "motion observation directory lookup is ambiguous"
         )
+    for motion_resolved in motion_resolved_roots:
+        if not motion_resolved.is_relative_to(evidence_resolved):
+            raise CampaignResolutionError(
+                "motion observation directory escapes the evidence root"
+            )
     asset_manifest: dict[str, Any] | None = None
     asset_manifest_receipt: dict[str, Any] | None = None
     if asset_manifest_path is not None:
@@ -1496,22 +2169,37 @@ def resolve_campaign(
             manifest_resolved, evidence_resolved
         )
     fixtures, observations = collect_standalones(
+        repo_root,
+        candidate_root,
+        evidence_root,
+        [candidate_root],
+    )
+    overlays = collect_nonsemantic_overlays(
         repo_root, candidate_root, evidence_root
     )
-    primary_navigation, endpoint_layouts = collect_navigation(
+    (
+        primary_navigation,
+        endpoint_layouts,
+        endpoint_overlays,
+        endpoint_baselines,
+    ) = collect_navigation(
         repo_root,
         primary_navigation_path,
         confirmation_navigation_path,
         evidence_root,
         fixtures,
         observations,
+        overlays,
     )
-    extended_count = collect_extended(
-        repo_root,
-        motion_observation_root,
-        evidence_root,
-        fixtures,
-        observations,
+    extended_count = sum(
+        collect_extended(
+            repo_root,
+            motion_root,
+            evidence_root,
+            fixtures,
+            observations,
+        )
+        for motion_root in motion_resolved_roots
     )
     supplemental_pair_count = collect_supplemental_standalones(
         repo_root,
@@ -1524,6 +2212,7 @@ def resolve_campaign(
     resolutions: dict[str, dict[str, Any]] = {}
     layouts: dict[str, dict[str, Any]] = {}
     screen_audit: list[dict[str, Any]] = []
+    settings_path_core: dict[str, Any] | None = None
     for layout_id in sorted(fixtures):
         reached = observations.get(layout_id)
         if not reached:
@@ -1531,15 +2220,29 @@ def resolve_campaign(
                 f"standalone fixture '{layout_id}' was never reached"
             )
         try:
-            resolution = resolve_ambient_lifecycle(
-                reached, asset_manifest=asset_manifest
-            )
-        except AmbientLifecycleError as error:
+            if layout_id == SETTINGS_LAYOUT_ID:
+                settings_path_core = resolve_settings_path_dependent_cores(
+                    reached,
+                    evidence_root=evidence_resolved,
+                    asset_manifest=asset_manifest,
+                    enabled=enable_settings_path_dependent_core,
+                )
+                resolution = settings_path_core["states"]["base"]["resolution"]
+            else:
+                resolution = resolve_ambient_lifecycle(
+                    reached, asset_manifest=asset_manifest
+                )
+        except (AmbientLifecycleError, MultiStatePathCoreError) as error:
             raise CampaignResolutionError(
                 f"STOP: screen '{layout_id}': {error}"
             ) from error
         resolutions[layout_id] = resolution
-        layouts[layout_id] = resolved_layout(resolution)
+        layouts[layout_id] = (
+            multi_state_layout(settings_path_core, "base")
+            if layout_id == SETTINGS_LAYOUT_ID
+            and settings_path_core is not None
+            else resolved_layout(resolution)
+        )
         screen_audit.append(
             {
                 "layout_id": layout_id,
@@ -1574,8 +2277,78 @@ def resolve_campaign(
                     "ambient_family_art_ids"
                 ],
                 "ambient_fraction": resolution["ambient_fraction"],
+                **(
+                    {
+                        "multi_state_path_dependent_core": {
+                            "state_order": copy.deepcopy(
+                                settings_path_core["state_order"]
+                            ),
+                            "accretion_order": copy.deepcopy(
+                                settings_path_core["accretion_order"]
+                            ),
+                            "states": [
+                                {
+                                    "state_id": state_id,
+                                    "measured_element_count": state[
+                                        "measured_element_count"
+                                    ],
+                                    "structural_core_element_count": state[
+                                        "structural_core_element_count"
+                                    ],
+                                    "structural_core_sha256": state[
+                                        "structural_core_sha256"
+                                    ],
+                                    "retained_heading_texts": copy.deepcopy(
+                                        state["retained_heading_texts"]
+                                    ),
+                                }
+                                for state_id, state in settings_path_core[
+                                    "states"
+                                ].items()
+                            ],
+                        }
+                    }
+                    if layout_id == SETTINGS_LAYOUT_ID
+                    and settings_path_core is not None
+                    else {}
+                ),
             }
         )
+
+    multi_state_path_core_audit = (
+        {
+            "layout_id": SETTINGS_LAYOUT_ID,
+            "state_order": copy.deepcopy(settings_path_core["state_order"]),
+            "accretion_order": copy.deepcopy(
+                settings_path_core["accretion_order"]
+            ),
+            "bindings": copy.deepcopy(settings_path_core["bindings"]),
+            "states": [
+                {
+                    "state_id": state_id,
+                    "retained_heading_texts": copy.deepcopy(
+                        state["retained_heading_texts"]
+                    ),
+                    "measured_element_count": state["measured_element_count"],
+                    "structural_core_element_count": state[
+                        "structural_core_element_count"
+                    ],
+                    "structural_core_sha256": state[
+                        "structural_core_sha256"
+                    ],
+                }
+                for state_id, state in settings_path_core["states"].items()
+            ],
+            "question_manifest": copy.deepcopy(
+                settings_path_core["question_manifest"]
+            ),
+            "cross_observation_audit": copy.deepcopy(
+                settings_path_core["cross_observation_audit"]
+            ),
+        }
+        if settings_path_core is not None
+        else None
+    )
 
     choice_layout_ids = sorted(
         layout_id
@@ -1600,7 +2373,11 @@ def resolve_campaign(
 
     path_dependent_core_audit = (
         validate_path_dependent_core_forks(
-            fixtures, resolutions, endpoint_layouts, repo_root
+            fixtures,
+            resolutions,
+            endpoint_layouts,
+            endpoint_baselines,
+            repo_root,
         )
         if any(record["native_screen_id"] == "hub" for record in fixtures.values())
         else []
@@ -1662,6 +2439,44 @@ def resolve_campaign(
                 if "baseline_evidence" in observation
             ],
         }
+        if layout_id == SETTINGS_LAYOUT_ID:
+            fixture["header"]["multi_state_path_dependent_core"] = {
+                "settlement_spec": settings_path_core["settlement_spec"],
+                "parent_screen_id": settings_path_core["parent_screen_id"],
+                "selector": settings_path_core["selector"],
+                "standalone_state_id": "base",
+                "state_order": copy.deepcopy(settings_path_core["state_order"]),
+                "accretion_order": copy.deepcopy(
+                    settings_path_core["accretion_order"]
+                ),
+                "bindings": copy.deepcopy(settings_path_core["bindings"]),
+                "question_manifest": copy.deepcopy(
+                    settings_path_core["question_manifest"]
+                ),
+                "cross_observation_audit": copy.deepcopy(
+                    settings_path_core["cross_observation_audit"]
+                ),
+            }
+            fixture["path_dependent_cores"] = {
+                state_id: {
+                    "state_id": state_id,
+                    "retained_heading_texts": copy.deepcopy(
+                        state["retained_heading_texts"]
+                    ),
+                    "measured_element_count": state["measured_element_count"],
+                    "structural_core_element_count": state[
+                        "structural_core_element_count"
+                    ],
+                    "structural_core_sha256": state[
+                        "structural_core_sha256"
+                    ],
+                    "observation_receipts": copy.deepcopy(
+                        state["observation_receipts"]
+                    ),
+                    "layout": multi_state_layout(settings_path_core, state_id),
+                }
+                for state_id, state in settings_path_core["states"].items()
+            }
         if layout_id in choice_layout_ids:
             fixture["header"]["choice_slots"] = {
                 "settlement_spec": SETTLEMENT_SPEC,
@@ -1677,6 +2492,11 @@ def resolve_campaign(
         candidate_updates[record["path"]] = fixture
 
     resolved_navigation = copy.deepcopy(primary_navigation)
+    navigation_receipt_roots = navigation_profile_receipt_roots(
+        primary_navigation_path,
+        confirmation_navigation_path,
+        evidence_root,
+    )
     edge_by_id = {
         str(edge.get("id")): edge
         for edge in resolved_navigation.get("edges", [])
@@ -1692,7 +2512,11 @@ def resolve_campaign(
             )
         edge_profile = _validate_profile_state(
             repo_root,
-            evidence_root,
+            resolve_profile_state_receipt_parent(
+                edge_header,
+                navigation_receipt_roots,
+                f"resolved edge {edge_id}",
+            ),
             edge_header,
             f"resolved edge {edge_id}",
         )
@@ -1740,20 +2564,56 @@ def resolve_campaign(
             raise CampaignResolutionError(
                 f"edge {edge_id} {label} primary observation is absent or ambiguous"
             )
-        endpoint["layout"] = copy.deepcopy(layouts[layout_id])
+        settings_state_id = (
+            SETTINGS_ENDPOINT_BINDINGS.get((edge_id, endpoint_key))
+            if layout_id == SETTINGS_LAYOUT_ID
+            else None
+        )
+        if layout_id == SETTINGS_LAYOUT_ID and settings_state_id is None:
+            raise CampaignResolutionError(
+                "multi-state path-dependent core contract: Settings endpoint has no exact state binding"
+            )
+        endpoint_resolution = (
+            settings_path_core["states"][settings_state_id]["resolution"]
+            if settings_state_id is not None
+            else resolutions[layout_id]
+        )
+        endpoint["layout"] = (
+            multi_state_layout(settings_path_core, settings_state_id)
+            if settings_state_id is not None
+            else copy.deepcopy(layouts[layout_id])
+        )
         endpoint["settlement"] = settlement_summary(
-            matching_observations[0], resolutions[layout_id]
+            matching_observations[0], endpoint_resolution
         )
         endpoint["animated_element_ids"] = copy.deepcopy(
-            resolutions[layout_id]["animated_element_ids"]
+            endpoint_resolution["animated_element_ids"]
         )
         endpoint["choice_slot_ids"] = copy.deepcopy(
-            resolutions[layout_id]["choice_slot_ids"]
+            endpoint_resolution["choice_slot_ids"]
         )
-        endpoint["element_count"] = resolutions[layout_id][
+        endpoint["element_count"] = endpoint_resolution[
             "structural_core_element_count"
         ]
         endpoint["layout_id"] = layout_id
+        if settings_state_id is not None:
+            state = settings_path_core["states"][settings_state_id]
+            endpoint["path_dependent_core"] = {
+                "settlement_spec": settings_path_core["settlement_spec"],
+                "parent_layout_id": SETTINGS_LAYOUT_ID,
+                "state_id": settings_state_id,
+                "selector": settings_path_core["selector"],
+                "retained_heading_texts": copy.deepcopy(
+                    state["retained_heading_texts"]
+                ),
+                "measured_element_count": state["measured_element_count"],
+                "structural_core_sha256": state["structural_core_sha256"],
+                "edge_id": edge_id,
+                "endpoint": endpoint_key,
+                "question_manifest": copy.deepcopy(
+                    settings_path_core["question_manifest"]
+                ),
+            }
         if layout_id in PATH_DEPENDENT_CORE_LAYOUTS:
             endpoint["path_dependent_core"] = {
                 **copy.deepcopy(PATH_DEPENDENT_CORE_LAYOUTS[layout_id]),
@@ -1763,6 +2623,66 @@ def resolve_campaign(
                     fixtures[layout_id]["fork_decision_receipt"]
                 ),
             }
+    for (edge_id, endpoint_key), overlay_id in endpoint_overlays.items():
+        edge = edge_by_id[edge_id]
+        endpoint = edge[endpoint_key]
+        overlay_record = overlays[overlay_id]
+        overlay = overlay_record["value"]["overlay"]
+        primary_observation = next(
+            observation
+            for observation in overlay["observations"]
+            if observation["role"] == "primary"
+        )
+        original_frame_sha256 = endpoint.get("frame_sha256")
+        original_underlay_element_count = endpoint.get("element_count")
+        endpoint.clear()
+        endpoint.update(
+            {
+                "type": "overlay",
+                "overlay_id": overlay_id,
+                "overlay_fixture": {
+                    "candidate_relative_path": overlay_record["path"]
+                    .relative_to(candidate_root)
+                    .as_posix(),
+                    **evidence_receipt(overlay_record["path"], evidence_root),
+                },
+                "members_semantically_observable": False,
+                "semantic_member_count": 0,
+                "semantic_members": [],
+                "underlying_surface": {
+                    "screen_id": "dark_cloud_settings",
+                    "role": "route_qualified_semantic_underlay",
+                    "structural_sha256": overlay_record[
+                        "structural_by_role"
+                    ]["primary"],
+                    "raw_element_count": original_underlay_element_count,
+                    "fixture": copy.deepcopy(
+                        overlay["semantic_underlay_binding"]["primary_fixture"]
+                    ),
+                },
+                "frame_sha256": original_frame_sha256,
+                "settlement": {
+                    "settlement_spec": "2.15",
+                    "criterion": (
+                        "two independent pristine instances: machine surface "
+                        "text/action settlement plus player-visible frame divergence"
+                    ),
+                    "consecutive_structural_samples": primary_observation[
+                        "settled_sample_count"
+                    ],
+                    "stable_span_milliseconds": primary_observation[
+                        "stable_span_milliseconds"
+                    ],
+                    "underlying_surface_id": overlay["classification"][
+                        "underlying_surface_id"
+                    ],
+                    "underlying_text_action_payload_sha256": overlay[
+                        "classification"
+                    ]["text_action_payload_sha256"],
+                    "semantic_member_count": 0,
+                },
+            }
+        )
     for edge in edge_by_id.values():
         edge["header"]["settlement"] = {
             "source": copy.deepcopy(edge["before"]["settlement"]),
@@ -1776,11 +2696,34 @@ def resolve_campaign(
         "confirmation_raw_recording": evidence_receipt(
             confirmation_navigation_path, evidence_root
         ),
-        "motion_observation_directory": motion_resolved.relative_to(
+        "motion_observation_directory": motion_resolved_roots[0].relative_to(
             evidence_resolved
         ).as_posix(),
+        "motion_observation_directories": [
+            root.relative_to(evidence_resolved).as_posix()
+            for root in motion_resolved_roots
+        ],
         "screen_count": len(resolutions),
+        "overlay_count": len(overlays),
+        "state_count": len(resolutions) + len(overlays),
+        "nonsemantic_overlays": [
+            {
+                "overlay_id": overlay_id,
+                "fixture": evidence_receipt(record["path"], evidence_root),
+                "bound_endpoints": sorted(
+                    f"{edge_id}.{endpoint}"
+                    for (edge_id, endpoint), resolved_overlay_id in (
+                        endpoint_overlays.items()
+                    )
+                    if resolved_overlay_id == overlay_id
+                ),
+            }
+            for overlay_id, record in sorted(overlays.items())
+        ],
         "path_dependent_core": copy.deepcopy(path_dependent_core_audit),
+        "multi_state_path_dependent_core": copy.deepcopy(
+            multi_state_path_core_audit
+        ),
         "choice_slot_asset_manifest": copy.deepcopy(asset_manifest_receipt),
         "choice_slot_ruling_receipts": copy.deepcopy(ruling_receipts),
         "choice_slot_layout_ids": choice_layout_ids,
@@ -1800,6 +2743,8 @@ def resolve_campaign(
         "settlement_spec": SETTLEMENT_SPEC,
         "applied": apply,
         "standalone_fixture_count": len(fixtures),
+        "overlay_record_count": len(overlays),
+        "state_count": len(fixtures) + len(overlays),
         "navigation_edge_count": len(edge_by_id),
         "settled_observation_count": sum(
             observation["kind"] == "settled_window"
@@ -1815,9 +2760,22 @@ def resolve_campaign(
         ),
         "screens": screen_audit,
         "path_dependent_core": path_dependent_core_audit,
+        "multi_state_path_dependent_core": copy.deepcopy(
+            multi_state_path_core_audit
+        ),
         "choice_slot_asset_manifest": copy.deepcopy(asset_manifest_receipt),
         "choice_slot_ruling_receipts": copy.deepcopy(ruling_receipts),
         "choice_slot_layout_ids": choice_layout_ids,
+        "nonsemantic_overlays": [
+            {
+                "overlay_id": overlay_id,
+                "fixture": evidence_receipt(record["path"], evidence_root),
+                "semantic_underlay": evidence_receipt(
+                    record["underlay_path"], evidence_root
+                ),
+            }
+            for overlay_id, record in sorted(overlays.items())
+        ],
         "outputs": {
             "resolved_navigation": str(resolved_navigation_output),
             "candidate_fixtures": [str(path) for path in sorted(candidate_updates)],
@@ -1851,12 +2809,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--primary-navigation", type=Path, required=True)
     parser.add_argument("--confirmation-navigation", type=Path, required=True)
     parser.add_argument("--motion-observation-root", type=Path, required=True)
+    parser.add_argument(
+        "--additional-motion-observation-root",
+        action="append",
+        default=[],
+        type=Path,
+    )
     parser.add_argument("--asset-manifest", type=Path, required=True)
     parser.add_argument("--supplemental-settled-pair-manifest", type=Path)
     parser.add_argument("--resolved-navigation-output", type=Path, required=True)
     parser.add_argument("--audit-output", type=Path, required=True)
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--verify", action="store_true")
+    parser.add_argument(
+        "--disable-settings-path-dependent-core",
+        action="store_true",
+        help="mutation seam: reproduce the exact pre-v2.16 Settings STOP",
+    )
     return parser.parse_args()
 
 
@@ -1880,6 +2849,13 @@ def main() -> int:
                 else None
             ),
             args.asset_manifest.resolve(),
+            [
+                path.resolve()
+                for path in getattr(
+                    args, "additional_motion_observation_root", []
+                )
+            ],
+            not getattr(args, "disable_settings_path_dependent_core", False),
         )
     except CampaignResolutionError as error:
         print(json.dumps({"success": False, "error": str(error)}))

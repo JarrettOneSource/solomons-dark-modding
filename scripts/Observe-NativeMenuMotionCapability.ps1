@@ -21,6 +21,9 @@ param(
     [ValidateSet("source", "destination")]
     [string]$EdgeSide = "destination",
 
+    [ValidateRange(60000, 3600000)]
+    [long]$MinimumObservationMilliseconds = 60000,
+
     [Parameter(Mandatory = $true)]
     [string]$OutputPath
 )
@@ -128,7 +131,10 @@ if ($stableSpanMilliseconds -lt $script:NativeMenuSettleMinimumSpanMilliseconds)
     throw "BROKEN: motion-capability baseline lacks a valid settled span."
 }
 $requiredSpanMilliseconds = [Math]::Max(
-    [long]$script:NativeMenuExtendedMinimumMilliseconds,
+    [long][Math]::Max(
+        $script:NativeMenuExtendedMinimumMilliseconds,
+        $MinimumObservationMilliseconds
+    ),
     [long]$script:NativeMenuExtendedSpanMultiplier * $stableSpanMilliseconds
 )
 $sampleCensusDeadlineMilliseconds = (

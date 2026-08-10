@@ -177,6 +177,31 @@ def perturbed_baseline_snapshot_byte() -> Iterator[None]:
         raise RuntimeError("snapshot-byte mutation failed to restore beta-notice exactly")
 
 
+SHELL_GOLDEN_SNAPSHOT = contracts.SHELL_MENU_GOLDEN
+_SHELL_GOLDEN_ORIGINAL = SHELL_GOLDEN_SNAPSHOT.read_bytes()
+if not _SHELL_GOLDEN_ORIGINAL.startswith(b"{\n"):
+    raise RuntimeError("shell-golden mutation lost its canonical JSON witness")
+_SHELL_GOLDEN_MUTATED = b"{ " + _SHELL_GOLDEN_ORIGINAL[2:]
+_SHELL_GOLDEN_ACTUAL = hashlib.sha256(_SHELL_GOLDEN_MUTATED).hexdigest()
+_SHELL_GOLDEN_RECORDED = json.loads(
+    contracts.MENU_BASELINE.read_text(encoding="utf-8")
+)["shell_golden_snapshot"]["sha256"]
+
+
+@contextmanager
+def perturbed_shell_golden_byte() -> Iterator[None]:
+    """Perturb valid JSON whitespace and restore the shell aggregate exactly."""
+    if SHELL_GOLDEN_SNAPSHOT.read_bytes() != _SHELL_GOLDEN_ORIGINAL:
+        raise RuntimeError("shell-golden mutation refuses an already changed snapshot")
+    SHELL_GOLDEN_SNAPSHOT.write_bytes(_SHELL_GOLDEN_MUTATED)
+    try:
+        yield
+    finally:
+        SHELL_GOLDEN_SNAPSHOT.write_bytes(_SHELL_GOLDEN_ORIGINAL)
+    if SHELL_GOLDEN_SNAPSHOT.read_bytes() != _SHELL_GOLDEN_ORIGINAL:
+        raise RuntimeError("shell-golden mutation failed to restore the aggregate exactly")
+
+
 ARCHITECTURE = "test_webgame_shell_architecture_keeps_devices_inside_input"
 FOCUS = "test_webgame_shell_twin_stick_and_focus_follow_landed_contracts"
 RENDERER = "test_webgame_shell_manifest_renderer_and_layout_replay_are_strict"
@@ -333,7 +358,7 @@ MUTATIONS: tuple[Mutation, ...] = (
     TextMutation(
         "focus.census-witnesses",
         FOCUS,
-        contracts.MENU_GOLDEN,
+        contracts.SHELL_MENU_GOLDEN,
         '"screen_census":  [',
         '"screen_census":  ["mutant"], "discarded_screen_census":  [',
         "focus/menu comparison did not reach native-loader and game-over census witnesses",
@@ -382,9 +407,9 @@ MUTATIONS: tuple[Mutation, ...] = (
         "render.canonical-golden-imports",
         RENDERER,
         contracts.APP,
-        'import menuGoldenJson from "../../tests/fixtures/webgame/menu-goldens.json" with { type: "json" };\nimport focusModelJson',
-        'import menuGoldenJson from "../../tests/fixtures/webgame/menu-goldens.json" with { type: "json" };\nvoid 0;\nimport focusModelJson',
-        "browser shell no longer imports the landed menu and focus recordings directly and adjacently",
+        'import menuGoldenJson from "../../webgame-contracts/baseline-snapshots/menu-goldens.json" with { type: "json" };\nimport focusModelJson',
+        'import menuGoldenJson from "../../webgame-contracts/baseline-snapshots/menu-goldens.json" with { type: "json" };\nvoid 0;\nimport focusModelJson',
+        "browser shell no longer imports the immutable shell menu and focus recordings directly and adjacently",
     ),
     SpecialMutation(
         "render.no-copied-golden",
@@ -1131,8 +1156,8 @@ INTERREGNUM_VISUAL_MUTATIONS: tuple[Mutation, ...] = (
         "baseline.versioned-schema",
         VISUAL,
         contracts.MENU_BASELINE,
-        "solomon-dark-menu-baseline-v1",
         "solomon-dark-menu-baseline-v2",
+        "solomon-dark-menu-baseline-v3",
         "menu baseline manifest lost its versioned schema",
     ),
     TextMutation(
@@ -1147,9 +1172,16 @@ INTERREGNUM_VISUAL_MUTATIONS: tuple[Mutation, ...] = (
         "baseline.exact-census",
         VISUAL,
         contracts.MENU_BASELINE,
+        '"baseline_snapshot_count": 28,\n  "pending_shellfix_count": 29',
         '"baseline_snapshot_count": 28,\n  "pending_shellfix_count": 28',
-        '"baseline_snapshot_count": 28,\n  "pending_shellfix_count": 27',
-        "menu baseline manifest census must remain exactly 28 snapshots and 28 pending fixtures",
+        "menu baseline manifest census must remain exactly 28 snapshots and 29 pending fixtures",
+    ),
+    SpecialMutation(
+        "baseline.shell-golden-byte-hash",
+        VISUAL,
+        perturbed_shell_golden_byte,
+        "menu shell golden snapshot does not match its file: "
+        f"recorded {_SHELL_GOLDEN_RECORDED[:16]}, menu-goldens.json hashes to {_SHELL_GOLDEN_ACTUAL[:16]}",
     ),
     SpecialMutation(
         "baseline.snapshot-byte-hash",
@@ -1170,32 +1202,32 @@ INTERREGNUM_VISUAL_MUTATIONS: tuple[Mutation, ...] = (
         "baseline.drop-pending-entry",
         VISUAL,
         contracts.MENU_BASELINE,
-        '    {\n      "fixture": "menu-layouts/beta-notice.json",\n      "sha256": "3079989caa69579ea0d4eebf863fb3f26a86a24be40eff4459263f735d6f6042",\n      "bytes": 165992,\n      "corrective": "shellfix task #101"\n    },\n',
+        '    {\n      "fixture": "menu-layouts/beta-notice.json",\n      "sha256": "0fd6739d87a2fed5819951a48aacc0ba60e1354518b5c9339264d3b8b25115ba",\n      "bytes": 219886,\n      "corrective": "shellfix task #101"\n    },\n',
         "",
-        "menu baseline pending_shellfix must enumerate exactly 28 G11 fixtures",
+        "menu baseline pending_shellfix must enumerate exactly 29 named fixtures",
     ),
     TextMutation(
         "baseline.pending-wrong-hash",
         VISUAL,
         contracts.MENU_BASELINE,
-        '"pending_shellfix": [\n    {\n      "fixture": "menu-layouts/beta-notice.json",\n      "sha256": "3079989caa69579ea0d4eebf863fb3f26a86a24be40eff4459263f735d6f6042"',
-        '"pending_shellfix": [\n    {\n      "fixture": "menu-layouts/beta-notice.json",\n      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"',
-        "menu pending_shellfix fixture menu-layouts/beta-notice.json does not match its file: recorded 0000000000000000, beta-notice.json hashes to 3079989caa69579e",
+        '"fixture": "menu-layouts/beta-notice.json",\n      "sha256": "0fd6739d87a2fed5819951a48aacc0ba60e1354518b5c9339264d3b8b25115ba"',
+        '"fixture": "menu-layouts/beta-notice.json",\n      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"',
+        "menu pending_shellfix fixture menu-layouts/beta-notice.json does not match its file: recorded 0000000000000000, beta-notice.json hashes to 0fd6739d87a2fed5",
     ),
     TextMutation(
         "visual.drop-pending-entry",
         VISUAL,
         contracts.VISUAL_GATE,
-        '    {\n      "fixture": "menu-layouts/beta-notice.json",\n      "settled_fixture_sha256": "3079989caa69579ea0d4eebf863fb3f26a86a24be40eff4459263f735d6f6042",\n      "corrective": "shellfix task #101"\n    },\n',
+        '    {\n      "fixture": "menu-layouts/beta-notice.json",\n      "settled_fixture_sha256": "0fd6739d87a2fed5819951a48aacc0ba60e1354518b5c9339264d3b8b25115ba",\n      "corrective": "shellfix task #101"\n    },\n',
         "",
-        "menu visual gate pending_shellfix census must remain exactly 28",
+        "menu visual gate pending_shellfix census must remain exactly 29",
     ),
     TextMutation(
         "visual.pending-wrong-hash",
         VISUAL,
         contracts.VISUAL_GATE,
-        '"pending_shellfix": [\n    {\n      "fixture": "menu-layouts/beta-notice.json",\n      "settled_fixture_sha256": "3079989caa69579ea0d4eebf863fb3f26a86a24be40eff4459263f735d6f6042"',
-        '"pending_shellfix": [\n    {\n      "fixture": "menu-layouts/beta-notice.json",\n      "settled_fixture_sha256": "0000000000000000000000000000000000000000000000000000000000000000"',
+        '"fixture": "menu-layouts/beta-notice.json",\n      "settled_fixture_sha256": "0fd6739d87a2fed5819951a48aacc0ba60e1354518b5c9339264d3b8b25115ba"',
+        '"fixture": "menu-layouts/beta-notice.json",\n      "settled_fixture_sha256": "0000000000000000000000000000000000000000000000000000000000000000"',
         "menu visual pending entry menu-layouts/beta-notice.json pins the wrong settled fixture hash",
     ),
     TextMutation(
@@ -1209,7 +1241,7 @@ INTERREGNUM_VISUAL_MUTATIONS: tuple[Mutation, ...] = (
     TextMutation(
         "visual.standalone-embedded-pair",
         VISUAL,
-        contracts.ROOT / "tests/fixtures/webgame/menu-layouts/controls.json",
+        contracts.ROOT / "webgame-contracts/baseline-snapshots/menu-layouts/controls.json",
         '"layout":  {',
         '"mutant_layout":  {',
         "standalone and embedded G11 recordings disagree for menu-layouts/controls.json",

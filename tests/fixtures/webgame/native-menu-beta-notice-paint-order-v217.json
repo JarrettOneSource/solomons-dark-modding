@@ -1,0 +1,115 @@
+{
+  "schema": "solomon-dark-native-menu-beta-notice-paint-order-v217",
+  "settlement_spec": "2.17",
+  "layout_id": "beta-notice",
+  "screen_id": "beta_notice",
+  "core_member_count": 28,
+  "ordered_semantic_sha256": [
+    "b7d7d5020df8c2e6bdb330f56d2d0d10aa9f3b0c9dadd116d93d06f2c16b9b59",
+    "e99d42044fa945ca2dced0b9ffd5ce3bf5fa70dc1d268d5b52e062d5babb33ef",
+    "544256c4137cd0114aa7c33056511d02ee30a6b6e1e4c5431f715a6d863e6339",
+    "49fcbe3f2a1dc6b52195d9a2a3b13d581bf336d57ff28f7ad061db6f68fe5709",
+    "6a24b719f3419e4d9eb6a1d3f061ad2cf32b47502c4b388e42f95001b1db4506",
+    "7489a5661bbfffff4b226b43b68ecdf9e775fcbf473d06cdb845e33b3d2c3bbf",
+    "cbf2caf576ada3a4699de617c804946157083ecd697df6582cc89c689eead6c5",
+    "60155b1b525f4e83054d52fd04eb52551a1ba3499c1181a32ceda9248c97d629",
+    "cc155cbe0be77a3d24701ba856c17979e690b7f9d64f63643c4c0d9384cdd093",
+    "3851603add736acab2010d41fbf42eb2e43a955cf2645dfd6ad03d46d930a0e6",
+    "6778bac85c12c48d9fc48cc08cde23e56807c04bda8d7983cc5f4319b2736d7d",
+    "68f0434cd184ab70021db01d42d6e815efc8601206ef5559fb4590c307657d32",
+    "c82e27040b515b409fbaa634030bb4ddf62e7894730a7f3e0ef1ab65966b2ff0",
+    "0f0f709271f9908cdf0c4135e539f08ccfb67bc9a85f7d968738f1c84cc6b365",
+    "e52e034a8317a375ad63cdfd5d18e6a01e210819edd84b7f2066496026c9d073",
+    "982a15d6799813fad7cecdbd48dee3851e8387aa465823b247c49615701b69d0",
+    "5885334d50449e95296fa332c81c151e4c400d7d89f8ba0236fc8f96aa74facc",
+    "5cb359afcda7fc85712cb5116bfac70e91771a770e87a637baa07a68436bf2b0",
+    "13e0f71960124fbc216a51aa26b9a4ebd853199654939d01057a0b569d56400a",
+    "66b1753e5ec4a3cab0a75e8a8dafe790eeb3e087ba64e9f6bb6c67f0c00d1f35",
+    "61b9c0344c3421957b21251b9bbdc97a701b55353face15cca673c06d1ff74af",
+    "ed5feb25d2070162e4a4f66a207ebb3875a6834c53faa6c588ac20ca1525dacf",
+    "ae96aeda6604f415d70eb7644584ce2e8e710ec64b6413a629869046a07cfa1d",
+    "b4557aa344aef97f90a23a0f51cf760f7b1b73ef12e3fc67c49a3eea906f841d",
+    "404e76bb430007da07411c29cfac146c4c5242ced8c23522ecb51985c5613b74",
+    "34f86236f7af172702a7ec6f6ed26f425d2be6f86b7595319f666aa093f3714c",
+    "257971bc0a9d693bfaaa125dc751fef5581692c11df145556c15adeee78caebd",
+    "7ac8bd4c544d9a8dfe006d580ab42a2bcd48a44c802f23d9653f2d61d65c2a0f"
+  ],
+  "ordered_core_sha256": "66737676387fb2254c082987fb51983799e0820f78fc498afe1b9884bd6a4735",
+  "final_paint_group": [
+    {
+      "relative_core_index": 25,
+      "art_id": "UI.101",
+      "rect": [
+        702.0,
+        643.5,
+        898.0,
+        712.0
+      ],
+      "unclipped_rect": [
+        623.5,
+        643.5,
+        976.5,
+        712.5
+      ],
+      "semantic_sha256": "34f86236f7af172702a7ec6f6ed26f425d2be6f86b7595319f666aa093f3714c",
+      "native_paint_order": 100,
+      "overlay_reference_member": true
+    },
+    {
+      "relative_core_index": 26,
+      "art_id": "UI.54",
+      "rect": [
+        696.0,
+        637.5,
+        766.0,
+        722.5
+      ],
+      "unclipped_rect": [
+        696.0,
+        637.5,
+        766.0,
+        722.5
+      ],
+      "semantic_sha256": "257971bc0a9d693bfaaa125dc751fef5581692c11df145556c15adeee78caebd",
+      "native_paint_order": 101,
+      "overlay_reference_member": true
+    },
+    {
+      "relative_core_index": 27,
+      "art_id": "UI.54",
+      "rect": [
+        834.0,
+        637.5,
+        904.0,
+        722.5
+      ],
+      "unclipped_rect": [
+        834.0,
+        637.5,
+        904.0,
+        722.5
+      ],
+      "semantic_sha256": "7ac8bd4c544d9a8dfe006d580ab42a2bcd48a44c802f23d9653f2d61d65c2a0f",
+      "native_paint_order": 102,
+      "overlay_reference_member": true
+    }
+  ],
+  "qualified_fixture": {
+    "fixture": "menu-layouts/beta-notice.json",
+    "sha256": "0fd6739d87a2fed5819951a48aacc0ba60e1354518b5c9339264d3b8b25115ba",
+    "bytes": 219886
+  },
+  "superseded_contract": {
+    "evidence_path": "raw-v9/beta-notice-path-core-question/legacy-native-menu-beta-notice-order-v29.json",
+    "sha256": "77a25d7e36a2fdb11a9953ffe354bffbd169d5b0c70b1b4a8000a20ebcfe76d2",
+    "bytes": 2546
+  },
+  "disposition": "re-derived against the qualified 28-member pause-entry core; the obsolete 34-member landed-comparison identity is retired",
+  "paint_truth": {
+    "repository_path": "webgame/client/ambient-title-data.json",
+    "introducing_commit": "b3eafc6c4ebccd574f534796203c7c7bea702280",
+    "sha256": "58af8f9a851936db633e7660da19f9295c8040931315799fdb10a08a1a2721b7",
+    "provenance_sha256": "5bf87434032cb3b76b2cb303be0cc309dad822dec522ab243f43ef7642e90544",
+    "method": "settled 100-sample dual-instance v6 traces; velocities cross-instance agreed <0.6px/s; static paint order = native draw-hook sequence"
+  }
+}

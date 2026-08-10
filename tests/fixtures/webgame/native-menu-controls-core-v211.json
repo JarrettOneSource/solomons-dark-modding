@@ -370,12 +370,12 @@
   },
   "source_audits": {
     "title": {
-      "path": "diagnostics/controls-screen-title-stop-audit.json",
+      "path": "raw-v9/diagnostics/controls-screen-title-stop-audit.json",
       "sha256": "0377809414de5a1e5d0b8af01baaf1ee8221c5e586e81d7dfda95f18d1da703f",
       "bytes": 5456
     },
     "structural_core": {
-      "path": "diagnostics/controls-post-v210-structural-stop-audit.json",
+      "path": "raw-v9/diagnostics/controls-post-v210-structural-stop-audit.json",
       "sha256": "22fc8f3061a0f0577bf805ab1ddf750416744bc0097405187321b9feeae148f1",
       "bytes": 63660
     }

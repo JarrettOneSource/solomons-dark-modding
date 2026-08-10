@@ -588,7 +588,7 @@ def test_exact_text_capture_does_not_read_retired_ui_trees() -> str:
         "TryGetActiveMyQuickPanel(",
         "TryGetActiveSimpleMenu(",
         "TryGetActiveDarkCloudBrowserRender",
-        "TryGetActiveHallOfFameRender",
+        "TryGetCurrentHallOfFame",
         "TryGetActiveSpellPickerRender",
     )
     missing = [token for token in capture_required if token not in capture_text]

@@ -29,6 +29,21 @@ from native_menu_settlement_v2 import (
     structural_layout_bytes,
     validate_overlay_reference,
 )
+from native_menu_census_era_v221 import (
+    CHOICE_ROWS as V221_CHOICE_ROWS,
+    CLASS_A_COUNTS as V221_CLASS_A_COUNTS,
+    CLASS_B_COUNTS as V221_CLASS_B_COUNTS,
+    FIELD_CORRECTIONS as V221_FIELD_CORRECTIONS,
+    require_contract as require_v221_census_era_contract,
+    semantic_sha256 as v221_semantic_sha256,
+)
+from native_menu_final_disposition_v222 import (
+    NAMED_ENDPOINT_VACUITY as V222_NAMED_ENDPOINT_VACUITY,
+    SEQUENCE_LAYOUTS as V222_SEQUENCE_LAYOUTS,
+    require_contract as require_v222_final_disposition_contract,
+    semantic_payload as v222_semantic_payload,
+    sequence_sha256 as v222_sequence_sha256,
+)
 
 
 LAYOUT_IDS = (
@@ -62,6 +77,52 @@ LAYOUT_IDS = (
     "skill-picker",
 )
 
+SETTLED_LAYOUT_IDS = (
+    "beta-notice",
+    "control-scheme-picker",
+    "controls",
+    "create-discipline",
+    "create-element",
+    "dark-cloud-browser",
+    "dark-cloud-login-settings",
+    "dark-cloud-menu",
+    "dark-cloud-my-levels",
+    "dark-cloud-online-levels",
+    "dark-cloud-options",
+    "dark-cloud-recent",
+    "dark-cloud-search",
+    "dark-cloud-sort",
+    "game-over",
+    "game-settings-dark-cloud",
+    "game-settings-gameplay",
+    "game-settings-title",
+    "hall-of-fame",
+    "hub_new_game",
+    "hub_pristine_second_new_game",
+    "hub_resumed",
+    "loading-screen",
+    "main-menu-root",
+    "map-picker",
+    "native-loader",
+    "pause-menu",
+    "performance",
+    "profile-save-select",
+    "skill-picker",
+)
+SETTLED_HUB_LAYOUT_IDS = (
+    "hub_new_game",
+    "hub_pristine_second_new_game",
+    "hub_resumed",
+)
+SETTLED_STANDALONE_LAYOUT_IDS = tuple(
+    layout_id
+    for layout_id in SETTLED_LAYOUT_IDS
+    if layout_id not in SETTLED_HUB_LAYOUT_IDS
+)
+EXPECTED_MENU_GOLDEN_SHA256 = (
+    "19949349ec140751136f0dc45a442bd99a74dc413fe7bc5a0d94b9dd99c3fe18"
+)
+
 EDGE_CONTRACT = {
     "control_scheme_picker_to_create": (
         "control_scheme_picker",
@@ -75,7 +136,7 @@ EDGE_CONTRACT = {
     ),
     "create_discipline_to_hub": (
         "create_discipline",
-        "create.select_discipline_mind",
+        "select_discipline_mind",
         "hub",
     ),
     "hub_to_pause": ("hub", "menu_key", "pause_menu"),
@@ -142,7 +203,7 @@ EDGE_CONTRACT = {
     ),
     "main_to_settings": (
         "main_menu",
-        "main_menu.settings",
+        "settings_click",
         "settings",
     ),
     "settings_to_main": ("settings", "done_button_click", "main_menu"),
@@ -209,7 +270,7 @@ EDGE_CONTRACT = {
     "dark_cloud_to_login_settings": (
         "dark_cloud_my_levels",
         "dark_cloud_browser.login",
-        "dark_cloud_settings",
+        "dark_cloud_login_settings",
     ),
     "dark_cloud_login_to_browser": (
         "dark_cloud_login_settings",
@@ -245,6 +306,16 @@ EDGE_CONTRACT = {
         "profile_save_select",
         "main_menu.resume_last_game",
         "hub",
+    ),
+    "profile_select_new_game_to_create": (
+        "profile_save_select",
+        "new_game_click",
+        "create_element",
+    ),
+    "beta_notice_first_boot_to_control_scheme_picker": (
+        "beta_notice_first_boot",
+        "dialog_primary",
+        "control_scheme_picker",
     ),
 }
 
@@ -859,7 +930,9 @@ def test_native_menu_recorders_settle_and_derive_provenance() -> str:
         r"stableSpanMilliseconds\s*=\s*\[long\]"
         r"\$baselineSettlement\.stable_span_milliseconds.*?"
         r"requiredSpanMilliseconds\s*=\s*\[Math\]::Max\(\s*"
-        r"\[long\]\$script:NativeMenuExtendedMinimumMilliseconds,\s*"
+        r"\[long\]\[Math\]::Max\(\s*"
+        r"\$script:NativeMenuExtendedMinimumMilliseconds,\s*"
+        r"\$MinimumObservationMilliseconds\s*\),\s*"
         r"\[long\]\$script:NativeMenuExtendedSpanMultiplier\s*\*\s*"
         r"\$stableSpanMilliseconds\s*\).*?"
         r"\$observedSpanMilliseconds\s*=\s*0L.*?"
@@ -1320,7 +1393,12 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
         r"_derivation_evidence\(resolved\[\"witness\"\]\).*?"
         r"DERIVATION_MISMATCH_REASON.*?"
         r"required_baseline_id.*?PER_BINDING_MISMATCH_REASON.*?"
-        r"_resolve_unique_receipt\(.*?"
+        r"resolved_evidence_root = evidence_root\.resolve\(\).*?"
+        r"resolved_search_roots = tuple\(.*?"
+        r"not root\.is_relative_to\(resolved_evidence_root\).*?"
+        r"launch receipt search roots escape or are absent.*?"
+        r"if len\(matches\) != 1:.*?"
+        r"launch receipt lookup is absent or ambiguous.*?"
         r"receipt_path\.stat\(\)\.st_size != expected_bytes.*?"
         r"sha256_file\(receipt_path\) != expected_sha256",
         "the offline durable-state verifier can accept a foreign identity, "
@@ -1425,10 +1503,20 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
         r"len\(set\(tops\)\) != 2.*?"
         r"def validate_browser_tab\(.*?"
         r"measured\[\"measured_tab\"\] != expected.*?"
-        r"receipt\.get\(\"geometry_sha256\"\) != "
-        r"measured\[\"geometry_sha256\"\]",
+        r"receipt_measurements = _validated_receipt_measurements\(.*?"
+        r"_semantic_measurements\(receipt_measurements\).*?"
+        r"_semantic_measurements\(measured\[\"measurements\"\]\)",
         "offline promotion no longer remeasures the Case A browser tab or "
         "verifies the exact capture-time geometry receipt",
+    )
+    _require_regex(
+        browser_python,
+        r"def _validated_receipt_measurements\(.*?"
+        r"sorted\(bracket_ids\) != member_ids.*?"
+        r"receipt\.get\(\s*\"geometry_sha256\"\s*\).*?"
+        r"_geometry_sha256\(measurements\)",
+        "offline browser-tab verification no longer proves the six exact "
+        "measured brackets and their capture-time geometry hash",
     )
 
     baseline_path = (
@@ -1578,7 +1666,8 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
         (ROOT / "tests/fixtures/webgame/menu-transition-layouts").glob("*.json")
     )
     expected_paths = {
-        f"menu-layouts/{layout_id}.json" for layout_id in LAYOUT_IDS
+        f"menu-layouts/{layout_id}.json"
+        for layout_id in SETTLED_STANDALONE_LAYOUT_IDS
     } | {
         "menu-transition-layouts/hub_new_game.json",
         "menu-transition-layouts/hub_pristine_second_new_game.json",
@@ -1589,7 +1678,7 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
     }
     if actual_paths != expected_paths:
         raise StaticReTestFailure(
-            "profile-state fixture sweep did not reach the exact 31-layout corpus: "
+            "profile-state fixture sweep did not reach the exact 30-layout corpus: "
             f"missing={sorted(expected_paths - actual_paths)} "
             f"extra={sorted(actual_paths - expected_paths)}"
         )
@@ -1726,7 +1815,7 @@ def test_native_menu_profile_state_and_browser_tab_are_pinned() -> str:
 
     return (
         "launcher and recorders derive only exact legitimate durable-state "
-        "identities with no override path; all 31 layouts and menu-goldens "
+        "identities with no override path; all 30 layouts and menu-goldens "
         "hash-check their per-binding baseline; Dark Cloud tabs remain measured"
     )
 
@@ -2081,15 +2170,28 @@ def test_native_menu_capture_surface_agreement_is_fail_closed() -> str:
         r"hub_pristine_second_new_game.*?15.*?"
         r"hub_new_game.*?14.*?hub_resumed.*?10.*?"
         r"\$elements\.Count -ne \$requiredElementCount.*?"
-        r"settled Hub path classifier measured.*?exact authorized.*?census.*?"
+        r"settled Hub path classifier measured.*?exact authorized.*?census",
+        "path-qualified Hub capture no longer classifies and enforces all "
+        "three exact authorized censuses",
+    )
+    _require_regex(
+        support,
+        r"\$measuredHubLayout\s*=\s*Resolve-NativeMenuHubPathLayoutId.*?"
         r"\$measuredHubLayout -cne \$ScreenId.*?"
-        r"Hub path selector expected.*?machine-classified.*?"
-        r"\$semanticPayload\.screen_id\s*=\s*\$ScreenId.*?"
-        r"Invoke-NativeMenuSettlementClassifier.*?"
-        r"Assert-NativeMenuSettledHubPathCensus",
-        "path-qualified Hub capture no longer routes population samples by "
-        "the measured selector and enforces its exact authorized census only "
-        "after settlement",
+        r"Status = \"wrong_surface\".*?"
+        r"Hub path selector expected.*?machine-classified",
+        "path-qualified Hub probes no longer reject a measured variant that "
+        "differs from the requested path selector",
+    )
+    _require_regex(
+        support,
+        r"\$classification\s*=\s*Invoke-NativeMenuSettlementClassifier.*?"
+        r"\$stableWindow\.Count -lt.*?40-sample/two-second floor.*?"
+        r"Assert-NativeMenuSettledHubPathCensus\s*`\s*"
+        r"-ScreenId \$ScreenId\s*`\s*"
+        r"-Layout \$classification\.layout",
+        "path-qualified Hub census is no longer enforced on the exact "
+        "classifier-selected settled window",
     )
     _require_regex(
         click_helper,
@@ -2912,7 +3014,10 @@ def test_native_menu_motion_capability_campaign_resolution_is_fail_closed() -> s
     _require_regex(
         resolver,
         r"fixture\[\"layout\"\]\s*=\s*copy\.deepcopy\(layouts\[layout_id\]\).*?"
-        r"endpoint\[\"layout\"\]\s*=\s*copy\.deepcopy\(layouts\[layout_id\]\).*?"
+        r"for \(edge_id, endpoint_key\), layout_id in endpoint_layouts\.items\(\):.*?"
+        r"endpoint\[\"layout\"\]\s*=\s*\(.*?"
+        r"multi_state_layout\(settings_path_core, settings_state_id\).*?"
+        r"else copy\.deepcopy\(layouts\[layout_id\]\).*?"
         r"if verify:.*?"
         r"resolved candidate .*? is not the machine-derived v2\.9 result.*?"
         r"resolved navigation is not the machine-derived v2\.9 result",
@@ -2989,23 +3094,33 @@ def test_native_menu_v210_controls_title_correction_is_exact() -> str:
         r"settled_layout\.get\(\"screen_id\"\).*?"
         r"field 'screen_id' differs.*?"
         r"if landed_title == settled_title:\s*return None.*?"
+        r"if layout_id == \"dark-cloud-login-settings\":.*?"
+        r"diagnose_dark_cloud_login_title_v220\(",
+        "Settlement v2.10 dispatch can bypass screen identity or the exact "
+        "v2.20 layout-specific correction before Controls",
+    )
+    _require_regex(
+        diagnosis,
+        r"if not controls_title_contract:.*?"
+        r"_require_v210_controls_title_contract\(.*?"
         r"layout_id != controls_title_contract\[\"layout_id\"\].*?"
         r"landed_layout\.get\(\"screen_id\"\) != "
         r"controls_title_contract\[\"screen_id\"\].*?"
         r"landed_title != controls_title_contract\[\"landed_value\"\].*?"
         r"settled_title != controls_title_contract\[\"settled_value\"\].*?"
-        r"field 'screen_title' differs.*?"
         r"solomon-dark-native-menu-screen-title-correction-v210",
         "Settlement v2.10 can authorize a title change outside the exact "
         "Controls layout, native screen, old value, and new value",
     )
     _require_regex(
         promoter,
+        r"controls_title_contract = read_json\(.*?"
         r"native-menu-controls-title-v210\.json.*?"
-        r"diagnose_landed_layout\(\s*layout_id,.*?"
-        r"order_override_contract,\s*controls_title_contract,.*?"
-        r"diagnose_landed_layout\(\s*source_layout_id,.*?"
-        r"order_override_contract,\s*controls_title_contract,",
+        r"def diagnose_record\(.*?"
+        r"diagnose_landed_layout\(.*?"
+        r"controls_title_contract=controls_title_contract.*?"
+        r"dark_cloud_login_title_contract=.*?dark_cloud_login_title_contract.*?"
+        r"source_diagnosis = diagnose_record\(",
         "standalone or transition-source promotion can bypass the exact "
         "v2.10 Controls title contract or lose layout identity",
     )
@@ -3032,7 +3147,7 @@ def test_native_menu_v210_controls_title_correction_is_exact() -> str:
     )
     _require_regex(
         specification,
-        r"# Native menu settlement specification v2\.11.*?"
+        r"# Native menu settlement specification v2\.22.*?"
         r"## Controls title capture defect.*?"
         r"0377809414de5a1e5d0b8af01baaf1ee8221c5e586e81d7dfda95f18d1da703f.*?"
         r"no general title tolerance was added",
@@ -3118,20 +3233,25 @@ def test_native_menu_v211_controls_core_supersession_is_exact() -> str:
     settled_fixture_path = (
         ROOT / "tests/fixtures/webgame/menu-layouts/controls.json"
     )
+    if settled.get("sha256") != (
+        "85261df441db0393e0e9f00a1c1a1cb63b3ba440b86d72501e06e29eee8b26a1"
+    ) or settled.get("bytes") != 186498:
+        raise StaticReTestFailure(
+            "Settlement v2.11 lost the exact accepted candidate evidence receipt"
+        )
     assert_recorded_hash_matches_file(
-        settled.get("sha256"),
+        "9b0270614d0ed6ff94792498d6bff928153bf896990a25d477c8440b7f04cd52",
         settled_fixture_path,
-        "Settlement v2.11 superseding settled Controls fixture",
+        "Settlement v2.11 promoted Controls fixture",
     )
     if landed.get("bytes") != (ROOT / landed["path"]).stat().st_size:
         raise StaticReTestFailure(
             "Settlement v2.11 superseded Controls byte receipt no longer "
             "matches the committed baseline"
         )
-    if settled.get("bytes") != settled_fixture_path.stat().st_size:
+    if settled_fixture_path.stat().st_size != 184599:
         raise StaticReTestFailure(
-            "Settlement v2.11 superseding Controls byte receipt no longer "
-            "matches the committed settled fixture"
+            "Settlement v2.11 promoted Controls fixture byte receipt drifted"
         )
 
     def semantic_counter(path: Path) -> Counter[str]:
@@ -3215,14 +3335,14 @@ def test_native_menu_v211_controls_core_supersession_is_exact() -> str:
     audits = contract.get("source_audits")
     if audits != {
         "title": {
-            "path": "diagnostics/controls-screen-title-stop-audit.json",
+            "path": "raw-v9/diagnostics/controls-screen-title-stop-audit.json",
             "sha256": (
                 "0377809414de5a1e5d0b8af01baaf1ee8221c5e586e81d7dfda95f18d1da703f"
             ),
             "bytes": 5456,
         },
         "structural_core": {
-            "path": "diagnostics/controls-post-v210-structural-stop-audit.json",
+            "path": "raw-v9/diagnostics/controls-post-v210-structural-stop-audit.json",
             "sha256": (
                 "22fc8f3061a0f0577bf805ab1ddf750416744bc0097405187321b9feeae148f1"
             ),
@@ -3288,31 +3408,41 @@ def test_native_menu_v211_controls_core_supersession_is_exact() -> str:
         diagnosis,
         r"def _diagnose_structural_core_v211\(.*?"
         r"_v211_receipt_matches\(recorded_landed, landed_fixture_receipt\).*?"
-        r"_v211_receipt_matches\(recorded_candidate, candidate_fixture_receipt\).*?"
         r"layout_id != contract\[\"layout_id\"\].*?"
         r"_v211_semantic_counter\(landed_layout.*?!= landed_counter.*?"
         r"_v211_semantic_counter\(settled_layout.*?!= settled_counter.*?"
-        r"V211_STRUCTURAL_MISMATCH",
+        r"V211_STRUCTURAL_MISMATCH.*?"
+        r"_v211_receipt_matches\(\s*recorded_candidate, candidate_fixture_receipt\s*\).*?"
+        r'"qualified_reemission": not source_candidate_receipt_reproduced.*?'
+        r'"general_tolerance": False',
         "Settlement v2.11 runtime can accept a non-exact receipt, layout, or "
         "semantic multiset",
     )
     _require_regex(
         promoter,
+        r"controls_core_contract = read_json\(.*?"
         r"native-menu-controls-core-v211\.json.*?"
-        r"diagnose_landed_layout\(\s*layout_id,.*?"
-        r"controls_core_contract,.*?file_receipt\(landed_path_by_layout_id\[layout_id\]\).*?"
-        r"_validate_controls_context_v211\(.*?"
-        r"controls_core_contract,.*?records\[\"controls\"\].*?"
-        r"diagnose_landed_layout\(\s*source_layout_id,.*?"
-        r"controls_core_contract,.*?"
-        r"promotion_pairs",
+        r"def diagnose_record\(.*?"
+        r"controls_core_contract=controls_core_contract.*?"
+        r"landed_fixture_receipt=file_receipt\(.*?"
+        r"candidate_fixture_receipt=file_receipt\(.*?"
+        r"controls_core_context = _validate_controls_context_v211\(\s*"
+        r"controls_core_contract,\s*records\[\"controls\"\]",
         "standalone, transition-source, or final promotion can bypass the "
         "exact v2.11 Controls contract and context gate",
     )
     _require_regex(
+        promoter,
+        r"source_diagnosis = diagnose_record\(\s*"
+        r"source_layout_id,\s*population_primary_trace,\s*"
+        r"population_confirmation_trace",
+        "transition-source promotion no longer reuses the exact v2.11 "
+        "Controls diagnosis path",
+    )
+    _require_regex(
         generator,
         r"committed_receipt\(repo_root, landed_snapshot_relative\).*?"
-        r"structural_audit does not reproduce both multisets.*?"
+        r"structural audit does not reproduce both multisets.*?"
         r"Controls confirmation reused the primary identity.*?"
         r"controls_endpoints\(navigation, settled_layout\)",
         "Settlement v2.11 generator can accept an uncommitted old snapshot, "
@@ -3343,7 +3473,7 @@ def test_native_menu_v211_controls_core_supersession_is_exact() -> str:
     )
     _require_regex(
         specification,
-        r"# Native menu settlement specification v2\.11.*?"
+        r"# Native menu settlement specification v2\.22.*?"
         r"## Controls structural-core capture defect.*?"
         r"22fc8f3061a0f0577bf805ab1ddf750416744bc0097405187321b9feeae148f1.*?"
         r"no general settled-only-member tolerance",
@@ -3353,6 +3483,983 @@ def test_native_menu_v211_controls_core_supersession_is_exact() -> str:
     return (
         "Settlement v2.11 supersedes exactly the audited Controls core while "
         "preserving classifier agreement, paired settlement, and both endpoints"
+    )
+
+
+def test_native_menu_v220_dark_cloud_login_title_correction_is_exact() -> str:
+    assert_module_runs_in_ci("test_native_menu_ambient_lifecycle")
+    contract_path = (
+        ROOT
+        / "tests/fixtures/webgame/native-menu-dark-cloud-login-title-v220.json"
+    )
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    expected_scope = {
+        "schema": "solomon-dark-native-menu-dark-cloud-login-title-v220",
+        "settlement_spec": "2.20",
+        "layout_id": "dark-cloud-login-settings",
+        "screen_id": "dark_cloud_login_settings",
+        "field": "screen_title",
+        "landed_value": "",
+        "settled_value": "Dark Cloud Browser",
+    }
+    expected_fields = {
+        *expected_scope,
+        "landed_fixture",
+        "baseline_snapshot",
+        "superseding_candidate",
+        "source_stop_audit",
+        "source_promoter_stop",
+        "source_provenance",
+        "profile_state_identity_sha256",
+        "paired_settlement",
+        "bound_endpoints",
+        "authorization",
+        "forbidden",
+        "derivation",
+    }
+    if set(contract) != expected_fields or {
+        field: contract.get(field) for field in expected_scope
+    } != expected_scope:
+        raise StaticReTestFailure(
+            "Settlement v2.20 no longer authorizes exactly the one-field "
+            "Dark Cloud login title correction"
+        )
+    if contract.get("forbidden") != [
+        "title tolerance",
+        "another layout",
+        "another field",
+        "another settled title value",
+        "candidate rewriting",
+    ]:
+        raise StaticReTestFailure(
+            "Settlement v2.20 no longer forbids every title-correction scope leak"
+        )
+
+    committed_receipts = {
+        "landed_fixture": (
+            "tests/fixtures/webgame/menu-layouts/dark-cloud-login-settings.json"
+        ),
+        "baseline_snapshot": (
+            "webgame-contracts/baseline-snapshots/menu-layouts/"
+            "dark-cloud-login-settings.json"
+        ),
+    }
+    for field, expected_path in committed_receipts.items():
+        receipt = contract.get(field)
+        if (
+            not isinstance(receipt, dict)
+            or set(receipt) != {"repo_relative_path", "sha256", "bytes"}
+            or receipt.get("repo_relative_path") != expected_path
+        ):
+            raise StaticReTestFailure(
+                f"Settlement v2.20 {field.replace('_', ' ')} no longer names "
+                "the exact committed artifact"
+            )
+        check_path = ROOT / (
+            committed_receipts["baseline_snapshot"]
+            if field == "landed_fixture"
+            else expected_path
+        )
+        assert_recorded_hash_matches_file(
+            receipt.get("sha256"),
+            check_path,
+            f"Settlement v2.20 archived {field.replace('_', ' ')}",
+        )
+        if receipt.get("bytes") != check_path.stat().st_size:
+            raise StaticReTestFailure(
+                f"Settlement v2.20 {field.replace('_', ' ')} byte receipt is false"
+            )
+    if contract["landed_fixture"]["sha256"] != contract["baseline_snapshot"]["sha256"]:
+        raise StaticReTestFailure(
+            "Settlement v2.20 shellfix baseline no longer preserves the superseded landed bytes"
+        )
+
+    candidate = contract.get("superseding_candidate")
+    if (
+        not isinstance(candidate, dict)
+        or candidate.get("evidence_path")
+        != (
+            "raw-v9/candidates/candidate-v214-profile-final/menu-layouts/"
+            "dark-cloud-login-settings.json"
+        )
+        or not re.fullmatch(r"[0-9a-f]{64}", str(candidate.get("sha256")))
+        or not re.fullmatch(
+            r"[0-9a-f]{64}", str(candidate.get("structural_core_sha256"))
+        )
+        or not isinstance(candidate.get("bytes"), int)
+        or candidate["bytes"] <= 0
+        or candidate.get("element_count") != 77
+    ):
+        raise StaticReTestFailure(
+            "Settlement v2.20 superseding candidate is no longer pinned to the exact settled core"
+        )
+    assert_recorded_hash_matches_file(
+        candidate["sha256"],
+        ROOT / committed_receipts["landed_fixture"],
+        "Settlement v2.20 promoted Dark Cloud login fixture",
+    )
+    if candidate["bytes"] != (
+        ROOT / committed_receipts["landed_fixture"]
+    ).stat().st_size:
+        raise StaticReTestFailure(
+            "Settlement v2.20 promoted Dark Cloud login fixture byte receipt drifted"
+        )
+    evidence_receipt_fields = {
+        "source_stop_audit": (
+            "raw-v9/profile-select-new-game-edge/"
+            "dark-cloud-login-title-stop-audit.json"
+        ),
+        "source_promoter_stop": (
+            "raw-v9/profile-select-new-game-edge/merged-v219/"
+            "promoter-dry-run-v219-40-edges-rerun3.log"
+        ),
+    }
+    for field, expected_path in evidence_receipt_fields.items():
+        receipt = contract.get(field)
+        required = {"evidence_path", "sha256", "bytes"}
+        if field == "source_promoter_stop":
+            required.add("message")
+        if (
+            not isinstance(receipt, dict)
+            or set(receipt) != required
+            or receipt.get("evidence_path") != expected_path
+            or not re.fullmatch(r"[0-9a-f]{64}", str(receipt.get("sha256")))
+            or not isinstance(receipt.get("bytes"), int)
+            or receipt["bytes"] <= 0
+        ):
+            raise StaticReTestFailure(
+                f"Settlement v2.20 {field.replace('_', ' ')} provenance constant is incomplete"
+            )
+    if contract["source_promoter_stop"].get("message") != (
+        "STOP: standalone dark-cloud-login-settings: landed-vs-settled mismatch "
+        "outside authorized classes: layout field 'screen_title' differs"
+    ):
+        raise StaticReTestFailure(
+            "Settlement v2.20 no longer pins the exact pre-authorization production STOP"
+        )
+
+    source = contract.get("source_provenance")
+    required_source_fields = {
+        "base_commit_sha": 40,
+        "source_tree_sha": 40,
+        "game_executable_sha256": 64,
+        "loader_dll_sha256": 64,
+        "profile_state_identity_sha256": 64,
+    }
+    if not isinstance(source, dict) or not set(required_source_fields) <= set(source):
+        raise StaticReTestFailure(
+            "Settlement v2.20 lost its machine-derived source provenance witness"
+        )
+    for field, length in required_source_fields.items():
+        if not re.fullmatch(
+            rf"[0-9a-f]{{{length}}}", str(source.get(field))
+        ):
+            raise StaticReTestFailure(
+                f"Settlement v2.20 machine-derived {field} is malformed"
+            )
+    if (
+        source.get("profile_state_identity_sha256")
+        != contract.get("profile_state_identity_sha256")
+    ):
+        raise StaticReTestFailure(
+            "Settlement v2.20 source and capture headers no longer share one profile identity"
+        )
+
+    paired = contract.get("paired_settlement")
+    if not isinstance(paired, dict) or set(paired) != {
+        "primary",
+        "confirmation",
+        "core_equality",
+    }:
+        raise StaticReTestFailure(
+            "Settlement v2.20 paired settlement no longer reaches both traces and the core proof"
+        )
+    identities: list[tuple[Any, Any]] = []
+    for role in ("primary", "confirmation"):
+        observation = paired.get(role)
+        recording = observation.get("recording") if isinstance(observation, dict) else None
+        if (
+            not isinstance(observation, dict)
+            or observation.get("sample_count") != 40
+            or observation.get("stable_span_milliseconds", 0) < 2_000
+            or not isinstance(recording, dict)
+            or not re.fullmatch(r"[0-9a-f]{64}", str(recording.get("sha256")))
+            or not isinstance(recording.get("bytes"), int)
+            or recording["bytes"] <= 0
+            or not isinstance(recording.get("evidence_path"), str)
+        ):
+            raise StaticReTestFailure(
+                f"Settlement v2.20 {role} trace no longer proves a real settled window"
+            )
+        identities.append((observation.get("instance"), observation.get("process_id")))
+    if len(set(identities)) != 2:
+        raise StaticReTestFailure(
+            "Settlement v2.20 paired title evidence no longer uses two independent instances"
+        )
+    core_equality = paired.get("core_equality")
+    if (
+        not isinstance(core_equality, dict)
+        or core_equality.get("core_equal") is not True
+        or core_equality.get("zero_residual") is not True
+        or core_equality.get("bound_endpoint_census_complete") is not True
+    ):
+        raise StaticReTestFailure(
+            "Settlement v2.20 title evidence lost exact v2.19 paired-core equality"
+        )
+
+    endpoints = contract.get("bound_endpoints")
+    if not isinstance(endpoints, list) or len(endpoints) != 2:
+        raise StaticReTestFailure(
+            "Settlement v2.20 title contract no longer pins exactly two navigation endpoints"
+        )
+    identities = {
+        (entry.get("edge_id"), entry.get("side"), entry.get("trigger"))
+        for entry in endpoints
+        if isinstance(entry, dict)
+    }
+    if identities != {
+        ("dark_cloud_to_login_settings", "after", "dark_cloud_browser.login"),
+        ("dark_cloud_login_to_browser", "before", "done_button_click"),
+    } or any(
+        entry.get("screen_title") != "Dark Cloud Browser"
+        or entry.get("structural_core_sha256")
+        != candidate["structural_core_sha256"]
+        or entry.get("element_count") != candidate["element_count"]
+        or not re.fullmatch(r"[0-9a-f]{64}", str(entry.get("frame_sha256")))
+        for entry in endpoints
+    ):
+        raise StaticReTestFailure(
+            "Settlement v2.20 endpoints no longer reproduce the exact settled title core and frame"
+        )
+
+    derivation = contract.get("derivation")
+    generator_path = ROOT / "tools/derive_native_menu_dark_cloud_login_title_v220.py"
+    if (
+        not isinstance(derivation, dict)
+        or derivation.get("tool")
+        != "tools/derive_native_menu_dark_cloud_login_title_v220.py"
+    ):
+        raise StaticReTestFailure(
+            "Settlement v2.20 contract no longer identifies its machine derivation"
+        )
+    assert_recorded_hash_matches_file(
+        derivation.get("tool_sha256"),
+        generator_path,
+        "Settlement v2.20 committed contract generator",
+    )
+
+    diagnosis = _read("tools/native_menu_landed_diagnosis_v25.py")
+    promoter = _read("tools/promote_native_menu_recapture.py")
+    generator = _read("tools/derive_native_menu_dark_cloud_login_title_v220.py")
+    generation = _read("tools/native_menu_generation_v218.py")
+    title_mutations = _read("tools/run_native_menu_v220_title_mutations.py")
+    static_mutation = _read(
+        "tools/run_native_menu_v220_static_contract_mutation.py"
+    )
+    mode_mutation = _read("tools/run_native_menu_stop_first_census_mutation.py")
+    unit_tests = _read("tests/test_native_menu_ambient_lifecycle.py")
+    specification = _read("docs/reverse-engineering/native-menu-settlement.md")
+    _require_regex(
+        diagnosis,
+        r"def diagnose_dark_cloud_login_title_v220\(.*?"
+        r"layout_id != contract\[\"layout_id\"\].*?"
+        r"landed_layout\.get\(\"screen_id\"\) != contract\[\"screen_id\"\].*?"
+        r"settled_layout\.get\(\"screen_id\"\) != contract\[\"screen_id\"\].*?"
+        r"landed_layout\.get\(\"screen_title\"\) != contract\[\"landed_value\"\].*?"
+        r"settled_layout\.get\(\"screen_title\"\) != contract\[\"settled_value\"\].*?"
+        r"contract\[\"landed_fixture\"\].*?contract\[\"superseding_candidate\"\].*?"
+        r"general_tolerance.*?False",
+        "Settlement v2.20 runtime can accept a wrong layout, field value, receipt, or generalized tolerance",
+    )
+    _require_regex(
+        promoter,
+        r"native-menu-dark-cloud-login-title-v220\.json.*?"
+        r"_validate_dark_cloud_login_title_context_v220\(.*?"
+        r"records\[\"dark-cloud-login-settings\"\].*?"
+        r"dark_cloud_login_title_contract=\(\s*dark_cloud_login_title_contract\s*\)",
+        "Settlement v2.20 standalone and transition diagnosis can bypass the exact context contract",
+    )
+    _require_regex(
+        promoter,
+        r"if enumerate_all_unclassified and not dry_run:\s*"
+        r"raise PromotionError\(\s*"
+        r"\"enumerate-all landed-difference diagnostics require --dry-run\"",
+        "Settlement v2.20 exhaustive diagnostics can run on a fixture-writing promotion path",
+    )
+    _require_regex(
+        promoter,
+        r"except LandedDiagnosisError as error:.*?"
+        r"if not enumerate_all_unclassified:\s*"
+        r"raise PromotionError\(stop_message\) from error.*?"
+        r"candidate_applied\": False",
+        "Settlement v2.20 diagnostic mode can weaken production stop-first behavior or claim candidate application",
+    )
+    _require_regex(
+        generator,
+        r"baseline != landed.*?"
+        r"for role in \(\"primary\", \"confirmation\"\):.*?"
+        r"trace_receipt\(\s*evidence_root, observation\[\"recording\"\], role\s*\).*?"
+        r"identities != EXPECTED_ENDPOINTS",
+        "Settlement v2.20 generator can omit exact landed bytes, either paired trace, or one bound endpoint",
+    )
+    _require_regex(
+        generator,
+        r"promoter_stop = audit\.get\(\"promoter_stop\"\).*?"
+        r"stop_receipt = trace_receipt\(evidence_root, promoter_stop, \"promoter STOP\"\).*?"
+        r"\"source_promoter_stop\": \{.*?"
+        r"atomic_json\(output_path, contract\)",
+        "Settlement v2.20 generator can omit the source production STOP or fail to emit the derived contract",
+    )
+    _require_regex(
+        title_mutations,
+        r"authorization_disabled_reproduces_title_stop.*?"
+        r"case_mutated_target_value_stops.*?"
+        r"same_pattern_on_other_layout_stops.*?"
+        r"second_differing_layout_field_stops.*?"
+        r"settled_title_disagrees_with_pin_stops.*?"
+        r"before_cleared = clear_bytecode.*?"
+        r"mutation_cleared = clear_bytecode.*?"
+        r"restore_cleared = clear_bytecode",
+        "the v2.20 five-row mutation fleet no longer proves exact value, field, layout, and receipt scope with green baselines",
+    )
+    _require_regex(
+        static_mutation,
+        r"CASE = \"static_contract_rejects_case_mutated_target\".*?"
+        r"before_cleared = clear_bytecode.*?"
+        r"mutated\[\"settled_value\"\] = \"DARK CLOUD BROWSER\".*?"
+        r"finally:\s*atomic_bytes\(contract_path, original\).*?"
+        r"TRIP_MESSAGE not in trip\.stderr.*?"
+        r"restore_cleared = clear_bytecode.*?"
+        r"exact_contract_bytes_restored",
+        "the registered v2.20 static contract is no longer mutation-tested with an exact-byte restore and named trip",
+    )
+    _require_regex(
+        mode_mutation,
+        r"CASE = \"production_stops_first_while_census_enumerates_all\".*?"
+        r"before_cleared = clear_bytecode.*?"
+        r"command = \[.*?--dry-run.*?"
+        r"completed\.returncode != 1.*?"
+        r"result.*?before\[\"first_production_stop\"\].*?"
+        r"restore_cleared = clear_bytecode.*?"
+        r"verify_green\(repo, evidence, census, before_receipt\)",
+        "the mode-boundary mutation no longer proves production stops first while exhaustive diagnostics stay no-write green",
+    )
+    _require_regex(
+        unit_tests,
+        r"test_v220_dark_cloud_login_title_exact_correction_is_bounded.*?"
+        r"test_v220_dark_cloud_login_title_case_variant_stops.*?"
+        r"test_v220_dark_cloud_login_title_rule_does_not_apply_elsewhere.*?"
+        r"test_v220_dark_cloud_login_title_rejects_a_second_layout_field",
+        "the CI behavior suite no longer proves both directions of the exact v2.20 correction",
+    )
+    _require_regex(
+        diagnosis,
+        r"except LandedDiagnosisError as diagnosis_error:.*?"
+        r"member_differences = _enumerate_unclassified_members\(.*?"
+        r"if not member_differences and diagnosis_message not in recorded_messages:.*?"
+        r"\"field\": \"landed_diagnosis_guard\".*?"
+        r"\"message\": diagnosis_message",
+        "the exhaustive census can silently lose a fail-closed diagnosis guard when no raw member residual remains",
+    )
+    _require_regex(
+        unit_tests,
+        r"test_enumerate_all_records_a_guard_stop_with_no_member_residual.*?"
+        r"side_effect=LandedDiagnosisError\(\"named correction guard failed\"\).*?"
+        r"\"field\": \"landed_diagnosis_guard\".*?"
+        r"\"message\": \"named correction guard failed\"",
+        "the census behavior suite no longer proves a zero-residual guard STOP is enumerated",
+    )
+    generation_tests = _read("tests/test_native_menu_generation_v218.py")
+    _require_regex(
+        generation,
+        r"def semantic_core\(.*?return \{\s*"
+        r"\"screen_id\": layout\.get\(\"screen_id\"\),\s*"
+        r"\"screen_title\": layout\.get\(\"screen_title\"\),\s*"
+        r"\"semantic_multiset\": Counter\(signatures\),\s*"
+        r"\"relative_sequence\": signatures,\s*\}.*?"
+        r"for field in \(\"screen_id\", \"screen_title\"\)",
+        "the exhaustive census can misclassify recorder capture_method annotation as player-visible generation identity",
+    )
+    _require_regex(
+        generation_tests,
+        r"test_capture_method_annotation_is_not_a_generation_identity_field.*?"
+        r"settled\[\"capture_method\"\] = \"settled semantic recorder\".*?"
+        r"self\.assertTrue\(result\[\"semantic_core\"\]\[\"exact\"\]\)",
+        "the generation suite no longer proves capture-method annotation cannot create a false corpus difference",
+    )
+    _require_regex(
+        specification,
+        r"# Native menu settlement specification v2\.22.*?"
+        r"## Dark Cloud login title capture defect.*?"
+        r"4eb60e30e5f5e9d1db77fd9ae67fbba2d445077007d26b60cc08eefbb1ce4f5a.*?"
+        r"No title tolerance or candidate rewrite exists.*?"
+        r"Production promotion still stops at the first unclassified\s+difference",
+        "the v2.20 spec no longer records the exact correction and no-write diagnostic boundary",
+    )
+    return (
+        "Settlement v2.20 corrects exactly one Dark Cloud login title field, "
+        "pins both settled instances and endpoints, and preserves production stop-first behavior"
+    )
+
+
+def test_native_menu_v221_census_era_disposition_is_exact() -> str:
+    assert_module_runs_in_ci("test_native_menu_ambient_lifecycle")
+    contract_path = (
+        ROOT
+        / "tests/fixtures/webgame/native-menu-census-era-disposition-v221.json"
+    )
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    try:
+        view = require_v221_census_era_contract(contract)
+    except ValueError as error:
+        raise StaticReTestFailure(
+            "Settlement v2.21 exact sealed census disposition no longer validates"
+        ) from error
+
+    if set(view["class_a"]) != set(V221_CLASS_A_COUNTS) or sum(
+        len(record["members"]) for record in view["class_a"].values()
+    ) != 261:
+        raise StaticReTestFailure(
+            "Settlement v2.21 no longer pins all 261 exact Class-A members"
+        )
+    if set(view["class_b"]) != set(V221_CLASS_B_COUNTS) or sum(
+        len(record["members"]) for record in view["class_b"].values()
+    ) != 38:
+        raise StaticReTestFailure(
+            "Settlement v2.21 no longer pins all 38 paired Class-B members"
+        )
+    if (
+        set(view["field_corrections"]) != set(V221_FIELD_CORRECTIONS)
+        or set(view["class_f"]) != {"performance", "profile-save-select"}
+        or set(V221_CHOICE_ROWS)
+        != {
+            "skill_picker.art.skills_84.1",
+            "skill_picker.art.skills_84.2",
+        }
+    ):
+        raise StaticReTestFailure(
+            "Settlement v2.21 lost an exact field, Class-F, or Skills.84 scope witness"
+        )
+
+    committed_records = [
+        *contract["class_a_records"],
+        *contract["class_b_records"],
+        *contract["field_corrections"],
+    ]
+    if (
+        len(contract["class_a_records"]) != 10
+        or len(contract["class_b_records"]) != 7
+        or len(contract["field_corrections"]) != 6
+        or len(committed_records) != 23
+    ):
+        raise StaticReTestFailure(
+            "Settlement v2.21 committed landed-receipt sweep reached no complete record census"
+        )
+    baseline_manifest = json.loads(
+        (ROOT / "webgame-contracts/menu-baseline.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    baseline_entries = baseline_manifest.get("baseline_snapshots")
+    if not isinstance(baseline_entries, list) or len(baseline_entries) != 28:
+        raise StaticReTestFailure(
+            "Settlement v2.21 immutable landed snapshot sweep reached no full 28-fixture census"
+        )
+    baseline_by_fixture = {
+        entry.get("fixture"): entry
+        for entry in baseline_entries
+        if isinstance(entry, dict) and isinstance(entry.get("fixture"), str)
+    }
+    if len(baseline_by_fixture) != 28:
+        raise StaticReTestFailure(
+            "Settlement v2.21 immutable landed snapshot lookup is ambiguous"
+        )
+    witnessed_paths: set[str] = set()
+    immutable_snapshot_by_landed_path: dict[str, Path] = {}
+    for record in committed_records:
+        receipt = record.get("landed_fixture")
+        if (
+            not isinstance(receipt, dict)
+            or set(receipt) != {"repo_relative_path", "sha256", "bytes"}
+            or not isinstance(receipt.get("repo_relative_path"), str)
+        ):
+            raise StaticReTestFailure(
+                "Settlement v2.21 a landed disposition no longer names its committed fixture"
+            )
+        fixture_relative_path = receipt["repo_relative_path"].removeprefix(
+            "tests/fixtures/webgame/"
+        )
+        baseline_entry = baseline_by_fixture.get(fixture_relative_path)
+        if not isinstance(baseline_entry, dict):
+            raise StaticReTestFailure(
+                "Settlement v2.21 a landed disposition is not bound to an immutable baseline snapshot"
+            )
+        snapshot_relative_path = baseline_entry.get("snapshot")
+        if not isinstance(snapshot_relative_path, str):
+            raise StaticReTestFailure(
+                "Settlement v2.21 immutable baseline entry does not name its snapshot"
+            )
+        artifact = ROOT / snapshot_relative_path
+        assert_recorded_hash_matches_file(
+            receipt.get("sha256"),
+            artifact,
+            "Settlement v2.21 immutable landed fixture snapshot",
+        )
+        if (
+            receipt.get("sha256") != baseline_entry.get("sha256")
+            or receipt.get("bytes") != baseline_entry.get("bytes")
+            or receipt.get("bytes") != artifact.stat().st_size
+        ):
+            raise StaticReTestFailure(
+                "Settlement v2.21 a landed disposition disagrees with its immutable snapshot receipt"
+            )
+        witnessed_paths.add(receipt["repo_relative_path"])
+        immutable_snapshot_by_landed_path[receipt["repo_relative_path"]] = artifact
+    if not {
+        "tests/fixtures/webgame/menu-layouts/skill-picker.json",
+        "tests/fixtures/webgame/menu-layouts/game-settings-gameplay.json",
+        "tests/fixtures/webgame/menu-layouts/dark-cloud-menu.json",
+    } <= witnessed_paths:
+        raise StaticReTestFailure(
+            "Settlement v2.21 committed receipt sweep lost its choice, adoption, or field witness"
+        )
+
+    for layout_id, record in view["class_a"].items():
+        landed_path = record["landed_fixture"]["repo_relative_path"]
+        artifact = immutable_snapshot_by_landed_path.get(landed_path)
+        if artifact is None:
+            raise StaticReTestFailure(
+                f"Settlement v2.21 {layout_id} Class-A sweep lost its immutable snapshot witness"
+            )
+        fixture = json.loads(
+            artifact.read_text(encoding="utf-8")
+        )
+        elements = fixture.get("layout", {}).get("elements")
+        if not isinstance(elements, list) or not elements:
+            raise StaticReTestFailure(
+                f"Settlement v2.21 {layout_id} embedded Class-A sweep reached no fixture members"
+            )
+        by_id = {
+            element.get("id"): element
+            for element in elements
+            if isinstance(element, dict) and isinstance(element.get("id"), str)
+        }
+        if len(by_id) != len(elements) or any(
+            member["element_id"] not in by_id
+            or v221_semantic_sha256(by_id[member["element_id"]])
+            != member["semantic_sha256"]
+            for member in record["members"]
+        ):
+            raise StaticReTestFailure(
+                f"Settlement v2.21 {layout_id} embedded Class-A members disagree with the standalone fixture"
+            )
+
+    derivation = contract.get("derivation")
+    if not isinstance(derivation, dict):
+        raise StaticReTestFailure(
+            "Settlement v2.21 no longer records its generator and mutation runner"
+        )
+    for prefix in ("tool", "mutation_tool"):
+        relative_path = derivation.get(prefix)
+        if not isinstance(relative_path, str):
+            raise StaticReTestFailure(
+                f"Settlement v2.21 {prefix} receipt no longer names a committed file"
+            )
+        artifact = ROOT / relative_path
+        assert_recorded_hash_matches_file(
+            derivation.get(f"{prefix}_sha256"),
+            artifact,
+            f"Settlement v2.21 committed {prefix}",
+        )
+        if derivation.get(f"{prefix}_bytes") != artifact.stat().st_size:
+            raise StaticReTestFailure(
+                f"Settlement v2.21 committed {prefix} byte receipt is false"
+            )
+
+    generator = _read("tools/derive_native_menu_census_era_v221.py")
+    runtime = _read("tools/native_menu_census_era_v221.py")
+    promoter = _read("tools/promote_native_menu_recapture.py")
+    mutations = _read("tools/run_native_menu_v221_mutations.py")
+    static_mutation = _read(
+        "tools/run_native_menu_v221_static_contract_mutation.py"
+    )
+    unit_tests = _read("tests/test_native_menu_ambient_lifecycle.py")
+    specification = _read("docs/reverse-engineering/native-menu-settlement.md")
+    _require_regex(
+        generator,
+        r"def attest_class_a_rows\(.*?presence_sample_count.*?"
+        r"CLASS_A_OCCURRENCE_STOP.*?def attest_class_b_rows\(.*?"
+        r"standalone\.primary.*?standalone\.confirmation.*?CLASS_B_PAIR_STOP.*?"
+        r"attest_class_a_rows\(layout_id, rows, expected_count\).*?"
+        r"attest_class_b_rows\(layout_id, rows, expected_count\)",
+        "Settlement v2.21 generator can bypass either qualified-occurrence attestation",
+    )
+    _require_regex(
+        runtime,
+        r"CLASS_A_MEMBER_SET_SHA256 = \{.*?CLASS_B_MEMBER_SET_SHA256 = \{.*?"
+        r"member\[\"element_id\"\] in CHOICE_ROWS.*?"
+        r"raise CensusEraV221Error\(CLASS_A_OCCURRENCE_STOP\).*?"
+        r"_member_set_sha256\(record\) != CLASS_A_MEMBER_SET_SHA256.*?"
+        r"_member_set_sha256\(record\) != CLASS_B_MEMBER_SET_SHA256",
+        "Settlement v2.21 runtime can accept a count-only member set or reabsorb Skills.84 into Class A",
+    )
+    _require_regex(
+        promoter,
+        r"native-menu-census-era-disposition-v221\.json.*?"
+        r"_validate_census_era_context_v221\(.*?"
+        r"census_era_contract=census_era_contract.*?"
+        r"generation_navigation=resolved_navigation",
+        "Settlement v2.21 standalone or endpoint promotion can bypass the exact census contract",
+    )
+    required_mutation_cases = {
+        "class_a_record_missing_one_member_trips_residual",
+        "class_a_member_not_in_census_trips",
+        "class_a_supersession_on_unrecorded_layout_trips",
+        "class_a_generator_refuses_qualified_presence",
+        "class_b_generator_refuses_single_trace_member",
+        "screen_id_correction_rejects_stale_aggregate_reference",
+        "pattern_residual_without_census_coverage_trips_original_guard",
+        "pause_population_routing_nonidentical_outcomes_stop",
+        "all_census_classes_disabled_reproduce_original_first_stop",
+        "choice_slot_reconciliation_rejects_mutated_geometry",
+        "choice_slot_reconciliation_rejects_zero_qualified_presence",
+        "choice_slot_exclusion_disabled_reproduces_occurrence_refusal",
+    }
+    missing_cases = sorted(case for case in required_mutation_cases if case not in mutations)
+    if missing_cases or mutations.count("field_correction_target_mutation_") != 1:
+        raise StaticReTestFailure(
+            f"Settlement v2.21 mutation fleet lost required claim families: {missing_cases}"
+        )
+    _require_regex(
+        mutations,
+        r"for correction in contract\[\"field_corrections\"\].*?"
+        r"field_correction_target_mutation_.*?"
+        r"field_correction_family_rejects_other_layout.*?"
+        r"field_correction_family_rejects_second_field.*?"
+        r"field_correction_family_rejects_disabled_authorization.*?"
+        r"field_correction_family_rejects_candidate_disagreement.*?"
+        r"before_cleared = clear_bytecode.*?mutation_cleared = clear_bytecode.*?"
+        r"restore_cleared = clear_bytecode",
+        "Settlement v2.21 mutation fleet no longer covers every exact field or green-trip-green phase",
+    )
+    _require_regex(
+        static_mutation,
+        r"CASE = \"static_contract_rejects_choice_slot_anchor_mutation\".*?"
+        r"before_cleared = clear_bytecode.*?"
+        r"\[\"anchor\"\]\[\"x\"\] \+= 1.*?"
+        r"finally:\s*atomic_bytes\(contract_path, original\).*?"
+        r"TRIP_MESSAGE not in trip\.stderr.*?"
+        r"restore_cleared = clear_bytecode.*?exact_contract_bytes_restored",
+        "the registered v2.21 static claim is not mutation-tested with exact-byte restore",
+    )
+    _require_regex(
+        unit_tests,
+        r"test_v221_exact_contract_and_skills_choice_reconcile.*?"
+        r"test_v221_class_a_is_all_or_nothing.*?"
+        r"test_v221_field_correction_does_not_leak_scope.*?"
+        r"test_v221_pause_population_routes_must_converge.*?"
+        r"test_v221_class_f_witnesses_are_paired_exact_cores",
+        "the CI behavior suite no longer exercises every v2.21 disposition seam",
+    )
+    _require_regex(
+        specification,
+        r"# Native menu settlement specification v2\.22.*?"
+        r"## Sealed census-era disposition.*?"
+        r"b6d91abab8eaf67dfb9c4f92c688bf5ea027db8132e470c8fe4c763a6db08a72.*?"
+        r"e327294f0aff85710e238dce6e0967afe0814a26908de3a0cfe8643d35e7dca2.*?"
+        r"Skills\.84.*?Class-F",
+        "the v2.21 specification no longer records the sealed census, Skills.84 decision, and bounded witnesses",
+    )
+    return (
+        "Settlement v2.21 dispositions are exact across 261 Class-A members, "
+        "38 Class-B members, six fields, two witnesses, and two Skills.84 rows"
+    )
+
+
+def test_native_menu_v222_final_four_disposition_is_exact() -> str:
+    assert_module_runs_in_ci("test_native_menu_ambient_lifecycle")
+    contract_path = (
+        ROOT
+        / "tests/fixtures/webgame/native-menu-final-disposition-v222.json"
+    )
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    try:
+        view = require_v222_final_disposition_contract(contract)
+    except ValueError as error:
+        raise StaticReTestFailure(
+            "Settlement v2.22 exact final four-row disposition no longer validates"
+        ) from error
+    if (
+        set(view["sequences"]) != set(V222_SEQUENCE_LAYOUTS)
+        or sum(
+            len(record["moved_members"])
+            for record in view["sequences"].values()
+        )
+        != 105
+        or set(view["endpoint_vacuity"]) != set(V222_NAMED_ENDPOINT_VACUITY)
+    ):
+        raise StaticReTestFailure(
+            "Settlement v2.22 lost one exact sequence or named vacuity witness"
+        )
+
+    baseline_manifest = json.loads(
+        (ROOT / "webgame-contracts/menu-baseline.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    baseline_entries = baseline_manifest.get("baseline_snapshots")
+    pending_entries = baseline_manifest.get("pending_shellfix")
+    if (
+        not isinstance(baseline_entries, list)
+        or len(baseline_entries) != 28
+        or not isinstance(pending_entries, list)
+        or len(pending_entries) not in {28, 29}
+    ):
+        raise StaticReTestFailure(
+            "Settlement v2.22 committed snapshot/pending sweep reached no full menu census"
+        )
+    baseline_by_fixture = {
+        entry.get("fixture"): entry
+        for entry in baseline_entries
+        if isinstance(entry, dict) and isinstance(entry.get("fixture"), str)
+    }
+    pending_by_fixture = {
+        entry.get("fixture"): entry
+        for entry in pending_entries
+        if isinstance(entry, dict) and isinstance(entry.get("fixture"), str)
+    }
+    if len(baseline_by_fixture) != 28 or len(pending_by_fixture) not in {28, 29}:
+        raise StaticReTestFailure(
+            "Settlement v2.22 baseline or pending lookup is ambiguous"
+        )
+
+    v221_contract = json.loads(
+        (
+            ROOT
+            / "tests/fixtures/webgame/native-menu-census-era-disposition-v221.json"
+        ).read_text(encoding="utf-8")
+    )
+    try:
+        v221_view = require_v221_census_era_contract(v221_contract)
+    except ValueError as error:
+        raise StaticReTestFailure(
+            "Settlement v2.22 lost its exact v2.21 member-projection basis"
+        ) from error
+
+    reached_snapshots: set[str] = set()
+    reached_pending_states: set[str] = set()
+    for layout_id, record in view["sequences"].items():
+        fixture = f"menu-layouts/{layout_id}.json"
+        baseline = baseline_by_fixture.get(fixture)
+        pending = pending_by_fixture.get(fixture)
+        if (
+            not isinstance(baseline, dict)
+            or not isinstance(pending, dict)
+            or record["landed_fixture"].get("repo_relative_path")
+            != f"tests/fixtures/webgame/{fixture}"
+            or baseline.get("sha256") != record["landed_fixture"].get("sha256")
+            or baseline.get("bytes") != record["landed_fixture"].get("bytes")
+            or baseline.get("snapshot")
+            != record["landed_baseline_snapshot"].get("repo_relative_path")
+        ):
+            raise StaticReTestFailure(
+                f"Settlement v2.22 {layout_id} landed receipt is not rebound to its immutable snapshot"
+            )
+        snapshot_path = ROOT / baseline["snapshot"]
+        assert_recorded_hash_matches_file(
+            record["landed_fixture"]["sha256"],
+            snapshot_path,
+            f"Settlement v2.22 {layout_id} committed landed snapshot",
+        )
+        if snapshot_path.stat().st_size != record["landed_fixture"]["bytes"]:
+            raise StaticReTestFailure(
+                f"Settlement v2.22 {layout_id} landed snapshot byte receipt is false"
+            )
+        snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+        snapshot_elements = snapshot.get("layout", {}).get("elements")
+        class_a = v221_view["class_a"].get(layout_id)
+        if (
+            not isinstance(snapshot_elements, list)
+            or not snapshot_elements
+            or not isinstance(class_a, dict)
+            or not class_a.get("members")
+        ):
+            raise StaticReTestFailure(
+                f"Settlement v2.22 {layout_id} landed sequence sweep reached no real members"
+            )
+        class_a_ids = {
+            member["element_id"]: member["semantic_sha256"]
+            for member in class_a["members"]
+        }
+        by_id = {
+            element.get("id"): element
+            for element in snapshot_elements
+            if isinstance(element, dict) and isinstance(element.get("id"), str)
+        }
+        if len(by_id) != len(snapshot_elements) or any(
+            element_id not in by_id
+            or v221_semantic_sha256(by_id[element_id]) != semantic_sha256
+            for element_id, semantic_sha256 in class_a_ids.items()
+        ):
+            raise StaticReTestFailure(
+                f"Settlement v2.22 {layout_id} Class-A projection disagrees with the committed snapshot"
+            )
+        ordered_snapshot = sorted(
+            snapshot_elements,
+            key=lambda element: (
+                float(element["draw_order"]),
+                canonical_bytes(v222_semantic_payload(element)),
+                str(element["id"]),
+            ),
+        )
+        projected_landed = [
+            element
+            for element in ordered_snapshot
+            if element["id"] not in class_a_ids
+        ]
+        if v222_sequence_sha256(projected_landed) != record[
+            "landed_sequence_sha256"
+        ]:
+            raise StaticReTestFailure(
+                f"Settlement v2.22 {layout_id} landed relative sequence identity changed"
+            )
+
+        current_path = ROOT / f"tests/fixtures/webgame/{fixture}"
+        current_sha = hashlib.sha256(current_path.read_bytes()).hexdigest()
+        if pending.get("sha256") != current_sha:
+            raise StaticReTestFailure(
+                f"Settlement v2.22 {layout_id} pending-shellfix receipt is stale"
+            )
+        if current_sha != baseline["sha256"]:
+            current = json.loads(current_path.read_text(encoding="utf-8"))
+            current_elements = current.get("layout", {}).get("elements")
+            class_b = v221_view["class_b"].get(layout_id)
+            if (
+                not isinstance(current_elements, list)
+                or not current_elements
+                or not isinstance(class_b, dict)
+                or not class_b.get("members")
+            ):
+                raise StaticReTestFailure(
+                    f"Settlement v2.22 {layout_id} promoted sequence sweep reached no real members"
+                )
+            remaining = Counter(
+                member["semantic_sha256"] for member in class_b["members"]
+            )
+            projected_settled: list[dict[str, Any]] = []
+            for element in current_elements:
+                semantic_sha = v221_semantic_sha256(element)
+                if remaining[semantic_sha] > 0:
+                    remaining[semantic_sha] -= 1
+                else:
+                    projected_settled.append(element)
+            if any(remaining.values()) or v222_sequence_sha256(
+                projected_settled
+            ) != record["settled_sequence_sha256"]:
+                raise StaticReTestFailure(
+                    f"Settlement v2.22 {layout_id} promoted sequence is not the exact settled order"
+                )
+        reached_snapshots.add(layout_id)
+        reached_pending_states.add(layout_id)
+    if reached_snapshots != set(V222_SEQUENCE_LAYOUTS) or reached_pending_states != set(
+        V222_SEQUENCE_LAYOUTS
+    ):
+        raise StaticReTestFailure(
+            "Settlement v2.22 committed sequence sweep missed a named layout"
+        )
+
+    derivation = contract.get("derivation")
+    if not isinstance(derivation, dict):
+        raise StaticReTestFailure(
+            "Settlement v2.22 no longer records its generator and mutation runner"
+        )
+    for prefix in ("tool", "mutation_tool"):
+        relative_path = derivation.get(prefix)
+        if not isinstance(relative_path, str):
+            raise StaticReTestFailure(
+                f"Settlement v2.22 {prefix} receipt no longer names a committed file"
+            )
+        artifact = ROOT / relative_path
+        assert_recorded_hash_matches_file(
+            derivation.get(f"{prefix}_sha256"),
+            artifact,
+            f"Settlement v2.22 committed {prefix}",
+        )
+        if derivation.get(f"{prefix}_bytes") != artifact.stat().st_size:
+            raise StaticReTestFailure(
+                f"Settlement v2.22 committed {prefix} byte receipt is false"
+            )
+
+    generator = _read("tools/derive_native_menu_final_disposition_v222.py")
+    runtime = _read("tools/native_menu_final_disposition_v222.py")
+    promoter = _read("tools/promote_native_menu_recapture.py")
+    mutations = _read("tools/run_native_menu_v222_mutations.py")
+    static_mutation = _read(
+        "tools/run_native_menu_v222_static_contract_mutation.py"
+    )
+    specification = _read("docs/reverse-engineering/native-menu-settlement.md")
+    _require_regex(
+        generator,
+        r"attest_sequence_derivation\(row, rows, observed\).*?"
+        r"if inbound or not navigation\.get\(\"edges\"\).*?"
+        r"endpoint-vacuity graph condition changed",
+        "Settlement v2.22 generator can skip membership/reproduction or graph attestation",
+    )
+    _require_regex(
+        runtime,
+        r"SEQUENCE_LAYOUTS = \{.*?NAMED_ENDPOINT_VACUITY = \{.*?"
+        r"if Counter\(map\(canonical_bytes.*?SEQUENCE_MEMBERSHIP_STOP.*?"
+        r"if inbound:.*?VACUITY_EDGE_STOP",
+        "Settlement v2.22 runtime can tolerate membership drift or an inbound edge",
+    )
+    _require_regex(
+        promoter,
+        r"native-menu-final-disposition-v222\.json.*?"
+        r"_validate_final_disposition_context_v222\(.*?"
+        r"final_disposition_contract=final_disposition_contract.*?"
+        r"generation_navigation=resolved_navigation",
+        "Settlement v2.22 production or diagnostic promotion can bypass the final contract",
+    )
+    required_cases = {
+        "sequence_settled_identity_permutation_trips",
+        "sequence_generator_refuses_membership_delta",
+        "sequence_supersession_rejects_other_layout",
+        "sequence_generator_refuses_occurrence_disagreement",
+        "endpoint_vacuity_rejects_existing_inbound_edge",
+        "endpoint_vacuity_rejects_layout_outside_named_three",
+        "sequence_supersessions_disabled_reproduce_first_stop",
+    }
+    missing_cases = sorted(case for case in required_cases if case not in mutations)
+    if missing_cases:
+        raise StaticReTestFailure(
+            f"Settlement v2.22 mutation fleet lost required claim rows: {missing_cases}"
+        )
+    _require_regex(
+        mutations,
+        r"before_cleared = clear_bytecode.*?mutation_cleared = clear_bytecode.*?"
+        r"TRIP: \{message\}.*?restore_cleared = clear_bytecode",
+        "Settlement v2.22 mutation runner lost green-trip-restored-green transcripts",
+    )
+    _require_regex(
+        static_mutation,
+        r"CASE = \"static_contract_rejects_landed_snapshot_receipt_mutation\".*?"
+        r"before_cleared = clear_bytecode.*?"
+        r"\[\"landed_fixture\"\]\[\"sha256\"\] = \"0\" \* 64.*?"
+        r"finally:\s*atomic_bytes\(contract_path, original\).*?"
+        r"TRIP_MESSAGE not in trip\.stderr.*?restore_cleared = clear_bytecode",
+        "the registered v2.22 snapshot receipt claim is not exact-byte mutation-tested",
+    )
+    _require_regex(
+        specification,
+        r"# Native menu settlement specification v2\.22.*?"
+        r"## Final four-row exact disposition.*?b6adf78a.*?"
+        r"dark-cloud-login-settings.*?game-settings-dark-cloud.*?"
+        r"game-over.*?map-picker.*?skill-picker",
+        "Settlement v2.22 specification lost its two sequence and three vacuity scopes",
+    )
+    return (
+        "Settlement v2.22 supersedes two exact reproduced sequences and makes "
+        "generation endpoints vacuous only for three machine-checked edge-free layouts"
     )
 
 
@@ -3407,12 +4514,14 @@ def test_native_menu_path_dependent_core_fork_is_exact() -> str:
         r'"parent_screen_id"\s*:\s*"hub".*?'
         r'"path_qualifier"\s*:\s*"resumed".*?'
         r'PATH_DEPENDENT_CORE_ENDPOINTS\s*=\s*\{.*?'
-        r'\("create_discipline_to_hub", "after"\): '
-        r'"hub_pristine_second_new_game".*?'
-        r'\("hub_to_pause", "before"\).*?'
-        r'\("pause_to_hub_resume", "after"\).*?'
-        r'\("profile_select_resume_to_hub", "after"\).*?'
-        r'\("settings_to_hub", "after"\)',
+        r'"create_discipline_to_hub".*?"after".*?'
+        r'"pristine_fresh_install".*?"hub_pristine_second_new_game".*?'
+        r'"create_discipline_to_hub".*?"after".*?'
+        r'"hub_new_game_two_action_v213".*?"hub_new_game".*?'
+        r'"hub_to_pause".*?"before".*?"hub_resumed".*?'
+        r'"pause_to_hub_resume".*?"after".*?"hub_resumed".*?'
+        r'"profile_select_resume_to_hub".*?"after".*?"hub_resumed".*?'
+        r'"settings_to_hub".*?"after".*?"hub_resumed"',
         "Settlement v2.13 no longer names exactly three Hub layouts or binds "
         "the fresh navigation graph to its deterministic path/session state",
     )
@@ -3422,7 +4531,10 @@ def test_native_menu_path_dependent_core_fork_is_exact() -> str:
         r"load_hub_binding_contract.*?"
         r"if reached_layouts != expected_layouts:.*?"
         r"path-dependent core contract: Hub variant census changed.*?"
-        r"if observed_bindings != PATH_DEPENDENT_CORE_ENDPOINTS:.*?"
+        r"declared_endpoint_pairs\s*=.*?"
+        r"observed_bindings\s*=.*?"
+        r"any\(None in key or layout_id is None.*?"
+        r"PATH_DEPENDENT_CORE_ENDPOINTS\.get\(key\) != layout_id.*?"
         r"one or more Hub navigation endpoints.*?remain ambiguous.*?"
         r"if unexpected_hub_endpoints:.*?"
         r"Hub navigation endpoint lacks a.*?declared selector.*?"
@@ -3470,8 +4582,8 @@ def test_native_menu_path_dependent_core_fork_is_exact() -> str:
         r'"hub_pristine_second_new_game".*?'
         r'"hub_resumed".*?'
         r"three authorized Hub layouts.*?"
-        r"if len\(fixtures\) != 31.*?"
-        r"28 menus plus three Hub layouts",
+        r"if len\(fixtures\) != 30.*?"
+        r"27 menus plus three Hub layouts",
         "menu-goldens aggregation no longer embeds all three authorized Hub "
         "standalones while preserving the 28 shell-facing layout census",
     )
@@ -3480,8 +4592,8 @@ def test_native_menu_path_dependent_core_fork_is_exact() -> str:
         r'"hub_new_game\.json".*?'
         r'"hub_pristine_second_new_game\.json".*?'
         r'"hub_resumed\.json".*?'
-        r"if len\(records\) != 31.*?"
-        r"28 menus plus three Hub layouts.*?"
+        r"if len\(records\) != 30.*?"
+        r"27 menus plus three Hub layouts.*?"
         r'"status": "new_path_dependent_layout".*?'
         r'"fork_decision": copy\.deepcopy',
         "promotion no longer carries both new Hub path layouts and their fork "
@@ -3497,7 +4609,7 @@ def test_native_menu_path_dependent_core_fork_is_exact() -> str:
     )
     _require_regex(
         specification,
-        r"# Native menu settlement specification v2\.13.*?"
+        r"# Native menu settlement specification v2\.22.*?"
         r"## Path-dependent core.*?Settlement v2\.6.*?"
         r"two.*?fresh instances.*?"
         r"deterministic entry path.*?durable session state.*?"
@@ -3815,7 +4927,9 @@ def test_native_menu_overlay_contamination_override_is_fail_closed() -> str:
         r"menu-overlay-reference\.json.*?"
         r"overlay\.get\(\"schema\"\) != OVERLAY_REFERENCE_SCHEMA.*?"
         r"assert_overlay_hygiene\(fixture\[\"layout\"\], overlay\).*?"
-        r"for side, observed in.*?source.*?destination.*?"
+        r"for side, endpoint_name, observed in.*?source.*?before.*?"
+        r"destination.*?after.*?"
+        r"if observed\.get\(\"type\"\) == \"overlay\":.*?continue.*?"
         r"assert_overlay_hygiene\(observed\[\"layout\"\], overlay\)",
         "the Settlement v2.5 aggregate can accept derived beta-dialog "
         "contamination in a standalone, transition source, or transition "
@@ -4918,7 +6032,230 @@ def _assert_landed_overlay_override(
     return True
 
 
+def _without_instance_generation(layout: dict[str, Any]) -> dict[str, Any]:
+    projected = json.loads(json.dumps(layout))
+    projected.pop("generation", None)
+    return projected
+
+
 def test_native_menu_settled_destinations_equal_standalones() -> str:
+    golden_path = ROOT / "tests/fixtures/webgame/menu-goldens.json"
+    assert_recorded_hash_matches_file(
+        EXPECTED_MENU_GOLDEN_SHA256,
+        golden_path,
+        "Settlement v2.22 promoted menu aggregate",
+    )
+    golden = _json("tests/fixtures/webgame/menu-goldens.json")
+    if golden.get("schema") != "solomon-dark-menu-goldens-v3":
+        raise StaticReTestFailure(
+            "settled destination contract did not reach the promoted v3 aggregate"
+        )
+    edges = golden.get("navigation_graph", {}).get("edges")
+    if not isinstance(edges, list) or len(edges) != 41:
+        raise StaticReTestFailure(
+            "settled destination contract did not reach all 41 graph edges"
+        )
+    edge_ids = [edge.get("id") for edge in edges if isinstance(edge, dict)]
+    if len(edge_ids) != 41 or len(set(edge_ids)) != 41 or set(edge_ids) != set(
+        EDGE_CONTRACT
+    ):
+        raise StaticReTestFailure(
+            "settled destination contract found a missing, duplicate, or unreviewed edge"
+        )
+
+    fixture_entries = [
+        *golden.get("layouts", []),
+        *golden.get("transition_endpoint_layouts", []),
+    ]
+    if len(fixture_entries) != 30:
+        raise StaticReTestFailure(
+            "settled destination contract did not reach 27 standalones and three Hub variants"
+        )
+    fixture_root = ROOT / "tests/fixtures/webgame"
+    by_fixture: dict[str, dict[str, Any]] = {}
+    by_layout_id: dict[str, dict[str, Any]] = {}
+    provenance_sources: list[dict[str, Any]] = []
+    for entry in fixture_entries:
+        if not isinstance(entry, dict) or not isinstance(entry.get("fixture"), str):
+            raise StaticReTestFailure(
+                "settled fixture census contains an unnamed wrapper"
+            )
+        fixture_name = entry["fixture"]
+        if fixture_name in by_fixture:
+            raise StaticReTestFailure(
+                f"settled fixture lookup is ambiguous for {fixture_name}"
+            )
+        fixture_path = fixture_root / fixture_name
+        fixture = _json(f"tests/fixtures/webgame/{fixture_name}")
+        if fixture.get("schema") != "solomon-dark-native-menu-layout-v3":
+            raise StaticReTestFailure(
+                f"settled fixture {fixture_name} does not use the v3 schema"
+            )
+        if fixture.get("header") != entry.get("header") or fixture.get(
+            "layout"
+        ) != entry.get("layout"):
+            raise StaticReTestFailure(
+                f"settled fixture {fixture_name} disagrees with its embedded aggregate copy"
+            )
+        reference = fixture_root / str(entry.get("reference_capture", ""))
+        assert_recorded_hash_matches_file(
+            str(entry.get("reference_sha256", "")),
+            reference,
+            f"{fixture_name} settled reference capture",
+        )
+        header = fixture["header"]
+        settlement = header.get("settlement")
+        if (
+            header.get("recorded_live") is not True
+            or not isinstance(settlement, dict)
+            or settlement.get("consecutive_structural_samples", 0) < 40
+            or settlement.get("stable_span_milliseconds", 0) < 2_000
+        ):
+            raise StaticReTestFailure(
+                f"settled fixture {fixture_name} lost its live 40-sample/two-second receipt"
+            )
+        source = header.get("source")
+        if not isinstance(source, dict):
+            raise StaticReTestFailure(
+                f"settled fixture {fixture_name} lost machine-derived provenance"
+            )
+        provenance_sources.append(source)
+        layout_id = Path(fixture_name).stem
+        if layout_id not in SETTLED_LAYOUT_IDS or layout_id in by_layout_id:
+            raise StaticReTestFailure(
+                f"settled fixture label {layout_id!r} is absent or ambiguous"
+            )
+        by_fixture[fixture_name] = fixture
+        by_layout_id[layout_id] = fixture
+    if set(by_layout_id) != set(SETTLED_LAYOUT_IDS):
+        raise StaticReTestFailure(
+            "settled fixture sweep did not reach the exact 30-layout census"
+        )
+
+    typed_endpoints: set[tuple[str, str, str]] = set()
+    layout_endpoint_count = 0
+    for edge in edges:
+        edge_id = edge["id"]
+        header = edge.get("header")
+        if not isinstance(header, dict) or header.get("recorded_live") is not True:
+            raise StaticReTestFailure(
+                f"settled edge {edge_id} lost its live capture header"
+            )
+        source = header.get("source")
+        if not isinstance(source, dict):
+            raise StaticReTestFailure(
+                f"settled edge {edge_id} lost machine-derived provenance"
+            )
+        provenance_sources.append(source)
+        for side in ("before", "after"):
+            endpoint = edge.get(side)
+            if not isinstance(endpoint, dict):
+                raise StaticReTestFailure(
+                    f"settled edge {edge_id}.{side} is absent"
+                )
+            endpoint_type = endpoint.get("type", "layout")
+            if endpoint_type != "layout":
+                typed_endpoints.add((edge_id, side, str(endpoint_type)))
+                if endpoint_type == "overlay":
+                    if (
+                        endpoint.get("semantic_member_count") != 0
+                        or endpoint.get("semantic_members") != []
+                        or endpoint.get("members_semantically_observable") is not False
+                    ):
+                        raise StaticReTestFailure(
+                            f"settled overlay endpoint {edge_id}.{side} claims semantic members"
+                        )
+                elif endpoint_type != "dialog_composite":
+                    raise StaticReTestFailure(
+                        f"settled edge {edge_id}.{side} has unknown type {endpoint_type!r}"
+                    )
+                continue
+            layout_endpoint_count += 1
+            layout_id = endpoint.get("layout_id")
+            if layout_id not in by_layout_id:
+                raise StaticReTestFailure(
+                    f"settled edge {edge_id}.{side} has no unique bound layout"
+                )
+            settlement = endpoint.get("settlement")
+            if (
+                not isinstance(settlement, dict)
+                or settlement.get("consecutive_structural_samples", 0) < 40
+                or settlement.get("stable_span_milliseconds", 0) < 2_000
+            ):
+                raise StaticReTestFailure(
+                    f"settled edge {edge_id}.{side} lost its selected settlement window"
+                )
+            expected_layout = by_layout_id[layout_id]["layout"]
+            path_core = endpoint.get("path_dependent_core")
+            if isinstance(path_core, dict) and layout_id == "game-settings-gameplay":
+                state_id = path_core.get("state_id")
+                states = by_layout_id[layout_id].get("path_dependent_cores")
+                if (
+                    not isinstance(states, dict)
+                    or state_id not in states
+                    or not isinstance(states[state_id], dict)
+                    or not isinstance(states[state_id].get("layout"), dict)
+                ):
+                    raise StaticReTestFailure(
+                        f"settled edge {edge_id}.{side} has an unbound Settings state"
+                    )
+                expected_layout = states[state_id]["layout"]
+            if _without_instance_generation(endpoint.get("layout", {})) != (
+                _without_instance_generation(expected_layout)
+            ):
+                raise StaticReTestFailure(
+                    f"settled edge {edge_id}.{side} does not byte-match its exact bound layout"
+                )
+            if endpoint.get("animated_element_ids", []) != expected_layout.get(
+                "animated_element_ids", []
+            ) or endpoint.get("choice_slot_ids", []) != expected_layout.get(
+                "choice_slot_ids", []
+            ):
+                raise StaticReTestFailure(
+                    f"settled edge {edge_id}.{side} classification map differs from its bound layout"
+                )
+    if layout_endpoint_count != 79 or typed_endpoints != {
+        ("settings_to_dark_cloud_settings", "after", "overlay"),
+        ("dark_cloud_settings_to_settings", "before", "overlay"),
+        (
+            "beta_notice_first_boot_to_control_scheme_picker",
+            "before",
+            "dialog_composite",
+        ),
+    }:
+        raise StaticReTestFailure(
+            "settled endpoint census no longer contains 79 layouts, two overlay endpoints, and one dialog composite"
+        )
+    if len(provenance_sources) != 71:
+        raise StaticReTestFailure(
+            "settled provenance sweep did not reach all 30 fixtures and 41 edges"
+        )
+    for source in provenance_sources:
+        if (
+            re.fullmatch(r"[0-9a-f]{40}", str(source.get("base_commit_sha")))
+            is None
+            or re.fullmatch(r"[0-9a-f]{40}", str(source.get("source_tree_sha")))
+            is None
+            or re.fullmatch(
+                r"[0-9a-f]{64}", str(source.get("game_executable_sha256"))
+            )
+            is None
+            or re.fullmatch(
+                r"[0-9a-f]{64}", str(source.get("loader_dll_sha256"))
+            )
+            is None
+        ):
+            raise StaticReTestFailure(
+                "settled fixture or edge lost exact commit/tree/binary provenance"
+            )
+    return (
+        "all 79 layout endpoints equal their exact bound settled layout after "
+        "the instance-local generation exclusion; two overlay endpoints and "
+        "one dialog-composite endpoint remain typed and member-safe"
+    )
+
+
+def _test_native_menu_settled_destinations_v2_legacy() -> str:
     golden = _json("tests/fixtures/webgame/menu-goldens.json")
     if golden.get("schema") != "solomon-dark-menu-goldens-v2":
         raise StaticReTestFailure(
@@ -5269,6 +6606,231 @@ def test_native_menu_settled_destinations_equal_standalones() -> str:
 
 def test_native_menu_screen_census_and_live_layouts_are_pinned() -> str:
     findings = _read("docs/reverse-engineering/native-menus-and-boot.md")
+    golden_path = ROOT / "tests/fixtures/webgame/menu-goldens.json"
+    assert_recorded_hash_matches_file(
+        EXPECTED_MENU_GOLDEN_SHA256,
+        golden_path,
+        "Settlement v2.22 promoted menu aggregate",
+    )
+    golden = _json("tests/fixtures/webgame/menu-goldens.json")
+    header = golden.get("header")
+    expected_counts = {
+        "screen_count": 30,
+        "standalone_layout_count": 27,
+        "path_dependent_layout_count": 3,
+        "layout_count": 30,
+        "overlay_count": 1,
+        "semantic_dialog_composite_count": 1,
+        "state_count": 32,
+        "edge_count": 41,
+    }
+    if (
+        golden.get("schema") != "solomon-dark-menu-goldens-v3"
+        or not isinstance(header, dict)
+        or {field: header.get(field) for field in expected_counts}
+        != expected_counts
+        or golden.get("screen_census") != list(SETTLED_LAYOUT_IDS)
+        or golden.get("overlay_census")
+        != ["dark_cloud_settings_credentials"]
+        or golden.get("semantic_dialog_composite_census")
+        != ["beta_notice_first_boot"]
+    ):
+        raise StaticReTestFailure(
+            "the promoted v3 menu state/layout/edge census drifted"
+        )
+
+    layouts = golden.get("layouts")
+    hub_layouts = golden.get("transition_endpoint_layouts")
+    if (
+        not isinstance(layouts, list)
+        or len(layouts) != 27
+        or not isinstance(hub_layouts, list)
+        or len(hub_layouts) != 3
+    ):
+        raise StaticReTestFailure(
+            "the promoted corpus no longer contains 27 screen fixtures and three Hub variants"
+        )
+    standalone_ids = [Path(entry["fixture"]).stem for entry in layouts]
+    hub_ids = [entry.get("header", {}).get("label") for entry in hub_layouts]
+    if standalone_ids != list(SETTLED_STANDALONE_LAYOUT_IDS) or hub_ids != list(
+        SETTLED_HUB_LAYOUT_IDS
+    ):
+        raise StaticReTestFailure(
+            "the ordered promoted standalone or Hub layout census drifted"
+        )
+
+    fixture_root = ROOT / "tests/fixtures/webgame"
+    claimed_references: set[Path] = set()
+    by_id: dict[str, dict[str, Any]] = {}
+    for entry in [*layouts, *hub_layouts]:
+        fixture_name = entry.get("fixture")
+        if not isinstance(fixture_name, str):
+            raise StaticReTestFailure("a promoted layout wrapper has no fixture name")
+        fixture = _json(f"tests/fixtures/webgame/{fixture_name}")
+        layout_id = Path(fixture_name).stem
+        if layout_id not in SETTLED_LAYOUT_IDS or layout_id in by_id:
+            raise StaticReTestFailure(
+                f"promoted layout identity {layout_id!r} is absent or ambiguous"
+            )
+        if (
+            fixture.get("schema") != "solomon-dark-native-menu-layout-v3"
+            or fixture.get("header") != entry.get("header")
+            or fixture.get("layout") != entry.get("layout")
+        ):
+            raise StaticReTestFailure(
+                f"promoted fixture {fixture_name} disagrees with its embedded copy"
+            )
+        reference = (fixture_root / str(entry.get("reference_capture", ""))).resolve()
+        assert_recorded_hash_matches_file(
+            str(entry.get("reference_sha256", "")),
+            reference,
+            f"{layout_id} reference capture",
+        )
+        claimed_references.add(reference)
+        elements = fixture.get("layout", {}).get("elements")
+        if not isinstance(elements, list) or not elements:
+            raise StaticReTestFailure(
+                f"promoted fixture {layout_id} contains no structural core"
+            )
+        by_id[layout_id] = fixture
+    if set(by_id) != set(SETTLED_LAYOUT_IDS):
+        raise StaticReTestFailure(
+            "promoted fixture sweep did not reach all 30 layout identities"
+        )
+
+    overlay_records = golden.get("overlay_records")
+    composite_records = golden.get("semantic_dialog_composite_records")
+    if (
+        not isinstance(overlay_records, list)
+        or len(overlay_records) != 1
+        or overlay_records[0].get("fixture")
+        != "menu-overlays/dark-cloud-settings.json"
+        or not isinstance(composite_records, list)
+        or len(composite_records) != 1
+        or composite_records[0].get("fixture")
+        != "menu-dialog-composites/beta-notice-first-boot.json"
+    ):
+        raise StaticReTestFailure(
+            "the promoted overlay/composite record census drifted"
+        )
+    for record, label in (
+        (overlay_records[0], "non-semantic overlay"),
+        (composite_records[0], "semantic dialog composite"),
+    ):
+        fixture_path = fixture_root / record["fixture"]
+        assert_recorded_hash_matches_file(
+            str(record.get("sha256", "")), fixture_path, label
+        )
+        if record.get("bytes") != fixture_path.stat().st_size:
+            raise StaticReTestFailure(f"{label} records a false byte count")
+    composite_reference = (
+        fixture_root / composite_records[0]["reference_capture"]
+    ).resolve()
+    assert_recorded_hash_matches_file(
+        composite_records[0]["reference_sha256"],
+        composite_reference,
+        "first-boot dialog composite reference",
+    )
+    claimed_references.add(composite_reference)
+    overlay_underlay = _json(
+        "tests/fixtures/webgame/menu-overlay-underlays/dark-cloud-settings.json"
+    )
+    overlay_reference = (
+        fixture_root
+        / "menu-overlay-underlays"
+        / overlay_underlay["header"]["reference_capture"]
+    ).resolve()
+    assert_recorded_hash_matches_file(
+        "59f5eb53865365205e8bf1943bdd75bfc8bf9364646f879cb403b2f4804620ff",
+        overlay_reference,
+        "dark-cloud settings overlay visual reference",
+    )
+    claimed_references.add(overlay_reference)
+    committed_references = {
+        path.resolve()
+        for path in (fixture_root / "menu-reference-captures").glob("*.png")
+    }
+    if not committed_references or claimed_references != committed_references:
+        raise StaticReTestFailure(
+            "promoted menu reference census has an unclaimed or missing image"
+        )
+
+    expected_tabs = {
+        "dark-cloud-browser": "online_levels",
+        "dark-cloud-online-levels": "online_levels",
+        "dark-cloud-recent": "recent",
+        "dark-cloud-my-levels": "my_levels",
+    }
+    for layout_id, expected_tab in expected_tabs.items():
+        receipt = by_id[layout_id]["header"].get("browser_tab_verification")
+        if (
+            not isinstance(receipt, dict)
+            or receipt.get("expected_tab") != expected_tab
+            or receipt.get("measured_tab") != expected_tab
+            or len(receipt.get("member_ids", [])) != 6
+            or re.fullmatch(
+                r"[0-9a-f]{64}", str(receipt.get("geometry_sha256"))
+            )
+            is None
+        ):
+            raise StaticReTestFailure(
+                f"{layout_id} lost its exact measured browser-tab state"
+            )
+    browser = by_id["dark-cloud-browser"]["layout"]["elements"]
+    online = by_id["dark-cloud-online-levels"]["layout"]["elements"]
+    if _strip_screen_prefix(browser, "dark-cloud-browser") != _strip_screen_prefix(
+        online, "dark-cloud-online-levels"
+    ):
+        raise StaticReTestFailure(
+            "pristine browser entry no longer equals the Online Levels state"
+        )
+
+    loader_geometry = {
+        element["art_id"]: element["rect"]
+        for element in by_id["native-loader"]["layout"]["elements"]
+    }
+    if loader_geometry != {
+        "Loader.2": [601.0, 302.5, 989.0, 529.5],
+        "Loader.1": [685.0, 553.0, 915.0, 607.0],
+        "Loader.0": [704.0, 572.0, 896.0, 590.0],
+        "Loader.3": [679.0, 541.0, 923.0, 559.0],
+    }:
+        raise StaticReTestFailure(
+            f"the live Raptisoft loader geometry drifted: {loader_geometry}"
+        )
+    loading = by_id["loading-screen"]["layout"]
+    fill = [
+        element
+        for element in loading["elements"]
+        if element.get("kind") == "progress_fill"
+    ]
+    if (
+        loading.get("screen_title") != "Gathering the coven..."
+        or len(fill) != 1
+        or fill[0].get("rect") != [319.5, 832.0, 1202.7001, 840.0]
+    ):
+        raise StaticReTestFailure(
+            "the settled loading title or measured 92-percent fill geometry drifted"
+        )
+    _require(
+        findings,
+        (
+            "`MyLoader::Render` `0x005BCA40`",
+            "## Screen census and layout",
+            "beta_notice_first_boot",
+            "dark_cloud_settings_credentials",
+            "## Not Yet Reversed",
+        ),
+        "native boot, promoted state census, and typed overlay documentation",
+    )
+    return (
+        "30 settled layouts, one non-semantic overlay, one dialog composite, "
+        "32 exact reference captures, and the loader/loading geometry are pinned"
+    )
+
+
+def _test_native_menu_screen_census_v2_legacy() -> str:
+    findings = _read("docs/reverse-engineering/native-menus-and-boot.md")
     golden = _json("tests/fixtures/webgame/menu-goldens.json")
     if golden["schema"] != "solomon-dark-menu-goldens-v2":
         raise StaticReTestFailure("the G11 golden schema drifted")
@@ -5509,6 +7071,65 @@ def test_native_menu_screen_census_and_live_layouts_are_pinned() -> str:
 def test_native_menu_live_transition_graph_is_pinned() -> str:
     findings = _read("docs/reverse-engineering/native-menus-and-boot.md")
     golden = _json("tests/fixtures/webgame/menu-goldens.json")
+    edges = golden.get("navigation_graph", {}).get("edges")
+    if (
+        golden.get("schema") != "solomon-dark-menu-goldens-v3"
+        or golden.get("header", {}).get("edge_count") != 41
+        or not isinstance(edges, list)
+        or len(edges) != 41
+    ):
+        raise StaticReTestFailure("the promoted 41-edge navigation census drifted")
+    actual: dict[str, tuple[str, str, str]] = {}
+    for edge in edges:
+        if not isinstance(edge, dict) or not isinstance(edge.get("id"), str):
+            raise StaticReTestFailure("the promoted graph contains an unnamed edge")
+        edge_id = edge["id"]
+        if edge_id in actual:
+            raise StaticReTestFailure(
+                f"the promoted graph contains duplicate edge {edge_id}"
+            )
+        actual[edge_id] = (
+            str(edge.get("screen")),
+            str(edge.get("trigger")),
+            str(edge.get("destination")),
+        )
+        frames: list[str] = []
+        for side in ("before", "after"):
+            endpoint = edge.get(side)
+            if not isinstance(endpoint, dict):
+                raise StaticReTestFailure(f"{edge_id}.{side} is absent")
+            frame = endpoint.get("frame_sha256") or endpoint.get(
+                "player_visible_frame_sha256"
+            )
+            if re.fullmatch(r"[0-9a-f]{64}", str(frame)) is None:
+                raise StaticReTestFailure(f"{edge_id}.{side} lost its exact frame hash")
+            frames.append(str(frame))
+        if frames[0] == frames[1]:
+            raise StaticReTestFailure(
+                f"{edge_id} no longer proves a distinct destination frame"
+            )
+        if edge_id not in findings:
+            raise StaticReTestFailure(
+                f"{edge_id} is measured but absent from the native-menu document"
+            )
+    if actual != EDGE_CONTRACT:
+        raise StaticReTestFailure(f"the promoted navigation graph drifted: {actual}")
+    raw = golden.get("header", {}).get("raw_recording")
+    if (
+        not isinstance(raw, dict)
+        or not raw.get("evidence_filename")
+        or re.fullmatch(r"[0-9a-f]{64}", str(raw.get("sha256"))) is None
+        or raw.get("bytes", 0) <= 0
+    ):
+        raise StaticReTestFailure(
+            "the promoted navigation graph lost its raw recording receipt"
+        )
+    return "all 40 measured native edges plus the dialog-composite dismissal edge are pinned"
+
+
+def _test_native_menu_live_transition_graph_v2_legacy() -> str:
+    findings = _read("docs/reverse-engineering/native-menus-and-boot.md")
+    golden = _json("tests/fixtures/webgame/menu-goldens.json")
     edges = golden["navigation_graph"]["edges"]
     if golden["header"]["edge_count"] != len(EDGE_CONTRACT):
         raise StaticReTestFailure("the G11 edge-count header drifted")
@@ -5547,6 +7168,80 @@ def test_native_menu_live_transition_graph_is_pinned() -> str:
 
 
 def test_native_menu_transition_endpoint_provenance_is_pinned() -> str:
+    findings = _read("docs/reverse-engineering/native-menus-and-boot.md")
+    golden = _json("tests/fixtures/webgame/menu-goldens.json")
+    edges = golden.get("navigation_graph", {}).get("edges")
+    if not isinstance(edges, list) or len(edges) != 41:
+        raise StaticReTestFailure(
+            "transition provenance sweep did not reach all 41 edges"
+        )
+    layout_count = 0
+    typed: set[tuple[str, str, str]] = set()
+    for edge in edges:
+        edge_id = str(edge.get("id"))
+        for side in ("before", "after"):
+            endpoint = edge.get(side)
+            if not isinstance(endpoint, dict):
+                raise StaticReTestFailure(f"{edge_id}.{side} is absent")
+            endpoint_type = endpoint.get("type", "layout")
+            if endpoint_type != "layout":
+                typed.add((edge_id, side, str(endpoint_type)))
+                continue
+            layout_count += 1
+            settlement = endpoint.get("settlement")
+            if (
+                endpoint.get("capture_method") != ENDPOINT_CAPTURE_AGREED
+                or not isinstance(endpoint.get("semantic_surface"), str)
+                or not endpoint["semantic_surface"]
+                or not isinstance(endpoint.get("machine_classified_surface"), str)
+                or not endpoint["machine_classified_surface"]
+                or not isinstance(endpoint.get("tagged_screen"), str)
+                or not endpoint["tagged_screen"]
+                or not isinstance(endpoint.get("semantic_generation"), int)
+                or not isinstance(endpoint.get("layout_generation"), int)
+                or not isinstance(endpoint.get("element_count"), int)
+                or endpoint["element_count"] <= 0
+                or not isinstance(settlement, dict)
+                or settlement.get("consecutive_structural_samples", 0) < 40
+                or settlement.get("stable_span_milliseconds", 0) < 2_000
+            ):
+                raise StaticReTestFailure(
+                    f"{edge_id}.{side} lost exact classifier/tag, generation, census, or settlement provenance"
+                )
+            if endpoint.get("layout_generation") != endpoint.get(
+                "semantic_generation"
+            ):
+                raise StaticReTestFailure(
+                    f"{edge_id}.{side} records two generation values within one observation"
+                )
+    if layout_count != 79 or typed != {
+        ("settings_to_dark_cloud_settings", "after", "overlay"),
+        ("dark_cloud_settings_to_settings", "before", "overlay"),
+        (
+            "beta_notice_first_boot_to_control_scheme_picker",
+            "before",
+            "dialog_composite",
+        ),
+    }:
+        raise StaticReTestFailure(
+            "transition provenance census no longer contains 79 layout observations, two overlays, and one composite"
+        )
+    _require(
+        findings,
+        (
+            "The recorder now treats an operator screen tag only as an expectation",
+            "classifier/tag agreement gate",
+            "never strips controls, retags a foreign",
+        ),
+        "capture-time classifier/tag agreement documentation",
+    )
+    return (
+        "all 79 layout endpoints carry settled classifier/tag and measured "
+        "generation provenance; two overlays and one composite stay explicitly typed"
+    )
+
+
+def _test_native_menu_transition_endpoint_provenance_v2_legacy() -> str:
     findings = _read("docs/reverse-engineering/native-menus-and-boot.md")
     golden = _json("tests/fixtures/webgame/menu-goldens.json")
     edges = golden["navigation_graph"]["edges"]
@@ -5636,7 +7331,9 @@ def test_designed_menu_focus_model_consumes_g14_intents() -> str:
     findings = _read("docs/reverse-engineering/native-menus-and-boot.md")
     focus = _json("webgame-contracts/menu-focus-model.json")
     intent = _json("webgame-contracts/intent-schema.json")
-    golden = _json("tests/fixtures/webgame/menu-goldens.json")
+    shell_golden = _json(
+        "webgame-contracts/baseline-snapshots/menu-goldens.json"
+    )
 
     if focus["provenance"] != "DESIGN_NOT_OBSERVED":
         raise StaticReTestFailure("the focus model lost its design provenance")
@@ -5667,8 +7364,10 @@ def test_designed_menu_focus_model_consumes_g14_intents() -> str:
         LAYOUT_IDS
     ):
         raise StaticReTestFailure(f"the focus-screen census drifted: {focus_ids}")
-    if set(focus_ids) != set(golden["screen_census"]):
-        raise StaticReTestFailure("focus and live layout censuses disagree")
+    if set(focus_ids) != set(shell_golden["screen_census"]):
+        raise StaticReTestFailure(
+            "focus and the exact shellfix-baseline layout censuses disagree"
+        )
     for screen in screens:
         if screen["provenance"] != "DESIGN_NOT_OBSERVED":
             raise StaticReTestFailure(

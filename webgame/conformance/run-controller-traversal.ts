@@ -76,7 +76,7 @@ function surfaceName(controller: ShellController): string {
 
 async function main(): Promise<void> {
   const menuGolden = JSON.parse(
-    await readFile(path.join(repository, "tests", "fixtures", "webgame", "menu-goldens.json"), "utf8"),
+    await readFile(path.join(repository, "webgame-contracts", "baseline-snapshots", "menu-goldens.json"), "utf8"),
   ) as { navigation_graph: { edges: GoldenEdge[] } };
   const focusGolden = JSON.parse(
     await readFile(path.join(repository, "webgame-contracts", "menu-focus-model.json"), "utf8"),

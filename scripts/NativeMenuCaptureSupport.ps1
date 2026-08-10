@@ -1384,30 +1384,10 @@ return table.concat({
                 )
             }
         }
-        $from = '"screen_id":"hub"'
-        $to = '"screen_id":"' + $ScreenId + '"'
-        if (
-            ([regex]::Matches(
-                $semanticJson,
-                [regex]::Escape($from)
-            )).Count -ne 1 -or
-            ([regex]::Matches(
-                $nonGeometryJson,
-                [regex]::Escape($from)
-            )).Count -ne 1
-        ) {
-            throw (
-                "BROKEN: Hub path classifier could not re-tag one exact " +
-                "machine-classified semantic payload."
-            )
-        }
-        $semanticJson = $semanticJson.Replace($from, $to)
-        $nonGeometryJson = $nonGeometryJson.Replace($from, $to)
-        $semanticPayload.screen_id = $ScreenId
     }
     return [pscustomobject]@{
         Status = "ready"
-        SemanticSurface = $ScreenId
+        SemanticSurface = $machineSurface
         MachineClassifiedSurface = $machineSurface
         SemanticGeneration = [uint64]$parts[1].Substring(
             "__SEMANTIC_GENERATION__=".Length

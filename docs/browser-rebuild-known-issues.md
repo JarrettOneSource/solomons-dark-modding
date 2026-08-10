@@ -9,8 +9,12 @@ snapshots under `webgame-contracts/baseline-snapshots/`. The 18 reviewed-pass
 and 10 reviewed-divergent visual records are bound to hashes of those same
 snapshot bytes; they make no claim about the replacement recordings.
 
-`webgame-contracts/menu-baseline.json` separately pins all 28 snapshots and all
-28 settled fixtures as `pending_shellfix`. A missing entry, changed snapshot,
-changed settled fixture, or census other than 28 fails the gate. There is no
-stale-layout waiver or geometry tolerance. Shellfix task #101 must remove this
-interregnum by rebuilding and reviewing the shell against the settled fixtures.
+`webgame-contracts/menu-baseline.json` separately pins the archived shell
+aggregate, all 28 layout snapshots, all 28 native reference captures, and 29
+settled states as `pending_shellfix`. The pending set is exactly the historical
+28 layouts minus the retired Dark Cloud Settings screen plus its non-semantic
+overlay and the first-boot beta-notice composite. A missing entry, changed
+snapshot, changed settled state, or census other than 28 snapshots and 29
+pending states fails the gate. There is no stale-layout waiver or geometry
+tolerance. Shellfix task #101 must remove this interregnum by rebuilding and
+reviewing the shell against the settled fixtures.

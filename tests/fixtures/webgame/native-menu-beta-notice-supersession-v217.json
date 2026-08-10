@@ -1,0 +1,75 @@
+{
+  "schema": "solomon-dark-native-menu-beta-notice-supersession-v217",
+  "settlement_spec": "2.17",
+  "layout_id": "beta-notice",
+  "screen_id": "beta_notice",
+  "retired_landed_fixture": {
+    "fixture": "menu-layouts/beta-notice.json",
+    "sha256": "3079989caa69579ea0d4eebf863fb3f26a86a24be40eff4459263f735d6f6042",
+    "bytes": 165992
+  },
+  "retired_landed_element_count": 112,
+  "superseding_qualified_fixture": {
+    "fixture": "menu-layouts/beta-notice.json",
+    "sha256": "0fd6739d87a2fed5819951a48aacc0ba60e1354518b5c9339264d3b8b25115ba",
+    "bytes": 219886
+  },
+  "superseding_core_member_count": 28,
+  "superseding_semantic_sha256_multiset": [
+    "0f0f709271f9908cdf0c4135e539f08ccfb67bc9a85f7d968738f1c84cc6b365",
+    "13e0f71960124fbc216a51aa26b9a4ebd853199654939d01057a0b569d56400a",
+    "257971bc0a9d693bfaaa125dc751fef5581692c11df145556c15adeee78caebd",
+    "34f86236f7af172702a7ec6f6ed26f425d2be6f86b7595319f666aa093f3714c",
+    "3851603add736acab2010d41fbf42eb2e43a955cf2645dfd6ad03d46d930a0e6",
+    "404e76bb430007da07411c29cfac146c4c5242ced8c23522ecb51985c5613b74",
+    "49fcbe3f2a1dc6b52195d9a2a3b13d581bf336d57ff28f7ad061db6f68fe5709",
+    "544256c4137cd0114aa7c33056511d02ee30a6b6e1e4c5431f715a6d863e6339",
+    "5885334d50449e95296fa332c81c151e4c400d7d89f8ba0236fc8f96aa74facc",
+    "5cb359afcda7fc85712cb5116bfac70e91771a770e87a637baa07a68436bf2b0",
+    "60155b1b525f4e83054d52fd04eb52551a1ba3499c1181a32ceda9248c97d629",
+    "61b9c0344c3421957b21251b9bbdc97a701b55353face15cca673c06d1ff74af",
+    "66b1753e5ec4a3cab0a75e8a8dafe790eeb3e087ba64e9f6bb6c67f0c00d1f35",
+    "6778bac85c12c48d9fc48cc08cde23e56807c04bda8d7983cc5f4319b2736d7d",
+    "68f0434cd184ab70021db01d42d6e815efc8601206ef5559fb4590c307657d32",
+    "6a24b719f3419e4d9eb6a1d3f061ad2cf32b47502c4b388e42f95001b1db4506",
+    "7489a5661bbfffff4b226b43b68ecdf9e775fcbf473d06cdb845e33b3d2c3bbf",
+    "7ac8bd4c544d9a8dfe006d580ab42a2bcd48a44c802f23d9653f2d61d65c2a0f",
+    "982a15d6799813fad7cecdbd48dee3851e8387aa465823b247c49615701b69d0",
+    "ae96aeda6604f415d70eb7644584ce2e8e710ec64b6413a629869046a07cfa1d",
+    "b4557aa344aef97f90a23a0f51cf760f7b1b73ef12e3fc67c49a3eea906f841d",
+    "b7d7d5020df8c2e6bdb330f56d2d0d10aa9f3b0c9dadd116d93d06f2c16b9b59",
+    "c82e27040b515b409fbaa634030bb4ddf62e7894730a7f3e0ef1ab65966b2ff0",
+    "cbf2caf576ada3a4699de617c804946157083ecd697df6582cc89c689eead6c5",
+    "cc155cbe0be77a3d24701ba856c17979e690b7f9d64f63643c4c0d9384cdd093",
+    "e52e034a8317a375ad63cdfd5d18e6a01e210819edd84b7f2066496026c9d073",
+    "e99d42044fa945ca2dced0b9ffd5ce3bf5fa70dc1d268d5b52e062d5babb33ef",
+    "ed5feb25d2070162e4a4f66a207ebb3875a6834c53faa6c588ac20ca1525dacf"
+  ],
+  "superseding_semantic_multiset_sha256": "812a51c2f2044c1385d349e06533a2e0a2bf6759d8e1ff0b03c122ca0d36b53e",
+  "qualified_pair": {
+    "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+    "route": "pause_menu.leave_game -> beta_notice",
+    "primary_trace": {
+      "evidence_path": "raw-v9/candidates/candidate-v214-profile-final/menu-settlement-traces/beta-notice.settlement.json",
+      "sha256": "3af921d4543f27bbf3d5f361be8aeb7220929df64eb3bc26f5e2ccd2ef65ca5d",
+      "bytes": 16331298
+    },
+    "confirmation": {
+      "evidence_path": "raw-v9/candidates/candidate-v214-profile-final/menu-animation-confirmations/beta-notice.confirmation.json",
+      "sha256": "1d1467cce8952c40d780808366e48d0bd4b7ad3f3a51e6a16827ff6224caad50",
+      "bytes": 17278827
+    }
+  },
+  "source_audit": {
+    "evidence_path": "raw-v9/beta-notice-path-core-question/beta-notice-path-state-question-audit.json",
+    "sha256": "7253b6e0d853182aa7ea73500e4753eec5892a2a7ad449bfbdc23c4792073857",
+    "bytes": 75641
+  },
+  "source_question_manifest": {
+    "evidence_path": "raw-v9/beta-notice-path-core-question/beta-notice-path-state-question-manifest.json",
+    "sha256": "8c0d5646e24230f1e2ebf5d4f236048de74adf0388ed233a1cd03551f22e26ae",
+    "bytes": 4195
+  },
+  "legacy_core_disposition": "retired evidence-of-era only; unqualified provenance and main-menu underlay contamination",
+  "authorization_scope": "exact qualified pause-entry beta-notice core only; no general landed-vs-settled tolerance"
+}

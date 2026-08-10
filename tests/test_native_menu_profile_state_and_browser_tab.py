@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import tempfile
 import unittest
@@ -854,6 +855,53 @@ class NativeMenuBrowserTabTests(unittest.TestCase):
                 layout=layout,
                 receipt=receipt,
                 label="forged receipt",
+            )
+
+    def test_capture_receipt_survives_deterministic_synthetic_reordinalization(
+        self,
+    ) -> None:
+        layout = _browser_layout("online_levels")
+        receipt = {
+            "expected_tab": "online_levels",
+            **resolve_browser_tab(layout, "online entry"),
+        }
+        reordinalized = copy.deepcopy(layout)
+        for index, element in enumerate(reordinalized["elements"], start=100):
+            element["id"] = f"reordinalized.{index}"
+
+        result = validate_browser_tab(
+            screen_tag="dark_cloud_browser",
+            layout=reordinalized,
+            receipt=receipt,
+            label="reordinalized online entry",
+        )
+
+        self.assertEqual("online_levels", result["measured_tab"])
+
+    def test_capture_receipt_semantics_still_reject_wrong_geometry(self) -> None:
+        layout = _browser_layout("online_levels")
+        receipt = {
+            "expected_tab": "online_levels",
+            **resolve_browser_tab(layout, "online entry"),
+        }
+        receipt = copy.deepcopy(receipt)
+        receipt["measurements"][0]["control_rect"][0] += 1
+        receipt["geometry_sha256"] = hashlib.sha256(
+            json.dumps(
+                receipt["measurements"],
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+
+        with self.assertRaisesRegex(
+            NativeMenuBrowserTabError, "false capture-time"
+        ):
+            validate_browser_tab(
+                screen_tag="dark_cloud_browser",
+                layout=layout,
+                receipt=receipt,
+                label="forged semantic geometry",
             )
 
     def test_non_browser_layout_cannot_carry_a_tab_receipt(self) -> None:

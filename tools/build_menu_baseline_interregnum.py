@@ -11,8 +11,10 @@ from pathlib import Path
 from typing import Any
 
 
-EXPECTED_LAYOUT_COUNT = 28
+EXPECTED_HISTORICAL_LAYOUT_COUNT = 28
+EXPECTED_PENDING_STATE_COUNT = 29
 CORRECTIVE = "shellfix task #101"
+SHELL_GOLDEN_SNAPSHOT = "webgame-contracts/baseline-snapshots/menu-goldens.json"
 
 
 class BaselineBuildError(RuntimeError):
@@ -23,24 +25,84 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _fixture_names(repo: Path) -> list[str]:
+def _historical_fixture_names(repo: Path) -> list[str]:
+    manifest_path = repo / "webgame-contracts/menu-baseline.json"
+    if manifest_path.is_file():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        names = sorted(
+            str(entry["fixture"])
+            for entry in manifest.get("baseline_snapshots", [])
+            if isinstance(entry, dict)
+        )
+    else:
+        golden = json.loads(
+            (repo / "tests/fixtures/webgame/menu-goldens.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        names = sorted(
+            str(entry["fixture"])
+            for entry in golden.get("layouts", [])
+            if isinstance(entry, dict)
+        )
+    if (
+        len(names) != EXPECTED_HISTORICAL_LAYOUT_COUNT
+        or len(set(names)) != len(names)
+    ):
+        raise BaselineBuildError(
+            "menu baseline initialization did not reach exactly 28 unique historical layouts"
+        )
+    if not {
+        "menu-layouts/main-menu-root.json",
+        "menu-layouts/dark-cloud-settings.json",
+    } <= set(names):
+        raise BaselineBuildError(
+            "menu baseline initialization did not reach both named historical witnesses"
+        )
+    return names
+
+
+def _pending_fixture_names(repo: Path) -> list[str]:
     golden = json.loads(
         (repo / "tests/fixtures/webgame/menu-goldens.json").read_text(
             encoding="utf-8"
         )
     )
-    names = sorted(
+    names = [
         str(entry["fixture"])
-        for entry in golden.get("layouts", [])
-        if isinstance(entry, dict)
-    )
-    if len(names) != EXPECTED_LAYOUT_COUNT or len(set(names)) != len(names):
-        raise BaselineBuildError(
-            "menu baseline initialization did not reach exactly 28 unique layouts"
+        for field in (
+            "layouts",
+            "overlay_records",
+            "semantic_dialog_composite_records",
         )
-    if "menu-layouts/main-menu-root.json" not in names:
+        for entry in golden.get(field, [])
+        if isinstance(entry, dict) and isinstance(entry.get("fixture"), str)
+    ]
+    names.sort()
+    if (
+        len(names) != EXPECTED_PENDING_STATE_COUNT
+        or len(set(names)) != len(names)
+        or "menu-layouts/main-menu-root.json" not in names
+    ):
         raise BaselineBuildError(
-            "menu baseline initialization did not reach main-menu-root witness"
+            "menu pending-shellfix census did not reach exactly 29 unique settled states"
+        )
+    overlay_count = sum(name.startswith("menu-overlays/") for name in names)
+    if overlay_count not in {0, 1}:
+        raise BaselineBuildError(
+            "menu pending-shellfix census contains an unauthorized overlay count"
+        )
+    if overlay_count == 1 and names.count(
+        "menu-overlays/dark-cloud-settings.json"
+    ) != 1:
+        raise BaselineBuildError(
+            "menu pending-shellfix census contains an unauthorized overlay state"
+        )
+    if names.count(
+        "menu-dialog-composites/beta-notice-first-boot.json"
+    ) != 1:
+        raise BaselineBuildError(
+            "menu pending-shellfix census lost the authorized beta dialog composite"
         )
     return names
 
@@ -53,17 +115,74 @@ def _write_json(path: Path, value: Any) -> None:
     )
 
 
+def _shell_golden_receipt(repo: Path) -> dict[str, Any]:
+    path = repo / SHELL_GOLDEN_SNAPSHOT
+    if not path.is_file():
+        raise BaselineBuildError("immutable pre-menufix shell golden is absent")
+    golden = json.loads(path.read_text(encoding="utf-8"))
+    layouts = golden.get("layouts")
+    census = golden.get("screen_census")
+    edges = golden.get("navigation_graph", {}).get("edges")
+    if (
+        not isinstance(layouts, list)
+        or len(layouts) != EXPECTED_HISTORICAL_LAYOUT_COUNT
+        or not isinstance(census, list)
+        or len(census) != EXPECTED_HISTORICAL_LAYOUT_COUNT
+        or not isinstance(edges, list)
+        or len(edges) != 39
+    ):
+        raise BaselineBuildError(
+            "immutable shell golden lost its exact 28-layout, 39-edge census"
+    )
+    reached_references: set[str] = set()
+    for wrapper in layouts:
+        reference = (
+            wrapper.get("reference_capture")
+            if isinstance(wrapper, dict)
+            else None
+        )
+        expected_sha = (
+            wrapper.get("reference_sha256")
+            if isinstance(wrapper, dict)
+            else None
+        )
+        if (
+            not isinstance(reference, str)
+            or reference in reached_references
+            or not isinstance(expected_sha, str)
+        ):
+            raise BaselineBuildError(
+                "immutable shell golden reference lookup is absent or ambiguous"
+            )
+        reached_references.add(reference)
+        reference_path = repo / "webgame-contracts/baseline-snapshots" / reference
+        if not reference_path.is_file() or _sha256(reference_path) != expected_sha:
+            raise BaselineBuildError(
+                f"immutable shell reference receipt changed: {reference}"
+            )
+    if len(reached_references) != EXPECTED_HISTORICAL_LAYOUT_COUNT:
+        raise BaselineBuildError(
+            "immutable shell reference sweep did not reach all 28 captures"
+        )
+    return {
+        "path": SHELL_GOLDEN_SNAPSHOT,
+        "sha256": _sha256(path),
+        "bytes": path.stat().st_size,
+    }
+
+
 def build(repo: Path, initialize: bool) -> dict[str, Any]:
     fixture_root = repo / "tests/fixtures/webgame"
     snapshot_root = repo / "webgame-contracts/baseline-snapshots"
     manifest_path = repo / "webgame-contracts/menu-baseline.json"
-    names = _fixture_names(repo)
+    historical_names = _historical_fixture_names(repo)
+    pending_names = _pending_fixture_names(repo)
     baseline_entries: list[dict[str, Any]] = []
     pending_entries: list[dict[str, Any]] = []
-    for fixture in names:
+    for fixture in historical_names:
         source = fixture_root / fixture
         snapshot = snapshot_root / fixture
-        if not source.is_file():
+        if initialize and not source.is_file():
             raise BaselineBuildError(
                 f"menu baseline source fixture is missing: {fixture}"
             )
@@ -88,6 +207,12 @@ def build(repo: Path, initialize: bool) -> dict[str, Any]:
                 "corrective": CORRECTIVE,
             }
         )
+    for fixture in pending_names:
+        source = fixture_root / fixture
+        if not source.is_file():
+            raise BaselineBuildError(
+                f"menu pending-shellfix fixture is missing: {fixture}"
+            )
         pending_entries.append(
             {
                 "fixture": fixture,
@@ -97,8 +222,9 @@ def build(repo: Path, initialize: bool) -> dict[str, Any]:
             }
         )
     manifest = {
-        "schema": "solomon-dark-menu-baseline-v1",
+        "schema": "solomon-dark-menu-baseline-v2",
         "corrective": CORRECTIVE,
+        "shell_golden_snapshot": _shell_golden_receipt(repo),
         "baseline_snapshot_count": len(baseline_entries),
         "pending_shellfix_count": len(pending_entries),
         "baseline_snapshots": baseline_entries,
@@ -123,7 +249,7 @@ def build(repo: Path, initialize: bool) -> dict[str, Any]:
     if (
         len(reviewed_pass) != 18
         or len(reviewed_divergent) != 10
-        or set(reviewed_pass) | set(reviewed_divergent) != set(names)
+        or set(reviewed_pass) | set(reviewed_divergent) != set(historical_names)
         or set(reviewed_pass) & set(reviewed_divergent)
     ):
         raise BaselineBuildError(
@@ -158,7 +284,7 @@ def build(repo: Path, initialize: bool) -> dict[str, Any]:
                 "settled_fixture_sha256": pending_by_fixture[fixture]["sha256"],
                 "corrective": CORRECTIVE,
             }
-            for fixture in names
+            for fixture in pending_names
         ],
     }
     _write_json(visual_path, visual_v2)

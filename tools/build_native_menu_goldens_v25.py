@@ -41,10 +41,29 @@ from native_menu_browser_tab import (
     NativeMenuBrowserTabError,
     validate_browser_tab,
 )
+from native_menu_multi_state_path_core import SETTINGS_ENDPOINT_BINDINGS
+from native_menu_nonsemantic_overlay import (
+    NativeMenuNonSemanticOverlayError,
+    validate_overlay_record,
+)
+from native_menu_semantic_dialog_composite import (
+    COMPOSITE_ID,
+    NativeMenuSemanticDialogCompositeError,
+    validate_composite_record,
+)
 
 
 class GoldenBuildError(RuntimeError):
     """The candidate corpus is incomplete, ambiguous, or internally divergent."""
+
+
+CHARTERED_PROFILE_NEW_GAME_EDGE = {
+    "id": "profile_select_new_game_to_create",
+    "source": "profile_save_select",
+    "trigger": "new_game_click",
+    "action_id": "main_menu.new_game",
+    "destination": "create_element",
+}
 
 
 def canonical_bytes(value: Any) -> bytes:
@@ -189,7 +208,7 @@ def validate_fixture(
     ):
         raise GoldenBuildError(f"{path} has incomplete Settlement v2.9 provenance")
     reference, reference_sha256 = reference_receipt(path, fixture, fixture_root)
-    return fixture, {
+    wrapper = {
         "fixture": (
             f"menu-transition-layouts/{path.name}"
             if path.parent.name == "menu-transition-layouts"
@@ -200,6 +219,11 @@ def validate_fixture(
         "header": copy.deepcopy(header),
         "layout": copy.deepcopy(layout),
     }
+    if "path_dependent_cores" in fixture:
+        wrapper["path_dependent_cores"] = copy.deepcopy(
+            fixture["path_dependent_cores"]
+        )
+    return fixture, wrapper
 
 
 def standalone_settled_pair(
@@ -316,6 +340,46 @@ def parse_capture_time(header: dict[str, Any], label: str) -> datetime:
 
 
 def endpoint(value: dict[str, Any], edge_id: str, side: str) -> dict[str, Any]:
+    if value.get("type") == "overlay":
+        overlay_id = value.get("overlay_id")
+        overlay_fixture = value.get("overlay_fixture")
+        settlement = value.get("settlement")
+        if (
+            overlay_id != "dark_cloud_settings_credentials"
+            or not isinstance(overlay_fixture, dict)
+            or overlay_fixture.get("candidate_relative_path")
+            != "menu-overlays/dark-cloud-settings.json"
+            or not isinstance(settlement, dict)
+            or settlement.get("settlement_spec") != "2.15"
+            or value.get("members_semantically_observable") is not False
+            or value.get("semantic_member_count") != 0
+            or value.get("semantic_members") != []
+        ):
+            raise GoldenBuildError(
+                f"navigation edge {edge_id} {side} has an invalid non-semantic overlay endpoint"
+            )
+        frame = value.get("frame_sha256")
+        if (
+            not isinstance(frame, str)
+            or len(frame) != 64
+            or any(character not in "0123456789abcdef" for character in frame)
+        ):
+            raise GoldenBuildError(
+                f"navigation edge {edge_id} {side} overlay has no exact frame provenance"
+            )
+        fields = (
+            "type",
+            "overlay_id",
+            "overlay_fixture",
+            "members_semantically_observable",
+            "semantic_member_count",
+            "semantic_members",
+            "underlying_surface",
+            "frame_sha256",
+            "settlement",
+        )
+        return {field: copy.deepcopy(value.get(field)) for field in fields}
+
     layout = value.get("layout")
     settlement = value.get("settlement")
     layout_id = value.get("layout_id")
@@ -354,12 +418,91 @@ def endpoint(value: dict[str, Any], edge_id: str, side: str) -> dict[str, Any]:
         "animated_family_ids",
         "choice_slot_ids",
         "browser_tab_verification",
+        "path_dependent_core",
     )
     return {
         field: copy.deepcopy(value.get(field))
         for field in fields
         if field in value
     }
+
+
+def validate_settings_path_binding(
+    fixture: dict[str, Any],
+    observed: dict[str, Any],
+    edge_id: str,
+    endpoint_name: str,
+) -> str:
+    contract = fixture.get("header", {}).get("multi_state_path_dependent_core")
+    endpoint_contract = observed.get("path_dependent_core")
+    if not isinstance(contract, dict) or contract.get("settlement_spec") != "2.16":
+        raise GoldenBuildError(
+            "multi-state path-dependent core contract: Settings fixture has no v2.16 binding registry"
+        )
+    binding_map: dict[tuple[str, str], str] = {}
+    reached_standalone = False
+    for binding in contract.get("bindings", []):
+        if not isinstance(binding, dict):
+            raise GoldenBuildError(
+                "multi-state path-dependent core contract: Settings binding is not an object"
+            )
+        if binding.get("binding") == "standalone":
+            if (
+                reached_standalone
+                or binding.get("layout_id") != "game-settings-gameplay"
+                or binding.get("state_id") != "base"
+            ):
+                raise GoldenBuildError(
+                    "multi-state path-dependent core contract: Settings standalone binding changed"
+                )
+            reached_standalone = True
+            continue
+        key = (binding.get("edge_id"), binding.get("endpoint"))
+        if (
+            binding.get("binding") != "navigation_endpoint"
+            or not all(isinstance(value, str) for value in key)
+            or key in binding_map
+            or not isinstance(binding.get("state_id"), str)
+        ):
+            raise GoldenBuildError(
+                "multi-state path-dependent core contract: Settings endpoint binding is absent or ambiguous"
+            )
+        binding_map[key] = binding["state_id"]
+    if not reached_standalone or binding_map != SETTINGS_ENDPOINT_BINDINGS:
+        raise GoldenBuildError(
+            "multi-state path-dependent core contract: Settings endpoint binding census changed or a fourth state appeared"
+        )
+    expected_state = binding_map.get((edge_id, endpoint_name))
+    if expected_state is None:
+        raise GoldenBuildError(
+            "multi-state path-dependent core contract: unbound Settings navigation endpoint"
+        )
+    layout = observed.get("layout")
+    registered_state = fixture.get("path_dependent_cores", {}).get(expected_state)
+    if (
+        not isinstance(registered_state, dict)
+        or not isinstance(endpoint_contract, dict)
+        or endpoint_contract.get("settlement_spec") != "2.16"
+        or endpoint_contract.get("parent_layout_id") != "game-settings-gameplay"
+        or endpoint_contract.get("edge_id") != edge_id
+        or endpoint_contract.get("endpoint") != endpoint_name
+        or endpoint_contract.get("state_id") != expected_state
+        or not isinstance(layout, dict)
+        or endpoint_contract.get("structural_core_sha256")
+        != layout.get("structural_core_sha256")
+        or endpoint_contract.get("measured_element_count")
+        != registered_state.get("measured_element_count")
+        or endpoint_contract.get("structural_core_sha256")
+        != registered_state.get("structural_core_sha256")
+        or observed.get("element_count")
+        != registered_state.get("structural_core_element_count")
+        or len(layout.get("elements", []))
+        != registered_state.get("structural_core_element_count")
+    ):
+        raise GoldenBuildError(
+            "multi-state path-dependent core contract: bound endpoint presented a different Settings core"
+        )
+    return expected_state
 
 
 def capture_session(header: dict[str, Any]) -> dict[str, Any]:
@@ -386,8 +529,12 @@ def build(
 ) -> dict[str, Any]:
     overlay_path = fixture_root / "menu-overlay-reference.json"
     layout_paths = unique_json_files(
-        fixture_root / "menu-layouts", 28, "main-menu-root"
+        fixture_root / "menu-layouts", 27, "main-menu-root"
     )
+    if "dark-cloud-settings" in layout_paths:
+        raise GoldenBuildError(
+            "Settlement v2.15 did not retire the mischaracterized Dark Cloud Settings screen"
+        )
     transition_paths = unique_json_files(
         fixture_root / "menu-transition-layouts", 3, "hub_new_game"
     )
@@ -400,6 +547,46 @@ def build(
             "path-dependent core contract: transition fixture census is not the "
             "three authorized Hub layouts"
         )
+    overlay_record_paths = unique_json_files(
+        fixture_root / "menu-overlays", 1, "dark-cloud-settings"
+    )
+    underlay_paths = unique_json_files(
+        fixture_root / "menu-overlay-underlays", 1, "dark-cloud-settings"
+    )
+    composite_paths = unique_json_files(
+        fixture_root / "menu-dialog-composites",
+        1,
+        "beta-notice-first-boot",
+    )
+    overlay_record_path = overlay_record_paths["dark-cloud-settings"]
+    underlay_path = underlay_paths["dark-cloud-settings"]
+    composite_path = composite_paths["beta-notice-first-boot"]
+    overlay_record = read_object(overlay_record_path)
+    try:
+        validate_overlay_record(overlay_record)
+    except NativeMenuNonSemanticOverlayError as error:
+        raise GoldenBuildError(str(error)) from error
+    recorded_underlay = overlay_record["overlay"]["semantic_underlay_binding"][
+        "primary_fixture"
+    ]
+    if (
+        recorded_underlay.get("sha256") != sha256_file(underlay_path)
+        or recorded_underlay.get("bytes") != underlay_path.stat().st_size
+    ):
+        raise GoldenBuildError(
+            "Settlement v2.15 overlay records a false semantic-underlay fixture receipt"
+        )
+    overlay_wrapper = {
+        "fixture": "menu-overlays/dark-cloud-settings.json",
+        "underlay_fixture": "menu-overlay-underlays/dark-cloud-settings.json",
+        "overlay_id": overlay_record["overlay_id"],
+        "settlement_spec": overlay_record["settlement_spec"],
+        "record": copy.deepcopy(overlay_record),
+        "sha256": sha256_file(overlay_record_path),
+        "bytes": overlay_record_path.stat().st_size,
+        "underlay_sha256": sha256_file(underlay_path),
+        "underlay_bytes": underlay_path.stat().st_size,
+    }
     fixtures: dict[str, dict[str, Any]] = {}
     wrappers: list[dict[str, Any]] = []
     transition_wrappers: list[dict[str, Any]] = []
@@ -422,9 +609,9 @@ def build(
         observed = parse_capture_time(fixture["header"], str(path))
         latest_capture = observed if latest_capture is None else max(latest_capture, observed)
         sessions.append(capture_session(fixture["header"]))
-    if len(fixtures) != 31 or latest_capture is None:
+    if len(fixtures) != 30 or latest_capture is None:
         raise GoldenBuildError(
-            "aggregate fixture sweep did not reach 28 menus plus three Hub layouts"
+            "aggregate fixture sweep did not reach 27 menus plus three Hub layouts"
         )
 
     landed = read_object(repo_root / "tests/fixtures/webgame/menu-goldens.json")
@@ -515,6 +702,60 @@ def build(
                 f"standalone '{layout_id}' failed derived overlay hygiene: {error}"
             ) from error
 
+    composite_record = read_object(composite_path)
+    try:
+        composite_classification = validate_composite_record(
+            composite_record,
+            fixtures["control-scheme-picker"]["layout"],
+            overlay,
+            fixtures["beta-notice"]["layout"],
+        )
+    except NativeMenuSemanticDialogCompositeError as error:
+        raise GoldenBuildError(str(error)) from error
+    composite_reference = composite_record.get("header", {}).get(
+        "reference_capture"
+    )
+    composite_reference_path = (
+        fixture_root / "menu-reference-captures/beta-notice-first-boot.png"
+    )
+    if composite_reference != {
+        "fixture": "menu-reference-captures/beta-notice-first-boot.png",
+        "sha256": sha256_file(composite_reference_path),
+        "bytes": composite_reference_path.stat().st_size,
+    }:
+        raise GoldenBuildError(
+            "semantic dialog composite records a false committed visual reference"
+        )
+    composite_wrapper = {
+        "fixture": "menu-dialog-composites/beta-notice-first-boot.json",
+        "composite_id": COMPOSITE_ID,
+        "settlement_spec": "2.17",
+        "record": copy.deepcopy(composite_record),
+        "sha256": sha256_file(composite_path),
+        "bytes": composite_path.stat().st_size,
+        "reference_capture": "menu-reference-captures/beta-notice-first-boot.png",
+        "reference_sha256": sha256_file(composite_reference_path),
+    }
+    composite_capture_time = parse_capture_time(
+        composite_record["header"], str(composite_path)
+    )
+    latest_capture = max(latest_capture, composite_capture_time)
+    for observation in composite_record["composite"]["observations"]:
+        sessions.append(
+            {
+                "label": COMPOSITE_ID,
+                "instance": observation.get("instance"),
+                "process_id": observation.get("process_id"),
+                "source": copy.deepcopy(observation.get("source")),
+                "profile_state": copy.deepcopy(
+                    observation.get("profile_state")
+                ),
+                "capture_method": "Settlement v2.17 semantic-dialog composite",
+                "recorded_live": True,
+                "captured_at_utc": observation.get("captured_at_utc"),
+            }
+        )
+
     navigation = read_object(navigation_path)
     resolution = navigation.get("header", {}).get("ambient_lifecycle_resolution")
     if (
@@ -534,16 +775,32 @@ def build(
     landed_edges = landed.get("navigation_graph", {}).get("edges")
     if not isinstance(landed_edges, list) or not landed_edges:
         raise GoldenBuildError("landed controller graph contains no edge witness")
-    expected_edge_ids = {
+    landed_edge_ids = {
         edge.get("id") for edge in landed_edges if isinstance(edge, dict)
     }
-    if len(expected_edge_ids) != len(landed_edges) or set(raw_by_id) != expected_edge_ids:
+    if len(landed_edge_ids) != len(landed_edges):
+        raise GoldenBuildError("landed controller graph has ambiguous edge ids")
+    expected_edge_ids = set(landed_edge_ids)
+    expected_edge_ids.add(CHARTERED_PROFILE_NEW_GAME_EDGE["id"])
+    if set(raw_by_id) != expected_edge_ids:
         raise GoldenBuildError(
             "resolved capture changed controller-traversal edge expectations"
         )
+    chartered_edge = raw_by_id[CHARTERED_PROFILE_NEW_GAME_EDGE["id"]]
+    if any(
+        chartered_edge.get(field) != expected
+        for field, expected in CHARTERED_PROFILE_NEW_GAME_EDGE.items()
+    ):
+        raise GoldenBuildError(
+            "chartered profile-save-select New Game edge identity or measured "
+            "destination changed"
+        )
 
     edges: list[dict[str, Any]] = []
-    for edge_id in [edge["id"] for edge in landed_edges]:
+    edge_order = [edge["id"] for edge in landed_edges]
+    if CHARTERED_PROFILE_NEW_GAME_EDGE["id"] not in landed_edge_ids:
+        edge_order.append(CHARTERED_PROFILE_NEW_GAME_EDGE["id"])
+    for edge_id in edge_order:
         raw = raw_by_id[edge_id]
         header = raw.get("header")
         before_raw = raw.get("before")
@@ -568,13 +825,66 @@ def build(
         before = endpoint(before_raw, edge_id, "source")
         after = endpoint(after_raw, edge_id, "destination")
         header_tab_receipts = header.get("browser_tab_verification")
-        for side, observed in (("source", before), ("destination", after)):
+        for side, endpoint_name, observed in (
+            ("source", "before", before),
+            ("destination", "after", after),
+        ):
+            if observed.get("type") == "overlay":
+                overlay_fixture = observed["overlay_fixture"]
+                if (
+                    overlay_fixture.get("sha256")
+                    != sha256_file(overlay_record_path)
+                    or overlay_fixture.get("bytes")
+                    != overlay_record_path.stat().st_size
+                    or observed.get("overlay_id")
+                    != overlay_record.get("overlay_id")
+                ):
+                    raise GoldenBuildError(
+                        f"navigation edge {edge_id} {side} records a false overlay fixture"
+                    )
+                recorded_endpoint_underlay = observed.get(
+                    "underlying_surface", {}
+                ).get("fixture")
+                if (
+                    not isinstance(recorded_endpoint_underlay, dict)
+                    or recorded_endpoint_underlay.get("sha256")
+                    != sha256_file(underlay_path)
+                    or recorded_endpoint_underlay.get("bytes")
+                    != underlay_path.stat().st_size
+                ):
+                    raise GoldenBuildError(
+                        f"navigation edge {edge_id} {side} records a false overlay underlay"
+                    )
+                if (
+                    resolve_navigation_profile_binding(
+                        repo_root,
+                        edge_id=edge_id,
+                        endpoint=endpoint_name,
+                        baseline_id=edge_profile["baseline_id"],
+                    )
+                    is not None
+                ):
+                    raise GoldenBuildError(
+                        f"navigation edge {edge_id} {side} overlay leaked into a screen binding"
+                    )
+                continue
+
             layout_id = observed["layout_id"]
             if layout_id not in fixtures:
                 raise GoldenBuildError(
                     f"navigation edge {edge_id} {side} does not resolve one standalone"
                 )
-            if canonical_bytes(observed["layout"]) != canonical_bytes(
+            if layout_id == "game-settings-gameplay":
+                state_id = validate_settings_path_binding(
+                    fixtures[layout_id], observed, edge_id, endpoint_name
+                )
+                if state_id == "base" and canonical_bytes(
+                    observed["layout"]
+                ) != canonical_bytes(fixtures[layout_id]["layout"]):
+                    raise GoldenBuildError(
+                        f"navigation edge {edge_id} {side} base Settings core does not byte-equal its standalone"
+                    )
+            elif canonical_bytes(observed["layout"]) != canonical_bytes(
                 fixtures[layout_id]["layout"]
             ):
                 raise GoldenBuildError(
@@ -584,7 +894,7 @@ def build(
             expected_bound_layout = resolve_navigation_profile_binding(
                 repo_root,
                 edge_id=edge_id,
-                endpoint="before" if side == "source" else "after",
+                endpoint=endpoint_name,
                 baseline_id=edge_profile["baseline_id"],
             )
             if expected_bound_layout is not None and (
@@ -620,12 +930,23 @@ def build(
                     f"navigation edge {edge_id} {side} failed derived overlay "
                     f"hygiene: {error}"
                 ) from error
-        destination_layout_id = after["layout_id"]
-        destination_fixture = (
-            f"menu-transition-layouts/{destination_layout_id}.json"
-            if destination_layout_id in transition_paths
-            else f"menu-layouts/{destination_layout_id}.json"
-        )
+        if after.get("type") == "overlay":
+            destination_fixture = "menu-overlays/dark-cloud-settings.json"
+            destination_type = "overlay"
+            destination_state_id = None
+        else:
+            destination_layout_id = after["layout_id"]
+            destination_fixture = (
+                f"menu-transition-layouts/{destination_layout_id}.json"
+                if destination_layout_id in transition_paths
+                else f"menu-layouts/{destination_layout_id}.json"
+            )
+            destination_type = "layout"
+            destination_state_id = (
+                after.get("path_dependent_core", {}).get("state_id")
+                if destination_layout_id == "game-settings-gameplay"
+                else None
+            )
         observed_at = raw.get("observed_at_utc")
         if not isinstance(observed_at, str) or not observed_at:
             raise GoldenBuildError(f"navigation edge {edge_id} has no observation time")
@@ -638,13 +959,119 @@ def build(
                 "trigger": raw.get("trigger"),
                 "action_id": raw.get("action_id"),
                 "destination": raw.get("destination"),
+                "destination_type": destination_type,
                 "destination_layout_fixture": destination_fixture,
+                **(
+                    {"destination_layout_state_id": destination_state_id}
+                    if destination_state_id is not None
+                    else {}
+                ),
                 "dispatch_result": raw.get("dispatch_result"),
                 "before": before,
                 "after": after,
                 "observed_at_utc": observed_at,
             }
         )
+
+    composite_observations = composite_record["composite"]["observations"]
+    composite_primary = next(
+        observation
+        for observation in composite_observations
+        if observation.get("role") == "primary"
+    )
+    picker_fixture = fixtures["control-scheme-picker"]
+    picker_header = picker_fixture["header"]
+    picker_layout = picker_fixture["layout"]
+    composite_edge_id = "beta_notice_first_boot_to_control_scheme_picker"
+    if any(edge.get("id") == composite_edge_id for edge in edges):
+        raise GoldenBuildError(
+            "semantic dialog composite dismissal edge identity is ambiguous"
+        )
+    edges.append(
+        {
+            "header": {
+                "label": composite_edge_id,
+                "instance": composite_primary["instance"],
+                "process_id": composite_primary["process_id"],
+                "source": copy.deepcopy(composite_primary["source"]),
+                "profile_state": copy.deepcopy(
+                    composite_primary["profile_state"]
+                ),
+                "capture_method": (
+                    "Settlement v2.17 semantic-dialog composite measured "
+                    "dismissal"
+                ),
+                "recorded_live": True,
+                "captured_at_utc": composite_primary["captured_at_utc"],
+            },
+            "id": composite_edge_id,
+            "screen": COMPOSITE_ID,
+            "edge": "dialog_primary",
+            "trigger": "dialog_primary",
+            "action_id": "dialog.primary",
+            "destination": "control_scheme_picker",
+            "destination_type": "layout",
+            "destination_layout_fixture": (
+                "menu-layouts/control-scheme-picker.json"
+            ),
+            "dispatch_result": "clicked_measured_top_plate",
+            "before": {
+                "type": "dialog_composite",
+                "composite_id": COMPOSITE_ID,
+                "composite_fixture": {
+                    "fixture": (
+                        "menu-dialog-composites/beta-notice-first-boot.json"
+                    ),
+                    "sha256": sha256_file(composite_path),
+                    "bytes": composite_path.stat().st_size,
+                },
+                "underlay_surface_id": "control_scheme_picker",
+                "player_visible_frame_sha256": composite_classification[
+                    "player_visible_dialog_frame_sha256"
+                ],
+                "settlement": {
+                    "settlement_spec": "2.17",
+                    "consecutive_structural_samples": composite_primary[
+                        "settled_sample_count"
+                    ],
+                    "stable_span_milliseconds": composite_primary[
+                        "stable_span_milliseconds"
+                    ],
+                    "settle_latency_milliseconds": composite_primary[
+                        "settle_latency_milliseconds"
+                    ],
+                },
+            },
+            "after": {
+                "semantic_surface": "control_scheme_picker",
+                "machine_classified_surface": "control_scheme_picker",
+                "semantic_generation": picker_layout["generation"],
+                "tagged_screen": "control_scheme_picker",
+                "layout_generation": picker_layout["generation"],
+                "element_count": len(picker_layout["elements"]),
+                "capture_method": picker_header["capture_method"],
+                "frame_sha256": composite_classification[
+                    "post_dismissal_underlay_frame_sha256"
+                ],
+                "settlement": copy.deepcopy(picker_header["settlement"]),
+                "layout": copy.deepcopy(picker_layout),
+                "layout_id": "control-scheme-picker",
+                "animated_element_ids": copy.deepcopy(
+                    picker_layout["animated_element_ids"]
+                ),
+                "animated_family_ids": copy.deepcopy(
+                    picker_layout["animated_family_ids"]
+                ),
+                "choice_slot_ids": copy.deepcopy(
+                    picker_layout["choice_slot_ids"]
+                ),
+                "browser_tab_verification": copy.deepcopy(
+                    picker_header.get("browser_tab_verification")
+                ),
+            },
+            "observed_at_utc": composite_primary["captured_at_utc"],
+        }
+    )
 
     unique_sessions: dict[bytes, dict[str, Any]] = {}
     for session in sessions:
@@ -662,10 +1089,12 @@ def build(
             "gap": "G11",
             "generated_from_live_capture_at_utc": latest_capture.isoformat(),
             "capture_method": (
-                "Settlement v2.9 reproduced structural cores, animated families, "
+                "Settlement v2.17 reproduced structural cores, animated families, "
                 "choice slots, and canonical "
                 "relative draw order, measured ambient lifecycle and motion "
-                "envelopes, native Sprite/text hooks, live D3D9 frames, "
+                "envelopes, path-dependent cores, non-semantic overlays, "
+                "semantic-dialog composites, "
+                "native Sprite/text hooks, live D3D9 frames, "
                 "exact-process input, and independent fresh-instance confirmation"
             ),
             "raw_recording": {
@@ -700,13 +1129,23 @@ def build(
                     "exact legitimate baseline"
                 ),
             },
-            "screen_count": len(wrappers),
+            "screen_count": len(fixtures),
+            "standalone_layout_count": len(wrappers),
+            "path_dependent_layout_count": len(transition_wrappers),
+            "layout_count": len(fixtures),
+            "overlay_count": 1,
+            "semantic_dialog_composite_count": 1,
+            "state_count": len(fixtures) + 2,
             "edge_count": len(edges),
             "sessions": list(unique_sessions.values()),
         },
-        "screen_census": sorted(layout_paths),
+        "screen_census": sorted(fixtures),
+        "overlay_census": [overlay_record["overlay_id"]],
+        "semantic_dialog_composite_census": [COMPOSITE_ID],
         "layouts": sorted(wrappers, key=lambda wrapper: wrapper["fixture"]),
         "transition_endpoint_layouts": transition_wrappers,
+        "overlay_records": [overlay_wrapper],
+        "semantic_dialog_composite_records": [composite_wrapper],
         "navigation_graph": {
             "capture_method": navigation.get("header", {}).get("capture_method"),
             "edges": edges,
@@ -716,7 +1155,10 @@ def build(
     return {
         "success": True,
         "output": str(output_path),
-        "screen_count": len(wrappers),
+        "screen_count": len(fixtures),
+        "overlay_count": 1,
+        "semantic_dialog_composite_count": 1,
+        "state_count": len(fixtures) + 2,
         "edge_count": len(edges),
         "sha256": sha256_file(output_path),
     }

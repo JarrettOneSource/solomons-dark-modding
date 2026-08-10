@@ -6,6 +6,7 @@ import { expectArray, expectObject, expectString } from "./validation.js";
 
 export const SCENE_GOLDEN_PATH = "tests/fixtures/webgame/scene-composition-goldens.json";
 export const MENU_GOLDEN_PATH = "tests/fixtures/webgame/menu-goldens.json";
+export const MENU_SHELL_GOLDEN_PATH = "webgame-contracts/baseline-snapshots/menu-goldens.json";
 
 export interface GoldenReferences {
   readonly sceneSpriteIds: ReadonlySet<string>;
@@ -68,9 +69,10 @@ async function loadJsonWithHash(
 }
 
 export async function collectGoldenReferences(repoRoot: string): Promise<GoldenReferences> {
-  const [sceneSource, menuSource] = await Promise.all([
+  const [sceneSource, menuSource, menuShellSource] = await Promise.all([
     loadJsonWithHash(repoRoot, SCENE_GOLDEN_PATH),
     loadJsonWithHash(repoRoot, MENU_GOLDEN_PATH),
+    loadJsonWithHash(repoRoot, MENU_SHELL_GOLDEN_PATH),
   ]);
   const scene = expectObject(sceneSource.value, "scene-composition golden");
   if (scene.schema !== "solomon-dark-scene-composition-goldens-v1") {
@@ -88,10 +90,18 @@ export async function collectGoldenReferences(repoRoot: string): Promise<GoldenR
   }
 
   const menu = expectObject(menuSource.value, "menu golden");
-  if (menu.schema !== "solomon-dark-menu-goldens-v1") {
+  if (menu.schema !== "solomon-dark-menu-goldens-v3") {
     throw new Error("menu golden schema drifted");
   }
+  const menuShell = expectObject(menuShellSource.value, "menu shell golden");
+  if (menuShell.schema !== "solomon-dark-menu-goldens-v1") {
+    throw new Error("menu shell golden schema drifted");
+  }
   const layouts = expectArray(menu.layouts, "menu golden layouts");
+  const shellLayouts = expectArray(
+    menuShell.layouts,
+    "menu shell golden layouts",
+  );
   if (layouts.length === 0) {
     throw new Error("menu golden contains no layouts to resolve");
   }
@@ -99,10 +109,18 @@ export async function collectGoldenReferences(repoRoot: string): Promise<GoldenR
   const menuFontIds = new Set<string>();
   collectStringFields(layouts, new Set(["art_id"]), menuArtIds);
   collectStringFields(layouts, new Set(["font_id"]), menuFontIds);
+  collectStringFields(shellLayouts, new Set(["art_id"]), menuArtIds);
+  collectStringFields(shellLayouts, new Set(["font_id"]), menuFontIds);
   if (!menuArtIds.has("Wizards_dire_BG") || !menuArtIds.has("Title.0")) {
     throw new Error("menu art reference sweep missed required native witnesses");
   }
-  if (!menuFontIds.has("Fonts.93-184") || !menuFontIds.has("Segoe UI")) {
+  if (
+    menuFontIds.size !== 4
+    || !menuFontIds.has("Fonts.216-307")
+    || !menuFontIds.has("Fonts.308-349")
+    || !menuFontIds.has("Fonts.93-184")
+    || !menuFontIds.has("Segoe UI")
+  ) {
     throw new Error("menu font reference sweep missed required font witnesses");
   }
   return {
@@ -112,6 +130,7 @@ export async function collectGoldenReferences(repoRoot: string): Promise<GoldenR
     sourceHashes: {
       [SCENE_GOLDEN_PATH]: sceneSource.sha256,
       [MENU_GOLDEN_PATH]: menuSource.sha256,
+      [MENU_SHELL_GOLDEN_PATH]: menuShellSource.sha256,
     },
   };
 }

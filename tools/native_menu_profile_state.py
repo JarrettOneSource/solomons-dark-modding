@@ -673,6 +673,7 @@ def validate_capture_profile_state(
     header: dict[str, Any],
     label: str,
     evidence_root: Path | None,
+    receipt_search_roots: tuple[Path, ...] | None = None,
     required_baseline_id: str | None = None,
     binding_label: str | None = None,
 ) -> dict[str, Any]:
@@ -834,7 +835,31 @@ def validate_capture_profile_state(
             raise NativeMenuProfileStateError(
                 f"{label} launch receipt has no evidence filename"
             )
-        receipt_path = _resolve_unique_receipt(evidence_root, filename, label)
+        resolved_evidence_root = evidence_root.resolve()
+        search_roots = receipt_search_roots or (evidence_root,)
+        resolved_search_roots = tuple(
+            sorted({root.resolve() for root in search_roots})
+        )
+        if not resolved_search_roots or any(
+            not root.is_relative_to(resolved_evidence_root) or not root.is_dir()
+            for root in resolved_search_roots
+        ):
+            raise NativeMenuProfileStateError(
+                f"{label} launch receipt search roots escape or are absent"
+            )
+        matches = sorted(
+            {
+                path.resolve()
+                for root in resolved_search_roots
+                for path in root.rglob(filename)
+                if path.is_file()
+            }
+        )
+        if len(matches) != 1:
+            raise NativeMenuProfileStateError(
+                f"{label} launch receipt lookup is absent or ambiguous: {matches}"
+            )
+        receipt_path = matches[0]
         if (
             receipt_path.stat().st_size != expected_bytes
             or sha256_file(receipt_path) != expected_sha256

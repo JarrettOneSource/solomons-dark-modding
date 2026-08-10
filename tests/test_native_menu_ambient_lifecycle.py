@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import hashlib
 import json
 import sys
 import tempfile
@@ -40,12 +39,32 @@ from tools.native_menu_ambient_lifecycle import (
 )
 from tools.native_menu_landed_diagnosis_v25 import (
     LandedDiagnosisError,
-    _signature,
-    _v29_beta_notice_order_projection,
+    TITLE_MISMATCH,
+    diagnose_dark_cloud_login_title_v220,
     diagnose_landed_layout,
     diagnosis_prereference_residual,
+    enumerate_unclassified_landed_differences,
     match_ambient_members,
+    match_population_members,
     semantic_overlay_corroboration,
+)
+from tools.native_menu_profile_state import (
+    FRESH_BASELINE_ID,
+    RECEIPT_SCHEMA,
+    load_hub_binding_contract,
+    load_profile_state_baseline,
+)
+from tools.native_menu_census_era_v221 import (
+    CLASS_A_RESIDUAL_STOP,
+    FIELD_CORRECTION_STOP,
+    PAUSE_EQUIVALENCE_STOP,
+    CensusEraV221Error,
+    consume_choice_slot_rows,
+    consume_class_a_residual,
+    diagnose_field_corrections,
+    require_class_f_witness,
+    require_contract as require_census_era_contract,
+    validate_pause_equivalence,
 )
 from tools.native_menu_overlay_v25 import (
     OverlayV25Error,
@@ -136,6 +155,53 @@ def _v211_controls_core_contract() -> dict[str, object]:
         / "tests/fixtures/webgame/native-menu-controls-core-v211.json"
     )
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _v220_dark_cloud_login_title_contract() -> dict[str, object]:
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "tests/fixtures/webgame/native-menu-dark-cloud-login-title-v220.json"
+    )
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _v221_census_era_contract() -> dict[str, object]:
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "tests/fixtures/webgame/native-menu-census-era-disposition-v221.json"
+    )
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _diagnose_v220_title(
+    *,
+    layout_id: str = "dark-cloud-login-settings",
+    settled_title: str = "Dark Cloud Browser",
+    settled_screen_id: str = "dark_cloud_login_settings",
+) -> dict[str, object] | None:
+    contract = _v220_dark_cloud_login_title_contract()
+    landed = {
+        "screen_id": "dark_cloud_login_settings",
+        "screen_title": "",
+    }
+    settled = {
+        "screen_id": settled_screen_id,
+        "screen_title": settled_title,
+    }
+    return diagnose_dark_cloud_login_title_v220(
+        layout_id,
+        landed,
+        settled,
+        contract,
+        {
+            field: contract["landed_fixture"][field]  # type: ignore[index]
+            for field in ("sha256", "bytes")
+        },
+        {
+            field: contract["superseding_candidate"][field]  # type: ignore[index]
+            for field in ("sha256", "bytes")
+        },
+    )
 
 
 def _v211_controls_layouts() -> tuple[dict[str, object], dict[str, object]]:
@@ -476,55 +542,6 @@ def _trace(
     }
 
 
-def _v29_order_case() -> tuple[
-    dict[str, object],
-    dict[str, object],
-    dict[str, object],
-    dict[str, object],
-]:
-    remaining = [_art(index, art_id=f"Core.{index}") for index in range(4)]
-    trio = [_art(20 + index, art_id=f"UI.dialog.{index}") for index in range(3)]
-    landed_elements = [remaining[0], *trio, *remaining[1:]]
-    for draw_order, element in enumerate(landed_elements):
-        element["draw_order"] = draw_order
-    settled_elements = copy.deepcopy([*remaining, *trio])
-    landed = {
-        "screen_id": "beta_notice",
-        "screen_title": "Beta notice",
-        "generation": 13,
-        "elements": landed_elements,
-    }
-    settled = {
-        "screen_id": "beta_notice",
-        "screen_title": "Beta notice",
-        "generation": 2,
-        "elements": settled_elements,
-        "ambient_members": [],
-    }
-    contract = {
-        "schema": "solomon-dark-native-menu-beta-notice-order-v29",
-        "layout_id": "beta-notice",
-        "screen_id": "beta_notice",
-        "core_member_count": len(settled_elements),
-        "longest_common_subsequence_count": len(remaining),
-        "moved_members": [
-            {
-                "art_id": element["art_id"],
-                "rect": copy.deepcopy(element["rect"]),
-                "semantic_sha256": hashlib.sha256(_signature(element)).hexdigest(),
-                "landed_relative_core_index": index + 1,
-                "settled_relative_core_index": len(remaining) + index,
-                "native_paint_order": 100 + index,
-                "overlay_reference_member": True,
-            }
-            for index, element in enumerate(trio)
-        ],
-        "paint_truth": {"source": "synthetic-test"},
-        "source_stop_audit": {"source": "synthetic-test"},
-    }
-    return landed, settled, _multiset_reference(trio), contract
-
-
 class NativeMenuAmbientLifecycleTests(unittest.TestCase):
     def test_sealed_v6_surface_fallback_does_not_override_live_probe_identity(
         self,
@@ -675,11 +692,15 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
     def test_supplemental_settled_pair_uses_exact_hashed_recordings(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
+            baseline = load_profile_state_baseline(REPO_ROOT)
+            binding = load_hub_binding_contract(REPO_ROOT)
+            identity = baseline["identity"]
             source = {
                 "base_commit_sha": "1" * 40,
                 "source_tree_sha": "2" * 40,
                 "game_executable_sha256": "3" * 64,
                 "loader_dll_sha256": "4" * 64,
+                "profile_state_identity_sha256": identity,
             }
 
             def write(path: Path, value: dict[str, object]) -> None:
@@ -696,6 +717,53 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
                     "bytes": path.stat().st_size,
                 }
 
+            def profile_state(role: str) -> dict[str, object]:
+                launch_path = root / f"{role}.profile-state.json"
+                write(
+                    launch_path,
+                    {
+                        "schema": RECEIPT_SCHEMA,
+                        "profile_state_identity_sha256": identity,
+                        "baseline_mode": "fresh_install",
+                        "source_sandbox_excluded": True,
+                        "retail_appdata_seeded": False,
+                        "files": [],
+                    },
+                )
+                return {
+                    "schema": RECEIPT_SCHEMA,
+                    "profile_state_identity_sha256": identity,
+                    "baseline_id": FRESH_BASELINE_ID,
+                    "baseline_mode": "fresh_install",
+                    "source_sandbox_excluded": True,
+                    "retail_appdata_seeded": False,
+                    "durable_file_count": 0,
+                    "baseline_fixture": {
+                        "repo_relative_path": (
+                            "tests/fixtures/webgame/"
+                            "native-menu-profile-state-baseline.json"
+                        ),
+                        "sha256": baseline["sha256"],
+                        "bytes": baseline["bytes"],
+                    },
+                    "binding_contract": {
+                        "repo_relative_path": (
+                            "tests/fixtures/webgame/"
+                            "native-menu-hub-bindings-v213.json"
+                        ),
+                        "sha256": binding["sha256"],
+                        "bytes": binding["bytes"],
+                    },
+                    "launch_receipt": {
+                        "evidence_filename": launch_path.name,
+                        "sha256": file_sha256(launch_path),
+                        "bytes": launch_path.stat().st_size,
+                    },
+                }
+
+            primary_profile_state = profile_state("primary")
+            confirmation_profile_state = profile_state("confirmation")
+
             primary_trace = root / "screen.settlement.json"
             confirmation = root / "screen.confirmation.json"
             historical_fixture = root / "screen.json"
@@ -710,6 +778,7 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
                         "instance": "menufx-history-b",
                         "process_id": 404,
                         "source": source,
+                        "profile_state": confirmation_profile_state,
                     },
                     "settled_window_samples": _stable_samples(5),
                 },
@@ -722,6 +791,7 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
                         "instance": "menufx-history-a",
                         "process_id": 303,
                         "source": source,
+                        "profile_state": primary_profile_state,
                         "settlement_trace": receipt(primary_trace),
                         "animation_confirmation": receipt(confirmation),
                     },
@@ -880,13 +950,17 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
             layout_id: {"native_screen_id": "hub"}
             for layout_id in PATH_DEPENDENT_CORE_LAYOUTS
         }
-        for (edge_id, endpoint), expected_layout_id in (
+        for (edge_id, endpoint, baseline_id), expected_layout_id in (
             PATH_DEPENDENT_CORE_ENDPOINTS.items()
         ):
             layout_id, explicit = _resolve_layout_id(
                 REPO_ROOT,
-                "hub", "hub", fixtures, edge_id, endpoint
-                , "pristine_fresh_install"
+                "hub",
+                "hub",
+                fixtures,
+                edge_id,
+                endpoint,
+                baseline_id,
             )
             self.assertEqual(layout_id, expected_layout_id)
             self.assertTrue(explicit)
@@ -929,6 +1003,18 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
                 "fork_decision_receipt": copy.deepcopy(
                     contract["layouts"][layout_id]["fork_decision"]
                 ),
+                "value": {
+                    "layout": {
+                        "elements": [
+                            {}
+                            for _ in range(
+                                contract["layouts"][layout_id][
+                                    "measured_settled_element_count"
+                                ]
+                            )
+                        ]
+                    }
+                },
                 "primary_observation": {
                     "samples": [
                         {
@@ -943,6 +1029,7 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
                                 ]
                             }
                         }
+                        for _ in range(40)
                     ]
                 },
                 "confirmation_observation": {
@@ -959,6 +1046,7 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
                                 ]
                             }
                         }
+                        for _ in range(40)
                     ]
                 },
             }
@@ -979,6 +1067,16 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
             }
             for index, (layout_id, record) in enumerate(fixtures.items())
         }
+        endpoints = {
+            (edge_id, endpoint): layout_id
+            for (edge_id, endpoint, baseline_id), layout_id in (
+                PATH_DEPENDENT_CORE_ENDPOINTS.items()
+            )
+            if baseline_id == "pristine_fresh_install"
+        }
+        endpoint_baselines = {
+            key: "pristine_fresh_install" for key in endpoints
+        }
 
         with mock.patch(
             "tools.resolve_native_menu_ambient_campaign."
@@ -988,7 +1086,8 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
             audit = validate_path_dependent_core_forks(
                 fixtures,
                 resolutions,
-                dict(PATH_DEPENDENT_CORE_ENDPOINTS),
+                endpoints,
+                endpoint_baselines,
                 REPO_ROOT,
             )
         self.assertEqual(
@@ -1000,6 +1099,15 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
         fixtures["hub_resumed"]["header"]["path_dependent_core"][
             "measured_settled_element_count"
         ] = 14
+        fixtures["hub_resumed"]["value"]["layout"]["elements"] = [
+            {} for _ in range(14)
+        ]
+        for observation_key in (
+            "primary_observation",
+            "confirmation_observation",
+        ):
+            for sample in fixtures["hub_resumed"][observation_key]["samples"]:
+                sample["payload"]["elements"] = [{} for _ in range(14)]
         with self.assertRaisesRegex(
             CampaignResolutionError,
             "path-dependent core contract: Hub variants do not differ in element census",
@@ -1022,7 +1130,8 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
                 validate_path_dependent_core_forks(
                     fixtures,
                     resolutions,
-                    dict(PATH_DEPENDENT_CORE_ENDPOINTS),
+                    endpoints,
+                    endpoint_baselines,
                     REPO_ROOT,
                 )
 
@@ -1047,6 +1156,18 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
                 "fork_decision_receipt": copy.deepcopy(
                     contract["layouts"][layout_id]["fork_decision"]
                 ),
+                "value": {
+                    "layout": {
+                        "elements": [
+                            {}
+                            for _ in range(
+                                contract["layouts"][layout_id][
+                                    "measured_settled_element_count"
+                                ]
+                            )
+                        ]
+                    }
+                },
             }
             for layout_id, policy in PATH_DEPENDENT_CORE_LAYOUTS.items()
         }
@@ -1062,8 +1183,18 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
             }
             for index, layout_id in enumerate(PATH_DEPENDENT_CORE_LAYOUTS)
         }
-        endpoints = dict(PATH_DEPENDENT_CORE_ENDPOINTS)
+        endpoints = {
+            (edge_id, endpoint): layout_id
+            for (edge_id, endpoint, baseline_id), layout_id in (
+                PATH_DEPENDENT_CORE_ENDPOINTS.items()
+            )
+            if baseline_id == "pristine_fresh_install"
+        }
+        endpoint_baselines = {
+            key: "pristine_fresh_install" for key in endpoints
+        }
         endpoints.pop(("settings_to_hub", "after"))
+        endpoint_baselines.pop(("settings_to_hub", "after"))
 
         with self.assertRaisesRegex(
             CampaignResolutionError,
@@ -1071,7 +1202,11 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
             "remain ambiguous",
         ):
             validate_path_dependent_core_forks(
-                fixtures, resolutions, endpoints, REPO_ROOT
+                fixtures,
+                resolutions,
+                endpoints,
+                endpoint_baselines,
+                REPO_ROOT,
             )
 
     def test_non_element_structural_field_variance_stops_settlement(self) -> None:
@@ -2110,6 +2245,212 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
                 controls_title_contract=_v210_controls_title_contract(),
             )
 
+    def test_v220_dark_cloud_login_title_exact_correction_is_bounded(self) -> None:
+        correction = _diagnose_v220_title()
+
+        self.assertIsInstance(correction, dict)
+        self.assertEqual(correction["settlement_spec"], "2.20")  # type: ignore[index]
+        self.assertEqual(correction["old_value"], "")  # type: ignore[index]
+        self.assertEqual(  # type: ignore[index]
+            correction["new_value"], "Dark Cloud Browser"
+        )
+        self.assertIs(correction["general_tolerance"], False)  # type: ignore[index]
+
+    def test_v220_dark_cloud_login_title_case_variant_stops(self) -> None:
+        with self.assertRaisesRegex(LandedDiagnosisError, TITLE_MISMATCH):
+            _diagnose_v220_title(settled_title="DARK CLOUD BROWSER")
+
+    def test_v220_dark_cloud_login_title_rule_does_not_apply_elsewhere(self) -> None:
+        with self.assertRaisesRegex(LandedDiagnosisError, TITLE_MISMATCH):
+            _diagnose_v220_title(layout_id="hall-of-fame")
+
+    def test_v220_dark_cloud_login_title_rejects_a_second_layout_field(self) -> None:
+        with self.assertRaisesRegex(LandedDiagnosisError, TITLE_MISMATCH):
+            _diagnose_v220_title(
+                settled_screen_id="dark_cloud_login_settings_mutated"
+            )
+
+    def test_v221_exact_contract_and_skills_choice_reconcile(self) -> None:
+        contract = _v221_census_era_contract()
+        view = require_census_era_contract(contract)
+        rows = contract["choice_slot_reconciliation"]["rows"]  # type: ignore[index]
+        residual = [copy.deepcopy(row["semantic_payload"]) for row in rows]
+
+        reconciliation, remaining = consume_choice_slot_rows(
+            "skill-picker", residual, contract
+        )
+
+        self.assertEqual(len(view["class_a"]), 10)
+        self.assertEqual(len(view["class_b"]), 7)
+        self.assertEqual(
+            reconciliation["member_ids"],  # type: ignore[index]
+            ["skill_picker.art.skills_84.1", "skill_picker.art.skills_84.2"],
+        )
+        self.assertEqual(remaining, [])
+
+    def test_v221_class_a_is_all_or_nothing(self) -> None:
+        contract = _v221_census_era_contract()
+        record = next(
+            entry
+            for entry in contract["class_a_records"]  # type: ignore[index]
+            if entry["layout_id"] == "dark-cloud-options"
+        )
+        residual = [
+            copy.deepcopy(member["semantic_payload"])
+            for member in record["members"][1:]
+        ]
+
+        with self.assertRaisesRegex(CensusEraV221Error, CLASS_A_RESIDUAL_STOP):
+            consume_class_a_residual(
+                "dark-cloud-options",
+                residual,
+                contract,
+                record["landed_fixture"],
+                record["candidate_fixture"],
+            )
+
+    def test_v221_field_correction_does_not_leak_scope(self) -> None:
+        contract = _v221_census_era_contract()
+
+        with self.assertRaisesRegex(CensusEraV221Error, FIELD_CORRECTION_STOP):
+            diagnose_field_corrections(
+                "pause-menu",
+                {"screen_title": ""},
+                {"screen_title": "GAME SETTINGS"},
+                contract,
+                {},
+                {},
+            )
+
+    def test_v221_pause_population_routes_must_converge(self) -> None:
+        contract = _v221_census_era_contract()
+        outcomes = copy.deepcopy(
+            contract["pause_menu_population_equivalence"][  # type: ignore[index]
+                "candidate_bindings"
+            ]
+        )
+        outcomes[1]["unclassified_differences_sha256"] = "f" * 64
+
+        with self.assertRaisesRegex(CensusEraV221Error, PAUSE_EQUIVALENCE_STOP):
+            validate_pause_equivalence(contract, outcomes)
+
+    def test_v221_class_f_witnesses_are_paired_exact_cores(self) -> None:
+        contract = _v221_census_era_contract()
+
+        performance = require_class_f_witness("performance", contract)
+        profile = require_class_f_witness("profile-save-select", contract)
+
+        self.assertEqual(len(performance["pair"]), 2)  # type: ignore[index]
+        self.assertEqual(len(profile["pair"]), 2)  # type: ignore[index]
+        self.assertEqual(
+            {row["projected_core_sha256"] for row in performance["pair"]},  # type: ignore[index]
+            {performance["projected_core_sha256"]},  # type: ignore[index]
+        )
+        self.assertEqual(
+            {row["projected_core_sha256"] for row in profile["pair"]},  # type: ignore[index]
+            {profile["projected_core_sha256"]},  # type: ignore[index]
+        )
+
+    def test_landed_diagnosis_capture_method_annotation_is_not_structural(self) -> None:
+        samples = _stable_samples(3)
+        settled = _resolve_pair(samples)
+        landed = copy.deepcopy(samples[0]["payload"])
+        settled_layout = {
+            **settled["structural_core"],
+            "ambient_members": copy.deepcopy(settled["ambient_members"]),
+        }
+        settled_layout["capture_method"] = "different capture method"
+        trace = _trace(samples, copy.deepcopy(landed["elements"]))
+
+        diagnosis = diagnose_landed_layout(
+            "screen",
+            landed,
+            settled_layout,
+            trace,
+            copy.deepcopy(trace),
+            _multiset_reference([_art(99, art_id="UI.overlay")]),
+        )
+
+        self.assertEqual(diagnosis["status"], "strict_structural_bit_match")
+
+    def test_enumerate_all_records_title_and_later_member_difference(self) -> None:
+        samples = _stable_samples(3)
+        settled = _resolve_pair(samples)
+        landed = copy.deepcopy(samples[0]["payload"])
+        landed["screen_title"] = "Old title"
+        landed["elements"].append(_art(99, art_id="UI.unclassified"))
+        trace = _trace(samples, copy.deepcopy(landed["elements"]))
+
+        differences = enumerate_unclassified_landed_differences(
+            "screen",
+            landed,
+            {
+                **settled["structural_core"],
+                "ambient_members": copy.deepcopy(settled["ambient_members"]),
+            },
+            trace,
+            copy.deepcopy(trace),
+            _multiset_reference([_art(98, art_id="UI.overlay")]),
+        )
+
+        self.assertEqual(
+            [difference["difference_type"] for difference in differences],
+            ["landed_only_member", "layout_field"],
+        )
+        self.assertEqual(differences[0]["witness"], "UI.unclassified")
+        self.assertEqual(differences[1]["field"], "screen_title")
+
+    def test_enumerate_all_records_a_guard_stop_with_no_member_residual(self) -> None:
+        layout = {
+            "generation": 1,
+            "screen_id": "screen",
+            "screen_title": "Screen",
+            "capture_method": "native",
+            "elements": [_art(1)],
+        }
+        with mock.patch(
+            "tools.native_menu_landed_diagnosis_v25.diagnose_landed_layout",
+            side_effect=LandedDiagnosisError("named correction guard failed"),
+        ), mock.patch(
+            "tools.native_menu_landed_diagnosis_v25._enumerate_unclassified_members",
+            return_value=[],
+        ):
+            differences = enumerate_unclassified_landed_differences(
+                "screen",
+                layout,
+                copy.deepcopy(layout),
+                {},
+                {},
+                {},
+            )
+
+        self.assertEqual(
+            differences,
+            [
+                {
+                    "difference_type": "authorization_contract_failure",
+                    "field": "landed_diagnosis_guard",
+                    "message": "named correction guard failed",
+                }
+            ],
+        )
+
+    def test_zero_residual_does_not_require_population_phases(self) -> None:
+        matched, residual, proof = match_population_members(
+            [],
+            10,
+            11,
+            {},
+            {},
+        )
+
+        self.assertEqual(matched, [])
+        self.assertEqual(residual, [])
+        self.assertEqual(
+            proof["population_trace_evaluation"],
+            "not_required_for_zero_residual",
+        )
+
     def test_v211_controls_structural_core_exact_supersession_is_bounded(
         self,
     ) -> None:
@@ -2224,74 +2565,6 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
         self.assertEqual(lifecycle, [])
         self.assertEqual(unmatched, [])
         self.assertEqual(animation[0]["member_id"], members[1]["id"])
-
-    def test_v29_beta_notice_exact_trio_moves_to_final_core_positions(self) -> None:
-        landed, settled, overlay, contract = _v29_order_case()
-
-        _, _, correction = _v29_beta_notice_order_projection(
-            landed, settled, overlay, contract
-        )
-
-        self.assertIsNotNone(correction)
-        self.assertEqual(
-            [
-                member["settled_relative_core_index"]
-                for member in correction["moved_members"]  # type: ignore[index]
-            ],
-            [4, 5, 6],
-        )
-
-    def test_v29_beta_notice_non_exempt_reorder_still_stops(self) -> None:
-        landed, settled, overlay, contract = _v29_order_case()
-        settled["elements"][1], settled["elements"][2] = (  # type: ignore[index]
-            settled["elements"][2],  # type: ignore[index]
-            settled["elements"][1],  # type: ignore[index]
-        )
-
-        with self.assertRaisesRegex(
-            LandedDiagnosisError,
-            "v2.9 beta-notice paint-order correction: a non-exempt core member moved",
-        ):
-            _v29_beta_notice_order_projection(landed, settled, overlay, contract)
-
-    def test_v29_beta_notice_dropped_trio_member_stops_set_identity(self) -> None:
-        landed, settled, overlay, contract = _v29_order_case()
-        settled["elements"].pop()  # type: ignore[union-attr]
-
-        with self.assertRaisesRegex(
-            LandedDiagnosisError,
-            "v2.9 beta-notice paint-order correction: exact core set identity failed",
-        ):
-            _v29_beta_notice_order_projection(landed, settled, overlay, contract)
-
-    def test_v29_beta_notice_mutated_trio_rect_stops_identity(self) -> None:
-        landed, settled, overlay, contract = _v29_order_case()
-        settled["elements"][-1]["rect"][0] += 1.0  # type: ignore[index]
-
-        with self.assertRaisesRegex(
-            LandedDiagnosisError,
-            "v2.9 beta-notice paint-order correction: exact core set identity failed",
-        ):
-            _v29_beta_notice_order_projection(landed, settled, overlay, contract)
-
-    def test_v29_beta_notice_trio_in_nonfinal_positions_stops(self) -> None:
-        landed, settled, overlay, contract = _v29_order_case()
-        elements = settled["elements"]  # type: ignore[assignment]
-        settled["elements"] = [
-            elements[0],
-            elements[1],
-            elements[4],
-            elements[5],
-            elements[6],
-            elements[2],
-            elements[3],
-        ]
-
-        with self.assertRaisesRegex(
-            LandedDiagnosisError,
-            "v2.9 beta-notice paint-order correction: bounded landed-to-settled positions differ",
-        ):
-            _v29_beta_notice_order_projection(landed, settled, overlay, contract)
 
     def test_landed_diagnosis_assigns_visibility_cycle_before_other_legs(self) -> None:
         def elements(sample_index: int) -> list[dict[str, object]]:
@@ -2445,6 +2718,46 @@ class NativeMenuAmbientLifecycleTests(unittest.TestCase):
                 copy.deepcopy(standalone),
                 {"create-discipline": [pair, duplicate]},
             )
+
+    def test_diagnostic_census_groups_one_population_classifier_equivalence(
+        self,
+    ) -> None:
+        samples = _stable_samples(3)
+        for sample in samples:
+            sample["payload"]["generation"] = 5  # type: ignore[index]
+        elements = copy.deepcopy(samples[0]["payload"]["elements"])  # type: ignore[index]
+        standalone = _trace(samples, elements, population_generation=5)
+        navigation = _trace(samples, elements, population_generation=4)
+        pair = {
+            "edge_id": "create_element_to_discipline",
+            "side": "after",
+            "primary_identity": ["menufx-primary", 101],
+            "confirmation_identity": ["menufx-confirmation", 202],
+            "primary_trace": navigation,
+            "confirmation_trace": copy.deepcopy(navigation),
+        }
+        duplicate = copy.deepcopy(pair)
+        duplicate["edge_id"] = "another_edge"
+
+        primary, confirmation, selection = _select_population_trace_pair_v25(
+            "create-discipline",
+            4,
+            5,
+            standalone,
+            copy.deepcopy(standalone),
+            {"create-discipline": [pair, duplicate]},
+            diagnostic_allow_equivalent=True,
+        )
+
+        self.assertEqual(primary, navigation)
+        self.assertEqual(confirmation, navigation)
+        self.assertEqual(
+            selection["source"],
+            "diagnostic_all_qualifying_navigation_endpoints",
+        )
+        self.assertFalse(selection["selection_performed"])
+        self.assertTrue(selection["diagnosis_convergence_required"])
+        self.assertEqual(len(selection["candidate_bindings"]), 2)
 
     def test_landed_diagnosis_accepts_exact_semantic_overlay_only(self) -> None:
         samples = _stable_samples(3)

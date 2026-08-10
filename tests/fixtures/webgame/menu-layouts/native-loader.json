@@ -1,125 +1,280 @@
 {
-    "schema":  "solomon-dark-native-menu-layout-v1",
-    "header":  {
-                   "instance":  "men-boot1",
-                   "process_id":  24016,
-                   "capture_commit":  "d28f98a190d69662c8e6e691484b4d4e0dc939b9",
-                   "native_exe_sha256":  "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
-                   "loader_dll_sha256":  "",
-                   "captured_at_utc":  "2026-08-05T04:45:13.2275140Z",
-                   "capture_method":  "MyLoader render detour + live loader globals + native Sprite draw hooks + D3D9 backbuffer",
-                   "source_json_sha256":  "fef7eca75f96dbfc565afbb8e235881194b5d55b1eaba421f0533fd3016a606b",
-                   "source_frame_sha256":  "b554e95a49eb027468c02360f001cdf0ac6f4e7f2f58768c0aba14e1402c79c1",
-                   "reference_capture":  "../menu-reference-captures/native-loader.png"
-               },
-    "layout":  {
-                   "generation":  1,
-                   "captured_at_milliseconds":  0,
-                   "screen_id":  "native_loader",
-                   "screen_title":  "Raptisoft loader",
-                   "capture_method":  "MyLoader render detour + live loader globals + native Sprite draw hooks + D3D9 backbuffer",
-                   "elapsed_milliseconds":  0,
-                   "progress_numerator":  7,
-                   "progress_denominator":  7,
-                   "progress":  1,
-                   "complete":  false,
-                   "elements":  [
-                                    {
-                                        "id":  "native_loader.art.loader_2.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "Loader.2",
-                                        "font_id":  "",
-                                        "text_style":  "centered",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  1,
-                                        "rect":  [
-                                                     601.000000,
-                                                     302.500000,
-                                                     989.000000,
-                                                     529.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               601.000000,
-                                                               302.500000,
-                                                               989.000000,
-                                                               529.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "native_loader.art.loader_1.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "Loader.1",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  2,
-                                        "rect":  [
-                                                     685.000000,
-                                                     553.000000,
-                                                     915.000000,
-                                                     607.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               685.000000,
-                                                               553.000000,
-                                                               915.000000,
-                                                               607.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "native_loader.art.loader_0.3",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "Loader.0",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  3,
-                                        "rect":  [
-                                                     704.000000,
-                                                     572.000000,
-                                                     896.000000,
-                                                     590.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               704.000000,
-                                                               572.000000,
-                                                               896.000000,
-                                                               590.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "native_loader.art.loader_3.4",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "Loader.3",
-                                        "font_id":  "",
-                                        "text_style":  "centered",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  4,
-                                        "rect":  [
-                                                     679.000000,
-                                                     541.000000,
-                                                     923.000000,
-                                                     559.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               679.000000,
-                                                               541.000000,
-                                                               923.000000,
-                                                               559.000000
-                                                           ]
-                                    }
-                                ]
-               }
+  "schema": "solomon-dark-native-menu-layout-v3",
+  "header": {
+    "label": "native_loader",
+    "instance": "menufx-v9p38",
+    "process_id": 11752,
+    "source": {
+      "base_commit_sha": "dbf36ac822163bd3ef8308994ee666a1963792bc",
+      "source_tree_sha": "fe13cd29846a7c4b3e450b1a4b312fccda65944b",
+      "capture_tree": "exact committed tree at base_commit_sha",
+      "game_executable_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+      "loader_dll_sha256": "f9c3357ddce217c4f6b0c13ad2511ec4cfcbf909974c335c865f21dfae53d289",
+      "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372"
+    },
+    "profile_state": {
+      "schema": "solomon-dark-native-menu-profile-state-v1",
+      "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+      "baseline_id": "pristine_fresh_install",
+      "baseline_mode": "fresh_install",
+      "source_sandbox_excluded": true,
+      "retail_appdata_seeded": false,
+      "durable_file_count": 0,
+      "baseline_fixture": {
+        "repo_relative_path": "tests/fixtures/webgame/native-menu-profile-state-baseline.json",
+        "sha256": "02ac22b1de367e9e94477f61c8e1144e6a5b16bd67bd418e69e9a2ec620914ff",
+        "bytes": 2155
+      },
+      "binding_contract": {
+        "repo_relative_path": "tests/fixtures/webgame/native-menu-hub-bindings-v213.json",
+        "sha256": "07c2ed2e53e997c8fb79c3d472b58d52c72c768286cad352ec1aeedaa907ef00",
+        "bytes": 21518
+      },
+      "launch_receipt": {
+        "evidence_filename": "native-loader.primary.menufx-v9p38.11752.profile-state.json",
+        "sha256": "89f20dfc0f193b0aac84a95f247071dde79e67044d3f41fb344d60666c949070",
+        "bytes": 694
+      }
+    },
+    "recorded_live": true,
+    "captured_at_utc": "2026-08-09T06:27:17.850413+00:00",
+    "capture_method": "MyLoader render detour + live loader globals + native Sprite draw hooks + D3D9 backbuffer",
+    "settlement": {
+      "settlement_spec": "2.9",
+      "criterion": "at least 40 consecutive samples spanning at least 2 seconds with constant surface/generations and every variance assigned to one measured v2.5 member class",
+      "settle_latency_milliseconds": 2407,
+      "stable_span_milliseconds": 2407,
+      "consecutive_structural_samples": 40,
+      "minimum_element_count": 4,
+      "peak_element_count": 4,
+      "raw_window_structural_sha256": "9260d2d9646aca7f7ff74f506df50a2354ab8567daefb21c4782d9049efb3789",
+      "resolved_structural_core_sha256": "daecd0a6f8ad1be798e142749b518945c4df3eb228f405f86038c92a2fbe00fd",
+      "resolved_classification_map_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "ambient_fraction": 0.0
+    },
+    "raw_recording": {
+      "evidence_filename": "native-loader-layout.json",
+      "sha256": "d7ba26354bb1644e21f7eadada43a162f2ab63541422d54216a3185b375c686d",
+      "bytes": 33706,
+      "frame_sha256": "b554e95a49eb027468c02360f001cdf0ac6f4e7f2f58768c0aba14e1402c79c1"
+    },
+    "reference_capture": "../menu-reference-captures/native-loader.png",
+    "settlement_trace": {
+      "evidence_filename": "native-loader.settlement.json",
+      "sha256": "ce734ed9481aa659460e2f00373ad312d23fa1a160399f06e2713bf6db9f0ae2",
+      "bytes": 124741
+    },
+    "animation_confirmation": {
+      "evidence_filename": "native-loader.confirmation.json",
+      "sha256": "740b42c796513d48f204e67ae655de7cdd4b8f1dc015e2910b5e514a9fb45000",
+      "bytes": 140511,
+      "instance": "menufx-v9p39",
+      "process_id": 20616,
+      "source": {
+        "base_commit_sha": "dbf36ac822163bd3ef8308994ee666a1963792bc",
+        "source_tree_sha": "fe13cd29846a7c4b3e450b1a4b312fccda65944b",
+        "capture_tree": "exact committed tree at base_commit_sha",
+        "game_executable_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+        "loader_dll_sha256": "f9c3357ddce217c4f6b0c13ad2511ec4cfcbf909974c335c865f21dfae53d289",
+        "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372"
+      },
+      "profile_state": {
+        "schema": "solomon-dark-native-menu-profile-state-v1",
+        "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+        "baseline_id": "pristine_fresh_install",
+        "baseline_mode": "fresh_install",
+        "source_sandbox_excluded": true,
+        "retail_appdata_seeded": false,
+        "durable_file_count": 0,
+        "baseline_fixture": {
+          "repo_relative_path": "tests/fixtures/webgame/native-menu-profile-state-baseline.json",
+          "sha256": "02ac22b1de367e9e94477f61c8e1144e6a5b16bd67bd418e69e9a2ec620914ff",
+          "bytes": 2155
+        },
+        "binding_contract": {
+          "repo_relative_path": "tests/fixtures/webgame/native-menu-hub-bindings-v213.json",
+          "sha256": "07c2ed2e53e997c8fb79c3d472b58d52c72c768286cad352ec1aeedaa907ef00",
+          "bytes": 21518
+        },
+        "launch_receipt": {
+          "evidence_filename": "native-loader.confirmation.menufx-v9p39.20616.profile-state.json",
+          "sha256": "d5e9d938d3e96d2e0c2967dce4a262c12db06f86f95021db0b30261854f1fb68",
+          "bytes": 693
+        }
+      },
+      "confirmation_structural_sha256": "9260d2d9646aca7f7ff74f506df50a2354ab8567daefb21c4782d9049efb3789",
+      "raw_primary_animated_element_ids": [],
+      "raw_confirmation_animated_element_ids": [],
+      "raw_sets_match_noncontractual": true,
+      "requires_campaign_resolution": true
+    },
+    "profile_state_binding": {
+      "baseline_id": "pristine_fresh_install",
+      "layout_id": "native-loader",
+      "edge_id": "",
+      "derivation_witness_role": ""
+    },
+    "ambient_lifecycle": {
+      "resolution_sha256": "0e1d7dbd8c33cd113155269b1db4e84dc69bef3edce4351c696ef061edff3413",
+      "independent_instances": [
+        [
+          "menufx-v9p38",
+          11752
+        ],
+        [
+          "menufx-v9p39",
+          20616
+        ]
+      ],
+      "observation_receipts": [
+        {
+          "evidence_path": "raw-v9/candidates/candidate-v214-profile-final/menu-settlement-traces/native-loader.settlement.json",
+          "sha256": "ce734ed9481aa659460e2f00373ad312d23fa1a160399f06e2713bf6db9f0ae2",
+          "bytes": 124741
+        },
+        {
+          "evidence_path": "raw-v9/candidates/candidate-v214-profile-final/menu-animation-confirmations/native-loader.confirmation.json",
+          "sha256": "740b42c796513d48f204e67ae655de7cdd4b8f1dc015e2910b5e514a9fb45000",
+          "bytes": 140511
+        }
+      ],
+      "extended_observation_baseline_receipts": []
+    }
+  },
+  "layout": {
+    "generation": 1,
+    "screen_id": "native_loader",
+    "screen_title": "Raptisoft loader",
+    "capture_method": "MyLoader render detour + live loader globals + native Sprite draw hooks + D3D9 backbuffer",
+    "draw_order_semantics": "structural_core_relative_sequence",
+    "elements": [
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "Loader.2",
+        "font_id": "",
+        "text_style": "centered",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          601.0,
+          302.5,
+          989.0,
+          529.5
+        ],
+        "unclipped_rect": [
+          601.0,
+          302.5,
+          989.0,
+          529.5
+        ],
+        "id": "native_loader.art.loader_2.1",
+        "draw_order": 0,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "Loader.1",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          685.0,
+          553.0,
+          915.0,
+          607.0
+        ],
+        "unclipped_rect": [
+          685.0,
+          553.0,
+          915.0,
+          607.0
+        ],
+        "id": "native_loader.art.loader_1.1",
+        "draw_order": 1,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "Loader.0",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          704.0,
+          572.0,
+          896.0,
+          590.0
+        ],
+        "unclipped_rect": [
+          704.0,
+          572.0,
+          896.0,
+          590.0
+        ],
+        "id": "native_loader.art.loader_0.1",
+        "draw_order": 2,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "Loader.3",
+        "font_id": "",
+        "text_style": "centered",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          679.0,
+          541.0,
+          923.0,
+          559.0
+        ],
+        "unclipped_rect": [
+          679.0,
+          541.0,
+          923.0,
+          559.0
+        ],
+        "id": "native_loader.art.loader_3.1",
+        "draw_order": 3,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      }
+    ],
+    "settlement_spec": "2.9",
+    "structural_core_sha256": "daecd0a6f8ad1be798e142749b518945c4df3eb228f405f86038c92a2fbe00fd",
+    "structural_core_element_count": 4,
+    "animated_element_ids": [],
+    "animated_family_ids": [],
+    "choice_slot_ids": [],
+    "choice_slots": [],
+    "visibility_cycling_element_ids": [],
+    "ambient_persistent_element_ids": [],
+    "classification_map": {},
+    "ambient_family_art_ids": [],
+    "ambient_members": [],
+    "ephemeral_family": {
+      "art_ids": [],
+      "union_spatial_envelope": null,
+      "observed_concurrency_range": [
+        0,
+        0
+      ],
+      "draw_bands": {},
+      "spawn_event_count": 0,
+      "despawn_event_count": 0,
+      "bidirectional_churn_witnessed": true
+    },
+    "ambient_semantic_member_count": 0,
+    "peak_element_count": 4,
+    "ambient_fraction": 0.0
+  }
 }

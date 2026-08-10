@@ -1,958 +1,948 @@
 {
-    "schema":  "solomon-dark-native-menu-layout-v1",
-    "header":  {
-                   "instance":  "men-title",
-                   "process_id":  16140,
-                   "capture_commit":  "f9cac8783e72e7423a2d952987fa169fa84f3dcb",
-                   "native_exe_sha256":  "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
-                   "loader_dll_sha256":  "f21d10e327e576ce2aed02a0626507143a9104c181d6694e2111d102433b52ec",
-                   "captured_at_utc":  "2026-08-05T07:13:47.8820614Z",
-                   "capture_method":  "live native UI tree + exact text/font hooks + native Sprite draw hooks + exact live-navigation screen tag (stale controls omitted)",
-                   "reference_capture":  "../menu-reference-captures/performance.png"
-               },
-    "layout":  {
-                   "generation":  8,
-                   "captured_at_milliseconds":  1147270218,
-                   "screen_id":  "performance",
-                   "screen_title":  "",
-                   "capture_method":  "live native UI tree + exact text/font hooks + native Sprite draw hooks + exact live-navigation screen tag (stale controls omitted)",
-                   "elements":  [
-                                    {
-                                        "id":  "performance.art.ui_42.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.42",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  25,
-                                        "rect":  [
-                                                     9.500000,
-                                                     8.500000,
-                                                     40.500000,
-                                                     41.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               9.500000,
-                                                               8.500000,
-                                                               40.500000,
-                                                               41.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.skills_43.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "Skills.43",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  24,
-                                        "rect":  [
-                                                     784.250000,
-                                                     9.750000,
-                                                     815.750000,
-                                                     41.250000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               784.250000,
-                                                               9.750000,
-                                                               815.750000,
-                                                               41.250000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_18.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.18",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  9,
-                                        "rect":  [
-                                                     669.000000,
-                                                     50.999992,
-                                                     931.000000,
-                                                     118.000015
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               669.000000,
-                                                               50.999992,
-                                                               931.000000,
-                                                               118.000015
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_17.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.17",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  34,
-                                        "rect":  [
-                                                     490.000000,
-                                                     90.000000,
-                                                     570.000000,
-                                                     173.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               490.000000,
-                                                               90.000000,
-                                                               570.000000,
-                                                               173.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_17.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.17",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  35,
-                                        "rect":  [
-                                                     1030.000000,
-                                                     90.000000,
-                                                     1110.000000,
-                                                     173.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1030.000000,
-                                                               90.000000,
-                                                               1110.000000,
-                                                               173.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_107.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.107",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  1,
-                                        "rect":  [
-                                                     516.500000,
-                                                     99.500000,
-                                                     601.500000,
-                                                     188.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               516.500000,
-                                                               99.500000,
-                                                               601.500000,
-                                                               188.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_108.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.108",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  2,
-                                        "rect":  [
-                                                     998.500000,
-                                                     99.500000,
-                                                     1083.500000,
-                                                     188.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               998.500000,
-                                                               99.500000,
-                                                               1083.500000,
-                                                               188.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_17.3",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.17",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  5,
-                                        "rect":  [
-                                                     535.000000,
-                                                     117.000000,
-                                                     615.000000,
-                                                     200.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               535.000000,
-                                                               117.000000,
-                                                               615.000000,
-                                                               200.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_17.4",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.17",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  6,
-                                        "rect":  [
-                                                     985.000000,
-                                                     117.000000,
-                                                     1065.000000,
-                                                     200.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               985.000000,
-                                                               117.000000,
-                                                               1065.000000,
-                                                               200.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.controlpanel_9.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "ControlPanel.9",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  26,
-                                        "rect":  [
-                                                     978.000000,
-                                                     216.000000,
-                                                     1060.000000,
-                                                     246.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               978.000000,
-                                                               216.000000,
-                                                               1060.000000,
-                                                               246.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.controlpanel_9.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "ControlPanel.9",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  27,
-                                        "rect":  [
-                                                     978.000000,
-                                                     257.000000,
-                                                     1060.000000,
-                                                     287.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               978.000000,
-                                                               257.000000,
-                                                               1060.000000,
-                                                               287.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.controlpanel_8.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "ControlPanel.8",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  28,
-                                        "rect":  [
-                                                     978.000000,
-                                                     298.000000,
-                                                     1060.000000,
-                                                     328.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               978.000000,
-                                                               298.000000,
-                                                               1060.000000,
-                                                               328.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_18.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.18",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  38,
-                                        "rect":  [
-                                                     421.000000,
-                                                     319.000000,
-                                                     488.000000,
-                                                     581.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               421.000000,
-                                                               319.000000,
-                                                               488.000000,
-                                                               581.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_18.3",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.18",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  39,
-                                        "rect":  [
-                                                     1112.000000,
-                                                     319.000000,
-                                                     1179.000000,
-                                                     581.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1112.000000,
-                                                               319.000000,
-                                                               1179.000000,
-                                                               581.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.controlpanel_9.3",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "ControlPanel.9",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  29,
-                                        "rect":  [
-                                                     978.000000,
-                                                     389.000000,
-                                                     1060.000000,
-                                                     419.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               978.000000,
-                                                               389.000000,
-                                                               1060.000000,
-                                                               419.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_28.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.28",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  16,
-                                        "rect":  [
-                                                     720.317322,
-                                                     426.920807,
-                                                     795.682678,
-                                                     504.079193
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               720.317322,
-                                                               426.920807,
-                                                               795.682678,
-                                                               504.079193
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.controlpanel_8.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "ControlPanel.8",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  30,
-                                        "rect":  [
-                                                     978.000000,
-                                                     430.000000,
-                                                     1060.000000,
-                                                     460.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               978.000000,
-                                                               430.000000,
-                                                               1060.000000,
-                                                               460.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.controlpanel_8.3",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "ControlPanel.8",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  31,
-                                        "rect":  [
-                                                     978.000000,
-                                                     521.000000,
-                                                     1060.000000,
-                                                     551.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               978.000000,
-                                                               521.000000,
-                                                               1060.000000,
-                                                               551.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.controlpanel_8.4",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "ControlPanel.8",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  32,
-                                        "rect":  [
-                                                     978.000000,
-                                                     562.000000,
-                                                     1060.000000,
-                                                     592.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               978.000000,
-                                                               562.000000,
-                                                               1060.000000,
-                                                               592.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.controlpanel_9.4",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "ControlPanel.9",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  33,
-                                        "rect":  [
-                                                     978.000000,
-                                                     603.000000,
-                                                     1060.000000,
-                                                     633.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               978.000000,
-                                                               603.000000,
-                                                               1060.000000,
-                                                               633.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_54.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.54",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  14,
-                                        "rect":  [
-                                                     696.000000,
-                                                     637.500000,
-                                                     766.000000,
-                                                     722.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               696.000000,
-                                                               637.500000,
-                                                               766.000000,
-                                                               722.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_54.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.54",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  15,
-                                        "rect":  [
-                                                     834.000000,
-                                                     637.500000,
-                                                     904.000000,
-                                                     722.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               834.000000,
-                                                               637.500000,
-                                                               904.000000,
-                                                               722.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_101.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.101",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  13,
-                                        "rect":  [
-                                                     702.000000,
-                                                     643.500000,
-                                                     898.000000,
-                                                     712.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               623.500000,
-                                                               643.500000,
-                                                               976.500000,
-                                                               712.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_17.5",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.17",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  7,
-                                        "rect":  [
-                                                     535.000000,
-                                                     700.000000,
-                                                     615.000000,
-                                                     783.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               535.000000,
-                                                               700.000000,
-                                                               615.000000,
-                                                               783.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_17.6",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.17",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  8,
-                                        "rect":  [
-                                                     985.000000,
-                                                     700.000000,
-                                                     1065.000000,
-                                                     783.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               985.000000,
-                                                               700.000000,
-                                                               1065.000000,
-                                                               783.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_109.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.109",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  3,
-                                        "rect":  [
-                                                     516.500000,
-                                                     711.500000,
-                                                     601.500000,
-                                                     800.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               516.500000,
-                                                               711.500000,
-                                                               601.500000,
-                                                               800.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_110.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.110",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  4,
-                                        "rect":  [
-                                                     998.500000,
-                                                     711.500000,
-                                                     1083.500000,
-                                                     800.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               998.500000,
-                                                               711.500000,
-                                                               1083.500000,
-                                                               800.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_17.7",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.17",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  36,
-                                        "rect":  [
-                                                     490.000000,
-                                                     727.000000,
-                                                     570.000000,
-                                                     810.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               490.000000,
-                                                               727.000000,
-                                                               570.000000,
-                                                               810.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_17.8",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.17",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  37,
-                                        "rect":  [
-                                                     1030.000000,
-                                                     727.000000,
-                                                     1110.000000,
-                                                     810.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               1030.000000,
-                                                               727.000000,
-                                                               1110.000000,
-                                                               810.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_8.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.8",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  10,
-                                        "rect":  [
-                                                     775.500000,
-                                                     782.000000,
-                                                     824.500000,
-                                                     894.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               775.500000,
-                                                               782.000000,
-                                                               824.500000,
-                                                               894.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_8.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.8",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  11,
-                                        "rect":  [
-                                                     706.625000,
-                                                     783.000000,
-                                                     743.375000,
-                                                     867.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               706.625000,
-                                                               783.000000,
-                                                               743.375000,
-                                                               867.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_8.3",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.8",
-                                        "font_id":  "",
-                                        "text_style":  "transform",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  12,
-                                        "rect":  [
-                                                     856.625000,
-                                                     783.000000,
-                                                     893.375000,
-                                                     867.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               856.625000,
-                                                               783.000000,
-                                                               893.375000,
-                                                               867.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_47.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.47",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  18,
-                                        "rect":  [
-                                                     730.500000,
-                                                     825.000000,
-                                                     788.500000,
-                                                     887.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               730.500000,
-                                                               825.000000,
-                                                               788.500000,
-                                                               887.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_48.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.48",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  20,
-                                        "rect":  [
-                                                     810.500000,
-                                                     825.000000,
-                                                     868.500000,
-                                                     887.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               810.500000,
-                                                               825.000000,
-                                                               868.500000,
-                                                               887.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_82.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.82",
-                                        "font_id":  "",
-                                        "text_style":  "centered",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  23,
-                                        "rect":  [
-                                                     794.500000,
-                                                     829.000000,
-                                                     806.500000,
-                                                     885.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               794.500000,
-                                                               829.000000,
-                                                               806.500000,
-                                                               885.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_47.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.47",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  17,
-                                        "rect":  [
-                                                     735.500000,
-                                                     830.000000,
-                                                     793.500000,
-                                                     892.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               735.500000,
-                                                               830.000000,
-                                                               793.500000,
-                                                               892.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_48.2",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.48",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  19,
-                                        "rect":  [
-                                                     815.500000,
-                                                     830.000000,
-                                                     873.500000,
-                                                     892.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               815.500000,
-                                                               830.000000,
-                                                               873.500000,
-                                                               892.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.skills_48.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "Skills.48",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  21,
-                                        "rect":  [
-                                                     480.500000,
-                                                     838.000000,
-                                                     508.500000,
-                                                     880.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               480.500000,
-                                                               838.000000,
-                                                               508.500000,
-                                                               880.000000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "performance.art.ui_100.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "UI.100",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  22,
-                                        "rect":  [
-                                                     483.500000,
-                                                     877.000000,
-                                                     505.500000,
-                                                     900.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               483.500000,
-                                                               877.000000,
-                                                               505.500000,
-                                                               908.000000
-                                                           ]
-                                    }
-                                ]
-               }
+  "schema": "solomon-dark-native-menu-layout-v3",
+  "header": {
+    "label": "performance",
+    "instance": "menufx-v9p71",
+    "process_id": 3184,
+    "source": {
+      "base_commit_sha": "405bb0f697fcdf484f304f0d5f38224d39a6ae70",
+      "source_tree_sha": "b6aaa8f1f9752963b570384a29a6082228c2cbfa",
+      "capture_tree": "exact committed tree at base_commit_sha",
+      "game_executable_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+      "loader_dll_sha256": "f9c3357ddce217c4f6b0c13ad2511ec4cfcbf909974c335c865f21dfae53d289",
+      "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+      "capture_driver_preset": "idle"
+    },
+    "profile_state": {
+      "schema": "solomon-dark-native-menu-profile-state-v1",
+      "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+      "baseline_id": "pristine_fresh_install",
+      "baseline_mode": "fresh_install",
+      "source_sandbox_excluded": true,
+      "retail_appdata_seeded": false,
+      "durable_file_count": 0,
+      "baseline_fixture": {
+        "repo_relative_path": "tests/fixtures/webgame/native-menu-profile-state-baseline.json",
+        "sha256": "02ac22b1de367e9e94477f61c8e1144e6a5b16bd67bd418e69e9a2ec620914ff",
+        "bytes": 2155
+      },
+      "binding_contract": {
+        "repo_relative_path": "tests/fixtures/webgame/native-menu-hub-bindings-v213.json",
+        "sha256": "07c2ed2e53e997c8fb79c3d472b58d52c72c768286cad352ec1aeedaa907ef00",
+        "bytes": 21518
+      },
+      "launch_receipt": {
+        "evidence_filename": "performance.menufx-v9p71.3184.profile-state.json",
+        "sha256": "cbdad058b118a704f772aa43215be081dc555b502f939420154c07c8e2f7a2c5",
+        "bytes": 694
+      }
+    },
+    "profile_state_binding": {
+      "baseline_id": "pristine_fresh_install",
+      "layout_id": "performance",
+      "edge_id": "",
+      "derivation_witness_role": ""
+    },
+    "capture_method": "live native UI tree + exact text/font hooks + native Sprite draw hooks",
+    "recorded_live": true,
+    "captured_at_utc": "2026-08-09T13:38:13.4900576Z",
+    "settlement": {
+      "settlement_spec": "2.9",
+      "criterion": "at least 40 consecutive samples spanning at least 2 seconds with constant surface/generations and every variance assigned to one measured v2.5 member class",
+      "settle_latency_milliseconds": 15869,
+      "stable_span_milliseconds": 15546,
+      "consecutive_structural_samples": 40,
+      "minimum_element_count": 24,
+      "peak_element_count": 24,
+      "raw_window_structural_sha256": "b5b21f135d8169d0f554fe254856828111d219e43bb4a8867f71690afc5f5ddc",
+      "resolved_structural_core_sha256": "ec96b682fbba631742fd4e63199f61aa05602209abcde53889b72c4fb31f97cf",
+      "resolved_classification_map_sha256": "52f32b0f5c9ff795f1ab5c8adb5946b7ae4e891ff8642eb3299537d43e71c03c",
+      "ambient_fraction": 0.041666666666666664
+    },
+    "browser_tab_verification": null,
+    "raw_recording": {
+      "evidence_filename": "performance.settlement.json",
+      "sha256": "bc255ebe16e765a8d9b8acf8b0d92923f54903d5a37caf2683e044f0ee424556",
+      "bytes": 2370391
+    },
+    "reference_capture": "../menu-reference-captures/performance.png",
+    "animation_confirmation": {
+      "evidence_filename": "performance.confirmation.json",
+      "sha256": "e2c3fe502c1fcbc60d1fc93e6327b1a355623d2f9dd186dc73b2e0a6fc14123a",
+      "bytes": 2414432,
+      "instance": "menufx-v9p75",
+      "process_id": 16408,
+      "source": {
+        "base_commit_sha": "405bb0f697fcdf484f304f0d5f38224d39a6ae70",
+        "source_tree_sha": "b6aaa8f1f9752963b570384a29a6082228c2cbfa",
+        "capture_tree": "exact committed tree at base_commit_sha",
+        "game_executable_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+        "loader_dll_sha256": "f9c3357ddce217c4f6b0c13ad2511ec4cfcbf909974c335c865f21dfae53d289",
+        "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+        "capture_driver_preset": "idle"
+      },
+      "profile_state": {
+        "schema": "solomon-dark-native-menu-profile-state-v1",
+        "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+        "baseline_id": "pristine_fresh_install",
+        "baseline_mode": "fresh_install",
+        "source_sandbox_excluded": true,
+        "retail_appdata_seeded": false,
+        "durable_file_count": 0,
+        "baseline_fixture": {
+          "repo_relative_path": "tests/fixtures/webgame/native-menu-profile-state-baseline.json",
+          "sha256": "02ac22b1de367e9e94477f61c8e1144e6a5b16bd67bd418e69e9a2ec620914ff",
+          "bytes": 2155
+        },
+        "binding_contract": {
+          "repo_relative_path": "tests/fixtures/webgame/native-menu-hub-bindings-v213.json",
+          "sha256": "07c2ed2e53e997c8fb79c3d472b58d52c72c768286cad352ec1aeedaa907ef00",
+          "bytes": 21518
+        },
+        "launch_receipt": {
+          "evidence_filename": "performance.confirmation.menufx-v9p75.16408.profile-state.json",
+          "sha256": "7ac24f5833a8b43d68fe8f692aa67d9f751656c170ecb4f0b5dcf0fba021596a",
+          "bytes": 693
+        }
+      },
+      "profile_state_binding": {
+        "baseline_id": "pristine_fresh_install",
+        "layout_id": "performance",
+        "edge_id": "",
+        "derivation_witness_role": ""
+      },
+      "confirmation_structural_sha256": "1d7dddc00868df4dda51928d05fdd45990b27831179f8b060b5a7d916a8e29c1",
+      "animated_element_ids_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "raw_primary_animated_element_ids": [],
+      "raw_confirmation_animated_element_ids": [],
+      "raw_sets_match_noncontractual": true,
+      "requires_campaign_resolution": true
+    },
+    "ambient_lifecycle": {
+      "resolution_sha256": "3f8e017fe1c5c408b8d3f14650e2fff85dd3372c23d3da500ec91442f2f87c43",
+      "independent_instances": [
+        [
+          "menufx-v9p24",
+          15940
+        ],
+        [
+          "menufx-v9p25",
+          16308
+        ],
+        [
+          "menufx-v9p71",
+          3184
+        ],
+        [
+          "menufx-v9p75",
+          16408
+        ]
+      ],
+      "observation_receipts": [
+        {
+          "evidence_path": "raw-v9/candidates/candidate-v214-profile-final/menu-settlement-traces/performance.settlement.json",
+          "sha256": "bc255ebe16e765a8d9b8acf8b0d92923f54903d5a37caf2683e044f0ee424556",
+          "bytes": 2370391
+        },
+        {
+          "evidence_path": "raw-v9/candidates/candidate-v214-profile-final/menu-animation-confirmations/performance.confirmation.json",
+          "sha256": "e2c3fe502c1fcbc60d1fc93e6327b1a355623d2f9dd186dc73b2e0a6fc14123a",
+          "bytes": 2414432
+        },
+        {
+          "evidence_path": "raw-v9/profile-select-new-game-edge/merged-v219/navigation-primary-v219-40-edges.json",
+          "sha256": "a4ad35b04deb9c2a5aaa52cb71172e32968e569f0cc47c77404544fa4dee2e29",
+          "bytes": 266236067
+        },
+        {
+          "evidence_path": "raw-v9/profile-select-new-game-edge/merged-v219/navigation-confirmation-v219-40-edges.json",
+          "sha256": "54e9571022dfa7f18b13ed8b63e6d70fadf52595de876d10453fcc9e42664cc7",
+          "bytes": 263780529
+        },
+        {
+          "evidence_path": "raw-v9/profile-select-new-game-edge/merged-v219/navigation-primary-v219-40-edges.json",
+          "sha256": "a4ad35b04deb9c2a5aaa52cb71172e32968e569f0cc47c77404544fa4dee2e29",
+          "bytes": 266236067
+        },
+        {
+          "evidence_path": "raw-v9/profile-select-new-game-edge/merged-v219/navigation-confirmation-v219-40-edges.json",
+          "sha256": "54e9571022dfa7f18b13ed8b63e6d70fadf52595de876d10453fcc9e42664cc7",
+          "bytes": 263780529
+        },
+        {
+          "evidence_path": "raw-v9/motion-v215/final-rerun3/capture/motion-observations/performance.confirmation.motion.json",
+          "sha256": "fdc9b68a8f9d4e9fcfb14e6b0b9da3083fa4bf3857e6972aba49dd2a7183d080",
+          "bytes": 11172771
+        },
+        {
+          "evidence_path": "raw-v9/motion-v215/final-rerun3/capture/motion-observations/performance.primary.motion.json",
+          "sha256": "228677a797640ede60f59087b43194ed4bec2cc8b2da12320ce7af11e8031761",
+          "bytes": 11172733
+        }
+      ],
+      "extended_observation_baseline_receipts": [
+        {
+          "evidence_path": "raw-v9/motion-v215/final-rerun3/capture/menu-animation-confirmations/performance.confirmation.json",
+          "sha256": "e2c3fe502c1fcbc60d1fc93e6327b1a355623d2f9dd186dc73b2e0a6fc14123a",
+          "bytes": 2414432
+        },
+        {
+          "evidence_path": "raw-v9/motion-v215/final-rerun3/capture/preconfirmation-baselines/performance.json",
+          "sha256": "e64dff84eafd96c84a5f43853c69dea3074e679199fbb9b56c8293e7e1b93d21",
+          "bytes": 42230
+        }
+      ]
+    }
+  },
+  "layout": {
+    "generation": 9,
+    "screen_id": "performance",
+    "screen_title": "",
+    "capture_method": "live native UI tree + exact text/font hooks + native Sprite draw hooks",
+    "draw_order_semantics": "structural_core_relative_sequence",
+    "elements": [
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.47",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          735.5,
+          830.0,
+          793.5,
+          892.0
+        ],
+        "unclipped_rect": [
+          735.5,
+          830.0,
+          793.5,
+          892.0
+        ],
+        "id": "performance.art.ui_47.1",
+        "draw_order": 0,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.47",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          730.5,
+          825.0,
+          788.5,
+          887.0
+        ],
+        "unclipped_rect": [
+          730.5,
+          825.0,
+          788.5,
+          887.0
+        ],
+        "id": "performance.art.ui_47.2",
+        "draw_order": 1,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.48",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          815.5,
+          830.0,
+          873.5,
+          892.0
+        ],
+        "unclipped_rect": [
+          815.5,
+          830.0,
+          873.5,
+          892.0
+        ],
+        "id": "performance.art.ui_48.1",
+        "draw_order": 2,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.48",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          810.5,
+          825.0,
+          868.5,
+          887.0
+        ],
+        "unclipped_rect": [
+          810.5,
+          825.0,
+          868.5,
+          887.0
+        ],
+        "id": "performance.art.ui_48.2",
+        "draw_order": 3,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "Skills.48",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          480.5,
+          838.0,
+          508.5,
+          880.0
+        ],
+        "unclipped_rect": [
+          480.5,
+          838.0,
+          508.5,
+          880.0
+        ],
+        "id": "performance.art.skills_48.1",
+        "draw_order": 4,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.100",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          483.5,
+          877.0,
+          505.5,
+          900.0
+        ],
+        "unclipped_rect": [
+          483.5,
+          877.0,
+          505.5,
+          908.0
+        ],
+        "id": "performance.art.ui_100.1",
+        "draw_order": 5,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.82",
+        "font_id": "",
+        "text_style": "centered",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          794.5,
+          829.0,
+          806.5,
+          885.0
+        ],
+        "unclipped_rect": [
+          794.5,
+          829.0,
+          806.5,
+          885.0
+        ],
+        "id": "performance.art.ui_82.1",
+        "draw_order": 6,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "Skills.43",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          784.25,
+          9.75,
+          815.75,
+          41.25
+        ],
+        "unclipped_rect": [
+          784.25,
+          9.75,
+          815.75,
+          41.25
+        ],
+        "id": "performance.art.skills_43.1",
+        "draw_order": 7,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.42",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          9.5,
+          8.5,
+          40.5,
+          41.5
+        ],
+        "unclipped_rect": [
+          9.5,
+          8.5,
+          40.5,
+          41.5
+        ],
+        "id": "performance.art.ui_42.1",
+        "draw_order": 8,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "ControlPanel.9",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          978.0,
+          216.0,
+          1060.0,
+          246.0
+        ],
+        "unclipped_rect": [
+          978.0,
+          216.0,
+          1060.0,
+          246.0
+        ],
+        "id": "performance.art.controlpanel_9.1",
+        "draw_order": 9,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "ControlPanel.9",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          978.0,
+          257.0,
+          1060.0,
+          287.0
+        ],
+        "unclipped_rect": [
+          978.0,
+          257.0,
+          1060.0,
+          287.0
+        ],
+        "id": "performance.art.controlpanel_9.2",
+        "draw_order": 10,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "ControlPanel.8",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          978.0,
+          298.0,
+          1060.0,
+          328.0
+        ],
+        "unclipped_rect": [
+          978.0,
+          298.0,
+          1060.0,
+          328.0
+        ],
+        "id": "performance.art.controlpanel_8.1",
+        "draw_order": 11,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "ControlPanel.9",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          978.0,
+          389.0,
+          1060.0,
+          419.0
+        ],
+        "unclipped_rect": [
+          978.0,
+          389.0,
+          1060.0,
+          419.0
+        ],
+        "id": "performance.art.controlpanel_9.3",
+        "draw_order": 12,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "ControlPanel.8",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          978.0,
+          430.0,
+          1060.0,
+          460.0
+        ],
+        "unclipped_rect": [
+          978.0,
+          430.0,
+          1060.0,
+          460.0
+        ],
+        "id": "performance.art.controlpanel_8.2",
+        "draw_order": 13,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "ControlPanel.8",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          978.0,
+          521.0,
+          1060.0,
+          551.0
+        ],
+        "unclipped_rect": [
+          978.0,
+          521.0,
+          1060.0,
+          551.0
+        ],
+        "id": "performance.art.controlpanel_8.3",
+        "draw_order": 14,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "ControlPanel.8",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          978.0,
+          562.0,
+          1060.0,
+          592.0
+        ],
+        "unclipped_rect": [
+          978.0,
+          562.0,
+          1060.0,
+          592.0
+        ],
+        "id": "performance.art.controlpanel_8.4",
+        "draw_order": 15,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "ControlPanel.9",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          978.0,
+          603.0,
+          1060.0,
+          633.0
+        ],
+        "unclipped_rect": [
+          978.0,
+          603.0,
+          1060.0,
+          633.0
+        ],
+        "id": "performance.art.controlpanel_9.4",
+        "draw_order": 16,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.17",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          490.0,
+          90.0,
+          570.0,
+          173.0
+        ],
+        "unclipped_rect": [
+          490.0,
+          90.0,
+          570.0,
+          173.0
+        ],
+        "id": "performance.art.ui_17.1",
+        "draw_order": 17,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.17",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          1030.0,
+          90.0,
+          1110.0,
+          173.0
+        ],
+        "unclipped_rect": [
+          1030.0,
+          90.0,
+          1110.0,
+          173.0
+        ],
+        "id": "performance.art.ui_17.2",
+        "draw_order": 18,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.17",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          490.0,
+          727.0,
+          570.0,
+          810.0
+        ],
+        "unclipped_rect": [
+          490.0,
+          727.0,
+          570.0,
+          810.0
+        ],
+        "id": "performance.art.ui_17.3",
+        "draw_order": 19,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.17",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          1030.0,
+          727.0,
+          1110.0,
+          810.0
+        ],
+        "unclipped_rect": [
+          1030.0,
+          727.0,
+          1110.0,
+          810.0
+        ],
+        "id": "performance.art.ui_17.4",
+        "draw_order": 20,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.18",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          421.0,
+          319.0,
+          488.0,
+          581.0
+        ],
+        "unclipped_rect": [
+          421.0,
+          319.0,
+          488.0,
+          581.0
+        ],
+        "id": "performance.art.ui_18.1",
+        "draw_order": 21,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "UI.18",
+        "font_id": "",
+        "text_style": "transform",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          1112.0,
+          319.0,
+          1179.0,
+          581.0
+        ],
+        "unclipped_rect": [
+          1112.0,
+          319.0,
+          1179.0,
+          581.0
+        ],
+        "id": "performance.art.ui_18.2",
+        "draw_order": 22,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      }
+    ],
+    "settlement_spec": "2.9",
+    "structural_core_sha256": "ec96b682fbba631742fd4e63199f61aa05602209abcde53889b72c4fb31f97cf",
+    "structural_core_element_count": 23,
+    "animated_element_ids": [
+      "performance.ambient.member_497899476eb7f2adf5d838648cfeda3b3f8a8adab660da13db2003505c3e5bf7_slot_1.1"
+    ],
+    "animated_family_ids": [],
+    "choice_slot_ids": [],
+    "choice_slots": [],
+    "visibility_cycling_element_ids": [],
+    "ambient_persistent_element_ids": [],
+    "classification_map": {
+      "performance.ambient.member_497899476eb7f2adf5d838648cfeda3b3f8a8adab660da13db2003505c3e5bf7_slot_1.1": [
+        "animated"
+      ]
+    },
+    "ambient_family_art_ids": [],
+    "ambient_members": [
+      {
+        "member_key": "member:497899476eb7f2adf5d838648cfeda3b3f8a8adab660da13db2003505c3e5bf7:slot:1",
+        "art_id": "UI.28",
+        "member_classes": [
+          "animated"
+        ],
+        "draw_bands": [
+          {
+            "below": "bottom",
+            "above": "performance.art.ui_47.1"
+          }
+        ],
+        "class_members": [
+          {
+            "classification": "animated",
+            "anchor_semantics": "first_observation_first_present_sample",
+            "anchor_payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.28",
+              "font_id": "",
+              "text_style": "transform",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                720.236389,
+                426.920807,
+                795.601746,
+                504.079193
+              ],
+              "unclipped_rect": [
+                720.236389,
+                426.920807,
+                795.601746,
+                504.079193
+              ]
+            },
+            "union_spatial_envelope": {
+              "sample_count": 698,
+              "rect": {
+                "min_x": 720.236389,
+                "max_x": 720.719788,
+                "min_y": 426.920807,
+                "max_y": 426.920807,
+                "min_width": 75.36535600000002,
+                "max_width": 75.36535700000002,
+                "min_height": 77.15838599999995,
+                "max_height": 77.15838599999995
+              },
+              "unclipped_rect": {
+                "min_x": 720.236389,
+                "max_x": 720.719788,
+                "min_y": 426.920807,
+                "max_y": 426.920807,
+                "min_width": 75.36535600000002,
+                "max_width": 75.36535700000002,
+                "min_height": 77.15838599999995,
+                "max_height": 77.15838599999995
+              }
+            },
+            "on_fraction": 1.0,
+            "dominant_visible": true,
+            "dominant_phase_payload": {
+              "kind": "art",
+              "text": "",
+              "action_id": "",
+              "art_id": "UI.28",
+              "font_id": "",
+              "text_style": "transform",
+              "visible": true,
+              "interactive": false,
+              "rect": [
+                720.236389,
+                426.920807,
+                795.601746,
+                504.079193
+              ],
+              "unclipped_rect": [
+                720.236389,
+                426.920807,
+                795.601746,
+                504.079193
+              ]
+            },
+            "events": {
+              "spawn": 0,
+              "despawn": 0,
+              "visible_toggle": 0,
+              "rect_change": 0,
+              "cross_window_rect_change": 2
+            },
+            "captured_member_count": 8
+          }
+        ],
+        "union_spatial_envelope": {
+          "sample_count": 698,
+          "rect": {
+            "min_x": 720.236389,
+            "max_x": 720.719788,
+            "min_y": 426.920807,
+            "max_y": 426.920807,
+            "min_width": 75.36535600000002,
+            "max_width": 75.36535700000002,
+            "min_height": 77.15838599999995,
+            "max_height": 77.15838599999995
+          },
+          "unclipped_rect": {
+            "min_x": 720.236389,
+            "max_x": 720.719788,
+            "min_y": 426.920807,
+            "max_y": 426.920807,
+            "min_width": 75.36535600000002,
+            "max_width": 75.36535700000002,
+            "min_height": 77.15838599999995,
+            "max_height": 77.15838599999995
+          }
+        },
+        "observed_concurrency_range": [
+          1,
+          1
+        ],
+        "on_fraction": 1.0,
+        "dominant_visible": true,
+        "events": {
+          "spawn": 0,
+          "despawn": 0,
+          "visible_toggle": 0,
+          "rect_change": 0,
+          "cross_window_rect_change": 2
+        },
+        "id": "performance.ambient.member_497899476eb7f2adf5d838648cfeda3b3f8a8adab660da13db2003505c3e5bf7_slot_1.1"
+      }
+    ],
+    "ephemeral_family": {
+      "art_ids": [],
+      "union_spatial_envelope": null,
+      "observed_concurrency_range": [
+        0,
+        0
+      ],
+      "draw_bands": {},
+      "spawn_event_count": 0,
+      "despawn_event_count": 0,
+      "bidirectional_churn_witnessed": true
+    },
+    "ambient_semantic_member_count": 1,
+    "peak_element_count": 24,
+    "ambient_fraction": 0.041666666666666664
+  }
 }

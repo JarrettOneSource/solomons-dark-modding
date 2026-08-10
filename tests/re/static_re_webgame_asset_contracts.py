@@ -26,6 +26,7 @@ CI_PATH = ROOT / ".github/workflows/lua-authoring-contracts.yml"
 INVENTORY_PATH = ROOT / "docs/reverse-engineering/native-content-inventory.json"
 SCENE_GOLDEN_PATH = ROOT / "tests/fixtures/webgame/scene-composition-goldens.json"
 MENU_GOLDEN_PATH = ROOT / "tests/fixtures/webgame/menu-goldens.json"
+SHELL_MENU_GOLDEN_PATH = ROOT / "webgame-contracts/baseline-snapshots/menu-goldens.json"
 
 EXPECTED_COMMITTED_HASH_PATHS = {
     "SolomonDarkModLoader/src/native_scene_capture/generated_atlas_spans.inl",
@@ -34,6 +35,7 @@ EXPECTED_COMMITTED_HASH_PATHS = {
     "docs/reverse-engineering/native-content-inventory.json",
     "tests/fixtures/webgame/menu-goldens.json",
     "tests/fixtures/webgame/scene-composition-goldens.json",
+    "webgame-contracts/baseline-snapshots/menu-goldens.json",
     "webgame/assets/asset-manifest.schema.json",
 }
 EXPECTED_OUTPUT_TREE_SHA256 = (
@@ -43,7 +45,7 @@ EXPECTED_MANIFEST_SHA256 = (
     "11e3d2041abb5117228064e73fcd02b9beb3b40dfeed735eafb7133ffd0c5fa3"
 )
 EXPECTED_FIXTURE_SHA256 = (
-    "df6db22e0f549f6653c0f55dccb1b9264e10b1052f9fab0ab7cba77b834dbde2"
+    "078b770f7eea244a871ece1af8a178ccd1d8400456bccf9fd02ce774e0fd6c8b"
 )
 EXPECTED_COUNTS = {
     "atlasCount": 41,
@@ -160,15 +162,25 @@ def _scene_sprite_ids(golden: dict[str, Any]) -> set[str]:
     return ids
 
 
-def _menu_ids(golden: dict[str, Any]) -> tuple[set[str], set[str]]:
-    layouts = _list(
-        golden.get("layouts"),
-        "menu golden no longer has layouts for asset resolution",
+def _menu_ids(
+    settled_golden: dict[str, Any], shell_golden: dict[str, Any]
+) -> tuple[set[str], set[str]]:
+    settled_layouts = _list(
+        settled_golden.get("layouts"),
+        "settled menu golden no longer has layouts for asset resolution",
     )
-    if not layouts:
+    shell_layouts = _list(
+        shell_golden.get("layouts"),
+        "shell baseline menu golden no longer has layouts for asset resolution",
+    )
+    if not settled_layouts or not shell_layouts:
         raise StaticReTestFailure(
-            "menu golden has no layout content for the asset resolver to check"
+            "settled and shell-baseline menu goldens must both contribute live layout content"
         )
+    layouts = _list(
+        settled_layouts + shell_layouts,
+        "settled and shell-baseline menu goldens no longer combine for asset resolution",
+    )
     art_ids = _string_field_set(layouts, "art_id")
     font_ids = _string_field_set(layouts, "font_id")
     if "Wizards_dire_BG" not in art_ids or "Title.0" not in art_ids:
@@ -179,9 +191,9 @@ def _menu_ids(golden: dict[str, Any]) -> tuple[set[str], set[str]]:
         raise StaticReTestFailure(
             "menu asset sweep missed the named native and system font witnesses"
         )
-    if len(art_ids) != 104 or len(font_ids) != 4:
+    if len(art_ids) != 107 or len(font_ids) != 4:
         raise StaticReTestFailure(
-            "menu asset sweep no longer reaches all 104 art and four font identifiers"
+            "menu asset sweep no longer reaches all 107 art and four font identifiers"
         )
     return art_ids, font_ids
 
@@ -276,7 +288,7 @@ def test_webgame_asset_manifest_schema_and_provenance_are_pinned() -> str:
     )
     if set(recorded_hashes) != EXPECTED_COMMITTED_HASH_PATHS:
         raise StaticReTestFailure(
-            "manifest fixture no longer names exactly its seven committed source inputs"
+            "manifest fixture no longer names exactly its eight committed source inputs"
         )
     if "tests/fixtures/webgame/scene-composition-goldens.json" not in recorded_hashes:
         raise StaticReTestFailure(
@@ -508,9 +520,9 @@ def test_webgame_asset_fixture_covers_native_families_and_golden_references() ->
         selected.get("entryHashes"),
         "asset fixture no longer carries selected per-entry hashes",
     )
-    if len(entry_hashes) != 499 or "DeadHawg.12" not in entry_hashes:
+    if len(entry_hashes) != 502 or "DeadHawg.12" not in entry_hashes:
         raise StaticReTestFailure(
-            "asset fixture no longer pins all 499 representative and golden-referenced entries"
+            "asset fixture no longer pins all 502 representative and golden-referenced entries"
         )
     for family in sorted(native_names):
         expected_id = f"{family}.0"
@@ -532,8 +544,12 @@ def test_webgame_asset_fixture_covers_native_families_and_golden_references() ->
         MENU_GOLDEN_PATH,
         "menu golden is absent or not reviewable JSON",
     )
+    shell_menu = _load_json(
+        SHELL_MENU_GOLDEN_PATH,
+        "shell baseline menu golden is absent or not reviewable JSON",
+    )
     scene_ids = _scene_sprite_ids(scene)
-    menu_art_ids, menu_font_ids = _menu_ids(menu)
+    menu_art_ids, menu_font_ids = _menu_ids(menu, shell_menu)
     references = _mapping(
         fixture.get("references"),
         "asset fixture no longer records the landed golden references",
@@ -553,9 +569,9 @@ def test_webgame_asset_fixture_covers_native_families_and_golden_references() ->
             "asset manifest fixture reports unresolved scene or menu references"
         )
     all_ids = scene_ids | menu_art_ids | menu_font_ids
-    if len(all_ids) != 485:
+    if len(all_ids) != 488:
         raise StaticReTestFailure(
-            "landed scene/menu sweep no longer yields the reviewed 485 unique renderer lookups"
+            "landed scene/menu sweep no longer yields the reviewed 488 unique renderer lookups"
         )
     resolutions = _mapping(
         references.get("resolutions"),
@@ -614,7 +630,7 @@ def test_webgame_asset_fixture_covers_native_families_and_golden_references() ->
             raise StaticReTestFailure(
                 f"asset manifest leaves golden reference unresolved: {asset_id}"
             )
-    return "all 28 native bundle families have hashed representatives and all 485 landed scene/menu lookups resolve"
+    return "all 28 native bundle families have hashed representatives and all 488 landed scene/menu lookups resolve"
 
 
 def test_webgame_workspace_battery_is_strict_ratcheted_and_ci_wired() -> str:

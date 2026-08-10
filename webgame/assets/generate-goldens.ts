@@ -9,6 +9,7 @@ import { canonicalJson, writeCanonicalJson } from "./canonical-json.js";
 import {
   collectGoldenReferences,
   MENU_GOLDEN_PATH,
+  MENU_SHELL_GOLDEN_PATH,
   SCENE_GOLDEN_PATH,
 } from "./golden-references.js";
 import { GROUND_TRUTH_FILES, loadProductionGroundTruth } from "./ground-truth.js";
@@ -297,7 +298,11 @@ async function generate(options: GoldenOptions): Promise<void> {
       firstTree.files.find((file) => file.file === "asset-manifest.json")?.sha256,
       "asset-manifest output SHA-256",
     ),
-    sourceGoldenPaths: [SCENE_GOLDEN_PATH, MENU_GOLDEN_PATH],
+    sourceGoldenPaths: [
+      SCENE_GOLDEN_PATH,
+      MENU_GOLDEN_PATH,
+      MENU_SHELL_GOLDEN_PATH,
+    ],
   };
   await mkdir(path.dirname(options.output), { recursive: true });
   await writeCanonicalJson(options.output, fixture);

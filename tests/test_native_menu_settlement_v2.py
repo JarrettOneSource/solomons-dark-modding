@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -892,7 +893,12 @@ class NativeMenuSettlementV2Tests(unittest.TestCase):
             }
             baseline = load_profile_state_baseline(repo_root)
             contract = load_hub_binding_contract(repo_root)
-            profile_receipt_path = raw_root / "capture.profile-state.json"
+            profile_receipt_path = (
+                candidate_root
+                / "profile-state-receipts"
+                / "capture.profile-state.json"
+            )
+            profile_receipt_path.parent.mkdir(parents=True, exist_ok=True)
             write(
                 profile_receipt_path,
                 {
@@ -1019,6 +1025,14 @@ class NativeMenuSettlementV2Tests(unittest.TestCase):
 
             primary_navigation_path = raw_root / "navigation-primary.json"
             confirmation_navigation_path = raw_root / "navigation-confirmation.json"
+            navigation_profile_root = (
+                raw_root / "navigation-test-profile-state-receipts"
+            )
+            navigation_profile_root.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(
+                profile_receipt_path,
+                navigation_profile_root / profile_receipt_path.name,
+            )
             for path, instance, process_id, layout_samples in (
                 (
                     primary_navigation_path,

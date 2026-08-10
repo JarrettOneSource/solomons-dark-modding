@@ -1,760 +1,389 @@
 {
-  "schema": "solomon-dark-native-menu-overlay-reference-v2",
+  "schema": "solomon-dark-native-menu-overlay-reference-v3",
   "header": {
-    "derivation": "art draws present in the segregated pre-dismissal capture and absent from the settled post-dismissal capture of the same exact underlying screen",
-    "underlying_screen": "control_scheme_picker",
-    "native_binary_provenance": {
-      "game_executable_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
-      "loader_dll_sha256": "92d51ae48fa4d5acc24372502f809276b00b5eb171825ead01392765602a3578"
-    },
-    "overlay_capture": {
-      "evidence_path": "raw-v4/overlay-reference/pre-dismissal-control-scheme-picker.json",
-      "sha256": "ab6f6c2b84d76716c0d2edcb91e91228f2b2ada3f6496661f2c7371bd8eb763a",
-      "bytes": 53330
-    },
-    "clean_capture": {
-      "evidence_path": "raw-v4/overlay-reference/clean-control-scheme-picker.json",
-      "sha256": "1cafcae5f80348848af03506fbeba0b6ba0fa3308626bed5e1260fdafbc85bc6",
-      "bytes": 12727
-    }
+    "derivation": "beta_notice structural art core minus embedded main_menu_root structural art core",
+    "ordinal_identity": "positional_bookkeeping_excluded",
+    "beta_notice_core_sha256": "43d196a3fcb90fdeb302c0354108405d23b45a25cadecfecce4327bd1f3ab67e",
+    "main_menu_root_core_sha256": "e7be7910e18045266a0dbad95fcbf8459f95bd62ceb187bcf6e378b88de4fa14",
+    "create_corroboration_sha256": "1ea41ccb4447c20981d400a8754b752aeb5f06d0dfb313a0cff248471f03ec8c",
+    "pause_corroboration_sha256": "1ea41ccb4447c20981d400a8754b752aeb5f06d0dfb313a0cff248471f03ec8c"
   },
   "overlay_semantic_draw_multiset": [
     {
       "count": 1,
       "payload": {
-        "kind": "art",
-        "text": "",
         "action_id": "",
         "art_id": "UI.101",
         "font_id": "",
-        "text_style": "position",
-        "visible": true,
         "interactive": false,
+        "kind": "art",
         "rect": [
           702.0,
           643.5,
           898.0,
           712.0
         ],
+        "text": "",
+        "text_style": "position",
         "unclipped_rect": [
           623.5,
           643.5,
           976.5,
           712.5
-        ]
+        ],
+        "visible": true
       }
     },
     {
       "count": 1,
       "payload": {
-        "kind": "art",
-        "text": "",
         "action_id": "",
         "art_id": "UI.107",
         "font_id": "",
-        "text_style": "position",
-        "visible": true,
         "interactive": false,
+        "kind": "art",
         "rect": [
           516.5,
           99.5,
           601.5,
           188.5
         ],
+        "text": "",
+        "text_style": "position",
         "unclipped_rect": [
           516.5,
           99.5,
           601.5,
           188.5
-        ]
+        ],
+        "visible": true
       }
     },
     {
       "count": 1,
       "payload": {
-        "kind": "art",
-        "text": "",
         "action_id": "",
         "art_id": "UI.108",
         "font_id": "",
-        "text_style": "position",
-        "visible": true,
         "interactive": false,
+        "kind": "art",
         "rect": [
           998.5,
           99.5,
           1083.5,
           188.5
         ],
+        "text": "",
+        "text_style": "position",
         "unclipped_rect": [
           998.5,
           99.5,
           1083.5,
           188.5
-        ]
+        ],
+        "visible": true
       }
     },
     {
       "count": 1,
       "payload": {
-        "kind": "art",
-        "text": "",
         "action_id": "",
         "art_id": "UI.109",
         "font_id": "",
-        "text_style": "position",
-        "visible": true,
         "interactive": false,
+        "kind": "art",
         "rect": [
           516.5,
           711.5,
           601.5,
           800.5
         ],
+        "text": "",
+        "text_style": "position",
         "unclipped_rect": [
           516.5,
           711.5,
           601.5,
           800.5
-        ]
+        ],
+        "visible": true
       }
     },
     {
       "count": 1,
       "payload": {
-        "kind": "art",
-        "text": "",
         "action_id": "",
         "art_id": "UI.110",
         "font_id": "",
-        "text_style": "position",
-        "visible": true,
         "interactive": false,
+        "kind": "art",
         "rect": [
           998.5,
           711.5,
           1083.5,
           800.5
         ],
+        "text": "",
+        "text_style": "position",
         "unclipped_rect": [
           998.5,
           711.5,
           1083.5,
           800.5
-        ]
+        ],
+        "visible": true
       }
     },
     {
       "count": 1,
       "payload": {
-        "kind": "art",
-        "text": "",
         "action_id": "",
         "art_id": "UI.17",
         "font_id": "",
+        "interactive": false,
+        "kind": "art",
+        "rect": [
+          535.0,
+          117.0,
+          615.0,
+          200.0
+        ],
+        "text": "",
         "text_style": "position",
-        "visible": true,
-        "interactive": false,
-        "rect": [
-          535.0,
-          117.0,
-          615.0,
-          200.0
-        ],
         "unclipped_rect": [
           535.0,
           117.0,
           615.0,
           200.0
-        ]
+        ],
+        "visible": true
       }
     },
     {
       "count": 1,
       "payload": {
-        "kind": "art",
-        "text": "",
         "action_id": "",
         "art_id": "UI.17",
         "font_id": "",
-        "text_style": "transform",
-        "visible": true,
         "interactive": false,
+        "kind": "art",
         "rect": [
           535.0,
           700.0,
           615.0,
           783.0
         ],
+        "text": "",
+        "text_style": "transform",
         "unclipped_rect": [
           535.0,
           700.0,
           615.0,
           783.0
-        ]
+        ],
+        "visible": true
       }
     },
     {
       "count": 1,
       "payload": {
-        "kind": "art",
-        "text": "",
         "action_id": "",
         "art_id": "UI.17",
         "font_id": "",
-        "text_style": "transform",
-        "visible": true,
         "interactive": false,
+        "kind": "art",
         "rect": [
           985.0,
           117.0,
           1065.0,
           200.0
         ],
+        "text": "",
+        "text_style": "transform",
         "unclipped_rect": [
           985.0,
           117.0,
           1065.0,
           200.0
-        ]
+        ],
+        "visible": true
       }
     },
     {
       "count": 1,
       "payload": {
-        "kind": "art",
-        "text": "",
         "action_id": "",
         "art_id": "UI.17",
         "font_id": "",
-        "text_style": "transform",
-        "visible": true,
         "interactive": false,
+        "kind": "art",
         "rect": [
           985.0,
           700.0,
           1065.0,
           783.0
         ],
+        "text": "",
+        "text_style": "transform",
         "unclipped_rect": [
           985.0,
           700.0,
           1065.0,
           783.0
-        ]
+        ],
+        "visible": true
       }
     },
     {
       "count": 1,
       "payload": {
-        "kind": "art",
-        "text": "",
         "action_id": "",
         "art_id": "UI.18",
         "font_id": "",
-        "text_style": "transform",
-        "visible": true,
         "interactive": false,
+        "kind": "art",
         "rect": [
           669.0,
           50.999992,
           931.0,
           118.000015
         ],
+        "text": "",
+        "text_style": "transform",
         "unclipped_rect": [
           669.0,
           50.999992,
           931.0,
           118.000015
-        ]
+        ],
+        "visible": true
       }
     },
     {
       "count": 1,
       "payload": {
-        "kind": "art",
-        "text": "",
         "action_id": "",
         "art_id": "UI.54",
         "font_id": "",
-        "text_style": "position",
-        "visible": true,
         "interactive": false,
+        "kind": "art",
         "rect": [
           696.0,
           637.5,
           766.0,
           722.5
         ],
+        "text": "",
+        "text_style": "position",
         "unclipped_rect": [
           696.0,
           637.5,
           766.0,
           722.5
-        ]
+        ],
+        "visible": true
       }
     },
     {
       "count": 1,
       "payload": {
-        "kind": "art",
-        "text": "",
         "action_id": "",
         "art_id": "UI.54",
         "font_id": "",
-        "text_style": "transform",
-        "visible": true,
         "interactive": false,
+        "kind": "art",
         "rect": [
           834.0,
           637.5,
           904.0,
           722.5
         ],
+        "text": "",
+        "text_style": "transform",
         "unclipped_rect": [
           834.0,
           637.5,
           904.0,
           722.5
-        ]
+        ],
+        "visible": true
       }
     },
     {
       "count": 1,
       "payload": {
-        "kind": "art",
-        "text": "",
         "action_id": "",
         "art_id": "UI.8",
         "font_id": "",
-        "text_style": "transform",
-        "visible": true,
         "interactive": false,
+        "kind": "art",
         "rect": [
           706.625,
           783.0,
           743.375,
           867.0
         ],
+        "text": "",
+        "text_style": "transform",
         "unclipped_rect": [
           706.625,
           783.0,
           743.375,
           867.0
-        ]
+        ],
+        "visible": true
       }
     },
     {
       "count": 1,
       "payload": {
-        "kind": "art",
-        "text": "",
         "action_id": "",
         "art_id": "UI.8",
         "font_id": "",
+        "interactive": false,
+        "kind": "art",
+        "rect": [
+          775.5,
+          782.0,
+          824.5,
+          894.0
+        ],
+        "text": "",
         "text_style": "position",
-        "visible": true,
-        "interactive": false,
-        "rect": [
-          775.5,
-          782.0,
-          824.5,
-          894.0
-        ],
         "unclipped_rect": [
           775.5,
           782.0,
           824.5,
           894.0
-        ]
+        ],
+        "visible": true
       }
     },
     {
       "count": 1,
       "payload": {
-        "kind": "art",
-        "text": "",
         "action_id": "",
         "art_id": "UI.8",
         "font_id": "",
-        "text_style": "transform",
-        "visible": true,
         "interactive": false,
+        "kind": "art",
         "rect": [
           856.625,
           783.0,
           893.375,
           867.0
         ],
+        "text": "",
+        "text_style": "transform",
         "unclipped_rect": [
           856.625,
           783.0,
           893.375,
           867.0
-        ]
+        ],
+        "visible": true
       }
     }
   ],
-  "overlay_only_art_elements": [
-    {
-      "id": "control_scheme_picker.art.ui_107.1",
-      "kind": "art",
-      "text": "",
-      "action_id": "",
-      "art_id": "UI.107",
-      "font_id": "",
-      "text_style": "position",
-      "visible": true,
-      "interactive": false,
-      "draw_order": 4,
-      "rect": [
-        516.5,
-        99.5,
-        601.5,
-        188.5
-      ],
-      "unclipped_rect": [
-        516.5,
-        99.5,
-        601.5,
-        188.5
-      ]
-    },
-    {
-      "id": "control_scheme_picker.art.ui_108.1",
-      "kind": "art",
-      "text": "",
-      "action_id": "",
-      "art_id": "UI.108",
-      "font_id": "",
-      "text_style": "position",
-      "visible": true,
-      "interactive": false,
-      "draw_order": 5,
-      "rect": [
-        998.5,
-        99.5,
-        1083.5,
-        188.5
-      ],
-      "unclipped_rect": [
-        998.5,
-        99.5,
-        1083.5,
-        188.5
-      ]
-    },
-    {
-      "id": "control_scheme_picker.art.ui_109.1",
-      "kind": "art",
-      "text": "",
-      "action_id": "",
-      "art_id": "UI.109",
-      "font_id": "",
-      "text_style": "position",
-      "visible": true,
-      "interactive": false,
-      "draw_order": 6,
-      "rect": [
-        516.5,
-        711.5,
-        601.5,
-        800.5
-      ],
-      "unclipped_rect": [
-        516.5,
-        711.5,
-        601.5,
-        800.5
-      ]
-    },
-    {
-      "id": "control_scheme_picker.art.ui_110.1",
-      "kind": "art",
-      "text": "",
-      "action_id": "",
-      "art_id": "UI.110",
-      "font_id": "",
-      "text_style": "position",
-      "visible": true,
-      "interactive": false,
-      "draw_order": 7,
-      "rect": [
-        998.5,
-        711.5,
-        1083.5,
-        800.5
-      ],
-      "unclipped_rect": [
-        998.5,
-        711.5,
-        1083.5,
-        800.5
-      ]
-    },
-    {
-      "id": "control_scheme_picker.art.ui_17.1",
-      "kind": "art",
-      "text": "",
-      "action_id": "",
-      "art_id": "UI.17",
-      "font_id": "",
-      "text_style": "position",
-      "visible": true,
-      "interactive": false,
-      "draw_order": 8,
-      "rect": [
-        535.0,
-        117.0,
-        615.0,
-        200.0
-      ],
-      "unclipped_rect": [
-        535.0,
-        117.0,
-        615.0,
-        200.0
-      ]
-    },
-    {
-      "id": "control_scheme_picker.art.ui_17.2",
-      "kind": "art",
-      "text": "",
-      "action_id": "",
-      "art_id": "UI.17",
-      "font_id": "",
-      "text_style": "transform",
-      "visible": true,
-      "interactive": false,
-      "draw_order": 9,
-      "rect": [
-        985.0,
-        117.0,
-        1065.0,
-        200.0
-      ],
-      "unclipped_rect": [
-        985.0,
-        117.0,
-        1065.0,
-        200.0
-      ]
-    },
-    {
-      "id": "control_scheme_picker.art.ui_17.3",
-      "kind": "art",
-      "text": "",
-      "action_id": "",
-      "art_id": "UI.17",
-      "font_id": "",
-      "text_style": "transform",
-      "visible": true,
-      "interactive": false,
-      "draw_order": 10,
-      "rect": [
-        535.0,
-        700.0,
-        615.0,
-        783.0
-      ],
-      "unclipped_rect": [
-        535.0,
-        700.0,
-        615.0,
-        783.0
-      ]
-    },
-    {
-      "id": "control_scheme_picker.art.ui_17.4",
-      "kind": "art",
-      "text": "",
-      "action_id": "",
-      "art_id": "UI.17",
-      "font_id": "",
-      "text_style": "transform",
-      "visible": true,
-      "interactive": false,
-      "draw_order": 11,
-      "rect": [
-        985.0,
-        700.0,
-        1065.0,
-        783.0
-      ],
-      "unclipped_rect": [
-        985.0,
-        700.0,
-        1065.0,
-        783.0
-      ]
-    },
-    {
-      "id": "control_scheme_picker.art.ui_18.1",
-      "kind": "art",
-      "text": "",
-      "action_id": "",
-      "art_id": "UI.18",
-      "font_id": "",
-      "text_style": "transform",
-      "visible": true,
-      "interactive": false,
-      "draw_order": 12,
-      "rect": [
-        669.0,
-        50.999992,
-        931.0,
-        118.000015
-      ],
-      "unclipped_rect": [
-        669.0,
-        50.999992,
-        931.0,
-        118.000015
-      ]
-    },
-    {
-      "id": "control_scheme_picker.art.ui_8.1",
-      "kind": "art",
-      "text": "",
-      "action_id": "",
-      "art_id": "UI.8",
-      "font_id": "",
-      "text_style": "position",
-      "visible": true,
-      "interactive": false,
-      "draw_order": 13,
-      "rect": [
-        775.5,
-        782.0,
-        824.5,
-        894.0
-      ],
-      "unclipped_rect": [
-        775.5,
-        782.0,
-        824.5,
-        894.0
-      ]
-    },
-    {
-      "id": "control_scheme_picker.art.ui_8.2",
-      "kind": "art",
-      "text": "",
-      "action_id": "",
-      "art_id": "UI.8",
-      "font_id": "",
-      "text_style": "transform",
-      "visible": true,
-      "interactive": false,
-      "draw_order": 14,
-      "rect": [
-        706.625,
-        783.0,
-        743.375,
-        867.0
-      ],
-      "unclipped_rect": [
-        706.625,
-        783.0,
-        743.375,
-        867.0
-      ]
-    },
-    {
-      "id": "control_scheme_picker.art.ui_8.3",
-      "kind": "art",
-      "text": "",
-      "action_id": "",
-      "art_id": "UI.8",
-      "font_id": "",
-      "text_style": "transform",
-      "visible": true,
-      "interactive": false,
-      "draw_order": 15,
-      "rect": [
-        856.625,
-        783.0,
-        893.375,
-        867.0
-      ],
-      "unclipped_rect": [
-        856.625,
-        783.0,
-        893.375,
-        867.0
-      ]
-    },
-    {
-      "id": "control_scheme_picker.art.ui_101.1",
-      "kind": "art",
-      "text": "",
-      "action_id": "",
-      "art_id": "UI.101",
-      "font_id": "",
-      "text_style": "position",
-      "visible": true,
-      "interactive": false,
-      "draw_order": 16,
-      "rect": [
-        702.0,
-        643.5,
-        898.0,
-        712.0
-      ],
-      "unclipped_rect": [
-        623.5,
-        643.5,
-        976.5,
-        712.5
-      ]
-    },
-    {
-      "id": "control_scheme_picker.art.ui_54.1",
-      "kind": "art",
-      "text": "",
-      "action_id": "",
-      "art_id": "UI.54",
-      "font_id": "",
-      "text_style": "position",
-      "visible": true,
-      "interactive": false,
-      "draw_order": 17,
-      "rect": [
-        696.0,
-        637.5,
-        766.0,
-        722.5
-      ],
-      "unclipped_rect": [
-        696.0,
-        637.5,
-        766.0,
-        722.5
-      ]
-    },
-    {
-      "id": "control_scheme_picker.art.ui_54.2",
-      "kind": "art",
-      "text": "",
-      "action_id": "",
-      "art_id": "UI.54",
-      "font_id": "",
-      "text_style": "transform",
-      "visible": true,
-      "interactive": false,
-      "draw_order": 18,
-      "rect": [
-        834.0,
-        637.5,
-        904.0,
-        722.5
-      ],
-      "unclipped_rect": [
-        834.0,
-        637.5,
-        904.0,
-        722.5
-      ]
-    }
-  ]
+  "overlay_semantic_draw_count": 15
 }

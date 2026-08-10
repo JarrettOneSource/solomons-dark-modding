@@ -16,6 +16,36 @@ from collections import Counter, defaultdict
 from typing import Any, Iterable
 
 if __package__:
+    from .native_menu_dark_cloud_browser_chrome_supersession import (
+        DarkCloudBrowserChromeSupersessionError,
+        consume_exact_landed_residual as consume_exact_browser_chrome_residual,
+    )
+    from .native_menu_dark_cloud_item_row_supersession import (
+        DarkCloudItemRowSupersessionError,
+        consume_exact_landed_residual,
+        validate_control_layout,
+    )
+    from .native_menu_generation_v219 import (
+        NativeMenuGenerationV219Error,
+        authorize_cross_path_generation,
+    )
+    from .native_menu_census_era_v221 import (
+        CensusEraV221Error,
+        consume_choice_slot_rows,
+        consume_class_a_residual,
+        diagnose_field_corrections,
+        game_over_endpoint_precondition_is_vacuous,
+        normalized_generation_pair,
+        require_class_f_witness,
+        require_contract as require_census_era_contract,
+        split_class_b_additions,
+    )
+    from .native_menu_final_disposition_v222 import (
+        NAMED_ENDPOINT_VACUITY,
+        FinalDispositionV222Error,
+        authorize_named_endpoint_vacuity,
+        authorize_relative_sequence,
+    )
     from .native_menu_overlay_v25 import (
         OverlayV25Error,
         overlay_draw_payload,
@@ -25,6 +55,36 @@ if __package__:
         _trace_payloads,
     )
 else:
+    from native_menu_dark_cloud_browser_chrome_supersession import (  # type: ignore[no-redef]
+        DarkCloudBrowserChromeSupersessionError,
+        consume_exact_landed_residual as consume_exact_browser_chrome_residual,
+    )
+    from native_menu_dark_cloud_item_row_supersession import (  # type: ignore[no-redef]
+        DarkCloudItemRowSupersessionError,
+        consume_exact_landed_residual,
+        validate_control_layout,
+    )
+    from native_menu_generation_v219 import (  # type: ignore[no-redef]
+        NativeMenuGenerationV219Error,
+        authorize_cross_path_generation,
+    )
+    from native_menu_census_era_v221 import (  # type: ignore[no-redef]
+        CensusEraV221Error,
+        consume_choice_slot_rows,
+        consume_class_a_residual,
+        diagnose_field_corrections,
+        game_over_endpoint_precondition_is_vacuous,
+        normalized_generation_pair,
+        require_class_f_witness,
+        require_contract as require_census_era_contract,
+        split_class_b_additions,
+    )
+    from native_menu_final_disposition_v222 import (  # type: ignore[no-redef]
+        NAMED_ENDPOINT_VACUITY,
+        FinalDispositionV222Error,
+        authorize_named_endpoint_vacuity,
+        authorize_relative_sequence,
+    )
     from native_menu_overlay_v25 import (  # type: ignore[no-redef]
         OverlayV25Error,
         overlay_draw_payload,
@@ -52,6 +112,13 @@ V211_STRUCTURAL_MISMATCH = (
 V211_WRONG_LAYOUT = (
     "landed-vs-settled structural core mismatch: v2.11 Controls "
     "supersession claimed by another layout"
+)
+V220_DARK_CLOUD_LOGIN_TITLE_CONTRACT_SCHEMA = (
+    "solomon-dark-native-menu-dark-cloud-login-title-v220"
+)
+TITLE_MISMATCH = (
+    "landed-vs-settled mismatch outside authorized classes: layout field "
+    "'screen_title' differs"
 )
 
 
@@ -159,216 +226,69 @@ def project_structural_core(
     return projected, residual
 
 
-def _lcs_indexes(
-    left: list[bytes], right: list[bytes]
-) -> tuple[set[int], set[int]]:
-    lengths = [[0] * (len(right) + 1) for _ in range(len(left) + 1)]
-    for left_index in range(len(left) - 1, -1, -1):
-        for right_index in range(len(right) - 1, -1, -1):
-            lengths[left_index][right_index] = (
-                1 + lengths[left_index + 1][right_index + 1]
-                if left[left_index] == right[right_index]
-                else max(
-                    lengths[left_index + 1][right_index],
-                    lengths[left_index][right_index + 1],
-                )
-            )
-    left_indexes: set[int] = set()
-    right_indexes: set[int] = set()
-    left_index = right_index = 0
-    while left_index < len(left) and right_index < len(right):
-        if left[left_index] == right[right_index]:
-            left_indexes.add(left_index)
-            right_indexes.add(right_index)
-            left_index += 1
-            right_index += 1
-        elif lengths[left_index + 1][right_index] >= lengths[left_index][right_index + 1]:
-            left_index += 1
-        else:
-            right_index += 1
-    return left_indexes, right_indexes
-
-
-def _require_v29_order_contract(
-    contract: dict[str, Any],
-) -> tuple[list[dict[str, Any]], int, int]:
-    if contract.get("schema") != "solomon-dark-native-menu-beta-notice-order-v29":
-        raise LandedDiagnosisError(
-            "v2.9 beta-notice paint-order correction: generated contract schema is invalid"
-        )
-    if (
-        contract.get("layout_id") != "beta-notice"
-        or contract.get("screen_id") != "beta_notice"
-    ):
-        raise LandedDiagnosisError(
-            "v2.9 beta-notice paint-order correction: contract names another layout"
-        )
-    members = contract.get("moved_members")
-    core_count = contract.get("core_member_count")
-    lcs_count = contract.get("longest_common_subsequence_count")
-    if (
-        not isinstance(members, list)
-        or len(members) != 3
-        or not all(isinstance(member, dict) for member in members)
-        or isinstance(core_count, bool)
-        or not isinstance(core_count, int)
-        or isinstance(lcs_count, bool)
-        or not isinstance(lcs_count, int)
-        or core_count != lcs_count + len(members)
-    ):
-        raise LandedDiagnosisError(
-            "v2.9 beta-notice paint-order correction: generated contract census is invalid"
-        )
-    required_member_fields = {
-        "art_id",
-        "rect",
-        "semantic_sha256",
-        "landed_relative_core_index",
-        "settled_relative_core_index",
-        "native_paint_order",
-        "overlay_reference_member",
-    }
-    if any(required_member_fields - set(member) for member in members):
-        raise LandedDiagnosisError(
-            "v2.9 beta-notice paint-order correction: generated member identity is incomplete"
-        )
-    semantic_hashes = [member["semantic_sha256"] for member in members]
-    if len(set(semantic_hashes)) != len(members) or not all(
-        isinstance(value, str)
-        and len(value) == 64
-        and all(character in "0123456789abcdef" for character in value)
-        for value in semantic_hashes
-    ):
-        raise LandedDiagnosisError(
-            "v2.9 beta-notice paint-order correction: semantic identities are ambiguous"
-        )
-    return members, core_count, lcs_count
-
-
-def _v29_beta_notice_order_projection(
+def _project_structural_core_v222(
+    layout_id: str,
     landed_layout: dict[str, Any],
     settled_layout: dict[str, Any],
-    overlay_reference: dict[str, Any],
-    contract: dict[str, Any],
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any] | None]:
-    """Project one core and apply only the generated beta-notice v2.9 rule."""
-    if settled_layout.get("screen_id") != "beta_notice":
-        projected, residual = project_structural_core(landed_layout, settled_layout)
+    final_disposition_contract: dict[str, Any],
+    landed_fixture_receipt: dict[str, Any] | None,
+    candidate_fixture_receipt: dict[str, Any] | None,
+    *,
+    sequence_supersession_enabled: bool,
+) -> tuple[
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    dict[str, Any] | None,
+]:
+    if not final_disposition_contract:
+        projected, residual = project_structural_core(
+            landed_layout, settled_layout
+        )
         return projected, residual, None
-
-    members, core_count, lcs_count = _require_v29_order_contract(contract)
+    projected, residual = _project_core_members(landed_layout, settled_layout)
     settled_core = _elements(settled_layout, "settled structural core")
-    contract_hashes = {member["semantic_sha256"] for member in members}
-    settled_hashes = [hashlib.sha256(_signature(element)).hexdigest() for element in settled_core]
-    if len(settled_core) != core_count or any(
-        settled_hashes.count(semantic_hash) != 1 for semantic_hash in contract_hashes
-    ):
-        raise LandedDiagnosisError(
-            "v2.9 beta-notice paint-order correction: exact core set identity failed"
-        )
     try:
-        projected, residual = _project_core_members(landed_layout, settled_layout)
-    except LandedDiagnosisError as error:
-        raise LandedDiagnosisError(
-            "v2.9 beta-notice paint-order correction: exact core set identity failed"
-        ) from error
-    if len(projected) != core_count:
-        raise LandedDiagnosisError(
-            "v2.9 beta-notice paint-order correction: exact core set identity failed"
+        supersession = authorize_relative_sequence(
+            layout_id,
+            projected,
+            settled_core,
+            final_disposition_contract,
+            landed_fixture_receipt,
+            candidate_fixture_receipt,
+            enabled=sequence_supersession_enabled,
         )
+    except FinalDispositionV222Error as error:
+        raise LandedDiagnosisError(str(error)) from error
+    return projected, residual, supersession
 
-    projected_signatures = [_signature(element) for element in projected]
-    settled_signatures = [_signature(element) for element in settled_core]
-    if Counter(projected_signatures) != Counter(settled_signatures):
-        raise LandedDiagnosisError(
-            "v2.9 beta-notice paint-order correction: exact core set identity failed"
-        )
-    projected_hashes = [hashlib.sha256(value).hexdigest() for value in projected_signatures]
-    landed_indexes = [projected_hashes.index(member["semantic_sha256"]) for member in members]
-    settled_indexes = [settled_hashes.index(member["semantic_sha256"]) for member in members]
-    expected_landed_indexes = [member["landed_relative_core_index"] for member in members]
-    expected_settled_indexes = [member["settled_relative_core_index"] for member in members]
-    final_indexes = list(range(core_count - len(members), core_count))
-    if landed_indexes != expected_landed_indexes or settled_indexes != expected_settled_indexes:
-        raise LandedDiagnosisError(
-            "v2.9 beta-notice paint-order correction: bounded landed-to-settled positions differ"
-        )
-    if settled_indexes != final_indexes:
-        raise LandedDiagnosisError(
-            "v2.9 beta-notice paint-order correction: exempt trio is not the final structural core group"
-        )
 
-    overlay = _overlay_counter(overlay_reference)
-    ordered_members: list[dict[str, Any]] = []
-    for member, landed_index, settled_index in zip(
-        members, landed_indexes, settled_indexes, strict=True
-    ):
-        landed_element = projected[landed_index]
-        settled_element = settled_core[settled_index]
-        if (
-            member.get("overlay_reference_member") is not True
-            or overlay[_signature(landed_element)] <= 0
-            or landed_element.get("art_id") != member.get("art_id")
-            or landed_element.get("rect") != member.get("rect")
-            or _signature(landed_element) != _signature(settled_element)
-        ):
-            raise LandedDiagnosisError(
-                "v2.9 beta-notice paint-order correction: exempt trio identity or overlay membership differs"
+def _allow_empty_bound_endpoints(
+    layout_id: str,
+    settled_layout: dict[str, Any],
+    navigation: dict[str, Any],
+    final_disposition_contract: dict[str, Any],
+) -> bool:
+    if layout_id not in NAMED_ENDPOINT_VACUITY:
+        return False
+    if not final_disposition_contract:
+        if layout_id != "game-over":
+            return False
+        try:
+            return game_over_endpoint_precondition_is_vacuous(
+                layout_id, navigation
             )
-        ordered_members.append(
-            {
-                "art_id": member["art_id"],
-                "rect": copy.deepcopy(member["rect"]),
-                "semantic_sha256": member["semantic_sha256"],
-                "landed_relative_core_index": landed_index,
-                "settled_relative_core_index": settled_index,
-                "native_paint_order": member["native_paint_order"],
-                "overlay_reference_member": True,
-            }
+        except CensusEraV221Error as error:
+            raise LandedDiagnosisError(str(error)) from error
+    try:
+        authorize_named_endpoint_vacuity(
+            layout_id,
+            navigation,
+            final_disposition_contract,
+            str(settled_layout.get("structural_core_sha256", "")),
         )
-
-    remaining_projected = [
-        signature
-        for index, signature in enumerate(projected_signatures)
-        if index not in set(landed_indexes)
-    ]
-    remaining_settled = [
-        signature
-        for index, signature in enumerate(settled_signatures)
-        if index not in set(settled_indexes)
-    ]
-    if remaining_projected != remaining_settled:
-        raise LandedDiagnosisError(
-            "v2.9 beta-notice paint-order correction: a non-exempt core member moved"
-        )
-    kept_projected, kept_settled = _lcs_indexes(
-        projected_signatures, settled_signatures
-    )
-    if len(kept_projected) != lcs_count or len(kept_settled) != lcs_count:
-        raise LandedDiagnosisError(
-            "v2.9 beta-notice paint-order correction: remaining-core LCS is not the generated witness"
-        )
-    moved_projected = {
-        index for index in range(core_count) if index not in kept_projected
-    }
-    moved_settled = {
-        index for index in range(core_count) if index not in kept_settled
-    }
-    if moved_projected != set(landed_indexes) or moved_settled != set(settled_indexes):
-        raise LandedDiagnosisError(
-            "v2.9 beta-notice paint-order correction: moved set is not exactly the exempt trio"
-        )
-
-    return projected, residual, {
-        "schema": "solomon-dark-native-menu-core-order-correction-v29",
-        "layout_id": "beta-notice",
-        "reason": "landed_hook_enumeration_order_superseded_by_native_paint_order",
-        "core_member_count": core_count,
-        "longest_common_subsequence_count": lcs_count,
-        "moved_members": ordered_members,
-        "paint_truth": copy.deepcopy(contract.get("paint_truth")),
-        "source_stop_audit": copy.deepcopy(contract.get("source_stop_audit")),
-    }
+    except FinalDispositionV222Error as error:
+        raise LandedDiagnosisError(str(error)) from error
+    return True
 
 
 def _rect_inside(rect: Any, envelope: Any) -> bool:
@@ -656,6 +576,11 @@ def match_population_members(
     primary_trace: dict[str, Any],
     confirmation_trace: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    if not residual:
+        return [], [], {
+            "population_trace_evaluation": "not_required_for_zero_residual",
+            "settled_residual_member_count": 0,
+        }
     primary = _population_evidence(primary_trace, "primary")
     confirmation = _population_evidence(confirmation_trace, "confirmation")
     proof = {
@@ -975,14 +900,14 @@ def _require_v211_controls_core_contract(
 
     if contract.get("source_audits") != {
         "title": {
-            "path": "diagnostics/controls-screen-title-stop-audit.json",
+            "path": "raw-v9/diagnostics/controls-screen-title-stop-audit.json",
             "sha256": (
                 "0377809414de5a1e5d0b8af01baaf1ee8221c5e586e81d7dfda95f18d1da703f"
             ),
             "bytes": 5456,
         },
         "structural_core": {
-            "path": "diagnostics/controls-post-v210-structural-stop-audit.json",
+            "path": "raw-v9/diagnostics/controls-post-v210-structural-stop-audit.json",
             "sha256": (
                 "22fc8f3061a0f0577bf805ab1ddf750416744bc0097405187321b9feeae148f1"
             ),
@@ -1066,10 +991,7 @@ def _diagnose_structural_core_v211(
     landed_counter, settled_counter = _require_v211_controls_core_contract(contract)
     recorded_landed = contract["superseded_landed_fixture"]
     recorded_candidate = contract["superseding_candidate_fixture"]
-    if not (
-        _v211_receipt_matches(recorded_landed, landed_fixture_receipt)
-        and _v211_receipt_matches(recorded_candidate, candidate_fixture_receipt)
-    ):
+    if not _v211_receipt_matches(recorded_landed, landed_fixture_receipt):
         return None
     if (
         layout_id != contract["layout_id"]
@@ -1082,8 +1004,13 @@ def _diagnose_structural_core_v211(
         != landed_counter
         or _v211_semantic_counter(settled_layout, "v2.11 settled Controls")
         != settled_counter
+        or settled_layout.get("structural_core_sha256")
+        != recorded_candidate.get("structural_core_sha256")
     ):
         raise LandedDiagnosisError(V211_STRUCTURAL_MISMATCH)
+    source_candidate_receipt_reproduced = _v211_receipt_matches(
+        recorded_candidate, candidate_fixture_receipt
+    )
     return {
         "schema": "solomon-dark-native-menu-structural-core-supersession-v211",
         "layout_id": layout_id,
@@ -1095,6 +1022,16 @@ def _diagnose_structural_core_v211(
         ],
         "reason": "landed_controls_capture_is_session_bleed_plus_stale_art_without_text",
         "source_audits": copy.deepcopy(contract["source_audits"]),
+        "source_candidate_receipt": {
+            "sha256": recorded_candidate["sha256"],
+            "bytes": recorded_candidate["bytes"],
+        },
+        "qualified_candidate_receipt": copy.deepcopy(candidate_fixture_receipt),
+        "qualified_reemission": not source_candidate_receipt_reproduced,
+        "reemission_rule": (
+            "later profile-state provenance may re-emit only the exact pinned "
+            "semantic multiset and structural-core hash"
+        ),
         "general_tolerance": False,
     }
 
@@ -1141,11 +1078,116 @@ def _require_v210_controls_title_contract(
     return source_stop_audit
 
 
+def _require_v220_dark_cloud_login_title_contract(
+    contract: dict[str, Any],
+) -> None:
+    expected = {
+        "schema": V220_DARK_CLOUD_LOGIN_TITLE_CONTRACT_SCHEMA,
+        "settlement_spec": "2.20",
+        "layout_id": "dark-cloud-login-settings",
+        "screen_id": "dark_cloud_login_settings",
+        "field": "screen_title",
+        "landed_value": "",
+        "settled_value": "Dark Cloud Browser",
+    }
+    required_fields = {
+        *expected,
+        "landed_fixture",
+        "baseline_snapshot",
+        "superseding_candidate",
+        "source_stop_audit",
+        "source_promoter_stop",
+        "source_provenance",
+        "profile_state_identity_sha256",
+        "paired_settlement",
+        "bound_endpoints",
+        "authorization",
+        "forbidden",
+        "derivation",
+    }
+    if set(contract) != required_fields or any(
+        contract.get(field) != value for field, value in expected.items()
+    ):
+        raise LandedDiagnosisError(TITLE_MISMATCH)
+    if (
+        not isinstance(contract.get("landed_fixture"), dict)
+        or not isinstance(contract.get("baseline_snapshot"), dict)
+        or not isinstance(contract.get("superseding_candidate"), dict)
+        or not isinstance(contract.get("source_stop_audit"), dict)
+        or not isinstance(contract.get("source_promoter_stop"), dict)
+        or not isinstance(contract.get("source_provenance"), dict)
+        or not isinstance(contract.get("paired_settlement"), dict)
+        or not isinstance(contract.get("bound_endpoints"), list)
+        or len(contract["bound_endpoints"]) != 2
+        or contract.get("forbidden")
+        != [
+            "title tolerance",
+            "another layout",
+            "another field",
+            "another settled title value",
+            "candidate rewriting",
+        ]
+    ):
+        raise LandedDiagnosisError(TITLE_MISMATCH)
+
+
+def _v220_receipt_matches(
+    recorded: dict[str, Any], observed: dict[str, Any] | None
+) -> bool:
+    return isinstance(observed, dict) and {
+        field: recorded.get(field) for field in ("sha256", "bytes")
+    } == {field: observed.get(field) for field in ("sha256", "bytes")}
+
+
+def diagnose_dark_cloud_login_title_v220(
+    layout_id: str,
+    landed_layout: dict[str, Any],
+    settled_layout: dict[str, Any],
+    contract: dict[str, Any],
+    landed_fixture_receipt: dict[str, Any] | None,
+    candidate_fixture_receipt: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if landed_layout.get("screen_title") == settled_layout.get("screen_title"):
+        return None
+    if not contract:
+        raise LandedDiagnosisError(TITLE_MISMATCH)
+    _require_v220_dark_cloud_login_title_contract(contract)
+    if (
+        layout_id != contract["layout_id"]
+        or landed_layout.get("screen_id") != contract["screen_id"]
+        or settled_layout.get("screen_id") != contract["screen_id"]
+        or landed_layout.get("screen_title") != contract["landed_value"]
+        or settled_layout.get("screen_title") != contract["settled_value"]
+        or not _v220_receipt_matches(
+            contract["landed_fixture"], landed_fixture_receipt
+        )
+        or not _v220_receipt_matches(
+            contract["superseding_candidate"], candidate_fixture_receipt
+        )
+    ):
+        raise LandedDiagnosisError(TITLE_MISMATCH)
+    return {
+        "schema": "solomon-dark-native-menu-screen-title-correction-v220",
+        "settlement_spec": "2.20",
+        "layout_id": layout_id,
+        "field": "screen_title",
+        "old_value": contract["landed_value"],
+        "new_value": contract["settled_value"],
+        "reason": "landed_dark_cloud_login_capture_omitted_live_title",
+        "source_stop_audit": copy.deepcopy(contract["source_stop_audit"]),
+        "bound_endpoints": copy.deepcopy(contract["bound_endpoints"]),
+        "general_tolerance": False,
+    }
+
+
 def _diagnose_layout_identity_v210(
     layout_id: str,
     landed_layout: dict[str, Any],
     settled_layout: dict[str, Any],
     controls_title_contract: dict[str, Any],
+    dark_cloud_login_title_contract: dict[str, Any],
+    landed_fixture_receipt: dict[str, Any] | None,
+    candidate_fixture_receipt: dict[str, Any] | None,
 ) -> dict[str, Any] | None:
     if landed_layout.get("screen_id") != settled_layout.get("screen_id"):
         raise LandedDiagnosisError(
@@ -1157,11 +1199,18 @@ def _diagnose_layout_identity_v210(
     if landed_title == settled_title:
         return None
 
-    if not controls_title_contract:
-        raise LandedDiagnosisError(
-            "landed-vs-settled mismatch outside authorized classes: layout "
-            "field 'screen_title' differs"
+    if layout_id == "dark-cloud-login-settings":
+        return diagnose_dark_cloud_login_title_v220(
+            layout_id,
+            landed_layout,
+            settled_layout,
+            dark_cloud_login_title_contract,
+            landed_fixture_receipt,
+            candidate_fixture_receipt,
         )
+
+    if not controls_title_contract:
+        raise LandedDiagnosisError(TITLE_MISMATCH)
     source_stop_audit = _require_v210_controls_title_contract(
         controls_title_contract
     )
@@ -1171,10 +1220,7 @@ def _diagnose_layout_identity_v210(
         or landed_title != controls_title_contract["landed_value"]
         or settled_title != controls_title_contract["settled_value"]
     ):
-        raise LandedDiagnosisError(
-            "landed-vs-settled mismatch outside authorized classes: layout "
-            "field 'screen_title' differs"
-        )
+        raise LandedDiagnosisError(TITLE_MISMATCH)
     return {
         "schema": "solomon-dark-native-menu-screen-title-correction-v210",
         "layout_id": layout_id,
@@ -1186,6 +1232,431 @@ def _diagnose_layout_identity_v210(
     }
 
 
+def _difference_member(
+    difference_type: str,
+    element: dict[str, Any],
+) -> dict[str, Any]:
+    semantic = _semantic(element)
+    return {
+        "difference_type": difference_type,
+        "element_id": element.get("id"),
+        "witness": (
+            element.get("action_id")
+            or element.get("art_id")
+            or element.get("text")
+        ),
+        "semantic_sha256": hashlib.sha256(canonical_bytes(semantic)).hexdigest(),
+        "semantic_payload": semantic,
+    }
+
+
+def _sequence_tokens(
+    sequence: list[bytes],
+) -> list[tuple[bytes, int]]:
+    occurrences: Counter[bytes] = Counter()
+    tokens: list[tuple[bytes, int]] = []
+    for signature in sequence:
+        occurrences[signature] += 1
+        tokens.append((signature, occurrences[signature]))
+    return tokens
+
+
+def _relative_sequence_difference(
+    projected: list[dict[str, Any]],
+    settled: list[dict[str, Any]],
+) -> dict[str, Any]:
+    landed_sequence = [_signature(element) for element in projected]
+    settled_sequence = [_signature(element) for element in settled]
+    landed_tokens = _sequence_tokens(landed_sequence)
+    settled_tokens = _sequence_tokens(settled_sequence)
+    landed_positions = {token: index for index, token in enumerate(landed_tokens)}
+    settled_positions = {token: index for index, token in enumerate(settled_tokens)}
+    moved: list[dict[str, Any]] = []
+    for token in sorted(
+        set(landed_positions) & set(settled_positions),
+        key=lambda value: (value[0], value[1]),
+    ):
+        landed_index = landed_positions[token]
+        settled_index = settled_positions[token]
+        if landed_index == settled_index:
+            continue
+        moved.append(
+            {
+                "semantic_sha256": hashlib.sha256(token[0]).hexdigest(),
+                "occurrence": token[1],
+                "landed_index": landed_index,
+                "settled_index": settled_index,
+            }
+        )
+    return {
+        "difference_type": "layout_field",
+        "field": "relative_draw_sequence",
+        "landed_sha256": sha256_json(
+            [json.loads(signature.decode("utf-8")) for signature in landed_sequence]
+        ),
+        "settled_sha256": sha256_json(
+            [json.loads(signature.decode("utf-8")) for signature in settled_sequence]
+        ),
+        "moved_members": moved,
+    }
+
+
+def _enumerate_unclassified_members(
+    layout_id: str,
+    landed_layout: dict[str, Any],
+    settled_layout: dict[str, Any],
+    primary_trace: dict[str, Any],
+    confirmation_trace: dict[str, Any],
+    overlay_reference: dict[str, Any],
+    *,
+    controls_core_contract: dict[str, Any],
+    landed_fixture_receipt: dict[str, Any] | None,
+    candidate_fixture_receipt: dict[str, Any] | None,
+    item_row_supersession_contract: dict[str, Any],
+    browser_chrome_supersession_contract: dict[str, Any],
+    census_era_contract: dict[str, Any],
+) -> list[dict[str, Any]]:
+    differences: list[dict[str, Any]] = []
+    try:
+        structural_supersession = _diagnose_structural_core_v211(
+            layout_id,
+            landed_layout,
+            settled_layout,
+            controls_core_contract,
+            landed_fixture_receipt,
+            candidate_fixture_receipt,
+        )
+    except LandedDiagnosisError as error:
+        structural_supersession = None
+        differences.append(
+            {
+                "difference_type": "authorization_contract_failure",
+                "field": "structural_core",
+                "message": str(error),
+            }
+        )
+    if structural_supersession is not None:
+        return differences
+
+    landed = _ordered(_elements(landed_layout, "landed layout"), "landed layout")
+    settled = _elements(settled_layout, "settled structural core")
+    try:
+        _, settled = split_class_b_additions(
+            layout_id,
+            settled,
+            census_era_contract,
+            landed_fixture_receipt,
+            candidate_fixture_receipt,
+        )
+    except CensusEraV221Error as error:
+        differences.append(
+            {
+                "difference_type": "authorization_contract_failure",
+                "field": "census_era_class_b",
+                "message": str(error),
+            }
+        )
+    remaining = Counter(_signature(element) for element in settled)
+    projected: list[dict[str, Any]] = []
+    residual: list[dict[str, Any]] = []
+    for element in landed:
+        signature = _signature(element)
+        if remaining[signature] > 0:
+            remaining[signature] -= 1
+            projected.append(element)
+        else:
+            residual.append(element)
+
+    missing = remaining.copy()
+    for element in settled:
+        signature = _signature(element)
+        if missing[signature] <= 0:
+            continue
+        differences.append(_difference_member("settled_only_member", element))
+        missing[signature] -= 1
+
+    if not any(remaining.values()) and [
+        _signature(element) for element in projected
+    ] != [_signature(element) for element in settled]:
+        differences.append(_relative_sequence_difference(projected, settled))
+
+    try:
+        _, residual = consume_choice_slot_rows(
+            layout_id, residual, census_era_contract
+        )
+        _, residual = consume_class_a_residual(
+            layout_id,
+            residual,
+            census_era_contract,
+            landed_fixture_receipt,
+            candidate_fixture_receipt,
+        )
+    except CensusEraV221Error as error:
+        differences.append(
+            {
+                "difference_type": "authorization_contract_failure",
+                "field": "census_era_class_a",
+                "message": str(error),
+            }
+        )
+    lifecycle, animation, unmatched = match_ambient_members(residual, settled_layout)
+    del lifecycle, animation
+    population, after_population, _ = match_population_members(
+        unmatched,
+        landed_layout.get("generation"),
+        settled_layout.get("generation"),
+        primary_trace,
+        confirmation_trace,
+    )
+    del population
+    if item_row_supersession_contract:
+        try:
+            _, after_population = consume_exact_landed_residual(
+                layout_id,
+                landed_layout,
+                settled_layout,
+                after_population,
+                item_row_supersession_contract,
+                landed_fixture_receipt,
+                candidate_fixture_receipt,
+            )
+        except DarkCloudItemRowSupersessionError as error:
+            differences.append(
+                {
+                    "difference_type": "authorization_contract_failure",
+                    "field": "dark_cloud_item_row_supersession",
+                    "message": str(error),
+                }
+            )
+    if browser_chrome_supersession_contract:
+        try:
+            _, after_population = consume_exact_browser_chrome_residual(
+                layout_id,
+                landed_layout,
+                settled_layout,
+                after_population,
+                browser_chrome_supersession_contract,
+                landed_fixture_receipt,
+                candidate_fixture_receipt,
+            )
+        except DarkCloudBrowserChromeSupersessionError as error:
+            differences.append(
+                {
+                    "difference_type": "authorization_contract_failure",
+                    "field": "dark_cloud_browser_chrome_supersession",
+                    "message": str(error),
+                }
+            )
+    _, residual_after_overlay = match_overlay_members(
+        after_population, overlay_reference
+    )
+    differences.extend(
+        _difference_member("landed_only_member", element)
+        for element in residual_after_overlay
+    )
+    return differences
+
+
+def enumerate_unclassified_landed_differences(
+    layout_id: str,
+    landed_layout: dict[str, Any],
+    settled_layout: dict[str, Any],
+    primary_trace: dict[str, Any],
+    confirmation_trace: dict[str, Any],
+    overlay_reference: dict[str, Any],
+    controls_title_contract: dict[str, Any] | None = None,
+    dark_cloud_login_title_contract: dict[str, Any] | None = None,
+    controls_core_contract: dict[str, Any] | None = None,
+    landed_fixture_receipt: dict[str, Any] | None = None,
+    candidate_fixture_receipt: dict[str, Any] | None = None,
+    path_local_generation_contract: dict[str, Any] | None = None,
+    item_row_supersession_contract: dict[str, Any] | None = None,
+    browser_chrome_supersession_contract: dict[str, Any] | None = None,
+    census_era_contract: dict[str, Any] | None = None,
+    final_disposition_contract: dict[str, Any] | None = None,
+    sequence_supersession_enabled: bool = True,
+    generation_navigation: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Enumerate every unauthorized landed/candidate difference without writes."""
+    controls_title_contract = controls_title_contract or {}
+    dark_cloud_login_title_contract = dark_cloud_login_title_contract or {}
+    controls_core_contract = controls_core_contract or {}
+    item_row_supersession_contract = item_row_supersession_contract or {}
+    browser_chrome_supersession_contract = (
+        browser_chrome_supersession_contract or {}
+    )
+    census_era_contract = census_era_contract or {}
+    final_disposition_contract = final_disposition_contract or {}
+    census_field_keys: set[tuple[str, str]] = set()
+    if census_era_contract:
+        try:
+            census_field_keys = set(
+                require_census_era_contract(census_era_contract)[
+                    "field_corrections"
+                ]
+            )
+        except CensusEraV221Error:
+            census_field_keys = set()
+    normalized_landed = copy.deepcopy(landed_layout)
+    normalized_settled = copy.deepcopy(settled_layout)
+    differences: list[dict[str, Any]] = []
+
+    title_authorized = False
+    if landed_layout.get("screen_title") != settled_layout.get("screen_title"):
+        try:
+            title_authorized = _diagnose_layout_identity_v210(
+                layout_id,
+                landed_layout,
+                settled_layout,
+                controls_title_contract,
+                dark_cloud_login_title_contract,
+                landed_fixture_receipt,
+                candidate_fixture_receipt,
+            ) is not None
+        except LandedDiagnosisError:
+            title_authorized = False
+
+    for field in ("screen_id", "screen_title"):
+        landed_value = landed_layout.get(field)
+        settled_value = settled_layout.get(field)
+        if landed_value == settled_value:
+            continue
+        census_authorized = (layout_id, field) in census_field_keys
+        if (field != "screen_title" or not title_authorized) and not census_authorized:
+            differences.append(
+                {
+                    "difference_type": "layout_field",
+                    "field": field,
+                    "landed_value": copy.deepcopy(landed_value),
+                    "settled_value": copy.deepcopy(settled_value),
+                }
+            )
+        normalized_landed[field] = copy.deepcopy(settled_value)
+
+    try:
+        diagnose_landed_layout(
+            layout_id,
+            normalized_landed,
+            normalized_settled,
+            primary_trace,
+            confirmation_trace,
+            overlay_reference,
+            controls_title_contract={},
+            dark_cloud_login_title_contract=(
+                dark_cloud_login_title_contract
+            ),
+            controls_core_contract=controls_core_contract,
+            landed_fixture_receipt=landed_fixture_receipt,
+            candidate_fixture_receipt=candidate_fixture_receipt,
+            path_local_generation_contract=path_local_generation_contract,
+            item_row_supersession_contract=item_row_supersession_contract,
+            browser_chrome_supersession_contract=(
+                browser_chrome_supersession_contract
+            ),
+            census_era_contract=census_era_contract,
+            final_disposition_contract=final_disposition_contract,
+            sequence_supersession_enabled=sequence_supersession_enabled,
+            generation_navigation=generation_navigation,
+        )
+    except LandedDiagnosisError as diagnosis_error:
+        member_differences = _enumerate_unclassified_members(
+            layout_id,
+            normalized_landed,
+            normalized_settled,
+            primary_trace,
+            confirmation_trace,
+            overlay_reference,
+            controls_core_contract=controls_core_contract,
+            landed_fixture_receipt=landed_fixture_receipt,
+            candidate_fixture_receipt=candidate_fixture_receipt,
+            item_row_supersession_contract=item_row_supersession_contract,
+            browser_chrome_supersession_contract=(
+                browser_chrome_supersession_contract
+            ),
+            census_era_contract=census_era_contract,
+        )
+        differences.extend(member_differences)
+        if normalized_landed.get("generation") != normalized_settled.get(
+            "generation"
+        ):
+            contract = path_local_generation_contract or {}
+            generation_landed = normalized_landed
+            generation_settled = normalized_settled
+            allow_empty_bound_endpoints = False
+            try:
+                census_view = require_census_era_contract(census_era_contract)
+            except CensusEraV221Error:
+                census_view = {}
+            if layout_id in census_view.get("generation_layouts", set()):
+                generation_landed, generation_settled = normalized_generation_pair(
+                    normalized_landed, normalized_settled
+                )
+                if layout_id in NAMED_ENDPOINT_VACUITY:
+                    try:
+                        allow_empty_bound_endpoints = _allow_empty_bound_endpoints(
+                            layout_id,
+                            normalized_settled,
+                            generation_navigation or {},
+                            final_disposition_contract,
+                        )
+                    except LandedDiagnosisError as error:
+                        differences.append(
+                            {
+                                "difference_type": "layout_field",
+                                "field": "generation",
+                                "landed_value": normalized_landed.get("generation"),
+                                "settled_value": normalized_settled.get("generation"),
+                                "message": str(error),
+                            }
+                        )
+            try:
+                authorize_cross_path_generation(
+                    generation_landed,
+                    generation_settled,
+                    contract.get("paired_generation", {}),
+                    contract.get("bound_endpoints", []),
+                    enabled=contract.get("enabled") is True,
+                    allow_empty_bound_endpoints=allow_empty_bound_endpoints,
+                )
+            except NativeMenuGenerationV219Error as error:
+                differences.append(
+                    {
+                        "difference_type": "layout_field",
+                        "field": "generation",
+                        "landed_value": normalized_landed.get("generation"),
+                        "settled_value": normalized_settled.get("generation"),
+                        "message": str(error),
+                    }
+                )
+        diagnosis_message = str(diagnosis_error)
+        recorded_messages = {
+            difference.get("message")
+            for difference in differences
+            if isinstance(difference.get("message"), str)
+        }
+        if not member_differences and diagnosis_message not in recorded_messages:
+            differences.append(
+                {
+                    "difference_type": "authorization_contract_failure",
+                    "field": "landed_diagnosis_guard",
+                    "message": diagnosis_message,
+                }
+            )
+
+    unique: dict[bytes, dict[str, Any]] = {}
+    for difference in differences:
+        unique.setdefault(canonical_bytes(difference), difference)
+    return sorted(
+        unique.values(),
+        key=lambda value: (
+            str(value.get("difference_type", "")),
+            str(value.get("field", "")),
+            str(value.get("element_id", "")),
+            str(value.get("semantic_sha256", "")),
+        ),
+    )
+
+
 def diagnose_landed_layout(
     layout_id: str,
     landed_layout: dict[str, Any],
@@ -1193,11 +1664,19 @@ def diagnose_landed_layout(
     primary_trace: dict[str, Any],
     confirmation_trace: dict[str, Any],
     overlay_reference: dict[str, Any],
-    order_override_contract: dict[str, Any] | None = None,
     controls_title_contract: dict[str, Any] | None = None,
+    dark_cloud_login_title_contract: dict[str, Any] | None = None,
     controls_core_contract: dict[str, Any] | None = None,
     landed_fixture_receipt: dict[str, Any] | None = None,
     candidate_fixture_receipt: dict[str, Any] | None = None,
+    path_local_generation_contract: dict[str, Any] | None = None,
+    item_row_supersession_contract: dict[str, Any] | None = None,
+    browser_chrome_supersession_contract: dict[str, Any] | None = None,
+    census_era_contract: dict[str, Any] | None = None,
+    final_disposition_contract: dict[str, Any] | None = None,
+    choice_slot_reconciliation_enabled: bool = True,
+    sequence_supersession_enabled: bool = True,
+    generation_navigation: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not isinstance(layout_id, str) or not layout_id:
         raise LandedDiagnosisError(
@@ -1205,13 +1684,66 @@ def diagnose_landed_layout(
         )
     if controls_title_contract is None:
         controls_title_contract = {}
+    if dark_cloud_login_title_contract is None:
+        dark_cloud_login_title_contract = {}
     if controls_core_contract is None:
         controls_core_contract = {}
+    if item_row_supersession_contract is None:
+        item_row_supersession_contract = {}
+    if browser_chrome_supersession_contract is None:
+        browser_chrome_supersession_contract = {}
+    if census_era_contract is None:
+        census_era_contract = {}
+    if final_disposition_contract is None:
+        final_disposition_contract = {}
+    census_view: dict[str, Any] = {}
+    if census_era_contract:
+        try:
+            census_view = require_census_era_contract(census_era_contract)
+        except CensusEraV221Error as error:
+            raise LandedDiagnosisError(str(error)) from error
+    if item_row_supersession_contract:
+        try:
+            validate_control_layout(
+                layout_id,
+                settled_layout,
+                item_row_supersession_contract,
+                candidate_fixture_receipt,
+            )
+        except DarkCloudItemRowSupersessionError as error:
+            raise LandedDiagnosisError(str(error)) from error
+    census_field_corrections: list[dict[str, Any]] = []
+    class_f_witness = None
+    if census_era_contract:
+        try:
+            class_f_witness = require_class_f_witness(
+                layout_id, census_era_contract
+            )
+        except CensusEraV221Error as error:
+            raise LandedDiagnosisError(str(error)) from error
+    normalized_identity_landed = copy.deepcopy(landed_layout)
+    if any(key[0] == layout_id for key in census_view.get("field_corrections", {})):
+        try:
+            census_field_corrections = diagnose_field_corrections(
+                layout_id,
+                landed_layout,
+                settled_layout,
+                census_era_contract,
+                landed_fixture_receipt,
+                candidate_fixture_receipt,
+            )
+        except CensusEraV221Error as error:
+            raise LandedDiagnosisError(str(error)) from error
+        for correction in census_field_corrections:
+            normalized_identity_landed[correction["field"]] = correction["new_value"]
     screen_title_correction = _diagnose_layout_identity_v210(
         layout_id,
-        landed_layout,
+        normalized_identity_landed,
         settled_layout,
         controls_title_contract,
+        dark_cloud_login_title_contract,
+        landed_fixture_receipt,
+        candidate_fixture_receipt,
     )
     structural_core_supersession = _diagnose_structural_core_v211(
         layout_id,
@@ -1221,30 +1753,67 @@ def diagnose_landed_layout(
         landed_fixture_receipt,
         candidate_fixture_receipt,
     )
+    census_class_b_adoption = None
+    relative_sequence_supersession = None
     if structural_core_supersession is not None:
         projected = _elements(settled_layout, "settled structural core")
         residual: list[dict[str, Any]] = []
-        order_correction = None
-    elif order_override_contract is None:
-        projected, residual = project_structural_core(landed_layout, settled_layout)
-        order_correction = None
     else:
-        projected, residual, order_correction = _v29_beta_notice_order_projection(
+        settled_for_projection = copy.deepcopy(settled_layout)
+        try:
+            (
+                census_class_b_adoption,
+                settled_for_projection["elements"],
+            ) = split_class_b_additions(
+                layout_id,
+                _elements(settled_layout, "settled structural core"),
+                census_era_contract,
+                landed_fixture_receipt,
+                candidate_fixture_receipt,
+            )
+        except CensusEraV221Error as error:
+            raise LandedDiagnosisError(str(error)) from error
+        (
+            projected,
+            residual,
+            relative_sequence_supersession,
+        ) = _project_structural_core_v222(
+            layout_id,
             landed_layout,
-            settled_layout,
-            overlay_reference,
-            order_override_contract,
+            settled_for_projection,
+            final_disposition_contract,
+            landed_fixture_receipt,
+            candidate_fixture_receipt,
+            sequence_supersession_enabled=sequence_supersession_enabled,
         )
     if structural_core_supersession is not None:
         lifecycle: list[dict[str, Any]] = []
         animation: list[dict[str, Any]] = []
         population: list[dict[str, Any]] = []
         overlay: list[dict[str, Any]] = []
+        choice_slot_reconciliation = None
+        census_class_a_supersession = None
         population_proof = {
             "structural_core_supersession": "exact_v211_controls_contract"
         }
         residual_after_overlay: list[dict[str, Any]] = []
     else:
+        try:
+            choice_slot_reconciliation, residual = consume_choice_slot_rows(
+                layout_id,
+                residual,
+                census_era_contract,
+                enabled=choice_slot_reconciliation_enabled,
+            )
+            census_class_a_supersession, residual = consume_class_a_residual(
+                layout_id,
+                residual,
+                census_era_contract,
+                landed_fixture_receipt,
+                candidate_fixture_receipt,
+            )
+        except CensusEraV221Error as error:
+            raise LandedDiagnosisError(str(error)) from error
         lifecycle, animation, unmatched = match_ambient_members(
             residual, settled_layout
         )
@@ -1255,9 +1824,46 @@ def diagnose_landed_layout(
             primary_trace,
             confirmation_trace,
         )
+        item_row_supersession = None
+        if item_row_supersession_contract:
+            try:
+                (
+                    item_row_supersession,
+                    after_population,
+                ) = consume_exact_landed_residual(
+                    layout_id,
+                    landed_layout,
+                    settled_layout,
+                    after_population,
+                    item_row_supersession_contract,
+                    landed_fixture_receipt,
+                    candidate_fixture_receipt,
+                )
+            except DarkCloudItemRowSupersessionError as error:
+                raise LandedDiagnosisError(str(error)) from error
+        browser_chrome_supersession = None
+        if browser_chrome_supersession_contract:
+            try:
+                (
+                    browser_chrome_supersession,
+                    after_population,
+                ) = consume_exact_browser_chrome_residual(
+                    layout_id,
+                    landed_layout,
+                    settled_layout,
+                    after_population,
+                    browser_chrome_supersession_contract,
+                    landed_fixture_receipt,
+                    candidate_fixture_receipt,
+                )
+            except DarkCloudBrowserChromeSupersessionError as error:
+                raise LandedDiagnosisError(str(error)) from error
         overlay, residual_after_overlay = match_overlay_members(
             after_population, overlay_reference
         )
+    if structural_core_supersession is not None:
+        item_row_supersession = None
+        browser_chrome_supersession = None
     if residual_after_overlay:
         element = residual_after_overlay[0]
         raise LandedDiagnosisError(
@@ -1270,16 +1876,57 @@ def diagnose_landed_layout(
         or population
         or overlay
         or animation
-        or order_correction
         or screen_title_correction
+        or census_field_corrections
         or structural_core_supersession
+        or choice_slot_reconciliation
+        or census_class_a_supersession
+        or census_class_b_adoption
+        or item_row_supersession
+        or browser_chrome_supersession
+        or relative_sequence_supersession
     )
-    if not corrected and landed_layout.get("generation") != settled_layout.get("generation"):
-        raise LandedDiagnosisError(
-            "landed-vs-settled generation changed without an authorized differing member"
+    generation_metadata_correction = None
+    generation_changed = landed_layout.get("generation") != settled_layout.get(
+        "generation"
+    )
+    census_generation = layout_id in census_view.get("generation_layouts", set())
+    if generation_changed and (not corrected or census_generation):
+        contract = path_local_generation_contract or {}
+        generation_landed = landed_layout
+        generation_settled = settled_layout
+        allow_empty_bound_endpoints = False
+        if census_generation:
+            generation_landed, generation_settled = normalized_generation_pair(
+                landed_layout, settled_layout
+            )
+            if layout_id in NAMED_ENDPOINT_VACUITY:
+                allow_empty_bound_endpoints = _allow_empty_bound_endpoints(
+                    layout_id,
+                    settled_layout,
+                    generation_navigation or {},
+                    final_disposition_contract,
+                )
+        try:
+            generation_metadata_correction = authorize_cross_path_generation(
+                generation_landed,
+                generation_settled,
+                contract.get("paired_generation", {}),
+                contract.get("bound_endpoints", []),
+                enabled=contract.get("enabled") is True,
+                allow_empty_bound_endpoints=allow_empty_bound_endpoints,
+            )
+        except NativeMenuGenerationV219Error as error:
+            raise LandedDiagnosisError(str(error)) from error
+        corrected = True
+    if (
+        overlay
+        and landed_layout.get("generation")
+        != settled_layout.get("generation")
+        and not population_proof.get(
+            "generation_difference_witnessed_in_both_traces"
         )
-    if overlay and not population_proof.get(
-        "generation_difference_witnessed_in_both_traces"
+        and class_f_witness is None
     ):
         raise LandedDiagnosisError(
             "overlay correction generation difference lacks both population-trace witnesses"
@@ -1301,8 +1948,16 @@ def diagnose_landed_layout(
         "overlay_dispositions": overlay,
         "overlay_reference_sha256": sha256_json(overlay_reference),
         "animated_geometry_dispositions": animation,
-        "core_order_correction": order_correction,
         "screen_title_correction": screen_title_correction,
+        "census_field_corrections": census_field_corrections,
         "structural_core_supersession": structural_core_supersession,
+        "choice_slot_reconciliation_v221": choice_slot_reconciliation,
+        "census_class_a_supersession_v221": census_class_a_supersession,
+        "census_class_b_adoption_v221": census_class_b_adoption,
+        "census_class_f_population_witness_v221": class_f_witness,
+        "relative_sequence_supersession_v222": relative_sequence_supersession,
+        "dark_cloud_item_row_supersession": item_row_supersession,
+        "dark_cloud_browser_chrome_supersession": browser_chrome_supersession,
+        "path_local_generation_correction": generation_metadata_correction,
         "all_differing_members_enumerated": True,
     }

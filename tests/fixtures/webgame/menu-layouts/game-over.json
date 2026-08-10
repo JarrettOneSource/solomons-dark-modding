@@ -1,70 +1,234 @@
 {
-    "schema":  "solomon-dark-native-menu-layout-v1",
-    "header":  {
-                   "instance":  "men-title",
-                   "process_id":  16140,
-                   "capture_commit":  "f9cac8783e72e7423a2d952987fa169fa84f3dcb",
-                   "native_exe_sha256":  "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
-                   "loader_dll_sha256":  "f21d10e327e576ce2aed02a0626507143a9104c181d6694e2111d102433b52ec",
-                   "captured_at_utc":  "2026-08-05T07:48:52.1691144Z",
-                   "capture_method":  "live native UI tree + exact text/font hooks + native Sprite draw hooks + exact live-navigation screen tag (stale controls omitted)",
-                   "reference_capture":  "../menu-reference-captures/game-over.png"
-               },
-    "layout":  {
-                   "generation":  3409,
-                   "captured_at_milliseconds":  1149374609,
-                   "screen_id":  "game_over",
-                   "screen_title":  "",
-                   "capture_method":  "live native UI tree + exact text/font hooks + native Sprite draw hooks + exact live-navigation screen tag (stale controls omitted)",
-                   "elements":  [
-                                    {
-                                        "id":  "game_over.art.gameover_0.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "GameOver.0",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  1,
-                                        "rect":  [
-                                                     646.500000,
-                                                     215.500000,
-                                                     953.500000,
-                                                     334.500000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               646.500000,
-                                                               215.500000,
-                                                               953.500000,
-                                                               334.500000
-                                                           ]
-                                    },
-                                    {
-                                        "id":  "game_over.art.gameover_1.1",
-                                        "kind":  "art",
-                                        "text":  "",
-                                        "action_id":  "",
-                                        "art_id":  "GameOver.1",
-                                        "font_id":  "",
-                                        "text_style":  "position",
-                                        "visible":  true,
-                                        "interactive":  false,
-                                        "draw_order":  2,
-                                        "rect":  [
-                                                     647.000000,
-                                                     515.000000,
-                                                     953.000000,
-                                                     635.000000
-                                                 ],
-                                        "unclipped_rect":  [
-                                                               647.000000,
-                                                               515.000000,
-                                                               953.000000,
-                                                               635.000000
-                                                           ]
-                                    }
-                                ]
-               }
+  "schema": "solomon-dark-native-menu-layout-v3",
+  "header": {
+    "label": "game_over",
+    "instance": "menufx-v9p35",
+    "process_id": 1340,
+    "source": {
+      "base_commit_sha": "68a3735ae342561623fa135b2c0e1243c673e111",
+      "source_tree_sha": "7210d566ffe62a526eb6018f5e5fa86aaa458dbd",
+      "capture_tree": "exact committed tree at base_commit_sha",
+      "game_executable_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+      "loader_dll_sha256": "8d01666de64a7a346a0331e48f715c8a98f8cfafb3da6419f63f1888c63327ff",
+      "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+      "capture_driver_preset": "idle"
+    },
+    "profile_state": {
+      "schema": "solomon-dark-native-menu-profile-state-v1",
+      "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+      "baseline_id": "pristine_fresh_install",
+      "baseline_mode": "fresh_install",
+      "source_sandbox_excluded": true,
+      "retail_appdata_seeded": false,
+      "durable_file_count": 0,
+      "baseline_fixture": {
+        "repo_relative_path": "tests/fixtures/webgame/native-menu-profile-state-baseline.json",
+        "sha256": "02ac22b1de367e9e94477f61c8e1144e6a5b16bd67bd418e69e9a2ec620914ff",
+        "bytes": 2155
+      },
+      "binding_contract": {
+        "repo_relative_path": "tests/fixtures/webgame/native-menu-hub-bindings-v213.json",
+        "sha256": "07c2ed2e53e997c8fb79c3d472b58d52c72c768286cad352ec1aeedaa907ef00",
+        "bytes": 21518
+      },
+      "launch_receipt": {
+        "evidence_filename": "game-over.menufx-v9p35.1340.profile-state.json",
+        "sha256": "ed382bb1a716929b3b0a00ecac412284f4ab64ece0920745c19f4bfe43013e27",
+        "bytes": 694
+      }
+    },
+    "profile_state_binding": {
+      "baseline_id": "pristine_fresh_install",
+      "layout_id": "game-over",
+      "edge_id": "",
+      "derivation_witness_role": ""
+    },
+    "capture_method": "live native UI tree + exact text/font hooks + native Sprite draw hooks",
+    "recorded_live": true,
+    "captured_at_utc": "2026-08-09T05:32:15.0537509Z",
+    "settlement": {
+      "settlement_spec": "2.9",
+      "criterion": "at least 40 consecutive samples spanning at least 2 seconds with constant surface/generations and every variance assigned to one measured v2.5 member class",
+      "settle_latency_milliseconds": 15758,
+      "stable_span_milliseconds": 15422,
+      "consecutive_structural_samples": 40,
+      "minimum_element_count": 2,
+      "peak_element_count": 2,
+      "raw_window_structural_sha256": "1f587fd17c539d7f9ee3124bad601fffddff50fe8ccd4191e9e9ffb2c70d5b85",
+      "resolved_structural_core_sha256": "ac246326112f8fcdf6e5b3478ebdf43f755b390d1120241d13f7f77b4c09f2dd",
+      "resolved_classification_map_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "ambient_fraction": 0.0
+    },
+    "browser_tab_verification": null,
+    "raw_recording": {
+      "evidence_filename": "game-over.settlement.json",
+      "sha256": "fcfac2c503e9073236468b5f4314e6f9e384c207d2b347f5bc51aad097a34e79",
+      "bytes": 245247
+    },
+    "reference_capture": "../menu-reference-captures/game-over.png",
+    "animation_confirmation": {
+      "evidence_filename": "game-over.confirmation.json",
+      "sha256": "cbcbc7f244ed300bac73b35b53736bbe134072dfbb6662e5081c7cb6a6f0d9cb",
+      "bytes": 250366,
+      "instance": "menufx-v9p36",
+      "process_id": 10676,
+      "source": {
+        "base_commit_sha": "68a3735ae342561623fa135b2c0e1243c673e111",
+        "source_tree_sha": "7210d566ffe62a526eb6018f5e5fa86aaa458dbd",
+        "capture_tree": "exact committed tree at base_commit_sha",
+        "game_executable_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+        "loader_dll_sha256": "8d01666de64a7a346a0331e48f715c8a98f8cfafb3da6419f63f1888c63327ff",
+        "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+        "capture_driver_preset": "idle"
+      },
+      "profile_state": {
+        "schema": "solomon-dark-native-menu-profile-state-v1",
+        "profile_state_identity_sha256": "0539412d5c91207d5b225e86f79795d260fe7b73b8d9a1c29166bd09b445e372",
+        "baseline_id": "pristine_fresh_install",
+        "baseline_mode": "fresh_install",
+        "source_sandbox_excluded": true,
+        "retail_appdata_seeded": false,
+        "durable_file_count": 0,
+        "baseline_fixture": {
+          "repo_relative_path": "tests/fixtures/webgame/native-menu-profile-state-baseline.json",
+          "sha256": "02ac22b1de367e9e94477f61c8e1144e6a5b16bd67bd418e69e9a2ec620914ff",
+          "bytes": 2155
+        },
+        "binding_contract": {
+          "repo_relative_path": "tests/fixtures/webgame/native-menu-hub-bindings-v213.json",
+          "sha256": "07c2ed2e53e997c8fb79c3d472b58d52c72c768286cad352ec1aeedaa907ef00",
+          "bytes": 21518
+        },
+        "launch_receipt": {
+          "evidence_filename": "game-over.confirmation.menufx-v9p36.10676.profile-state.json",
+          "sha256": "8410804e8a0acd1cad014ff6130839a0eeb8382c9532ce7ef2dcc33617969754",
+          "bytes": 694
+        }
+      },
+      "profile_state_binding": {
+        "baseline_id": "pristine_fresh_install",
+        "layout_id": "game_over",
+        "edge_id": "",
+        "derivation_witness_role": ""
+      },
+      "confirmation_structural_sha256": "a58f45e35fa9ae61657fa417a6d57f5c0f1c9dec09b8957108eba960948e88b6",
+      "animated_element_ids_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "raw_primary_animated_element_ids": [],
+      "raw_confirmation_animated_element_ids": [],
+      "raw_sets_match_noncontractual": true,
+      "requires_campaign_resolution": true
+    },
+    "ambient_lifecycle": {
+      "resolution_sha256": "2eb686222bb3f6d4c838bd7cae737770018d8664cd20bad1f7ee08e46363b489",
+      "independent_instances": [
+        [
+          "menufx-v9p35",
+          1340
+        ],
+        [
+          "menufx-v9p36",
+          10676
+        ]
+      ],
+      "observation_receipts": [
+        {
+          "evidence_path": "raw-v9/candidates/candidate-v214-profile-final/menu-settlement-traces/game-over.settlement.json",
+          "sha256": "fcfac2c503e9073236468b5f4314e6f9e384c207d2b347f5bc51aad097a34e79",
+          "bytes": 245247
+        },
+        {
+          "evidence_path": "raw-v9/candidates/candidate-v214-profile-final/menu-animation-confirmations/game-over.confirmation.json",
+          "sha256": "cbcbc7f244ed300bac73b35b53736bbe134072dfbb6662e5081c7cb6a6f0d9cb",
+          "bytes": 250366
+        }
+      ],
+      "extended_observation_baseline_receipts": []
+    }
+  },
+  "layout": {
+    "generation": 42,
+    "screen_id": "game_over",
+    "screen_title": "",
+    "capture_method": "live native UI tree + exact text/font hooks + native Sprite draw hooks",
+    "draw_order_semantics": "structural_core_relative_sequence",
+    "elements": [
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "GameOver.0",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          646.5,
+          215.5,
+          953.5,
+          334.5
+        ],
+        "unclipped_rect": [
+          646.5,
+          215.5,
+          953.5,
+          334.5
+        ],
+        "id": "game_over.art.gameover_0.1",
+        "draw_order": 0,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      },
+      {
+        "kind": "art",
+        "text": "",
+        "action_id": "",
+        "art_id": "GameOver.1",
+        "font_id": "",
+        "text_style": "position",
+        "visible": true,
+        "interactive": false,
+        "rect": [
+          647.0,
+          515.0,
+          953.0,
+          635.0
+        ],
+        "unclipped_rect": [
+          647.0,
+          515.0,
+          953.0,
+          635.0
+        ],
+        "id": "game_over.art.gameover_1.1",
+        "draw_order": 1,
+        "draw_order_semantics": "structural_core_relative_sequence"
+      }
+    ],
+    "settlement_spec": "2.9",
+    "structural_core_sha256": "ac246326112f8fcdf6e5b3478ebdf43f755b390d1120241d13f7f77b4c09f2dd",
+    "structural_core_element_count": 2,
+    "animated_element_ids": [],
+    "animated_family_ids": [],
+    "choice_slot_ids": [],
+    "choice_slots": [],
+    "visibility_cycling_element_ids": [],
+    "ambient_persistent_element_ids": [],
+    "classification_map": {},
+    "ambient_family_art_ids": [],
+    "ambient_members": [],
+    "ephemeral_family": {
+      "art_ids": [],
+      "union_spatial_envelope": null,
+      "observed_concurrency_range": [
+        0,
+        0
+      ],
+      "draw_bands": {},
+      "spawn_event_count": 0,
+      "despawn_event_count": 0,
+      "bidirectional_churn_witnessed": true
+    },
+    "ambient_semantic_member_count": 0,
+    "peak_element_count": 2,
+    "ambient_fraction": 0.0
+  }
 }

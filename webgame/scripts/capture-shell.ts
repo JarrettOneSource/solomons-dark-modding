@@ -7,7 +7,7 @@ import process from "node:process";
 
 import { chromium, type Browser, type Page } from "playwright-core";
 
-import menuGoldenJson from "../../tests/fixtures/webgame/menu-goldens.json" with { type: "json" };
+import menuGoldenJson from "../../webgame-contracts/baseline-snapshots/menu-goldens.json" with { type: "json" };
 import menuBaselineJson from "../../webgame-contracts/menu-baseline.json" with { type: "json" };
 import menuVisualGateJson from "../../webgame-contracts/menu-visual-gate.json" with { type: "json" };
 import { ManifestAssets } from "../client/manifest-assets.js";
@@ -466,7 +466,7 @@ async function main(): Promise<void> {
       await makeSideBySide(
         comparisonPage,
         layoutId,
-        path.join(REPO_ROOT, "tests", "fixtures", "webgame", layout.referenceCapture),
+        path.join(REPO_ROOT, "webgame-contracts", "baseline-snapshots", layout.referenceCapture),
         path.join(renderedRoot, `${layoutId}.png`),
         path.join(comparisonRoot, `${layoutId}.png`),
       );
@@ -478,9 +478,8 @@ async function main(): Promise<void> {
       }
       const referencePath = path.join(
         REPO_ROOT,
-        "tests",
-        "fixtures",
-        "webgame",
+        "webgame-contracts",
+        "baseline-snapshots",
         layout.referenceCapture,
       );
       const renderedPath = path.join(renderedRoot, `${layoutId}.png`);

@@ -2,6 +2,7 @@ import type { MenuCatalog } from "../client/menu-catalog.js";
 import {
   MENU_BASELINE_CORRECTIVE,
   MENU_BASELINE_COUNT,
+  MENU_PENDING_SHELLFIX_COUNT,
   type VerifiedMenuBaseline,
 } from "./menu-baseline.js";
 
@@ -144,8 +145,8 @@ export function validateMenuVisualGate(
   if (reviewedPass.length !== 18 || reviewedDivergent.length !== 10) {
     throw new Error("menu visual gate must preserve exactly 18 pass and 10 divergent baseline attestations");
   }
-  if (pending.length !== MENU_BASELINE_COUNT) {
-    throw new Error("menu visual gate pending_shellfix census must remain exactly 28");
+  if (pending.length !== MENU_PENDING_SHELLFIX_COUNT) {
+    throw new Error("menu visual gate pending_shellfix census must remain exactly 29");
   }
   for (const entry of [...reviewedPass, ...reviewedDivergent]) {
     if (entry.corrective !== MENU_BASELINE_CORRECTIVE) {
@@ -170,12 +171,17 @@ export function validateMenuVisualGate(
   if (
     reviewed.size !== MENU_BASELINE_COUNT
     || canonical.size !== MENU_BASELINE_COUNT
+    || pendingByFixture.size !== MENU_PENDING_SHELLFIX_COUNT
     || [...reviewed].some((fixture) => !canonical.has(fixture))
-    || [...canonical].some(
-      (fixture) => !reviewed.has(fixture) || !pendingByFixture.has(fixture),
+    || [...canonical].some((fixture) => !reviewed.has(fixture))
+    || [...pendingByFixture].some(
+      ([fixture]) => !baseline.pendingShellfix.has(fixture),
+    )
+    || [...baseline.pendingShellfix].some(
+      ([fixture]) => !pendingByFixture.has(fixture),
     )
   ) {
-    throw new Error("menu visual gate no longer covers the exact 28-fixture G11 census");
+    throw new Error("menu visual gate no longer covers the exact 28 historical fixtures and 29 pending states");
   }
   return {
     status: "pass_against_baseline_snapshots",

@@ -1,4 +1,4 @@
-# Native menu settlement specification v2.13
+# Native menu settlement specification v2.22
 
 This specification governs every G11 native-menu standalone and navigation
 endpoint recording. Its rule is: what two independent fresh instances
@@ -6,7 +6,8 @@ reproduce byte-exactly is contract; what they reproducibly vary is envelope;
 anything else is a STOP finding.
 
 A valid window contains at least 40 consecutive samples spanning at least two
-seconds. Surface identity and semantic generation are constant. The projected
+seconds. Surface identity, semantic generation, and layout generation are
+constant within that one instance's window. The projected
 structural core is byte-identical in relative draw order. Each non-core art
 member must machine-classify as rect-animated, visibility-cycling, ephemeral,
 or ambient-persistent under the v2.5 ambient-lifecycle rules. Text or controls
@@ -30,10 +31,10 @@ generation witness. In that case promotion may use one uniquely resolving
 primary/confirmation navigation-endpoint pair for the same layout, but only
 when both fresh instances contain the landed generation and the resolved
 endpoint layout equals the standalone. Multiple qualifying endpoint pairs are
-an ambiguity STOP. Absolute layout-generation counters are capture-path local,
-so the paired trace proves the generation change and screen structure; its
-settled counter need not equal a different standalone recording's local
-counter.
+an ambiguity STOP. Absolute layout-generation counters are session-cumulative,
+instance-local bookkeeping. A trace records its measured value, but structural
+identity comes from the exact member multiset and relative sequence described
+below.
 
 ## Path-dependent core
 
@@ -240,7 +241,293 @@ enters v2.11 and still reaches the pre-existing wholesale-substitution STOP.
 All v2.1-v2.10 rules remain active, and no general settled-only-member tolerance
 was added.
 
+## Fresh-baseline skill-picker recapture
+
+Settlement v2.14 supersedes only v2.8's permission to reuse the legacy
+`skill-picker` windows. That permission predated the baseline-legitimacy rule
+and could not prove that the loadout surface was captured from pristine state.
+The fixture now comes from two new `pristine_fresh_install` instances. Their
+launch receipts, traces, confirmations, and fixture headers all carry the
+machine-derived profile identity selected by the committed baseline registry.
+The old v7 windows remain diagnostics and cannot promote. The accepted
+provenance STOP audit is
+`b3e8fb6b2f3a1a89a616b57380e58a324af733c3ad070d8d6fe8af3434b95bc8`.
+
+The v2.7 animated-family and v2.8 choice-slot rules are unchanged. The fresh
+windows must independently re-prove the `UI.3` family rank crossing and all
+five arithmetic choice-slot conditions against the renderer asset manifest.
+Any fresh/legacy difference is recorded, and the fresh observation wins; no
+legacy-provenance exception exists.
+
+## Non-semantic overlay states
+
+Settlement v2.15 distinguishes a player-visible overlay from a menu-layout
+surface. A state is a non-semantic overlay only when two pristine instances
+both fail the operator-tag agreement gate in the same way, their
+machine-classified underlying surface settles with equal text/action payloads,
+and their settled player-visible frames differ from that surface's accepted
+visual. Such a state produces an overlay record containing the underlying
+surface id and settled agreement, both visible frames, the measured activating
+control and route, and an explicit declaration that it has no observable
+semantic members of its own. A tag-agreeing state cannot use this class, and an
+overlay record that claims a member payload is invalid.
+
+The only authorized G11 record is
+`dark_cloud_settings_credentials`. The measured Login Info / Modify action
+opens a credentials panel whose widgets live outside the menu-member system;
+the semantic classifier continues to report `main_menu`. The old
+`dark-cloud-settings` screen fixture was therefore mischaracterized and is
+retired, while the two activating navigation endpoints bind to the typed
+overlay record. The evidence seam observes frames and settled underlay
+semantics only: it never types credentials or changes durable Dark Cloud state.
+Any other tag-disagreeing state requires its own audit.
+
+## Multi-state path-dependent cores
+
+Settlement v2.16 extends v2.6 for one native screen that has more than one
+exact, history-selected core. Every state must settle independently in both
+fresh instances under the unchanged text-membership guardrail. Every graph
+endpoint touching the screen binds to exactly one measured state. Differences
+between states must equal the enumerated retained-member set byte-for-byte;
+geometry, payload, and all non-retained members remain invariant. A fourth
+state, an extra heading, a wrong state at a bound endpoint, or any unbound
+endpoint is a STOP. The binding set never learns or widens from a new sample.
+
+The only authorized multi-state screen is `game-settings-gameplay`. Visiting a
+child panel leaves that panel's full heading text member visible for the rest
+of the Settings visit. The two instances reproduced this deterministic
+accretion order:
+
+1. `base`: the 28-member settled census used by the standalone,
+   `pause_to_game_settings.after`, and `settings_to_performance.before`.
+2. `performance_retained`: the base plus the exact `TWEAK PERFORMANCE`
+   heading, used by `performance_to_settings.after` and
+   `settings_to_dark_cloud_settings.before`.
+3. `performance_dark_cloud_retained`: the preceding state plus the exact
+   `DARK CLOUD SETTINGS` heading, used by
+   `dark_cloud_settings_to_settings.after` and `settings_to_hub.before`.
+
+The corresponding structural-core censuses are 27, 28, and 29 because the
+motion-capable `UI.28` member remains enveloped outside the core. This is native
+player-visible retention, not a tolerance or a canonicalization filter. The
+accepted cross-observation audit is
+`74f125e8faca4624446907747fdad07250c788290d60fde95a3b91ddd81829a7`;
+the exact endpoint question manifest is
+`4d1708d1cbb49a69eb63aeb049ee4b404772a789aa8a058b3c4486a8a1fd0c7c`.
+
+## Semantic dialog composite states
+
+Settlement v2.17 distinguishes a semantic dialog composite from both an
+ordinary screen and a v2.15 non-semantic overlay. A composite is legal only
+when two pristine instances both classify the operator's dialog capture as one
+specific underlay reached through capture surface `dialog`; the complete
+machine-derived dialog semantic multiset is present; the two full canonical
+multisets agree; and both the visible dialog frame and post-dismissal underlay
+frame reproduce bit-exactly. Promotion pins the underlay fixture, dialog
+multiset, zero-residual decomposition, measured dismissal control, both frames,
+pixel-delta bounds, and a typed dismissal edge. A residual member, retagging,
+or unqualified route remains a STOP.
+
+The only authorized composite is `beta_notice_first_boot`: the 28-member beta
+dialog over the five-member `control_scheme_picker` underlay on a pristine
+first boot. The qualified pause-entry `beta-notice` remains an ordinary
+28-member screen fixture. The contaminated 34-member legacy capture is retired
+as evidence-of-era only. Its old paint-order contract was re-derived against
+the qualified 28-member core, where the measured OK-plate trio remains the
+final three relative core members. The accepted path-state audit is
+`7253b6e0d853182aa7ea73500e4753eec5892a2a7ad449bfbdc23c4792073857`.
+
+## Instance-local generation metadata
+
+Settlement v2.18 first established that absolute layout generation and its
+semantic mirror are non-rendered build bookkeeping. Their measured values are
+never hand-edited and captures are never selected by counter value. Each value
+must remain constant across its own 40-sample settled window; a mid-window
+change is a rebuild and therefore unsettled. A fixture carries the primary
+instance's measured value, and a generation-only landed correction is legal
+only when the complete semantic multiset, relative sequence, and every bound
+endpoint have zero residual. The Control Scheme Picker audit that established
+the path-local case is
+`17dda126fb37ff65d7cdba785cc628435d2059fcd20571f6c3b035377d86b313`.
+
+Settlement v2.19 supersedes only v2.18's mistaken requirement that two fresh
+instances reproduce the same absolute counter. The 34-pair corpus showed that
+generation is a session-cumulative layout-rebuild counter whose value is
+instance-timing-sensitive: drift of minus two through plus two occurred in
+both directions at route depth, while the first-layout picker pair agreed
+because no earlier rebuild could drift. For each pair, exclusion of generation
+is conditional on a machine projection of both recorded windows proving the
+same complete structural-core multiset and relative sequence, all other
+member-system fields exact, every bound endpoint enumerated, and zero residual.
+A pair with any non-generation difference remains an ordinary failed capture.
+
+The v2.19 audit re-derived all ten disagreeing standalone pairs and all 24
+disagreeing navigation endpoints from their sealed traces. All 34 core proofs
+pass; each receipt records both measured counter values, the member-multiset
+hash, relative-sequence hash, bound endpoints, and zero-residual verdict. This
+also validates the v2.14 fresh `skill-picker` pair at generations 18 and 20,
+so its semantic promotion stands without another capture. The accepted v2.18
+pair-stop audit is
+`e35798b681c1e13cf1626832307d010c906ce2fbc4d6fe234f07d76d0cd1940a`.
+Recapturing until counters happen to agree remains forbidden counter-shopping;
+no field other than `generation` and `semantic_generation` enters this rule.
+
+## Dark Cloud login title capture defect
+
+Settlement v2.20 adds one exact field correction for
+`dark-cloud-login-settings`. The committed landed fixture and its byte-identical
+shellfix baseline snapshot leave `layout.screen_title` empty. Two qualified
+pristine-profile instances instead settled with the case-sensitive title
+`Dark Cloud Browser` for all 40 samples; their complete 77-member cores and
+relative sequences are equal under v2.19 despite measured generations 25 and
+24. The two bound endpoints, `dark_cloud_to_login_settings.after` and
+`dark_cloud_login_to_browser.before`, reproduce the same structural-core hash,
+title, and player-visible frame. The machine-derived correction contract is
+`native-menu-dark-cloud-login-title-v220.json`; it cites the accepted STOP
+audit `4eb60e30e5f5e9d1db77fd9ae67fbba2d445077007d26b60cc08eefbb1ce4f5a`
+and both raw trace receipts.
+
+The correction applies only to that layout and native screen, only from the
+empty landed value to exactly `Dark Cloud Browser`, and only while the landed
+fixture, qualified candidate, pristine profile identity, both settled traces,
+and both navigation bindings still match their pinned receipts. A case change,
+another layout or field, a second differing layout field, another candidate
+receipt, or a settled title other than the pinned value remains the unchanged
+screen-title STOP. No title tolerance or candidate rewrite exists.
+
+The same ruling introduced a no-write exhaustive diagnostic mode for landed
+comparison. It executes the same gates and classifiers as production but
+records every difference outside authorized classes rather than returning at
+the first one. Production promotion still stops at the first unclassified
+difference. The diagnostic is dry-run-only, records `candidate_applied: false`,
+and cannot select captures or mutate fixtures. Recorder `capture_method` text
+remains provenance annotation, not a player-visible semantic-core field, so it
+cannot manufacture a landed generation or member difference. This makes later
+rulings operate on one machine-derived corpus census without weakening any
+production gate.
+
+## Sealed census-era disposition
+
+Settlement v2.21 binds the corrective classes to the sealed 326-row no-write
+census
+`b6d91abab8eaf67dfb9c4f92c688bf5ea027db8132e470c8fe4c763a6db08a72`.
+It is an exact disposition, not a pattern matcher. Class A supersedes 261
+landed-only era members across ten named layouts, with one record per layout;
+every member is pinned by element id and semantic hash and must be absent from
+every qualified standalone and endpoint occurrence. Class B adopts 38
+settled-only members across seven layouts only when each member occurs in both
+paired qualified traces. Removing, adding, partially applying, or moving any
+record to another layout is a STOP. The committed contract also checks each
+embedded Class-A member against the corresponding landed fixture, so the two
+copies cannot silently disagree.
+
+The occurrence audit
+`e327294f0aff85710e238dce6e0967afe0814a26908de3a0cfe8643d35e7dca2`
+found exactly two landed-only rows that fail the Class-A absence predicate:
+`skill_picker.art.skills_84.1` and `.2`. Their measured rectangles reproduce
+the two-layer `Skills.84` roster draw at `skill_picker.choice_slot.1`: atlas
+`Skills`, anchor `(604, 386.5)`, relative positions 30 and 31, and offsets
+`(0, 0)` and `(-4, -4)`. They therefore reconcile only through the already
+proven v2.8 choice-slot rule. They are explicitly excluded from the
+skill-picker Class-A record; a future row requires a new QUESTION and cannot
+auto-extend this exception.
+
+Class C applies the v2.18 generation doctrine to the 13 enumerated
+landed-versus-settled counter rows only after all semantic members, relative
+sequence, population witnesses, and bound endpoints resolve exactly. The
+no-native-inbound-edge precondition is vacuous only for the machine-checked
+`game-over` standalone. Class D consists of six exact, case-sensitive
+one-field corrections: five measured titles and the `dark-cloud-menu`
+`simple_menu` to `dark_cloud_menu` screen id. The latter requires aggregate
+regeneration with zero stale references. Class E lets four old chrome/Item-1
+guards be subsumed only by a complete Class-A record and treats the two equal
+pause-menu witness routes as one proven equivalence class without selecting
+between them. An uncovered pattern or divergent route still emits its original
+named STOP.
+
+Class F supplies the two missing paired population witnesses and nothing else.
+Two pristine instances for `performance` and two for `profile-save-select`
+each held a 40-sample, two-second-or-longer window and projected exactly onto
+their qualified 23- and 33-member cores. Their measured generation counters
+remain provenance; no capture was selected to match a landed counter. The
+machine audit is
+`66db25b623bdcf6ea82694e70a8ca662cc4a0567ceceb4b52f1eaaf0a46d6870`.
+All six classes are evaluated by production's existing stop-at-first path;
+enumerate-all remains diagnostic-only and no-write.
+
+## Final four-row exact disposition
+
+Settlement v2.22 binds the last four rows of the no-write census
+`b6adf78aa2cadb671e8a6d337db5de0cc4cf1478928b4250e365f1f8d7d276b0`.
+It adds two exact relative-sequence supersessions and one closed endpoint-
+vacuity list; it adds no order or generation tolerance.
+
+The sequence records apply only to `dark-cloud-login-settings` and
+`game-settings-dark-cloud`. For each layout, the landed and settled relative-
+sequence identities, every moved member with its duplicate-aware occurrence
+and old/new index, the immutable landed snapshot, the qualified candidate,
+both standalone traces, and the pristine profile identity are pinned. The
+settled order reproduces independently in the standalone and the named
+transition source (`dark_cloud_login_to_browser.before` and
+`dark_cloud_settings_done.before`, respectively). The generator refuses a
+record if either layout has any membership delta or if any qualified
+occurrence disagrees. Promotion carries the captured settled order; neither
+the generator nor promoter rewrites an element list.
+
+The v2.18 bound-endpoint precondition is vacuous only for the closed named set
+`game-over`, `map-picker`, and `skill-picker`. Promotion re-enumerates the
+resolved native navigation graph and requires zero inbound edges for each
+named layout every time. It also requires the exact paired standalone core and
+window-constant measured generation already recorded for that layout. An
+inbound edge disables vacuity, and an edge-free layout outside the named set
+cannot claim it. Promoted fixtures retain their own measured counters; no
+counter is edited or selected by value.
+
 ## Changelog
+
+- **v2.22 — 2026-08-10:** disposed the sealed final four-row census with two
+  exact, two-context relative-sequence supersessions and extended endpoint
+  vacuity to the closed machine-checked set `game-over`, `map-picker`, and
+  `skill-picker`. Cites census `b6adf78a`; no order tolerance, counter rewrite,
+  or property-based vacuity rule was added.
+
+- **v2.21 — 2026-08-10:** disposed the sealed 326-row census through exact
+  Classes A-F, excluding the two measured `Skills.84` choice-slot rows from
+  era supersession and adding paired bounded witnesses for `performance` and
+  `profile-save-select`. Cites census `b6d91aba`, occurrence audit `e327294f`,
+  and Class-F audit `66db25b6`; no count or pattern tolerance was added.
+
+- **v2.20 — 2026-08-09:** two pristine instances and both bound endpoints
+  reproduced the player-visible `Dark Cloud Browser` title omitted by the
+  landed `dark-cloud-login-settings` fixture. Added the exact one-field
+  correction cited by audit `4eb60e30`; also added a dry-run-only exhaustive
+  difference census while preserving production stop-at-first behavior.
+- **v2.19 — 2026-08-09:** the accepted paired-generation STOP proved that the
+  session-cumulative generation counter drifts by -2 through +2 across fresh
+  instances even on equal routes. Replaced only v2.18(c) with a per-pair exact
+  semantic-core precondition, citing stop audit `e35798b6`; all 34 disagreeing
+  points pass that proof and no other field is excluded.
+- **v2.18 — 2026-08-09:** the accepted Control Scheme Picker generation-only
+  STOP identified the absolute counter as non-rendered bookkeeping and made
+  its within-window constancy, primary-value provenance, field-bounded
+  cross-path exclusion, and no-counter-shopping rules explicit, citing audit
+  `17dda126`.
+- **v2.17 — 2026-08-09:** the accepted beta-notice path-state STOP added the
+  exact first-boot dialog composite over Control Scheme Picker, promoted the
+  qualified pause-entry beta screen, and retired the contaminated legacy core,
+  citing audit `7253b6e0`.
+
+- **v2.16 — 2026-08-09:** the accepted Settings cross-observation STOP showed
+  deterministic retained-heading accretion. Added three exact
+  `game-settings-gameplay` states and exhaustive endpoint bindings, citing
+  audit `74f125e8` and question manifest `4d1708d1`; no other screen or member
+  is authorized.
+- **v2.15 — 2026-08-09:** the accepted Dark Cloud Settings surface STOP proved
+  the credentials panel is outside the menu-member system. Added the typed,
+  zero-member overlay record and retired the mischaracterized screen fixture.
+- **v2.14 — 2026-08-09:** the accepted skill-picker provenance STOP replaced
+  the legacy-window reuse permission with a two-instance pristine-baseline
+  recapture. Animated-family and choice-slot predicates remain unchanged.
 
 - **v2.13 — 2026-08-08:** the accepted Hub provenance-boundary STOP was
   resolved by a two-instance, pristine-derived Annalist then
