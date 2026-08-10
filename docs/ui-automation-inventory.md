@@ -195,7 +195,8 @@ Additional runtime-only transitional surfaces currently observed by the overlay 
 - Primary implementation:
   - [`src/debug_ui_overlay/control_observers.inl`](../SolomonDarkModLoader/src/debug_ui_overlay/control_observers.inl)
   - [`src/debug_ui_overlay/surface_render_hooks.inl`](../SolomonDarkModLoader/src/debug_ui_overlay/surface_render_hooks.inl)
-  - [`src/debug_ui_overlay/tracked_surfaces_and_main_menu.inl`](../SolomonDarkModLoader/src/debug_ui_overlay/tracked_surfaces_and_main_menu.inl)
+  - [`src/debug_ui_overlay/tracked_surfaces.inl`](../SolomonDarkModLoader/src/debug_ui_overlay/tracked_surfaces.inl)
+  - [`src/debug_ui_overlay/main_menu_and_text_helpers.inl`](../SolomonDarkModLoader/src/debug_ui_overlay/main_menu_and_text_helpers.inl)
   - [`src/debug_ui_overlay/label_resolution_and_frame_render.inl`](../SolomonDarkModLoader/src/debug_ui_overlay/label_resolution_and_frame_render.inl)
 - Verified actions:
   - `main_menu.play`
@@ -219,7 +220,7 @@ Additional runtime-only transitional surfaces currently observed by the overlay 
 - Primary implementation:
   - [`src/debug_ui_overlay/exact_widget_resolution.inl`](../SolomonDarkModLoader/src/debug_ui_overlay/exact_widget_resolution.inl)
   - [`src/debug_ui_overlay/exact_text_capture_and_hooks.inl`](../SolomonDarkModLoader/src/debug_ui_overlay/exact_text_capture_and_hooks.inl)
-  - [`src/debug_ui_overlay/tracked_surfaces_and_main_menu.inl`](../SolomonDarkModLoader/src/debug_ui_overlay/tracked_surfaces_and_main_menu.inl)
+  - [`src/debug_ui_overlay/tracked_surfaces.inl`](../SolomonDarkModLoader/src/debug_ui_overlay/tracked_surfaces.inl)
   - [`src/debug_ui_overlay/state_and_actions.inl`](../SolomonDarkModLoader/src/debug_ui_overlay/state_and_actions.inl)
 - Verified actions:
   - `dark_cloud_browser.search`
@@ -264,7 +265,7 @@ Additional runtime-only transitional surfaces currently observed by the overlay 
   - [`src/debug_ui_overlay/overlay_surface_builders.inl`](../SolomonDarkModLoader/src/debug_ui_overlay/overlay_surface_builders.inl)
   - [`src/debug_ui_overlay/exact_widget_resolution.inl`](../SolomonDarkModLoader/src/debug_ui_overlay/exact_widget_resolution.inl)
   - [`src/debug_ui_overlay/string_and_memory_readers.inl`](../SolomonDarkModLoader/src/debug_ui_overlay/string_and_memory_readers.inl)
-  - [`src/debug_ui_overlay/tracked_surfaces_and_main_menu.inl`](../SolomonDarkModLoader/src/debug_ui_overlay/tracked_surfaces_and_main_menu.inl)
+  - [`src/debug_ui_overlay/tracked_surfaces.inl`](../SolomonDarkModLoader/src/debug_ui_overlay/tracked_surfaces.inl)
 - Working actions:
   - `settings.done`
   - `settings.controls`

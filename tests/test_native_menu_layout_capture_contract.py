@@ -14,6 +14,10 @@ def read(relative_path: str) -> str:
     return (ROOT / relative_path).read_text(encoding="utf-8")
 
 
+def read_many(*relative_paths: str) -> str:
+    return "".join(read(path) for path in relative_paths)
+
+
 def read_menu_layout_capture() -> str:
     root = "SolomonDarkModLoader/src/debug_ui_overlay/"
     return "".join(
@@ -22,7 +26,8 @@ def read_menu_layout_capture() -> str:
             "menu_layout_capture.inl",
             "menu_layout_capture_resolvers.inl",
             "menu_layout_capture_art_observation.inl",
-            "menu_layout_capture_snapshot_and_hooks.inl",
+            "menu_layout_capture_snapshot.inl",
+            "menu_layout_capture_hooks.inl",
         )
     )
 
@@ -141,9 +146,11 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         self.assertIn("sd.ui.capture_current_layout", recorder)
 
     def test_settings_family_replays_only_machine_measured_cached_panel_art(self) -> None:
-        builders = read(
+        builders = read_many(
             "SolomonDarkModLoader/src/debug_ui_overlay/"
-            "overlay_surface_builders_settings_surfaces.inl"
+            "overlay_surface_builders_settings_tracking.inl",
+            "SolomonDarkModLoader/src/debug_ui_overlay/"
+            "overlay_surface_builders_settings_layouts.inl",
         )
         helpers = read(
             "SolomonDarkModLoader/src/debug_ui_overlay/"
@@ -154,9 +161,11 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             "label_resolution_surface_registry_and_frame_render.inl"
         )
         binary_layout = read("config/binary-layout.ini")
-        tracking = read(
+        tracking = read_many(
             "SolomonDarkModLoader/src/debug_ui_overlay/"
-            "tracked_surfaces_and_main_menu.inl"
+            "tracked_surfaces.inl",
+            "SolomonDarkModLoader/src/debug_ui_overlay/"
+            "main_menu_and_text_helpers.inl",
         )
         self.assertIn("bool TryReadTrackedSettingsRender(", tracking)
         self.assertNotRegex(
@@ -369,9 +378,11 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             "SolomonDarkModLoader/src/debug_ui_overlay/"
             "state_actions_activation/resolved_action_activation.inl"
         )
-        snapshot = read(
+        snapshot = read_many(
             "SolomonDarkModLoader/src/debug_ui_overlay/"
-            "menu_layout_capture_snapshot_and_hooks.inl"
+            "menu_layout_capture_snapshot.inl",
+            "SolomonDarkModLoader/src/debug_ui_overlay/"
+            "menu_layout_capture_hooks.inl",
         )
         self.assertIn("retained_settings_elements_owner", state)
         self.assertIn("retained_settings_exact_text_elements", state)
