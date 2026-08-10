@@ -4,6 +4,7 @@ import argparse
 import copy
 import hashlib
 import json
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -17,6 +18,13 @@ from tools.import_native_menu_special_captures_v25 import (
     standardize_loading,
 )
 from tools.native_menu_ambient_lifecycle import find_ambient_settled_window
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+PROFILE_FIXTURES = (
+    Path("tests/fixtures/webgame/native-menu-profile-state-baseline.json"),
+    Path("tests/fixtures/webgame/native-menu-hub-bindings-v213.json"),
+)
 
 
 def _write_json(path: Path, value: object) -> None:
@@ -136,7 +144,13 @@ class NativeMenuSpecialImportV25Tests(unittest.TestCase):
             check=True,
         )
         (root / "tracked.txt").write_text("fixture\n", encoding="utf-8")
-        subprocess.run(["git", "-C", str(root), "add", "tracked.txt"], check=True)
+        tracked = ["tracked.txt"]
+        for relative in PROFILE_FIXTURES:
+            destination = root / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(REPOSITORY_ROOT / relative, destination)
+            tracked.append(relative.as_posix())
+        subprocess.run(["git", "-C", str(root), "add", *tracked], check=True)
         subprocess.run(
             ["git", "-C", str(root), "commit", "-q", "-m", "fixture"],
             check=True,
@@ -147,6 +161,9 @@ class NativeMenuSpecialImportV25Tests(unittest.TestCase):
         loader.parent.mkdir(parents=True)
         loader.write_bytes(b"loader-under-test")
         loader_hash = _sha256(loader)
+        baseline = json.loads(
+            (root / PROFILE_FIXTURES[0]).read_text(encoding="utf-8")
+        )["profile_state"]
         for instance in instances:
             stage = root / "runtime" / "instances" / instance / "stage"
             stage.mkdir(parents=True)
@@ -159,6 +176,21 @@ class NativeMenuSpecialImportV25Tests(unittest.TestCase):
                         "gameExecutable": {"sha256": _sha256(executable)},
                         "loader": {"sha256": loader_hash},
                     }
+                },
+            )
+            _write_json(
+                stage / ".sdmod" / "native-menu-profile-state.json",
+                {
+                    "schema": "solomon-dark-native-menu-profile-state-v1",
+                    "profile_state_identity_sha256": baseline[
+                        "profile_state_identity_sha256"
+                    ],
+                    "baseline_mode": baseline["baseline_mode"],
+                    "source_sandbox_excluded": baseline[
+                        "source_sandbox_excluded"
+                    ],
+                    "retail_appdata_seeded": baseline["retail_appdata_seeded"],
+                    "files": baseline["files"],
                 },
             )
 

@@ -691,9 +691,10 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
             r'Resolve-NativeMenuHubPathLayoutId.*?'
             r'\$measuredHubLayout -cne \$ScreenId.*?'
             r'Hub path selector expected.*?machine-classified.*?'
-            r'\$semanticPayload\.screen_id = \$ScreenId',
-            "the Hub parent screen must be retagged only after its measured "
-            "path layout equals the requested qualifier",
+            r'Status = "ready".*?'
+            r'SemanticPayload = \$semanticPayload',
+            "the Hub parent screen must remain machine-measured while its "
+            "requested path qualifier is accepted only after exact classification",
         )
         self.assertIn(
             "-TransitionalSourceScreen $SourceScreen",
