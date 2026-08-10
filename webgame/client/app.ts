@@ -1,4 +1,5 @@
-import menuGoldenJson from "../../tests/fixtures/webgame/menu-goldens.json" with { type: "json" };
+import menuGoldenJson from "../../tests/fixtures/webgame/menufix-preview-overlay/menu-goldens.json" with { type: "json" };
+import inertControlsJson from "../../webgame-contracts/inert-controls.json" with { type: "json" };
 import focusModelJson from "../../webgame-contracts/menu-focus-model.json" with { type: "json" };
 import { GamepadProducer } from "../input/gamepad-producer.js";
 import { parseFocusModel } from "../input/focus-model.js";
@@ -7,17 +8,13 @@ import { parseIntent } from "../input/intent.js";
 import { KeyboardMouseProducer } from "../input/keyboard-mouse-producer.js";
 import { DEFAULT_HUB_CAMERA_SCALE } from "../input/twin-stick.js";
 import { loadManifestAssets } from "./manifest-assets.js";
+import { parseInertControls } from "./inert-controls.js";
 import { parseMenuCatalog } from "./menu-catalog.js";
 import { HubController, type HubSnapshot } from "./hub-controller.js";
-import { buildHubRenderPlan } from "./hub-render-plan.js";
+import { buildHubLayoutRenderPlan } from "./hub-render-plan.js";
 import { buildHubScenePlan } from "./hub-scene.js";
-import {
-  buildOutOfScopePlan,
-  buildRenderPlan,
-  withLoaderProgress,
-  type RenderPlan,
-} from "./render-plan.js";
-import { ShellController, type ShellSnapshot, type ShellStore } from "./shell-controller.js";
+import { buildRenderPlan, withLoaderProgress, type RenderPlan } from "./render-plan.js";
+import { ShellController, type ShellSnapshot } from "./shell-controller.js";
 import { TextInputOverlay } from "./text-inputs.js";
 import { WebGlShellRenderer } from "./webgl-renderer.js";
 
@@ -38,6 +35,7 @@ export interface WebShellHarness {
   renderPlan(): RenderPlan;
   dispatch(value: unknown): void;
   showLayout(layoutId: string, preferredFocus?: string): Promise<void>;
+  showDialogComposite(compositeId: string): Promise<void>;
   showHub(): Promise<void>;
   showHubReference(): Promise<void>;
   showHubNpc(npcId: string): Promise<void>;
@@ -63,15 +61,6 @@ function requiredElement<T extends Element>(selector: string, constructor: { new
   return element;
 }
 
-function browserStore(): ShellStore {
-  return {
-    get: (key) => window.localStorage.getItem(`webshell.${key}`),
-    set: (key, value) => {
-      window.localStorage.setItem(`webshell.${key}`, value);
-    },
-  };
-}
-
 function toNative(canvas: HTMLCanvasElement, point: Point2): Point2 {
   const bounds = canvas.getBoundingClientRect();
   return {
@@ -88,11 +77,12 @@ async function main(): Promise<void> {
   const canvas = requiredElement("#game-canvas", HTMLCanvasElement);
   const inputRoot = requiredElement("#text-inputs", HTMLDivElement);
   const catalog = parseMenuCatalog(menuGoldenJson);
+  const inertControls = parseInertControls(inertControlsJson);
   const focusModel = parseFocusModel(focusModelJson);
   const assets = await loadManifestAssets();
   assets.assertShellAssets(catalog);
   const renderer = new WebGlShellRenderer(canvas, assets);
-  const controller = new ShellController(catalog, focusModel, { store: browserStore() });
+  const controller = new ShellController(catalog, focusModel, inertControls);
   const hub = new HubController({
     openPause: () => {
       controller.handle({ kind: "interact", target: "pause", phase: "press" });
@@ -114,7 +104,7 @@ async function main(): Promise<void> {
   }));
 
   // G11 boot is work-bound with no timer and no skip. Each completed unit is a
-  // real layout dependency preparation; the loader exits only when all 28 can
+  // real layout dependency preparation; the loader exits only when the full census can
   // draw without a deferred asset lookup.
   let completed = 0;
   for (const layoutId of catalog.screenCensus) {
@@ -128,6 +118,9 @@ async function main(): Promise<void> {
     window.dispatchEvent(new CustomEvent("webshell:loader-progress", {
       detail: { completed, total: catalog.screenCensus.length },
     }));
+  }
+  for (const composite of catalog.dialogComposites.values()) {
+    await renderer.prepare(buildRenderPlan(composite.layout, assets, null, false));
   }
 
   const inputs = new TextInputOverlay(inputRoot, canvas, controller);
@@ -155,26 +148,41 @@ async function main(): Promise<void> {
       if (layout === undefined) {
         throw new Error(`renderer cannot find active G11 layout ${snapshot.surface.layoutId}`);
       }
+      const focused = snapshot.focusId === null || snapshot.focusRect === null
+        ? null
+        : { id: snapshot.focusId, rect: snapshot.focusRect };
+      nextPlan = layout.id === "pause-menu" || catalog.transitionLayoutIds.includes(layout.id)
+        ? buildHubLayoutRenderPlan(assets, hub.snapshot(), layout, focused, showFocus)
+        : buildRenderPlan(layout, assets, focused, showFocus);
+    } else if (snapshot.surface.kind === "dialog-composite") {
+      const composite = catalog.dialogComposites.get(snapshot.surface.compositeId);
+      if (composite === undefined) {
+        throw new Error(`renderer cannot find dialog composite ${snapshot.surface.compositeId}`);
+      }
       nextPlan = buildRenderPlan(
-        layout,
+        composite.layout,
         assets,
         snapshot.focusId === null || snapshot.focusRect === null
           ? null
           : { id: snapshot.focusId, rect: snapshot.focusRect },
         showFocus,
       );
-    } else if (snapshot.surface.kind === "hub-stub") {
+    } else {
       const hubSnapshot = hub.snapshot();
-      nextPlan = bareHubReference
-        ? buildHubScenePlan(assets, {
+      if (bareHubReference) {
+        nextPlan = buildHubScenePlan(assets, {
           player: hubSnapshot.player,
           heading: hubSnapshot.player.heading,
           moving: hubSnapshot.player.moving,
           presentationMilliseconds: hubSnapshot.presentationMilliseconds,
-        }, [], "hub.g12-reference")
-        : buildHubRenderPlan(assets, hubSnapshot);
-    } else {
-      nextPlan = buildOutOfScopePlan(snapshot.surface.message);
+        }, [], "hub.g12-reference");
+      } else {
+        const endpoint = catalog.layouts.get(snapshot.surface.endpointLayoutId);
+        if (endpoint === undefined) {
+          throw new Error(`renderer cannot find hub endpoint ${snapshot.surface.endpointLayoutId}`);
+        }
+        nextPlan = buildHubLayoutRenderPlan(assets, hubSnapshot, endpoint, null, false);
+      }
     }
     await renderer.prepare(nextPlan);
     if (generation !== renderGeneration) {
@@ -193,15 +201,25 @@ async function main(): Promise<void> {
 
   hub.subscribe((snapshot) => {
     if (controller.snapshot().surface.kind === "hub-stub") {
+      const shellSnapshot = controller.snapshot();
       const generation = ++renderGeneration;
-      const nextPlan = bareHubReference
-        ? buildHubScenePlan(assets, {
+      let nextPlan: RenderPlan;
+      if (bareHubReference) {
+        nextPlan = buildHubScenePlan(assets, {
           player: snapshot.player,
           heading: snapshot.player.heading,
           moving: snapshot.player.moving,
           presentationMilliseconds: snapshot.presentationMilliseconds,
-        }, [], "hub.g12-reference")
-        : buildHubRenderPlan(assets, snapshot);
+        }, [], "hub.g12-reference");
+      } else if (shellSnapshot.surface.kind === "hub-stub") {
+        const endpoint = catalog.layouts.get(shellSnapshot.surface.endpointLayoutId);
+        if (endpoint === undefined) {
+          throw new Error(`renderer cannot find hub endpoint ${shellSnapshot.surface.endpointLayoutId}`);
+        }
+        nextPlan = buildHubLayoutRenderPlan(assets, snapshot, endpoint, null, false);
+      } else {
+        return;
+      }
       const worldKey = hubWorldDependencyKey(snapshot);
       if (worldKey !== null && worldKey === preparedHubWorldKey) {
         activePlan = nextPlan;
@@ -228,15 +246,6 @@ async function main(): Promise<void> {
       return;
     }
     sink(intent);
-    const after = controller.snapshot();
-    if (
-      before.surface.kind === "layout"
-      && before.surface.layoutId === "map-picker"
-      && after.surface.kind === "out-of-scope"
-    ) {
-      controller.showHubForConformance();
-      hub.beginRunEntry();
-    }
   };
   const menuTargetAt = (point: Point2): string | null => {
     const native = toNative(canvas, point);
@@ -281,7 +290,13 @@ async function main(): Promise<void> {
   } else if (requestedLayout !== null) {
     controller.showLayoutForConformance(requestedLayout);
   } else {
-    controller.completeBoot(browserStore().get("control_scheme") === null);
+    controller.showMatchLoading();
+    await renderSettled;
+    renderer.render(activePlan);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => {
+      resolve();
+    }));
+    controller.completeBoot();
     // G11 section "Presentation rules" records this 1.1-second fade only for
     // first Title/MainMenu entry. The controller separately enforces the
     // native 2.0-second input gate; neither timing is generalized to edges.
@@ -329,6 +344,11 @@ async function main(): Promise<void> {
     },
     showLayout: async (layoutId, preferredFocus) => {
       controller.showLayoutForConformance(layoutId, preferredFocus);
+      await renderSettled;
+      renderer.render(activePlan);
+    },
+    showDialogComposite: async (compositeId) => {
+      controller.showDialogCompositeForConformance(compositeId);
       await renderSettled;
       renderer.render(activePlan);
     },

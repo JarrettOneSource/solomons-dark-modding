@@ -1,11 +1,13 @@
-import menuGoldenJson from "../../tests/fixtures/webgame/menu-goldens.json" with { type: "json" };
+import menuGoldenJson from "../../tests/fixtures/webgame/menufix-preview-overlay/menu-goldens.json" with { type: "json" };
+import inertControlsJson from "../../webgame-contracts/inert-controls.json" with { type: "json" };
 import focusModelJson from "../../webgame-contracts/menu-focus-model.json" with { type: "json" };
 import { describe, expect, it } from "vitest";
 
 import type { MenuNavIntent } from "../input/intent.js";
 import { parseFocusModel } from "../input/focus-model.js";
+import { parseInertControls } from "./inert-controls.js";
 import { parseMenuCatalog } from "./menu-catalog.js";
-import { ShellController, type ShellStore } from "./shell-controller.js";
+import { ShellController } from "./shell-controller.js";
 
 function nav(command: MenuNavIntent["command"], phase: MenuNavIntent["phase"] = "press") {
   return { kind: "menu_nav", command, phase } as const;
@@ -13,147 +15,167 @@ function nav(command: MenuNavIntent["command"], phase: MenuNavIntent["phase"] = 
 
 function harness() {
   let now = 100;
-  const values = new Map<string, string>();
-  const store: ShellStore = {
-    get: (key) => values.get(key) ?? null,
-    set: (key, value) => values.set(key, value),
-  };
   const controller = new ShellController(
     parseMenuCatalog(menuGoldenJson),
     parseFocusModel(focusModelJson),
-    { clock: () => now, store },
+    parseInertControls(inertControlsJson),
+    { clock: () => now },
   );
   return {
     controller,
-    values,
     advance: (milliseconds: number) => {
       now += milliseconds;
     },
   };
 }
 
-describe("sim-less browser shell state", () => {
-  it("runs loader to beta, enforces the exact two-second title input gate, then enters main", () => {
+function activate(controller: ShellController, actionId: string): void {
+  controller.handle({ kind: "interact", target: actionId, phase: "press" });
+}
+
+describe("measured critical-path browser shell", () => {
+  it("always boots a pristine session into the semantic beta dialog over the picker", () => {
     const { controller, advance } = harness();
     expect(controller.snapshot()).toMatchObject({
       surface: { kind: "layout", layoutId: "native-loader" },
       inputSurface: "blocked",
+      values: {},
     });
-    controller.completeBoot(false);
+    controller.showMatchLoading();
+    expect(controller.snapshot().surface).toEqual({ kind: "layout", layoutId: "loading-screen" });
+    controller.completeBoot();
     expect(controller.snapshot()).toMatchObject({
-      surface: { kind: "layout", layoutId: "beta-notice" },
+      surface: { kind: "dialog-composite", compositeId: "beta_notice_first_boot" },
+      focusId: "dialog.primary",
       inputGated: true,
     });
-    controller.handle(nav("confirm"));
-    expect(controller.snapshot().surface).toEqual({ kind: "layout", layoutId: "beta-notice" });
+    activate(controller, "dialog.primary");
+    expect(controller.snapshot().surface).toEqual({
+      kind: "dialog-composite",
+      compositeId: "beta_notice_first_boot",
+    });
     advance(2000);
-    controller.handle(nav("confirm"));
+    activate(controller, "dialog.primary");
     expect(controller.snapshot()).toMatchObject({
-      surface: { kind: "layout", layoutId: "main-menu-root" },
-      focusId: "main_menu.play",
+      surface: { kind: "layout", layoutId: "control-scheme-picker" },
+      focusId: "control_scheme_picker.select_wasd",
       inputGated: false,
     });
   });
 
-  it("routes first boot through the persisted control-scheme prerequisite", () => {
-    const { controller, advance, values } = harness();
-    controller.completeBoot(true);
-    advance(2000);
-    controller.handle(nav("back"));
+  it.each([
+    "control_scheme_picker.select_arrows_mouse",
+    "control_scheme_picker.select_wasd",
+  ])("dispatches every control-scheme option: %s", (actionId) => {
+    const { controller } = harness();
+    controller.showLayoutForConformance("control-scheme-picker", actionId);
+    activate(controller, actionId);
     expect(controller.snapshot()).toMatchObject({
-      surface: { kind: "layout", layoutId: "control-scheme-picker" },
-      focusId: "control_scheme_picker.select_wasd",
+      surface: { kind: "layout", layoutId: "create-element" },
+      values: { control_scheme: actionId },
     });
-    controller.handle(nav("confirm"));
-    expect(values.get("control_scheme")).toBe("control_scheme_picker.select_wasd");
-    expect(controller.snapshot().surface).toEqual({ kind: "layout", layoutId: "create-element" });
   });
 
-  it("opens title settings and preserves its invoking context on Done", () => {
+  it.each([
+    "create.select_element_ether",
+    "create.select_element_earth",
+    "create.select_element_fire",
+    "create.select_element_water",
+    "create.select_element_air",
+  ])("dispatches every element option: %s", (actionId) => {
     const { controller } = harness();
-    controller.showLayoutForConformance("main-menu-root", "main_menu.settings");
-    controller.handle(nav("confirm"));
+    controller.showLayoutForConformance("create-element", actionId);
+    activate(controller, actionId);
     expect(controller.snapshot()).toMatchObject({
-      surface: { kind: "layout", layoutId: "game-settings-title" },
-      focusId: "settings.sound_volume",
+      surface: { kind: "layout", layoutId: "create-discipline" },
+      values: { "create.element": actionId },
     });
-    controller.handle(nav("back"));
+  });
+
+  it.each([
+    "create.select_discipline_mind",
+    "create.select_discipline_body",
+    "create.select_discipline_arcane",
+  ])("dispatches every discipline option: %s", (actionId) => {
+    const { controller } = harness();
+    controller.showLayoutForConformance("create-discipline", actionId);
+    activate(controller, actionId);
+    expect(controller.snapshot()).toMatchObject({
+      surface: { kind: "hub-stub", endpointLayoutId: "hub_new_game" },
+      values: { "create.discipline": actionId },
+    });
+  });
+
+  it("opens and closes pause as an overlay and follows Leave Game to the in-session main menu", () => {
+    const { controller } = harness();
+    controller.showHubForConformance("hub_new_game");
+    activate(controller, "pause");
+    expect(controller.snapshot().surface).toEqual({ kind: "layout", layoutId: "pause-menu" });
+    activate(controller, "pause_menu.resume_game");
+    expect(controller.snapshot().surface).toEqual({
+      kind: "hub-stub",
+      endpointLayoutId: "hub_resumed",
+    });
+
+    activate(controller, "pause");
+    activate(controller, "pause_menu.leave_game");
+    expect(controller.snapshot().surface).toEqual({ kind: "layout", layoutId: "beta-notice" });
+    activate(controller, "dialog.primary");
+    expect(controller.snapshot()).toMatchObject({
+      surface: { kind: "layout", layoutId: "main-menu-root" },
+      focusId: "main_menu.play",
+    });
+  });
+
+  it("serves Play, Last Game, and Back without inventing the missing New Game edge", () => {
+    const { controller } = harness();
+    controller.showLayoutForConformance("main-menu-root");
+    activate(controller, "main_menu.play");
+    expect(controller.snapshot().surface).toEqual({
+      kind: "layout",
+      layoutId: "profile-save-select",
+    });
+
+    const beforeNewGame = structuredClone(controller.snapshot());
+    activate(controller, "main_menu.new_game");
+    expect(controller.snapshot()).toEqual(beforeNewGame);
+
+    activate(controller, "main_menu.resume_last_game");
+    expect(controller.snapshot().surface).toEqual({
+      kind: "hub-stub",
+      endpointLayoutId: "hub_resumed",
+    });
+
+    controller.showLayoutForConformance("profile-save-select");
+    activate(controller, "main_menu.back");
     expect(controller.snapshot().surface).toEqual({ kind: "layout", layoutId: "main-menu-root" });
   });
 
-  it("traps a Dark Cloud modal and restores the exact invoking control on Back", () => {
+  it("keeps owner-descoped controls inert with byte-for-byte-equivalent snapshots", () => {
     const { controller } = harness();
-    controller.showLayoutForConformance("dark-cloud-browser", "dark_cloud_browser.search");
-    controller.handle({
-      kind: "interact",
-      target: "dark_cloud_browser.search",
-      phase: "press",
-    });
-    expect(controller.snapshot()).toMatchObject({
-      surface: { kind: "layout", layoutId: "dark-cloud-search" },
-      focusId: "dark_cloud_search.name",
-    });
-    controller.handle(nav("back"));
-    expect(controller.snapshot()).toMatchObject({
-      surface: { kind: "layout", layoutId: "dark-cloud-browser" },
-      focusId: "dark_cloud_browser.search",
-    });
-  });
+    controller.showLayoutForConformance("main-menu-root", "main_menu.settings");
+    const before = structuredClone(controller.snapshot());
+    activate(controller, "main_menu.settings");
+    expect(controller.snapshot()).toEqual(before);
 
-  it("omits disabled resume and capability-gated controls from traversal", () => {
-    const { controller } = harness();
-    controller.showLayoutForConformance("profile-save-select");
-    controller.setEligibilityForConformance({ resumeAvailable: false });
-    expect(controller.snapshot().focusId).toBe("main_menu.new_game");
-    expect(controller.snapshot().focusNodes.find(
-      (node) => node.id === "main_menu.resume_last_game",
-    )?.enabled).toBe(false);
-
-    controller.showLayoutForConformance("performance");
-    expect(controller.snapshot().focusNodes.find(
-      (node) => node.id === "performance.light_quality",
-    )?.enabled).toBe(false);
-    controller.setEligibilityForConformance({ lightQualityAvailable: true });
-    expect(controller.snapshot().focusNodes.find(
-      (node) => node.id === "performance.light_quality",
-    )?.enabled).toBe(true);
-  });
-
-  it("persists the real-input Dark Name but never persists the password", () => {
-    const { controller, values } = harness();
-    controller.showLayoutForConformance("dark-cloud-login-settings");
-    controller.setTextValue("dark_account.dark_name", "DeckWizard");
-    controller.setTextValue("dark_account.password", "secret");
-    expect(controller.snapshot().values).toMatchObject({
-      "dark_account.dark_name": "DeckWizard",
-      "dark_account.password": "secret",
-    });
-    expect(values.get("dark_account.dark_name")).toBe("DeckWizard");
-    expect(values.has("dark_account.password")).toBe(false);
-  });
-
-  it("arms Game Over only after its one-second state threshold", () => {
-    const { controller, advance } = harness();
-    controller.showLayoutForConformance("game-over");
-    expect(controller.snapshot().focusId).toBeNull();
-    advance(999);
-    controller.tick();
-    expect(controller.snapshot().focusId).toBeNull();
-    advance(1);
-    controller.tick();
-    expect(controller.snapshot().focusId).toBe("game_over.continue");
+    controller.showLayoutForConformance("game-over", "game_over.continue");
+    const beforeGameOver = structuredClone(controller.snapshot());
     controller.handle(nav("confirm"));
-    expect(controller.snapshot().surface).toEqual({ kind: "layout", layoutId: "hall-of-fame" });
+    expect(controller.snapshot()).toEqual(beforeGameOver);
   });
 
-  it("ends map Start at an explicit gameplay-out-of-scope surface", () => {
-    const { controller } = harness();
-    controller.showLayoutForConformance("map-picker");
-    controller.handle(nav("confirm"));
-    const surface = controller.snapshot().surface;
-    expect(surface.kind).toBe("out-of-scope");
-    if (surface.kind === "out-of-scope") {
-      expect(surface.message).toContain("outside P0");
-    }
+  it("does not persist selections across pristine page-controller instances", () => {
+    const first = harness().controller;
+    first.showLayoutForConformance("control-scheme-picker");
+    activate(first, "control_scheme_picker.select_wasd");
+    expect(first.snapshot().values).toHaveProperty("control_scheme");
+
+    const second = harness().controller;
+    second.completeBoot();
+    expect(second.snapshot().values).toEqual({});
+    expect(second.snapshot().surface).toEqual({
+      kind: "dialog-composite",
+      compositeId: "beta_notice_first_boot",
+    });
   });
 });

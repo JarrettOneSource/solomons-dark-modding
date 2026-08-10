@@ -1,5 +1,3 @@
-import type { MenuCatalog } from "../client/menu-catalog.js";
-
 export const MENU_VISUAL_PIXEL_RULE =
   "Human side-by-side review at 1600x900 requires the same assetpack art at exact G11 positions; font rasterization may differ.";
 export const MENU_VISUAL_STALE_MARKER = "stale controls omitted";
@@ -9,6 +7,13 @@ interface WaiverEntry {
   readonly fixture: string;
   readonly requiredMarker: string;
   readonly corrective: string;
+}
+
+interface VisualGateCatalog {
+  readonly layouts: ReadonlyMap<string, Readonly<{
+    fixture: string;
+    captureMethod: string;
+  }>>;
 }
 
 export interface MenuVisualGateResult {
@@ -74,7 +79,7 @@ function parseEntry(value: unknown, index: number): WaiverEntry {
 
 export function validateMenuVisualGate(
   value: unknown,
-  catalog: MenuCatalog,
+  catalog: VisualGateCatalog,
 ): MenuVisualGateResult {
   const root = object(value, "menu visual gate");
   exactKeys(

@@ -167,15 +167,19 @@ def test_webgame_hub_architecture_is_client_owned_provisional_and_sim_independen
     app = sources["client/app.ts"]
     _require_regex(
         app,
-        r'if \(before\.surface\.kind === "hub-stub"\) \{\s*hub\.handle\(intent\);\s*return;\s*\}',
+        r'if \(before\.surface\.kind === "hub-stub"\) \{\s*hub\.handle\(intent\);\s*return;\s*\}\s*sink\(intent\);',
         "P1 input routing no longer sends G14 intents into hub shell state only while the hub owns the surface",
     )
-    _require_regex(
+    route = re.search(
+        r"const routeIntent = \(intent: Intent\): void => \{([\s\S]*?)\n  \};",
         app,
-        r'before\.surface\.layoutId === "map-picker"\s*&&\s*after\.surface\.kind === "out-of-scope"'
-        r'\s*\) \{\s*controller\.showHubForConformance\(\);\s*hub\.beginRunEntry\(\);\s*\}',
-        "P1 run entry no longer routes the frozen Courtyard MapPicker confirmation into the hub flow",
     )
+    if route is None:
+        raise StaticReTestFailure("P1 input routing no longer has one auditable route body")
+    if "hub.beginRunEntry()" in route.group(1):
+        raise StaticReTestFailure(
+            "owner-descoped MapPicker can still enter the run flow from the browser shell"
+        )
 
     json_paths = _tracked_webgame_json()
     if "quality-floors.json" not in json_paths or "package.json" not in json_paths:
@@ -443,16 +447,20 @@ def test_webgame_hub_controller_traversal_covers_every_talk_purchase_and_run_bou
                 "P1 hub traversal no longer proves the exact Useful Thyngs gold and stock ledger",
             ),
             (
-                'layoutId: "map-picker"',
-                "P1 run traversal no longer enters through the frozen Courtyard MapPicker",
+                '{ kind: "layout", layoutId: "map-picker" }',
+                "P1 traversal no longer reaches the rendered owner-descoped Courtyard MapPicker",
             ),
             (
-                '{ kind: "run-shell" }',
-                "P1 run traversal no longer reaches the visible P2/P3 run-shell boundary",
+                "const beforeMapConfirm = structuredClone(shell.snapshot());",
+                "P1 traversal no longer snapshots MapPicker state before activation",
             ),
             (
-                "RUN SHELL LEFT: South triggered scripted_terminal_reset and returned to Courtyard.",
-                "P1 run traversal no longer leaves the run shell through the G13 reset edge",
+                'assert.deepEqual(shell.snapshot(), beforeMapConfirm, "owner-descoped MapPicker confirmation mutated shell state")',
+                "P1 traversal no longer proves owner-descoped MapPicker activation is non-navigating",
+            ),
+            (
+                'assert.equal(hub.snapshot().transition, null, "owner-descoped MapPicker confirmation started a session edge")',
+                "P1 traversal no longer proves owner-descoped MapPicker activation starts no session edge",
             ),
             (
                 "WEBGAME_HUB_TRAVERSAL_LOG",
@@ -461,14 +469,7 @@ def test_webgame_hub_controller_traversal_covers_every_talk_purchase_and_run_bou
         ),
         "P1 controller traversal declared no gate claims",
     )
-    _require_regex(
-        traversal,
-        r"hub\.snapshot\(\)\.completedSessionEdges\.slice\(-2\),\s*\[\s*"
-        r'"gameplay\.courtyard --start_run--> loading\.boneyard",\s*'
-        r'"loading\.boneyard --arena_materialized--> gameplay\.arena",\s*\]',
-        "P1 run traversal no longer proves both nested G13 run-entry edges",
-    )
-    return "the real gamepad producer walks every G8 region, completes all 20 talk flows, buys the 150-gold item, and enters/leaves the run shell"
+    return "the real gamepad producer walks every G8 region, completes all 20 talk flows, buys the 150-gold item, and proves the owner-descoped MapPicker inert"
 
 
 def test_webgame_hub_capture_assets_performance_provenance_and_ci_are_wired() -> str:

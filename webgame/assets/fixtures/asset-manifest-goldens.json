@@ -364,7 +364,7 @@
     "assets/loading/Wizards_dire_BG.png": "251365e025129972707b436d441d52ae2c5f8199bc3f80a1c4e03b2a28a1180c",
     "docs/reverse-engineering/native-asset-object-map.json": "f3059a8c15e4377e23e5e6054c3b9e0209917da640f671341e7c0ab4c96c0044",
     "docs/reverse-engineering/native-content-inventory.json": "21499a46b56c690c95abb6fd22a02f91df141f7a5d7da16276a11fdbe496fa88",
-    "tests/fixtures/webgame/menu-goldens.json": "9f142fb6c4be2e3a0db0db28ebdee961a66650bf45e4dc2602481b5f1dbd600f",
+    "tests/fixtures/webgame/menufix-preview-overlay/menu-goldens.json": "574785f257a915777d3ef151a3c79ac704a5b3b096aa83ed446315a216bcfec3",
     "tests/fixtures/webgame/scene-composition-goldens.json": "7bf5adec2f4425e07d42465b7dc3cefbab004dd7133b951a06ebccedeb3885c2",
     "webgame/assets/asset-manifest.schema.json": "95f73048a839cdf811578232e0a87d6fc7ea82cd44d226f6340d5de17cc02de0"
   },
@@ -378,11 +378,11 @@
   },
   "determinism": {
     "fileCount": 46,
-    "firstOutputTreeSha256": "3abd761d4047540d32bcf9b6f7a4c87404e0ac84417db2c708dbf346aa6409ea",
+    "firstOutputTreeSha256": "fb4952cb1678120acbea8e1ea12e3071a38092572451a9043ea370bfcb85edb6",
     "outputFiles": {
       "asset-manifest.json": {
-        "bytes": 7125414,
-        "sha256": "11e3d2041abb5117228064e73fcd02b9beb3b40dfeed735eafb7133ffd0c5fa3"
+        "bytes": 7125438,
+        "sha256": "63b27d2be8116276f244ae6cb0a7614dcab1a6133bcdd4842f2265d3c240c9ce"
       },
       "atlases/BadGuys.png": {
         "bytes": 6021399,
@@ -565,7 +565,7 @@
         "sha256": "fba1a0c2f68894d38914b1daf17fd5593b018fefe19309443b58c9aebfd118bb"
       }
     },
-    "secondOutputTreeSha256": "3abd761d4047540d32bcf9b6f7a4c87404e0ac84417db2c708dbf346aa6409ea"
+    "secondOutputTreeSha256": "fb4952cb1678120acbea8e1ea12e3071a38092572451a9043ea370bfcb85edb6"
   },
   "emittedBytes": {
     "atlases": 42744038,
@@ -580,7 +580,7 @@
     "FLAG_IMMORTALIZE"
   ],
   "manifestSchema": "solomon-dark-web-asset-manifest-v1",
-  "manifestSha256": "11e3d2041abb5117228064e73fcd02b9beb3b40dfeed735eafb7133ffd0c5fa3",
+  "manifestSha256": "63b27d2be8116276f244ae6cb0a7614dcab1a6133bcdd4842f2265d3c240c9ce",
   "packDescriptors": {
     "boneyards": {
       "bytes": 5783538,
@@ -628,6 +628,7 @@
       "Create.22",
       "Create.23",
       "Create.3",
+      "Create.4",
       "Create.5",
       "Create.6",
       "Create.7",
@@ -635,7 +636,6 @@
       "GameOver.0",
       "GameOver.1",
       "LevelPicker.0",
-      "LevelPicker.1",
       "LevelPicker.2",
       "LevelPicker.3",
       "LevelPicker.4",
@@ -648,10 +648,10 @@
       "Skills.13",
       "Skills.164",
       "Skills.43",
+      "Skills.45",
       "Skills.48",
       "Skills.5",
-      "Skills.83",
-      "Skills.84",
+      "Skills.94",
       "Title.0",
       "Title.1",
       "Title.11",
@@ -687,6 +687,7 @@
       "UI.18",
       "UI.20",
       "UI.24",
+      "UI.27",
       "UI.28",
       "UI.29",
       "UI.3",
@@ -706,6 +707,7 @@
       "UI.8",
       "UI.80",
       "UI.82",
+      "UI.88",
       "Wizards_dire_BG"
     ],
     "menuFontIds": [
@@ -1738,6 +1740,9 @@
       "Create.3": {
         "kind": "entry"
       },
+      "Create.4": {
+        "kind": "entry"
+      },
       "Create.5": {
         "kind": "entry"
       },
@@ -1954,9 +1959,6 @@
       "LevelPicker.0": {
         "kind": "entry"
       },
-      "LevelPicker.1": {
-        "kind": "entry"
-      },
       "LevelPicker.2": {
         "kind": "entry"
       },
@@ -1996,16 +1998,16 @@
       "Skills.43": {
         "kind": "entry"
       },
+      "Skills.45": {
+        "kind": "entry"
+      },
       "Skills.48": {
         "kind": "entry"
       },
       "Skills.5": {
         "kind": "entry"
       },
-      "Skills.83": {
-        "kind": "entry"
-      },
-      "Skills.84": {
+      "Skills.94": {
         "kind": "entry"
       },
       "Solomon.13": {
@@ -2116,6 +2118,9 @@
       "UI.24": {
         "kind": "entry"
       },
+      "UI.27": {
+        "kind": "entry"
+      },
       "UI.28": {
         "kind": "entry"
       },
@@ -2171,6 +2176,9 @@
         "kind": "entry"
       },
       "UI.82": {
+        "kind": "entry"
+      },
+      "UI.88": {
         "kind": "entry"
       },
       "Wizards_dire_BG": {
@@ -2932,6 +2940,7 @@
       "Create.22": "90d205ad5de0697dc74eb837c0ec84de915390cf502f1384637b7f3982ab379f",
       "Create.23": "c2f7d69bdc1c957667ae7c2435b93614dfd8b17ffefcbdace054112c9d5f50a6",
       "Create.3": "36075d9f05d0b24d8a0cc4b16860568818322aed70c2a22b9179f89121735d33",
+      "Create.4": "69ae71ff01ffe6d4415df3f56eda8b9af07523af5acec94c947c4cd89de2d4c0",
       "Create.5": "10783db2f5d99c853f3c153b93f659344d49ddd84ccb874db5689d893d5382c6",
       "Create.6": "ad59ad73621d074e9dfffa23675ba02d6e827d50eb7162317416af962fb02e52",
       "Create.7": "c4a203cd5fde8cfcda00a12fc46a70753c43d73448e290fdb76ecdfac4c663c3",
@@ -3003,7 +3012,6 @@
       "Heartmonger.0": "e2777c5fb2d8082b438b8ee58a1b3cde03fcd948aff54b3f5e6d284dd49d412c",
       "Inventory.0": "6455d6d813f44ad6825de454b635f09095a2af4224053c028b66053b662ce6d8",
       "LevelPicker.0": "9ae5a18485a5d042afc806af5a50107d85a65ddc88ab3fd680be719fb6f5f338",
-      "LevelPicker.1": "a40a6be77bc3d29ab4a636911ea31aee6419faeeff910b28194ef3752dd7b502",
       "LevelPicker.2": "a738d97aa213a6d85caa039a38b94ab4331643ce2a1b707da6808ebc422b4a88",
       "LevelPicker.3": "e28dd2d3a6fa13e9154fe8b6320a0046a97b4f7571ad1ef124ca12074a089435",
       "LevelPicker.4": "7943cbf458f015af4478cc2e16931d79d9bd17a28d866af7b8ba1023454b9c5a",
@@ -3021,10 +3029,10 @@
       "Skills.13": "740bc105c7b19ae47c653a7e13762bd8b7310df13cc46faf7064180109f08d34",
       "Skills.164": "a1a832843e2a76d483a2d84087fbe83469e058270213f8b8d5788a68ec64ccfd",
       "Skills.43": "1550201b0b8a58656d46cd50b28737dfb1168b4ebb27a305912b70a8200daa28",
+      "Skills.45": "433c24773462be9ec33c1e9193cdb59395f62978993badcdefd54a9971fb96f2",
       "Skills.48": "e42fb6bd83ac8bbadc07b65876002cc61202d5ac978dbc3b66d0fd6b19b3b3de",
       "Skills.5": "eb88b29d7300fa7d3f1cec8f6ed1c1949ba35680bb702de5e9105f22171e2cff",
-      "Skills.83": "cee813584c38f5c1995ed2fc75416db5f3c43ecbb7c0d931e9bff4bb4af3ba39",
-      "Skills.84": "e0e390491bc17127475f04bc0bcf81d017abebcd32070561e202800ffc794258",
+      "Skills.94": "384cfafd5a91f36d669cb9c978c12c66c3026d02cee589355f92028bd5d4bec3",
       "Solomon.0": "bc93627d236569dffad3badfdddfb08983b53fb38e685461892018e626c72fab",
       "Solomon.13": "c11289d4fd3fe919a7965d70c1f838707bd85f0cf627bcbe3a0cd2ebb30fa033",
       "SolomonRiff.0": "d5f44334c1c8c851945e43a3c97f0cfc5f4cd95d9d0eeffc1b4fbd350da6f1c2",
@@ -3065,6 +3073,7 @@
       "UI.18": "a81ef2a376dd3cd0f73b73d5bde6571f27e5e22acf818599f34a2d953bc3280c",
       "UI.20": "cd8c17e8533e2fee2459815c0ecf93fca1ee695c630dca3894b789a397401806",
       "UI.24": "bf980148eaa4cfea444a9def0e8963adc590e916e03d1b2f652ef4db9b07fb61",
+      "UI.27": "6ab0fdfee0643bc0ea2b295d1dc8a854bce15f80a57b3a22adc26675508e018c",
       "UI.28": "1c817de5fc27689fc1f076f4b4fe3c4d927e2b62391eb0afc663cf57957c1c77",
       "UI.29": "5c0c7cd4bed35566c238cac5a3896c87b87306100c5ce7a07da4ffa0f55c03e8",
       "UI.3": "e3ae24c423216041b1b685df911e4600dd143645a78738c556e1a51ab9c2d21d",
@@ -3084,6 +3093,7 @@
       "UI.8": "a7e73d65620c16547ba6a5dc463732d9b13fe67e04479b9f0ddb3abd1667bb1b",
       "UI.80": "066d0a05950170609183f4629c85bc4301b7f6337f6634d38163c1c95d2ba6e3",
       "UI.82": "d5c2ac46e11d9ccfa4e5e9fc60e20b47ea8d35a1e8933736fa197d41adfd63f7",
+      "UI.88": "e2c4ba4becdcc826c18fa27c50257db479312d4ccf3a41c48f6d211f0384b378",
       "Unholy.0": "8009e58e02b6ff7f4722c275f773da04d84bc589423da0e3a034121a281f8182",
       "Wizards_dire_BG": "77a26e998e715ed56bae1ad509ba7c76e4f9323799f0b0cff092ab76b0b04826",
       "road.png": "e459435181d36f5385959e1e4944e000e5cd5cc57feb94d228a9c0a5481dd228"
@@ -3094,13 +3104,13 @@
       "Fonts.93-184": "bc4245f0a411217cce8a58ba87c9727c6f3eff899df7ffddf6718c9ee6a3c6bd"
     },
     "specialDrawHashes": {
-      "Segoe UI": "9a9c41ad933964fbcd7ef35de1cff8fcab4265697dd393f8704c61e491fbbabd",
+      "Segoe UI": "8da057f84b775310c832a8912b06d736d15819607187bb2ddf3f8f1ff86adfe5",
       "native.framebuffer-clear": "869bb1f6747121d111bc4e4b682acb3ebd1ce95a9a08b69aafb8b0b9d57c6376",
       "native.textured-quad@0x41474C": "1308d1d95172ee7a5dbf2c2057fe966b57aafb87e595a3de61d29a8300ecaf87"
     }
   },
   "sourceGoldenPaths": [
     "tests/fixtures/webgame/scene-composition-goldens.json",
-    "tests/fixtures/webgame/menu-goldens.json"
+    "tests/fixtures/webgame/menufix-preview-overlay/menu-goldens.json"
   ]
 }

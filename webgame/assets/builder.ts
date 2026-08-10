@@ -47,6 +47,9 @@ function normalizeAbsolute(candidate: string, label: string): string {
 }
 
 function isInside(parent: string, candidate: string): boolean {
+  if (path.parse(parent).root.toLowerCase() !== path.parse(candidate).root.toLowerCase()) {
+    return false;
+  }
   const relative = path.relative(parent, candidate);
   return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== "..");
 }
@@ -586,7 +589,8 @@ export async function buildAssets(inputs: BuildInputs): Promise<BuildResult> {
         },
         "Segoe UI": {
           kind: "system-font",
-          sourceGoldenFilename: "tests/fixtures/webgame/menu-goldens.json",
+          sourceGoldenFilename:
+            "tests/fixtures/webgame/menufix-preview-overlay/menu-goldens.json",
         },
       },
       packs,

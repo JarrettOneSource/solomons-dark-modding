@@ -81,7 +81,7 @@ describe("asset-manifest golden fixture", () => {
     expect(representatives.Unholy).toBe("Unholy.0");
     const selected = expectObject(fixture.selected, "selected fixture records");
     const entryHashes = expectObject(selected.entryHashes, "selected entry hashes");
-    expect(Object.keys(entryHashes)).toHaveLength(499);
+    expect(Object.keys(entryHashes)).toHaveLength(501);
     expect(entryHashes["DeadHawg.12"]).toBeDefined();
     for (const id of Object.values(representatives)) {
       expect(entryHashes[expectString(id, "bundle representative id")]).toBeDefined();
@@ -98,7 +98,7 @@ describe("asset-manifest golden fixture", () => {
     const menuArtIds = expectArray(references.menuArtIds, "menu art ids");
     const menuFontIds = expectArray(references.menuFontIds, "menu font ids");
     expect(sceneIds).toHaveLength(378);
-    expect(menuArtIds).toHaveLength(104);
+    expect(menuArtIds).toHaveLength(106);
     expect(menuFontIds).toHaveLength(4);
     expect(sceneIds).toContain("DeadHawg.12");
     expect(sceneIds).toContain("native.framebuffer-clear");
@@ -113,8 +113,8 @@ describe("asset-manifest golden fixture", () => {
       ),
     );
     const resolutions = expectObject(references.resolutions, "golden resolutions");
-    expect(ids.size).toBe(485);
-    expect(Object.keys(resolutions)).toHaveLength(485);
+    expect(ids.size).toBe(487);
+    expect(Object.keys(resolutions)).toHaveLength(487);
     expect(resolutions["native.framebuffer-clear"]).toEqual({ kind: "special-draw" });
     for (const id of ids) {
       expect(resolutions[id], `golden asset reference does not resolve: ${id}`).toBeDefined();
@@ -129,7 +129,8 @@ describe("asset-manifest golden fixture", () => {
       .toBeDefined();
     expect(hashes["tests/fixtures/webgame/scene-composition-goldens.json"])
       .toBeDefined();
-    expect(hashes["tests/fixtures/webgame/menu-goldens.json"]).toBeDefined();
+    expect(hashes["tests/fixtures/webgame/menufix-preview-overlay/menu-goldens.json"])
+      .toBeDefined();
     expect(hashes["webgame/assets/asset-manifest.schema.json"]).toBeDefined();
     for (const [relativePath, recordedHash] of Object.entries(hashes)) {
       expect(await sha256File(path.join(REPO_ROOT, ...relativePath.split("/"))))

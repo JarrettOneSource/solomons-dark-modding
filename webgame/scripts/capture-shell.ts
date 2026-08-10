@@ -1,5 +1,4 @@
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
-import { createHash } from "node:crypto";
 import { mkdir, readFile, readlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -7,11 +6,9 @@ import process from "node:process";
 
 import { chromium, type Browser, type Page } from "playwright-core";
 
-import menuGoldenJson from "../../tests/fixtures/webgame/menu-goldens.json" with { type: "json" };
-import menuVisualGateJson from "../../webgame-contracts/menu-visual-gate.json" with { type: "json" };
+import menuGoldenJson from "../../tests/fixtures/webgame/menufix-preview-overlay/menu-goldens.json" with { type: "json" };
 import { ManifestAssets } from "../client/manifest-assets.js";
 import { parseMenuCatalog } from "../client/menu-catalog.js";
-import { validateMenuVisualGate } from "../conformance/menu-visual-gate.js";
 
 interface ProcessIdentity {
   readonly pid: number;
@@ -33,7 +30,9 @@ interface BootEvent {
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..");
 const WEBGAME_ROOT = path.join(REPO_ROOT, "webgame");
 const EVIDENCE_ROOT = process.env.WEBGAME_EVIDENCE_ROOT
-  ?? "/mnt/d/codex-evidence/webshell-20260805";
+  ?? "/mnt/d/codex-evidence/shellfix-20260809/captures/predeploy";
+const MENUFIX_REFERENCE_ROOT = process.env.MENUFIX_REFERENCE_ROOT
+  ?? "/mnt/d/codex-evidence/menufix-20260805/raw-v9/candidates/candidate-v214-profile-final";
 const ASSET_ROOT = process.env.WEBGAME_ASSET_ROOT;
 const CHROME = process.env.CHROME_PATH ?? "/usr/bin/google-chrome";
 const SERVER_PORT = Number(process.env.WEBGAME_CAPTURE_PORT ?? "4174");
@@ -53,8 +52,25 @@ function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-async function sha256File(filePath: string): Promise<string> {
-  return createHash("sha256").update(await readFile(filePath)).digest("hex");
+function windowsPath(filePath: string): string {
+  const match = /^\/mnt\/([a-z])\/(.*)$/i.exec(path.resolve(filePath));
+  if (match?.[1] === undefined || match[2] === undefined) {
+    throw new Error(`Windows-side hashing requires a mounted drive path: ${filePath}`);
+  }
+  return `${match[1].toUpperCase()}:\\${match[2].replaceAll("/", "\\")}`;
+}
+
+function sha256File(filePath: string): string {
+  const encodedCommand = Buffer.from(
+    `$ProgressPreference='SilentlyContinue';$p=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${Buffer.from(windowsPath(filePath), "utf8").toString("base64")}'));(Get-FileHash -Algorithm SHA256 -LiteralPath $p).Hash.ToLowerInvariant()`,
+    "utf16le",
+  ).toString("base64");
+  return execFileSync("powershell.exe", [
+    "-NoProfile",
+    "-NonInteractive",
+    "-EncodedCommand",
+    encodedCommand,
+  ], { encoding: "utf8" }).trim();
 }
 
 async function endpointResponds(url: string): Promise<boolean> {
@@ -225,7 +241,19 @@ async function makeSideBySide(
 async function main(): Promise<void> {
   const assetRoot = requireConfiguration();
   const catalog = parseMenuCatalog(menuGoldenJson);
-  const visualGate = validateMenuVisualGate(menuVisualGateJson, catalog);
+  const criticalLayoutIds = new Set([
+    "native-loader",
+    "loading-screen",
+    "control-scheme-picker",
+    "create-element",
+    "create-discipline",
+    "hub_new_game",
+    "hub_resumed",
+    "pause-menu",
+    "beta-notice",
+    "main-menu-root",
+    "profile-save-select",
+  ]);
   const rawManifest = JSON.parse(await readFile(path.join(assetRoot, "asset-manifest.json"), "utf8")) as unknown;
   const manifestAssets = new ManifestAssets(rawManifest);
   const allowedImagePaths = new Set(
@@ -329,20 +357,20 @@ async function main(): Promise<void> {
     const firstProgress = progress[0]?.detail as { completed?: unknown; total?: unknown } | undefined;
     const lastProgress = progress.at(-1)?.detail as { completed?: unknown; total?: unknown } | undefined;
     if (
-      progress.length !== 29
+      progress.length !== catalog.screenCensus.length + 1
       || firstProgress?.completed !== 0
-      || firstProgress.total !== 28
-      || lastProgress?.completed !== 28
-      || lastProgress.total !== 28
+      || firstProgress.total !== catalog.screenCensus.length
+      || lastProgress?.completed !== catalog.screenCensus.length
+      || lastProgress.total !== catalog.screenCensus.length
     ) {
-      throw new Error("work-bound boot evidence did not record every real 0..28 layout preparation unit");
+      throw new Error("work-bound boot evidence did not record every aggregate layout preparation unit");
     }
     const titleEvent = bootEvidence.events.find((event) => event.name === "webshell:title-enter");
     if (JSON.stringify(titleEvent?.detail) !== JSON.stringify({
       fadeMilliseconds: 1100,
       inputGateMilliseconds: 2000,
     })) {
-      throw new Error("first title entry evidence lost the G11 1.1-second fade or 2.0-second input gate");
+      throw new Error("first-boot entry evidence lost the 1.1-second fade or 2.0-second input gate");
     }
     if (!bootEvidence.animationDurations.includes(1100) || bootEvidence.snapshot?.inputGated !== true) {
       throw new Error("live boot did not retain the title fade and gated-input state");
@@ -365,9 +393,29 @@ async function main(): Promise<void> {
           type: input.type,
           actionId: input.dataset.actionId ?? "",
         })),
+        renderedText: window.__webshell?.renderPlan().commands.flatMap((command) => (
+          command.kind === "atlas-text" || command.kind === "system-text"
+            ? [command.text]
+            : []
+        )) ?? [],
       }));
-      if (state.surface?.kind !== "layout" || state.surface.layoutId !== layoutId) {
+      const settledOnLayout = state.surface?.kind === "layout" && state.surface.layoutId === layoutId;
+      const settledOnHubEndpoint = (
+        state.surface?.kind === "hub-stub"
+        && state.surface.endpointLayoutId === layoutId
+      );
+      if (!settledOnLayout && !settledOnHubEndpoint) {
         throw new Error(`live renderer did not settle on requested G11 screen ${layoutId}`);
+      }
+      if (layoutId === "profile-save-select" && !state.renderedText.includes("HALL OF FAME")) {
+        throw new Error("profile-save-select rendered its HALL OF FAME control without a label");
+      }
+      if (
+        layoutId === "pause-menu"
+        && !["RESUME GAME", "GAME SETTINGS", "LEAVE GAME"]
+          .every((label) => state.renderedText.includes(label))
+      ) {
+        throw new Error("pause-menu did not render all three measured control labels");
       }
       inputCensus[layoutId] = state.inputs;
       await page.screenshot({
@@ -375,6 +423,19 @@ async function main(): Promise<void> {
         animations: "disabled",
       });
     }
+    await page.evaluate(async () => window.__webshell?.showDialogComposite("beta_notice_first_boot"));
+    await settleFrame(page);
+    const compositeState = await page.evaluate(() => window.__webshell?.snapshot());
+    if (
+      compositeState?.surface.kind !== "dialog-composite"
+      || compositeState.surface.compositeId !== "beta_notice_first_boot"
+    ) {
+      throw new Error("live renderer did not settle on beta_notice_first_boot");
+    }
+    await page.screenshot({
+      path: path.join(renderedRoot, "beta_notice_first_boot.png"),
+      animations: "disabled",
+    });
 
     const domAudit = await page.evaluate(() => ({
       imageElements: document.images.length,
@@ -400,9 +461,8 @@ async function main(): Promise<void> {
     if (
       inputCensus["dark-cloud-login-settings"]?.length !== 2
       || inputCensus["dark-cloud-search"]?.length !== 1
-      || inputCensus["dark-cloud-settings"]?.length !== 2
     ) {
-      throw new Error("real DOM text-entry census disagrees with the G11 Deck keyboard surfaces");
+      throw new Error("real DOM text-entry census disagrees with the corrected keyboard surfaces");
     }
 
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -451,52 +511,81 @@ async function main(): Promise<void> {
     });
 
     const comparisonPage = await context.newPage();
-    for (const layoutId of catalog.screenCensus) {
+    for (const layoutId of criticalLayoutIds) {
       const layout = catalog.layouts.get(layoutId);
       if (layout === undefined) {
-        throw new Error(`side-by-side capture lost G11 layout ${layoutId}`);
+        throw new Error(`side-by-side capture lost critical layout ${layoutId}`);
       }
       await makeSideBySide(
         comparisonPage,
         layoutId,
-        path.join(REPO_ROOT, "tests", "fixtures", "webgame", layout.referenceCapture),
+        path.join(MENUFIX_REFERENCE_ROOT, layout.referenceCapture),
         path.join(renderedRoot, `${layoutId}.png`),
         path.join(comparisonRoot, `${layoutId}.png`),
       );
     }
-    const visualArtifacts = await Promise.all(catalog.screenCensus.map(async (layoutId) => {
+    const firstBootComposite = catalog.dialogComposites.get("beta_notice_first_boot");
+    if (firstBootComposite === undefined) {
+      throw new Error("side-by-side capture lost beta_notice_first_boot composite");
+    }
+    await makeSideBySide(
+      comparisonPage,
+      firstBootComposite.id,
+      path.join(MENUFIX_REFERENCE_ROOT, firstBootComposite.referenceCapture),
+      path.join(renderedRoot, `${firstBootComposite.id}.png`),
+      path.join(comparisonRoot, `${firstBootComposite.id}.png`),
+    );
+    const visualArtifacts = catalog.screenCensus.map((layoutId) => {
       const layout = catalog.layouts.get(layoutId);
       if (layout === undefined) {
-        throw new Error(`visual artifact audit lost G11 layout ${layoutId}`);
+        throw new Error(`visual artifact audit lost aggregate layout ${layoutId}`);
       }
-      const referencePath = path.join(
-        REPO_ROOT,
-        "tests",
-        "fixtures",
-        "webgame",
-        layout.referenceCapture,
-      );
+      const referencePath = path.join(MENUFIX_REFERENCE_ROOT, layout.referenceCapture);
       const renderedPath = path.join(renderedRoot, `${layoutId}.png`);
-      const sideBySidePath = path.join(comparisonRoot, `${layoutId}.png`);
-      const [referenceSha256, renderedSha256, sideBySideSha256] = await Promise.all([
+      const [referenceSha256, renderedSha256] = [
         sha256File(referencePath),
         sha256File(renderedPath),
-        sha256File(sideBySidePath),
-      ]);
+      ];
       if (referenceSha256 !== layout.referenceSha256) {
         throw new Error(`visual comparison reference hash changed for ${layout.fixture}`);
       }
+      const isCritical = criticalLayoutIds.has(layoutId);
+      const sideBySideSha256 = isCritical
+        ? sha256File(path.join(comparisonRoot, `${layoutId}.png`))
+        : null;
       return {
+        layoutId,
         fixture: layout.fixture,
         referenceCapture: layout.referenceCapture,
         referenceSha256,
         renderedSha256,
         sideBySideSha256,
-        disposition: visualGate.waivedDivergentFixtures.includes(layout.fixture)
-          ? "waived_stale_g11"
-          : "pixel_plausible_pass",
+        disposition: isCritical ? "critical_exact_review_required" : "inert_rendered",
       };
-    }));
+    });
+    const compositeReferencePath = path.join(
+      MENUFIX_REFERENCE_ROOT,
+      firstBootComposite.referenceCapture,
+    );
+    const compositeRenderedPath = path.join(renderedRoot, `${firstBootComposite.id}.png`);
+    const compositeSideBySidePath = path.join(comparisonRoot, `${firstBootComposite.id}.png`);
+    const [compositeReferenceSha256, compositeRenderedSha256, compositeSideBySideSha256] = [
+      sha256File(compositeReferencePath),
+      sha256File(compositeRenderedPath),
+      sha256File(compositeSideBySidePath),
+    ];
+    if (compositeReferenceSha256 !== firstBootComposite.referenceSha256) {
+      throw new Error("visual comparison reference hash changed for beta_notice_first_boot");
+    }
+    const compositeArtifacts = [{
+      compositeId: firstBootComposite.id,
+      fixture: firstBootComposite.fixture,
+      referenceCapture: firstBootComposite.referenceCapture,
+      referenceSha256: compositeReferenceSha256,
+      renderedSha256: compositeRenderedSha256,
+      sideBySideSha256: compositeSideBySideSha256,
+      disposition: "critical_exact_review_required",
+    }];
     await context.close();
 
     ownedDuringRun = (await descendants(process.pid))
@@ -505,11 +594,18 @@ async function main(): Promise<void> {
       throw new Error("owned-process evidence did not reach the Vite/Chromium process tree");
     }
     report = {
-      schema: "solomon-dark-webshell-capture-v1",
+      schema: "solomon-dark-shellfix-capture-v1",
       screenCount: catalog.screenCensus.length,
-      sideBySideCount: catalog.screenCensus.length,
+      compositeCount: compositeArtifacts.length,
+      sideBySideCount: criticalLayoutIds.size + compositeArtifacts.length,
       deckRenderCount: catalog.screenCensus.length,
-      visualGate: { ...visualGate, artifacts: visualArtifacts },
+      visualEvidence: {
+        criticalWaivers: 0,
+        criticalLayoutIds: [...criticalLayoutIds],
+        criticalCompositeIds: compositeArtifacts.map((artifact) => artifact.compositeId),
+        artifacts: visualArtifacts,
+        composites: compositeArtifacts,
+      },
       boot: {
         readyMilliseconds: bootReadyMilliseconds,
         loaderCapturedBeforeReady,
@@ -584,7 +680,7 @@ async function main(): Promise<void> {
     "utf8",
   );
   console.log(
-    `captured ${catalog.screenCensus.length} native-size, ${catalog.screenCensus.length} Deck-size, and ${catalog.screenCensus.length} side-by-side frames`,
+    `captured ${catalog.screenCensus.length + 1} native-size, ${catalog.screenCensus.length} Deck-size, and ${criticalLayoutIds.size + 1} side-by-side frames`,
   );
   const measured = report.performance as { framesPerSecond: number; p95Ms: number };
   console.log(`1280x800: ${measured.framesPerSecond.toFixed(2)}fps mean, ${measured.p95Ms.toFixed(3)}ms p95`);

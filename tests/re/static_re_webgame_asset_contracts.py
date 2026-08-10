@@ -25,25 +25,28 @@ FLOORS_PATH = ROOT / "webgame/quality-floors.json"
 CI_PATH = ROOT / ".github/workflows/lua-authoring-contracts.yml"
 INVENTORY_PATH = ROOT / "docs/reverse-engineering/native-content-inventory.json"
 SCENE_GOLDEN_PATH = ROOT / "tests/fixtures/webgame/scene-composition-goldens.json"
-MENU_GOLDEN_PATH = ROOT / "tests/fixtures/webgame/menu-goldens.json"
+MENU_GOLDEN_PATH = (
+    ROOT
+    / "tests/fixtures/webgame/menufix-preview-overlay/menu-goldens.json"
+)
 
 EXPECTED_COMMITTED_HASH_PATHS = {
     "SolomonDarkModLoader/src/native_scene_capture/generated_atlas_spans.inl",
     "assets/loading/Wizards_dire_BG.png",
     "docs/reverse-engineering/native-asset-object-map.json",
     "docs/reverse-engineering/native-content-inventory.json",
-    "tests/fixtures/webgame/menu-goldens.json",
+    "tests/fixtures/webgame/menufix-preview-overlay/menu-goldens.json",
     "tests/fixtures/webgame/scene-composition-goldens.json",
     "webgame/assets/asset-manifest.schema.json",
 }
 EXPECTED_OUTPUT_TREE_SHA256 = (
-    "3abd761d4047540d32bcf9b6f7a4c87404e0ac84417db2c708dbf346aa6409ea"
+    "fb4952cb1678120acbea8e1ea12e3071a38092572451a9043ea370bfcb85edb6"
 )
 EXPECTED_MANIFEST_SHA256 = (
-    "11e3d2041abb5117228064e73fcd02b9beb3b40dfeed735eafb7133ffd0c5fa3"
+    "63b27d2be8116276f244ae6cb0a7614dcab1a6133bcdd4842f2265d3c240c9ce"
 )
 EXPECTED_FIXTURE_SHA256 = (
-    "df6db22e0f549f6653c0f55dccb1b9264e10b1052f9fab0ab7cba77b834dbde2"
+    "98ba420fec144bec90b4dc61f4106dda69395ba7196f32185178de39b722262f"
 )
 EXPECTED_COUNTS = {
     "atlasCount": 41,
@@ -169,8 +172,10 @@ def _menu_ids(golden: dict[str, Any]) -> tuple[set[str], set[str]]:
         raise StaticReTestFailure(
             "menu golden has no layout content for the asset resolver to check"
         )
-    art_ids = _string_field_set(layouts, "art_id")
-    font_ids = _string_field_set(layouts, "font_id")
+    # The authorized aggregate also carries transition endpoints, ambient
+    # class payloads, and the first-boot semantic composite outside `layouts`.
+    art_ids = _string_field_set(golden, "art_id")
+    font_ids = _string_field_set(golden, "font_id")
     if "Wizards_dire_BG" not in art_ids or "Title.0" not in art_ids:
         raise StaticReTestFailure(
             "menu asset sweep missed the named loading and title art witnesses"
@@ -179,9 +184,9 @@ def _menu_ids(golden: dict[str, Any]) -> tuple[set[str], set[str]]:
         raise StaticReTestFailure(
             "menu asset sweep missed the named native and system font witnesses"
         )
-    if len(art_ids) != 104 or len(font_ids) != 4:
+    if len(art_ids) != 106 or len(font_ids) != 4:
         raise StaticReTestFailure(
-            "menu asset sweep no longer reaches all 104 art and four font identifiers"
+            "menu asset sweep no longer reaches all 106 art and four font identifiers"
         )
     return art_ids, font_ids
 
@@ -309,7 +314,7 @@ def test_webgame_asset_manifest_schema_and_provenance_are_pinned() -> str:
     assert_recorded_hash_matches_file(
         fixture_match.group(1), FIXTURE_PATH, "documented asset manifest fixture"
     )
-    return "renderer schema requires native IDs, geometry, three packs, and byte-level provenance; all eight committed hashes match"
+    return "renderer schema requires native IDs, geometry, three packs, and byte-level provenance; all seven committed hashes match"
 
 
 def test_webgame_asset_double_build_and_weight_report_are_pinned() -> str:
@@ -508,9 +513,9 @@ def test_webgame_asset_fixture_covers_native_families_and_golden_references() ->
         selected.get("entryHashes"),
         "asset fixture no longer carries selected per-entry hashes",
     )
-    if len(entry_hashes) != 499 or "DeadHawg.12" not in entry_hashes:
+    if len(entry_hashes) != 501 or "DeadHawg.12" not in entry_hashes:
         raise StaticReTestFailure(
-            "asset fixture no longer pins all 499 representative and golden-referenced entries"
+            "asset fixture no longer pins all 501 representative and golden-referenced entries"
         )
     for family in sorted(native_names):
         expected_id = f"{family}.0"
@@ -553,9 +558,9 @@ def test_webgame_asset_fixture_covers_native_families_and_golden_references() ->
             "asset manifest fixture reports unresolved scene or menu references"
         )
     all_ids = scene_ids | menu_art_ids | menu_font_ids
-    if len(all_ids) != 485:
+    if len(all_ids) != 487:
         raise StaticReTestFailure(
-            "landed scene/menu sweep no longer yields the reviewed 485 unique renderer lookups"
+            "landed scene/menu sweep no longer yields the reviewed 487 unique renderer lookups"
         )
     resolutions = _mapping(
         references.get("resolutions"),
@@ -614,7 +619,7 @@ def test_webgame_asset_fixture_covers_native_families_and_golden_references() ->
             raise StaticReTestFailure(
                 f"asset manifest leaves golden reference unresolved: {asset_id}"
             )
-    return "all 28 native bundle families have hashed representatives and all 485 landed scene/menu lookups resolve"
+    return "all 28 native bundle families have hashed representatives and all 487 landed scene/menu lookups resolve"
 
 
 def test_webgame_workspace_battery_is_strict_ratcheted_and_ci_wired() -> str:

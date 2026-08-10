@@ -145,25 +145,10 @@ function region(actionId: string): FocusNode["region"] {
 }
 
 function enabled(actionId: string, eligibility: ShellEligibility): boolean {
-  if (actionId === "main_menu.resume_last_game") {
-    return eligibility.resumeAvailable;
-  }
-  if (actionId === "performance.light_quality") {
-    return eligibility.lightQualityAvailable;
-  }
-  if (actionId === "profile.sign_out") {
-    return eligibility.darkCloudSignedIn;
-  }
-  if (
-    actionId === "dark_cloud_browser.play"
-    || actionId === "dark_cloud_browser.edit"
-    || actionId === "dark_cloud_options.select_boneyard"
-  ) {
-    return eligibility.selectedBoneyardCompatible;
-  }
-  if (actionId === "game_over.continue") {
-    return eligibility.gameOverArmed;
-  }
+  // Every rendered menu control remains clickable. Whether it dispatches is
+  // owned centrally by the inert-controls manifest and ShellController.
+  void actionId;
+  void eligibility;
   return true;
 }
 
@@ -196,7 +181,10 @@ export function buildFocusNodes(
 ): readonly ShellFocusNode[] {
   const rule = model.screens.get(layout.id);
   if (rule === undefined) {
-    throw new Error(`G11 focus model has no screen rule for ${layout.id}`);
+    if (layout.elements.some((element) => element.visible && element.interactive)) {
+      throw new Error(`focus model has no screen rule for interactive layout ${layout.id}`);
+    }
+    return [];
   }
   if (layout.id === "skill-picker") {
     return Array.from({ length: eligibility.offeredSkillCount }, (_, index) => node(
@@ -216,10 +204,14 @@ export function buildFocusNodes(
   const result: ShellFocusNode[] = [];
   for (const [orderIndex, actionId] of effectiveFocusOrder(rule).entries()) {
     if (actionId === "dark_cloud_browser.level_rows") {
-      result.push(node("dark_cloud_browser.level_row[0]", [105, 258, 1495, 318], eligibility));
+      if (!result.some((candidate) => candidate.id === "dark_cloud_browser.level_row[0]")) {
+        result.push(node("dark_cloud_browser.level_row[0]", [105, 258, 1495, 318], eligibility));
+      }
       continue;
     }
-    result.push(node(actionId, proxyRect(layout, actionId, orderIndex), eligibility));
+    if (!result.some((candidate) => candidate.id === actionId)) {
+      result.push(node(actionId, proxyRect(layout, actionId, orderIndex), eligibility));
+    }
   }
   return result;
 }

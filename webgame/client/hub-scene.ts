@@ -240,7 +240,7 @@ export function buildHubScenePlan(
     layoutId,
     nativeViewport: [1600, 900],
     layerOrder: G12_LAYER_ORDER,
-    clearColor: [0, 0, 1, 1],
+    clearColor: [0, 0, 0, 1],
     elements: [],
     commands: [...commands, ...overlayCommands],
   };

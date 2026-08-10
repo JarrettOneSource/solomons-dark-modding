@@ -1,0 +1,903 @@
+{
+    "schema": "solomon-dark-webgame-inert-controls-v1",
+    "disposition_reasons": {
+        "owner_descoped": "Owner orders 2026-08-08 and 2026-08-09 limit functional menus to the measured critical path.",
+        "pending_capture": "main_menu.new_game destination unmeasured in corrected graph; capture queued with menufix; un-inert in Phase 2 when the edge lands"
+    },
+    "entries": [
+        {
+            "screen": "controls",
+            "control": "controls.control.controls_back.1",
+            "action_id": "controls.back",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "create-discipline",
+            "control": "create_discipline.control.create_select_element_air.1",
+            "action_id": "create.select_element_air",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "create-discipline",
+            "control": "create_discipline.control.create_select_element_earth.1",
+            "action_id": "create.select_element_earth",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "create-discipline",
+            "control": "create_discipline.control.create_select_element_ether.1",
+            "action_id": "create.select_element_ether",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "create-discipline",
+            "control": "create_discipline.control.create_select_element_fire.1",
+            "action_id": "create.select_element_fire",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "create-discipline",
+            "control": "create_discipline.control.create_select_element_water.1",
+            "action_id": "create.select_element_water",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "create-element",
+            "control": "create_element.control.create_select_discipline_arcane.1",
+            "action_id": "create.select_discipline_arcane",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "create-element",
+            "control": "create_element.control.create_select_discipline_body.1",
+            "action_id": "create.select_discipline_body",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "create-element",
+            "control": "create_element.control.create_select_discipline_mind.1",
+            "action_id": "create.select_discipline_mind",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-browser",
+            "control": "dark_cloud_browser.control.dark_cloud_browser_login.1",
+            "action_id": "dark_cloud_browser.login",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-browser",
+            "control": "dark_cloud_browser.control.dark_cloud_browser_menu.1",
+            "action_id": "dark_cloud_browser.menu",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-browser",
+            "control": "dark_cloud_browser.control.dark_cloud_browser_my_levels.1",
+            "action_id": "dark_cloud_browser.my_levels",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-browser",
+            "control": "dark_cloud_browser.control.dark_cloud_browser_online_levels.1",
+            "action_id": "dark_cloud_browser.online_levels",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-browser",
+            "control": "dark_cloud_browser.control.dark_cloud_browser_options.1",
+            "action_id": "dark_cloud_browser.options",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-browser",
+            "control": "dark_cloud_browser.control.dark_cloud_browser_play.1",
+            "action_id": "dark_cloud_browser.play",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-browser",
+            "control": "dark_cloud_browser.control.dark_cloud_browser_recent.1",
+            "action_id": "dark_cloud_browser.recent",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-browser",
+            "control": "dark_cloud_browser.control.dark_cloud_browser_search.1",
+            "action_id": "dark_cloud_browser.search",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-browser",
+            "control": "dark_cloud_browser.control.dark_cloud_browser_sort.1",
+            "action_id": "dark_cloud_browser.sort",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-login-settings",
+            "control": "dark_cloud_login_settings.control.dark_cloud_browser_login.1",
+            "action_id": "dark_cloud_browser.login",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-login-settings",
+            "control": "dark_cloud_login_settings.control.dark_cloud_browser_menu.1",
+            "action_id": "dark_cloud_browser.menu",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-login-settings",
+            "control": "dark_cloud_login_settings.control.dark_cloud_browser_my_levels.1",
+            "action_id": "dark_cloud_browser.my_levels",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-login-settings",
+            "control": "dark_cloud_login_settings.control.dark_cloud_browser_online_levels.1",
+            "action_id": "dark_cloud_browser.online_levels",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-login-settings",
+            "control": "dark_cloud_login_settings.control.dark_cloud_browser_options.1",
+            "action_id": "dark_cloud_browser.options",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-login-settings",
+            "control": "dark_cloud_login_settings.control.dark_cloud_browser_recent.1",
+            "action_id": "dark_cloud_browser.recent",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-login-settings",
+            "control": "dark_cloud_login_settings.control.dark_cloud_browser_search.1",
+            "action_id": "dark_cloud_browser.search",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-login-settings",
+            "control": "dark_cloud_login_settings.control.dark_cloud_browser_sort.1",
+            "action_id": "dark_cloud_browser.sort",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-menu",
+            "control": "dark_cloud_menu.control.profile_game_settings.1",
+            "action_id": "profile.game_settings",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-menu",
+            "control": "dark_cloud_menu.control.profile_main_menu.1",
+            "action_id": "profile.main_menu",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-menu",
+            "control": "dark_cloud_menu.control.profile_resume.1",
+            "action_id": "profile.resume",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-menu",
+            "control": "dark_cloud_menu.control.profile_sign_out.1",
+            "action_id": "profile.sign_out",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-my-levels",
+            "control": "dark_cloud_my_levels.control.dark_cloud_browser_login.1",
+            "action_id": "dark_cloud_browser.login",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-my-levels",
+            "control": "dark_cloud_my_levels.control.dark_cloud_browser_menu.1",
+            "action_id": "dark_cloud_browser.menu",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-my-levels",
+            "control": "dark_cloud_my_levels.control.dark_cloud_browser_my_levels.1",
+            "action_id": "dark_cloud_browser.my_levels",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-my-levels",
+            "control": "dark_cloud_my_levels.control.dark_cloud_browser_online_levels.1",
+            "action_id": "dark_cloud_browser.online_levels",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-my-levels",
+            "control": "dark_cloud_my_levels.control.dark_cloud_browser_options.1",
+            "action_id": "dark_cloud_browser.options",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-my-levels",
+            "control": "dark_cloud_my_levels.control.dark_cloud_browser_recent.1",
+            "action_id": "dark_cloud_browser.recent",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-my-levels",
+            "control": "dark_cloud_my_levels.control.dark_cloud_browser_search.1",
+            "action_id": "dark_cloud_browser.search",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-my-levels",
+            "control": "dark_cloud_my_levels.control.dark_cloud_browser_sort.1",
+            "action_id": "dark_cloud_browser.sort",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-online-levels",
+            "control": "dark_cloud_online_levels.control.dark_cloud_browser_login.1",
+            "action_id": "dark_cloud_browser.login",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-online-levels",
+            "control": "dark_cloud_online_levels.control.dark_cloud_browser_menu.1",
+            "action_id": "dark_cloud_browser.menu",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-online-levels",
+            "control": "dark_cloud_online_levels.control.dark_cloud_browser_my_levels.1",
+            "action_id": "dark_cloud_browser.my_levels",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-online-levels",
+            "control": "dark_cloud_online_levels.control.dark_cloud_browser_online_levels.1",
+            "action_id": "dark_cloud_browser.online_levels",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-online-levels",
+            "control": "dark_cloud_online_levels.control.dark_cloud_browser_options.1",
+            "action_id": "dark_cloud_browser.options",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-online-levels",
+            "control": "dark_cloud_online_levels.control.dark_cloud_browser_play.1",
+            "action_id": "dark_cloud_browser.play",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-online-levels",
+            "control": "dark_cloud_online_levels.control.dark_cloud_browser_recent.1",
+            "action_id": "dark_cloud_browser.recent",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-online-levels",
+            "control": "dark_cloud_online_levels.control.dark_cloud_browser_search.1",
+            "action_id": "dark_cloud_browser.search",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-online-levels",
+            "control": "dark_cloud_online_levels.control.dark_cloud_browser_sort.1",
+            "action_id": "dark_cloud_browser.sort",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-options",
+            "control": "dark_cloud_options.control.dark_cloud_browser_login.1",
+            "action_id": "dark_cloud_browser.login",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-options",
+            "control": "dark_cloud_options.control.dark_cloud_browser_menu.1",
+            "action_id": "dark_cloud_browser.menu",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-options",
+            "control": "dark_cloud_options.control.dark_cloud_browser_my_levels.1",
+            "action_id": "dark_cloud_browser.my_levels",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-options",
+            "control": "dark_cloud_options.control.dark_cloud_browser_online_levels.1",
+            "action_id": "dark_cloud_browser.online_levels",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-options",
+            "control": "dark_cloud_options.control.dark_cloud_browser_options.1",
+            "action_id": "dark_cloud_browser.options",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-options",
+            "control": "dark_cloud_options.control.dark_cloud_browser_recent.1",
+            "action_id": "dark_cloud_browser.recent",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-options",
+            "control": "dark_cloud_options.control.dark_cloud_browser_search.1",
+            "action_id": "dark_cloud_browser.search",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-options",
+            "control": "dark_cloud_options.control.dark_cloud_browser_sort.1",
+            "action_id": "dark_cloud_browser.sort",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-recent",
+            "control": "dark_cloud_recent.control.dark_cloud_browser_login.1",
+            "action_id": "dark_cloud_browser.login",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-recent",
+            "control": "dark_cloud_recent.control.dark_cloud_browser_menu.1",
+            "action_id": "dark_cloud_browser.menu",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-recent",
+            "control": "dark_cloud_recent.control.dark_cloud_browser_my_levels.1",
+            "action_id": "dark_cloud_browser.my_levels",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-recent",
+            "control": "dark_cloud_recent.control.dark_cloud_browser_online_levels.1",
+            "action_id": "dark_cloud_browser.online_levels",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-recent",
+            "control": "dark_cloud_recent.control.dark_cloud_browser_options.1",
+            "action_id": "dark_cloud_browser.options",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-recent",
+            "control": "dark_cloud_recent.control.dark_cloud_browser_play.1",
+            "action_id": "dark_cloud_browser.play",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-recent",
+            "control": "dark_cloud_recent.control.dark_cloud_browser_recent.1",
+            "action_id": "dark_cloud_browser.recent",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-recent",
+            "control": "dark_cloud_recent.control.dark_cloud_browser_search.1",
+            "action_id": "dark_cloud_browser.search",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-recent",
+            "control": "dark_cloud_recent.control.dark_cloud_browser_sort.1",
+            "action_id": "dark_cloud_browser.sort",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-search",
+            "control": "dark_cloud_search.control.dark_cloud_search_name.1",
+            "action_id": "dark_cloud_search.name",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-sort",
+            "control": "dark_cloud_sort.control.dark_cloud_browser_login.1",
+            "action_id": "dark_cloud_browser.login",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-sort",
+            "control": "dark_cloud_sort.control.dark_cloud_browser_menu.1",
+            "action_id": "dark_cloud_browser.menu",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-sort",
+            "control": "dark_cloud_sort.control.dark_cloud_browser_my_levels.1",
+            "action_id": "dark_cloud_browser.my_levels",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-sort",
+            "control": "dark_cloud_sort.control.dark_cloud_browser_online_levels.1",
+            "action_id": "dark_cloud_browser.online_levels",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-sort",
+            "control": "dark_cloud_sort.control.dark_cloud_browser_options.1",
+            "action_id": "dark_cloud_browser.options",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-sort",
+            "control": "dark_cloud_sort.control.dark_cloud_browser_recent.1",
+            "action_id": "dark_cloud_browser.recent",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-sort",
+            "control": "dark_cloud_sort.control.dark_cloud_browser_search.1",
+            "action_id": "dark_cloud_browser.search",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-sort",
+            "control": "dark_cloud_sort.control.dark_cloud_browser_sort.1",
+            "action_id": "dark_cloud_browser.sort",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "game-settings-dark-cloud",
+            "control": "settings.control.settings_controls.1",
+            "action_id": "settings.controls",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "game-settings-dark-cloud",
+            "control": "settings.control.settings_done.1",
+            "action_id": "settings.done",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "game-settings-gameplay",
+            "control": "settings.control.settings_controls.1",
+            "action_id": "settings.controls",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "game-settings-gameplay",
+            "control": "settings.control.settings_done.1",
+            "action_id": "settings.done",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "game-settings-title",
+            "control": "settings.control.settings_controls.1",
+            "action_id": "settings.controls",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "game-settings-title",
+            "control": "settings.control.settings_done.1",
+            "action_id": "settings.done",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "main-menu-root",
+            "control": "main_menu.control.main_menu_explore_dark_cloud.1",
+            "action_id": "main_menu.explore_dark_cloud",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "main-menu-root",
+            "control": "main_menu.control.main_menu_hall_of_fame.1",
+            "action_id": "main_menu.hall_of_fame",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "main-menu-root",
+            "control": "main_menu.control.main_menu_settings.1",
+            "action_id": "main_menu.settings",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "pause-menu",
+            "control": "pause_menu.control.pause_menu_game_settings.1",
+            "action_id": "pause_menu.game_settings",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "profile-save-select",
+            "control": "profile_save_select.control.main_menu_hall_of_fame.1",
+            "action_id": "main_menu.hall_of_fame",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "profile-save-select",
+            "control": "profile_save_select.control.main_menu_new_game.1",
+            "action_id": "main_menu.new_game",
+            "disposition": "pending_capture"
+        },
+        {
+            "screen": "main-menu-root",
+            "control": "focus-proxy:main_menu.quit",
+            "action_id": "main_menu.quit",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "game-settings-title",
+            "control": "focus-proxy:settings.sound_volume",
+            "action_id": "settings.sound_volume",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "game-settings-title",
+            "control": "focus-proxy:settings.music_volume",
+            "action_id": "settings.music_volume",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "game-settings-title",
+            "control": "focus-proxy:settings.fullscreen",
+            "action_id": "settings.fullscreen",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "game-settings-title",
+            "control": "focus-proxy:settings.resolution",
+            "action_id": "settings.resolution",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "game-settings-title",
+            "control": "focus-proxy:settings.login_info",
+            "action_id": "settings.login_info",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "game-settings-title",
+            "control": "focus-proxy:settings.tweak_game",
+            "action_id": "settings.tweak_game",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "game-settings-gameplay",
+            "control": "focus-proxy:settings.sound_volume",
+            "action_id": "settings.sound_volume",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "game-settings-gameplay",
+            "control": "focus-proxy:settings.music_volume",
+            "action_id": "settings.music_volume",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "game-settings-gameplay",
+            "control": "focus-proxy:settings.fullscreen",
+            "action_id": "settings.fullscreen",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "game-settings-gameplay",
+            "control": "focus-proxy:settings.login_info",
+            "action_id": "settings.login_info",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "game-settings-gameplay",
+            "control": "focus-proxy:settings.tweak_game",
+            "action_id": "settings.tweak_game",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "game-settings-dark-cloud",
+            "control": "focus-proxy:settings.sound_volume",
+            "action_id": "settings.sound_volume",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "game-settings-dark-cloud",
+            "control": "focus-proxy:settings.music_volume",
+            "action_id": "settings.music_volume",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "game-settings-dark-cloud",
+            "control": "focus-proxy:settings.fullscreen",
+            "action_id": "settings.fullscreen",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "game-settings-dark-cloud",
+            "control": "focus-proxy:settings.login_info",
+            "action_id": "settings.login_info",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "game-settings-dark-cloud",
+            "control": "focus-proxy:settings.tweak_game",
+            "action_id": "settings.tweak_game",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "controls",
+            "control": "focus-proxy:controls.move_up",
+            "action_id": "controls.move_up",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "controls",
+            "control": "focus-proxy:controls.move_down",
+            "action_id": "controls.move_down",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "controls",
+            "control": "focus-proxy:controls.move_left",
+            "action_id": "controls.move_left",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "controls",
+            "control": "focus-proxy:controls.move_right",
+            "action_id": "controls.move_right",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "controls",
+            "control": "focus-proxy:controls.open_menu",
+            "action_id": "controls.open_menu",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "controls",
+            "control": "focus-proxy:controls.open_inventory",
+            "action_id": "controls.open_inventory",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "controls",
+            "control": "focus-proxy:controls.open_skills",
+            "action_id": "controls.open_skills",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "controls",
+            "control": "focus-proxy:controls.belt_slot_1",
+            "action_id": "controls.belt_slot_1",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "controls",
+            "control": "focus-proxy:controls.belt_slot_2",
+            "action_id": "controls.belt_slot_2",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "controls",
+            "control": "focus-proxy:controls.belt_slot_3",
+            "action_id": "controls.belt_slot_3",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "controls",
+            "control": "focus-proxy:controls.belt_slot_4",
+            "action_id": "controls.belt_slot_4",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "controls",
+            "control": "focus-proxy:controls.belt_slot_5",
+            "action_id": "controls.belt_slot_5",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "controls",
+            "control": "focus-proxy:controls.belt_slot_6",
+            "action_id": "controls.belt_slot_6",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "controls",
+            "control": "focus-proxy:controls.belt_slot_7",
+            "action_id": "controls.belt_slot_7",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "controls",
+            "control": "focus-proxy:controls.belt_slot_8",
+            "action_id": "controls.belt_slot_8",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "performance",
+            "control": "focus-proxy:performance.complex_lighting",
+            "action_id": "performance.complex_lighting",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "performance",
+            "control": "focus-proxy:performance.complex_shadows",
+            "action_id": "performance.complex_shadows",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "performance",
+            "control": "focus-proxy:performance.multiple_shadows",
+            "action_id": "performance.multiple_shadows",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "performance",
+            "control": "focus-proxy:performance.light_quality",
+            "action_id": "performance.light_quality",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "performance",
+            "control": "focus-proxy:performance.secondary_spells_at_mouse",
+            "action_id": "performance.secondary_spells_at_mouse",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "performance",
+            "control": "focus-proxy:performance.kid_mode",
+            "action_id": "performance.kid_mode",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "performance",
+            "control": "focus-proxy:performance.enhanced_effects",
+            "action_id": "performance.enhanced_effects",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "performance",
+            "control": "focus-proxy:performance.save_memory",
+            "action_id": "performance.save_memory",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "performance",
+            "control": "focus-proxy:performance.zoom_effects",
+            "action_id": "performance.zoom_effects",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "performance",
+            "control": "focus-proxy:performance.back",
+            "action_id": "performance.back",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-browser",
+            "control": "focus-proxy:dark_cloud_browser.level_row[0]",
+            "action_id": "dark_cloud_browser.level_row[0]",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-recent",
+            "control": "focus-proxy:dark_cloud_browser.level_row[0]",
+            "action_id": "dark_cloud_browser.level_row[0]",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-online-levels",
+            "control": "focus-proxy:dark_cloud_browser.level_row[0]",
+            "action_id": "dark_cloud_browser.level_row[0]",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-my-levels",
+            "control": "focus-proxy:dark_cloud_browser.level_row[0]",
+            "action_id": "dark_cloud_browser.level_row[0]",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-my-levels",
+            "control": "focus-proxy:dark_cloud_browser.edit",
+            "action_id": "dark_cloud_browser.edit",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-search",
+            "control": "focus-proxy:dark_cloud_search.search_now",
+            "action_id": "dark_cloud_search.search_now",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-sort",
+            "control": "focus-proxy:dark_cloud_sort.newest",
+            "action_id": "dark_cloud_sort.newest",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-sort",
+            "control": "focus-proxy:dark_cloud_sort.oldest",
+            "action_id": "dark_cloud_sort.oldest",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-sort",
+            "control": "focus-proxy:dark_cloud_sort.updated_recently",
+            "action_id": "dark_cloud_sort.updated_recently",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-sort",
+            "control": "focus-proxy:dark_cloud_sort.best_rating",
+            "action_id": "dark_cloud_sort.best_rating",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-options",
+            "control": "focus-proxy:dark_cloud_options.select_boneyard",
+            "action_id": "dark_cloud_options.select_boneyard",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-login-settings",
+            "control": "focus-proxy:dark_account.dark_name",
+            "action_id": "dark_account.dark_name",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-login-settings",
+            "control": "focus-proxy:dark_account.password",
+            "action_id": "dark_account.password",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-login-settings",
+            "control": "focus-proxy:dark_account.sign_in",
+            "action_id": "dark_account.sign_in",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-login-settings",
+            "control": "focus-proxy:dark_account.create_new",
+            "action_id": "dark_account.create_new",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "dark-cloud-login-settings",
+            "control": "focus-proxy:dark_account.done",
+            "action_id": "dark_account.done",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "skill-picker",
+            "control": "focus-proxy:skill_picker.option[0]",
+            "action_id": "skill_picker.option[0]",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "skill-picker",
+            "control": "focus-proxy:skill_picker.option[1]",
+            "action_id": "skill_picker.option[1]",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "skill-picker",
+            "control": "focus-proxy:skill_picker.option[2]",
+            "action_id": "skill_picker.option[2]",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "map-picker",
+            "control": "focus-proxy:map_picker.story[0]",
+            "action_id": "map_picker.story[0]",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "game-over",
+            "control": "focus-proxy:game_over.continue",
+            "action_id": "game_over.continue",
+            "disposition": "owner_descoped"
+        },
+        {
+            "screen": "hall-of-fame",
+            "control": "focus-proxy:hall_of_fame.continue",
+            "action_id": "hall_of_fame.continue",
+            "disposition": "owner_descoped"
+        }
+    ]
+}
