@@ -250,11 +250,13 @@
     <ClInclude Include="src\debug_ui_overlay\menu_layout_capture.inl" />
     <ClInclude Include="src\debug_ui_overlay\menu_layout_capture_art_observation.inl" />
     <ClInclude Include="src\debug_ui_overlay\menu_layout_capture_resolvers.inl" />
-    <ClInclude Include="src\debug_ui_overlay\menu_layout_capture_snapshot_and_hooks.inl" />
+    <ClInclude Include="src\debug_ui_overlay\menu_layout_capture_snapshot.inl" />
+    <ClInclude Include="src\debug_ui_overlay\menu_layout_capture_hooks.inl" />
     <ClInclude Include="src\debug_ui_overlay\overlay_surface_builders.inl" />
     <ClInclude Include="src\debug_ui_overlay\overlay_surface_builders_misc_surfaces.inl" />
     <ClInclude Include="src\debug_ui_overlay\overlay_surface_builders_settings_helpers.inl" />
-    <ClInclude Include="src\debug_ui_overlay\overlay_surface_builders_settings_surfaces.inl" />
+    <ClInclude Include="src\debug_ui_overlay\overlay_surface_builders_settings_tracking.inl" />
+    <ClInclude Include="src\debug_ui_overlay\overlay_surface_builders_settings_layouts.inl" />
     <ClInclude Include="src\debug_ui_overlay\public_api.inl" />
     <ClInclude Include="src\debug_ui_overlay\public_memory_forwarders.inl" />
     <ClInclude Include="src\debug_ui_overlay\public_api_actions.inl" />
@@ -280,7 +282,8 @@
     <ClInclude Include="src\debug_ui_overlay\state_and_actions_surface_owner_resolution.inl" />
     <ClInclude Include="src\debug_ui_overlay\string_and_memory_readers.inl" />
     <ClInclude Include="src\debug_ui_overlay\surface_render_hooks.inl" />
-    <ClInclude Include="src\debug_ui_overlay\tracked_surfaces_and_main_menu.inl" />
+    <ClInclude Include="src\debug_ui_overlay\tracked_surfaces.inl" />
+    <ClInclude Include="src\debug_ui_overlay\main_menu_and_text_helpers.inl" />
     <ClInclude Include="src\debug_ui_overlay\ui_navigation_element_builders.inl" />
     <ClInclude Include="src\debug_ui_overlay\ui_navigation_public.inl" />
     <ClInclude Include="src\debug_ui_overlay\widget_geometry_readers.inl" />

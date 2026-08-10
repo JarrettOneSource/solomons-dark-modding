@@ -791,7 +791,10 @@
     <ClInclude Include="src\debug_ui_overlay\overlay_surface_builders_settings_helpers.inl">
       <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
-    <ClInclude Include="src\debug_ui_overlay\overlay_surface_builders_settings_surfaces.inl">
+    <ClInclude Include="src\debug_ui_overlay\overlay_surface_builders_settings_tracking.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\overlay_surface_builders_settings_layouts.inl">
       <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\public_api.inl">
@@ -809,7 +812,10 @@
     <ClInclude Include="src\debug_ui_overlay\menu_layout_capture_resolvers.inl">
       <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
-    <ClInclude Include="src\debug_ui_overlay\menu_layout_capture_snapshot_and_hooks.inl">
+    <ClInclude Include="src\debug_ui_overlay\menu_layout_capture_snapshot.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\menu_layout_capture_hooks.inl">
       <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\public_api_actions.inl">
@@ -881,7 +887,10 @@
     <ClInclude Include="src\debug_ui_overlay\surface_render_hooks.inl">
       <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
-    <ClInclude Include="src\debug_ui_overlay\tracked_surfaces_and_main_menu.inl">
+    <ClInclude Include="src\debug_ui_overlay\tracked_surfaces.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\main_menu_and_text_helpers.inl">
       <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\ui_navigation_element_builders.inl">
