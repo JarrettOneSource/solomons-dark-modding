@@ -410,7 +410,7 @@ MUTATIONS: tuple[Mutation, ...] = (
         "battery.quality-floors",
         REPLAY,
         contracts.QUALITY_FLOORS,
-        '"unitTests": 81',
+        '"unitTests": 99',
         '"unitTests": 80',
         "P2 webgame quality floors no longer ratchet to the complete sim/conformance battery",
     ),
