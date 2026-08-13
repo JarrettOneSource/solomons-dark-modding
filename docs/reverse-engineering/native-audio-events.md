@@ -251,6 +251,18 @@ The 22 looping WAVs are exact below. `smpl` is source-file metadata; “stock lo
 
 `Music::PlayImmediate (0x00409A10)` replaces/starts without a crossfade. `PlayCrossfade (0x00409CD0)` and `Transition (0x00409FA0)` set the per-tick step to `1 / transition_ticks`, swap the active/inactive lane, and start the requested song; `Transition` additionally selects a named track envelope. The tick at `0x00409610` raises the new-lane gain at `+0x68`, lowers the old-lane gain at `+0x6C`, writes module-channel envelopes via attributes `0x200 + channel`, and stops the faded lane when it reaches zero. `Music::Stop (0x0040A3F0)` stops both lanes. A transition argument of `-1` is replaced by the application music-transition setting; natural witnesses include title `prelude` with 200 ticks, selection with `-1`, academy with 2, and combat with `-1`.
 
+Arena initialization has its own scene transition at `0x00470A90`. The branch
+reads Arena wave/combat byte `+0x8F14`. When it is zero, instructions
+`0x00470E07..0x00470E20` request song `prelude` through
+`Music::PlayCrossfade (0x00409CD0)` with literal float `-1.0` from
+`0x007DE858`, so the application default supplies the duration. When the byte
+is nonzero, `0x00470E83..0x00470EA2` instead calls
+`Music::Transition (0x00409FA0)` with both song and track named `combat`.
+Later wave-state owner `0x0047D570` selects song `combat` with track
+`combatprelude` while moving into the combat lifecycle. Entering an ordinary
+Boneyard therefore crossfades Academy to module-order-0 `prelude`; continuing
+Academy merely because the menu state still says Hub has no native owner.
+
 ## Multiplayer ownership
 
 The normative rule is:

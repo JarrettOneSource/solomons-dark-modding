@@ -202,6 +202,60 @@ Those are literally captured retail render pixels and are appropriate for the
 browser editor's calm survey-scale approximation. They should not be listed
 as a native disk asset or treated as evidence that `paintbkg` is ground art.
 
+### Arena light field and Lantern source
+
+The opaque black clear is also the base of a separate Region light field; it
+is not sufficient to draw the ground and then place one translucent black
+rectangle over the finished scene. `Arena::Render` resets the Region light
+manager at `Arena + 0x8C44` through `0x0057D4E0`, collects light providers from
+the list at `Arena + 0x8D80` (`count +0x8D8C`), invokes each provider's vtable
+slot `+0x30`, finalizes the field through `0x0057D5E0`, and only then flushes
+the shared world-object painter queue. The reset stores ambient RGB `(0,0,0)`
+at manager `+0xC8..+0xD0` and clears the 0x1C-byte source-record count at
+`+0x108`.
+
+`0x0057FE40` records one source as source point `+0x00/+0x04`, query-space
+point `+0x08/+0x0C`, radius `+0x10`, intensity `+0x14`, and shadow flag
+`+0x18`. The ordinary scalar query at `0x0057F980` takes the maximum source
+contribution, not their sum. For source radius `r`, intensity `i`, and query
+delta `(dx,dy)`, its exact unoccluded falloff is:
+
+```text
+d2 = (dx / r)^2 + (dy / (0.85 * r))^2
+
+d2 <  75^2: scalar = i
+d2 >= 145^2: scalar = 0
+otherwise: scalar = i * (1 - (d2 - 75^2) / (145^2 - 75^2))
+```
+
+The constants are retail doubles/floats at `0x00785858 == 0.85`,
+`0x00797218/20 == 5625 == 75^2`, `0x00797224 == 21025 == 145^2`, and
+`0x00797210 == 15400`. The common Puppet dispatcher stores this scalar at
+object `+0xCC` and multiplies it into the object's requested tint before its
+main painter. Base ground, explicit underlays, and late proxy art retain their
+own caller's color lane; lighting the entire flattened framebuffer would
+therefore darken native-unlit passes incorrectly.
+
+The ordinary player provider at `0x005299A0` submits a point 15 world units
+along the player's heading with `radius=2.6`, `intensity=1`, and flag `1` when
+its drive-state predicate permits it. The Boneyard Lantern is runtime type
+5010 (constructor `0x005E1120`, static vtable `0x0079C854`). Its tick
+`0x005FF010` enrolls the object in the Arena provider list, and slot-`+0x30`
+provider `0x005E6220` submits the Lantern root with `radius=0.65`, intensity
+`0.55 + RandomFloat(0.2)`, and the retail Multiple Shadows flag
+`DAT_00B3BCAA`. Thus its per-render intensity lies in `[0.55,0.75)` and is
+presentation RNG, not authored layout state.
+
+An isolated live Arena run independently validated the static chain. The
+runtime Lantern at `0x1AF7B090` had rebased vtable `0x00B2C854`; its slot
+`+0x30` resolved to rebased `0x00976220`. Traces armed at original addresses
+`0x005FF010` and `0x005E6220` observed 199 Lantern ticks and 57 light submits
+over the same sampling window, both with `ECX=0x1AF7B090`. A player source
+record sampled from the live manager held the recovered 15-unit anchor,
+`radius=2.6`, `intensity=1`, and flag `1`. Sampling the provider list between
+reset and collection can legitimately observe zero; the function traces prove
+that such a sample does not mean the Lantern stopped owning its light.
+
 ## RegionLayout schema
 
 RegionLayout is embedded in Arena/Region state at `+0x8510`. Its constructor
@@ -489,6 +543,27 @@ stores the source posts. Collision setup `0x005E8650` registers the segment
 after an owner exists. `0x00600ED0` emits repeated textured quad geometry and
 `0x005E1EF0` uses the loose `fencegrate` texture loaded by world initializer
 `0x005BBD90`.
+
+The intact geometry is exact. Builder `0x005E8100` normalizes the endpoint
+vector, moves both working endpoints inward by 12 world units
+(`0x007DE9D8`), and places the lower quad edge on those shortened endpoints.
+The upper edge is exactly 52 units higher: a 32-unit value at `0x00784CC8`
+plus 20 units at `0x007DE920`. The loose 64x64 `fencegrate` image is not
+stretched once across the authored segment. Its U span is shortened length
+divided by retail constant `53.33333121405716` (`0x0079DB28`), while V spans
+the full texture. The related 13.333333-unit step at `0x0079DB30` determines
+the generated repeat subdivision. Renderer `0x005E1EF0` draws that textured
+quad, then adds two black 3-unit rules: one 9 units below the upper edge and
+one 5 units above the lower edge.
+
+Every unique endpoint Fencepost begins with selector zero. After a derived
+fence resolves its shared post pointers, materializer `0x0064AC90` overwrites
+the start/end post's 32-bit selector at `+0x140` only when the serialized
+Fence selector is not `0xFFFFFFFF`. Because connected segments reference the
+same post, later source-order overrides win. Stock-generated samples inspected
+for this correction store `0xFFFFFFFF` at both ends and therefore retain
+DeadHawg record 36, but a parser/projection must preserve explicit selectors
+for authored and mod Boneyards rather than dropping them.
 
 FenceGrate_Broken inherits that storage, changes the type to 3011, and adds a
 serialized side flag at `+0x1C4` (`0x005E38E0`). Builder `0x005EC6E0`
