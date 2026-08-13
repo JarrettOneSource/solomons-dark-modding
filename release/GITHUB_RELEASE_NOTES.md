@@ -1,8 +1,7 @@
-# Solomon Darker v0.1.0-beta.34
+# Solomon Darker v0.1.0-beta.35
 
-- The project and launcher are now named Solomon Darker, with the new Solomon Darker logo throughout the desktop launcher.
-- Starting a single-player run now routes through the Default boneyard instead of depending on a stale picker selection.
-- The minimap now follows the player you are spectating.
+- The multiplayer directory is now Search Parties at `/parties`, matching the renamed Solomon Darker website.
+- Website joins, direct Steam invites, and Lobby ID joins continue to use the same Steam lobby sessions and mod synchronization.
 - Multiplayer protocol remains v92.
 
 Download the ZIP. Extract the ZIP. Start `SolomonDarkMultiplayerBeta.exe`.
