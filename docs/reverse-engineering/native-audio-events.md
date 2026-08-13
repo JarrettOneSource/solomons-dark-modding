@@ -103,6 +103,42 @@ Secondary/welded casts use the same wrapper rules. The common primary cleanup fa
 
 Other enemy contact families are parallel fixed/pool requests: Pike hit 71 at `0x0047766A`; bone attack 11 at `0x00477977`; zombie punch 109 at `0x0047DC33`; Bite pool 176..178 at `0x0048621E`; ArmorCrash pool 173..175 at `0x0048D1CF`; and bone crack 12 at `0x0048A690`. Every pool draw uses the active gameplay stream.
 
+#### Player footstep owner and lifecycle
+
+`PlayerActor::Tick` owns the complete player-footstep decision inside the
+movement branch at `0x0054AD54..0x0054B080`. The branch first compares
+`actor[+0x158]^2 + actor[+0x15C]^2` with the float at `0x007DE890`
+(`0.01f`). If the squared displacement is not strictly greater, control jumps
+to `0x0054B662`: no MoveStep, gait advance, surface query, RNG draw, or
+footstep request occurs. Normal `0.9f` release damping therefore permits 21
+more movement ticks from the steady cardinal baseline, then becomes silent
+even though the retained velocity continues to decay.
+
+The audio sub-branch additionally requires player slot byte `actor+0x5C` to
+be zero and the shared application tick `DAT_0081F658` to be divisible by 25.
+It is consequently a local-player, 4 Hz request on the global 100 Hz gameplay
+clock, not an animation-frame callback or distance accumulator. Collision does
+not suppress it: gait and sound remain owned by requested movement whenever
+the threshold passed, even if placement was blocked.
+
+Surface selection then follows region virtuals rather than a player-side map:
+
+- special movement state `actor+0x154 == 2` draws uniformly from registry
+  216..219, `sounds\\stepsplash\\step1..4`;
+- otherwise region slot `+0x118` true requests fixed registry 104,
+  `sounds\\woodstep`, through the pitch-and-gain wrapper; and
+- slot `+0x118` false draws uniformly from registry 214..215,
+  `sounds\\Step\\step1..2`, through the gain-only wrapper.
+
+Both ordinary-surface paths multiply region slot `+0x100` attenuation by the
+global footstep scalar `0.5`. The Courtyard vtable `0x00792644` resolves
+`+0x100` to `0x005006C0` and `+0x118` to `0x005088F0`; the latter returns zero
+unconditionally. Courtyard walking therefore uses only the two `Step` samples
+at local gain `0.5`. Selection consumes `Integer(2)` from the active gameplay
+RNG, so a browser may use a deterministic approximation but must not infer an
+event later from a residual nonzero velocity or replay several missed cadence
+ticks as a burst.
+
 ### Pickups, progression, waves, dig, shop, and UI
 
 | Event class | Native trigger | Exact call site(s) | Requested asset(s) | Selection and parameters |
