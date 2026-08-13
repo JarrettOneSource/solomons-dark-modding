@@ -411,6 +411,45 @@ Style zero addresses DeadHawg 36..42. A nonzero style addresses 320..347; style
 one normalizes the selector modulo seven during its alternate render/bounds
 path.
 
+### Shared actor/scenery occlusion and effective Y
+
+These scenery classes do not render into an independent background layer.
+`Arena::Render` at `0x0046EC80` gathers main actors (`+0x318/+0x324`), this
+scenery population (`+0x87CC/+0x87D8`), and transient actors
+(`+0x8B78/+0x8B84`) through queue insertion `0x0068C3B0`. Queue flush
+`0x0068C480` invokes vtable slot `+0x0C`; common Puppet dispatcher
+`0x00624B40` then calls the object's slot-`+0x1C` main painter. The complete
+queue proof and normal-row formula are retained in
+[`world-sprite-render-pipeline.md`](../re/world-sprite-render-pipeline.md).
+
+For visible objects, the effective row input is
+`trunc(worldY) + trunc(sortBias)`, where world Y is Puppet `+0x1C` and sort
+bias is Puppet `+0xA0`. The queue subtracts the local player's truncated Y,
+divides by two with truncation toward zero, and paints rows ascending. Same-row
+entries retain list-gather order: main actors, then scenery, then transient
+actors. Gravestone base, Tree base, Monument, Building base, Goodie, Scrub,
+Fencepost, and the non-wall fence-family main painters therefore occlude
+actors through this shared queue. Gravestone slot `+0x2C` remains an underlay;
+Tree and Building slot `+0x24` art remains a later proxy/foreground pass.
+Wall is the exception in this family because its visible mesh is slot
+`+0x28`, before the shared main queue.
+
+FenceGrate constructor `0x005E7FB0` writes retail float constant
+`0x00787050 == -15.0` to `+0xA0`. Broken grates, Gates, and rails inherit it;
+Wall constructor `0x005F88B0` writes the same bias. Fencepost constructor
+`0x005E1E20` retains the base `0.0`. Gate rebuild `0x005ED100` sets the
+runtime root Y to `max(tip.y, midpoint(hinge, tip).y)`, so a Gate leaf's
+effective painter key is that moving root Y minus 15, not its hinge Y. On the
+live horizontal gate documented below, both leaf keys are smaller than the
+endpoint-post key. The leaves consequently paint first and the posts appear
+in front even though materializer `0x0064AC90` created the posts before the
+bodies.
+
+This is painter-order occlusion, not depth-buffer testing and not a physical
+collision mask. A port may use CSS stacking or multiple canvases, but it must
+preserve the shared effective-Y order and the separate underlay, shadow, main,
+and foreground lanes.
+
 ## Fence specification and derived objects
 
 `Fence` 3005 is only the serialized specification. Constructor
