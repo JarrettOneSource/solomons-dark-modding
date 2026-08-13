@@ -21,7 +21,7 @@
             <TextBlock Margin="0,5,0,20"
                        FontSize="22"
                        FontWeight="SemiBold"
-                       Text="Solomon Dark Revived" />
+                       Text="Solomon Darker" />
 
             <Border Padding="20,18"
                     Background="{StaticResource CardBackgroundBrush}"

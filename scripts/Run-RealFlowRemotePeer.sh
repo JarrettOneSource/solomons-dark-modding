@@ -291,7 +291,7 @@ windows_list() {
 launcher_window() {
     x11_env
     "$x11_root/usr/bin/xdotool" search --onlyvisible \
-        --name '^Solomon Dark Revived$' | tail -n 1
+        --name '^Solomon Darker$' | tail -n 1
 }
 
 game_window() {

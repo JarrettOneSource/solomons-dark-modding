@@ -390,7 +390,7 @@ std::string HelloResultUserMessage(SessionHelloResultCode result) {
         break;
     case SessionHelloResultCode::ProtocolMismatch:
         text =
-            "The host is on a different Solomon Dark Revived version. "
+            "The host is on a different Solomon Darker version. "
             "Update both players to the same launcher version";
         break;
     case SessionHelloResultCode::ManifestMismatch:

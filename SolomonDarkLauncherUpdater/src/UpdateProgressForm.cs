@@ -36,7 +36,7 @@ internal sealed class UpdateProgressForm : Form
 
     public UpdateProgressForm()
     {
-        Text = "Solomon Dark Revived Update";
+        Text = "Solomon Darker Update";
         AccessibleName = Text;
         BackColor = WindowBackground;
         ForeColor = TextPrimary;
@@ -73,7 +73,7 @@ internal sealed class UpdateProgressForm : Form
             Font = new Font("Segoe UI Semibold", 9.5f),
             ForeColor = TextPrimary,
             Location = new Point(38, 12),
-            Text = "Solomon Dark Revived Update"
+            Text = "Solomon Darker Update"
         };
         titleLabel.MouseDown += DragWindow;
         titleBar.Controls.Add(titleLabel);

@@ -198,7 +198,7 @@ def _stage_reproducer_package(
         json.dumps(
             {
                 "schemaVersion": 2,
-                "product": "Solomon Dark Multiplayer Beta",
+                "product": "Solomon Darker",
                 "version": "isolated-verifier",
                 "defaultEnabledMods": [],
             },

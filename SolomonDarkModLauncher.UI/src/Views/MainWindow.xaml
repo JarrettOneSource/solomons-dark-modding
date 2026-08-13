@@ -6,7 +6,7 @@
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:modSettings="clr-namespace:SolomonDarkModLauncher.UI.ViewModels.ModSettings"
         mc:Ignorable="d"
-        Title="Solomon Dark Revived"
+        Title="Solomon Darker"
         Width="760"
         Height="940"
         MinWidth="560"
@@ -72,14 +72,8 @@
                    RenderOptions.BitmapScalingMode="HighQuality" />
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,4,0,0">
                 <Image Source="/Assets/logo.png"
-                       Height="116"
+                       Height="148"
                        RenderOptions.BitmapScalingMode="HighQuality" />
-                <TextBlock Text="R E V I V E D"
-                           Margin="0,9,0,0"
-                           HorizontalAlignment="Center"
-                           FontSize="13"
-                           FontWeight="Bold"
-                           Foreground="{StaticResource GoldOutlineTextBrush}" />
             </StackPanel>
             <Rectangle Height="56" VerticalAlignment="Bottom">
                 <Rectangle.Fill>

@@ -1,7 +1,7 @@
 <Window x:Class="SolomonDarkModLauncher.UI.Views.SaveManagerWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Saves · Solomon Dark Revived"
+        Title="Saves · Solomon Darker"
         Width="680"
         Height="720"
         MinWidth="560"

@@ -50,7 +50,7 @@ bool ValidateJoinedLobby(std::string* error_message) {
             &advertised_protocol) ||
         advertised_protocol != kProtocolVersion) {
         *error_message =
-            "This lobby is on a different Solomon Dark Revived version. "
+            "This lobby is on a different Solomon Darker version. "
             "Update both players to the same launcher version.";
         return false;
     }

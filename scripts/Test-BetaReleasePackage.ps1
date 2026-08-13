@@ -219,7 +219,7 @@ try {
             throw "Extracted desktop launcher did not open a window."
         }
         $result.uiWindowTitle = $uiProcess.MainWindowTitle
-        if ($result.uiWindowTitle -notlike "Solomon Dark Revived*") {
+        if ($result.uiWindowTitle -notlike "Solomon Darker*") {
             throw "Unexpected desktop launcher title: $($result.uiWindowTitle)"
         }
 

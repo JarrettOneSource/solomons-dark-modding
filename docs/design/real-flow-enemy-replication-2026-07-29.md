@@ -34,7 +34,7 @@ The production connection has three distinct layers:
    loader calls Steam matchmaking `CreateLobby`, publishes the supported build
    and manifest metadata to that Steam lobby, and exposes the resulting 64-bit
    lobby ID in the launcher.
-2. A direct lobby-ID join first asks the configured Solomon Dark Revived
+2. A direct lobby-ID join first asks the configured Solomon Darker
    website for the host's mod manifest when available. The website is an
    optional directory and compatibility source; it does not carry gameplay
    traffic and is not the session broker.

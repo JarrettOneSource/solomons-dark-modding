@@ -263,7 +263,7 @@ internal static class LauncherCommandExecutor
             hostProtocol != MultiplayerCompatibilityMaterializer.CurrentProtocolVersion)
         {
             throw new InvalidOperationException(
-                "The host is on a different Solomon Dark Revived version " +
+                "The host is on a different Solomon Darker version " +
                 $"(host: {hostBuild.LoaderVersion ?? "unknown"}, " +
                 $"you: {LauncherVersionInfo.Informational}). " +
                 "Both players need the same launcher version to play together.");

@@ -22,7 +22,7 @@ public partial class App : Application
         {
             MessageBox.Show(
                 "The launcher received invalid startup arguments.",
-                "Solomon Dark Revived",
+                "Solomon Darker",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             Shutdown(2);
@@ -191,7 +191,7 @@ public partial class App : Application
             {
                 MessageBox.Show(
                     "The open launcher did not accept the lobby link. Close it and try again.",
-                    "Solomon Dark Revived",
+                    "Solomon Darker",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
             }
@@ -217,7 +217,7 @@ public partial class App : Application
         {
             MessageBox.Show(
                 ex.Message,
-                "Solomon Dark Revived",
+                "Solomon Darker",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             Shutdown(2);
@@ -287,8 +287,8 @@ public partial class App : Application
 
         MessageBox.Show(
             window,
-            "This Solomon Dark Revived link is not valid.",
-            "Solomon Dark Revived",
+            "This Solomon Darker link is not valid.",
+            "Solomon Darker",
             MessageBoxButton.OK,
             MessageBoxImage.Error);
     }

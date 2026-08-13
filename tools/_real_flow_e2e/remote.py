@@ -677,7 +677,7 @@ class RemoteProtonPeer:
         windows = ""
         while time.monotonic() < deadline:
             windows = self.connection.helper_command("windows")
-            if "Solomon Dark Revived" in windows:
+            if "Solomon Darker" in windows:
                 break
             time.sleep(0.5)
         else:

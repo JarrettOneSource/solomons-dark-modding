@@ -18,7 +18,7 @@ internal static class LauncherProtocolRegistration
         }
 
         using var protocolKey = Registry.CurrentUser.CreateSubKey(ProtocolKeyPath);
-        protocolKey.SetValue(null, "URL:Solomon Dark Revived Lobby");
+        protocolKey.SetValue(null, "URL:Solomon Darker Lobby");
         protocolKey.SetValue("URL Protocol", string.Empty);
 
         using var iconKey = protocolKey.CreateSubKey("DefaultIcon");

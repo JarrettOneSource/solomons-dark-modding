@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the portable Solomon Dark multiplayer beta ZIP."""
+"""Verify the portable Solomon Darker beta ZIP."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ VERSION_PROPS = ROOT / "Directory.Build.props"
 PROTOCOL_HEADER = ROOT / "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h"
 DEFAULT_OUTPUT = ROOT / "runtime/beta_release_artifact.json"
 PACKAGE_PREFIX = "SolomonDarkMultiplayerBeta-v"
-EXPECTED_PRODUCT = "Solomon Dark Multiplayer Beta"
+EXPECTED_PRODUCT = "Solomon Darker"
 EXPECTED_GAME_VERSION = "0.72.5"
 EXPECTED_STEAM_APP_ID = 3362180
 PE_I386 = 0x014C

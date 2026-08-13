@@ -217,7 +217,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     public ObservableCollection<string> ModDownloadItems { get; } = [];
 
-    public string Title => "Solomon Dark Revived";
+    public string Title => "Solomon Darker";
     public string Version
     {
         get
@@ -2134,7 +2134,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             hostProtocol != preview.LocalProtocolVersion)
         {
             SetError(
-                "The host is on a different Solomon Dark Revived version " +
+                "The host is on a different Solomon Darker version " +
                 $"(host: {preview.HostLoaderVersion ?? "unknown"}, you: {Version}). " +
                 "Both players need the same launcher version to play together.");
             StatusText = "Join canceled - game versions don't match.";

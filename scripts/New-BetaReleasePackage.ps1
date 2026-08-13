@@ -265,7 +265,7 @@ Copy-Item $thirdPartyNoticesPath (Join-Path $packageRoot "THIRD-PARTY-NOTICES.tx
 
 $marker = [ordered]@{
     schemaVersion = 2
-    product = "Solomon Dark Multiplayer Beta"
+    product = "Solomon Darker"
     version = $Version
     protocolVersion = $protocolVersion
     supportedGameVersion = "0.72.5"

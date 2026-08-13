@@ -22,7 +22,7 @@ internal static class Program
         {
             MessageBox.Show(
                 $"The launcher updater could not start.\n\n{exception.Message}",
-                "Solomon Dark Revived",
+                "Solomon Darker",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
             return 1;

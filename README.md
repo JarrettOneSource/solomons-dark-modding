@@ -1,4 +1,4 @@
-# Solomon's Dark Modding
+# Solomon Darker
 
 A modding framework for `SolomonDark.exe`. Stages a local game copy, applies Boneyard and art overlays, and injects a loader that hosts Lua scripts, a scriptable bot runtime, and an opt-in debug overlay.
 
