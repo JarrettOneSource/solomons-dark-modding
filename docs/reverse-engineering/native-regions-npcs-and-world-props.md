@@ -88,6 +88,67 @@ passes, and interaction logic. Arena instead delegates its population and
 geometry to `RegionLayout`; its load, regenerate, save, and materialization
 chain is documented in the boneyard map.
 
+### Interior bounds, collision, and normal population
+
+The four private interiors construct independent world bounds and center their
+primary room atlases inside them:
+
+| Region | World bounds | Primary art and offset | Static contour records | Normal fixed population / collision |
+| --- | --- | --- | ---: | --- |
+| Mortuary | `1024 x 1024` | Memoratorium `970 x 910` at `(27,57)` | 11 | Memorator `(628,770,r25)`; ten Painting actors `r15` with paired solids `r40` |
+| StoreRoom | `1075 x 800` | Storage `1075 x 655` at `(0,72.5)` | 34 | solid shelving props `(538,324)`, `(537.5,434)`, `(536,542.5)`, each `r40` |
+| Library | `1024 x 1024` | Library `992 x 819` at `(16,102.5)` | 27 | Librarian `(512,595,r55)`, Dowser `(900,642.5,r25)`, plus solids `(239.5,788)`, `(258.5,678.5)`, `(762,732.5)`, `(831,620.5)`, each `r40` |
+| Office | `1024 x 1024` | Office `819 x 819` at `(102.5,102.5)` | 48 | Arch Chancellor `(514,467,r55)` plus solid `(517.5,681,r40)` |
+
+The contour builders consume duplicated-point records from, respectively,
+`DAT_00806660..DAT_00806710`, `DAT_00806710..DAT_00806930`,
+`DAT_00806C30..DAT_00806DE0`, and
+`DAT_00806930..DAT_00806C30`. The initial point is the pair at `tableStart-8`;
+each subsequent point is the first pair in a 16-byte record. The builder joins
+that previous point to each successive record point. They are authored
+collision chains, not rectangles implied by the room art.
+
+The ten normal Mortuary Painting centers are `(512,697)`, `(350,683)`,
+`(673,683)`, `(744,540)`, `(590,540)`, `(434,540)`, `(279,540)`,
+`(354,400)`, `(512,400)`, and `(670,400)`. Alternate story population paths
+exist, but they do not replace this ordinary Hub population by default.
+
+Room presentation preserves three ownership bands: base/registered room art,
+depth-sorted world actors and props, then later foreground fragments. The
+Mortuary easels/portraits, StoreRoom shelving, Library tables/shelves and exit
+corridor, and Office wall fragments therefore cannot be flattened into a
+single background without losing native player occlusion.
+
+The instruction-level painter order further resolves the normal fixed-room
+composition:
+
+- `StoreRoom::Present (0x00519070)` tiles Storage record 1 and submits record
+  5 plus records 13..26 before the ordinary actor list. Its three solid shelf
+  rows call the auxiliary pass with selectors 0..2, which draws records 2, 3,
+  and 4 at the room transform and therefore depth-sorts them at the authored
+  actor centers `(538,324)`, `(537.5,434)`, and `(536,542.5)`. Records 11 and
+  12 are submitted only after the actor/effect lists. Storage record 0 is the
+  small room-effect particle, while 7..10 are the interaction-marker bank;
+  neither belongs in a flattened room background.
+- `Library::Present (0x00511320)` draws room record 0 and the extended return
+  corridor record 5 before actors. The three table render selectors 0..2 in
+  `0x00512060` draw records 9, 10, and 11 in depth order; the fourth recorded
+  solid is collision-only with respect to that selector. Records 1 and 2 are
+  late candelabra fragments after the actor list. Record 3 is the small room
+  particle, and records 6..8 plus 13..20 belong to the interaction/effect
+  branch rather than the static room layer.
+- `Office::Present (0x00519E40)` draws room record 1 and extended return
+  corridor record 4 before actors, then submits records 17..22 after the actor
+  and effect lists. The one solid prop uses selector 0 in `0x00501060` and
+  depth-sorts Office record 5 at `(517.5,681)`.
+- `Mortuary::Present (0x0050EAC0)` draws base record 0 before actors. Its
+  painting presentation is actor-owned by `0x00518620`; main-painter records
+  1 and 5 are room-effect sprites, not a replacement static foreground.
+
+These are renderer ownership facts, not merely record xrefs: the StoreRoom
+and Library prop records must remain independent depth entries, and the late
+room fragments must remain after the player/NPC list.
+
 ### Exact fixed-region art composition
 
 The following bindings are executable record selections, not visual guesses:
@@ -122,7 +183,7 @@ these fixed-room records are dormant in the retail executable:
 | College | 1, 9, 35, 36, 46 |
 | Memoratorium | 10 |
 | Storage | 6 |
-| Library | 12, 25..28 |
+| Library | 12 |
 | Office | 6 |
 
 These records are still parsed and resident when their bundle is acquired.
@@ -148,12 +209,52 @@ they have distinct vtables, sizes, ticks, renderers, and factory identities.
 | 5008 Teacher | `0x00502570` | `0x0050B260` | `0x0051C710` | College 13, 501..504 |
 | 5011 Polisher | `0x0050B4F0` | `0x00505EB0` | `0x0051DD50` | Office 23..26; embedded wipeglass audio loop |
 | 5012 ArchChancellor | `0x00502A80` | `0x0050B6B0` | `0x0051DE40` | Office 0, 3, 7..12 |
-| 5013 Librarian | `0x00502C10` | `0x0050A4C0` | `0x0051E0E0` | Library 29..32 |
+| 5013 Librarian | `0x00502C10` | `0x0050A4C0` | `0x0051E0E0` | Library 25..32 |
 | 5016 Dowser | `0x00502C80` | `0x0050A4C0` | `0x0051E1F0` | Library 21..24 |
 | 5017 Memorator | `0x00502D90` | `0x00513090` | `0x0051E270` | Memoratorium 2, 6, 7, 28..75 |
 | 5022 Annalist2 | `0x00503000` | `0x005061E0` | `0x0051EAF0` | Memoratorium 11..13 |
 | 5023 ArchChancellorDesk | `0x00502BA0` | `0x0050A4C0` | `0x005060A0` | Office 3 |
 | 5024 ArchChancellorStanding | `0x00502B20` | `0x0050A4C0` | `0x0051DDC0` | College 51..53 |
+
+The normal named-NPC compositors are also layered rather than single-record
+portraits. The base named-NPC constructor `0x005016E0` initializes animation
+selector `Actor+0x144` to zero; `FUN_00747360` converts that stored float to
+the integral frame index and does not randomize it. Consequently the ordinary
+idle render is deterministic:
+
+- `Librarian::Render (0x0051E0E0)` first draws all of Library 29..32 at the
+  room-view center, then selects Library 25..28 by `Actor+0x144` and draws the
+  selected body at `(actor.x, actor.y-57)`. The normal default is record 25
+  over the counter/rail composition 29..32.
+- `Dowser::Render (0x0051E1F0)` selects Library 21..24 by the same field; the
+  normal default is record 21 at the actor root.
+- `ArchChancellor::Render (0x0051DE40)` draws Office record 3 at the room-view
+  center and selects one record from each paired bank 7..9 and 10..12 with the
+  same frame. The body root is `(actor.x+6,
+  actor.y-100+0.75*Actor+0x174)`; the constructor leaves `+0x174` at zero, so
+  the normal default is records 7 and 10 at `(518,412)` over the desk.
+- In normal Mortuary state (`Region+0x8F10 == 0`),
+  `Memorator::Render (0x0051E270)` selects Memoratorium
+  `28+trunc(Actor+0x144)` and the paired head bank beginning at 44. Constructor
+  defaults `+0x144` and the secondary selector `+0x184` to zero, making the
+  ordinary composite records 28 and 44 at `(628,770)`.
+
+The Painting pass has its own nearby eulogy lifecycle. Mortuary population
+setup `0x00515290` creates the ten ranked Painting actors and initializes each
+selected `DAT_0081A3FC[index]` portrait id to `-1`. In
+`Mortuary::RenderPainting (0x00518620)`, that unset state draws the blank
+registered easel record 4. A completed Memorator eulogy state in
+`0x00513090` copies `Region+0x8F14` into the selected slot; the filled path
+then draws the easel/front records 3 and 7 around either Memoratorium 14..23
+or the loaded external portrait. `DAT_0081A3C0[index]` independently controls
+the extra marker treatment. A clean Hub session with no persisted eulogy data
+must therefore show ten blank easels, not fabricate ten filled portraits.
+
+These selections correct the earlier consumer-only interpretation that
+mistook Library 29..32 for the Librarian body and treated Library 25..28 as
+dormant. They also establish the exact default layer pairs used by a static web
+parity frame while leaving animation selectors available for a later service
+interaction slice.
 
 There is no registered type 5014. `Astronomer` is instead a small region-owned
 helper object constructed at `0x005025F0`, with vtable `0x00791A70`, update

@@ -204,6 +204,86 @@ The exact ordering is:
     clamps alpha to `0.0`, invokes the same `+0x128` endpoint, and clears the
     rate. Thus stock order is **fade-out endpoint, load/swap, fade-in**.
 
+### Exact ordinary Hub portal choreography
+
+Courtyard tick `0x0050C970` owns four direct portal-contact tests. Each match
+clears the local actor's normal action/cast path, calls scripted movement
+helper `0x0063E4D0`, stores the destination for the outgoing endpoint, and
+starts `Region+0x8E4C` at `+0.01`:
+
+| Target | Contact segment | Scripted movement target | Speed |
+| ---: | --- | --- | ---: |
+| `1` Mortuary | `(179,394)` to `(33,529)` | `(32,363)` | `0.65` |
+| `2` Library | `(1995.5,606.5)` to `(1915.5,443.5)` | `(2057.5,460.5)` | `0.45` |
+| `3` StoreRoom | `(679.5,146.5)` to `(576.5,146.5)` | `(627.5,-1000)` | `0.45` |
+| `4` Office | `(1024.5,881.5)` to `(881.5,881.5)` | `(881.5,-1000)` | `0.45` |
+
+The private-room ticks use physical exits at the bottom view boundary.
+StoreRoom, Library, and Office test the exact horizontal segment
+`centerX +/- 100` at `bottomY - 100`. Contact scripts the local actor toward
+`(centerX,bottomY+1000)` at speed `1`, clears casting, and begins the outgoing
+`+0.01` fade. Mortuary tick `0x00509330` deliberately differs: its segment is
+`centerX +/- 1000` at `bottomY - 60`, and its scripted target preserves the
+actor's contact X while using `bottomY + 1000`. Ghidra data reads establish the
+compiled doubles `0x007DE908 = 100`, `0x007DE938 = 1000`, and
+`0x007849A0 = 60`. The Mortuary incoming target is therefore 60 units above
+the return line and does not immediately retrigger it. Mortuary owns an
+additional completed-story branch, but its ordinary return still uses this
+region endpoint. The ordinary endpoint functions write pending target `0`:
+Mortuary `0x00500D50`, StoreRoom `0x00500FE0`, and the Library/Office shared
+endpoint `0x00501250`.
+
+The Courtyard's Storeroom doorway barrier is adjacent state, not base geometry.
+The constructor `0x00506490` initializes barrier byte `Courtyard+0x95A0` and
+close countdown `+0x95A4` to zero. A StoreRoom return through `0x00500FE0`
+arms `+0x95A4 = 200` only when `StoreRoom+0x8EA0` is set. Courtyard tick
+`0x0050C970` counts down and calls `0x005001E0`, which marks the barrier
+present, requests `doorslam__stream`, and registers the exact segment
+`(573.5,180)..(681.5,180)` through `0x005213C0`. Thus the neutral ordinary Hub
+has 129 stable Courtyard segments and an open Storeroom route; the previously
+dumped 130th segment represents a later story-closed state.
+
+Incoming attach stages the actor and lets the scripted movement continue
+during the black-to-room fade. StoreRoom, Library, and Office place a remote
+or nonmatching slot at `(centerX,bottomY-100)`; the local slot begins farther
+inside at `bottomY-150`. Mortuary uses `bottomY-70` and `bottomY-120`
+respectively. Private attach first writes `-0.025` (`0x0079146C`) to the
+incoming fade rate. StoreRoom keeps it; Mortuary, Library, and Office overwrite
+it with `-0.01` (`0x007914A0`). Ordinary Courtyard re-entry also uses `-0.01`.
+The per-room attach routines are `0x00500BD0`, `0x00500EC0`, `0x005012B0`,
+`0x005010C0`, and `0x00503F20`. A diagnostic immediate switch can clear in one
+tick when the cached incoming alpha was already zero, but that is not the
+ordinary return-portal clock.
+
+Courtyard attach distinguishes the old private region and reconstructs the
+corresponding entrance walk:
+
+| Old id | Courtyard actor position | Scripted target |
+| ---: | --- | --- |
+| `1` Mortuary | `(63,413)` | `(123,488)` |
+| `2` Library | `(1990.5,504.5)` | `(1917.5,563.5)` |
+| `3` StoreRoom | `(627.5,98.5)` | `(627.5,198.5)` |
+| `4` Office | `(952.5,67.5)` | `(952.5,157.5)` |
+
+The Mortuary target values are the stock floats at `0x00787C68` (`123`) and
+`0x0079207C` (`488`); they are not extrapolated from another entrance.
+
+### Ordinary-room audio and multiplayer ownership
+
+A direct-call sweep of the four fixed-room ticks, attach routines, ordinary
+endpoints, and Courtyard portal branches found no portal-door cue and no music
+change. The `doorslam__stream` call reached from `0x005001E0` belongs to the
+flagged StoreRoom-return countdown and its dynamic Courtyard barrier, not to
+these ordinary room edges. Academy music remains under the Hub owner, and
+common actor movement continues to emit its normal footsteps.
+
+Private-room intent is participant-local. Host and clients can occupy distinct
+regions `0..4`; a remote actor is materialized only when its participant scene
+intent matches the local scene. Shared Courtyard simulation and transport do
+not pause when the local participant is private. This is why a multiplayer
+port must publish region/transition per participant and filter actor presence
+and region-local cues, rather than synchronizing one global Hub room.
+
 `sd.scene.switch_region` is a diagnostic/authored immediate switch seam. It
 queues step 4 directly and therefore does not prove a preceding stock portal
 fade. The golden deliberately includes both: onboarding captures a stock
