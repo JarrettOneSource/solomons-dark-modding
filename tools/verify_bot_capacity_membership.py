@@ -1227,7 +1227,7 @@ def capture_website_row(output_path: Path) -> dict[str, Any]:
         "--force-device-scale-factor=1",
         f"--user-data-dir={windows_path(profile)}",
         f"--screenshot={windows_path(output_path)}",
-        f"{DIRECTORY_URL}/classes",
+        f"{DIRECTORY_URL}/parties",
     ]
     try:
         completed = subprocess.run(
@@ -1261,7 +1261,7 @@ def capture_website_row(output_path: Path) -> dict[str, Any]:
     return {
         "path": str(output_path),
         "bytes": output_path.stat().st_size,
-        "url": f"{DIRECTORY_URL}/classes",
+        "url": f"{DIRECTORY_URL}/parties",
         "productionTouched": False,
     }
 
@@ -1904,7 +1904,7 @@ print("count=" .. tostring(#(sd.bots.list() or {})))
             "statusCode": full_auth_code,
             "body": full_auth,
             "frontendMessage":
-                "The class is full — every seat is taken.",
+                "The party is full — every seat is taken.",
         }
         atomic_write_json(
             EVIDENCE_ROOT / "website/full-join-refusal.json",
