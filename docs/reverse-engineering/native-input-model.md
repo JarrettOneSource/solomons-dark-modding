@@ -371,6 +371,34 @@ mouse producer never does. A controller producer emits `move.unit_vector` and a
 world `aim` point. The sim receives only this union and never Win32, DOM, or
 Gamepad API events.
 
+### Browser world-surface ingestion consequence
+
+The Website `/game` integration audited on 2026-08-13 consumes this closed
+native contract as one current input state: movement, nullable world aim, and
+independent primary/secondary held levels. That representation is a transport
+projection, not a claim that retail stores a JavaScript-shaped record. A fixed
+tick derives press, hold, and release from consecutive levels; every level
+transition must therefore survive network queueing on its own authoritative
+tick, while same-level aim updates may coalesce.
+
+The browser world surface must listen for `mousedown`/`mouseup`, not only
+`pointerdown`/`pointerup`. Pointer Events issue `pointerdown` only for the first
+mouse-button transition from no buttons to at least one, so a pointer-only
+implementation loses the second physical button when left and right overlap.
+After a world down, window-level move/up ownership mirrors native capture.
+Releasing either button leaves the other level intact. `contextmenu` is
+prevented at that world surface so right remains the stock secondary action;
+HUD/modal/touch DOM surfaces remain separate topmost owners and do not bubble a
+second gameplay action.
+
+The device-independent target remains the existing world point. Client pixels
+are first converted through the browser's transformed logical viewport, then
+use the recovered native projection `view_origin + mouse_screen / view_scale`.
+The primary consumer, when implemented, must still derive its direction from
+the separately recovered torso anchor 25 logical screen pixels above the
+player projection. Capturing a point does not authorize early projectile,
+cooldown, mana, damage, animation, or audio behavior.
+
 ### Lossless native-mouse profile
 
 There are two required meanings of lossless:
