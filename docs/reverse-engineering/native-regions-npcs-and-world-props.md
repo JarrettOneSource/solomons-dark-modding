@@ -108,6 +108,14 @@ each subsequent point is the first pair in a 16-byte record. The builder joins
 that previous point to each successive record point. They are authored
 collision chains, not rectangles implied by the room art.
 
+A fresh 2026-08-13 live dump of every endpoint in all four ranges matched the
+web tables exactly, including authored order. Painting talk bodies remain
+`r15`, while each associated `r40` solid scenery body is centered two world
+units above it. The larger body fully determines ordinary player collision
+while the smaller body remains the interaction owner. That distinction should
+be preserved in the domain model without adding a second, behaviorally
+redundant collision response.
+
 The ten normal Mortuary Painting centers are `(512,697)`, `(350,683)`,
 `(673,683)`, `(744,540)`, `(590,540)`, `(434,540)`, `(279,540)`,
 `(354,400)`, `(512,400)`, and `(670,400)`. Alternate story population paths
@@ -136,7 +144,13 @@ composition:
   solid is collision-only with respect to that selector. Records 1 and 2 are
   late candelabra fragments after the actor list. Record 3 is the small room
   particle, and records 6..8 plus 13..20 belong to the interaction/effect
-  branch rather than the static room layer.
+  branch rather than the static room layer. After record 4 and the room-effect
+  pass, the function sets opaque black and submits two untextured rectangles
+  at room-local `(-496,289,381,121)` and `(115,289,381,121)`, then restores
+  white. With the `(512,512)` room transform these cover world rectangles
+  `(16,801)..(397,922)` and `(627,801)..(1008,922)`, leaving the authored
+  230-pixel return corridor visible. These late exit masks are renderer-owned;
+  they are not pixels in Library records 0..5.
 - `Office::Present (0x00519E40)` draws room record 1 and extended return
   corridor record 4 before actors, then submits records 17..22 after the actor
   and effect lists. The one solid prop uses selector 0 in `0x00501060` and
@@ -148,6 +162,25 @@ composition:
 These are renderer ownership facts, not merely record xrefs: the StoreRoom
 and Library prop records must remain independent depth entries, and the late
 room fragments must remain after the player/NPC list.
+
+The live painter capture fixes the late StoreRoom geometry more precisely.
+Records 11 and 12 are both submitted with the room-center transform
+`(537.5,400)`, resolve to world rectangles `(41,607)..(487,727)` and
+`(589,607)..(1035,727)`, and leave the authored 102-pixel center doorway
+transparent. A player below the wall is occluded at the left and right pieces
+but remains visible through that center gap. Moving these records behind the
+player to cure an entrance artifact would be a native regression; any such
+artifact must instead be traced at the Courtyard entrance/camera layer.
+
+Normal presentation also instantiates additive room particles from the small
+effect records: 50 candle flames from Memoratorium 1, 9
+from Storage 0, 17 from Library 3, and 7 from Office 2. The presentation loop
+calls `FUN_00401310` twice per flame: Mortuary samples Y scale uniformly from
+`[0.7,0.9]`, the other rooms sample `[0.8,1.2]`, and all rooms sample rotation
+from `[-5,+5]` degrees while fixing X scale at `0.8`. It then calls transform
+submitter `FUN_00415020` and uses blend source `5`, destination `2`, operation
+`1`. These sprites are live presentation effects, not pixels that may be baked
+into a background.
 
 ### Exact fixed-region art composition
 
@@ -171,6 +204,26 @@ depth, draw base and foreground records, render actor/prop lists between those
 layers, submit effect geometry, and restore presentation state. Replacing one
 background record does not replace the room, its collision, or its foreground
 occlusion.
+
+The StoreRoom entrance report exposed the same ownership rule in the adjacent
+Courtyard. A normal live painter capture at player `(602.408875,243.011703)`
+showed College record 2 as base art at draw order 28, before the resident world
+list. Four `CollegeObstacle` actors were then depth-sorted immediately around
+the player:
+
+| Record | Obstacle center | Captured order relative to player |
+| ---: | ---: | --- |
+| 23 | `(749.5,162.5)` | before |
+| 24 | `(956,169)` | before |
+| 20 | `(628,215)` | before |
+| 25 | `(955.5,239.5)` | before |
+| player | `(602.408875,243.011703)` | after all four |
+
+Thus records 20, 23, 24, and 25 are not one fixed “spawn roof” at a `y=320`
+boundary. Record 24 may not be flattened into the base either. Each obstacle
+keeps its own actor-center depth, while record 2 remains in the pre-actor room
+art. Collapsing those ownership bands makes the Storeroom doorway at record 20
+incorrectly cover a player who has already walked south of it.
 
 The original decompiler-source xref pass missed 40 of these selections because
 untyped `thiscall` callees caused Ghidra to discard the ECX sprite argument.
@@ -234,21 +287,31 @@ idle render is deterministic:
   actor.y-100+0.75*Actor+0x174)`; the constructor leaves `+0x174` at zero, so
   the normal default is records 7 and 10 at `(518,412)` over the desk.
 - In normal Mortuary state (`Region+0x8F10 == 0`),
-  `Memorator::Render (0x0051E270)` selects Memoratorium
-  `28+trunc(Actor+0x144)` and the paired head bank beginning at 44. Constructor
-  defaults `+0x144` and the secondary selector `+0x184` to zero, making the
-  ordinary composite records 28 and 44 at `(628,770)`.
+  `Memorator::Render (0x0051E270)` selects a 16-heading body/head composite at
+  `(628,770)`. Heading index `i` uses body record `28+i` and head record
+  `44+2*i`; index 0 faces north and indices advance clockwise. A settled
+  ordinary entrance capture selected 39+66, facing the local player, while
+  controlled player placements recovered 28+44 north, 30+48 north-east,
+  32+52 east, 34+56 south-east, 36+60 south, and 40+68 west. The nearby
+  question marker is record 27, submitted at `(598,710)` and resolving to
+  center `(627,742)`, or `(-1,-28)` from the actor root. Constructor-zero
+  28+44 is a transient north-facing frame, not the fixed player-visible idle.
 
 The Painting pass has its own nearby eulogy lifecycle. Mortuary population
-setup `0x00515290` creates the ten ranked Painting actors and initializes each
-selected `DAT_0081A3FC[index]` portrait id to `-1`. In
-`Mortuary::RenderPainting (0x00518620)`, that unset state draws the blank
-registered easel record 4. A completed Memorator eulogy state in
-`0x00513090` copies `Region+0x8F14` into the selected slot; the filled path
-then draws the easel/front records 3 and 7 around either Memoratorium 14..23
-or the loaded external portrait. `DAT_0081A3C0[index]` independently controls
-the extra marker treatment. A clean Hub session with no persisted eulogy data
-must therefore show ten blank easels, not fabricate ten filled portraits.
+setup `0x00515290` creates the ten ranked Painting actors and can initialize a
+selected `DAT_0081A3FC[index]` portrait id to `-1`; in
+`Mortuary::RenderPainting (0x00518620)`, that transient unset state draws blank
+registered easel record 4. That constructor observation was previously
+mistaken for the ordinary visible room state. In a clean normal new-game Hub
+with builder selector `Gameplay+0x1CD8 == 0`, the player-visible globals were
+`DAT_0081A3FC[0..9] = 0,1,2,3,4,5,6,7,8,9` and
+`DAT_0081A3C0[0..9] = 0,1,1,1,0,1,1,0,0,1` before entry. The room consequently
+showed ten filled portraits and six marker urns. Each bundled filled painting
+draws registered easel record 3, portrait record `14+id`, front record 7, and,
+for a true marker bit, record 8 offset `(10,15)` from the Painting actor.
+External portraits and the completed-eulogy update remain valid adjacent
+branches, but ten blank easels are not a native-safe default for an ordinary
+web Hub session.
 
 These selections correct the earlier consumer-only interpretation that
 mistook Library 29..32 for the Librarian body and treated Library 25..28 as

@@ -218,6 +218,19 @@ starts `Region+0x8E4C` at `+0.01`:
 | `3` StoreRoom | `(679.5,146.5)` to `(576.5,146.5)` | `(627.5,-1000)` | `0.45` |
 | `4` Office | `(1024.5,881.5)` to `(881.5,881.5)` | `(881.5,-1000)` | `0.45` |
 
+The contact primitive is `FUN_00410B40`, an inclusive circle-to-segment test:
+the squared closest-point distance is accepted when it is **less than or equal
+to** the actor radius squared. Courtyard base tick `FUN_0063EFC0` runs before
+these four tests, so collision resolution supplies the position tested by the
+portal code. This matters most at the Office. Its portal lies along the north
+edge of the closed sigil contour
+`(961,888)..(1009,871)..(1025,818)..(991,781)..(929,779)..(896,819)..`
+`(909,864)..(961,888)`. The player must approach that contour from the
+reachable south-west or south-east exterior and slide diagonally into contact;
+a test or navigator that starts inside the sigil is exercising an unreachable
+state. Web parity therefore needs an inclusive portal-contact predicate kept
+separate from the strict penetration predicate used to resolve solid walls.
+
 The private-room ticks use physical exits at the bottom view boundary.
 StoreRoom, Library, and Office test the exact horizontal segment
 `centerX +/- 100` at `bottomY - 100`. Contact scripts the local actor toward
