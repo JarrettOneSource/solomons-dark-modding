@@ -216,20 +216,38 @@ starts `Region+0x8E4C` at `+0.01`:
 | `1` Mortuary | `(179,394)` to `(33,529)` | `(32,363)` | `0.65` |
 | `2` Library | `(1995.5,606.5)` to `(1915.5,443.5)` | `(2057.5,460.5)` | `0.45` |
 | `3` StoreRoom | `(679.5,146.5)` to `(576.5,146.5)` | `(627.5,-1000)` | `0.45` |
-| `4` Office | `(1024.5,881.5)` to `(881.5,881.5)` | `(881.5,-1000)` | `0.45` |
+| `4` Office | `(1024.5,115.5)` to `(881.5,115.5)` | `(881.5,-1000)` | `0.45` |
 
 The contact primitive is `FUN_00410B40`, an inclusive circle-to-segment test:
 the squared closest-point distance is accepted when it is **less than or equal
 to** the actor radius squared. Courtyard base tick `FUN_0063EFC0` runs before
 these four tests, so collision resolution supplies the position tested by the
-portal code. This matters most at the Office. Its portal lies along the north
-edge of the closed sigil contour
-`(961,888)..(1009,871)..(1025,818)..(991,781)..(929,779)..(896,819)..`
-`(909,864)..(961,888)`. The player must approach that contour from the
-reachable south-west or south-east exterior and slide diagonally into contact;
-a test or navigator that starts inside the sigil is exercising an unreachable
-state. Web parity therefore needs an inclusive portal-contact predicate kept
-separate from the strict penetration predicate used to resolve solid walls.
+portal code.
+
+The Office row corrects a previous x87-stack transcription error. At
+`0x0050D7C0`, the function loads `0x00793078 = 115.5` and leaves it on the x87
+stack while it stores the two X constants `0x00793074 = 1024.5` and
+`0x00793070 = 881.5`. Both endpoint Y stores consume the retained `115.5`;
+`881.5` is the second endpoint X and the later scripted-target X, not the
+portal Y. The matching branch at `0x0050D85C` writes target region `4` at
+`0x0050D896`. A full-image write search found no second Courtyard writer for
+target `4`.
+
+This placement is also consistent with Courtyard attach `0x00503F20`: a fresh
+retail new game normalizes previous region `-1` to Office id `4`, places the
+local actor at `(952.5,67.5)`, and scripts it to `(952.5,157.5)`. The Office
+portal is therefore the north doorway immediately above the settled spawn,
+not the southern sigil. Web parity still needs an inclusive portal-contact
+predicate kept separate from the strict penetration predicate used to resolve
+solid walls.
+
+The correction was validated on 2026-08-14 against the unmodified retail EXE
+SHA-256 `03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`.
+A clean new game entered Office by holding W from spawn. An isolated loader
+run then measured the settled Courtyard actor at approximately
+`(944.0377,164.3609)` and, after 700 ms of W, region `4` at
+`(511.9665,903.5174)`. This is direct stock behavior, not a diagnostic region
+switch.
 
 The private-room ticks use physical exits at the bottom view boundary.
 StoreRoom, Library, and Office test the exact horizontal segment

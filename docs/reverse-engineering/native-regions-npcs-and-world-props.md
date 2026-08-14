@@ -108,6 +108,16 @@ each subsequent point is the first pair in a 16-byte record. The builder joins
 that previous point to each successive record point. They are authored
 collision chains, not rectangles implied by the room art.
 
+The native ownership seam is the region layout, not the PNG pixels. Each
+fixed-room constructor owns the room bounds and its authored contour table,
+while the matching presentation routine owns the registered base and late
+room layers. Depth-sorted solid props are separate world objects: their
+object/class state supplies the collision body and their auxiliary renderer
+selects the matching atlas record. Thus a faithful modular model should bind
+an architecture layer to its authored segment chain and bind each visual prop
+record to its authored actor collider. It should not infer collision from
+opaque pixels or flatten actor props into the background.
+
 A fresh 2026-08-13 live dump of every endpoint in all four ranges matched the
 web tables exactly, including authored order. Painting talk bodies remain
 `r15`, while each associated `r40` solid scenery body is centered two world
@@ -162,6 +172,15 @@ composition:
 These are renderer ownership facts, not merely record xrefs: the StoreRoom
 and Library prop records must remain independent depth entries, and the late
 room fragments must remain after the player/NPC list.
+
+This ownership also explains the adjacent Boneyard case without making the
+two formats identical. A Boneyard placed object already carries native class,
+variant, transform, and registered art identity; collision is class/variant
+behavior materialized from that object. Fixed Hub architecture instead uses a
+region-owned contour chain. Both benefit from one semantic prop/layout record
+feeding presentation and collision, but the Hub room schema must not be
+serialized into `.boneyard`, nor should either path use pixel masks as its
+physics contract.
 
 The live painter capture fixes the late StoreRoom geometry more precisely.
 Records 11 and 12 are both submitted with the room-center transform
