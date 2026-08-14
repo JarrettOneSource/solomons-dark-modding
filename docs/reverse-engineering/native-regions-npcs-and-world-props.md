@@ -108,6 +108,26 @@ each subsequent point is the first pair in a 16-byte record. The builder joins
 that previous point to each successive record point. They are authored
 collision chains, not rectangles implied by the room art.
 
+Those table points are primary-art-local, not Region-world coordinates. Each
+setup routine translates both endpoints before passing them to segment
+registrar `FUN_005213C0`:
+
+`world = viewOrigin + 0.5 * viewSize + (tablePoint - tableOrigin)`
+
+| Region | Setup routine | View size | Table origin | Table-to-world offset |
+| --- | ---: | ---: | ---: | ---: |
+| Mortuary | `0x00515290` | `1024 x 1024` | `(485,455)` | `(27,57)` |
+| StoreRoom | `0x00517A30` | `1075 x 800` | `(537.5,327.5)` | `(0,72.5)` |
+| Library | `0x00517F60` | `1024 x 1024` | `(496,409.5)` | `(16,102.5)` |
+| Office | `0x00517D50` | `1024 x 1024` | `(409.5,409.5)` | `(102.5,102.5)` |
+
+The translations exactly equal the centered primary-art offsets in the table
+above. Office setup, for example, loads double `409.5` from `0x00792140`,
+multiplies the `1024` view dimension by double `0.5` from `0x007DE808`, and
+adds the resulting `102.5` delta to every table X and Y before registration.
+The fixed actor and prop circles are separately authored in world coordinates
+and do not receive this architecture transform.
+
 The native ownership seam is the region layout, not the PNG pixels. Each
 fixed-room constructor owns the room bounds and its authored contour table,
 while the matching presentation routine owns the registered base and late
@@ -118,13 +138,26 @@ an architecture layer to its authored segment chain and bind each visual prop
 record to its authored actor collider. It should not infer collision from
 opaque pixels or flatten actor props into the background.
 
-A fresh 2026-08-13 live dump of every endpoint in all four ranges matched the
-web tables exactly, including authored order. Painting talk bodies remain
-`r15`, while each associated `r40` solid scenery body is centered two world
-units above it. The larger body fully determines ordinary player collision
-while the smaller body remains the interaction owner. That distinction should
-be preserved in the domain model without adding a second, behaviorally
-redundant collision response.
+A 2026-08-13 dump of every raw endpoint in all four static ranges matched the
+web tables exactly, including authored order. That result established table
+transcription but was previously misread as a world-space collision result. A
+fresh isolated live Office capture on 2026-08-14 used the same clean retail
+image (SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`),
+runtime base `0x00E20000`, Office object `0x15CB8FD8`, and embedded controller
+`0x15CB9350`. Its 48 registered segment objects contain transformed world
+coordinates: segment 0 is `(600.5,972.5)->(598.5,921.5)`, segment 38 is
+`(450.5,741.5)->(589.5,741.5)`, and segment 47 is
+`(416.5,733.5)->(451.5,741.5)`. Each is the corresponding raw table segment
+plus `(102.5,102.5)`. The controller retained its native `1024 x 1024` extent,
+`7 x 7` spatial grid with `150 x 150` cells, and enabled slide flag; the shared
+movement response was not the source of the reported displacement.
+
+Painting talk bodies remain `r15`, while each associated `r40` solid scenery
+body is centered two world units above it. The larger body fully determines
+ordinary player collision while the smaller body remains the interaction
+owner. That distinction should be preserved in the domain model without
+adding a second, behaviorally redundant collision response.
 
 The ten normal Mortuary Painting centers are `(512,697)`, `(350,683)`,
 `(673,683)`, `(744,540)`, `(590,540)`, `(434,540)`, `(279,540)`,
