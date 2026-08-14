@@ -60,8 +60,13 @@
     { "address": "0x005FA4B0", "role": "post-contact rock/bounds update and breakup dispatch" },
     { "address": "0x0060B700", "role": "Boulder breakup and actor removal", "vtable_slot": "0x6C" },
     { "address": "0x00473290", "role": "Anim_BoulderBit constructor" },
+    { "address": "0x00453060", "role": "Anim_Bouncer base constructor" },
+    { "address": "0x00456720", "role": "Anim_Bouncer gated motion, gravity, bounce, rotation, and base fade tick" },
     { "address": "0x00457E00", "role": "Anim_BoulderBit motion/fade tick", "vtable_slot": "0x08" },
     { "address": "0x00457E40", "role": "Anim_BoulderBit draw", "vtable_slot": "0x0C" },
+    { "address": "0x005E03A0", "role": "ZAnimLitObject full render entry through Puppet_RenderDispatch", "vtable_slot": "0x0C" },
+    { "address": "0x005E01E0", "role": "ZAnimLitObject child draw dispatch", "vtable_slot": "0x1C" },
+    { "address": "0x00624B40", "role": "Puppet common cull, Region-light modulation, and draw dispatcher" },
     { "address": "0x005FA3F0", "role": "rock/contact-list destructor body" },
     { "address": "0x005FBD90", "role": "Boulder deleting destructor" }
   ],
@@ -101,9 +106,37 @@
     "called_rock_scale_factor": 0.75,
     "called_rock_rotation_range_degrees": 360.0,
     "called_rock_rotation_step_range_degrees": [-30.0, 30.0],
+    "called_rock_lateral_magnitude_range": [0.0, 4.0],
+    "called_rock_height_initial": -2.0,
+    "called_rock_height_target_random_range": [0.0, 5.0],
+    "called_rock_height_step": 1.5,
+    "called_rock_fall_gravity": 1.0,
+    "called_rock_positive_height_velocity": 0.25,
+    "called_rock_remove_height_strictly_greater_than": 10.0,
     "breakup_fragment_count_minimum": 8,
     "breakup_fragment_count_charge_factor": 30.0,
-    "breakup_fragment_alpha_step": -0.02500000037252903
+    "breakup_fragment_direction_y_scale": 0.8,
+    "breakup_fragment_angle_jitter_divisor": 3.0,
+    "breakup_fragment_radial_placement_charge_factor": 45.0,
+    "breakup_fragment_speed_base": 1.5,
+    "breakup_fragment_speed_random_charge_factor": 1.5,
+    "breakup_fragment_height_random_charge_factor": -50.0,
+    "breakup_fragment_perspective_velocity_random_range": [-5.0, -2.0],
+    "breakup_fragment_perspective_velocity_scale_random_range": [0.75, 2.25],
+    "breakup_fragment_scale_floor_float32": 0.44999998807907104,
+    "breakup_fragment_scale_multiplier_float32": 0.6499999761581421,
+    "breakup_fragment_scale_cap": 0.75,
+    "breakup_fragment_gravity_per_motion_tick": 0.4,
+    "breakup_fragment_motion_skip_global_tick_modulus": 3,
+    "breakup_fragment_motion_skip_requires_nonzero_height": true,
+    "breakup_fragment_bounce_damping_float32": 0.30000001192092896,
+    "breakup_fragment_horizontal_damping_float32": 0.6499999761581421,
+    "breakup_fragment_stop_velocity_threshold": -0.75,
+    "breakup_fragment_base_alpha_initial": 2.0,
+    "breakup_fragment_enhanced_alpha_initial": 10.0,
+    "breakup_fragment_subclass_alpha_step_float32": -0.02500000037252903,
+    "breakup_fragment_base_alpha_step_float32": -0.014999999664723873,
+    "breakup_fragment_wrapper_sort_offset": -15.0
   },
   "assets": [
     { "atlas": "BadGuys", "record": 18, "role": "optional called-rock dust/fade auxiliary", "width": 40, "height": 34 },
@@ -119,7 +152,12 @@
     "projection": "0x0043A8A0 copies transformed X/Y exactly and ignores Z; registration is Boulder actor transform plus that orthographic XY offset",
     "main_draw_scale": "max(stored rock scale, float32(0.45))",
     "orientation": "while held, rotate +0x154 by 0.75 degrees/tick about normalized axis (0,-0.8,1); preserve the final matrix unchanged in flight",
-    "lighting": "main body and fragments enter world/lit animation ownership; no direct BadGuys[67] shadow reference exists in Boulder draw"
+    "lighting": {
+      "boulder": "vslot +0x0C is Puppet_RenderDispatch; sample inbound Region light at Boulder world XY; no recovered outbound light",
+      "called_rock": "direct world-animation vslot +0x0C bypasses Puppet_RenderDispatch and ZAnimLitObject; no inbound Region sample and no outbound light",
+      "breakup_fragment": "independent ZAnimLitObject wrapper copies fragment XY, uses Puppet_RenderDispatch for inbound Region light, and has no outbound-light intensity/range fields",
+      "shadow": "no direct BadGuys[67] shadow reference exists in Boulder draw"
+    }
   },
   "randomness": {
     "native_owner": "shared game RNG",
@@ -136,7 +174,7 @@
     "hold": "one cached actor follows the live staff emitter and aim while charge grows",
     "release": "0x005E5450 flips +0x1DC/+0x1DD from held to flight without replacing identity",
     "flight": "straight motion and 0x00620B60 contact query every native tick; the actor position is velocity-advanced before the query, so terminal breakup registers at that advanced sample; no native fixed timeout recovered",
-    "impact": "0x0060B700 restores saved charge, emits lit Anim_BoulderBit fragments, registers them as world/lit animations, then removes the Boulder",
+    "impact": "0x0060B700 restores saved charge, emits independently rooted Anim_BoulderBit children inside ZAnimLitObject wrappers, registers the wrappers, then removes the Boulder; the semantic event must retain native global birth tick for modulo-three motion",
     "interruption": "dispatcher/player primary transition and world actor teardown stop gather ownership; destructor clears both lists; web owner removal, death, scene replacement, and disconnect must remove the semantic actor/effects and balance loops"
   },
   "audio": {
@@ -152,7 +190,7 @@
   },
   "bounded_unknowns": [
     "A clean-stock 2026-08-14 hold/release/terrain-impact capture was unavailable because unrelated isolated stock processes owned the desktop.",
-    "The exact shared-RNG seed/order is intentionally not promoted into browser gameplay state.",
+    "The exact shared-RNG seed/order and its interleaving with unrelated actors are unrecovered and intentionally not promoted into browser gameplay state.",
     "The current web combat model has no native target damage/contact continuation lane; terrain contact and visual breakup can be authoritative without claiming the unreconstructed residual-damage rules.",
     "No direct Boulder shadow sprite call was recovered; generic world lighting/tint remains a sibling renderer responsibility."
   ]

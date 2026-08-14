@@ -767,10 +767,32 @@ are slots `+0x08/+0x0C`. A called rock:
   identity;
 - starts at speed `0.1`, multiplies speed by `1.1` per tick, caps at `5`, and
   self-removes inside five world units;
-- uses scale `0.75 * min(charge,0.75)`, initial perspective height `-2`, a
-  charge-dependent target height, random initial rotation in `0..360`
-  degrees, and random rotation step in `-30..30` degrees; and
-- switches to its fall/removal branch if the parent is no longer held.
+- uses scale `0.75 * min(charge,0.75)`, initial perspective height `-2`, and
+  target height `boulder[+0x1E0] - 20 - 20*charge + random(0,5)`. Held tick
+  sets Boulder `+0x1E0 = -20 - 10*charge`, so this simplifies to
+  `-40 - 30*charge + random(0,5)`; height moves toward that target by exactly
+  `1.5` per tick;
+- adds a per-tick perpendicular vector after the homing step: `0x0074704A`
+  converts the updated rock-to-parent vector to an angle, native radians-to-
+  degrees conversion adds `90`, and the constructor's fixed `random(0,4)`
+  magnitude is applied at that heading. It does not consume another RNG sample
+  each tick. Initial rotation is `random(0,360)` and advances by the fixed
+  constructor sample `random(-30,30)` each tick; and
+- switches to its fall branch on the first tick that observes the parent is no
+  longer held. In that branch perspective height adds fall velocity, velocity
+  adds `1`, positive height forces velocity to `0.25`, and the actor removes
+  only once height is greater than `10`. There is no twelve-tick fall, alpha
+  fade, fixed travel lifetime, or renderer-reconstructed birth history.
+
+The called-rock actor stores absolute world position and a pointer to the
+same Boulder identity. It is inserted directly into the world's animation
+collection at `Region + 0x278`; its vslot `+0x0C` is the full renderer
+`0x0045E440`, not `Puppet_RenderDispatch (0x00624B40)` and not a
+`ZAnimLitObject`. Its main sprite therefore does not sample inbound Region
+light through the common dispatcher. The optional enhanced-effects auxiliary
+sets black and then restores white before the main lit-bank sprite. Called
+rocks are independent painter roots at their own absolute position, with no
+outbound light role.
 
 Optional adjacent branches emit `BadGuys[18]` fade/dust and loose
 `Anim_BoulderBit` pieces. They are sibling cosmetic actors registered with the
@@ -807,19 +829,63 @@ per-tick terrain/actor contact. At `0x00620C2D` it commits the velocity step to
 the actor's `+0x18/+0x1C` position before issuing the world and actor contact
 queries. A terminal breakup is consequently registered at that advanced
 contact sample, not the prior clear position. Breakup vslot `+0x6C` at
-`0x0060B700` restores
-the saved charge and emits `floor(max(8, 30*charge))` randomized
-`Anim_BoulderBit` actors from the lit `BadGuys[2008..2010]` bank. Their shared
-tick `0x00457E00` owns motion/fade (base fade decrement `0.025` per tick), and
-`0x00457E40` owns drawing. Each fragment is wrapped in a registered
-`ZAnimLitObject`; after registration the Boulder removes itself.
+`0x0060B700` restores the saved charge and emits
+`floor(max(8, 30*charge))` randomized `Anim_BoulderBit` actors from the lit
+`BadGuys[2008..2010]` bank. Let `q=min(charge,1)`,
+`r=max(8,30*charge)`, and `step=360/r`. The first direction angle is
+`random(0,360)`; each emitted fragment advances it by
+`step + random(-step/3,+step/3)`. Direction Y is multiplied by `0.8` before
+both placement and velocity. Each fragment then uses these exact independent
+domains and recurrences:
 
-The visual random choices must not become authoritative gameplay RNG in the
-browser. A stable spell/particle-identity seed may reproduce their native
-distributions for all observers. By contrast, impact is a semantic world
-event: the authority must publish/retain the impact phase long enough for every
-client to render the same breakup and balance rolling audio. Reconstructing an
-impact from sparse snapshot disappearance would lose cadence and is invalid.
+- constructor perspective velocity and its retained bounce seed both start at
+  `-(random(0,3)+2)`, then breakup multiplies both by
+  `random(0,1.5)*q+0.75`; initial perspective height is
+  `-random(0,50*q)`;
+- radial placement is `random(0,45*charge)` along the flattened direction;
+  velocity multiplies that direction by `random(0,1.5*charge)+1.5`;
+- draw scale first compares `(random(0,0.75)+0.5)*charge` with exact float32
+  `0.44999998807907104`. When it passes, native consumes a second independent
+  `random(0,0.75)` for the selected value; otherwise it selects the floor. It
+  then multiplies by `0.6499999761581421` and caps the result at `0.75`;
+- initial rotation is `random(0,360)` and initial rotation step is
+  `random(0,10)+1`. Base tick `0x00456720` tests perspective height `+0x38`
+  before its global-tick modulus. While that motion lane is nonzero, ticks
+  divisible by three skip motion, gravity, rotation, and the base alpha
+  decrement. Other active-motion ticks add velocity to XY, perspective
+  velocity to height, `0.4` to that velocity, and the current rotation step to
+  rotation. Crossing height zero rerolls rotation step in `1..11`, multiplies
+  both the current perspective velocity and retained bounce seed by `0.3`,
+  applies a 50-percent horizontal velocity damping of `0.65`, and stops all
+  motion/rotation when the new perspective velocity is greater than `-0.75`.
+  That stop writes height zero, which bypasses the modulus branch thereafter;
+- base alpha starts at `2`, or `10` when Enhanced Effects is enabled. The
+  subclass subtracts float32 `0.025` after every completed base call. An
+  active every-third tick therefore loses only `0.025`; other active ticks and
+  every settled tick also lose the base float32 `0.015`, for a two-subtraction
+  total of `0.04`. Removal occurs when the resulting alpha is no longer
+  positive. Draw clamps visible alpha to `1`.
+
+`Anim_BoulderBit` vslot `+0x0C` is its child draw `0x00457E40`, but the child
+is wrapped in a separately registered `ZAnimLitObject` whose vslot `+0x0C`
+`0x005E03A0` calls `Puppet_RenderDispatch`. The wrapper copies the fragment's
+absolute XY and sets its painter/sort offset `+0xA0` to `-15`; it samples
+inbound Region light at that position before calling the child. This wrapper
+has no ZAnimLit intensity/range fields and emits no outbound light. The
+Boulder body likewise enters `Puppet_RenderDispatch` through vslot `+0x0C`
+and samples Region light at its own world position; it has no recovered
+outbound light. After all fragment wrappers are registered, the Boulder
+removes itself.
+
+The exact shared native RNG seed and interleaving with unrelated actors remain
+unrecovered. Those visual choices must not become authoritative gameplay RNG
+in the browser: stable spell/particle identities and independent sample lanes
+must reproduce the instruction-backed domains and angle recurrence for all
+observers. By contrast, called-rock absolute position/release/fall state and
+impact birth tick are authoritative presentation state. The authority must
+publish and retain them long enough for sparse snapshots and late observers;
+a renderer must not recreate historical emissions from Boulder age or infer
+breakup from disappearance.
 
 The static source is the 4,723,200-byte preserved executable SHA-256
 `03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`,
