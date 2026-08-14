@@ -362,6 +362,49 @@ def test_projectile_presentation_and_fire_goodguy_semantics_are_pinned() -> str:
     return "Atlas hooks, frame cadence, world queue, and damaging 0x7EE trails are pinned"
 
 
+def test_ether_flight_compositor_and_contact_ownership_are_pinned() -> str:
+    doc = _document()
+    heading = "## 2026-08-14 Ether primary presentation audit"
+    _require(heading in doc, "Ether presentation audit is absent")
+    audit = doc.split(heading, maxsplit=1)[1]
+    _require_tokens(
+        audit,
+        (
+            "`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`",
+            "`0x0053CFE0`",
+            "`0x005E4990` / `0x005E4F80`",
+            "`0x005FD270` / `0x005E0460`",
+            "`0x005E4A80` / `0x005F1F00` / `0x005E4B80`",
+            "`0x00535A30`",
+            "`0x0079C544`",
+            "`+0x154` | `RandomFloat(360)`",
+            "`+0x15C` | `1.0`",
+            "`+0x160` | `0`",
+            "`+0x161` | `0`",
+            "phase_next = phase + movementScalar * speed * 3",
+            "advances presentation by 9",
+            "root = (actor.x, actor.y - 10)",
+            "**two complete outer passes**",
+            "`Integer(10) + 2`",
+            "`alpha = 0.35 * abs(sin_deg(5 * phase))`",
+            "`alpha = 0.55 * abs(sin_deg(8 * phase))`",
+            "| `110` | purple core | 27 x 26",
+            "| `111` | white spark/cloud | 40 x 40",
+            "| `112` | white ray | 40 x 40",
+            "`a7b13b464e035e2099081ce942db4aa231fc7c20de1ecacbd9d0a590132c88d3`",
+            "ordinary flight",
+            "`BadGuys[53]`, heading-aligned",
+            "`Anim_FadeMM`",
+            "`ZAnimLit`",
+            "Flight itself requests no sound",
+            "does not construct a separate source glow or launch trail",
+            "Do not infer impact from containment expiry or disappearance",
+        ),
+        "Ether flight/contact ownership audit",
+    )
+    return "Ether records 110..112 own flight; record 53 and FadeMM remain contact-owned"
+
+
 # Emitter points the goldens resolve to, from records #3263 (K=0) and #3431 (K=7)
 # of the images/Clothes.bundle common stream, point index 1.
 _EMITTER_BANK_0 = (-45.5, -15.5)

@@ -571,6 +571,7 @@ from static_re_projectile_spell_mechanics_contracts import (
     test_cast_glyph_emitter_index_and_offsets_are_pinned,
     test_cast_glyph_emitter_resolves_every_recorded_projectile_spawn,
     test_earth_charge_curve_and_release_geometry_are_exact,
+    test_ether_flight_compositor_and_contact_ownership_are_pinned,
     test_materialized_projectile_trajectories_pin_native_motion,
     test_projectile_contact_events_cross_check_existing_damage_goldens,
     test_projectile_goldens_pin_live_capture_provenance_and_rank_coverage,
@@ -2200,6 +2201,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "projectile presentation and Fire_Goodguy semantics are pinned",
         test_projectile_presentation_and_fire_goodguy_semantics_are_pinned,
+    ),
+    (
+        "Ether flight compositor and contact ownership are pinned",
+        test_ether_flight_compositor_and_contact_ownership_are_pinned,
     ),
     (
         "Cast glyph emitter index arithmetic and element offsets are pinned",

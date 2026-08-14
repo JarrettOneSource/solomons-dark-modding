@@ -122,6 +122,13 @@ written; the spawn point is not — see Not Yet Reversed.
 `0x0053CFE0` asks `0x005B7080` for type `0x7D3`. The actor ticks at
 `0x005FD270` and draws at `0x005E0460`.
 
+The flight body is **not** `BadGuys[53]`. Draw `0x005E0460` delegates the
+whole in-flight presentation to Ether compositor `0x00535A30`, which consumes
+registered `BadGuys[110..112]`. Record 53 belongs only to the surviving-pierce
+contact fade described below. The 2026-08-14 presentation audit at the end of
+this report records the exact compositor formula and corrects the older
+one-sprite shorthand.
+
 The initial point is the common glyph emitter with local `(0,+10)` applied.
 Target acquisition probes `100` units ahead of the caster. Initial speed is
 
@@ -687,7 +694,7 @@ Drawing the following frames as a screen-space overlay is not equivalent.
 
 | Mechanic | Native sprite/atlas hook | Frame cadence / ownership |
 | --- | --- | --- |
-| Ether missile | `BadGuys[53]` | gameplay actor position/heading; world-queued |
+| Ether missile | compositor `0x00535A30`, `BadGuys[110..112]`; contact-only `BadGuys[53]` | radial two-pass gameplay-actor body at `(x,y-10)`, world-queued; record 53 is emitted only by a surviving-pierce contact |
 | Fireball | main `BadGuys[255..266]`; auxiliary `BadGuys[110..112]` | main frame `(age_ticks / 3) % 12`: 3 ticks/frame, 36 ticks/cycle; cosmetic particles are separate transients |
 | Air lightning | no atlas entry | procedural mesh at `0x00536380`; fade lifetime/alpha `1.0`, minus `0.1` per tick |
 | Frost Jet | `BadGuys[30]` core and `[28]` forward glint only; `[32]` Hail and `[14]` Cold Aura are learned branches | one transient/tick with Enhanced Effects Off or two/tick with it On; each moves at rank-1 speed `4` and remains about 32–33 ticks |
@@ -951,7 +958,7 @@ and render families agree with the durable goldens and tables above.
 
 | Slice | Native press/hold/release contract | Native world visual contract | Native cast audio contract |
 | --- | --- | --- | --- |
-| Ether / Magic Missile (`8`, type `0x7D3`) | one actor on the press action marker; holding the same press does not duplicate that action | spawn at staff emitter plus `(0,+10)`; velocity `3` world units/tick; radius `15`; body `BadGuys[53]`; world queued; no fixed lifetime | registry 57 `sounds\\magicmissile` once at emission; flight is silent |
+| Ether / Magic Missile (`8`, type `0x7D3`) | one actor on the press action marker; holding the same press does not duplicate that action | spawn at staff emitter plus `(0,+10)`; velocity `3` world units/tick; radius `15`; two-pass body compositor `0x00535A30` with `BadGuys[110..112]`; world queued; no fixed lifetime; record 53 is contact-only | registry 57 `sounds\\magicmissile` once at emission; flight is silent |
 | Fire / Fire Missile (`16`, type `0x7D4`) | one actor on the press action marker | emitter plus `(0,+10)` plus `20` along aim; velocity `4.5`/tick; radius `22.5`; main strip `BadGuys[255..266]`, frame `(age/3)%12`; auxiliary family `[110..112]` | registry 97 `sounds\\throwfire` once at emission; flight is silent |
 | Air / Lightning (`24`) | start on press, sustain once per held tick, stop on release; constant Staff action is `K=0` on insertion and `K=7` thereafter; no projectile actor | a reach-205 rank-1 ray from cast origin; each procedural bolt/fade survives 10 ticks with alpha `1 - 0.1*age`; no dedicated spell-atlas projectile | registry 54 `sounds\\lightningstart` on the start edge; registry 162 `sounds\\lightningloop__loop` owned for the channel lifetime |
 | Water / Frost Jet (`32`) | start on press, emit once per held tick, stop on release; constant Staff action is `K=0` on insertion and `K=7` thereafter; no persistent gameplay projectile | rank-1 cone reach `205` is immediate gameplay only; shipped Enhanced Effects default emits two speed-`4` visual transients/tick; 75% Normal / 25% Over, 32-33 ticks; `BadGuys[30]` core plus `[28]` glint only | registry 44 `sounds\\icestart` on the start edge; registry 161 `sounds\\iceloop__loop` owned for the channel lifetime |
@@ -1016,3 +1023,188 @@ one-shot aim on accepted press and retain that heading through the queued
 action; refresh sustained heading only from live held aim and otherwise retain
 the last channel heading. Do not independently rotate robe, staff, emitter, or
 VFX, and do not let snapshot interpolation infer a second facing owner.
+## 2026-08-14 Ether primary presentation audit
+
+### Scope and method
+
+This audit closes the Magic Missile flight presentation rather than accepting
+the earlier `BadGuys[53]` shorthand. The target is the preserved retail 0.72.5
+`SolomonDark.exe`, 4,723,200 bytes, SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`.
+Fresh read-only headless Ghidra replicas decompiled and instruction-dumped:
+
+| Role | Native address |
+| --- | ---: |
+| Primary handler | `0x0053CFE0` |
+| `MagicMissile` constructor / deleting destructor | `0x005E4990` / `0x005E4F80` |
+| Fixed tick / draw | `0x005FD270` / `0x005E0460` |
+| Target probe / contact / continuation | `0x005E4A80` / `0x005F1F00` / `0x005E4B80` |
+| Shared Ether compositor | `0x00535A30` |
+| `Anim_FadeMM` tick / draw | `0x00454000` / `0x00457110` |
+| `Anim_FadeAdditive` tick / draw | `0x00454000` / `0x004560A0` |
+| Contact `ZAnimLit` constructor / tick / draw / destructor | `0x005E03D0` / `0x005FD1D0` / `0x005E01E0` / `0x005E47D0` |
+
+The causal pass followed Staff Cast 1 through construction, actor tick, draw,
+contact, and deletion. The adjacency pass resolved the animation vtables,
+registered texture range, contact-only record 53 path, audio calls, sibling
+users of the compositor, and `ZAnimLit` wrapper. The existing machine catalogs
+already distinguish `0x00535A30 -> BadGuys[110..112]` from
+`0x005F1F00 -> BadGuys[53]`; this report now agrees with that catalog.
+
+### Actor layout and lifetime
+
+`MagicMissile` is factory type `0x7D3`, allocation size `0x168`, vtable
+`0x0079C544`. Constructor `0x005E4990` initializes the presentation-relevant
+tail as follows:
+
+| Offset | Initial value | Meaning in this path |
+| ---: | ---: | --- |
+| `+0x13C` | `0` before handler write | scalar clockwise heading |
+| `+0x140/+0x142` | `-1/-1` | target group/slot identity |
+| `+0x144` | `3.0` | base movement speed |
+| `+0x148` | `2.0` | turn input used by homing |
+| `+0x14C` | `0.01` | turn accumulator input |
+| `+0x150` | `0` | target-loss/contact policy byte |
+| `+0x154` | `RandomFloat(360)` | independent visual phase, degrees |
+| `+0x158` | `0` before handler write | damage payload |
+| `+0x15C` | `1.0` | visual scale |
+| `+0x160` | `0` | optional render-half-alpha flag |
+| `+0x161` | `0` | pierce count |
+| `+0x164` | `1.0` | post-pierce scale/loss factor |
+
+Tick `0x005FD270` runs the inherited timers, converts `+0x13C` to a unit
+vector, and advances by `movementScalar(+0x120) * speed(+0x144)`. Every fifth
+tick it tests a five-tick terrain segment. After movement and world-list
+publication it advances visual phase:
+
+```text
+phase_next = phase + movementScalar * speed * 3
+```
+
+Neutral rank 1 therefore moves 3 world units and advances presentation by 9
+degrees per native tick. The remainder is homing/target validation and the
+per-tick proximity callback; none of those paths constructs a flight-trail
+animation. In particular, call `0x0045ADE0` is the group/slot target resolver,
+not an effect constructor.
+
+There is no native fixed flight lifetime. Terrain or actor contact enters
+`0x005F1F00`; a missing owner also removes the actor. Deleting destructor
+`0x005E4F80` restores `MagicMissile::vftable`, calls inherited teardown
+`0x006289F0`, and frees when requested. The Website's collision-free 500-tick
+containment horizon is therefore not a recovered native duration.
+
+### Exact flight compositor
+
+Draw `0x005E0460` samples
+
+```text
+S = visualScale + RandomFloat(visualScale * 0.5)
+root = (actor.x, actor.y - 10)
+```
+
+and calls `0x00535A30(root.x, root.y, S, phase)`. It applies a temporary white
+alpha 0.5 only when byte `+0x160` is nonzero; the neutral rank-1 constructor
+uses the normal branch. The actor is a radial composite. It is not one rigid
+sprite rotated into heading.
+
+The compositor performs **two complete outer passes**. Both reuse the same
+phase and `S`; they consume independent global-RNG samples. Each pass submits
+the following operations in order:
+
+1. Normal purple `(1,0.5,1)` core `BadGuys[110]`:
+   `scale = (2.5 + 0.15 * abs(sin_deg(15 * phase))) * S`,
+   `alpha = 0.2 + U[0,0.25]`.
+2. Normal purple core `BadGuys[110]`:
+   `scale = (1.5 + 0.15 * abs(sin_deg(15 * phase))) * S`,
+   `alpha = 0.35 + U[0,0.55]`.
+3. Enable the additive lane, then draw white spark `BadGuys[111]`:
+   `scale = (1 + U[0,0.1]) * S`,
+   `alpha = 0.35 * abs(sin_deg(5 * phase))`,
+   `rotation = 50 * S * sin_deg(phase)`.
+4. Draw `Integer(10) + 2`, hence 2 through 11, more additive white
+   `BadGuys[111]` particles. Each samples a random unit direction, radius
+   `U[0,20*S]`, scale `(0.25 + U[0,0.2]) * S`, alpha `U[0,0.75]`, and
+   rotation `U[0,360]`.
+5. Draw additive white ray `BadGuys[112]`:
+   `scale = (1 + U[0,0.3]) * S`,
+   `alpha = 0.55 * abs(sin_deg(8 * phase))`,
+   `rotation = 50 * S * sin_deg(0.5 * phase)`.
+6. Disable the additive lane before the next outer pass or function return.
+
+The two cores deliberately share the `15 * phase` wave. The ray alpha uses
+`8 * phase`, not 11. Both details are confirmed by raw instructions and
+correct older decompiler-derived approximations.
+
+The app registration array at `+0x46BC` is three `0xC4` records:
+
+| Record | Flight role | Extracted size | Website PNG SHA-256 |
+| ---: | --- | ---: | --- |
+| `110` | purple core | 27 x 26 | `dc85c8e39483f4256ec7b28240d33a15b6966c0e997554598f19091d7a4c189f` |
+| `111` | white spark/cloud | 40 x 40 | `3b02db24cc4caaad26432e4bf3e480c71c1a99e9cc8fb4fb4703077af22180c0` |
+| `112` | white ray | 40 x 40 | `d442af9ee058baceb7df36d682a4663cfd207818572fe77830833ef555802630` |
+
+They come from `images/BadGuys.bundle`, SHA-256
+`a7b13b464e035e2099081ce942db4aa231fc7c20de1ecacbd9d0a590132c88d3`.
+The actor remains one world-queue participant at gameplay Y; its much larger
+visible cloud does not alter radius 15, culling ownership, or painter key.
+
+### Contact and impact adjacency
+
+`BadGuys[53]` at app field `+0x28CC` is 28 x 58 and does not participate in
+ordinary flight. `0x005F1F00` owns two distinct contact presentation paths:
+
+- With no pierce left, construct `Anim_FadeMM` (vtable `0x007848C4`) at the
+  missile position. Its scale is `2 * missileVisualScale`; lifetime/alpha
+  scalar starts at 2. Shared tick `0x00454000` subtracts 0.1 and removes at
+  zero, yielding 20 ticks. Render `0x00457110` calls the complete Ether
+  compositor with the `-9999` phase sentinel, which selects the global render
+  clock. The animation is wrapped by `ZAnimLit`: initial light scalar 0.75,
+  multiplier 1, delta -0.05 per tick, radius 100. The wrapper owns child
+  deletion and disappears with the child.
+- With pierce remaining, decrement it, scale damage and visual magnitude, and
+  advance along heading in steps capped at 5 world units until the continuation
+  predicate clears. Each step constructs additive `Anim_FadeAdditive` (vtable
+  `0x007847F4`) using `BadGuys[53]`, heading-aligned, alpha 1. Its inherited
+  0.1 decrement gives a ten-tick streak. This is the record-53 use previously
+  misidentified as the Magic Missile body.
+
+Normal contact requests registry 58 `sounds\\magicmissilehit` at
+`0x005F1FF2`; projectile construction already requested registry 57
+`sounds\\magicmissile` at `0x0053D9CA`. Flight itself requests no sound.
+The Staff action/source lane supplies the cast pose and socket only; the
+handler does not construct a separate source glow or launch trail.
+
+### Web consumption and open boundary
+
+The cohesive Website implementation should render only the instruction-backed
+flight compositor for its current collision-free projectile actor. It must
+remove record 53 from flight, keep all `110/111/112` operations inside the
+actor's one world-painter container, and retain Boneyard world-light tinting.
+Presentation RNG should be a deterministic projection of stable projectile id,
+age tick, and draw channel. That intentionally preserves the stock distributions
+without coupling browser cosmetics to authoritative gameplay RNG or browser
+frame count.
+
+Do not infer impact from containment expiry or disappearance. `Anim_FadeMM`,
+its light, record-53 pierce streaks, and impact audio stay dormant until an
+authoritative contact semantic exists. The higher-skill writer and exact name
+of byte `+0x160` remain open; rank-1 uses zero. A fresh clean-stock pixel
+capture remains desirable for final color-management comparison, but it cannot
+change the recovered object ownership, records, ordering, phase recurrence, or
+formulas above.
+
+### Validation receipt
+
+The registered focused static contract
+`test_ether_flight_compositor_and_contact_ownership_are_pinned` passes. It
+requires the exact binary identity, ownership addresses, actor fields, phase
+recurrence, root, both complete pass facts, particle count, phase lanes,
+registered records and sizes, bundle hash, contact classes, audio boundary,
+absence of a source glow/trail, and the prohibition on inferred impacts.
+
+`python3 tests/re/run_static_re_tests.py --ci` ran 465 repository-available
+contracts: 463 passed, including the new registered Ether contract. The two
+failures are pre-existing documentation drifts outside this change's files:
+the native-animation attachment table is missing its 18- and 12-facing formula
+strings, and the native-audio trigger table no longer enumerates exactly 64
+reviewed rows. No animation or audio-census document is modified by this audit.
