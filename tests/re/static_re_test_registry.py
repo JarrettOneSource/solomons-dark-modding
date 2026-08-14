@@ -40,6 +40,9 @@ from static_re_native_session_flow_contracts import (
     test_native_session_flow_state_enum_is_pinned,
     test_native_session_flow_transition_step_order_is_pinned,
 )
+from static_re_native_web_combat_lifecycle_contracts import (
+    test_native_web_combat_lifecycle_integration_contract_is_pinned,
+)
 from static_re_native_class_loadout_contracts import (
     test_native_class_loadout_census_and_identity_are_pinned,
     test_native_class_loadout_definition_to_actor_mapping_is_pinned,
@@ -1874,6 +1877,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native enemy target acquisition is recovered and layout-backed",
         test_native_enemy_target_acquisition_is_recovered_and_layout_backed,
+    ),
+    (
+        "Native-to-Website survival combat integration contract is pinned",
+        test_native_web_combat_lifecycle_integration_contract_is_pinned,
     ),
     (
         "Extended target selection completes the native chase latch",
