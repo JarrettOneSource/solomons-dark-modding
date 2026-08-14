@@ -194,6 +194,48 @@ actors; they are not raw pointees recursively deleted by their parent. The
 `Anim_BoulderBit` deleting destructor `0x00479F60` has no collection cleanup
 because each fragment is itself a registered animation object.
 
+The 2026-08-14 Earth presentation adjacency pass closes what those two lists
+contain and how they reach the renderer. The durable scalar/address/art join is
+[`earth-boulder-vfx-catalog.json`](earth-boulder-vfx-catalog.json).
+
+- Each smart Rock is 0x3C bytes: local XYZ `+0x00..08`, transformed XYZ
+  `+0x0C..14`, scale `+0x18`, and sprite variant `+0x1C`.
+- Boulder vslot `+0x68` (`0x005FE430`) replaces the main collection whenever
+  `floor(30*charge)` changes. It installs a central variant-3
+  `BadGuys[171]` rock scaled `4*charge`, then `ceil(30*charge)` Fibonacci-
+  sphere points at radius `30*charge`. Shell variants `0..2` select
+  `BadGuys[168..170]` and use a charge-scaled random factor `0.5..1.25`,
+  capped at one.
+- Draw vslot `+0x1C` (`0x0060AC40`) transforms those points by the matrix at
+  `+0x154`, accepts only strict transformed `Z > -40`, sorts by transformed Z,
+  and draws the collection. Because the rank-1 radius is at most `30` and the
+  matrix is rotation-only, that plane cannot cull a valid rank-1 Rock.
+  `0x0043A8A0` then copies transformed X/Y exactly; Z has no projection term
+  and is used only for culling/order. Main draw scale is
+  `max(stored_scale, float32(0.45))`. Record 86 is a separate opening glimmer:
+  mix `+0x1EC` starts at one and decreases by `0.035`/tick; glimmer alpha is
+  `mix`, while rock alpha is `1-mix`.
+- Held tick rotates `+0x154` by `0.75` degrees about normalized axis
+  `(0,-0.8,1)` through `0x00403340`. Release preserves and stops that matrix;
+  the flight body does not keep flat-spinning.
+- Held tick `0x00609D30` separately registers `Anim_CalledRock` objects. Their
+  `0x00457FF0` tick accelerates inward from `0.1` by `x1.1` to a cap of `5`,
+  removing inside distance `5`; `0x0045E440` draws lit
+  `BadGuys[2008..2010]`. Spawn radius is sampled below
+  `clamp(50*charge,5,120)`. Optional `BadGuys[18]` dust is another sibling
+  actor, not part of the main rock list.
+- Impact vslot `+0x6C` (`0x0060B700`) emits
+  `floor(max(8,30*charge))` `Anim_BoulderBit` fragments using the same lit
+  `[2008..2010]` bank, registers each through `ZAnimLitObject`, and removes the
+  Boulder. The base fragment fade decrement is `0.025`/tick.
+- Normal flight `0x00620B60` writes the velocity-advanced actor position
+  before contact queries. A terminal breakup therefore uses that advanced
+  contact sample rather than the preceding clear position.
+
+This also corrects the prior human summary: `BadGuys[86]` is not a charge-
+scaled body sprite. A renderer that draws only record 86 reproduces the
+opening glimmer and necessarily omits the actual Boulder.
+
 ## Proven inheritance and behavioral families
 
 The vtables and constructor chains establish these native families:

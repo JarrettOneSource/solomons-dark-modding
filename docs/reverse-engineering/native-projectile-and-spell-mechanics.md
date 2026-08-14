@@ -511,6 +511,127 @@ Boulder can continue and contact a different target. That is residual
 multi-target behavior, not same-target periodic damage. There is no recovered
 fixed flight expiration.
 
+### Construction, called rocks, draw order, and breakup
+
+The 2026-08-14 two-pass presentation audit corrects the earlier shorthand that
+called `BadGuys[86]` the Boulder body. Record 86 is a 94 x 94 opening glimmer.
+The visible body is a native collection of individual `Boulder::Rock` records.
+The machine-readable address/field/constant/art join is
+[`earth-boulder-vfx-catalog.json`](earth-boulder-vfx-catalog.json).
+
+`Boulder + 0x13C` owns a
+`PointerList<SmartPointer<Boulder::Rock>>`; backing storage is at `+0x150`.
+Each 0x3C-byte Rock holds local XYZ at `+0x00..+0x08`, draw-transformed XYZ at
+`+0x0C..+0x14`, scale at `+0x18`, and a sprite variant at `+0x1C`.
+The constructor installs `Boulder::vftable` `0x0079E014`; tick
+`0x00609D30` calls vslot `+0x68` (`0x005FE430`) whenever
+`floor(30 * charge)` changes.
+
+`0x005FE430` replaces the collection as one cohesive shell:
+
+1. It creates a central variant-3 Rock at local `(0,0,0)` with scale
+   `4 * charge`. Variant 3 selects `BadGuys[171]`, the 17 x 17 center pebble.
+2. It calls `0x00411400` with `n = 30 * charge` and radius
+   `r = 30 * charge`. The loop emits `ceil(n)` points. Its algebra is the
+   deterministic Fibonacci sphere
+   `y = 2*i/n - 1 + 1/n`, `theta = i*pi*(3-sqrt(5))`, normalized and scaled to
+   `r`; this is not random scatter.
+3. Each shell point chooses native integer variant `0..2`, mapping to
+   `BadGuys[168..170]`. Its scale is
+   `min(1, (random(0,0.75)+0.5) * min(charge,1))`.
+
+The initial charge `0.18` therefore produces six shell points plus the central
+pebble; exactly `0.3` produces nine shell points plus center, while the observed
+float32 release row `0.3012498915` produces ten plus center; full charge
+produces 30 shell points plus center. Variant and scale samples use the shared
+native RNG, but count, positions, radius, charge thresholds, and collection
+replacement are deterministic.
+
+Held orientation is also native state, not a flat sprite spin. Constructor
+field `+0x70` is float `3`; `0x00609D30` multiplies it by double `0.25` and
+passes `0.75` degrees per tick with axis `(0,-0.8,1)` to matrix helper
+`0x00403340`. That helper normalizes the axis. The matrix advances only while
+held and is preserved unchanged after release.
+
+Construction also owns separate inward particles. While held and below full
+charge, `0x00609D30` creates an `Anim_CalledRock` every tick below charge
+`0.25`; at later charge it does so when `randInt(0,2) == 1`. The constructor is
+`0x00453890`, vtable `0x00784EE4`; tick `0x00457FF0` and draw `0x0045E440`
+are slots `+0x08/+0x0C`. A called rock:
+
+- chooses lit variant `0..2` from `BadGuys[2008..2010]`, not the main body
+  bank;
+- starts at a random direction/radius around the live Boulder whose sampled
+  upper radius is `clamp(50*charge,5,120)`, then homes toward the same actor
+  identity;
+- starts at speed `0.1`, multiplies speed by `1.1` per tick, caps at `5`, and
+  self-removes inside five world units;
+- uses scale `0.75 * min(charge,0.75)`, initial perspective height `-2`, a
+  charge-dependent target height, random initial rotation in `0..360`
+  degrees, and random rotation step in `-30..30` degrees; and
+- switches to its fall/removal branch if the parent is no longer held.
+
+Optional adjacent branches emit `BadGuys[18]` fade/dust and loose
+`Anim_BoulderBit` pieces. They are sibling cosmetic actors registered with the
+world; they are not entries inserted into the persistent main shell.
+
+Main draw vslot `+0x1C` at `0x0060AC40` transforms every Rock's local XYZ by
+the Boulder matrix at `+0x154`, keeps only strict `transformed_z > -40.0`,
+sorts survivors by transformed Z, and draws `BadGuys[168 + variant]`.
+Constructor helper `0x00402CC0` initializes that matrix to identity, including
+zero translation. Rank-1 local shell radius is at most `30`, and the held
+update is a pure rotation, so its transformed Z stays in `[-30,+30]`: the
+`-40` depth-plane branch cannot cull a valid rank-1 main Rock. The browser
+still applies the predicate because it is part of the native draw contract.
+
+Projection helper `0x0043A8A0` is only two float loads/stores: it copies the
+transformed X and Y fields and never reads Z. Z therefore controls culling and
+sort order only; it contributes no perspective displacement or registration
+offset. The sprite is registered at the Boulder actor transform plus that
+orthographic XY offset. Draw also clamps every main Rock's stored scale to a
+minimum float32 `0.44999998807907104` (`0x00785370`; the comparison double at
+`0x00786C88` has the same value). This preserves a rotating 3D pile rather
+than a flat rotating bitmap or perspective projection. The opening mix at
+`+0x1EC` starts at `1` and loses `0.035` per native tick:
+record 86 draws with that mix while the rock collection draws with
+`1 - mix`. Thus the white glimmer fades out as the assembled body fades in;
+it never becomes the body. The glimmer scale is `4.1 * charge`. No direct
+`BadGuys[67]` shadow reference exists in this draw method; generic world
+lighting/tint remains a sibling renderer concern.
+
+Release finalizer `0x005E5450` flips the adjacent held/flight bytes at
+`+0x1DC/+0x1DD` and preserves actor identity, shell records, charge, matrix,
+and direction. Flight remains straight at speed `3`; `0x00620B60` owns the
+per-tick terrain/actor contact. At `0x00620C2D` it commits the velocity step to
+the actor's `+0x18/+0x1C` position before issuing the world and actor contact
+queries. A terminal breakup is consequently registered at that advanced
+contact sample, not the prior clear position. Breakup vslot `+0x6C` at
+`0x0060B700` restores
+the saved charge and emits `floor(max(8, 30*charge))` randomized
+`Anim_BoulderBit` actors from the lit `BadGuys[2008..2010]` bank. Their shared
+tick `0x00457E00` owns motion/fade (base fade decrement `0.025` per tick), and
+`0x00457E40` owns drawing. Each fragment is wrapped in a registered
+`ZAnimLitObject`; after registration the Boulder removes itself.
+
+The visual random choices must not become authoritative gameplay RNG in the
+browser. A stable spell/particle-identity seed may reproduce their native
+distributions for all observers. By contrast, impact is a semantic world
+event: the authority must publish/retain the impact phase long enough for every
+client to render the same breakup and balance rolling audio. Reconstructing an
+impact from sparse snapshot disappearance would lose cadence and is invalid.
+
+The static source is the 4,723,200-byte preserved executable SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`,
+reanalyzed read-only with Ghidra 12.0.3 from
+`Decompiled Game/ghidra_project/SolomonDark.gpr`. Desktop ownership prevented a
+new clean-stock run. Historical instrumented observer frame
+`/mnt/d/codex-evidence/spell-fx-20260726/investigation/boulder-observer-trace/earth/client_casts/cast-01/chosen-host.png`
+(SHA-256
+`c0893564eb55353b02f28b9e70b97350f0ab1be6b6efa2b82df864ae99b5595b`)
+corroborates the multi-rock cluster at the live staff/hand emitter with the
+bright glimmer behind it. It is composition/attachment evidence, not a clean
+timing or count oracle.
+
 Damage scaling from charge is already derived bit-exactly in
 [`earth-boulder-damage-formula-2026-07-27.md`](earth-boulder-damage-formula-2026-07-27.md).
 This document deliberately does not derive it again. The accepted post-fix
@@ -570,7 +691,7 @@ Drawing the following frames as a screen-space overlay is not equivalent.
 | Fireball | main `BadGuys[255..266]`; auxiliary `BadGuys[110..112]` | main frame `(age_ticks / 3) % 12`: 3 ticks/frame, 36 ticks/cycle; cosmetic particles are separate transients |
 | Air lightning | no atlas entry | procedural mesh at `0x00536380`; fade lifetime/alpha `1.0`, minus `0.1` per tick |
 | Frost Jet | `BadGuys[30]` core and `[28]` forward glint only; `[32]` Hail and `[14]` Cold Aura are learned branches | one transient/tick with Enhanced Effects Off or two/tick with it On; each moves at rank-1 speed `4` and remains about 32–33 ticks |
-| Boulder | body `BadGuys[86]`; debris `[168..171]`; auxiliary `[18]`, `[2008..2010]` | body scale follows live charge; do not replace it with a fixed-size frame animation |
+| Boulder | opening glimmer `BadGuys[86]`; main rock collection `[168..171]`; called-rock/breakup bank `[2008..2010]`; optional dust `[18]` | crossfade glimmer to a charge-sized, matrix-transformed, depth-sorted multi-rock shell; called rocks home inward; impact fragments are separate lit actors |
 | `Fire_Goodguy` | `DeadHawg[46..77]` | phase `+0.25`/tick (four ticks per integer phase); alpha ramps independently |
 
 The sprite ids identify native array entries, not standalone image filenames.
@@ -834,7 +955,7 @@ and render families agree with the durable goldens and tables above.
 | Fire / Fire Missile (`16`, type `0x7D4`) | one actor on the press action marker | emitter plus `(0,+10)` plus `20` along aim; velocity `4.5`/tick; radius `22.5`; main strip `BadGuys[255..266]`, frame `(age/3)%12`; auxiliary family `[110..112]` | registry 97 `sounds\\throwfire` once at emission; flight is silent |
 | Air / Lightning (`24`) | start on press, sustain once per held tick, stop on release; constant Staff action is `K=0` on insertion and `K=7` thereafter; no projectile actor | a reach-205 rank-1 ray from cast origin; each procedural bolt/fade survives 10 ticks with alpha `1 - 0.1*age`; no dedicated spell-atlas projectile | registry 54 `sounds\\lightningstart` on the start edge; registry 162 `sounds\\lightningloop__loop` owned for the channel lifetime |
 | Water / Frost Jet (`32`) | start on press, emit once per held tick, stop on release; constant Staff action is `K=0` on insertion and `K=7` thereafter; no persistent gameplay projectile | rank-1 cone reach `205` is immediate gameplay only; shipped Enhanced Effects default emits two speed-`4` visual transients/tick; 75% Normal / 25% Over, 32-33 ticks; `BadGuys[30]` core plus `[28]` glint only | registry 44 `sounds\\icestart` on the start edge; registry 161 `sounds\\iceloop__loop` owned for the channel lifetime |
-| Earth / Boulder (`40`, type `0x7D5`) | create on the first active tick; charge while the selected primary remains latched; after input release, the player tick retains Earth while charge is strictly below `0.3`, then releases the same cached actor on the following eligible tick | constructor charge is float32 `0.18`; the first post-tick actor row is age `1` at `0.181250006`; add float32 `0.00125` per active tick and clamp at `1`; a two-frame request reaches update `97` at `0.301249892` while still held, then first flies at age `98`; held radius `15`; release speed `3`/tick; body `BadGuys[86]` scaled by charge | actor creation plays registry 87 `sounds\\startboulder` once; registry 159 `sounds\\gatherrocksloop__loop` starts with Earth and stops on primary transition or charge cap; moving boulder owns registry 168 `sounds\\rollingstoneloop__loop` |
+| Earth / Boulder (`40`, type `0x7D5`) | create on the first active tick; charge while the selected primary remains latched; after input release, the player tick retains Earth while charge is strictly below `0.3`, then releases the same cached actor on the following eligible tick | constructor charge is float32 `0.18`; the first post-tick actor row is age `1` at `0.181250006`; add float32 `0.00125` per active tick and clamp at `1`; a two-frame request reaches update `97` at `0.301249892` while still held, then first flies at age `98`; held radius `15`; release speed `3`/tick; record 86 crossfades into the depth-sorted `[168..171]` collection, while called rocks and breakup use `[2008..2010]` | actor creation plays registry 87 `sounds\\startboulder` once; registry 159 `sounds\\gatherrocksloop__loop` starts with Earth and stops on primary transition or charge cap; moving boulder owns registry 168 `sounds\\rollingstoneloop__loop` |
 
 ### Deliberate PoC boundary
 

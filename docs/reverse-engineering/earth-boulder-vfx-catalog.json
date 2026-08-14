@@ -1,0 +1,159 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-08-14",
+  "subject": "rank-1 Earth primary Boulder construction, draw, release, and breakup",
+  "binary": {
+    "path": "SolomonDarkAbandonware/SolomonDark.exe",
+    "size_bytes": 4723200,
+    "sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3"
+  },
+  "ghidra": {
+    "version": "12.0.3 PUBLIC",
+    "source_project": "Decompiled Game/ghidra_project/SolomonDark.gpr",
+    "mode": "headless, existing analyzed project copied to a disposable project, -readOnly -noanalysis",
+    "passes": [
+      "owner/constructor/tick/release/contact/draw/destructor",
+      "rock-list builder/Fibonacci sphere/called-rock/fragment/asset adjacency"
+    ]
+  },
+  "actor": {
+    "class": "Boulder",
+    "type_id": 2005,
+    "type_id_hex": "0x7D5",
+    "vtable": "0x0079E014",
+    "size_bytes": 536,
+    "fields": {
+      "charge": "0x74",
+      "rock_list": "0x13C",
+      "rock_list_backing": "0x150",
+      "orientation_matrix": "0x154",
+      "glimmer_mix": "0x1EC",
+      "saved_charge": "0x1F0",
+      "max_charge": "0x1FC",
+      "contact_target_list": "0x200",
+      "contact_target_list_backing": "0x214",
+      "held_flag": "0x1DC",
+      "flight_flag": "0x1DD"
+    },
+    "rock_record": {
+      "size_bytes": 60,
+      "local_xyz": "0x00..0x08",
+      "transformed_xyz": "0x0C..0x14",
+      "scale": "0x18",
+      "sprite_variant": "0x1C"
+    }
+  },
+  "functions": [
+    { "address": "0x00544C60", "role": "Earth primary dispatcher and cached actor owner" },
+    { "address": "0x005FA270", "role": "Boulder constructor" },
+    { "address": "0x00609D30", "role": "held growth, glimmer mix, shell rebuild edge, called-rock emission, flight contact dispatch" },
+    { "address": "0x005FE430", "role": "rebuild central rock plus Fibonacci-sphere shell", "vtable_slot": "0x68" },
+    { "address": "0x00411400", "role": "deterministic Fibonacci-sphere point generator" },
+    { "address": "0x00402CC0", "role": "initialize Boulder orientation matrix to identity with zero translation" },
+    { "address": "0x0060AC40", "role": "glimmer crossfade, matrix transform, depth sort, and main rock draw", "vtable_slot": "0x1C" },
+    { "address": "0x0043A8A0", "role": "orthographic projection helper; copy transformed X/Y and ignore Z" },
+    { "address": "0x00453890", "role": "Anim_CalledRock constructor" },
+    { "address": "0x00457FF0", "role": "Anim_CalledRock homing/fall tick", "vtable_slot": "0x08" },
+    { "address": "0x0045E440", "role": "Anim_CalledRock lit-rock draw", "vtable_slot": "0x0C" },
+    { "address": "0x005E5450", "role": "same-identity held-to-flight finalizer" },
+    { "address": "0x00620B60", "role": "per-flight-tick world/actor contact" },
+    { "address": "0x005FA4B0", "role": "post-contact rock/bounds update and breakup dispatch" },
+    { "address": "0x0060B700", "role": "Boulder breakup and actor removal", "vtable_slot": "0x6C" },
+    { "address": "0x00473290", "role": "Anim_BoulderBit constructor" },
+    { "address": "0x00457E00", "role": "Anim_BoulderBit motion/fade tick", "vtable_slot": "0x08" },
+    { "address": "0x00457E40", "role": "Anim_BoulderBit draw", "vtable_slot": "0x0C" },
+    { "address": "0x005FA3F0", "role": "rock/contact-list destructor body" },
+    { "address": "0x005FBD90", "role": "Boulder deleting destructor" }
+  ],
+  "constants": {
+    "charge_initial_float32": 0.18000000715255737,
+    "rank_1_charge_step_float32": 0.0012499999720603228,
+    "minimum_release_charge_float32": 0.30000001192092896,
+    "maximum_charge": 1.0,
+    "release_speed_world_units_per_tick": 3.0,
+    "shell_count_factor": 30.0,
+    "shell_radius_factor": 30.0,
+    "central_variant": 3,
+    "central_scale_factor": 4.0,
+    "shell_variant_random_integer_inclusive": [0, 2],
+    "shell_scale_random_addend_range": [0.5, 1.25],
+    "shell_scale_cap": 1.0,
+    "main_draw_depth_plane_strictly_greater_than": -40.0,
+    "main_draw_scale_minimum_float32": 0.44999998807907104,
+    "held_orientation_axis": [0.0, -0.8, 1.0],
+    "held_orientation_degrees_per_tick": 0.75,
+    "held_collision_radius": 15.0,
+    "immediate_release_collision_radius_charge_factor": 45.0,
+    "normal_flight_collision_radius_charge_factor": 75.0,
+    "glimmer_mix_initial": 1.0,
+    "glimmer_mix_step_per_tick": -0.03500000014901161,
+    "glimmer_scale_factor": 4.099999904632568,
+    "called_rock_unconditional_below_charge": 0.25,
+    "called_rock_otherwise_spawn_probability": 0.3333333333333333,
+    "called_rock_spawn_radius_charge_factor": 50.0,
+    "called_rock_spawn_radius_minimum": 5.0,
+    "called_rock_spawn_radius_maximum": 120.0,
+    "called_rock_initial_speed": 0.10000000149011612,
+    "called_rock_speed_multiplier": 1.100000023841858,
+    "called_rock_speed_cap": 5.0,
+    "called_rock_contact_distance": 5.0,
+    "called_rock_scale_charge_cap": 0.75,
+    "called_rock_scale_factor": 0.75,
+    "called_rock_rotation_range_degrees": 360.0,
+    "called_rock_rotation_step_range_degrees": [-30.0, 30.0],
+    "breakup_fragment_count_minimum": 8,
+    "breakup_fragment_count_charge_factor": 30.0,
+    "breakup_fragment_alpha_step": -0.02500000037252903
+  },
+  "assets": [
+    { "atlas": "BadGuys", "record": 18, "role": "optional called-rock dust/fade auxiliary", "width": 40, "height": 34 },
+    { "atlas": "BadGuys", "record": 86, "role": "opening glimmer only; never the boulder body", "width": 94, "height": 94 },
+    { "atlas": "BadGuys", "records": [168, 169, 170, 171], "role": "main depth-sorted body variants; 171 is the central pebble", "dimensions": [[37, 33], [33, 32], [38, 34], [17, 17]] },
+    { "atlas": "BadGuys", "records": [2008, 2009, 2010], "role": "lit called-rock and breakup fragment variants", "dimensions": [[37, 33], [33, 32], [38, 34]] }
+  ],
+  "render_contract": {
+    "shell_point_count": "ceil(30 * charge), plus one central variant-3 rock",
+    "shell_point_distribution": "Fibonacci sphere: y = 2*i/n - 1 + 1/n, theta = i*pi*(3-sqrt(5)); normalized to radius 30*charge",
+    "crossfade": "record 86 alpha/mix is m; body alpha is 1-m; m starts at 1 and loses 0.035 per tick until zero",
+    "ordering": "transform local XYZ by Boulder +0x154 matrix, keep strict transformed Z > -40, sort ascending transformed Z, then draw main bank; rank-1 radius <= 30 makes the cull branch unreachable for valid shell rocks",
+    "projection": "0x0043A8A0 copies transformed X/Y exactly and ignores Z; registration is Boulder actor transform plus that orthographic XY offset",
+    "main_draw_scale": "max(stored rock scale, float32(0.45))",
+    "orientation": "while held, rotate +0x154 by 0.75 degrees/tick about normalized axis (0,-0.8,1); preserve the final matrix unchanged in flight",
+    "lighting": "main body and fragments enter world/lit animation ownership; no direct BadGuys[67] shadow reference exists in Boulder draw"
+  },
+  "randomness": {
+    "native_owner": "shared game RNG",
+    "authoritative_gameplay_state": false,
+    "visual_samples": [
+      "main shell variant and scale",
+      "called-rock emission, spawn radius/direction/variant/rotation",
+      "optional dust and loose fragment emission",
+      "breakup fragment variant, direction, placement, scale, and lifetime"
+    ],
+    "web_consequence": "seed visual choices from stable spell/particle identity; never consume authoritative gameplay RNG"
+  },
+  "lifecycle": {
+    "hold": "one cached actor follows the live staff emitter and aim while charge grows",
+    "release": "0x005E5450 flips +0x1DC/+0x1DD from held to flight without replacing identity",
+    "flight": "straight motion and 0x00620B60 contact query every native tick; the actor position is velocity-advanced before the query, so terminal breakup registers at that advanced sample; no native fixed timeout recovered",
+    "impact": "0x0060B700 restores saved charge, emits lit Anim_BoulderBit fragments, registers them as world/lit animations, then removes the Boulder",
+    "interruption": "dispatcher/player primary transition and world actor teardown stop gather ownership; destructor clears both lists; web owner removal, death, scene replacement, and disconnect must remove the semantic actor/effects and balance loops"
+  },
+  "audio": {
+    "create_once": { "registry": 87, "path": "sounds/startboulder.wav" },
+    "gather_owner": { "registry": 159, "path": "sounds/gatherrocksloop__loop.wav" },
+    "flight_owner": { "registry": 168, "path": "sounds/rollingstoneloop__loop.wav" }
+  },
+  "historical_capture": {
+    "classification": "instrumented stock multiplayer observer evidence; not a clean-stock rerun",
+    "chosen_host_path": "/mnt/d/codex-evidence/spell-fx-20260726/investigation/boulder-observer-trace/earth/client_casts/cast-01/chosen-host.png",
+    "chosen_host_sha256": "c0893564eb55353b02f28b9e70b97350f0ab1be6b6efa2b82df864ae99b5595b",
+    "interpretation": "shows an assembled multi-rock cluster at the caster's right-hand/staff emitter with the bright opening glimmer behind it; it corroborates composition and attachment but is not an exact timing/count oracle"
+  },
+  "bounded_unknowns": [
+    "A clean-stock 2026-08-14 hold/release/terrain-impact capture was unavailable because unrelated isolated stock processes owned the desktop.",
+    "The exact shared-RNG seed/order is intentionally not promoted into browser gameplay state.",
+    "The current web combat model has no native target damage/contact continuation lane; terrain contact and visual breakup can be authoritative without claiming the unreconstructed residual-damage rules.",
+    "No direct Boulder shadow sprite call was recovered; generic world lighting/tint remains a sibling renderer responsibility."
+  ]
+}
