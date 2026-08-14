@@ -568,6 +568,7 @@ from static_re_runtime_cast_contracts import (
 )
 from static_re_projectile_spell_mechanics_contracts import (
     test_air_and_frost_channels_remain_tick_queries_with_exact_stop_edges,
+    test_air_lightning_cadence_and_contact_light_source_are_pinned,
     test_cast_glyph_emitter_index_and_offsets_are_pinned,
     test_cast_glyph_emitter_resolves_every_recorded_projectile_spawn,
     test_earth_charge_curve_and_release_geometry_are_exact,
@@ -2193,6 +2194,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Air and Frost remain tick queries with exact stop edges",
         test_air_and_frost_channels_remain_tick_queries_with_exact_stop_edges,
+    ),
+    (
+        "Air Lightning cadence and contact light source are pinned",
+        test_air_lightning_cadence_and_contact_light_source_are_pinned,
     ),
     (
         "projectile contacts cross-check existing damage goldens",
