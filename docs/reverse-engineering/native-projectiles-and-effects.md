@@ -94,7 +94,7 @@ animation objects can add art not visible as a literal in the parent method.
 | Type | RTTI class | Constructor | Tick | Principal render / behavior callbacks | Direct art |
 | ---: | --- | ---: | ---: | --- | --- |
 | `0x7D3` | `MagicMissile` | `0x005E4990` | `0x005FD270` | draw `0x005E0460` -> Ether compositor `0x00535A30`; target/contact `0x005E4A80`, `0x005F1F00`, `0x005E4B80` | flight BadGuys 110..112; surviving-pierce contact BadGuys 53 |
-| `0x7D4` | `Fireball` | `0x005E0970` | `0x005FDD90` | full draw `0x006099C0`; sprite pass `0x005E50D0` | BadGuys 110..112, 255..266 |
+| `0x7D4` | `Fireball` | `0x005E0970` | `0x005FDD90` | vtable `0x0079C5BC` render slot `+0x0C` directly draws at `0x006099C0` and bypasses common Region-light dispatcher `0x00624B40`; outbound light provider `0x005E50D0`; contact `0x005E5160` creates `Anim_FireBurst`; ordinary trail `ZAnim` slot `+0x0C` `0x005E01E0` also bypasses Region light | direct BadGuys 110, 255..266; child trail 267..270; impact 251..254 |
 | `0x7D5` | `Boulder` | `0x005FA270` | `0x00609D30` | draw `0x0060AC40`; rock/contact `0x00620B60`, `0x005FE430`, `0x0060B700` | BadGuys 18, 86, 168..171, 2008..2010 |
 | `0x7D6` | `Ember` | `0x005E0BD0` | `0x0060D7E0` | draw `0x0060DDD0`; contact `0x005E5700` | BadGuys 15, 251..254, 267..270 |
 | `0x7DA` | `Arrow` | `0x005E1000` | `0x005FEA00` | draw `0x0060F590`; trail `0x005E5EC0` | BadGuys 2, 255..266, 271..282 |

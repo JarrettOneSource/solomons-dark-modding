@@ -889,7 +889,7 @@ Drawing the following frames as a screen-space overlay is not equivalent.
 | Mechanic | Native sprite/atlas hook | Frame cadence / ownership |
 | --- | --- | --- |
 | Ether missile | compositor `0x00535A30`, `BadGuys[110..112]`; contact-only `BadGuys[53]` | radial two-pass gameplay-actor body at `(x,y-10)`, world-queued; record 53 is emitted only by a surviving-pierce contact |
-| Fireball | main `BadGuys[255..266]`; auxiliary `BadGuys[110..112]` | main frame `(age_ticks / 3) % 12`: 3 ticks/frame, 36 ticks/cycle; cosmetic particles are separate transients |
+| Fireball | core `BadGuys[110]`; main `BadGuys[255..266]`; cosmetic trail `BadGuys[267..270]` | main frame `(age_ticks / 3) % 12`: 3 ticks/frame, 36 ticks/cycle; one separately registered `Anim_FireParticle` transient is born per Fireball tick |
 | Air lightning | ribbon texture `BadGuys[44]`; all four corona circles use `BadGuys[110]`; fork glyphs `[1836..1839]` | two independently tessellated additive ribbons at `0x00534510`, body lifetime `2`; separate source glow and endpoint fade lifetime `5`, alpha minus `0.2` per tick; three independent world painter roots |
 | Frost Jet | `BadGuys[30]` and `[28]` (core and forward glint only); `[32]` Hail and `[14]` Cold Aura are learned branches | one transient/tick with Enhanced Effects Off or two/tick with it On; each moves at rank-1 speed `4` and remains about 32–33 ticks |
 | Boulder | opening glimmer `BadGuys[86]`; main rock collection `[168..171]`; called-rock/breakup bank `[2008..2010]`; optional dust `[18]` | crossfade glimmer to a charge-sized, matrix-transformed, depth-sorted multi-rock shell; called rocks home inward; impact fragments are separate lit actors |
@@ -1156,7 +1156,7 @@ and tables above.
 | Slice | Native press/hold/release contract | Native world visual contract | Native cast audio contract |
 | --- | --- | --- | --- |
 | Ether / Magic Missile (`8`, type `0x7D3`) | one actor on the press action marker; holding the same press does not duplicate that action | spawn at staff emitter plus `(0,+10)`; velocity `3` world units/tick; radius `15`; two-pass body compositor `0x00535A30` with `BadGuys[110..112]`; world queued; no fixed lifetime; record 53 is contact-only | registry 57 `sounds\\magicmissile` once at emission; flight is silent |
-| Fire / Fire Missile (`16`, type `0x7D4`) | one actor on the press action marker | emitter plus `(0,+10)` plus `20` along aim; velocity `4.5`/tick; radius `22.5`; main strip `BadGuys[255..266]`, frame `(age/3)%12`; auxiliary family `[110..112]` | registry 97 `sounds\\throwfire` once at emission; flight is silent |
+| Fire / Fire Missile (`16`, type `0x7D4`) | one actor on the press action marker | emitter plus `(0,+10)` plus `20` along aim; velocity `4.5`/tick; radius `22.5`; core `BadGuys[110]`; main strip `BadGuys[255..266]`, frame `(age/3)%12`; per-tick cosmetic trail `BadGuys[267..270]` | registry 97 `sounds\\throwfire` once at emission; flight is silent |
 | Air / Lightning (`24`) | start on press, sustain once per held tick, stop on release; constant Staff action is `K=0` on insertion and `K=7` thereafter; no projectile actor | reach-205 rank-1 ray; each tick creates a two-tick dual ribbon using `BadGuys[44]`, a one-shot source corona, and a five-tick endpoint corona whose four circles all use `BadGuys[110]` plus paired forks `[1836..1839]` | registry 54 `sounds\\lightningstart` on the start edge; registry 162 `sounds\\lightningloop__loop` owned for the channel lifetime |
 | Water / Frost Jet (`32`) | start on press, emit once per held tick, stop on release; constant Staff action is `K=0` on insertion and `K=7` thereafter; no persistent gameplay projectile | rank-1 cone reach `205` is immediate gameplay only; shipped Enhanced Effects default emits two speed-`4` visual transients/tick; 75% Normal / 25% Over, 32-33 ticks; `BadGuys[30]` core plus `[28]` glint only | registry 44 `sounds\\icestart` on the start edge; registry 161 `sounds\\iceloop__loop` owned for the channel lifetime |
 | Earth / Boulder (`40`, type `0x7D5`) | create on the first active tick; charge while the selected primary remains latched; after input release, the player tick retains Earth while charge is strictly below `0.3`, then releases the same cached actor on the following eligible tick | constructor charge is float32 `0.18`; the first post-tick actor row is age `1` at `0.181250006`; add float32 `0.00125` per active tick and clamp at `1`; a two-frame request reaches update `97` at `0.301249892` while still held, then first flies at age `98`; held radius `15`; release speed `3`/tick; record 86 crossfades into the depth-sorted `[168..171]` collection, while called rocks and breakup use `[2008..2010]` | actor creation plays registry 87 `sounds\\startboulder` once; registry 159 `sounds\\gatherrocksloop__loop` starts with Earth and stops on primary transition or charge cap; moving boulder owns registry 168 `sounds\\rollingstoneloop__loop` |
@@ -1405,3 +1405,151 @@ failures are pre-existing documentation drifts outside this change's files:
 the native-animation attachment table is missing its 18- and 12-facing formula
 strings, and the native-audio trigger table no longer enumerates exactly 64
 reviewed rows. No animation or audio-census document is modified by this audit.
+
+## 2026-08-14 Fireball presentation closure
+
+This closure used read-only headless Ghidra replicas against the preserved
+retail executable SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`.
+It follows the Fire primary beyond the earlier body-frame lead and replaces the
+incorrect implication that the whole `110..112` auxiliary family belongs to
+the rank-1 Fireball.
+
+### Causal ownership and fields
+
+| Stage | Native owner | Recovered contract |
+| --- | --- | --- |
+| cast | handler `0x0053DC60` | creates factory type `0x7D4`, starts at Staff emitter plus `(0,+10)` plus `20*aim`, and registers the actor |
+| construction | `0x005E0970` | establishes the Fireball vtable and rank/modifier fields; common heading setter `0x00529380` writes direction `+0x13C/+0x140` and clockwise-from-up degrees `+0x144`; scale `+0x148` and movement scalar `+0x14C` default to one |
+| flight tick | `0x005FDD90` over common actor tick `0x00624AC0` | moves `4.5*direction`, performs actor contact each tick and terrain contact every fifth tick, and creates one cosmetic `Anim_FireParticle` child each tick |
+| body draw | Fireball vtable `0x0079C5BC`, render slot `+0x0C` -> `0x006099C0` | direct self-lit queue draw: ordered core, additive body, then source-over half-alpha body passes; bypasses common Puppet Region-light dispatcher `0x00624B40` |
+| light | vslot `+0x30`, `0x005E50D0` | actor-root point light radius `1+U[0,0.25)`, intensity `0.75`, flag from `Game.MultipleShadows` |
+| contact | `0x005E5160` | dispatches contact/status/optional area work, creates a lit `Anim_FireBurst`, requests `fireballhit`, then removes the Fireball |
+| teardown | deleting destructor `0x005E50A0` | tears down the projectile actor; independently registered ZAnim children retain their own owner/lifetime |
+
+The Fireball has no fixed native lifetime. It is consumed by the first accepted
+actor or terrain contact. The straight-flight actor uses radius `22.5`, a
+20-unit actor probe in its current spatial cell every tick, and a five-tick
+lookahead terrain segment every fifth tick. None of those contact semantics is
+a render timeout.
+
+### Registered record groups and exact body passes
+
+The durable atlas catalog maps the relevant `BadGuys` array destinations:
+
+| Singleton field | Records | Consumer in this thread |
+| ---: | ---: | --- |
+| `+0x478C` | `251..254` | Fireball contact `0x005E5160` supplies the impact descriptor |
+| `+0x479C` | `255..266` | Fireball body draw `0x006099C0` indexes the 12-frame strip |
+| `+0x47AC` | `267..270` | `Anim_FireParticle::Draw` `0x0045E1B0` indexes the four cosmetic trail records |
+
+Record `110` is addressed separately as the shared white circular mask. Body
+draw `0x006099C0` translates to actor `(x,y-10)` and applies stored rotation:
+
+1. record `110`, color `(1,0.5,0)`, alpha `0.2+U[0,0.25)`, scale
+   `(3.2*actorScale,4*actorScale)`, without setting the additive flag;
+2. record `255 + floor(age/3)%12`, white alpha one, scale
+   `(2*actorScale,2.5*actorScale)`, additive flag set;
+3. the same selected record and transform, white alpha `0.5`, after clearing
+   the additive flag;
+4. restore render color and the optional `+0x168` alpha modifier state.
+
+This is a 36-tick body cycle and a three-draw composite. Records `111` and
+`112` are adjacent shared spark/ray masks, but this Fireball draw does not call
+them.
+
+Constructor instructions at `0x005E097A` install vtable `0x0079C5BC`. Its
+render-queue slot `+0x0C` is direct body draw `0x006099C0`, not common Puppet
+Region-light dispatcher `0x00624B40`. The direct draw installs the orange and
+white modulation above. Fireball is therefore self-lit on the inbound side;
+its separate `+0x30` provider remains an outbound light source.
+
+### `Anim_FireParticle` flight trail
+
+Fireball tick allocates a 0x44-byte child constructed by `0x00453290`, wraps it
+in a world-owned `ZAnim`, and registers it through `0x0063E5B0`. Its tick is
+`0x004533A0`, draw is `0x0045E1B0`, and wrapper depth bias is `30`.
+
+For Fireball position `P`, unit direction `D`, and actor scale `S`:
+
+```text
+birth = P + randomUnitVector()*U[0,10*S) + (0,-10) - D*10
+velocity = D*2
+rotation = U[0,360) degrees
+rotationDelta = +1 degree/tick
+scale = (U[0,1)+0.5)*1.25
+scaleMultiplier = 0.95/tick
+frame = integer U[0,4) -> BadGuys[267..270]
+dBase = (U[0,0.1)+0.1)*0.5 -> [0.05,0.10)
+d = dBase*0.5 with Enhanced Effects -> [0.025,0.05)
+```
+
+Initial modulation is white `(1,1,1,1)`. Each tick subtracts `d` from red and
+alpha, subtracts `2d` from green and blue, and deletes the particle only after
+the new red value is negative. Draw sets the additive flag for the chosen
+record and restores blend/color afterward. `Game.EnhancedEffects` at
+`0x00B3BCAD` halves `dBase` when enabled, changing the lifetime band from
+roughly 10--20 ticks to 20--40 ticks without changing emission cadence or actor
+class. The shipped Website-equivalent Windows capability/default policy has
+Enhanced Effects on, so the browser uses `[0.025,0.05)`. An older inspected
+performance-profile sample had the configurable off branch; it is supporting
+alternate-state evidence, not the shipped-default policy.
+
+Ordinary `ZAnim` also bypasses inbound Region light. Its render-queue vtable
+slot `+0x0C`, `0x005E01E0`, loads the owned animation at `+0x13C` and
+tail-jumps directly to the child's slot `+0x0C`; it does not call
+`0x00624B40`. `Anim_FireParticle::Draw` `0x0045E1B0` clamps the child RGBA at
+`+0x20..+0x2C`, installs that modulation through `0x0041FE50`, toggles the
+additive flag around records `267..270`, and restores white. A web painter must
+therefore use `regionLightPoint: null` for the trail, not sample its moving
+position for inbound tint.
+
+The RNG calls use process-global presentation state. A deterministic web
+projection can preserve every distribution and recurrence from a stable child
+identity, but it cannot claim the exact native sequence without also reproducing
+all intervening global RNG consumers. The semantic birth still belongs to the
+authoritative Fireball tick: sparse snapshots must carry stable particle
+identity, immutable birth position/direction, variant, age, and lifetime rather
+than asking a renderer to invent historical emissions.
+
+### Light and impact replacement
+
+The flight light provider `0x005E50D0` submits at the actor root with radius
+`1+U[0,0.25)`, intensity `0.75`, and `DAT_00B3BCAA` Multiple Shadows. Retail's
+default is off. This provider is not a sprite pass and does not imply reciprocal
+inbound lighting: both Fireball and particle visuals are self-lit as established
+by their render-queue slots.
+
+On contact, `0x005E5160` builds `Anim_FireBurst` (`0x00453470`; tick
+`0x004575B0`; draw `0x0045E2D0`) over records `251..254`. Phase advances
+`0.25`/tick, selecting one frame per four ticks and ending after about 16--17
+ticks; position moves upward one unit/tick. Initial scale is `U[1,1.1)`,
+rotation is `U[0,360)`, and signed angular speed has magnitude `U[0.5,1.5)`.
+The burst first draws record `110` at `5*scale`, orange, with alpha
+`0.5*(1-phase/4)`, then draws the 251--254 frame additively under tint
+`(1,1,0.75,1)`.
+
+The `ZAnimLit` builder `0x005E03D0` gives that burst depth bias `50`, light
+radius `1.5`, intensity `1`, per-tick intensity delta `-0.04`, and Multiple
+Shadows false. `0x005FD1D0` applies the delta and registers the wrapper for its
+world tick; provider `0x005E48E0` caps submitted intensity at one. Impact sound
+is `sounds\\fireballhit`; cast release remains registry 97
+`sounds\\throwfire`, and flight itself is silent.
+
+### Non-conflation boundary and remaining unknowns
+
+`Anim_FireParticle` is not `Fire_Goodguy`. Type `0x7EE` constructs at
+`0x005E76C0`, ticks at `0x005FF050`, draws `DeadHawg[46..77]` through
+`0x00610F90`, lives 200 ticks, and owns damaging area contacts every third tick
+through `0x005FF1D0`. Firewalker, Fire Wall, and certain upgrade dispatchers
+create that gameplay actor. A rank-1 Fireball trail never does.
+
+The special `+0x168` modifier and upgrade/status/area fields
+`+0x150..+0x16E` are statically located but are not present in the rank-1 web
+slice. Exact global-RNG sequencing remains bounded as described above. No new
+clean-stock Fire capture was obtained; the existing loader-injected D3D9
+backbuffer at
+`D:\\codex-evidence\\spell-fx-20260726\\post-fix-other-elements\\fire-client-matrix\\fire\\client_casts\\cast-01\\chosen-client.png`
+(SHA-256 `0f4cc770c2ae3f86dc72f772acc2345d8a805a2cc68bd5196788dc74882cda07`)
+is supporting visual evidence only. Static ownership, records, constants, and
+pass order come from the pinned retail image.
