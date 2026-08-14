@@ -298,12 +298,15 @@ The observed native darkness model is compositional rather than one global
    the matching analytic source field;
 3. with Complex Lighting enabled, the light texture multiplicatively
    composites over the already-painted pre-main lanes;
-4. each queued world object is culled and samples a local analytic scalar;
-5. that scalar is multiplied into the object's renderer color before the
+4. each queued world object is culled, samples a local analytic scalar, and
+   builds zero or more complex-shadow records from flagged nearby sources;
+5. the object's painter projects its source-facing outline edges away from
+   each source as black, alpha-tapered quads immediately before its main art;
+6. the local scalar is multiplied into the object's renderer color before the
    sprite/mesh is alpha-blended;
-6. late proxy/foreground lanes paint after the shared queue; Tree secondary
+7. late proxy/foreground lanes paint after the shared queue; Tree secondary
    art additionally applies its Tree-root analytic scalar explicitly; and
-7. post-scene overlays may darken or color the completed picture.
+8. post-scene overlays may darken or color the completed picture.
 
 The common world dispatcher at `0x00624B40` obtains its scalar through
 `0x0057F980`, `0x0057F0E0`, or transformed query `0x0057E490`, stores it at
@@ -353,6 +356,22 @@ units along the player heading and uses recovered parameters `radius = 2.6`,
 state predicate. The level-up lane changes that source while its 180-tick timer
 is positive. These sources therefore own both a visible ground light field and
 subsequent object samples; they are not merely invisible scalar records.
+
+Complex-shadow query `0x0057F0E0` uses the same elliptical source field but
+accepts only source records whose `+0x18` flag is set. It writes per-object
+0x24-byte records containing source direction/position, multi-source base
+opacity, one-unit-behind light sample, normalized distance, projection length,
+and source radius. When `Game.ComplexShadows` (`0x00B3BCA9`) is enabled, Tree,
+Gravestone, Fencepost, and the adjacent scenery/fence painters consume those
+records. Shared helper `0x00655970` keeps only source-facing outline edges and
+projects each endpoint away from the source by
+`(145 - RandomFloat()) * radius`; base alpha is the multi-source factor and
+the projected alpha is `((1 - behindScalar) * (1 - distanceFraction))^3`.
+The ordinary player provider always sets the required flag. Lantern and most
+ordinary effect providers instead pass the retail Multiple Shadows byte,
+which defaults off. Complex Lighting and Complex Shadows both default on, so
+the player-owned forward light casts these silhouettes in the normal stock
+profile even when a nearby Lantern does not.
 
 No volumetric fog equation was found in the reachable gameplay compositor.
 What players perceive as Boneyard darkness is accounted for by the clear and

@@ -341,6 +341,70 @@ record sampled from the live manager held the recovered 15-unit anchor,
 reset and collection can legitimately observe zero; the function traces prove
 that such a sample does not mean the Lantern stopped owning its light.
 
+### Complex directional object shadows
+
+The source record's `+0x18` flag is not merely a light-list containment hint.
+With `Game.ComplexLighting` (`0x00B3BCA8`) enabled, complex query
+`0x0057F0E0` also requires that flag before it appends directional shadow work
+for a world object. `Game.ComplexShadows` (`0x00B3BCA9`) then controls whether
+the object painters emit that work. Both settings default to true in the
+retail initializer and in the inspected clean stock profile. The separate
+`Game.MultipleShadows` setting (`0x00B3BCAA`) defaults to false. Consequently
+the ordinary player source always participates because provider `0x005299A0`
+submits flag `1`; the default Lantern usually illuminates without casting this
+directional shadow because it submits the Multiple Shadows byte. The visible
+orange staff orb is therefore supporting presentation evidence for the source,
+not its owner: the native contract is the player-owned point 15 world units
+along heading.
+
+For every eligible source inside the same elliptical 145-unit falloff,
+`0x0057F0E0` appends this 0x24-byte record to the object list at `+0xAC`:
+
+| Offset | Meaning |
+| ---: | --- |
+| `+0x00/+0x04` | unit direction from source to object |
+| `+0x08/+0x0C` | source world position |
+| `+0x10` | base opacity factor, initialized to `1` |
+| `+0x14` | light scalar sampled one world unit behind the object along that direction |
+| `+0x18` | normalized elliptical distance squared, `d2 / 145^2` |
+| `+0x1C` | projection distance, `(145 - RandomFloat()) * source.radius` |
+| `+0x20` | source radius |
+
+When more than one flagged source reaches the same object, the query compares
+their direction vectors pairwise. Each record's base factor is attenuated by
+`max(dot(directionA, directionB), other.distanceFraction)`. This is the actual
+Multiple Shadows interaction; summing darkness or choosing only the nearest
+source is not equivalent.
+
+Shared geometry helper `0x00655970` consumes the class's explicit object-local
+outline. For each outline edge it computes the edge midpoint and normal,
+rejects edges that do not face the source, and projects both endpoints radially
+away from the source by the record's fixed projection distance. It submits one
+black two-triangle quad per accepted edge. The two object-edge vertices use
+the record's base factor as alpha. The two projected vertices use
+`((1 - behindScalar) * (1 - distanceFraction))^3`, yielding the native soft
+tail through ordinary per-vertex interpolation. This is directional silhouette
+geometry, not a blurred ellipse beneath the object.
+
+The following recovered painters establish the relevant ownership and the
+adjacent object family:
+
+| Caster | Painter | Outline source |
+| --- | ---: | --- |
+| Tree | `0x00608AB0` | variant table at `0x0081B910` |
+| Gravestone | `0x0060F260` | variant table at `0x0081BE50` |
+| Fencepost | `0x00612DC0` | 14-entry style/frame table at `0x0081B0B8` |
+| FenceGrate | `0x00600ED0` | sibling custom projected-mesh path |
+
+Monument, Building, Goodie, Scrub, Rails, Wall, and other scenery/fence
+painters also reference the Complex Shadows global. This adjacency means the
+web seam belongs to the shared Region/world renderer, not to Tree, Gravestone,
+or Fence special cases. Exact native outline coordinates remain class-authored
+data; a browser implementation may derive stable silhouettes from the already
+extracted native alpha art, but must preserve source ownership, facing-edge
+selection, radial projection, opacity endpoints, painter ordering, and the
+settings/flag distinction above.
+
 ## RegionLayout schema
 
 RegionLayout is embedded in Arena/Region state at `+0x8510`. Its constructor
