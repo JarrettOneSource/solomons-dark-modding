@@ -1670,3 +1670,121 @@ backbuffer at
 (SHA-256 `0f4cc770c2ae3f86dc72f772acc2345d8a805a2cc68bd5196788dc74882cda07`)
 is supporting visual evidence only. Static ownership, records, constants, and
 pass order come from the pinned retail image.
+
+## 2026-08-14 targeting, range, homing, and one-shot cadence correction
+
+This section supersedes the earlier Website rank-1 PoC assumptions that gave
+Air a fixed 205-unit ray and advanced Ether as a direction-locked projectile.
+The causal pass follows player handlers into the native spatial queries and
+projectile actor. The adjacency pass covers target retention, Lightning chain
+selection, terrain/contact queries, and the shared Staff action clock. Evidence
+comes from the pinned retail `SolomonDark.exe` (4,723,200 bytes; SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`).
+
+### Lightning acquisition and segment geometry
+
+`0x00529AD0` clears the wizard target handle at `+0x164/+0x166`, starts at the
+wizard's actor position, obtains the Region reach scalar at `+0x8BE4`, doubles
+it, and clips the resulting heading ray to the Region rectangle
+`+0x8BCC..+0x8BD8`. It then calls the native cone query `0x00641500` with a
+30-degree aperture, the clipped range, mask `6`, and no excluded actor. The
+query accepts live actors other than type `0xBB9`, requires Region line of
+sight through vslot `+0x124`, and orders matches lexicographically by the
+actor's lower `+0xFC` priority first and squared distance second. Base actor
+constructor `0x006287D0` writes zero at `0x00628986`; Gravestone constructor
+`0x005E5C30` overwrites the field with `1000` at `0x005E5CBA`. Combat actors
+therefore outrank graves, while equal-priority actors choose the nearest
+candidate. Mask bits `0x180` also enroll
+the Region special-scenery collection. A Gravestone (`2029`) is in that
+collection, so an unobstructed grave in the aim cone is an intentional native
+Lightning target rather than collision clutter.
+
+`0x0052BA80` reacquires on every held Lightning tick. When the new query finds
+nothing it restores the prior handle only while the old actor remains live and
+its normalized caster-to-target vector has dot product at least `0.71` with
+the current heading (about 44.8 degrees). A successful new query replaces the
+old handle immediately.
+
+Handler `0x0053F9C0` resolves a target's vslot `+0x34` attachment offset, adds
+the actor position, clips caster-to-target through `0x00524D70` with mask
+`0x380`, and moves the visual endpoint up 20 world units. Gravestone vtable
+`0x0079C774` uses `0x00448D50` for `+0x34`; that function returns `(0,0)`, so
+its Lightning endpoint is exactly `(grave.x, grave.y-20)` after clipping. With
+no target, the handler obtains the Region vslot `+0x108` extent vector,
+doubles it, extends along caster heading, and clips that segment. Air therefore
+has no native fixed 205-unit reach; 205 belongs to Frost Jet.
+
+For the first bolt, the handler measures the clipped source-to-endpoint
+distance and places the QuickSpline middle control point half that distance
+along the caster's original aim heading. This differs from the geometric
+midpoint when a target lies off-axis and is the native targeting arc. The
+existing `0x00531640`/`0x00534510` Lightning body then owns the two ribbon
+layers and procedural waves. Chaining is adjacent, not rank-1 inference:
+wizard `+0x284` controls hop count; `0x00641340` chooses the nearest unused
+eligible actor within radius `200`; each hop multiplies damage by float32
+`0.600000024`. Each hop owns another body and contact corona.
+
+### Ether launch target and homing recurrence
+
+`0x0053CFE0` creates rank-1 Magic Missile at the Staff socket plus `(0,+10)`.
+It probes at `spawn + aimDirection*100` and calls `0x00641160`. That query walks
+the Region actor collection, accepts actors whose flags contain bit `1`, and
+chooses the actor nearest the probe while squared distance is below float32
+`999999`. It performs no line-of-sight test. This is a broad acquisition
+domain centered ahead of the caster, not a 100-unit maximum flight range.
+
+The projectile constructor `0x005E4990` stores heading at `+0x13C`, target
+handle at `+0x140/+0x142`, speed `3` at `+0x144`, turn input `2` at `+0x148`,
+turn accumulator `0.01` at `+0x14C`, target-loss policy at `+0x150`, phase at
+`+0x154`, scale at `+0x15C`, and pierce state at `+0x161/+0x164`. Tick
+`0x005FD270` advances using the current heading first. It then computes the
+normalized signed angular delta to the live target and applies:
+
+```text
+heading += 2 * turnAccumulator * movementScalar * signedAngularDelta
+turnAccumulator += turnAccumulator > 1 ? 0.00200000009 : 0.0500000007
+turnAccumulator = min(turnAccumulator, 10)
+```
+
+The stored float32 heading controls the following tick. Losing a target clears
+the handle for rank 1 because the constructor's retarget policy is false.
+Terrain lookahead runs every fifth age tick over five ticks of velocity before
+movement; proximity contact runs every tick at radius `6`. There is no native
+fixed flight lifetime. After age 199 or target loss, the proximity mask widens
+from `2` to `6`; surviving-pierce retargeting at `0x005E4B80` is an adjacent
+upgrade lane, not rank-1 behavior.
+
+### Staff one-shot rate and held repeat
+
+The Staff Cast1 constructor `0x0044B170` initializes progress `0`, float32 rate
+`0.075` (`0x00784A1C`), actor movement scalar from `actor+0x120`, marker `1`,
+and strict end `4`. Tick `0x004486E0` performs `progress += scalar*rate`, fires
+the marker on crossing one, and completes only once progress is greater than
+four. Dispatch `0x0052DA80` then changes the rate by element:
+
+- Ether skill `8`: multiply by `0x00656580(0)`;
+- Fire skill `16`: multiply by `0x00656580(1)` and double `0.75` at
+  `0x007848B0`.
+
+`0x00656580` is the cast-speed helper, not a damage helper. For class index
+`i` it returns
+`((equipmentMultiplier(+0x6AC) * FasterCaster(+0x94) + flat(+0x6B0)) *
+classMultiplier(+0x6B4+i*4) + classFlat(+0x6D4+i*4))`, clamped to zero. Neutral
+defaults are one/zero, so Ether retains rate `0.075` while Fire uses `0.05625`.
+The player primary loop treats input as a held level: once the current Staff
+action is gone, a still-held Ether or Fire primary immediately queues the next
+action. A browser press-edge-only implementation is therefore both too slow
+and behaviorally wrong for held one-shot casting.
+
+### Implementation consequence and bounded unknowns
+
+The authoritative simulation must acquire/retain Air targets, publish explicit
+source/midpoint/endpoint geometry for every bolt, and carry stable Ether target
+identity plus heading/turn state. Renderers may consume those semantic facts;
+they must not infer targets or rebuild homing history from snapshots. Boneyard
+wave enemies and Gravestone `2029` are the presently materialized native
+candidate families. Full stock actor-priority values for every future actor
+class remain outside this Website slice; supported enemies retain base priority
+zero and Gravestone uses its recovered priority `1000`. Exact
+global collection insertion order only matters for an exact equal-priority,
+equal-distance tie and remains unspecified.
