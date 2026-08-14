@@ -574,18 +574,28 @@ record 3.
 ### Gates
 
 Gate inherits FenceGrate, changes the type to 3012, and serializes the side
-flag plus hinge/end vectors, movement vector, and scalar motion state through
-`0x005E3910`. Builder `0x005F73C0` selects a hinge from the side flag, derives
-the leaf's rest segment from its endpoint posts, and initializes randomized
-motion parameters. `0x005ED4D0` builds/registers the moving collision line;
-`0x005ECDF0` creates its spatial/collision handle.
+flag, expanded collision endpoints, hinge, live tip, fixed leaf length, and
+rest heading through `0x005E3910`. Velocity, damping, live registration handle,
+and last-sound tick are transient and are not serialized. Builder `0x005F73C0`
+selects a hinge from the side flag, derives the leaf's rest segment from its
+endpoint posts, and applies the one-time randomized Y displacement.
+`0x005ED4D0` builds/registers the moving collision line; `0x005ECDF0` recovers
+its live spatial/collision handle after load.
 
-Tick `0x005ED5F0` integrates angular/leaf velocity, tests the proposed segment
-against the world, rolls movement back and damps/reverses velocity on a hit,
-rebuilds collision state, and rate-limits an interaction sound to at least 250
-ticks. Gate is therefore dynamic collidable scenery, not a two-frame prop.
-Renderer `0x005ECE40` composes DeadHawg records 7 and 8 around the moving
-segment.
+Tick `0x005ED5F0` advances the Cartesian tip velocity while constraining the
+leaf to its fixed length and to 60 degrees from the rest heading, then rebuilds
+visual and collision state and rate-limits `GateSqueak`. Gate is therefore
+dynamic collidable scenery, not a two-frame prop.
+
+Renderer `0x005ECE40` does **not** plant DeadHawg record 7 at one point. It
+passes the full record-7 UV quad and Gate points `+0x16C..+0x188` to custom
+textured-quad path `0x00414710 -> 0x0041E990`, so the iron ornament maps over
+the current hinge-to-tip leaf. Record 8 remains an ordinary glyph at the upper
+edge midpoint plus `(0, 7)`, followed by two three-pixel black rules. The full
+field map, call graph, geometry, render lanes, motion state machine,
+serialization boundary, lifecycle, evidence ledger, and web-port contract are
+charted in
+[`native-gate-art-and-lifecycle.md`](native-gate-art-and-lifecycle.md).
 
 ### Walls and rails
 

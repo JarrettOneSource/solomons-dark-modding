@@ -281,6 +281,38 @@ Builder `0x005E8100` derives this payload from source posts. Renderer
 the retail materializer to derive this record is safer than emitting a direct
 FenceGrate.
 
+#### Gate 3012
+
+Gate is a derived `FenceGrate`, not a normal stock authoring record.
+Materializer `0x0064AC90` expands one Fence 3005 with segment code `2` into two
+Gate objects with side bytes `0` and `1`, both connected to the deduplicated
+endpoint Fenceposts. Authors should emit the Fence recipe rather than either
+leaf.
+
+Gate serializer `0x005E3910` writes the inherited FenceGrate payload first,
+then this Gate-specific suffix:
+
+| Runtime offset | Type | Field | Persistence role |
+| ---: | --- | --- | --- |
+| `+0x1C4` | `u8` | side | selects which endpoint owns the hinge |
+| `+0x1CC` | `float2` | expanded collision start | post-load handle recovery |
+| `+0x1D4` | `float2` | expanded collision end | post-load handle recovery |
+| `+0x1DC` | `float2` | hinge | fixed pivot |
+| `+0x1E4` | `float2` | live tip | current pushed position |
+| `+0x1EC` | `f32` | fixed length | hinge-to-tip constraint |
+| `+0x1F0` | `f32` | rest heading | center of the 60-degree travel envelope |
+
+The live collision handle at `+0x1C8`, last-squeak tick at `+0x1F4`, velocity
+at `+0x1F8/+0x1FC`, and damping at `+0x200` are transient. They are not part of
+the Gate-specific serialized suffix.
+
+The main visible leaf is also derived geometry rather than an ordinary sprite.
+Rebuild `0x005ED100` creates four points from the current hinge `H` and tip
+`T`: `H-(0,87)`, `T-(0,87)`, `H`, and `T`. Renderer `0x005ECE40` maps the full
+DeadHawg record-7 UV rectangle onto those four points, then adds ordinary
+record 8 and two line primitives. The complete native contract is in
+[`native-gate-art-and-lifecycle.md`](native-gate-art-and-lifecycle.md).
+
 ### Terrain 3009
 
 Constructor `0x00646A80`, Sync `0x00651720`. The payload is variable length.
