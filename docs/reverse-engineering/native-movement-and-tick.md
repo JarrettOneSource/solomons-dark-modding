@@ -266,10 +266,11 @@ not permanently change the actor radius.
 
 ### MoveStep dispatch
 
-`MoveStep` at `0x00525800` has a deliberately cheap direct-add path when the
-controller has no collision world (`controller+0x120 == 0`), the actor's
-collision-disable byte at `actor+0x36` is set, or the controller bypass byte at
-`controller+0x121` is set. Otherwise it:
+`MoveStep` at `0x00525800` has a deliberately cheap direct-add path only when
+the controller has no collision world (`controller+0x120 == 0`), the actor is
+not enrolled for collision (`actor+0x36 == 0`), **and** the controller's
+dynamic-response lane is disabled (`controller+0x121 == 0`). If any of those
+three lanes requires collision work, it:
 
 1. saves the original center;
 2. gathers nearby collision cells through `0x00521B80/0x005218C0`;
@@ -282,6 +283,44 @@ The native placement predicate exposed as
 `movement_collision_test_circle_placement` is `0x00523C90`; its extended
 worker is `0x005238C0`. It answers whether the actor-sized circle can be placed
 at a candidate center against the same native geometry used by MoveStep.
+
+### Region transitions retain dynamic actor collision
+
+Arena entry does not replace the player with an arena-only movement body or
+drop the shared dynamic-response stage. `Arena::Arena` at `0x00464EE0` and
+`Courtyard::Courtyard` at `0x00506490` both begin by calling the common
+`Region::Region` constructor at `0x00652830`. That base owns the participant
+manager, actor lists, world-cell/collision substrate, and teardown used by both
+fixed rooms and the Boneyard-backed Arena. The persistent gameplay-slot actor
+is registered into the active Region through `0x00641090`, which assigns its
+region owner and rebinds its world-cell membership; it is not reconstructed as
+a collision-free Arena presentation object.
+
+The scene-independent `PlayerActor::Tick` at `0x00548B00` continues to submit
+the accumulated player movement lane to `PlayerActor_MoveStep` at
+`0x00525800`. After authored-world response, `MoveStep` invokes
+`MovementCollision_ResolveDynamicObjects` at `0x00526520` when the Region's
+dynamic-collision lane is active. That pass walks the Region's nearby actor
+list, filters collision membership/masks, and applies the shared radius,
+resistance, push-strength, movement-epoch, and recursive placement rules.
+There is no Arena-specific player-versus-player bypass in this owner chain.
+
+Implementation consequence for ports: changing from a fixed Region to Arena
+may replace the authored static geometry adapter, but it must keep the shared
+actor-body response around that adapter. Applying Arena scenery collision
+independently to each player omits a native downstream consumer and permits
+players to overlap or pass through one another after Boneyard entry.
+
+Evidence: fresh read-only headless Ghidra decompilation on 2026-08-14 from the
+analyzed retail `SolomonDark.exe` project replica for `0x00652830`,
+`0x00464EE0`, `0x00506490`, `0x00641090`, `0x00548B00`, `0x00525800`, and
+`0x00526520`; retail SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`.
+Confidence is high for owner continuity, call order, and the absence of an
+Arena-only movement path. An exact-coincident pair still has a zero normalized
+separation vector in the shared solver; ordinary relative motion creates a
+direction and resolves contact. A port must not invent per-player spawn
+offsets to hide that boundary case.
 
 ### Walls, slides, stops, and corners
 
