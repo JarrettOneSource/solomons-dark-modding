@@ -240,13 +240,170 @@ The browser contract is a per-tick ordered ray/chain:
 5. multiply the next hop's damage by native double `0.6`.
 
 The channel exists while primary input remains held. Releasing it stops new
-contact queries immediately. `Anim_FadeLightning` is render-only: its lifetime
-and alpha start at `1.0`, fall by `0.1` per tick, and therefore persist for ten
-ticks after emission. It increments its procedural angle by `1` per tick and
-uses the mesh builder at `0x00536380`; it has no atlas sprite id.
+contact queries immediately. Presentation is not one ten-tick fade object.
+`0x00531640` creates a two-tick `Anim_LightningBolt`, a one-shot source
+`Anim_SpellGlow`, and the world/split wrapper. `0x0053F9C0` separately creates
+a five-tick `Anim_FadeLightning` contact corona whenever the clipped/target
+endpoint is valid. The handler creates a fresh set on every sustained tick, so
+a steady hold overlaps at most two bolt bodies and five endpoint coronas.
 
 The fixture records the ray state on every native tick at rank 1 (`229` rows)
 and controlled rank 2 (`259` rows), rather than inventing a projectile actor.
+
+### Lightning presentation ownership
+
+The complete normal player path in retail Beta 0.72.5 is:
+
+```text
+0x0053F9C0 player held-tick handler
+  -> 0x00531640 Lightning presentation factory
+     -> 0x0045B2C0 Anim_LightningBolt constructor
+        -> 0x00534510 procedural ribbon tessellator, called twice
+        -> 0x00453BD0 two-tick update
+        -> 0x004575D0 additive two-layer render
+     -> 0x00454AD0 Anim_SpellGlow constructor at the cast source
+        -> 0x00459A00 render -> 0x00536380 corona painter
+     -> ZAnimSplit vtable 0x00784664 / registration 0x0063F6D0
+  -> 0x00452E20 Anim_Fade base construction at contact
+     -> Anim_FadeLightning vtable 0x007865C8
+     -> 0x00476230 update -> base fade update 0x00454000
+     -> 0x004572C0 render -> 0x00536380 corona painter
+     -> 0x005E03D0 ZAnimLit child
+```
+
+This corrects the former classification of `0x00536380`: that function is the
+source/contact corona painter, not the lightning ribbon builder. The ribbon
+builder is `0x00534510`.
+
+The primary call gives `0x00531640` the staff cast point, a half-distance
+direction-derived middle point, and the clipped or retained-target endpoint.
+A contacted actor contributes a `-20` Y attachment offset. Primary segments
+enable the source glow; chained segments disable it and perturb the middle
+point by a random radial vector. `0x00531640` also walks the path in `50`-unit
+steps and emits auxiliary world-light/draw work only once a sample is at least
+`220` units from the original source (`48400` squared-distance constant).
+
+`Anim_LightningBolt` has vtable `0x0078556C`, object size `0x70`, integer
+lifetime `+0x2C = 2`, tick `0x00453BD0`, and render `0x004575D0`. Its constructor
+calls `0x00534510` twice over the same three points:
+
+| layer | width / phase | color |
+| --- | --- | --- |
+| first | `1.0`, `-3 * native render tick` | RGBA `(1,1,1,1)` |
+| second | first width times native double `0.75`, first phase plus native double `15` | RGBA `(0,1,1,0.5)` |
+
+`0x00534510` appends all three points to `QuickSpline` through `0x0062BCA0`;
+the coefficient builder is `0x0062A9E0`, evaluator is `0x0062B2F0`, and
+tangent-normal helper is `0x00529010`. The middle point is therefore
+native-significant. Cadence nevertheless measures only the first
+source-to-middle leg at `0x0053461C..0x005346DA`, divides that distance by
+native double `30` normally (`0x005346FF`) or `15` when high-detail byte
+`0x00B3BCAD` is set (`0x005346F7`), and computes
+`step = splineDuration / (firstLegDistance / spacing)` at
+`0x00534735..0x0053473D`. Float `0.5` at `0x007DE870` caps the step at
+`0x00534741..0x00534756`; the cap is not `1`. The strict loop condition is
+`t < duration - step` at `0x00534AD8..0x00534AEB`, increment is at
+`0x0053516D..0x00535182`, and the exact duration endpoint is appended after
+the loop.
+
+For the current rank-1 untargeted path, the collinear points are source `0`,
+middle `102.5`, and endpoint `205`. Thus the first leg is `102.5`, raw normal
+step is `2 / (102.5 / 30) = 0.585365...`, and the cap produces `0.5`.
+Loop parameters are `0`, `0.5`, and `1.0`; the appended endpoint is `2.0`.
+Each layer therefore has exactly four vertex pairs/eight vertices and three
+neighboring segments/eighteen indices. This is not `ceil(205 / 30)`.
+
+At each loop sample, envelope is `sin((t / 2) * pi)`. The center adds a normal
+wave `envelope * sin(t * 360 degrees + phase) * 25`, a second normal wave
+`envelope * sin(phase * 2.5 - t * 90 degrees) * 12`, and active-RNG radial
+displacement with signed angle magnitude below `65` degrees and radius below
+`30`, also multiplied by the envelope. Half-width is
+`((1 - envelope) * 0.75 + 0.5) * width * 25 * 0.5`; the separately appended
+endpoint uses untapered `width * 25 * 0.5`. `0x00529010` finite-differences
+the spline with `0.001` before normalizing its perpendicular. Each sample
+contributes two 24-byte textured vertices and each neighboring pair contributes
+six indices. The two calls consume independent random samples, so they do not
+produce geometrically identical nested ribbons. Geometry is fixed at
+construction, not rerolled by render.
+
+The renderer binds the texture pointer at BadGuys object `+0x21F0`, which is
+inline BadGuys record `44` at object `+0x21E8`, submits both triangle lists
+through `0x0041DA00`, and brackets them with the world renderer's additive/
+special state byte at `+0x3F1`. The tessellator can append one textured
+four-vertex flare/branch selected from the two-record BadGuys array at object
+`+0x4818`; the choice and orientation consume the active RNG. Sibling
+`Anim_DarkLightningBolt` uses vtable `0x00785598` and the same two-layer
+tessellator/lifetime but intentionally omits the normal bolt's special-state
+bracket, so it is not the player-primary style.
+
+`Anim_SpellGlow` uses action `0x18`, source scale `1 + Random(0.5)`, and angle
+`Random(360)`. Its render dispatches to `0x00536380`. The contact
+`Anim_FadeLightning` starts at alpha/lifetime `1`, uses float32 decrement `0.2`
+at `0x00784CE8`, advances its corona angle by `1` per tick, and dies after the
+five renderable levels `1.0, 0.8, 0.6, 0.4, 0.2`. Its position is the endpoint
+plus a random radial offset with magnitude `Random(10)` and its uniform scale
+is `1 + Random(0.5)`. Chain contacts can use a `0.2` pre-scale and decrement
+`0.4` in the low-detail/actor-flag branch.
+
+`0x00536380` draws four additive cyan-white circular quads. Although the
+registered BadGuys array has sibling records `110`, `111`, and `112`, all four
+draw sites at `0x005364FB`, `0x005365DB`, `0x0053668C`, and `0x0053678B`
+check the first entry and pass the same record-`110` pointer at BadGuys object
+`+0x46BC` to `0x00414EA0`. Records `111` and `112` are used by
+adjacent effects, not by this Air painter. The circle pulse is
+`(abs(sin(angle * 15 degrees)) * 0.15 + 3.5) * objectScale`; relative scales
+are `1`, `0.75`, `0.5`, and `Random(0.2) + 0.2`. RGB is
+`(0.5,0.75,0.75)`; alphas before object fade are
+`Random(0.25) + 0.2`, `0.5`, `0.5`, and `0.25`.
+
+Record `110` is `27x26` with `(0,0)` registration. With object scale
+`1..1.5`, its largest circle is `94.5..147.825` pixels wide and
+`91..142.35` pixels high before the contact's sub-`10` jitter and five-object
+held overlap. The large corona is therefore numerically stock-consistent even
+though the clean source-only capture does not visually accept an endpoint.
+The extracted record hashes are `44`
+`a940b0b66118b81df6199bea4361558c3037d57630f1329ff780d1254adc4438`,
+`110` `681388cc79153506329c762cb8d3ec0b5cd629d1e6098b86597d629a63ddd882`,
+and forks `1836..1839`
+`1cfac650a02c2bdee9575afd391b79535df2b3e7c64764016314ec11f218c1db`,
+`e43e83ff7fd834aee563dd7a8fc3781a24ddb094cf34d49215cee2ab40444c10`,
+`14ebfbe91ebf1c09d122d3f5274d96c72012e6ebdf16ad8fc49b56cee0e2c8c1`,
+and `90723bedc696c964165ed6e06d32f9834118f04ab53821d047d48ee3826a99da`.
+The painter then chooses two fork glyphs from exact records `1836..1839`; the
+second index is `3 - first`, so record ids sum to `3675`, and its rotation is
+the first plus `90` degrees. The attached `ZAnimLit` follows the fade and is
+configured with randomized intensity based on `1 + Random(0.75)`, starting
+value `1`, decay `-0.05`, and range `50`.
+
+These are three separate world registrations: `ZAnimSplit` owns the bolt body,
+`Anim_SpellGlow` owns the source corona, and `Anim_FadeLightning` owns the
+contact corona. A browser renderer must give them independent painter roots at
+body midpoint Y, source Y, and jittered endpoint Y. One midpoint-sorted parent
+changes stock occlusion whenever another world object lies between them.
+
+A loader-free retail capture in an isolated Wine/Xvfb prefix used copied
+`Game.FastCPU=false` settings, selecting the normal `30`-unit path above. The
+60-fps, 132-frame hold at
+`/tmp/sdr-stock-vfx-probe.9l2URj/stock-air-held-v2.mp4` (SHA-256
+`bd0fcc847fbc346cb4bd6b88cf602fcf1c679d24c68d91b065f0518da8907f10`)
+shows the raised staff and sustained cyan-white source glow. It never acquires
+or clips an endpoint that materializes a body/contact object, so it supports
+source-glow ownership only and must not be cited as visual acceptance for the
+ribbon or endpoint corona.
+
+The adjacency sweep found five direct `0x00531640` calls: two Skeleton Mage
+paths in `0x00490860`, the player primary and its chain branch in
+`0x0053F9C0`, and `Mod_ElectricBurn` `0x00628F10`. `StormCloud` `0x006021A0`
+constructs `Anim_LightningBolt` directly. `Anim_FadeLightning` is also reused
+by Ball Lightning impacts, StormCloud, and ElectricBurn. Those xrefs establish
+a reusable lightning presentation family; they do not turn the player primary
+into a gameplay missile.
+
+Focused read-only Ghidra transcripts are preserved at
+`/tmp/sd-air-ghidra-tessellator-20260814.log` (SHA-256
+`79d830e17beef1737aefe0eb9a9e22321c2d19a7ccb1337dc436ddb8c7e43f47`)
+and `/tmp/sd-air-ghidra-corona-20260814.log` (SHA-256
+`0896a025f6b3a200d0cf35409ef263e6930b41615685ed3af59ed39455d79854`).
 
 ## Water: Frost Jet channel
 
@@ -696,8 +853,8 @@ Drawing the following frames as a screen-space overlay is not equivalent.
 | --- | --- | --- |
 | Ether missile | compositor `0x00535A30`, `BadGuys[110..112]`; contact-only `BadGuys[53]` | radial two-pass gameplay-actor body at `(x,y-10)`, world-queued; record 53 is emitted only by a surviving-pierce contact |
 | Fireball | main `BadGuys[255..266]`; auxiliary `BadGuys[110..112]` | main frame `(age_ticks / 3) % 12`: 3 ticks/frame, 36 ticks/cycle; cosmetic particles are separate transients |
-| Air lightning | no atlas entry | procedural mesh at `0x00536380`; fade lifetime/alpha `1.0`, minus `0.1` per tick |
-| Frost Jet | `BadGuys[30]` core and `[28]` forward glint only; `[32]` Hail and `[14]` Cold Aura are learned branches | one transient/tick with Enhanced Effects Off or two/tick with it On; each moves at rank-1 speed `4` and remains about 32–33 ticks |
+| Air lightning | ribbon texture `BadGuys[44]`; all four corona circles use `BadGuys[110]`; fork glyphs `[1836..1839]` | two independently tessellated additive ribbons at `0x00534510`, body lifetime `2`; separate source glow and endpoint fade lifetime `5`, alpha minus `0.2` per tick; three independent world painter roots |
+| Frost Jet | `BadGuys[30]` and `[28]` (core and forward glint only); `[32]` Hail and `[14]` Cold Aura are learned branches | one transient/tick with Enhanced Effects Off or two/tick with it On; each moves at rank-1 speed `4` and remains about 32–33 ticks |
 | Boulder | opening glimmer `BadGuys[86]`; main rock collection `[168..171]`; called-rock/breakup bank `[2008..2010]`; optional dust `[18]` | crossfade glimmer to a charge-sized, matrix-transformed, depth-sorted multi-rock shell; called rocks home inward; impact fragments are separate lit actors |
 | `Fire_Goodguy` | `DeadHawg[46..77]` | phase `+0.25`/tick (four ticks per integer phase); alpha ramps independently |
 
@@ -919,9 +1076,12 @@ matched the fixture source exactly:
 A fresh read-only headless Ghidra pass against that image decompiled the five
 primary handlers (`0x0053CFE0`, `0x0053DC60`, `0x0053F9C0`, `0x00543860`,
 `0x00544C60`), the Magic Missile and Boulder render paths (`0x005E0460`,
-`0x0060AC40`), the Fire Missile render path (`0x006099C0`), and the procedural
-Lightning builder (`0x00536380`). Their dispatch, constants, actor ownership,
-and render families agree with the durable goldens and tables above.
+`0x0060AC40`), the Fire Missile render path (`0x006099C0`), the Lightning
+factory (`0x00531640`), ribbon constructor/builder/render
+(`0x0045B2C0`/`0x00534510`/`0x004575D0`), and corona path
+(`0x00452E20`/`0x00476230`/`0x004572C0`/`0x00536380`). Their dispatch,
+constants, actor ownership, and render families agree with the durable goldens
+and tables above.
 
 ### Shared cast actions and emitter
 
@@ -960,7 +1120,7 @@ and render families agree with the durable goldens and tables above.
 | --- | --- | --- | --- |
 | Ether / Magic Missile (`8`, type `0x7D3`) | one actor on the press action marker; holding the same press does not duplicate that action | spawn at staff emitter plus `(0,+10)`; velocity `3` world units/tick; radius `15`; two-pass body compositor `0x00535A30` with `BadGuys[110..112]`; world queued; no fixed lifetime; record 53 is contact-only | registry 57 `sounds\\magicmissile` once at emission; flight is silent |
 | Fire / Fire Missile (`16`, type `0x7D4`) | one actor on the press action marker | emitter plus `(0,+10)` plus `20` along aim; velocity `4.5`/tick; radius `22.5`; main strip `BadGuys[255..266]`, frame `(age/3)%12`; auxiliary family `[110..112]` | registry 97 `sounds\\throwfire` once at emission; flight is silent |
-| Air / Lightning (`24`) | start on press, sustain once per held tick, stop on release; constant Staff action is `K=0` on insertion and `K=7` thereafter; no projectile actor | a reach-205 rank-1 ray from cast origin; each procedural bolt/fade survives 10 ticks with alpha `1 - 0.1*age`; no dedicated spell-atlas projectile | registry 54 `sounds\\lightningstart` on the start edge; registry 162 `sounds\\lightningloop__loop` owned for the channel lifetime |
+| Air / Lightning (`24`) | start on press, sustain once per held tick, stop on release; constant Staff action is `K=0` on insertion and `K=7` thereafter; no projectile actor | reach-205 rank-1 ray; each tick creates a two-tick dual ribbon using `BadGuys[44]`, a one-shot source corona, and a five-tick endpoint corona whose four circles all use `BadGuys[110]` plus paired forks `[1836..1839]` | registry 54 `sounds\\lightningstart` on the start edge; registry 162 `sounds\\lightningloop__loop` owned for the channel lifetime |
 | Water / Frost Jet (`32`) | start on press, emit once per held tick, stop on release; constant Staff action is `K=0` on insertion and `K=7` thereafter; no persistent gameplay projectile | rank-1 cone reach `205` is immediate gameplay only; shipped Enhanced Effects default emits two speed-`4` visual transients/tick; 75% Normal / 25% Over, 32-33 ticks; `BadGuys[30]` core plus `[28]` glint only | registry 44 `sounds\\icestart` on the start edge; registry 161 `sounds\\iceloop__loop` owned for the channel lifetime |
 | Earth / Boulder (`40`, type `0x7D5`) | create on the first active tick; charge while the selected primary remains latched; after input release, the player tick retains Earth while charge is strictly below `0.3`, then releases the same cached actor on the following eligible tick | constructor charge is float32 `0.18`; the first post-tick actor row is age `1` at `0.181250006`; add float32 `0.00125` per active tick and clamp at `1`; a two-frame request reaches update `97` at `0.301249892` while still held, then first flies at age `98`; held radius `15`; release speed `3`/tick; record 86 crossfades into the depth-sorted `[168..171]` collection, while called rocks and breakup use `[2008..2010]` | actor creation plays registry 87 `sounds\\startboulder` once; registry 159 `sounds\\gatherrocksloop__loop` starts with Earth and stops on primary transition or charge cap; moving boulder owns registry 168 `sounds\\rollingstoneloop__loop` |
 

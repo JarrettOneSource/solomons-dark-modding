@@ -342,6 +342,7 @@ def test_projectile_presentation_and_fire_goodguy_semantics_are_pinned() -> str:
             "`BadGuys[53]`",
             "`BadGuys[255..266]`",
             "`BadGuys[110..112]`",
+            "all four corona circles use `BadGuys[110]`",
             "`(age_ticks / 3) % 12`",
             "3 ticks/frame, 36 ticks/cycle",
             "`BadGuys[30]` and `[28]`",
