@@ -293,12 +293,16 @@ re-rolling decor in the render loop is incorrect.
 The observed native darkness model is compositional rather than one global
 "fog color":
 
-1. the framebuffer is cleared;
-2. Arena light submissions populate the current light field;
-3. each queued world object is culled and samples a local light scalar;
-4. that scalar is multiplied into the object's/base renderer color;
-5. the sprite/mesh is alpha-blended into the framebuffer; and
-6. post-scene overlays may darken or color the completed picture.
+1. the framebuffer is cleared and direct base/underlay/compact lanes paint;
+2. Arena light submissions rasterize an offscreen light texture and populate
+   the matching analytic source field;
+3. with Complex Lighting enabled, the light texture multiplicatively
+   composites over the already-painted pre-main lanes;
+4. each queued world object is culled and samples a local analytic scalar;
+5. that scalar is multiplied into the object's renderer color before the
+   sprite/mesh is alpha-blended;
+6. late proxy/foreground lanes paint after the shared queue; and
+7. post-scene overlays may darken or color the completed picture.
 
 The common world dispatcher at `0x00624B40` obtains its scalar through
 `0x0057F980`, `0x0057F0E0`, or transformed query `0x0057E490`, stores it at
@@ -306,7 +310,9 @@ object `+0xCC`, multiplies the object's tint, installs the resulting renderer
 color, calls the object's draw virtual, and restores the prior color. When the
 complex-lighting global at `0x00B3BCA8` disables the path, the scalar is forced
 to `1`. Direct underlay/overdraw art uses the renderer color installed by its
-own caller and does not acquire an invented object-light sample.
+own caller and does not acquire an invented object-light sample. Pre-main
+direct art is nevertheless affected by the separate Region light-texture
+multiply; late proxy/foreground art is not.
 
 Renderer color installation at `0x0041FE50` stores the requested RGBA floats
 at renderer offsets `+0x1EC..+0x1F8`; its effective color lanes at
@@ -330,19 +336,24 @@ golden records blend state per draw so a call site that changes it does not get
 flattened into the ordinary rule.
 
 Arena rendering resets the light list, lets current objects submit lights, and
-finalizes the light field before it flushes the shared world queue. The normal
-player light submission at `0x005299A0` is anchored 15 world units along the
-player heading and uses recovered parameters `radius = 2.6`, `intensity = 1`,
-and flag `1`; it is enabled by the corresponding player/drive state predicate.
-The level-up lane can submit a temporary presentation light while its timer is
-positive. Those sources affect subsequent object samples; they do not create a
-separate visible sprite layer.
+finalizes the offscreen field before it flushes the shared world queue.
+`0x0057FE40` both stamps alpha-graded DeadHawg record `18` into that field and
+records the source for analytic queries. `0x0057D670` composites the field with
+blend factors `ZERO, SRCCOLOR`. At Complex Lighting on callsite `0x0046FAFF`,
+that multiply precedes shared queue flush `0x0046FDAF`; at Complex Lighting off
+callsite `0x00470107`, it follows the queue and supplies the cheaper flattened
+result. The normal player light submission at `0x005299A0` is anchored 15 world
+units along the player heading and uses recovered parameters `radius = 2.6`,
+`intensity = 1`, and flag `1`; it is enabled by the corresponding player/drive
+state predicate. The level-up lane changes that source while its 180-tick timer
+is positive. These sources therefore own both a visible ground light field and
+subsequent object samples; they are not merely invisible scalar records.
 
 No volumetric fog equation was found in the reachable gameplay compositor.
 What players perceive as Boneyard darkness is accounted for by the clear and
-underlay colors, the finalized light field and per-object scalar, tinted art,
-and post-scene screen overlays. A renderer must not add distance fog merely
-because the scene is dark.
+underlay colors, the multiplied Region light texture, the per-object scalar,
+tinted art, and post-scene screen overlays. A renderer must not add distance
+fog merely because the scene is dark.
 
 ## Camera and the exact world-to-screen transform
 

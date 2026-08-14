@@ -206,13 +206,38 @@ as a native disk asset or treated as evidence that `paintbkg` is ground art.
 
 The opaque black clear is also the base of a separate Region light field; it
 is not sufficient to draw the ground and then place one translucent black
-rectangle over the finished scene. `Arena::Render` resets the Region light
-manager at `Arena + 0x8C44` through `0x0057D4E0`, collects light providers from
-the list at `Arena + 0x8D80` (`count +0x8D8C`), invokes each provider's vtable
-slot `+0x30`, finalizes the field through `0x0057D5E0`, and only then flushes
-the shared world-object painter queue. The reset stores ambient RGB `(0,0,0)`
-at manager `+0xC8..+0xD0` and clears the 0x1C-byte source-record count at
-`+0x108`.
+rectangle over the finished scene. Initializer `0x0057DF20` creates the
+manager's offscreen render target at `+0x4C` and records the light-quality
+scale at `+0xC4`. Each `Arena::Render` frame resets the manager at
+`Arena + 0x8C44` through `0x0057D4E0`. That reset binds the offscreen target,
+clears it to ambient RGB `(0,0,0)`, installs the target transform, and clears
+the 0x1C-byte source-record count at `+0x108`. Arena then collects providers
+from the list at `Arena +0x8D80` (`count +0x8D8C`) and invokes each provider's
+vtable slot `+0x30`. `0x0057D5E0` restores the main target after collection.
+
+Generic submitter `0x0057FE40` has two inseparable products. It draws
+DeadHawg record `18` (`DeadHawg +0xE00`) into the offscreen target at the
+query-space point with scale `radius` and presentation alpha `intensity`.
+That stock asset is the `336 x 305` crop of a `336 x 336` logical field, with
+registration `(168,153)` and a white, alpha-graded ellipse. The same call
+records source point `+0x00/+0x04`, query-space point `+0x08/+0x0C`, radius
+`+0x10`, intensity `+0x14`, and shadow flag `+0x18` for analytic queries.
+Flag-zero submissions first pass the existing-source containment check at
+`0x0057E2F0`; a fully covered source may therefore produce neither raster nor
+record when Multiple Shadows is off.
+
+Compositor `0x0057D670` draws the completed target over a view-sized quad. It
+selects renderer blend state `2`; `0x004208A0` resolves that state to
+`source=ZERO` and `destination=SRCCOLOR`, so the operation is the exact
+framebuffer multiply `out = destination * lightMap`. With Complex Lighting on
+(`0x00B3BCA8 != 0`), `Arena::Render` calls it at `0x0046FAFF` after the direct
+base/underlay/compact lanes but before shared world-queue flush `0x0068C480`
+at `0x0046FDAF`. Main actors are subsequently drawn with their analytic local
+scalar, and late proxy/foreground lanes remain after the multiply. With
+Complex Lighting off, the same composite moves to `0x00470107`, after the
+shared queue, while per-object scalar sampling is forced to one. The latter is
+the retail low-cost flattened-lighting branch, not evidence that the light-map
+composite is optional.
 
 `0x0057FE40` records one source as source point `+0x00/+0x04`, query-space
 point `+0x08/+0x0C`, radius `+0x10`, intensity `+0x14`, and shadow flag
@@ -232,9 +257,12 @@ The constants are retail doubles/floats at `0x00785858 == 0.85`,
 `0x00797218/20 == 5625 == 75^2`, `0x00797224 == 21025 == 145^2`, and
 `0x00797210 == 15400`. The common Puppet dispatcher stores this scalar at
 object `+0xCC` and multiplies it into the object's requested tint before its
-main painter. Base ground, explicit underlays, and late proxy art retain their
-own caller's color lane; lighting the entire flattened framebuffer would
-therefore darken native-unlit passes incorrectly.
+main painter. Base ground and explicit pre-main underlays do not acquire an
+object scalar, but they are already present when the Region light texture is
+multiplied in the Complex Lighting branch. Late proxy/foreground art retains
+its caller-owned color because it is submitted afterward. A single multiply
+over the completed scene is therefore also wrong: it would move the boundary
+past the main queue and late proxies.
 
 The ordinary player provider at `0x005299A0` submits a point 15 world units
 along the player's heading with `radius=2.6`, `intensity=1`, and flag `1` when
@@ -245,6 +273,63 @@ provider `0x005E6220` submits the Lantern root with `radius=0.65`, intensity
 `0.55 + RandomFloat(0.2)`, and the retail Multiple Shadows flag
 `DAT_00B3BCAA`. Thus its per-render intensity lies in `[0.55,0.75)` and is
 presentation RNG, not authored layout state.
+
+The Lantern is one member of a shared source protocol. The retail executable
+has 36 direct references to generic submitter `0x0057FE40`: one Arena replay
+of stored source records and 35 class-owned provider functions. The provider
+families recovered from vtable slot `+0x30` are:
+
+| Family | Native owners |
+| --- | --- |
+| actors and world residents | Skeleton, SkeletonArcher, SkeletonMage, Imp/GoodImp/GreenImp, Wraith, DemonSkull, Demon, DireFaculty, Heartmonger, Coffin, Portal, Lantern, GameNPC, and `ZAnimLit` |
+| missiles and transient effects | Magic/Fire/Frost/Guided/Skull/Ball-Lightning missiles, Fireball, Boulder/EBoulder/Hailstones, Ember/EvilEmber, Arrow/Firebolt/DarkFireball/Silk, Meteor, GreenFire, Fire/Goodguy/MovingFire/DireFire, GroundSpark, Shockwave/FreezeWave, Leviathan, EtherBolt/UnholySpit, Golem, MagicTrap, Bonus, DemonBomb, StormCloud/AcidRain, RainOfBones, EtherDrain, Comet, and OffscreenMagic |
+
+The ordinary player and its 180-tick level-up variation use the sibling
+submitter `0x00580130` from provider `0x005299A0`, so they are additional light
+owners even though they do not appear among those 36 direct generic calls.
+
+That provider census is not the whole producer census. `Region` owns a
+separate `Array<Region::MiscLight>` at `+0x8DF0` (backing store `+0x8DF4`,
+capacity `+0x8DF8`, count `+0x8E00`). `Region::Tick` at `0x0063EFC0` clears its
+count at `0x0063F078`; effect/action updates then append the same 0x1C-byte
+source shape through `0x0044F4B0`. `Arena::Render` replays those records through
+`0x0057FE40` after the provider-list pass. There are 13 direct append calls in
+ten retail functions:
+
+| Misc-light producer | Append callsites |
+| --- | --- |
+| `Action_Demonskull_MouthBeam` (`0x0044FFE0`) | `0x00451576` |
+| `Anim_UltraBanish` (`0x00460AB0`) | `0x00460C44` |
+| three `ZAnimSplit` paths (`0x00531640`, `0x00531F00`, `0x005328D0`) | `0x00531D61`, `0x00531EBE`, `0x00532734`, `0x00532891`, `0x005331B5`, `0x00533312` |
+| `MagicCircle` (`0x006006E0`) | `0x00600834` |
+| `EyeLaser` (`0x006054F0`) | `0x00605742` |
+| `Mod_ElectricBurn` (`0x00628F10`) | `0x00628FE8` |
+| `Mod_Burn` (`0x00629A40`) | `0x00629CAE` |
+| `Mod_EtherBurn` (`0x00629CD0`) | `0x00629ED8` |
+
+Both generic submitters apply the source flag before rasterization. Flag zero
+calls containment test `0x0057E2F0`; an existing source suppresses the new one
+only when its intensity is at least as high and its 145-scaled circle strictly
+contains the new circle:
+
+```text
+existing.intensity >= candidate.intensity
+distance(existing, candidate)^2
+  < ((existing.radius - candidate.radius) * 145)^2
+```
+
+Equality at the circle boundary is not containment. A nonzero flag bypasses
+this suppression. The ordinary player passes one; the Lantern passes the
+`Multiple Shadows` setting, whose retail default is off. Provider order and
+the fixed-tick misc-light append order are therefore part of a future
+spell/enemy adapter's presentation contract.
+
+This expanded inventory defines source adapters for future combat parity; it
+does not make dormant enemy, modifier, or spell systems part of an entry-only
+Boneyard renderer. `Portal` here is the hostile type-5021 Imp spawner, not a
+Hub room-transition trigger. Likewise, the compiled Courtyard Teacher update
+and cast functions are absent from both producer censuses; its currently
+implemented pose/rune/audio cycle does not submit a Region light.
 
 An isolated live Arena run independently validated the static chain. The
 runtime Lantern at `0x1AF7B090` had rebased vtable `0x00B2C854`; its slot
