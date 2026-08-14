@@ -17,6 +17,9 @@ native:  map record 7's full UV rectangle onto [p0, p1, p2, p3]
 
 This is a render-consumption defect, not a missing asset, wrong atlas crop,
 static-fence geometry defect, painter-order defect, or server-motion defect.
+The follow-up endpoint audit in this same report also corrects an earlier
+misread of the short black tip rule: native offsets the upper endpoint down by
+32 units; it does not extend the lower endpoint down by 32 units.
 
 ## Evidence ledger
 
@@ -24,6 +27,7 @@ static-fence geometry defect, painter-order defect, or server-motion defect.
 | --- | --- | --- | --- | --- |
 | Record 7 is a custom textured quadrilateral | `Gate::Render` `0x005ECE40` passes `Gate + 0x16C` and record 7's UV quad at glyph offset `+0x4C` to `0x00414710`; that helper binds the glyph texture and calls four-point submitter `0x0041E990` | High, instruction-proved | The destination must be the live Gate quad, not one planted sprite | None affecting the main leaf |
 | Record 8 is an ordinary glyph | `0x005ECE40` calls ordinary glyph painter `0x004143D0` with DeadHawg record 8 at the recovered midpoint | High, instruction-proved | Keep record 8 as a separate sprite | None |
+| The tip rule joins `p1 + (0,32)` to `p3` | `0x005ECF12..0x005ECFC3` constructs a four-float value from `p1,p3`; `0x005ECF44` loads the `p1.y` slot, adds double `32.0` at `0x00784CC8`, and writes that slot back before the two points and width `3` are passed to `0x0041F310` | High, instruction-proved | Do not draw from bare `p1` or extend beyond `p3`; share the recovered endpoints between the runtime and editor | None |
 | The four destination points move with the Gate | `Gate::Rebuild` `0x005ED100` rewrites `+0x16C..+0x188` from the current hinge and tip after every accepted motion step | High, instruction-proved | Refresh mesh vertices whenever a snapshot changes the tip | None |
 | The web has the correct source images | Extracted record 7 is 84x96 with SHA-256 `da68ac958eb419efa2f442b8a94c00bbd5df9f416f2a6c0ff22cd34fc84d643f`; record 8 is 16x19 with SHA-256 `0c8e94f34cf40b4b1ce94761f43ce9052c20ae331d127b3b8069c23c2e9c7063` | High, byte-checked | Do not replace or redraw the assets | None |
 | The custom mapping is visible in stock | A clean retail process was driven from New Game through College into Boneyard, then the entry Gate was pushed. Closed and open captures show the iron pattern changing with each live leaf rather than remaining an axis-aligned stamp | High, direct clean-stock observation | Browser comparison must exercise both closed and pushed states | The visual run did not inspect live fields |
@@ -284,7 +288,7 @@ After the record-7 quad, `Gate::Render` performs three more visible steps.
 | ---: | --- | --- | ---: |
 | 1 | DeadHawg record 7 | full UV quad mapped to `p0,p1,p2,p3` | `0x00414710` -> `0x0041E990` |
 | 2 | DeadHawg record 8 | `midpoint(p0,p1) + (0,7)` | ordinary glyph painter `0x004143D0` |
-| 3 | black rule, width 3 | `p1 -> (p3.x, p3.y + 32)` | line primitive |
+| 3 | black rule, width 3 | `(p1.x, p1.y + 32) -> p3` | line primitive |
 | 4 | black rule, width 3 | `midpoint(p0,p1) -> midpoint(p2,p3)` | line primitive |
 | 5 | color reset | white | render-state restore |
 
@@ -292,6 +296,14 @@ The prior `+1` X offset assigned to record 8 has no native instruction owner.
 Record 8 is not baked into record 7 and is not transformed with the custom
 quad. The two rules are additional geometry, not missing pixels that should
 be painted into either PNG.
+
+The first rule's stack flow matters. `0x00403650` stores the supplied `p1,p3`
+pair as four consecutive floats. The add at `0x005ECF44` targets the stored
+`p1.y`, and the later argument copies preserve modified `p1` as one endpoint
+and untouched `p3` as the other. Reading the temporary-stack offsets after the
+intervening pushes had previously moved `+32` onto `p3.y`; that would make the
+rule 64 world units longer than the stock primitive for a vertical closed
+leaf.
 
 ## Painter lanes and actor occlusion
 

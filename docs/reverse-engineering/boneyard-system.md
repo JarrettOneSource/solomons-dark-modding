@@ -248,6 +248,26 @@ The recovered phases are:
 - attach the generated definitions to RegionLayout and release temporary
   geometry arrays.
 
+### Random seed ownership and run lifetime
+
+Randomness is sampled at generation time, not at render time and not when an
+observer attaches to an already loaded Arena.
+
+| Claim | Instruction evidence | Confidence | Consequence |
+| --- | --- | --- | --- |
+| Each ordinary procedural build samples a fresh seed | At `0x006388FE`, `BoneyardGenerator` reads the global RNG owner at `0x00818B08`, passes `0` and `999999` to integer random helper `0x00401170`, stores the result, and logs it through `Random Boneyard Seed: %d` at `0x0063893D` | High | A newly generated run must not reuse a prior run's seed merely because the same process remains alive |
+| The sampled seed owns the generator-local stream | Immediately after selection, `0x0063891B..0x0063892A` initializes the generator-local random state through `0x00401110` and `0x00401120` before any layout construction | High | Layout choices for one build remain coherent and deterministic inside that build |
+| Normal loading invokes generation once at the Arena boundary | `0x0046DC60` calls create/save owner `0x0046D7B0` only when random-level global `0x00B3BEDC` is active; that owner constructs a temporary Arena, initializes generator state, invokes `0x006388B0` once, serializes it, and destroys the temporary Arena | High | The materialized yard remains stable for the Arena/run lifetime; peers or renderers joining that run must see the same layout |
+| Explicit regeneration is a new generation event | Editor path `0x004C84B0` handles its guarded input chord by starting game state, reinitializing the generator, calling `0x006388B0`, rebuilding derived Fence objects, and completing Arena setup | High | A reroll belongs at an explicit new-run/regeneration lifecycle edge, never in a client painter or reconnect handler |
+
+For the web port, a multiplayer session is the Arena lifetime: one
+authoritative materialization is shared by all connected peers and retained
+across a peer reconnect. A standalone desktop/development host has a different
+outer owner. Once its final client leaves, that solo run is over; the next
+client begins a fresh host run and must cause a new materialization on match
+start. Keeping the process alive is not evidence that the Arena should remain
+alive.
+
 The generator contains one recursive call at `0x0063ADC9`. Its empty-candidate
 interpolation branch is at `0x0063D78F`, immediately after the candidate lookup
 at `0x0063D781`. The loader's existing Boneyard generator patch redirects that
