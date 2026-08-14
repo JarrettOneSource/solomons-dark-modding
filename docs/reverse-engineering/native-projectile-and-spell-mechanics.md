@@ -609,3 +609,76 @@ an unnamed G4 attachment run.
   `ghidra-remaining-ambiguities.log`
 - Repository fixture:
   `tests/fixtures/webgame/projectile-goldens.json`
+
+## 2026-08-14 web primary-cast PoC consumption contract
+
+This section records the exact native boundary consumed by the Website's first
+player-casting implementation. It does not reopen the closed G2/G4 campaigns.
+The preserved retail executable was hashed again before implementation and
+matched the fixture source exactly:
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`.
+A fresh read-only headless Ghidra pass against that image decompiled the five
+primary handlers (`0x0053CFE0`, `0x0053DC60`, `0x0053F9C0`, `0x00543860`,
+`0x00544C60`), the Magic Missile and Boulder render paths (`0x005E0460`,
+`0x0060AC40`), the Fire Missile render path (`0x006099C0`), and the procedural
+Lightning builder (`0x00536380`). Their dispatch, constants, actor ownership,
+and render families agree with the durable goldens and tables above.
+
+### Shared cast actions and emitter
+
+- A world-surface left-button level enters the selected element's primary
+  action. Ether and Fire consume its press edge once. Air, Water, and Earth
+  consume the held level; Earth additionally consumes the release edge.
+- Ether and Fire use `Staff Cast 1`, mode 3 action `0x0044B170`. Its observed
+  fixed-tick pose branch is insertion `K=0`, then `1`, `8`, `7`, and reset
+  `0`; the alternate RNG branch starts at `8` and then joins `7`. Movement does
+  not cancel the queued action. Death does. Releasing a short click does not
+  rewind it. The one-shot emission marker is action-progress crossing `1`. In
+  the observed branch-A run this is fixed action tick 19 and the `K=1 -> K=8`
+  transition; branch B reaches the same progress marker while changing
+  `K=8 -> K=7`.
+- Air, Water, and Earth do **not** run that 74-tick action program. The
+  sustained dispatcher `0x00548A00` calls the equipped-item resolver and then
+  queues mode 5 `Action_PlayerWizard_StaffConstant` through `0x0044F5F0` at
+  `0x00548A54..0x00548A66` on every active primary tick (mode 8 is the
+  no-item path). The insertion tick still exposes the prior `K=0`; the
+  one-tick constant action writes `K=7`, which is renewed while the primary
+  remains active. The live Earth fixture independently observes the boulder at
+  Staff emitter bank 0 on its first actor row and bank 7 on every later held
+  row.
+- Aim is derived from the world cursor relative to the torso anchor 25 screen
+  pixels above the player's projected position. Heading is clockwise from
+  screen-up, with direction `(sin(h), -cos(h))`.
+- The staff socket is Clothes record
+  `#3244 + 24*K + facing`, point 1, added to actor position without actor-scale
+  multiplication. Facing is the native 24-way heading quantization. Spell art
+  belongs in the world painter queue at its effective Y, never in the HUD or a
+  player-local overlay.
+
+### Element-by-element implementation slices
+
+| Slice | Native press/hold/release contract | Native world visual contract | Native cast audio contract |
+| --- | --- | --- | --- |
+| Ether / Magic Missile (`8`, type `0x7D3`) | one actor on the press action marker; holding the same press does not duplicate that action | spawn at staff emitter plus `(0,+10)`; velocity `3` world units/tick; radius `15`; body `BadGuys[53]`; world queued; no fixed lifetime | registry 57 `sounds\\magicmissile` once at emission; flight is silent |
+| Fire / Fire Missile (`16`, type `0x7D4`) | one actor on the press action marker | emitter plus `(0,+10)` plus `20` along aim; velocity `4.5`/tick; radius `22.5`; main strip `BadGuys[255..266]`, frame `(age/3)%12`; auxiliary family `[110..112]` | registry 97 `sounds\\throwfire` once at emission; flight is silent |
+| Air / Lightning (`24`) | start on press, sustain once per held tick, stop on release; constant Staff action is `K=0` on insertion and `K=7` thereafter; no projectile actor | a reach-205 rank-1 ray from cast origin; each procedural bolt/fade survives 10 ticks with alpha `1 - 0.1*age`; no dedicated spell-atlas projectile | registry 54 `sounds\\lightningstart` on the start edge; registry 162 `sounds\\lightningloop__loop` owned for the channel lifetime |
+| Water / Frost Jet (`32`) | start on press, emit once per held tick, stop on release; constant Staff action is `K=0` on insertion and `K=7` thereafter; no persistent projectile actor | rank-1 cone reach `205`; each transient survives about 32-33 ticks; core `BadGuys[30]` and `[28]`, handler extras `[32]` and `[14]` | registry 44 `sounds\\icestart` on the start edge; registry 161 `sounds\\iceloop__loop` owned for the channel lifetime |
+| Earth / Boulder (`40`, type `0x7D5`) | create on the first active tick; charge while the selected primary remains latched; after input release, the player tick retains Earth while charge is strictly below `0.3`, then releases the same cached actor on the following eligible tick | constructor charge is float32 `0.18`; the first post-tick actor row is age `1` at `0.181250006`; add float32 `0.00125` per active tick and clamp at `1`; a two-frame request reaches update `97` at `0.301249892` while still held, then first flies at age `98`; held radius `15`; release speed `3`/tick; body `BadGuys[86]` scaled by charge | actor creation plays registry 87 `sounds\\startboulder` once; registry 159 `sounds\\gatherrocksloop__loop` starts with Earth and stops on primary transition or charge cap; moving boulder owns registry 168 `sounds\\rollingstoneloop__loop` |
+
+### Deliberate PoC boundary
+
+The Website slice is authorized to implement only cast input, animation,
+emission/channel lifecycle, replication, rendering, and the audio requests
+listed above. It therefore must not consume mana, apply damage or status,
+acquire or home toward targets, collide with actors or terrain, emit impact
+audio/debris, or enforce the unrecovered gameplay cooldown/rank progression.
+Without contact, Ether, Fire, and released Earth actors need a web containment
+lifetime so they cannot grow the authoritative list forever. That lifetime is
+an explicit web PoC policy, not a recovered native constant, and must be named
+as such in the Website ledger and tests.
+
+This boundary also forbids reconstructing one-shot audio from interpolated
+positions. Authoritative player state must latch a monotonic emission sequence;
+channel and rolling loops must be owner-keyed and balanced at release, actor
+expiry, disconnect, and scene transition. Those lifecycle edges are part of
+the native sound contract even while damage and collision remain absent.

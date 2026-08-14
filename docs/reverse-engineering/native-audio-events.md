@@ -58,8 +58,9 @@ The five selectable player elements are Ether, Fire, Air, Water/Frost, and Earth
 | `cast.water.channel_hold` | Water stays selected | no call | no new request | Existing 161 loop persists. |
 | `cast.water.channel_stop` | Primary selector `0x20 -> other/idle` | `0x00549725` | stop 161 | Fixed; decrements loop ownership. |
 | `cast.earth.charge_start` | Primary selector `0 -> 0x28` | `0x00549F57` | start 159 `sounds\gatherrocksloop__loop` | Fixed; one transition edge only. |
+| `cast.earth.boulder_created` | Earth dispatcher allocates, registers, and stores the type `0x7D5` actor | `0x00544FA8` | 87 `sounds\startboulder` | Fixed; one trigger per actor creation, before release. |
 | `cast.earth.charge_hold` | Held Boulder charge grows | no call | no new request | Existing 159 loop persists; reaching the charge cap also stops at `0x0054AD12`. |
-| `cast.earth.release` | Native release and selector `0x28 -> 0` | `0x00549758`; `0x00544FA8` | stop 159; 87 `sounds\startboulder` | Fixed; release must be one stock transition. |
+| `cast.earth.release` | Native release and selector `0x28 -> 0` | `0x00549758` | stop 159 | Fixed; release must be one stock transition and has no direct one-shot. |
 | `projectile.ether.flight` | Magic Missile birth | `0x0053D9CA` | 57 `sounds\magicmissile` | Launch request is the cast-release request; flight ticks are silent. |
 | `projectile.ether.impact` | Magic Missile contact | `0x005F1FF2` (also `0x005F3F7B`, `0x005F412E`, `0x005F4206`, `0x005F6B60`, `0x005F6FDC` for sibling contact paths) | 58 `sounds\magicmissilehit` | Fixed asset; point gain and float-RNG pitch. |
 | `projectile.fire.flight` | Fire Missile birth | `0x0053E4E0` | 97 `sounds\throwfire` | Launch request is the cast-release request; flight ticks are silent. |
