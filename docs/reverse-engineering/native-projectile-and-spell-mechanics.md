@@ -286,6 +286,177 @@ plus a small random term and drops by `0.04` per tick, yielding about `32`–`33
 ticks of visual persistence. Their lifetime must not extend contact: gameplay
 ends on the input stop edge.
 
+### 2026-08-14 Frost Jet presentation closure
+
+This pass was performed read-only against the preserved retail
+`SolomonDark.exe`, SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`,
+in the analyzed Ghidra project `Decompiled Game/ghidra_project/SolomonDark`.
+Fresh targets were the handler and its adjacent constructors/update/renderers:
+
+| Owner | Address / native identity |
+| --- | --- |
+| held skill handler | `0x00543860` |
+| shared emitter socket | `0x0053B830` |
+| Normal constructor / vtable | `0x00453550` / `0x00784E84` |
+| Over constructor / vtable | `0x00453840` / `0x00784EB4` |
+| heading/velocity initializer | `0x00453800` |
+| shared update | `0x00453670` |
+| Normal render | `0x00457720` |
+| Over render | `0x00457A00` |
+| world obstruction clip | `0x00524D70` |
+| uniform float / bounded integer / random sign | `0x00401310` / `0x00401170` / `0x004012C0` |
+| heading unit vector | `0x00410500` |
+
+The handler's bounded `Integer(4)` selection constructs Over only for result
+`1`, so ordinary player casts produce 25% Over and 75% Normal particles. They
+are separate world transients, not four animation frames of one object.
+
+#### Rank-1 density, heading, spawn, and travel
+
+The particle-count expression is option-sensitive:
+
+```text
+count = 1 - trunc((mWiden + 15) / (EnhancedEffects ? -10 : -20))
+```
+
+Neutral rank 1 has `mWiden == 0`, hence one particle per held tick when
+Enhanced Effects is Off and two per held tick when it is On. This count does
+not multiply the cone/contact query; it changes only presentation density.
+
+For each particle:
+
+```text
+spread       = mWiden + 15                         // rank 1: 15 degrees
+heading      = casterHeading + sin(worldTick * 65 deg) * spread
+spawn        = exact Staff socket
+             + U[0,10] * unit(casterHeading +/- U[0,45 deg])
+speed        = 4 * (1 + (mWiden / 2.5) * 0.05)    // rank 1: 4/tick
+lifetime[0]  = 1.25 + U[0,0.05]
+lifetime[n]  = lifetime[n-1] - 0.04
+```
+
+When a tick creates two particles, the handler advances the input phase by
+`65 / count` degrees before the second sample. This oscillating stream is
+independent of the rank-1 `205`-unit cone reach. Particles move only about
+`128`-`132` world units before expiry; the native visual does not interpolate
+to the gameplay endpoint.
+
+The phase advance is explicit in the handler instructions:
+`0x005439D0..0x005439DA` loads the particle count, divides constant double
+`0x00784D90` (fresh raw value `65`) by it, and stores the local step. The Over
+and Normal branches consume the mutable phase at `0x00543A86` and
+`0x00543BA3`; loop tail `0x005440A2..0x005440AE` decrements the count and adds
+the stored step before the next creation. Enhanced Effects On therefore gives
+the second particle a 32.5-degree-ahead sine input even though both particles
+are born on the same world tick.
+
+Only Normal creation computes a predicted path and calls `0x00524D70`.
+Obstruction distance and point are stored at `+0x50` and `+0x54/+0x58`. When
+update consumes the distance, it snaps to the stored point, chooses a randomly
+signed perpendicular, halves velocity, and clears the pending contact. The
+Over path skips that setup. This is cosmetic wall splay/ricochet and must not
+be used as the Water damage owner.
+
+#### Update fields and exact renderer passes
+
+`Anim_FrostJetEffect` is `0x5C` bytes. Its presentation fields are:
+
+| Offset | Initial value | Update |
+| --- | --- | --- |
+| `+0x1C` lifetime | `1.25 + U[0,0.05]` | subtract `0.04`; remove below zero |
+| `+0x20` phase | `0` | Normal adds `0.05`; Over adds `0.025` |
+| `+0x24/+0x28` velocity | heading unit times rank speed | position adds velocity; optional wall splay |
+| `+0x2C/+0x30` heading | handler heading | unchanged by ordinary flight |
+| `+0x3C` additive-core alpha | `0.75` | subtract `0.05` |
+| `+0x40` core scale | `S = 0.5 + U[0,0.75]` | if lifetime `< 1`, add `2` |
+| `+0x44` glint scale | `Q = (2 + U[0,1]) * S` | if lifetime `< 1`, multiply `0.95` |
+| `+0x48` color ramp | Normal `1 + U[0,0.5]`; Over overrides it to `0` | subtract `2`, clamp at zero |
+| `+0x4C` opacity multiplier | `1` | unchanged |
+
+The core tint is `(max(0, 1 - colorRamp), 1, 1)`: Normal is cyan on
+construction and white after the first completed update; Over is white from
+construction. Both renderers pass the native heading to the registered sprite
+draw and restore ordinary blending/white afterward.
+
+Normal render `0x00457720` submits three ordered draws:
+
+1. ordinary alpha, `BadGuys[30]`, particle position, scale `S`, alpha
+   `min(lifetime^2, phase)`, cyan-to-white tint;
+2. while `+0x3C > 0`, additive `BadGuys[30]` at the same transform, scale
+   `0.5*S`, alpha `+0x3C`; and
+3. additive `BadGuys[28]` at `position + 3*velocity`, scale `min(Q,1)`, alpha
+   `min(10*lifetime,1)`.
+
+Over render `0x00457A00` omits the half-core draw:
+
+1. ordinary alpha, `BadGuys[30]`, scale `S`, alpha
+   `0.5*min(lifetime,phase)`, white; then
+2. additive `BadGuys[28]` at `position + 3*velocity`, scale `0.25*Q`, alpha
+   `min(3*min(0.5*phase,lifetime),1)`.
+
+The draw-state byte set to `1` resolves through `0x004208A0` to D3D
+`SRCALPHA, ONE`; zero is ordinary `SRCALPHA, INVSRCALPHA`. These objects enter
+the common transient/world lists and are culled, Y-sorted, camera-transformed,
+and locally lit by the common world dispatcher. They are not screen overlays.
+
+#### Exact atlas records and learned-branch separation
+
+`BadGuys` inline records use header `0x38` and stride `0xC4`:
+
+| Record | Inline address from `DAT_00819978` | Registered canvas / origin | Role |
+| ---: | ---: | --- | --- |
+| 30 | `+0x1730` | `93 x 145`, registered paste `(0,0)` | rank-1 Frost core, both classes |
+| 28 | `+0x15A8` | `10 x 11`, registered paste `(0,2)` | rank-1 forward glint, both classes |
+| 32 | `+0x18B8`, assigned at `0x00543F57` vicinity | `29 x 30`, paste `(5,4)` | learned Hail (`+0x8A8`), not Frost stream |
+| 14 | `+0x0AF0`, assigned at `0x00544866..0x00544870` | `92 x 91`, paste `(11,3)` | learned Cold Aura (`+0x8B0`), not Frost stream |
+
+The Website extractor's full registered canvases hash as record 30
+`62aac46ed0f3436cf39023b2c93e8c02b8dee3c0611e74179cc5af92793470b5`
+and record 28
+`e118b2feb22c5ffd4c5f0981e20044b8df6181ead01c572965143ad959e24d60`.
+Any rank-1 primary implementation cycling records 32 or 14 is mixing learned
+branches into the base spell.
+
+#### Enhanced Effects shipped default and browser policy
+
+`0x00B3BCAD` is the literal `ENHANCED EFFECTS` Boolean bound by Settings at
+`0x005DAD45` and Controls at `0x005DB5DB`. The setting is persisted under the
+misleading key `Game.FastCPU`. At `0x005BB310..0x005BB34F`, the settings loader
+uses capability byte `0x00B3BCAE` as the missing-key fallback. The executable's
+embedded `DEFAULTS|...|ENDDEFAULTS` block does not contain `Game.FastCPU`; the
+recognized shipped Windows path initializes the capability byte to `1`.
+Therefore a new shipped Windows profile defaults Enhanced Effects On. A
+preserved user sample with `Game.FastCPU=false` and Enhanced Effects Off proves
+the value remains configurable after first load.
+
+The current Website has no gameplay performance-settings owner for this byte.
+Until such a system exists, its native-parity primary uses the shipped default
+of two independent particles per held tick. That is a named product policy,
+not a claim that stock cannot run the one-particle Off path.
+
+#### Visual evidence and remaining limits
+
+The preserved instrumented-stock frame
+`D:\codex-evidence\beta28-release-20260731\acceptance\screenshots\client-b-water-bot-retail-wave.png`
+is 1606 x 929 RGBA, SHA-256
+`116eb2378541aef6c436f20fa03f7d62a5c83b6222b1e50ddffb35fe27f6eb3b`.
+It corroborates a short blue-white layered spray, but foliage occludes part of
+the cast and the run is not clean stock. A fresh direct-retail On/Off capture
+was deferred after unrelated `SolomonDark.exe` PIDs `18792` and `23472` were
+found in foreign staged runtimes; neither process was disturbed.
+
+Closed facts are object ownership, density branches, sprite records,
+registration, field recurrences, render order, blends, heading, unobstructed
+motion, contact separation, audio, and teardown. Still open are a clean-stock
+On/Off pixel receipt, the exact per-session RNG sample sequence, and a browser
+terrain-query seam for cosmetic Normal wall splay. Deterministic web samples
+may preserve the recovered random distributions using authoritative spell
+identity, but must not be presented as the retail RNG sequence. The born
+direction is not identity-derived: authority must evaluate the native
+world-tick phase plus the per-tick particle ordinal, while radial spawn jitter
+remains relative to the caster's un-wiggled base heading.
+
 ## Earth: Boulder
 
 `0x00544C60` creates type `0x7D5`. Construction is at `0x005FA270`, the held
@@ -398,7 +569,7 @@ Drawing the following frames as a screen-space overlay is not equivalent.
 | Ether missile | `BadGuys[53]` | gameplay actor position/heading; world-queued |
 | Fireball | main `BadGuys[255..266]`; auxiliary `BadGuys[110..112]` | main frame `(age_ticks / 3) % 12`: 3 ticks/frame, 36 ticks/cycle; cosmetic particles are separate transients |
 | Air lightning | no atlas entry | procedural mesh at `0x00536380`; fade lifetime/alpha `1.0`, minus `0.1` per tick |
-| Frost Jet | core `BadGuys[30]` and `[28]`; handler extras `[32]` and `[14]` | a new transient may be emitted on each sustain tick; each remains about 32–33 ticks |
+| Frost Jet | `BadGuys[30]` core and `[28]` forward glint only; `[32]` Hail and `[14]` Cold Aura are learned branches | one transient/tick with Enhanced Effects Off or two/tick with it On; each moves at rank-1 speed `4` and remains about 32–33 ticks |
 | Boulder | body `BadGuys[86]`; debris `[168..171]`; auxiliary `[18]`, `[2008..2010]` | body scale follows live charge; do not replace it with a fixed-size frame animation |
 | `Fire_Goodguy` | `DeadHawg[46..77]` | phase `+0.25`/tick (four ticks per integer phase); alpha ramps independently |
 
@@ -662,7 +833,7 @@ and render families agree with the durable goldens and tables above.
 | Ether / Magic Missile (`8`, type `0x7D3`) | one actor on the press action marker; holding the same press does not duplicate that action | spawn at staff emitter plus `(0,+10)`; velocity `3` world units/tick; radius `15`; body `BadGuys[53]`; world queued; no fixed lifetime | registry 57 `sounds\\magicmissile` once at emission; flight is silent |
 | Fire / Fire Missile (`16`, type `0x7D4`) | one actor on the press action marker | emitter plus `(0,+10)` plus `20` along aim; velocity `4.5`/tick; radius `22.5`; main strip `BadGuys[255..266]`, frame `(age/3)%12`; auxiliary family `[110..112]` | registry 97 `sounds\\throwfire` once at emission; flight is silent |
 | Air / Lightning (`24`) | start on press, sustain once per held tick, stop on release; constant Staff action is `K=0` on insertion and `K=7` thereafter; no projectile actor | a reach-205 rank-1 ray from cast origin; each procedural bolt/fade survives 10 ticks with alpha `1 - 0.1*age`; no dedicated spell-atlas projectile | registry 54 `sounds\\lightningstart` on the start edge; registry 162 `sounds\\lightningloop__loop` owned for the channel lifetime |
-| Water / Frost Jet (`32`) | start on press, emit once per held tick, stop on release; constant Staff action is `K=0` on insertion and `K=7` thereafter; no persistent projectile actor | rank-1 cone reach `205`; each transient survives about 32-33 ticks; core `BadGuys[30]` and `[28]`, handler extras `[32]` and `[14]` | registry 44 `sounds\\icestart` on the start edge; registry 161 `sounds\\iceloop__loop` owned for the channel lifetime |
+| Water / Frost Jet (`32`) | start on press, emit once per held tick, stop on release; constant Staff action is `K=0` on insertion and `K=7` thereafter; no persistent gameplay projectile | rank-1 cone reach `205` is immediate gameplay only; shipped Enhanced Effects default emits two speed-`4` visual transients/tick; 75% Normal / 25% Over, 32-33 ticks; `BadGuys[30]` core plus `[28]` glint only | registry 44 `sounds\\icestart` on the start edge; registry 161 `sounds\\iceloop__loop` owned for the channel lifetime |
 | Earth / Boulder (`40`, type `0x7D5`) | create on the first active tick; charge while the selected primary remains latched; after input release, the player tick retains Earth while charge is strictly below `0.3`, then releases the same cached actor on the following eligible tick | constructor charge is float32 `0.18`; the first post-tick actor row is age `1` at `0.181250006`; add float32 `0.00125` per active tick and clamp at `1`; a two-frame request reaches update `97` at `0.301249892` while still held, then first flies at age `98`; held radius `15`; release speed `3`/tick; body `BadGuys[86]` scaled by charge | actor creation plays registry 87 `sounds\\startboulder` once; registry 159 `sounds\\gatherrocksloop__loop` starts with Earth and stops on primary transition or charge cap; moving boulder owns registry 168 `sounds\\rollingstoneloop__loop` |
 
 ### Deliberate PoC boundary
