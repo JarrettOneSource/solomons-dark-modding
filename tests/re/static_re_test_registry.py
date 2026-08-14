@@ -413,6 +413,7 @@ from static_re_primary_combat_contracts import (
     test_lua_earth_retargeting_uses_live_boulder_impact_anchor,
     test_primary_build_skill_mapping_has_single_runtime_owner,
     test_primary_mana_resolver_uses_native_live_spell_stats,
+    test_water_frost_visual_heading_and_terrain_ownership_are_pinned,
 )
 from static_re_multiplayer_combat_contracts import (
     test_bot_element_damage_probe_supports_upgraded_primary_victim_validation,
@@ -1634,6 +1635,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_native_item_recipe_selection_excludes_equipped_items,
     ),
     ("primary mana resolver uses native live spell stats", test_primary_mana_resolver_uses_native_live_spell_stats),
+    (
+        "Water Frost visual heading and terrain ownership are pinned",
+        test_water_frost_visual_heading_and_terrain_ownership_are_pinned,
+    ),
     ("Earth boulder damage uses native live spell stats", test_earth_boulder_damage_uses_native_live_spell_stats),
     (
         "Earth Boulder damage formula addresses are registered",

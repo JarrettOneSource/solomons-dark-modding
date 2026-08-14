@@ -129,6 +129,60 @@ def test_primary_mana_resolver_uses_native_live_spell_stats() -> str:
     return "primary mana resolver uses live Skills_Wizard primary stat outputs"
 
 
+def test_water_frost_visual_heading_and_terrain_ownership_are_pinned() -> str:
+    mechanics = read_text(
+        ROOT / "docs/reverse-engineering/native-projectile-and-spell-mechanics.md"
+    )
+    required_tokens = (
+        "0x00543895..0x005438AF",
+        "0x00656580",
+        "index `3` and saves its return",
+        "`progression[+0x94] == 1`",
+        "queryWidth   = mWiden + 15",
+        "castSpeed    = effective Water-class cast speed",
+        "phase        = worldTick + ordinal * float32(65 / count)",
+        "heading      = casterHeading + sin(phase * 65 deg) * castSpeed",
+        "0x00543A86..0x00543AD6",
+        "0x00543BA3..0x00543C5C",
+        "0x005439C9..0x005439CC",
+        "0x005440A2..0x005440AE",
+        "`2112.5` degrees modulo the sine",
+        "`0x00641B10` builds a heading-centered angular wedge",
+        "Normal visual birth separately calls `0x00524D70` with mask `0x380`",
+        "predicts from the caster actor position, not the jittered Staff socket",
+        "randomly signed",
+        "perpendicular at `0.5` magnitude",
+        "Over never",
+        "vtable `0x00793D74`",
+        "`Anim_FrostJetEffect_Chaining`",
+        "`Anim_BlizzardBeam` render `0x00458470`",
+        "record 29 belongs to",
+        "record 14",
+        "record 32",
+        "registry 161 `iceloop`",
+        "snapshot a nullable Normal obstruction point",
+    )
+    missing = [token for token in required_tokens if token not in mechanics]
+    if missing:
+        raise StaticReTestFailure(
+            "Water Frost heading/terrain ledger lost native ownership token(s): "
+            + ", ".join(missing)
+        )
+
+    forbidden_tokens = (
+        "heading      = casterHeading + sin(worldTick * 65 deg) * spread",
+        "second particle a 32.5-degree-ahead sine input",
+        "visual spread is `15` degrees",
+    )
+    present = [token for token in forbidden_tokens if token in mechanics]
+    if present:
+        raise StaticReTestFailure(
+            "Water Frost ledger restored the disproved query-width heading model: "
+            + ", ".join(present)
+        )
+    return "Water Frost visual heading, class boundary, and Normal terrain ownership are pinned"
+
+
 def test_earth_boulder_damage_uses_native_live_spell_stats() -> str:
     resource_text = read_text(RESOURCE_STATE)
     projection_text = read_text(BOULDER_PROJECTION)

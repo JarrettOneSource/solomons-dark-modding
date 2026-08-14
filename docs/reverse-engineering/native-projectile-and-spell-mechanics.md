@@ -525,11 +525,13 @@ Neutral rank 1 has `mWiden == 0`, hence one particle per held tick when
 Enhanced Effects is Off and two per held tick when it is On. This count does
 not multiply the cone/contact query; it changes only presentation density.
 
-For each particle:
+For each particle, query width and particle direction are distinct operands:
 
 ```text
-spread       = mWiden + 15                         // rank 1: 15 degrees
-heading      = casterHeading + sin(worldTick * 65 deg) * spread
+queryWidth   = mWiden + 15                         // rank 1: 15 degrees
+castSpeed    = effective Water-class cast speed    // neutral rank 1: 1 degree
+phase        = worldTick + ordinal * float32(65 / count)
+heading      = casterHeading + sin(phase * 65 deg) * castSpeed
 spawn        = exact Staff socket
              + U[0,10] * unit(casterHeading +/- U[0,45 deg])
 speed        = 4 * (1 + (mWiden / 2.5) * 0.05)    // rank 1: 4/tick
@@ -537,8 +539,8 @@ lifetime[0]  = 1.25 + U[0,0.05]
 lifetime[n]  = lifetime[n-1] - 0.04
 ```
 
-When a tick creates two particles, the handler advances the input phase by
-`65 / count` degrees before the second sample. This oscillating stream is
+When a tick creates two particles, the handler advances the pre-multiply phase
+accumulator by `65 / count` before the second sample. This oscillating stream is
 independent of the rank-1 `205`-unit cone reach. Particles move only about
 `128`-`132` world units before expiry; the native visual does not interpolate
 to the gameplay endpoint.
@@ -548,9 +550,10 @@ The phase advance is explicit in the handler instructions:
 `0x00784D90` (fresh raw value `65`) by it, and stores the local step. The Over
 and Normal branches consume the mutable phase at `0x00543A86` and
 `0x00543BA3`; loop tail `0x005440A2..0x005440AE` decrements the count and adds
-the stored step before the next creation. Enhanced Effects On therefore gives
-the second particle a 32.5-degree-ahead sine input even though both particles
-are born on the same world tick.
+the stored step before the next creation. The accumulator is multiplied by
+`65` only after that addition. Enhanced Effects On therefore gives the second
+particle `32.5` accumulator units, or `2112.5` degrees modulo the sine, rather
+than a merely 32.5-degree-ahead sine input.
 
 Only Normal creation computes a predicted path and calls `0x00524D70`.
 Obstruction distance and point are stored at `+0x50` and `+0x54/+0x58`. When
@@ -700,14 +703,113 @@ found in foreign staged runtimes; neither process was disturbed.
 
 Closed facts are object ownership, density branches, sprite records,
 registration, field recurrences, render order, blends, heading, unobstructed
-motion, contact separation, audio, and teardown. Still open are a clean-stock
-On/Off pixel receipt, the exact per-session RNG sample sequence, and a browser
-terrain-query seam for cosmetic Normal wall splay. Deterministic web samples
+motion, contact separation, audio, and teardown. The second pass below closes
+the browser terrain-query seam for cosmetic Normal wall splay. Still open are
+a clean-stock On/Off pixel receipt and the exact per-session RNG sample
+sequence. Deterministic web samples
 may preserve the recovered random distributions using authoritative spell
 identity, but must not be presented as the retail RNG sequence. The born
 direction is not identity-derived: authority must evaluate the native
 world-tick phase plus the per-tick particle ordinal, while radial spawn jitter
 remains relative to the caster's un-wiggled base heading.
+
+### 2026-08-14 second-pass Water adjacency and ownership audit
+
+The Website's fresh isolated `origin/main` baseline produced 65 healthy live
+Water transients, the expected pose/facing, and balanced ice-loop ownership,
+but rendered a broad cyan cone. A renewed handler pass identified the cause:
+the first implementation treated `mWiden + 15` as particle-heading amplitude
+and added the intra-tick step after converting world time to degrees. Neither
+matches the executable.
+
+At `0x00543895..0x005438AF`, the handler calls `0x00656580` with Water class
+index `3` and saves its return at stack `+0x68`. The helper computes the
+effective Water-class cast speed from progression fields:
+
+```text
+(progression[+0x6AC] * progression[+0x94] + progression[+0x6B0])
+  * progression[+0x6B4 + class*4]
+  + progression[+0x6D4 + class*4]
+```
+
+and clamps it at zero. The neutral rank-1 fixture has the already recovered
+`progression[+0x94] == 1` and no equipment/skill modifiers, so the visual
+amplitude is one degree. `mWiden + 15` is instead consumed by cone acquisition
+and the particle-count expression.
+
+The full heading sequence appears twice. Over
+`0x00543A86..0x00543AD6` and Normal `0x00543BA3..0x00543C5C` load the mutable
+phase, multiply QWORD `0x00784D90 == 65`, multiply runtime float pi at
+`0x00B4027C`, divide QWORD `0x007DE888 == 180`, take sine, multiply the saved
+effective cast speed, add caster heading, and call `0x00453800`.
+`0x005439C9..0x005439CC` initializes phase from float32 world tick;
+`0x005439D0..0x005439DA` computes/stores float32 `65 / count`; loop tail
+`0x005440A2..0x005440AE` adds that step before the next particle. This closes
+the neutral formula as:
+
+```text
+heading = casterHeading
+  + sin((float32(worldTick) + ordinal * float32(65 / count)) * 65 degrees)
+  * 1 degree
+```
+
+#### Range, target/obstruction ownership, and alternate branch
+
+- `0x00641B10` builds a heading-centered angular wedge from half-width and
+  squared reach, enumerates spatial candidates, excludes hidden/self/type
+  failures, and keeps all eligible actors rather than a single nearest target.
+  Rank-1 player Water supplies reach `205`, width `15`, and mask `0x1082`.
+- Each candidate is independently checked by `0x00524D70`; only a clear
+  line continues to push/status/damage. That helper returns the nearest line
+  collision under its mask. Gameplay contact is immediate and independent of
+  the visual object's motion or expiry.
+- Normal visual birth separately calls `0x00524D70` with mask `0x380`. It
+  predicts from the caster actor position, not the jittered Staff socket:
+  `steps = float32(lifetime / 0.04 + jitterRadius)` and
+  `end = caster + steps * velocity`. A hit is stored only if it is in front of
+  the jittered born position. Shared update subtracts current speed from the
+  remaining distance; after crossing zero it snaps to the point, replaces
+  velocity with a randomly signed perpendicular at `0.5` magnitude, clears
+  the pending hit with the large sentinel at `0x00784E78`, and advances once
+  with that new velocity. The born heading field remains unchanged. Over never
+  performs this visual obstruction setup.
+- The distinct bot/alternate caller emits Normal only with cast speed `0.5`,
+  zero widen/push, reduced density with a minimum of one, opacity multiplier
+  `0.25`, and acquisition mask `2`. Those are caller-owned differences, not
+  player rank-1 defaults.
+
+#### Negative adjacency proof
+
+Raw code/data xrefs close the apparent missing-effect family:
+
+- `0x00453550` is reached by player Water, Water+Air, and the Over constructor;
+  `0x00453840` is reached only by player Water. Heading initializer
+  `0x00453800` is shared with Water+Air and Steam, but those callers own their
+  own subclasses/records.
+- Normal vtable `0x00784E84` and Over vtable `0x00784EB4` both point at shared
+  update `0x00453670`; their render slots point at `0x00457720` and
+  `0x00457A00`. `0x00453870` occurs only in vtable `0x00793D74`, whose
+  constructor write at `0x00541870` belongs to `Anim_FrostJetEffect_Chaining`
+  under Water+Air. It is not an Over update.
+- Hail constructor `0x00454030` and record 32, and Cold Aura constructor
+  `0x0045AF20` and record 14, are learned Water branches reached from their
+  progression guards in the same handler. Record 31 at `+0x17F4` belongs to
+  `Anim_BlizzardBeam` render `0x00458470`; adjacent record 29 belongs to
+  Heartmonger. None is a rank-1 source/contact/terrain sprite.
+- Player Water enters `0x00543860` only from sustained dispatcher
+  `0x00548A00`; release simply stops subsequent query/emission. The common
+  world transient queue owns Y order, local Region lighting, expiry, and
+  teardown. Rank-1 has no point light and no hit sound beyond registry 44
+  `icestart` plus owner-held registry 161 `iceloop`.
+
+Implementation consequence: correct the heading recurrence at authoritative
+birth and snapshot a nullable Normal obstruction point resolved against the
+authoritative Hub/Boneyard static collision model. Presentation must replay the
+snap/perpendicular/half-speed recurrence while keeping sprite rotation at the
+born heading and the glint lead on current velocity. The base registered
+record set remains exactly 30/28; adding an invented source, impact, or terrain
+sprite would cross class ownership. Open items remain the exact retail RNG
+sequence and clean-stock Enhanced Effects On/Off pixels.
 
 ## Earth: Boulder
 
