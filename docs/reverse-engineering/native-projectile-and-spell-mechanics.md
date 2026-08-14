@@ -1790,8 +1790,8 @@ by their render-queue slots.
 
 On contact, `0x005E5160` builds `Anim_FireBurst` (`0x00453470`; tick
 `0x004575B0`; draw `0x0045E2D0`) over records `251..254`. Phase advances
-`0.25`/tick, selecting one frame per four ticks and ending after about 16--17
-ticks; position moves upward one unit/tick. Initial scale is `U[1,1.1)`,
+`0.25`/tick, selecting one frame per four ticks and ending after exactly 16
+visible ticks (semantic ages `0..15`); position moves upward one unit/tick. Initial scale is `U[1,1.1)`,
 rotation is `U[0,360)`, and signed angular speed has magnitude `U[0.5,1.5)`.
 The burst first draws record `110` at `5*scale`, orange, with alpha
 `0.5*(1-phase/4)`, then draws the 251--254 frame additively under tint
@@ -1939,3 +1939,125 @@ class remain outside this Website slice; supported enemies retain base priority
 zero and Gravestone uses its recovered priority `1000`. Exact
 global collection insertion order only matters for an exact equal-priority,
 equal-distance tie and remains unspecified.
+
+## 2026-08-14 Fireball contact, range, and recast closure
+
+This second pass was prompted by the Website Fireball still crossing walls and
+disappearing without the contact replacement described above. It used fresh,
+read-only headless Ghidra replicas against the same 4,723,200-byte retail
+`SolomonDark.exe`, SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`.
+The handler, actor tick, contact routine, cast action, child animation, and
+lit-wrapper instructions were re-read together instead of treating the body
+draw as the complete Fire primary.
+
+### Targeting, action cadence, and birth
+
+- `Action_PlayerWizard_StaffCast1` constructor/tick `0x0044B170` /
+  `0x0044B370` starts from float32 rate `0.075`. Helper `0x00656580` supplies
+  the cast-speed scalar (neutral `1`), and Fire alone applies the adjacent
+  double `0.75`, producing progress `0.05625`/tick, the observed marker at
+  fixed action tick `19`, and action release at tick `74`. `PlayerWizard`
+  callback `0x00550180` dispatches the mode-3 marker exactly once per action
+  through `0x0054CAF0`. The occupied action rejects requeue, but a still-held
+  primary level queues the next action after the prior one ends; release is not
+  required for native Fire auto-repeat.
+- Fireball skill row `16` contains `mDamage` and `mManaCost`, not `mCooldown`.
+  No Fire-specific cooldown write, retained target, target query, homing turn,
+  aim spread, or range comparison occurs in handler `0x0053DC60` or tick
+  `0x005FDD90`. The action occupancy is the default recast gate. The projectile
+  is straight and contact-bounded, not target- or distance-bounded.
+- The handler samples wizard heading `+0x6C`, converts it with `0x00410500`,
+  and `0x00529380` writes the immutable unit direction to Fireball
+  `+0x13C/+0x140`. It creates type `0x7D4` at the Staff emitter plus `(0,+10)`,
+  then pushes the actor `20` units along that direction. The tick multiplies
+  direction by movement scalar `+0x14C` and the `4.5` Fireball speed global.
+- After registration, the handler calls segment/polygon query `0x00524D70`
+  from the wizard root to the spawned Fireball root with collision mask
+  `0x700`. A blocked birth immediately calls `0x005E5160(NULL)` at the spawned
+  root. It creates no flight particle because no Fireball tick has run.
+
+### Flight/contact instruction order
+
+`Fireball::Tick` `0x005FDD90` has this exact presentation-relevant order:
+
+1. If actor age `+0x134` is divisible by five, query the segment from current
+   root `P` to `P + 5*(4.5*D)`, again through `0x00524D70` and mask `0x700`.
+   A blocked segment calls terrain contact at current `P` and returns before
+   common movement and before cosmetic-particle allocation.
+2. Run common actor tick `0x00624AC0`, then add `4.5*D` to the root.
+3. Run the world-bounds retirement check, then query the current spatial cell
+   through `0x00641220` with radius `20` and mask `6`. The candidate filters
+   reject deleted/ineligible objects, preserve the native group/contact gates,
+   and use the candidate geometry path before accepting contact.
+4. An accepted candidate calls `0x005E5160(candidate)`. Unlike the terrain
+   branch, execution then falls through and allocates one final
+   `Anim_FireParticle`. This last cosmetic child is not residual damage.
+5. Allocate/register the ordinary `ZAnim` particle and renew the Fireball in
+   the world-owned actor list.
+
+The constructor's collision category is `0x700`; its recovered actor radius is
+`22.5`. The tick's `20`-unit current-cell query is broad-phase reach, not a
+Fireball range limit. No hard flight timer exists. A web-only 500-tick deletion
+must therefore not masquerade as contact or play an impact.
+
+### Contact replacement, light, and audio corrections
+
+`0x005E5160` conditionally performs rank/upgrade damage and status dispatch for
+a non-null eligible actor, then calls the Fireball removal vslot **before**
+audio and presentation allocation. Null terrain contact skips actor damage but
+owns the same replacement presentation and audio:
+
+- point sound registry `30`, `sounds\\fireballhit`, is requested at the
+  Fireball root with world point gain and pitch `1 + signed U[0,0.1)`, hence
+  `[0.9,1.1)`; the exact stock WAV is 30,530 bytes, SHA-256
+  `9bfad709cfb932b7e836c58f781a42ee78907a0211bac5d14a2583d721192738`;
+- `Anim_FireBurst` constructor `0x00453470` receives singleton descriptor
+  `+0x4788` for registered `BadGuys[251..254]` and starts at `(P.x,P.y-10)`;
+- phase starts at zero and advances exactly `0.25` in base tick `0x00457540`.
+  The child marks itself deleted when the new phase is greater than or equal to
+  descriptor count four, so visible semantic ages are exactly `0..15`: frames
+  `0..3` each last four ticks and there is no visible age-16 frame;
+- specialized tick `0x004575B0` also moves `y -= 1` and adds signed angular
+  velocity of magnitude `U[0.5,1.5)` degrees/tick. Scale is `U[1,1.1)` and
+  initial rotation is `U[0,360)`;
+- draw `0x0045E2D0` first submits record `110` source-over at `5*scale`, tint
+  `(1,0.5,0)`, and alpha `0.5*(1-age/16)`, then submits the current impact frame
+  additively with tint `(1,1,0.75)`;
+- `ZAnimLit` vtable `0x0079C4DC` uses render slot `+0x0C = 0x005E01E0`, the
+  same direct child draw trampoline as ordinary `ZAnim`. The burst is therefore
+  self-lit for inbound Region tint. Independently, provider `0x005E48E0`
+  publishes a moving child-position light: radius `1.5`, intensity
+  `1 - 0.04*age`, Multiple Shadows false. The wrapper depth bias is `50`.
+
+This corrects the earlier approximate “16--17 tick” wording: the instruction
+boundary is an exact 16 visible ticks. It also clarifies contact ordering;
+removal precedes, rather than follows, the independently owned burst and sound.
+
+### Enhanced Effects and adjacency boundary
+
+The contact burst has no Enhanced Effects branch. The flight child retains the
+already recovered global `DAT_00B3BCAD` branch: shipped/default Enhanced
+Effects on halves fade to `[0.025,0.05)` while off uses `[0.05,0.10)`; cadence
+stays one child per successful Fireball tick. `Fire_Goodguy 0x7EE`, Embers,
+Explode, status fields, and area damage remain separate actor/gameplay lanes.
+
+The Website can now truthfully add terrain contact, a stable semantic
+`fire-impact` replacement, exact registered frames, its outbound light, and
+the hit cue. The current web wave-enemy snapshot has positions but no native
+collision body/category/contact flags or health authority, so instruction-exact
+actor damage/contact remains bounded rather than being guessed from a point
+radius. A future combat slice must recover and publish that actor contract
+before enabling the candidate branch.
+
+### Static-contract receipt
+
+Registered contract
+`test_fireball_contact_range_and_recast_closure_is_pinned` passes through the
+canonical static-RE registry. It requires the exact binary identity, Staff
+rate/scalar/Fire multiplier and held requeue, absence of targeting/range/timer,
+handler and fifth-age segment order, contact/removal ownership, exact 16-tick
+two-pass burst, direct/self-lit wrapper, moving light, shipped Enhanced branch,
+bounded actor-authority lane, and the corrected Fire impact row in
+`native-audio-events.md`, including call site, stock WAV, pitch, and null-terrain
+ownership. The touched Python contract modules also pass bytecode compilation.

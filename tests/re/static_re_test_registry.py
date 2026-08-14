@@ -575,6 +575,7 @@ from static_re_projectile_spell_mechanics_contracts import (
     test_earth_charge_curve_and_release_geometry_are_exact,
     test_earth_boulder_second_pass_visual_ownership_is_pinned,
     test_ether_flight_compositor_and_contact_ownership_are_pinned,
+    test_fireball_contact_range_and_recast_closure_is_pinned,
     test_frost_jet_operand_widths_and_rank_one_update_ownership_are_pinned,
     test_materialized_projectile_trajectories_pin_native_motion,
     test_projectile_contact_events_cross_check_existing_damage_goldens,
@@ -2221,6 +2222,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "projectile presentation and Fire_Goodguy semantics are pinned",
         test_projectile_presentation_and_fire_goodguy_semantics_are_pinned,
+    ),
+    (
+        "Fireball contact, range, and recast closure is pinned",
+        test_fireball_contact_range_and_recast_closure_is_pinned,
     ),
     (
         "Ether flight compositor and contact ownership are pinned",

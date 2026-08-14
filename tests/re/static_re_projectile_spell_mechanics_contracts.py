@@ -12,6 +12,7 @@ from static_re_contract_support import ROOT, StaticReTestFailure
 
 DOC_PATH = ROOT / "docs/reverse-engineering/native-projectile-and-spell-mechanics.md"
 EARTH_VFX_CATALOG_PATH = ROOT / "docs/reverse-engineering/earth-boulder-vfx-catalog.json"
+AUDIO_DOC_PATH = ROOT / "docs/reverse-engineering/native-audio-events.md"
 FIXTURE_PATH = ROOT / "tests/fixtures/webgame/projectile-goldens.json"
 CAPTURE_SHA = "1b9d454da60afefa2cb5f01a0f6e8ce829efebe6"
 
@@ -423,6 +424,56 @@ def test_projectile_presentation_and_fire_goodguy_semantics_are_pinned() -> str:
         "projectile presentation/Fire_Goodguy document",
     )
     return "Atlas hooks, frame cadence, world queue, and damaging 0x7EE trails are pinned"
+
+
+def test_fireball_contact_range_and_recast_closure_is_pinned() -> str:
+    doc = _document()
+    heading = "## 2026-08-14 Fireball contact, range, and recast closure"
+    _require(heading in doc, "Fireball contact/range/recast closure is absent")
+    closure = doc.split(heading, maxsplit=1)[1]
+    _require_tokens(
+        closure,
+        (
+            "`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`",
+            "`0x0044B170` /\n  `0x0044B370`",
+            "`0x00656580`",
+            "`0.05625`/tick",
+            "release is not\n  required for native Fire auto-repeat",
+            "not target- or distance-bounded",
+            "`0x0053DC60`",
+            "`0x00529380`",
+            "`4.5` Fireball speed global",
+            "segment/polygon query `0x00524D70`",
+            "collision mask\n  `0x700`",
+            "`Fireball::Tick` `0x005FDD90`",
+            "returns before\n   common movement and before cosmetic-particle allocation",
+            "falls through and allocates one final\n   `Anim_FireParticle`",
+            "No hard flight timer exists",
+            "`0x005E5160`",
+            "removal vslot **before**",
+            "audio and presentation allocation",
+            "`9bfad709cfb932b7e836c58f781a42ee78907a0211bac5d14a2583d721192738`",
+            "visible semantic ages are exactly `0..15`",
+            "frames\n  `0..3` each last four ticks",
+            "record `110` source-over at `5*scale`",
+            "`(1,1,0.75)`",
+            "`ZAnimLit` vtable `0x0079C4DC`",
+            "radius `1.5`, intensity\n  `1 - 0.04*age`",
+            "shipped/default Enhanced\nEffects on halves fade to `[0.025,0.05)`",
+            "no native\ncollision body/category/contact flags or health authority",
+        ),
+        "Fireball contact/range/recast closure",
+    )
+    _require_tokens(
+        AUDIO_DOC_PATH.read_text(encoding="utf-8"),
+        (
+            "| `projectile.fire.impact` | Fireball contact | `0x005E5288` inside `0x005E5160` | 30 `sounds\\fireballhit` |",
+            "signed float-RNG pitch `1 + U[-0.1,0.1)`",
+            "The Fireball removal vslot runs first; null terrain contact owns the same request.",
+        ),
+        "Fireball impact audio catalog row",
+    )
+    return "Fire targeting absence, contact order, exact burst, light, audio, and bounded actor lane are pinned"
 
 
 def test_ether_flight_compositor_and_contact_ownership_are_pinned() -> str:
