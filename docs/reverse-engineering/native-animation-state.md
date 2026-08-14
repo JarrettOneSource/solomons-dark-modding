@@ -259,16 +259,19 @@ selection remain G3 territory.
 
 ## Facing
 
-All divisions below are integer divisions after x87 float-to-int truncation.
-Do not use `round`, floating modulo, or a continuous sprite rotation.
+The enemy renderers below add the half-step, divide, then call `0x00747360`;
+its ordinary `FISTP` path uses the default x87 round-to-nearest-even mode.
+Do not substitute JavaScript `Math.round`, truncation, floating modulo, or a
+continuous sprite rotation. The independently recorded Wizard/DemonSkull path
+retains its integer formula below.
 
 <!-- ANIMATION_FACING_BEGIN -->
 | Family | Mapping | Distinct rendered facings |
 | --- | --- | ---: |
 | Wizard, staff, wand, cast sockets; DemonSkull | `f=((int)heading+7)/15; if f>=24 f-=24` | 24 |
-| Skeleton, Archer, Mage, Wraith, Demon, DireFaculty, Heartmonger, Crow, grounded Maggot, Spider | `f=((int)heading+10)/20; if f>=18 f-=18; if f<0 f+=18` | 18 |
-| Zombie | same 18-way formula after adding its fixed-tick actor-local angular offset `+0x21C` to heading | 18 |
-| Imp, GoodImp, GreenImp | `f=((int)heading+15)/30; if f>=12 f-=12; if f<0 f+=12` | 12 |
+| Skeleton, Archer, Mage, Wraith, Demon, DireFaculty, Heartmonger, Crow, grounded Maggot, Spider | `f=roundEven((heading+10)/20); positiveMod(f,18)` | 18 |
+| Zombie | same 18-way round-even formula after adding its fixed-tick actor-local angular offset `+0x21C` to heading | 18 |
+| Imp, GoodImp, GreenImp | `f=roundEven((heading+15)/30); positiveMod(f,12)` | 12 |
 | airborne Maggot | renderer truncates its ballistic orientation and wraps it into `[0,9]`; this is spin orientation, not world heading | 10 |
 | Coffin, Cocoon, Portal | heading does not select body art | 1 / none |
 <!-- ANIMATION_FACING_END -->

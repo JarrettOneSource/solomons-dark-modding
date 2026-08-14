@@ -516,6 +516,58 @@ intentionally reused by several families. Projectile-owned and child-animation
 art is cataloged separately because its lifetime belongs to the spawned
 object, not the enemy that requested it.
 
+### Spawn-presentation ABI used by the Website port
+
+The eight retail survival-wave families share one facing convention except
+for Imp. The renderers load actor heading onto the x87 stack and call
+`0x00747360`; its ordinary path reaches `FISTP` under the default
+round-to-nearest-even control word. The exact buckets are:
+
+```text
+Skeleton/Archer/Mage/Zombie/Wraith/Demon:
+  positiveMod(roundEven((headingDegrees + 10.0) / 20.0), 18)
+
+Imp:
+  positiveMod(roundEven((headingDegrees + 15.0) / 30.0), 12)
+```
+
+The constants are doubles at `0x007DE810` (`10`), `0x007DE920` (`20`),
+`0x00784D80` (`15`), and `0x00784D50` (`30`). This is observably different
+from JavaScript `Math.round` on exact half buckets.
+
+Record placement uses each atlas record's logical registration, not the crop
+center. The bundle loader preserves the logical cell, origin, and `extras`;
+the Website anchor formula is `cropSize / 2 - origin`. Articulated native
+renderers also consume point records as joint/attachment inputs. Those later
+joint fields are not part of the current Website snapshot. Constructor-spawn
+composition is:
+
+| Family | Spawn composition and native child order |
+| --- | --- |
+| Skeleton | limbs `1585 + pose*18 + facing`; selected body bank; optional weapon overlay; headgear bases `1477`, `1495`, `1531`, or `1549` plus facing |
+| SkeletonArcher | limbs `1585 + facing`; body `451 + facing`; selected shared headgear |
+| SkeletonMage | limbs `1585 + facing`; body `1729 + facing`; selected shared headgear; alternate bank begins at `1459` |
+| Imp | main `285 + variant*12 + facing`; upper effect `333..342` at actor offset `(0,-10)` |
+| Zombie | base `2365 + facing`; body `2203 + bodyType*18 + facing`; rear/front arms from `2095` and `2149` with the flyblown spawn pose when configured; head `2293 + headType*18 + facing` |
+| Wraith | complete record `2070 + facing`, scale `2`, renderer transform offset `(0,+15)` |
+| Demon | controller `19 + pose*18 + facing`; component banks `1..18`, `62..79`, `80..97`, and `98..115` consume controller attachment records; death uses `55..61` |
+| Coffin | constructor state zero is not drawn for 180 or 360 ticks; state one advances `175..178` by `0.3/tick`, holds 150..299 ticks, and state two advances through `187` by `0.2/tick`; later state records and secondary `383..392` belong to the Coffin/Maggot state machine |
+
+Skeleton's `HELM`, `HORNED`, `HOODED`, `ARMOR`, `SWORD`, `MACE`, `FLAIL`,
+`AXE`, and `PIKE` flags are presentation selectors as well as gameplay config.
+Zombie body type/flyblown, Mage element/cloak, and the constructor-selected Imp
+variant are likewise separate selector axes. They must not be collapsed into a
+family-colored marker.
+
+The native constructors seed some cosmetic selectors and articulation phases
+from the process-global RNG. A network port that does not serialize those
+fields cannot claim matching RNG sequence merely because it uses the correct
+records. It may project a deterministic cosmetic value into the exact stock
+domain, while retaining a neutral reachable joint pose, but locomotion,
+attack, Wraith fade, Zombie limb state, Demon joints, Coffin combat opening,
+death, and child effects remain authoritative actor state and must be
+replicated before the presentation advances them.
+
 ## Custom-content and multiplayer consequences
 
 The native enemy seam has four distinct levels:
