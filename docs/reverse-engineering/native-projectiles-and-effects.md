@@ -200,8 +200,9 @@ contain and how they reach the renderer. The durable scalar/address/art join is
 
 - Each smart Rock is 0x3C bytes: local XYZ `+0x00..08`, transformed XYZ
   `+0x0C..14`, scale `+0x18`, and sprite variant `+0x1C`.
-- Boulder vslot `+0x68` (`0x005FE430`) replaces the main collection whenever
-  `floor(30*charge)` changes. It installs a central variant-3
+- Boulder initialization builds once at charge `0.18`; vslot `+0x68`
+  (`0x005FE430`) then replaces the main collection only whenever old/new
+  `floor(30*charge)` buckets differ. It installs a central variant-3
   `BadGuys[171]` rock scaled `4*charge`, then `ceil(30*charge)` Fibonacci-
   sphere points at radius `30*charge`. Shell variants `0..2` select
   `BadGuys[168..170]` and use a charge-scaled random factor `0.5..1.25`,
@@ -212,9 +213,15 @@ contain and how they reach the renderer. The durable scalar/address/art join is
   matrix is rotation-only, that plane cannot cull a valid rank-1 Rock.
   `0x0043A8A0` then copies transformed X/Y exactly; Z has no projection term
   and is used only for culling/order. Main draw scale is
-  `max(stored_scale, float32(0.45))`. Record 86 is a separate opening glimmer:
-  mix `+0x1EC` starts at one and decreases by `0.035`/tick; glimmer alpha is
-  `mix`, while rock alpha is `1-mix`.
+  `max(stored_scale, float32(0.45))`. Persistent record 15 uses green-white
+  `(0.9,1,0.9)`, alpha `random(0,0.25)+0.35`, and scale `4.1*charge` in held
+  and flight phases. Record 86 is the separate additive opening flash: mix
+  `+0x1EC` starts at one and decreases by `0.035`/tick; flash alpha is `mix`,
+  scale is `2.5*mix`, rotation is global-render-tick times six degrees, and
+  rock alpha is `1-mix`.
+- The whole visual gets per-draw random displacement in radius `[0,3]` and
+  local Y `-20-32.5*charge`. Its actor/Region-light point remains authoritative
+  Boulder XY; painter bias is `(20+10*charge)*charge*1.5`.
 - Held tick rotates `+0x154` by `0.75` degrees about normalized axis
   `(0,-0.8,1)` through `0x00403340`. Release preserves and stops that matrix;
   the flight body does not keep flat-spinning.
@@ -227,14 +234,16 @@ contain and how they reach the renderer. The durable scalar/address/art join is
 - Impact vslot `+0x6C` (`0x0060B700`) emits
   `floor(max(8,30*charge))` `Anim_BoulderBit` fragments using the same lit
   `[2008..2010]` bank, registers each through `ZAnimLitObject`, and removes the
-  Boulder. The base fragment fade decrement is `0.025`/tick.
+  Boulder. Subclass fade is float32 `0.025` every tick; the base adds float32
+  `0.015` except active-motion global ticks divisible by three. Settled
+  fragments receive both decrements even on divisible ticks.
 - Normal flight `0x00620B60` writes the velocity-advanced actor position
   before contact queries. A terminal breakup therefore uses that advanced
   contact sample rather than the preceding clear position.
 
-This also corrects the prior human summary: `BadGuys[86]` is not a charge-
-scaled body sprite. A renderer that draws only record 86 reproduces the
-opening glimmer and necessarily omits the actual Boulder.
+This also corrects the prior human summary: `BadGuys[86]` is neither a charge-
+scaled body sprite nor the persistent aura. A renderer that draws only record
+86 necessarily omits record 15 and the actual Boulder.
 
 ## Proven inheritance and behavioral families
 

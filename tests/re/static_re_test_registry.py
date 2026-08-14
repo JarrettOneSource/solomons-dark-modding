@@ -572,6 +572,7 @@ from static_re_projectile_spell_mechanics_contracts import (
     test_cast_glyph_emitter_index_and_offsets_are_pinned,
     test_cast_glyph_emitter_resolves_every_recorded_projectile_spawn,
     test_earth_charge_curve_and_release_geometry_are_exact,
+    test_earth_boulder_second_pass_visual_ownership_is_pinned,
     test_ether_flight_compositor_and_contact_ownership_are_pinned,
     test_frost_jet_operand_widths_and_rank_one_update_ownership_are_pinned,
     test_materialized_projectile_trajectories_pin_native_motion,
@@ -2191,6 +2192,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Earth charge and release geometry are exact",
         test_earth_charge_curve_and_release_geometry_are_exact,
+    ),
+    (
+        "Earth second-pass visual ownership is pinned",
+        test_earth_boulder_second_pass_visual_ownership_is_pinned,
     ),
     (
         "Air and Frost remain tick queries with exact stop edges",

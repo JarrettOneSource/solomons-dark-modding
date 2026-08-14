@@ -11,6 +11,7 @@ from static_re_contract_support import ROOT, StaticReTestFailure
 
 
 DOC_PATH = ROOT / "docs/reverse-engineering/native-projectile-and-spell-mechanics.md"
+EARTH_VFX_CATALOG_PATH = ROOT / "docs/reverse-engineering/earth-boulder-vfx-catalog.json"
 FIXTURE_PATH = ROOT / "tests/fixtures/webgame/projectile-goldens.json"
 CAPTURE_SHA = "1b9d454da60afefa2cb5f01a0f6e8ce829efebe6"
 
@@ -30,6 +31,62 @@ def _document() -> str:
 
 def _fixture() -> dict[str, Any]:
     return json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+
+
+def _earth_vfx_catalog() -> dict[str, Any]:
+    return json.loads(EARTH_VFX_CATALOG_PATH.read_text(encoding="utf-8"))
+
+
+def test_earth_boulder_second_pass_visual_ownership_is_pinned() -> str:
+    catalog = _earth_vfx_catalog()
+    constants = catalog["constants"]
+    assets = {entry.get("record"): entry for entry in catalog["assets"] if "record" in entry}
+    functions = {entry["address"] for entry in catalog["functions"]}
+
+    _require(
+        catalog["binary"]["sha256"]
+        == "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+        "Earth VFX binary identity drifted",
+    )
+    _require(
+        {"0x00544C60", "0x00609D30", "0x005FE430", "0x0060AC40", "0x005E5450"}
+        <= functions,
+        "Earth owner/tick/builder/draw/release join is incomplete",
+    )
+    _require(constants["persistent_aura_record"] == 15, "persistent aura record drifted")
+    _require(
+        constants["persistent_aura_alpha_range"] == [0.35, 0.6]
+        and constants["persistent_aura_scale_factor"] == 4.099999904632568,
+        "persistent aura alpha/scale drifted",
+    )
+    _require(constants["opening_flash_record"] == 86, "opening flash record drifted")
+    _require(
+        constants["opening_flash_scale_factor"] == 2.5
+        and constants["opening_flash_rotation_degrees_per_render_tick"] == 6.0
+        and constants["opening_flash_blend"] == "additive",
+        "opening flash compositor drifted",
+    )
+    _require(
+        constants["visual_jitter_radius_range"] == [0.0, 3.0]
+        and constants["visual_local_y_base"] == -20.0
+        and constants["visual_local_y_charge_factor"] == -32.5,
+        "Earth visual-root transform drifted",
+    )
+    _require(
+        assets[15]["width"] == 38
+        and assets[15]["height"] == 37
+        and assets[15]["sha256"]
+        == "5abc42fa09f09a5fefe3df9281d2102e6b93a48249edb4e21f36f73e1a0011eb",
+        "record-15 extraction drifted",
+    )
+    _require("additive opening flash" in assets[86]["role"], "record 86 role drifted")
+    _require("floor(30*old_charge)" in _document(), "assembly rebuild edge is absent")
+    _require("must therefore not remove Earth" in _document(), "native range ownership drifted")
+    _require(
+        "preserve the final matrix unchanged in flight" in catalog["render_contract"]["orientation"],
+        "released-shell orientation ownership drifted",
+    )
+    return "Earth aura/flash, assembly, root transform, released orientation, and range are pinned"
 
 
 def _samples(table: dict[str, Any]) -> list[dict[str, Any]]:

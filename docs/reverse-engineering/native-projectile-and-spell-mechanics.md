@@ -765,9 +765,50 @@ fixed flight expiration.
 
 ### Construction, called rocks, draw order, and breakup
 
-The 2026-08-14 two-pass presentation audit corrects the earlier shorthand that
-called `BadGuys[86]` the Boulder body. Record 86 is a 94 x 94 opening glimmer.
-The visible body is a native collection of individual `Boulder::Rock` records.
+The 2026-08-14 second two-pass presentation audit corrects one remaining
+mistake in the first reconstruction: Boulder owns **two** center overlays, not
+one. `BadGuys[15]` is the persistent green-white aura attached to the assembled
+Boulder. `BadGuys[86]` is only the short additive opening flash. The visible
+body is a native collection of individual `Boulder::Rock` records. The pass
+used Ghidra decompilation of `0x005FA270`, `0x00609D30`, `0x005E5450`,
+`0x005FE430`, and `0x0060AC40`, then independently checked the relevant PE
+instructions around `0x00609D30`, `0x0060AC40`, and dispatcher `0x00544C60`.
+The asset-object join independently maps object offset `0x0BB4` to record 15
+and `0x4210` to record 86. This corrects the former single-overlay model rather
+than layering a guessed extra effect onto it.
+
+Dispatcher `0x00544C60` owns one cached Boulder actor. While held, it resamples
+the current player world aim and staff socket on every tick; there is no enemy
+target selection or projectile homing. Release freezes the last sampled
+direction and assigns straight speed `3`. No fixed distance or flight lifetime
+exists in the actor. Contact/removal, world teardown, or owner teardown end its
+range. A web-only 500-tick containment must therefore not remove Earth.
+
+Draw `0x0060AC40` first adds a shared-random displacement of magnitude
+`random(0,3)` in a random unit direction to the complete visual assembly. Its
+visual origin is
+`actorY - (Boulder+0x1D4)*charge*0.75 + (Boulder+0x1E0)`. Constructor field
+`+0x1D4` is `30`, while held tick writes `+0x1E0=-20-10*charge`, yielding exact
+local Y `-20-32.5*charge`. The Boulder actor and Region-light sample remain at
+the authoritative actor XY; only the composed visual moves. Tick instructions
+`0x0060A548..0x0060A55E` set painter bias to
+`-(+0x1E0)*charge*1.5 = (20+10*charge)*charge*1.5`.
+
+The persistent record-15 pass at `0x0060ACD0..0x0060AE04` uses color
+`(0.9,1.0,0.9)`, alpha `random(0,0.25)+0.35`, and scale
+`4.099999904632568*charge`. It remains present in held and flight phases. The
+record-86 pass at `0x0060B1BC..0x0060B2B3` is additive white, uses alpha
+`opening_mix`, scale `2.5*opening_mix`, and rotation
+`global_render_tick*6` degrees. The body alpha is `1-opening_mix`. Record 15 is
+the missing stock "on-boulder" effect; assigning its `4.1*charge` scale to
+record 86 is instruction-false.
+
+Exact extracted record 15 is 38 x 37 pixels, SHA-256
+`5abc42fa09f09a5fefe3df9281d2102e6b93a48249edb4e21f36f73e1a0011eb`.
+Record 86 remains 94 x 94. Both are children of the Region-lit Boulder painter
+root and inherit its sampled tint; neither is an independently registered
+actor or outbound-light source.
+
 The machine-readable address/field/constant/art join is
 [`earth-boulder-vfx-catalog.json`](earth-boulder-vfx-catalog.json).
 
@@ -775,9 +816,15 @@ The machine-readable address/field/constant/art join is
 `PointerList<SmartPointer<Boulder::Rock>>`; backing storage is at `+0x150`.
 Each 0x3C-byte Rock holds local XYZ at `+0x00..+0x08`, draw-transformed XYZ at
 `+0x0C..+0x14`, scale at `+0x18`, and a sprite variant at `+0x1C`.
-The constructor installs `Boulder::vftable` `0x0079E014`; tick
-`0x00609D30` calls vslot `+0x68` (`0x005FE430`) whenever
-`floor(30 * charge)` changes.
+The constructor installs `Boulder::vftable` `0x0079E014` and initialization
+dispatches vslot `+0x68` (`0x005FE430`) once at constructor charge `0.18`.
+Tick `0x00609D30` compares `floor(30*old_charge)` with
+`floor(30*new_charge)` and rebuilds only when that bucket changes. The native
+Rock collection is consequently stable between rebuild ticks. Charge continues
+to interpolate for the aura/root offset and gameplay radius, but body count,
+local XYZ, variants, stored scales, and central scale use the last authoritative
+assembly charge. Recomputing the shell from every interpolated charge is not a
+native growth animation; it makes rocks breathe and drift between births.
 
 `0x005FE430` replaces the collection as one cohesive shell:
 
@@ -866,10 +913,12 @@ orthographic XY offset. Draw also clamps every main Rock's stored scale to a
 minimum float32 `0.44999998807907104` (`0x00785370`; the comparison double at
 `0x00786C88` has the same value). This preserves a rotating 3D pile rather
 than a flat rotating bitmap or perspective projection. The opening mix at
-`+0x1EC` starts at `1` and loses `0.035` per native tick:
-record 86 draws with that mix while the rock collection draws with
-`1 - mix`. Thus the white glimmer fades out as the assembled body fades in;
-it never becomes the body. The glimmer scale is `4.1 * charge`. No direct
+`+0x1EC` starts at `1` and loses `0.035` per native tick: record 86 draws
+additively with alpha `mix`, scale `2.5*mix`, and global-frame rotation `6`
+degrees per render tick, while the rock collection draws with `1-mix`. Thus
+the opening flash fades out as the assembled body fades in; it never becomes
+the body. Record 15 remains behind the body at `4.1*charge` with its independent
+`[0.35,0.60]` alpha sample. No direct
 `BadGuys[67]` shadow reference exists in this draw method; generic world
 lighting/tint remains a sibling renderer concern.
 
@@ -1276,7 +1325,7 @@ and tables above.
 | Fire / Fire Missile (`16`, type `0x7D4`) | one actor on the press action marker | emitter plus `(0,+10)` plus `20` along aim; velocity `4.5`/tick; radius `22.5`; core `BadGuys[110]`; main strip `BadGuys[255..266]`, frame `(age/3)%12`; per-tick cosmetic trail `BadGuys[267..270]` | registry 97 `sounds\\throwfire` once at emission; flight is silent |
 | Air / Lightning (`24`) | start on press, sustain once per held tick, stop on release; constant Staff action is `K=0` on insertion and `K=7` thereafter; no projectile actor | reach-205 rank-1 ray; each tick creates a two-tick dual ribbon using `BadGuys[44]`, a one-shot source corona, and a five-tick endpoint corona whose four circles all use `BadGuys[110]` plus paired forks `[1836..1839]` | registry 54 `sounds\\lightningstart` on the start edge; registry 162 `sounds\\lightningloop__loop` owned for the channel lifetime |
 | Water / Frost Jet (`32`) | start on press, emit once per held tick, stop on release; constant Staff action is `K=0` on insertion and `K=7` thereafter; no persistent gameplay projectile | rank-1 cone reach `205` is immediate gameplay only; shipped Enhanced Effects default emits two speed-`4` visual transients/tick; 75% Normal / 25% Over, 32-33 ticks; `BadGuys[30]` core plus `[28]` glint only | registry 44 `sounds\\icestart` on the start edge; registry 161 `sounds\\iceloop__loop` owned for the channel lifetime |
-| Earth / Boulder (`40`, type `0x7D5`) | create on the first active tick; charge while the selected primary remains latched; after input release, the player tick retains Earth while charge is strictly below `0.3`, then releases the same cached actor on the following eligible tick | constructor charge is float32 `0.18`; the first post-tick actor row is age `1` at `0.181250006`; add float32 `0.00125` per active tick and clamp at `1`; a two-frame request reaches update `97` at `0.301249892` while still held, then first flies at age `98`; held radius `15`; release speed `3`/tick; record 86 crossfades into the depth-sorted `[168..171]` collection, while called rocks and breakup use `[2008..2010]` | actor creation plays registry 87 `sounds\\startboulder` once; registry 159 `sounds\\gatherrocksloop__loop` starts with Earth and stops on primary transition or charge cap; moving boulder owns registry 168 `sounds\\rollingstoneloop__loop` |
+| Earth / Boulder (`40`, type `0x7D5`) | create on the first active tick; charge while the selected primary remains latched; after input release, the player tick retains Earth while charge is strictly below `0.3`, then releases the same cached actor on the following eligible tick | constructor charge is float32 `0.18`; the first post-tick actor row is age `1` at `0.181250006`; add float32 `0.00125` per active tick and clamp at `1`; a two-frame request reaches update `97` at `0.301249892` while still held, then first flies at age `98`; held radius `15`; release speed `3`/tick; persistent aura record 15 surrounds the discretely rebuilt/depth-sorted `[168..171]` shell; additive opening record 86 fades in about 29 ticks; called rocks and breakup use `[2008..2010]`; shell orientation freezes on release but the whole visual retains stock jitter | actor creation plays registry 87 `sounds\\startboulder` once; registry 159 `sounds\\gatherrocksloop__loop` starts with Earth and stops on primary transition or charge cap; moving boulder owns registry 168 `sounds\\rollingstoneloop__loop` |
 
 ### Deliberate PoC boundary
 
@@ -1285,10 +1334,10 @@ emission/channel lifecycle, replication, rendering, and the audio requests
 listed above. It therefore must not consume mana, apply damage or status,
 acquire or home toward targets, collide with actors or terrain, emit impact
 audio/debris, or enforce the unrecovered gameplay cooldown/rank progression.
-Without contact, Ether, Fire, and released Earth actors need a web containment
-lifetime so they cannot grow the authoritative list forever. That lifetime is
-an explicit web PoC policy, not a recovered native constant, and must be named
-as such in the Website ledger and tests.
+Without contact, Ether and Fire actors retain the named web containment policy.
+Earth now owns authoritative terrain contact and must not inherit that policy:
+the native actor has no fixed timer or range, and a long unobstructed Earth
+flight remains live until contact or teardown.
 
 This boundary also forbids reconstructing one-shot audio from interpolated
 positions. Authoritative player state must latch a monotonic emission sequence;
