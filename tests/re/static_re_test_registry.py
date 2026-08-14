@@ -15,6 +15,7 @@ from static_re_boneyard_contracts import (
     test_flat_boneyard_fixture_matches_native_syncbuffer_envelope,
     test_loading_screen_uses_native_stage_progress_and_shared_d3d9_lifetime,
     test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary,
+    test_solomon_dig_and_wave_director_contract_is_registered,
 )
 from static_re_boneyard_picker_contracts import (
     test_boneyard_picker_owns_its_keys_and_centers_row_text,
@@ -879,6 +880,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Default Boneyard load, seed, and compact-decor findings are registered",
         test_default_boneyard_load_seed_and_compact_decor_findings_are_registered,
+    ),
+    (
+        "Solomon Dig encounter and survival wave director are registered",
+        test_solomon_dig_and_wave_director_contract_is_registered,
     ),
     (
         "Stock map picker recovery pins the selected value and launch path",

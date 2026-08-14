@@ -100,6 +100,11 @@ def test_boneyard_scripting_model_and_runtime_anchors_are_registered() -> str:
         "0x00646F80",
         "0x00652040",
         "0x0046E390",
+        "0x00632730",
+        "0x006388B0",
+        "0x0063EFC0",
+        "retained/dead retail directive",
+        "low-population timer",
         "0x0046C9A0",
         "0x0046D000",
         "0x004B4EC0",
@@ -858,4 +863,119 @@ def test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary() -> s
         "multiplayer Boneyard scenery is generated from the host seed at the stock "
         "Arena_Create boundary, with exact Tree/Scrub and compact-decor tables, "
         "matched cameras, and exact PID/path cleanup verified at runtime"
+    )
+
+
+def test_solomon_dig_and_wave_director_contract_is_registered() -> str:
+    findings = _read(
+        "docs/reverse-engineering/native-solomon-dig-and-wave-director.md"
+    )
+    layout = _read("config/binary-layout.ini")
+
+    required_findings = (
+        "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+        "363a985d79dc3ca28fb5ce519f56c436f5269a9bea1bedc7d1a825e8139499fc",
+        "dda683d9f9e34649b3a510b2790650fc99103e51316d4b95eb6593fe98d7d448",
+        "0x00481C20",
+        "0x00481FC0",
+        "0x0047D0F0",
+        "0x0047D450",
+        "0x0047D570",
+        "0x004857B0",
+        "0x0048A8B0",
+        "0x00410D60",
+        "0x004A2610",
+        "0x004902C0",
+        "0x00490420",
+        "0x00490640",
+        "0x00490790",
+        "0x004ED980",
+        "trunc(turnRate) + 1",
+        "40 + 2 * RandomInt(25)",
+        "`95..184`",
+        "`213..227`",
+        "`228..272`",
+        "trunc((normalizedHeading + 12) / 24) % 15",
+        "13 at `(x - 10, y - 113)`",
+        "f3542e9d1b3621fdecd6f68baedf2d4f3c80762bd21ca7aa9fbb66e530db309c",
+        "057a3661340a3a099cf88c491d88c4268d82b8bb48ab29d214961ce701140126",
+        "a4d85b56f79486361a4ae18a6b4bc2bc1c0e28ba1a57f96ef68cc64e09e9cafa",
+        "((solomon.x - player.x) / 1.5)^2",
+        "horizontal radius 150 and vertical radius 125",
+        "SAY_SOLOMON_HELLO1.wav",
+        "SAY_SOLOMON_HELLO4.wav",
+        "dd460115df4f6880d7e067fc1c8c93492413f103ea9b94855f11e955293a564d",
+        "a2748ccc9fbe13c2ae80e238ea8dd5a170b1dd7e2b2c7fa050a0073470ce52a2",
+        "25-tick hold",
+        "SAY_SOLOMON_LAUGH1.wav",
+        "SAY_GETHIMBOYS.wav",
+        "c26e56af5c5036bdfdda8dee9c5ba8270a75156b45c0afe9f00c83b850b34541",
+        "Speed begins at 2 and increases by `0.05`",
+        "lifetime is set to 515",
+        "42 `WAVE` records",
+        "918 spawn-budget units",
+        "205 `GROUP` blocks",
+        "Negative values are valid",
+        "594 TimeLine events",
+        "394 SPAWN",
+        "87 PAUSE",
+        "0x00465C00",
+        "0x00465D70",
+        "0x004625F0",
+        "0x0046C9A0",
+        "0x0046D000",
+        "0x0046E390",
+        "0x00466200",
+        "0x00463D30",
+        "renderer visibility, or maximum",
+        "does not draw a wave number",
+        "SolomonDarkModLoader_LuaExec",
+    )
+    missing_findings = [
+        token for token in required_findings if token not in findings
+    ]
+    if missing_findings:
+        raise StaticReTestFailure(
+            "Solomon Dig/wave director RE map is incomplete: "
+            + ", ".join(missing_findings)
+        )
+
+    required_layout = (
+        "[gameplay.solomon_dig_wave_director_re]",
+        "solomon_dig_ctor=0x00481C20",
+        "solomon_dig_state_dispatch=0x0048A8B0",
+        "solomon_dig_find_player=0x00481FC0",
+        "solomon_dig_face_player=0x0047D0F0",
+        "solomon_dig_wait_dialogue=0x0047D450",
+        "solomon_dig_retreat=0x0047D570",
+        "solomon_dig_escape=0x004857B0",
+        "solomon_turn_direction=0x00410D60",
+        "solomon_render_dispatch=0x004A2610",
+        "solomon_render_dig=0x004902C0",
+        "solomon_render_dialogue=0x00490420",
+        "solomon_render_retreat=0x00490640",
+        "solomon_render_escape=0x00490790",
+        "solomon_asset_map=0x008199D0",
+        "solomon_asset_builder=0x004ED980",
+        "arena_start_waves=0x00465C00",
+        "arena_wave_advance=0x00465D70",
+        "arena_start_next_wave_when=0x004625F0",
+        "wave_data_parse=0x00632730",
+        "wave_timeline_generate=0x006388B0",
+        "timeline_event_activate=0x0046C9A0",
+        "timeline_tick=0x0046E390",
+        "spawner_tick=0x0046D000",
+        "region_tick_low_population_timer=0x0063EFC0",
+        "spawn_position_policy=0x00466200",
+        "spawn_collision_adjust=0x00463D30",
+    )
+    missing_layout = [token for token in required_layout if token not in layout]
+    if missing_layout:
+        raise StaticReTestFailure(
+            "Solomon Dig/wave director binary-layout anchors are incomplete: "
+            + ", ".join(missing_layout)
+        )
+    return (
+        "Solomon first contact, exact dialogue/retreat timing, generated survival "
+        "schedule, TimeLine/Spawner ownership, and no-wave-HUD boundaries are pinned"
     )

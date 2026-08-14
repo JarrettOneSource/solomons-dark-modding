@@ -542,6 +542,20 @@ Kinds 0 and 7 create Spawners; kind 1 trips/tries triggers; kind 2 sets this
 pause state; kind 3 advances the wave; kind 4 is a label no-op; kind 5 jumps;
 kind 6 changes subsequent spawn-location defaults.
 
+The stock survival generator adds two constraints to this generic object
+model. `WaveData_Parse` at `0x00632730` reads the retail `wave.txt` directives
+before `0x006388B0` emits the TimeLine graph. The exact verdict for
+`MAXENEMIES` is a retained/dead retail directive: it survives parsing but is
+never copied into a TimeLine,
+Spawner, or Arena population gate. `WAVEDELAY` similarly contributes a seeded
+random draw without installing a delay; preserving that draw is required to
+preserve the later generated schedule.
+
+Region tick `0x0063EFC0` owns the Arena `+0x88` low-population timer. It
+increments while fewer than 11 monsters are live and no boss exists, and mode
+6 compares its stored threshold against that timer (or its monster threshold
+against the strict live count). This field is not the schedule's wave ordinal.
+
 ## Bonedit authoring surface
 
 Bonedit's main bundle builder is `0x004E41C0`. The relevant panels and node

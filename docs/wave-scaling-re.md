@@ -82,6 +82,8 @@ Primary functions:
 - `0x00632730` `WaveData_Parse`: parser branch recognizes `WAVE`, `ENDWAVE`,
   `SPAWN:`, `SPAWNDELAY:`, `WAVEDELAY:`, `MAXENEMIES:`, `GROUP`, and monster
   flag strings.
+- `0x006388B0` generated-schedule compiler: expands each `SPAWN` group-cost
+  budget and serializes ordinary TimeLine/Spawner events.
 - `0x0046C9A0` wave/timeline event handler: case `7` creates the live wave
   spawner object.
 - `0x0046D000` `WaveSpawner_Tick`: decrements spawn timers, selects group
@@ -111,6 +113,12 @@ Any wave/config tooling must preserve `ARMORMAYBE -> 0x2A`. The builder also
 implements internal codes `0x2D..0x30`, but the recovered text parser emits
 none of them.
 
+Retail source rows contain `FLAG_IGNITE` and `FLAG_IMMORTALIZE`, but
+`WaveFlag_ParseModifiers` has no comparison for either token. Both take its
+`Unknown Param` path and append no runtime modifier. Lossless source tooling
+may retain their text; compiled Spawner records must not treat them as active
+flags.
+
 Live wave-spawner fields recovered from `0x0046C9A0` and `0x0046D000`:
 
 - `+0x18`: current wave/action record pointer
@@ -124,36 +132,39 @@ Live wave-spawner fields recovered from `0x0046C9A0` and `0x0046D000`:
 - `+0x38`: current group-member index
 - `+0x3C/+0x40`: spawn X/Y or spawn-location parameters
 
-`SPAWN` feeds the remaining budget at `spawner + 0x20`. If the parsed budget is
-zero for grouped records, the case-7 constructor switches on `+0x31` and sums
-the referenced group-member counts to produce the budget.
+The source directives do not map one-to-one onto those live Spawner fields.
+`0x006388B0` first expands raw `SPAWN` to a group-cost budget, repeatedly
+selects whole GROUPs, adds wave-ordinal count bonuses, and serializes the
+resulting count into `spawner + 0x20`. Ordinary Spawners then select a random
+event record for each emitted actor; source rows are not emitted in sequence.
 
-`SPAWNDELAY` feeds the per-spawn countdown/base-delay path. After a successful
-spawn, `WaveSpawner_Tick` resets `+0x24` from `+0x28`, optionally adding random
-jitter when `+0x30` is set.
+`SPAWNDELAY` is sampled once per consumed GROUP member. Half of each draw is
+summed into the generated event's spread. Spawner activation derives
+`+0x24/+0x28/+0x2C` from that compiled count/spread and scheduling mode. A
+Spawner may drain multiple actors on the tick its remaining-spread timer
+expires.
 
-`WAVEDELAY` feeds the longer `+0x2C` timer. While this timer remains positive,
-the spawner normally emits one budget unit, resets the spawn delay, and returns.
-Once it expires, the same tick can keep looping and drain more of the remaining
-budget immediately.
+`WAVEDELAY` is sampled once during compilation, but the sampled value is dead;
+it does not feed the TimeLine lull or the live Spawner. A subsequent singleton
+`SPAWN` draw is likewise dead but remains part of the seeded random stream.
 
-`MAXENEMIES` is not the inner spawn-loop counter. Static evidence ties it to
-the wave/trigger advancement gate that uses global enemy count. In practice it
-controls how aggressively later waves are allowed to overlap while the live
-enemy population is below the threshold. If we scale `SPAWN` materially upward,
-we should scale `MAXENEMIES` with it or the stock overlap/cap behavior can
-become the limiting factor.
+`MAXENEMIES` is also parsed but inert. Full-function instruction tracing finds
+its parsed local only in the parser cleanup/destructor path. It is not copied
+into a TimeLine event, Spawner, or Arena advancement gate. `WaveSpawner_Tick`
+contains no global-live-count cap. Scaling `MAXENEMIES` therefore has no stock
+runtime effect.
 
 ## Count Scaling Seams
 
 Preferred data seam:
 
 - Generate or overlay a scaled `data/wave.txt`.
-- Multiply `SPAWN` by the chosen player-count rule.
+- Multiply `SPAWN` by the chosen player-count rule, understanding that it is a
+  group-cost budget and emitted counts include compiler bonuses.
 - Adjust `SPAWNDELAY` lower if the goal is denser bursts, not just more enemies
   over a longer period.
-- Adjust `MAXENEMIES` upward with `SPAWN` so the stock overlap gate does not
-  hold later waves at the original population thresholds.
+- Leave `MAXENEMIES` alone unless preserving authored text; retail parses but
+  does not consume it.
 - Keep `GROUP`/`FORMATION` contents intact unless we also want composition
   scaling.
 
@@ -259,7 +270,7 @@ Player-count difficulty scaling is disabled:
 
 - `arena + 0x8FE4` is an integer gameplay-slot count, not a float scalar;
 - the loader writes `1` at the native wave-spawner seam before enemy creation;
-- retail `SPAWN`, `MAXENEMIES`, group composition, flags, and independent
+- retail `SPAWN`, inert `MAXENEMIES`, group composition, flags, and independent
   damage scalars remain unchanged.
 
 Generate or overlay a scaled `data/wave.txt` only if a future, explicit balance
