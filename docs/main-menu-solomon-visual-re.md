@@ -133,6 +133,22 @@ sprite stride 0xC4
 Records 16 through 24 form the grave-decoration vector at
 `+0x8B4/+0x8B8/+0x8BC`. They do not contribute to Solomon.
 
+### Owner and lifetime
+
+`MainMenu` installs vtable `0x007980CC`. Its relevant virtual slots are layout
+at `+0x04` (`0x005A51A0`, thunking to `0x0059A9D0`), tick at `+0x08`
+(`0x005A51B0`), and render at `+0x0C` (`0x00598780`). Construction at
+`0x0058D940` builds the four embedded menu controls, initializes the three
+grave-row vectors, starts `solomondarktheme`, calls `Title_Build`, and zeros
+the title animation fields including cloak phase `MainMenu + 0x400`.
+
+The deleting destructor at `0x00592E10` delegates to `0x0058DA70`. That
+destructor releases the three grave-row allocations, destroys their vector
+storage and the four embedded controls, and then tears down the base UI owner.
+The title Solomon therefore has no independently retained actor or sprite
+lifetime: its body, eyes, and cloak are immediate submissions by the active
+`MainMenu` render owner from the process-global `Title` bundle.
+
 ## Exact Solomon records
 
 | Record | Bundle offset | Layer | Atlas crop `(x,y,w,h)` | Logical canvas | Center offset | Trim origin |
@@ -214,6 +230,21 @@ rotation = 0
    ```
 
 6. Restore white RGBA and pop the outer translation.
+
+The instruction-level call sites make the painter relationship explicit:
+
+- `0x005991CB` calls the scaled helper for inline record 3 at `Title + 0x284`;
+- `0x005992C4` calls the unscaled helper for inline record 8 at
+  `Title + 0x658`;
+- `0x00599442` and `0x005994FF` submit the current cloak vector record twice;
+- `0x005995E3` and `0x00599693` submit the next cloak vector record twice.
+
+These calls execute synchronously in that order in `MainMenu_Render`; there is
+no later depth sort. The cloak/hood is consequently painter-above the eyes and
+must occlude every overlapping eye pixel. A retained-mode port may express the
+same relationship with explicit layer values, but those values must satisfy
+`body < eyes < cloak` while preserving the two current-frame draws before the
+two next-frame draws.
 
 The duplicate cloak draws are intentional. To match the stock result exactly,
 draw each selected frame twice with normal source-over alpha blending. Do not
