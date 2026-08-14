@@ -477,7 +477,7 @@ The principal selector-based outdoor classes are:
 
 | Type / class | Native art |
 | --- | --- |
-| 2001 Tree | DeadHawg 228..242, 243..263, and 264..282; layered canopy/trunk/foreground with sway and collision. |
+| 2001 Tree | DeadHawg 228..242, 243..263, and 264..282; layered main/foreground with collision and viewer-local occlusion alpha. |
 | 2009 Monument | DeadHawg 156..176. |
 | 2029 Gravestone | DeadHawg base 97..113 and independent overlay 88..96. |
 | 2040 Building | DeadHawg base 148..151 and upper 152..155. |

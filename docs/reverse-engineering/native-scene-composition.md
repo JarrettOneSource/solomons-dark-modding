@@ -194,8 +194,8 @@ copies all 58 dwords of its final state back to the active object. G12 consumes
 those selected variant values; it does not re-derive or replace G1's RNG.
 
 There are also presentation-only random consumers after layout generation:
-Tree sway, Scrub phase, transient Arena ground effects, marker tint, and some
-lighting inputs are documented in
+Tree local occlusion alpha, Scrub phase, transient Arena ground effects,
+marker tint, and some lighting inputs are documented in
 [`native-default-boneyard-load-seed-and-decor.md`](native-default-boneyard-load-seed-and-decor.md).
 They must be modeled as presentation state if pixel-identical replay is
 required. They are not permission for the renderer to choose a new static decor
@@ -301,7 +301,8 @@ The observed native darkness model is compositional rather than one global
 4. each queued world object is culled and samples a local analytic scalar;
 5. that scalar is multiplied into the object's renderer color before the
    sprite/mesh is alpha-blended;
-6. late proxy/foreground lanes paint after the shared queue; and
+6. late proxy/foreground lanes paint after the shared queue; Tree secondary
+   art additionally applies its Tree-root analytic scalar explicitly; and
 7. post-scene overlays may darken or color the completed picture.
 
 The common world dispatcher at `0x00624B40` obtains its scalar through
@@ -312,7 +313,11 @@ complex-lighting global at `0x00B3BCA8` disables the path, the scalar is forced
 to `1`. Direct underlay/overdraw art uses the renderer color installed by its
 own caller and does not acquire an invented object-light sample. Pre-main
 direct art is nevertheless affected by the separate Region light-texture
-multiply; late proxy/foreground art is not.
+multiply; late proxy/foreground art is not. Tree secondary painter
+`0x00608830` is the explicit exception to the generic late-lane rule: after
+the multiply boundary it installs RGB from Tree color scalar `+0xD0` times the
+already sampled root scalar `+0xCC`, and uses Tree visibility alpha `+0x150`.
+Building upper art retains its caller-owned color.
 
 Renderer color installation at `0x0041FE50` stores the requested RGBA floats
 at renderer offsets `+0x1EC..+0x1F8`; its effective color lanes at
