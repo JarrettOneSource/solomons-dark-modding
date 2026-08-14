@@ -682,3 +682,45 @@ positions. Authoritative player state must latch a monotonic emission sequence;
 channel and rolling loops must be owner-keyed and balanced at release, actor
 expiry, disconnect, and scene transition. Those lifecycle edges are part of
 the native sound contract even while damage and collision remain absent.
+
+### Cast-facing priority and lifetime
+
+A fresh 2026-08-14 read-only decompile of retail `PlayerActor::Tick`
+`0x00548B00` from Ghidra replica slot 2 closes the heading owner shared by all
+five primaries. The analyzed `/SolomonDark.exe` is the 4,723,200-byte retail
+image with SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`.
+
+`PlayerActor_UpdateControlBrainTargeting (0x0052C910)` supplies two independent
+vectors to the player tick: movement and facing. When actor animation-drive
+byte `+0x160` is zero, the player tick may convert movement through
+`0x0042D280` and write actor heading `+0x6C`. If facing intent is present, the
+same tick converts the facing vector through `0x0042D280` and writes `+0x6C`
+again, after the movement write. Attack/cast facing therefore wins locomotion
+on the acceptance tick. This is not a renderer transform.
+
+The active action then preserves that heading. Staff Cast 1 remains queued
+after a short Ether/Fire input release and keeps `+0x160` nonzero, so later
+movement ticks cannot replace the accepted cast heading before the action's
+marker or completion. Its marker is the fixed-tick progress crossing at tick
+19 and its observed program ends at tick 74. Air, Water, and Earth renew the
+one-tick Staff Constant action while their primary remains active, giving the
+same facing priority for the channel lifetime. Earth retains the last cast
+heading while its minimum-charge selection latch delays release.
+
+The same state has several downstream consumers:
+
+- Wizard body, held staff, and Staff socket composition all quantize actor
+  `+0x6C` into the same 24-way facing.
+- Cast emitter `0x0053B830` samples that facing at the fixed-tick emission.
+- Fire handler `0x0053DC60` samples actor `+0x6C`, converts it through
+  `0x00410500`, and writes `Fireball +0x13C/+0x140` at birth. Later actor
+  heading changes do not steer the born projectile.
+- Movement remains physically active during a queued action, but it neither
+  cancels the action nor owns presentation facing until the action releases.
+
+The port consequence is one authoritative action-level priority rule: capture
+one-shot aim on accepted press and retain that heading through the queued
+action; refresh sustained heading only from live held aim and otherwise retain
+the last channel heading. Do not independently rotate robe, staff, emitter, or
+VFX, and do not let snapshot interpolation infer a second facing owner.
