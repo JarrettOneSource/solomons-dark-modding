@@ -570,15 +570,58 @@ be used as the Water damage owner.
 | `+0x24/+0x28` velocity | heading unit times rank speed | position adds velocity; optional wall splay |
 | `+0x2C/+0x30` heading | handler heading | unchanged by ordinary flight |
 | `+0x3C` additive-core alpha | `0.75` | subtract `0.05` |
-| `+0x40` core scale | `S = 0.5 + U[0,0.75]` | if lifetime `< 1`, add `2` |
+| `+0x40` core scale | `S = 0.5 + U[0,0.75]` | if lifetime `< 1`, add `0.009999999776482582` |
 | `+0x44` glint scale | `Q = (2 + U[0,1]) * S` | if lifetime `< 1`, multiply `0.95` |
-| `+0x48` color ramp | Normal `1 + U[0,0.5]`; Over overrides it to `0` | subtract `2`, clamp at zero |
+| `+0x48` color ramp | Normal `1 + U[0,0.10000000149011612]`; Over overrides it to `0` | subtract `0.07500000298023224`, clamp at zero |
 | `+0x4C` opacity multiplier | `1` | unchanged |
 
-The core tint is `(max(0, 1 - colorRamp), 1, 1)`: Normal is cyan on
-construction and white after the first completed update; Over is white from
+These three non-round values were re-audited from instruction width and raw
+bytes after the integrated browser receipt exposed a cyan full-screen wash.
+`0x004537E6` is `DC 05 08 4D 78 00`, so its operand is the QWORD bytes
+`00 00 00 40 E1 7A 84 3F` = `0.009999999776482582`, not the low-DWORD float
+`2`. `0x004537B1` is the same QWORD form over bytes
+`00 00 00 40 33 33 B3 3F` = `0.07500000298023224`. The constructor at
+`0x00453622` uses `D9 05` and therefore correctly reads the DWORD bytes
+`CD CC CC 3D` = `0.10000000149011612`. This operand-width correction
+supersedes the earlier `+2`, `-2`, and `U[0,0.5]` transcription.
+
+The complete presentation-constant width audit is:
+
+| Address | Storage | Exact value | Native role |
+| --- | --- | ---: | --- |
+| `0x007849F0` | DWORD | `0.05000000074505806` | lifetime random bound; Normal phase step |
+| `0x00784740` | QWORD | `1.25` | lifetime base |
+| `0x007DE934` | DWORD | `0.75` | additive alpha; core-scale random bound |
+| `0x00784E7C` | DWORD | `0.03999999910593033` | lifetime decrement |
+| `0x007DE808` | QWORD | `0.5` | core base; Over phase factor; wall-splay speed factor |
+| `0x007DE838` | QWORD | `2` | glint-scale base only |
+| `0x007845E8` | DWORD | `0.10000000149011612` | color-ramp random bound |
+| `0x007DE8A0` | QWORD | `0.05000000074505806` | additive-alpha decrement |
+| `0x00784EA8` | QWORD | `0.07500000298023224` | color-ramp decrement |
+| `0x00784E20` | QWORD | `0.949999988079071` | late-life glint shrink |
+| `0x00784D08` | QWORD | `0.009999999776482582` | late-life core growth |
+| `0x00784970` | QWORD | `0.8999999761581421` | Normal glint opacity gate |
+| `0x007DE910` / `0x007DE8F0` | QWORD | `3` / `0.25` | glint offset/Over alpha; Over scale |
+
+Every persistent field is rounded by its `fstp DWORD` store. Bounded random
+results are therefore float32 before constructor addition/multiplication;
+velocity and position are float32, position advances iteratively, the Normal
+`L * L` alpha local is float32 before the minimum, and each glint-offset
+multiply/add is stored through float32. A closed replay cannot replace these
+steps with one `origin + velocity * age` expression.
+
+The core tint is `(max(0, 1 - colorRamp), 1, 1)`: Normal starts cyan and
+restores red gradually over roughly 14-15 updates; Over is white from
 construction. Both renderers pass the native heading to the registered sprite
 draw and restore ordinary blending/white afterward.
+
+The rank-1 classes also share update ownership exactly. Normal vtable
+`0x00784E84 + 0x08` and Over vtable `0x00784EB4 + 0x08` both contain
+`0x00453670`. Nearby function `0x00453870` calls that updater and then
+subtracts `0.01` from core scale, but its sole data xref is vtable slot
+`0x00793D7C`; constructor vptr write `0x00541870` identifies that table as
+`Anim_FrostJetEffect_Chaining`. It is not the Over updater. Importing its
+post-update shrink into rank-1 Over would cross a learned-spell class boundary.
 
 Normal render `0x00457720` submits three ordered draws:
 
@@ -586,8 +629,10 @@ Normal render `0x00457720` submits three ordered draws:
    `min(lifetime^2, phase)`, cyan-to-white tint;
 2. while `+0x3C > 0`, additive `BadGuys[30]` at the same transform, scale
    `0.5*S`, alpha `+0x3C`; and
-3. additive `BadGuys[28]` at `position + 3*velocity`, scale `min(Q,1)`, alpha
-   `min(10*lifetime,1)`.
+3. while opacity multiplier `M = +0x4C` is at least
+   `0.8999999761581421`, additive `BadGuys[28]` at
+   `position + 3*velocity`, scale `min(Q,1)`, alpha
+   `M * min(10*lifetime,1)`.
 
 Over render `0x00457A00` omits the half-core draw:
 
@@ -600,6 +645,12 @@ The draw-state byte set to `1` resolves through `0x004208A0` to D3D
 `SRCALPHA, ONE`; zero is ordinary `SRCALPHA, INVSRCALPHA`. These objects enter
 the common transient/world lists and are culled, Y-sorted, camera-transformed,
 and locally lit by the common world dispatcher. They are not screen overlays.
+`Text_Draw` at `0x00415130` writes the submitted scale directly to all three
+matrix diagonal entries; `0x00414540` then transforms the registered
+pixel-space quad. There is no texture-dimension normalization. The renderer's
+float local color is multiplied by common Region-light channels before final
+byte quantization, so a web renderer must not pre-quantize the cyan-to-white
+red channel before composing that tint.
 
 #### Exact atlas records and learned-branch separation
 

@@ -573,6 +573,7 @@ from static_re_projectile_spell_mechanics_contracts import (
     test_cast_glyph_emitter_resolves_every_recorded_projectile_spawn,
     test_earth_charge_curve_and_release_geometry_are_exact,
     test_ether_flight_compositor_and_contact_ownership_are_pinned,
+    test_frost_jet_operand_widths_and_rank_one_update_ownership_are_pinned,
     test_materialized_projectile_trajectories_pin_native_motion,
     test_projectile_contact_events_cross_check_existing_damage_goldens,
     test_projectile_goldens_pin_live_capture_provenance_and_rank_coverage,
@@ -2198,6 +2199,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Air Lightning cadence and contact light source are pinned",
         test_air_lightning_cadence_and_contact_light_source_are_pinned,
+    ),
+    (
+        "Frost Jet operand widths and rank-one update ownership are pinned",
+        test_frost_jet_operand_widths_and_rank_one_update_ownership_are_pinned,
     ),
     (
         "projectile contacts cross-check existing damage goldens",

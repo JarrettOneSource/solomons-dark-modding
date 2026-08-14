@@ -468,6 +468,30 @@ def test_air_lightning_cadence_and_contact_light_source_are_pinned() -> str:
     return "Air shipped-default cadence, topology, and ZAnimLit mapping are pinned"
 
 
+def test_frost_jet_operand_widths_and_rank_one_update_ownership_are_pinned() -> str:
+    doc = _document()
+    _require_tokens(
+        doc,
+        (
+            "`0x004537E6` is `DC 05 08 4D 78 00`",
+            "`00 00 00 40 E1 7A 84 3F` = `0.009999999776482582`",
+            "`00 00 00 40 33 33 B3 3F` = `0.07500000298023224`",
+            "`CD CC CC 3D` = `0.10000000149011612`",
+            "Normal vtable\n`0x00784E84 + 0x08`",
+            "Over vtable `0x00784EB4 + 0x08`",
+            "both contain\n`0x00453670`",
+            "`0x00793D7C`",
+            "`Anim_FrostJetEffect_Chaining`",
+            "It is not the Over updater",
+            "Every persistent field is rounded by its `fstp DWORD` store",
+            "`0x00415130` writes the submitted scale directly",
+            "must not pre-quantize the cyan-to-white",
+        ),
+        "Frost Jet scalar-width/update-ownership document",
+    )
+    return "Frost Jet QWORD scalars and rank-1 shared updater are pinned"
+
+
 # Emitter points the goldens resolve to, from records #3263 (K=0) and #3431 (K=7)
 # of the images/Clothes.bundle common stream, point index 1.
 _EMITTER_BANK_0 = (-45.5, -15.5)
