@@ -406,6 +406,63 @@ def test_ether_flight_compositor_and_contact_ownership_are_pinned() -> str:
     return "Ether records 110..112 own flight; record 53 and FadeMM remain contact-owned"
 
 
+def test_air_lightning_cadence_and_contact_light_source_are_pinned() -> str:
+    doc = _document()
+    _require_tokens(
+        doc,
+        (
+            "`0x5F3759DF`",
+            "`0x3E959773`",
+            "new shipped profile selects Enhanced Effects On / spacing `15`",
+            "seven vertex pairs/fourteen vertices",
+            "thirty-six indices",
+            "field `+0x140` is radius",
+            "`+0x144` is intensity starting at `1`",
+            "`multipleShadows=false`",
+            "painter sort field `+0xA0`",
+            "inner `75` and outer",
+        ),
+        "Air Lightning cadence/light-source document",
+    )
+
+    squared_distance = _f32(102.5 * 102.5)
+    half_squared_distance = _f32(squared_distance * 0.5)
+    squared_bits = struct.unpack("<I", struct.pack("<f", squared_distance))[0]
+    estimate_bits = 0x5F3759DF - (squared_bits >> 1)
+    estimate = struct.unpack("<f", struct.pack("<I", estimate_bits))[0]
+    inverse_distance = _f32(
+        estimate * (1.5 - half_squared_distance * estimate * estimate)
+    )
+    distance = _f32(1.0 / inverse_distance)
+    ratio = _f32(distance / 15.0)
+    step = min(0.5, _f32(2.0 / ratio))
+    _require(
+        struct.unpack("<I", struct.pack("<f", step))[0] == 0x3E959773,
+        f"Air parameter step bits drifted: {step}",
+    )
+
+    samples: list[float] = []
+    parameter = _f32(0.0)
+    while parameter < 2.0 - step:
+        samples.append(parameter)
+        parameter = _f32(parameter + step)
+    samples.append(2.0)
+    _require(
+        samples
+        == [
+            0.0,
+            0.29217109084129333,
+            0.5843421816825867,
+            0.8765132427215576,
+            1.1686843633651733,
+            1.460855484008789,
+            2.0,
+        ],
+        f"Air parameter samples drifted: {samples}",
+    )
+    return "Air shipped-default cadence, topology, and ZAnimLit mapping are pinned"
+
+
 # Emitter points the goldens resolve to, from records #3263 (K=0) and #3431 (K=7)
 # of the images/Clothes.bundle common stream, point index 1.
 _EMITTER_BANK_0 = (-45.5, -15.5)

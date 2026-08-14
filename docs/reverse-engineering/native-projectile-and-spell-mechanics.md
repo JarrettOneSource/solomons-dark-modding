@@ -85,7 +85,7 @@ assets the native game loads, or capture them per facing.
 | --- | --- | --- | --- |
 | Ether | cast glyph emitter plus local `(0,+10)`; aim probe `100` units forward; speed `3 * (1 + mSpeed/100)` | actor radius `15`; target proximity every tick with `6`-unit probe; terrain every fifth tick using a five-tick lookahead | no fixed timer found; contact consumes unless pierce remains; an age over `200` changes the candidate mask |
 | Fire | cast glyph emitter plus local `(0,+10)`, then `20` units along aim; velocity is aim unit vector times `4.5` | actor radius `22.5`; candidate query radius `20` every tick in the current spatial cell; terrain every fifth tick with five-tick lookahead | no fixed timer found; first impact removes the Fireball; status/area work is dispatched before removal |
-| Air | cast origin to retained target/aim line; instantaneous, so no velocity or spread | line/world clip at `0x00524D70`; target/chain query every held tick at `0x00641340` | exists only while the primary is held; each chained hop scales the next damage by `0.6`; a render-only fade lives `10` ticks |
+| Air | cast origin to retained target/aim line; instantaneous, so no velocity or spread | line/world clip at `0x00524D70`; target/chain query every held tick at `0x00641340` | exists only while the primary is held; each chained hop scales the next damage by `0.6`; bolt body lives `2` ticks and contact fade lives `5` ticks |
 | Water/Frost | cast origin and aim define a rank-scaled cone; instantaneous, so no velocity | rank-1 query reach is `205` world units; candidate cone `0x00641B10`, mask `0x1082`, then per-target LOS; contact every held tick | start/sustain/stop channel; render particles outlive their source tick for about `32`–`33` ticks |
 | Earth | charged actor is held at the cast emitter, then released straight along aim at speed `3` | held radius `15`; release radius is charge-scaled; recursive collision/query `0x00620B60` runs every flight tick | held until release even after full charge; no fixed flight timer found; distinct-target ledger allows residual pool to hit more than one target |
 
@@ -296,9 +296,13 @@ calls `0x00534510` twice over the same three points:
 the coefficient builder is `0x0062A9E0`, evaluator is `0x0062B2F0`, and
 tangent-normal helper is `0x00529010`. The middle point is therefore
 native-significant. Cadence nevertheless measures only the first
-source-to-middle leg at `0x0053461C..0x005346DA`, divides that distance by
-native double `30` normally (`0x005346FF`) or `15` when high-detail byte
-`0x00B3BCAD` is set (`0x005346F7`), and computes
+source-to-middle leg at `0x0053461C..0x005346DA`. It uses the Quake fast
+inverse-square-root seed `0x5F3759DF` at `0x0053462A`, one Newton refinement at
+`0x005346C6..0x005346DA`, and float32 stores for the squared length, estimate,
+recovered reciprocal distance, ratio, step, and loop accumulation. It divides
+that recovered distance by native double `15` when Enhanced Effects byte
+`0x00B3BCAD` is set (`0x005346F7`) or `30` when clear (`0x005346FF`), and
+computes
 `step = splineDuration / (firstLegDistance / spacing)` at
 `0x00534735..0x0053473D`. Float `0.5` at `0x007DE870` caps the step at
 `0x00534741..0x00534756`; the cap is not `1`. The strict loop condition is
@@ -306,12 +310,26 @@ native double `30` normally (`0x005346FF`) or `15` when high-detail byte
 `0x0053516D..0x00535182`, and the exact duration endpoint is appended after
 the loop.
 
+`0x00B3BCAD` is the literal `ENHANCED EFFECTS` Boolean persisted under the
+misleading `Game.FastCPU` key. Settings loader `0x005BB310..0x005BB34F` uses
+capability byte `0x00B3BCAE` as the missing-key fallback. The shipped defaults
+block omits the key, and the recognized Windows path seeds the capability byte
+to `1`, so a new shipped profile selects Enhanced Effects On / spacing `15`.
+A preserved false-profile capture selects Off / spacing `30`; it proves the
+branch remains user-selectable rather than defining the shipped default.
+
 For the current rank-1 untargeted path, the collinear points are source `0`,
-middle `102.5`, and endpoint `205`. Thus the first leg is `102.5`, raw normal
-step is `2 / (102.5 / 30) = 0.585365...`, and the cap produces `0.5`.
-Loop parameters are `0`, `0.5`, and `1.0`; the appended endpoint is `2.0`.
-Each layer therefore has exactly four vertex pairs/eight vertices and three
-neighboring segments/eighteen indices. This is not `ceil(205 / 30)`.
+middle `102.5`, and endpoint `205`. Float32 squared length is `10506.25`; the
+one-step inverse-square-root path yields effective distance
+`102.67955780029297`, ratio `6.845304012298584`, and step `0x3E959773` /
+`0.29217109084129333`. Float32 accumulation produces the exact parameter
+samples
+`[0, 0.29217109084129333, 0.5843421816825867, 0.8765132427215576, 1.1686843633651733, 1.460855484008789, 2]`.
+The next candidate `1.7530266046524048` fails the strict loop threshold. Each
+layer therefore has seven vertex pairs/fourteen vertices, six neighboring
+segments, and thirty-six indices. This is not `ceil(205 / 15)`. The explicit
+Off branch remains capped at step `0.5` and produces four pairs/eight
+vertices/three segments/eighteen indices.
 
 At each loop sample, envelope is `sin((t / 2) * pi)`. The center adds a normal
 wave `envelope * sin(t * 360 degrees + phase) * 25`, a second normal wave
@@ -371,18 +389,32 @@ and forks `1836..1839`
 and `90723bedc696c964165ed6e06d32f9834118f04ab53821d047d48ee3826a99da`.
 The painter then chooses two fork glyphs from exact records `1836..1839`; the
 second index is `3 - first`, so record ids sum to `3675`, and its rotation is
-the first plus `90` degrees. The attached `ZAnimLit` follows the fade and is
-configured with randomized intensity based on `1 + Random(0.75)`, starting
-value `1`, decay `-0.05`, and range `50`.
+the first plus `90` degrees. The attached `ZAnimLit` mapping is closed by the
+Air constructor writes at `0x00540072..0x005400F8`, tick `0x005FD1D0`, and
+provider `0x005E48E0`: field `+0x140` is radius
+`1 + Random(0.75)`, `+0x144` is intensity starting at `1`, `+0x148` is the
+float32 per-tick intensity delta `-0.05`, and local Multiple Shadows byte
+`+0x14C` is `0`. The provider passes `min(intensity, 1)`, radius, the followed
+child position, and `localMultipleShadows & DAT_00B3BCAA` to Region. Air's
+source is therefore always `multipleShadows=false`, shares the contact
+corona's sub-`10`-unit jittered position, and has radius `[1,1.75)`. Float
+`50` at `0x00784CF8` is written to Puppet painter sort field `+0xA0`, not to a
+light range. Region expands the radius with its existing inner `75` and outer
+`145` distance constants; no separate Air decay or `50`-unit range exists.
 
 These are three separate world registrations: `ZAnimSplit` owns the bolt body,
 `Anim_SpellGlow` owns the source corona, and `Anim_FadeLightning` owns the
 contact corona. A browser renderer must give them independent painter roots at
 body midpoint Y, source Y, and jittered endpoint Y. One midpoint-sorted parent
 changes stock occlusion whenever another world object lies between them.
+They also bypass inbound Region tint: `ZAnimSplit` draw vcall `0x005E0230` and
+the `ZAnim`/`ZAnimLit` child draw vcall `0x005E01E0` do not traverse the common
+Puppet local-light dispatcher. The outbound contact `ZAnimLit` source is a
+separate relationship and must be sampled at its jittered contact position.
 
 A loader-free retail capture in an isolated Wine/Xvfb prefix used copied
-`Game.FastCPU=false` settings, selecting the normal `30`-unit path above. The
+`Game.FastCPU=false` settings, selecting the explicit Off / `30`-unit path
+above rather than the shipped new-profile default. The
 60-fps, 132-frame hold at
 `/tmp/sdr-stock-vfx-probe.9l2URj/stock-air-held-v2.mp4` (SHA-256
 `bd0fcc847fbc346cb4bd6b88cf602fcf1c679d24c68d91b065f0518da8907f10`)
@@ -404,6 +436,11 @@ Focused read-only Ghidra transcripts are preserved at
 `79d830e17beef1737aefe0eb9a9e22321c2d19a7ccb1337dc436ddb8c7e43f47`)
 and `/tmp/sd-air-ghidra-corona-20260814.log` (SHA-256
 `0896a025f6b3a200d0cf35409ef263e6930b41615685ed3af59ed39455d79854`).
+The follow-up cadence/default and `ZAnimLit` field audit used the same exact
+retail executable and read-only Ghidra 12.0.3 replica
+`ghidra_project_replicas/slot-06`; its direct instruction ranges are listed
+above so the field and float-store sequence can be reproduced without a live
+runtime.
 
 ## Water: Frost Jet channel
 
