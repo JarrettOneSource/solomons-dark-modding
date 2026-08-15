@@ -38,12 +38,42 @@ def test_native_web_combat_lifecycle_integration_contract_is_pinned() -> str:
             "`NOSKELETONS` and `MORESKELETONS`",
             "explicit resource-safety bound",
             "a second deliberate Website product deviation",
+            "one deterministic dynamic-contact set",
+            "stages the semantic target identity",
+            "marker-time geometry",
+            "Maggot helper `0x00479C30` exactly three times",
+            "## Active Archer, Mage, and Wraith modifiers",
+            "change authoritative aim",
+            "self/ally shields remain separate lanes",
+            "constructs `Mod_Dazzle` type `0x1B6E`",
+            "`+0x14 = 0x32`",
+            "`Mod_Dazzle::Tick 0x00623490`",
+            "`+0x20 = 1 / duration`",
+            "`+0x120`",
+            "50-tick recovery ramp",
+            "effective skill-book rank",
+            "indexes the catalog mana and damage arrays",
+            "rank-indexed damage payload when emitted",
+            "Rank-one constants are fixtures",
+            "Shield current/maximum health",
+            "poison payload subtype",
+            "Dazzle, and poison status counters",
+            "zero/default reconstruction",
+            "unconditional `effects: []`",
+            "consume each new semantic event exactly once",
             "## Named Website completion bounds (not native evidence)",
-            "Coffin open marker/end `10/12`",
-            "Archer and Mage range-control minima are 120 and 100 world units",
+            "Coffin is excluded from this direct-action list",
+            "(120,240)`, `(80,180)`, `(180,320)`, `(100,320)`",
             "terminal presentation windows are Coffin 31, Demon 49, Imp 19",
             "Arrow `(5,8,300,false)`",
-            "Maggot movement step, collision radius, attack reach, and death window",
+            "one child every 50 ticks",
+            "24-tick ballistic emergence",
+            "post-emergence attack delay",
+            "successful bite",
+            "12-tick terminal",
+            "authoritative child step",
+            "launch-vector\n  distributions remain open",
+            "300 ticks at movement scale 0.5",
             "Wraith collision radius is 20",
             "`min(15, max(2, 1 + floor(waveOrdinal / 3)))`",
             "strongest damage-per-tick lane and the longest",
@@ -55,6 +85,8 @@ def test_native_web_combat_lifecycle_integration_contract_is_pinned() -> str:
 
     stale_claims = (
         "`STRONG`/`WEAK`: primary damage times 1.5/0.5",
+        "Coffin open marker/end `10/12`",
+        "verticalHeight",
         "containment horizon is not native lifetime evidence and must give way",
         "They do not permit client authority,\nage-based retirement",
     )
@@ -66,6 +98,6 @@ def test_native_web_combat_lifecycle_integration_contract_is_pinned() -> str:
         )
 
     return (
-        "native/web combat ownership, tick order, product deviations, and named "
-        "completion bounds are pinned"
+        "native/web combat ownership, effective-rank payloads, active modifiers, "
+        "strict replication, product deviations, and named completion bounds are pinned"
     )

@@ -200,6 +200,13 @@ Normal hostile eligibility is every two ticks; compensated family states use
 published transform but cannot choose targets, advance actions, or infer
 contacts.
 
+Living players, enemies, and owned child actors participate in the same native
+actor-circle contact domain. The Website must therefore put players, enemies,
+and Maggots in one deterministic dynamic-contact set when either side moves
+and commit every resolved displacement. Running the solver only for hostile
+movement would let a player pass through a stationary enemy and would not
+preserve the shared native collision contract.
+
 Exact 100 Hz action boundaries at attack speed 1 are:
 
 | Action | ID | First active marker | Completion | Recovery |
@@ -215,6 +222,14 @@ semantic action-marker event, not an animation-state Boolean. Mage action
 `0x12` uses variable short/long programs with marker 25/31 and strict end
 41/47 at rate `0.253125012*(1+roll)*attackSpeed`.
 
+Entering windup does not permanently authorize a later hit. A melee action
+stages the semantic target identity that began the action. At every damaging
+marker, authority must re-check that staged identity is still the same living,
+eligible target and is still inside the family contact/reach geometry. A
+target that dies, disconnects, leaves reach, or is replaced by reacquisition
+takes no marker damage. Exact per-family weapon shapes remain open; the named
+center-distance Website bounds below are the temporary marker-time geometry.
+
 Confirmed family ownership beyond the Skeleton template is:
 
 - Imp: flying approach/contact/cooldown; terminal split.
@@ -223,15 +238,51 @@ Confirmed family ownership beyond the Skeleton template is:
 - Wraith: approach/orbit/retreat/attack, retreat `200+RandomInt(601)`, exact
   post-attack cooldown 50, alpha/fade state.
 - Demon: approach, DemonBomb, recovery, terminal radial Imp split.
-- Coffin: hidden/closed, rise/hold, opening, open; opening makes/replenishes
-  Maggots. A Maggot emerges, crawls, bites once, and enters its own death.
+- Coffin: hidden/closed, rise/hold, opening, open. The opening edge invokes
+  Maggot helper `0x00479C30` exactly three times; the open state can replenish
+  owned children while below its configured maximum. A Maggot emerges
+  ballistically, crawls, bites once, immediately enters its own death, and is
+  cleaned up when its stored Coffin parent no longer resolves.
 
-Exact generalized marker/cooldown programs for Imp, Zombie, Wraith, Demon, and
-Coffin/Maggot are not closed. They must not be reported as tick-identical
-native parity. A bounded deterministic web program may complete the playable
-family while retaining family-specific states, documented timing constants,
-and semantic event ownership; it must not collapse them into reskinned
-Skeletons or one universal attack cadence.
+Exact generalized marker/cooldown programs for Imp, Zombie, Wraith, and Demon,
+plus the full Coffin replenishment and Maggot emergence distributions, are not
+closed. They must not be reported as tick-identical native parity. A bounded
+deterministic web program may complete the playable family while retaining
+family-specific states, documented timing constants, and semantic event
+ownership; it must not collapse them into reskinned Skeletons or one universal
+attack cadence.
+
+## Active Archer, Mage, and Wraith modifiers
+
+The retail modifier lanes are runtime behavior, not definition-only metadata:
+
+- Archer consumes arrow payload, accuracy mode, extra-arrow count, and range
+  mode independently. Normal/fire/poison arrows remain distinct; `LEADING`,
+  `SCATTERSHOT`, and `RANDOMSHOT` change authoritative aim rather than merely
+  relabeling the projectile.
+- Mage consumes element, range mode, self-shield toggle/strength, ally-shield
+  toggle/strength, and their shared interval. Fire, lightning, frost, and
+  poison must reach their projectile/direct-contact/status owners. Shield
+  damage is absorbed before HP, and self/ally shields remain separate lanes.
+- Wraith contact owns Dazzle; its orbit/fade brain does not reduce Dazzle to a
+  generic cooldown or presentation-only timer. The independent burning lane
+  likewise owns an attached fire effect rather than an inert config bit.
+
+The Dazzle timing is exact native evidence. Wraith tick `0x00486C30`
+constructs `Mod_Dazzle` type `0x1B6E`, initializes progress at modifier
+`+0x1C = 0`, and writes duration `+0x14 = 0x32` (50 ticks).
+`Mod_Dazzle::Tick 0x00623490` advances progress by the merged
+`+0x20 = 1 / duration`, clamps it to one, and multiplies the target actor's
+shared movement/status scalar at `+0x120` by that progress. The result is a
+50-tick recovery ramp whose first affected movement tick is `1/50` and whose
+last is `50/50`, not a 50-tick stun or constant slow.
+
+The Website authority must consume all of these evaluated fields in actor,
+projectile, shield, and player-status state. Exact native Archer angular/range
+formulas and Mage range, shield-interval units, and temporary effect clocks
+remain open; the explicit deterministic bounds below cover only those numeric
+gaps. They do not make any modifier inert and do not weaken the exact Dazzle
+ramp.
 
 ## Projectiles, contacts, and player resources
 
@@ -247,6 +298,17 @@ Fresh progression starts at HP 50 and MP 100. Native general recovery at
 100 Hz is MP `10/100 = 0.1/tick`, capped at `maxMP-hoardedMP`, and HP
 `1/(100*10) = 0.001/tick`. Level-up refills HP and MP. Rank-one primary costs
 are Ether 6, Fire 12, Air 12/second, Frost 12.5/second, and Boulder 12/second.
+
+Each primary spell's effective skill-book rank, not merely its permanent rank,
+indexes the catalog mana and damage arrays. For the Website authority, one-shot
+mana uses the effective rank on the accepted debit edge, and the authoritative
+projectile captures its rank-indexed damage payload when emitted. Air and Frost
+channels consume the rank-indexed per-second mana and damage values at 100 Hz
+and capture them on each semantic channel emission. Boulder captures the
+rank-indexed base damage on its authoritative held actor and multiplies that
+stored value by charge at contact. Rank-one constants are fixtures, not runtime
+authority after an upgrade.
+
 Exact one-shot versus sustained debit edges remain unresolved for welded
 builds; the web authority must debit once for one-shot casts and per fixed tick
 for channels, reject insufficient mana before materialization, and identify
@@ -331,15 +393,34 @@ and compact dynamic sample. Immutable descriptor data includes family,
 evaluated flags/config, scale/radius, cosmetic construction variants, and
 spawn identity. Dynamic samples include position, heading, target semantic ID,
 brain/action/pose clocks, HP, alpha/articulation state, hit feedback, and death
-epoch/tick. Projectiles/effects use stable actor IDs. Monotonic run-scoped
-events carry attack contacts, impacts, audio, rewards, death effects, and
-Game Over.
+epoch/tick. Shield current/maximum health and persistent attached-effect state
+are authoritative dynamic lanes; they cannot be inferred from HP or rebuilt as
+empty arrays on a client. Projectiles must preserve their normal/fire/cold/
+poison payload subtype, owner, stable identity, and kinematic state. Maggots
+must preserve Coffin ownership plus emergence/trajectory, bite/death, vertical,
+and hit-feedback state. Player snapshots must preserve authoritative cold,
+Dazzle, and poison status counters so host movement and client presentation
+refer to the same status epoch.
+
+Monotonic run-scoped events carry attack contacts, impacts, audio, rewards,
+death effects, and Game Over. Persistent effects such as burning, shields, and
+the bounded Mage lightning sample belong in replicated state; one-shot impact,
+terminal, and audio consequences belong to semantic events. In particular,
+the Skeleton/Archer/Mage terminal edge owns registry sound 79
+`sounds\\skeleton_die`; a client scene consumes that host event once rather
+than inferring it from interpolated HP or replaying retained history on late
+join.
 
 Clients interpolate only continuous transforms and pose clocks. They do not
 select targets, regenerate missed event cadence, infer death from HP, or replay
 historical audio on late join. Descriptor baselines are keyed by run nonce and
 support spawn, retire, periodic keyframe, gap recovery, and stale-frame
-rejection.
+rejection. Protocol decoding must fail closed when a required modifier,
+projectile payload, shield, status, Maggot phase, or effect lane is missing or
+malformed; zero/default reconstruction and unconditional `effects: []` are not
+compatibility behavior. A schema unable to carry those lanes requires an
+explicit version change before shipping. Client event cursors are run-scoped
+and consume each new semantic event exactly once.
 
 ## Named Website completion bounds (not native evidence)
 
@@ -348,21 +429,40 @@ where the native programs above remain open. These values make the requested
 survival loop complete; none is promoted to recovered retail timing:
 
 - locomotion advances one gait pose per 2 world units;
-- unresolved action programs are Coffin open marker/end `10/12`, Demon bomb
-  marker/end/recovery `6/11/36`, Imp contact marker/end/cooldown `6/11/18`,
-  Wraith drain marker/end/cooldown `4/9/50`, and Zombie swipe
-  marker/end/knockback `5/9/24` ticks;
-- Archer and Mage range-control minima are 120 and 100 world units;
-- center-distance attack reaches are Coffin 0, Demon 180, Imp 28, Skeleton 36,
-  Archer 240, Mage 220, Wraith 52, and Zombie 48;
+- unresolved direct-action programs are Demon bomb marker/end/recovery
+  `6/11/36`, Imp contact marker/end/cooldown `6/11/18`, Wraith drain
+  marker/end/cooldown `4/9/50`, and Zombie swipe marker/end/knockback
+  `5/9/24` ticks. Coffin is excluded from this direct-action list: it uses the
+  exact three-helper opening edge and the separate bounded child program
+  below;
+- Archer range modes 0/1/2/3 use bounded `(minimum, maximum)` bands
+  `(120,240)`, `(80,180)`, `(180,320)`, `(100,320)`; Mage modes use
+  `(100,220)`, `(70,165)`, `(150,300)`, `(80,300)`. Archer leading projection
+  is capped at 60 ticks, scatter/random offsets are `+/-12`/`+/-25` degrees,
+  extra-arrow spacing is 4 degrees, and at most eight extra arrows are
+  accepted. These are web bounds, not recovered native formulas;
+- center-distance attack reaches are Demon 180, Imp 28, Skeleton 36, Archer
+  240, Mage 220, Wraith 52, and Zombie 48;
 - terminal presentation windows are Coffin 31, Demon 49, Imp 19,
   Skeleton/Archer/Mage 24, and Wraith/Zombie 36 ticks;
 - enemy projectile `(speed, contact radius, lifetime, homing)` programs are
   Arrow `(5,8,300,false)`, Firebolt `(4.5,10,300,false)`, Guided Missile
   `(3,12,400,true)`, Demon Bomb `(2.5,18,400,true)`, and stationary Poison Pool
   `(0,35,1000,false)`;
-- Maggot movement step, collision radius, attack reach, and death window are
-  `0.5`, `8`, `18`, and `12` ticks/units as applicable;
+- Coffin's exact native opening edge requests three helpers. Its bounded web
+  follow-up replenishes one child every 50 ticks while below the configured
+  live-child maximum. Each child uses a 24-tick ballistic emergence, a 10-tick
+  post-emergence attack delay, distinct lid/edge launch state, then a `0.5`
+  crawl step, collision radius 8, attack reach 18, and one successful bite.
+  That bite immediately begins a 12-tick terminal presentation. An invalid,
+  missing, dying, or non-Coffin parent retires the child on the next
+  authoritative child step; the exact retail replenishment and launch-vector
+  distributions remain open;
+- bounded modifier clocks are 300 ticks at movement scale 0.5 for Mage frost,
+  three seconds for Archer/Mage poison, 100 ticks per Mage shield-interval
+  config unit with ally range 240, and four ticks for the Mage lightning
+  effect sample. The Wraith's 50-tick Dazzle ramp is exact native evidence,
+  not part of this bounded list;
 - Wraith collision radius is 20. `SPLITMANY` is bounded to
   `min(15, max(2, 1 + floor(waveOrdinal / 3)))` until its exact native formula
   is closed;
@@ -381,20 +481,30 @@ and focused actor/config/combat tests together.
 
 The remaining native gaps are:
 
-1. exact action programs for Imp, Zombie, Wraith, Demon, and Coffin/Maggot;
+1. exact action programs for Imp, Zombie, Wraith, and Demon; full Coffin
+   replenishment timing and Maggot launch/emergence distributions beyond the
+   closed three-helper, ownership, and single-bite lifecycle;
 2. exact Wraith alpha, Zombie limb, Demon joint, and non-Skeleton death clocks;
 3. Wraith inherited collision radius and family-specific attack reach;
 4. upgraded Health Up/Mana Up HUD denominators;
 5. exact debit edges for every primary handler and welded build;
-6. global dialogue overlap, Solomon's 4096-ray/camera script, and unusual
+6. exact Archer range/aim formulas, Mage range/shield interval units, and
+   unresolved elemental status/effect clocks;
+7. global dialogue overlap, Solomon's 4096-ray/camera script, and unusual
    same-Arena re-entry;
-7. host migration during encounter, combat, or terminal arbitration;
-8. custom Boneyard TimeLine/boss scripting.
+8. host migration during encounter, combat, or terminal arbitration;
+9. custom Boneyard TimeLine/boss scripting.
 
 Those gaps permit named, deterministic, family-specific web timings needed to
 make the requested survival loop playable. They do not permit client authority,
 unlabeled or unbounded retirement, generic family reskins, snapshot-inferred
-semantic events, or claims of exact native timing. Acceptance requires
-fixed-kernel, protocol lifecycle/recovery, two-client spectator/Game Over,
-asset/record, audio-event, and real Chromium end-to-end coverage, followed by
-the Website's canonical validation gate.
+semantic events, dropped modifier fields, zero-filled status/effect/shield
+state, or claims of exact native timing. Acceptance requires upgraded primary
+ranks to change both debit and captured damage, marker-time target/reach
+falsifiers, two-way player/enemy and player/Maggot separation, active runtime
+tests for every retail Archer/Mage/Wraith modifier, bounded Coffin child
+emergence/replenishment/one-bite/parent cleanup, strict replication round trips,
+and at least one host event driving a scene effect exactly once. Those focused
+contracts sit alongside protocol lifecycle/recovery, two-client spectator/Game
+Over, asset/record, audio-event, and real Chromium end-to-end coverage, followed
+by the Website's canonical validation gate.
