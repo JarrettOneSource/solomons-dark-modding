@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "source": {
+    "build": "retail 0.72.5",
+    "executable": "SolomonDark.exe",
+    "sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+    "preferred_image_base": "0x00400000"
+  },
+  "actors": [
+    {
+      "name": "Hagatha",
+      "native_type_id": 5001,
+      "region": "Courtyard",
+      "position": [1340, 280],
+      "radius": 15,
+      "service": "PerkShop",
+      "title": "HAGATHA'S CHARMS AND CURSES"
+    },
+    {
+      "name": "Fomentius",
+      "native_type_id": 5004,
+      "region": "Courtyard",
+      "position": [1397, 664],
+      "radius": 30,
+      "service": "Shop",
+      "title": "FOMENTIUS' USEFUL THYNGS"
+    },
+    {
+      "name": "Luthacus",
+      "native_type_id": 5005,
+      "region": "Courtyard",
+      "position": [1700.5, 449.5],
+      "radius": 25,
+      "service": "InventoryShop",
+      "title": "LUTHACUS' SCAVENGED GOODS"
+    },
+    {
+      "name": "Shlorio",
+      "native_type_id": 5016,
+      "region": "Library",
+      "position": [900, 642.5],
+      "radius": 25,
+      "service": "DowsingShop",
+      "title": "SHLORIO'S DISCOUNT DOWSING"
+    }
+  ],
+  "interaction": {
+    "open_or_keep_open_when": "distanceSquared <= 5 * radiusSquared + 1500",
+    "dismiss_function": "0x00505010",
+    "service_dispatch_function": "0x00514A20",
+    "dialog_command_dispatch_function": "0x004FB890",
+    "blocked_during_region_fade": true
+  },
+  "animations": {
+    "common_four_frame_gesture": {
+      "function": "0x00501610",
+      "trigger": "Integer(200) == 2 while idle",
+      "speed": "(Float(3,false) + 1) * 0.45",
+      "phase_end_degrees": 180,
+      "output": "3.99 * sin(phaseDegrees)",
+      "frame_indices": [0, 1, 2, 3],
+      "members": [
+        {
+          "actor": "Luthacus",
+          "atlas": "College",
+          "base_records": [10],
+          "frame_records": [126, 127, 128, 129]
+        },
+        {
+          "actor": "Shlorio",
+          "atlas": "Library",
+          "frame_records": [21, 22, 23, 24]
+        }
+      ]
+    },
+    "hagatha": {
+      "tick_function": "0x0051ADC0",
+      "render_function": "0x0051B1D0",
+      "body_records": [517, 518, 519, 520, 521, 522, 523, 524],
+      "accessory_records": [45],
+      "crossfade_records": [89, 90, 91, 92],
+      "base_speed": 0.05,
+      "advance": "(Float(0.25,false) + 1) * speed",
+      "rare_direction_trigger": "Integer(1500) == 3",
+      "rare_velocity_multiplier": -1,
+      "rare_velocity_change": "persistent direction reversal"
+    },
+    "fomentius": {
+      "tick_function": "0x0050B110",
+      "render_function": "0x0051C1A0",
+      "body_records": [160, 161, 162, 163, 164],
+      "balloon_records": [54, 55, 56, 57, 58]
+    }
+  },
+  "functions": {
+    "shop_constructor": "0x0055E800",
+    "shop_render": "0x00557D40",
+    "ordinary_purchase": "0x0056BF70",
+    "perk_purchase": "0x0056C340",
+    "inventory_transfer": "0x0056CD00",
+    "dowsing_action": "0x0055FAF0",
+    "dowsing_purchase": "0x0056D110",
+    "inventory_screen_render": "0x00568B90",
+    "fomentius_restock": "0x005C8960",
+    "inventory_insert_or_stack": "0x0055FF20",
+    "equipment_accepts": "0x00570CD0",
+    "equipment_attach": "0x00575850",
+    "equipment_current": "0x00570D80",
+    "equipment_remove_and_reinsert": "0x0066F020"
+  },
+  "ui": {
+    "ordinary_shop_columns": 4,
+    "ordinary_shop_padded_cells": 28,
+    "dowsing_columns": 3,
+    "dowsing_padded_cells": 9,
+    "shop_skills_records": [4],
+    "dowsing_ui_records": [15],
+    "inventory_records": [1],
+    "inventory_ui_records": [20, 21, 30, 31, 33, 49, 62, 75, 76, 77]
+  },
+  "fomentius_stock": [
+    { "kind": "health-potion", "native_type_id": 7001, "subtype": 0, "price": 150, "roll_bound": 3, "quantity_offset": 2 },
+    { "kind": "mana-potion", "native_type_id": 7001, "subtype": 1, "price": 75, "roll_bound": 6, "quantity_offset": 2 },
+    { "kind": "rejuvenation-potion", "native_type_id": 7001, "subtype": 5, "price": 200, "roll_bound": 3, "quantity_offset": 0 },
+    { "kind": "dye", "native_type_id": 7012, "subtype": 0, "price": 300, "roll_bound": 2, "quantity_offset": 2 },
+    { "kind": "key", "native_type_id": 7012, "subtype": 1, "price": 1200, "roll_bound": 18, "gate_value": 1 },
+    { "kind": "sack", "native_type_id": 7008, "subtype": 0, "price": 50, "roll_bound": 2, "quantity_offset": 1 },
+    { "kind": "antidote", "native_type_id": 7001, "subtype": 3, "price": 100, "roll_bound": 3, "quantity_offset": 1 },
+    { "kind": "wizard-chug", "native_type_id": 7001, "subtype": 2, "price": 2500, "roll_bound": 8, "gate_value": 3 },
+    { "kind": "mind-chug", "native_type_id": 7001, "subtype": 4, "price": 1500, "roll_bound": 8, "gate_value": 3 }
+  ],
+  "hagatha_catalog": "native-hagatha-perk-catalog.json",
+  "equipment_catalog": "native-item-catalog.json",
+  "dowsing": {
+    "initial_fee_observed": 650,
+    "untargeted_offer_count": "Integer(2) + 3",
+    "offer_price": "(Integer(15) + 100) * 50",
+    "next_fee": "(Integer(10) + 10) * 50",
+    "duplicate_retry_limit": 100,
+    "targeted_branch": {
+      "target_field": "DowsingShop+0x344",
+      "constructor_writes_null": "0x004F5B85",
+      "constructor_xrefs": ["0x004FBCE4", "0x00514E36"],
+      "same_set_helper": "0x00554AF0",
+      "same_type_helper": "0x00554CE0",
+      "result": "union of every eligible same-set and same-type recipe",
+      "disposition": "out-of-system: no retail hub producer"
+    }
+  },
+  "dormant_dialogue": [
+    {
+      "actor": "Luthacus",
+      "label": "Outfit me Randomly",
+      "command": "!RANDOMEQUIP",
+      "disposition": "out-of-system: data row is not wired by retail builder 0x0050B720 and command is absent from executable"
+    }
+  ]
+}

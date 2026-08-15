@@ -695,6 +695,233 @@ present path and distinguishes busy capture from broken setup. It never uses
 `sd.rng.set_seed`, never writes the Dig state/complete fields, and fails rather
 than choosing between ambiguous actors, shops, traces, or result pointers.
 
+## Retail trader presentation and transaction contract
+
+This section records the 2026-08-15 static follow-up used by the Website port.
+It was recovered from retail `0.72.5` `SolomonDark.exe`, SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`,
+in the checked-in Ghidra project. The G8 live golden above independently
+corroborates the initial gold, generated stock, dowsing fee, and state changes.
+A new live backbuffer receipt was not produced: the locally built loader
+rejected this retail image before process launch because its build stamp is not
+in that loader's supported-build table. Nothing below is inferred from that
+failed launch.
+
+### Trader actors and animation
+
+The four services are ordinary hub actors. Their retail positions and
+interaction radii are:
+
+| Actor | Native type | Region | Root | Radius | Service |
+| --- | ---: | --- | --- | ---: | --- |
+| Hagatha | 5001 | Courtyard | `(1340,280)` | 15 | `PerkShop` |
+| Fomentius | 5004 | Courtyard | `(1397,664)` | 30 | `Shop` |
+| Luthacus | 5005 | Courtyard | `(1700.5,449.5)` | 25 | `InventoryShop` |
+| Shlorio | 5016 | Library | `(900,642.5)` | 25 | `DowsingShop` |
+
+`0x0050A4C0`, shared by Luthacus and Shlorio, first runs the engagement
+dismissal helper `0x00505010`, increments the actor tick at `+0x160`, then
+tails into `0x00501610` with the animation block at actor `+0x13c`.
+When idle, `Integer(200)==2` begins a gesture. Its phase speed is
+`(Float(3,false)+1)*0.45`, the phase ends at 180 degrees, and the displayed
+frame scalar at `+0x144` is `3.99 * sin(phaseDegrees)`. Integer conversion
+therefore selects all four frame indices 0..3. The starting RNG state is a
+session input rather than an invariant frame epoch; a port must preserve the
+1-in-200 trigger, native RNG primitive, speed draw, easing, and four-frame
+range, and must make the selected session seed authoritative in multiplayer.
+
+Luthacus composites College record 10 with records 126..129 selected by that
+frame scalar. Shlorio selects Library records 21..24. Hagatha has a dedicated
+eight-frame loop in College records 517..524. Constructor `0x005018D0` sets
+actor `+0x144 = 0` and signed velocity `+0x148 = 0.05`. Tick `0x0051ADC0`
+advances the phase by `(Float(0.25,false)+1) * actor[+0x148]`, wraps it in
+`[0,8)`, and reverses its direction when `Integer(1500)==3` by multiplying the
+velocity by the binary double `-1` at `0x007DE8E8`. This is a persistent
+direction reversal, not a speed-up.
+
+That tick also creates one `Anim_CrossFade` on every update. It selects one of
+College records 89..92 with `Integer(4)`, seeds opacity with `Float(1,false)`,
+and advances normalized lifetime by
+`1 / ((Float(0.25,false)+1.25) * 100)`, so an object survives 125..150 native
+ticks. Uniform scale is `Float(0.1,true)+0.15`, giving `0.05..0.25`. Its
+eight authored anchor pairs are `(79.5,80.5)`, `(81.5,81.5)`, `(83.5,82.5)`,
+`(86.5,83.5)`, `(90.5,83.5)`, `(103.5,77.5)`, `(104.5,75.5)`, and
+`(84.5,84.5)`. Position adds the actor root, `14` to Y, and a radial jitter
+from `Float(2,false)`, then subtracts half the 150x150 body-frame extent.
+Renderer `0x0051B1D0` draws the selected body at `(x-5,y)` and College record
+45 at `(x-25,y+15)`. The particles remain presentation-only and are not part
+of transaction state, but all four particle records and the complete authored
+anchor set are reachable presentation members.
+
+### Interaction, dialogue, and service ownership
+
+The common action path builds the 400-byte dialogue object from the actor's
+dialogue definition at `+0x154`, attaches it as the active UI, and sets the
+actor's engagement byte at `+0x170`. `0x00505010` dismisses that UI when:
+
+```text
+distanceSquared(player, actor) > 5 * actorRadius^2 + 1500
+```
+
+The service dispatcher at `0x00514A20` is disabled while the courtyard/region
+fade value at gameplay `+0x8e48` is positive. It maps the four actor control
+slots to the following exact titles:
+
+- Hagatha (`Gameplay+0x101c`): `HAGATHA'S CHARMS AND CURSES`
+- Luthacus (`Gameplay+0x10d0`): `LUTHACUS' SCAVENGED GOODS`
+- Fomentius (`Gameplay+0x1184`): `FOMENTIUS' USEFUL THYNGS`
+- Shlorio (`Gameplay+0x1238`): `SHLORIO'S DISCOUNT DOWSING`
+
+Dialogue commands `!BUYPERKS`, `!INVENTORY`, `!BUYPOTIONS`, and the dowsing
+service reach the same shop roots through `0x004fb890`; the dialogue is
+replaced, not left underneath the shop. Retail dialogue text remains sourced
+from `data/dialogue/survival/{witch,potionguy,scavenger,dowser}.txt` and is the
+portable text authority.
+
+The scavenger data file also declares `Outfit me Randomly` / `!RANDOMEQUIP`,
+but that row is dormant in this retail build. The ordinary hub builder at
+`0x0050b720` installs only an `Examine Items` command leading to `!INVENTORY`.
+No `RANDOMEQUIP` literal or command branch exists in the executable, and the
+dispatcher at `0x004fb890` recognizes only the four reachable service
+commands. A parity port must not expose the dormant data row as reachable UI.
+
+### Gold, stock, and purchase invariants
+
+Gold is a participant-owned profile ledger (`profile+0x58`, rooted by
+`DAT_0081A388` in retail), not an item stack. The ordinary purchase callback at
+`0x0056bf70` reads price at item `+0x5c` and performs one atomic operation:
+
+1. reject without mutation when the participant cannot afford the item;
+2. call `0x005a7c60(-price,false)`;
+3. transfer one stock object into the active backpack, stacking where the
+   inventory type permits it; and
+4. remove exactly that object from the shop.
+
+There is no sell, refund, or buyback branch. One shop object represents one
+unit even when the UI groups equivalent objects.
+
+Fomentius' `0x005c8960` restock makes the following independent rolls, in
+order, only at initial hub construction and post-run return:
+
+| Item | Price | Quantity / gate |
+| --- | ---: | --- |
+| Health Potion | 150 | `Integer(3)+2` (2..4) |
+| Mana Potion | 75 | `Integer(6)+2` (2..7) |
+| Rejuvenation Potion | 200 | `Integer(3)` (0..2) |
+| Dye | 300 | `Integer(2)+2` (2..3) |
+| Key | 1200 | one only when `Integer(18)==1` |
+| Sack | 50 | `Integer(2)+1` (1..2) |
+| Antidote | 100 | `Integer(3)+1` (1..3) |
+| Wizard Chug | 2500 | one only when `Integer(8)==3` |
+| Mind Chug | 1500 | one only when `Integer(8)==3` |
+
+The total is therefore 8..24 objects. Shop open/close does not restock it.
+
+Hagatha presents selector IDs 0..27 except 8. An owned selector is omitted on
+the next rebuild. Its first-ever mix costs three times the catalog base price;
+after its persistent first-mix flag is set, a later mix costs the base price.
+`0x0056c340` rejects
+insufficient gold and full applicable capacity before debit, then advances the
+selector's participant-owned progression and first-mix state. The exact names,
+base prices, icons, and capacity families remain in
+`native-hagatha-perk-catalog.json`.
+
+Luthacus' `InventoryShop` callback `0x0056cd00` transfers a selected object in
+either direction between the active backpack and profile storage. It uses the
+same inventory insertion/stacking rules but never reads or changes gold and
+never creates a copy.
+
+Shlorio begins with the explicitly persisted observed fee of 650. DOWSE first
+rejects insufficient funds, then debits the fee and produces
+`Integer(2)+3` unique offers (3..4) from the 47 equipment recipe catalog,
+retrying duplicate selection at most 100 times. Each price is
+`(Integer(15)+100)*50` (5000..5700). A successful ordinary purchase reaches
+`0x0056d110`, clears every unbought offer, and rolls the next fee as
+`(Integer(10)+10)*50` (500..950). Closing after a paid roll discards its offers
+without refund.
+
+`DowsingShop` also contains a targeted branch, now fully dispositioned. Its
+constructor at `0x004f5ab0` writes target field `+0x344` to null. The only two
+constructor xrefs, `0x004fbce4` and `0x00514e36`, construct the ordinary hub
+service and never replace that null. If an external producer did supply a
+target, `0x0055faf0` would call `0x00554af0` twice to append every eligible
+recipe in the same authored set and `0x00554ce0` three times to append every
+eligible recipe of the same compiled item type. Duplicate rejection makes the
+repeated calls no-ops: the result is the stable union of matching-set and
+matching-type recipes, not two, three, or four random offers. No retail hub
+producer reaches it, so targeted dowsing is dormant and outside the reachable
+hub trader system rather than unknown.
+
+The common Shop grid is four columns; Dowsing uses three. The renderer pads
+the ordinary grid to 28 slots and the dowsing result grid to nine. Before a
+dowsing roll it renders `DOWSE`, the current `%d gold` fee, the gold icon, and
+the insufficient-funds state. `InventoryScreen` independently displays the
+same participant gold ledger. These are views of authoritative state, never
+client-side balances.
+
+### Inventory and equipment membership
+
+The authored equipment input is the complete 47-row recipe table in
+`native-item-catalog.json`: 13 rings, nine amulets, eight wands, seven robes,
+six hats, and four staffs across seven item sets, with all 86 item/set FX
+declarations retained there. The reachable inventory accepts native type IDs
+Potion 7001, Ring 7002, Amulet 7003, Staff 7004, Hat 7005, Robe 7006, Sack
+7008, Perk 7009, Map 7010, Wand 7011, and Misc 7012. Potion subtypes Health,
+Mana, Wizard Chug, Antidote, Mind Chug, and Rejuvenation select Inventory
+records 46..51. Equipment icon records are catalogued per recipe; Sack uses
+70/71, Perk uses Skills record `127 + selector` (bundle uses Inventory 10),
+and Misc uses 42..45.
+
+The equip path is not a purchase side effect. `0x00570cd0` validates an item,
+`0x00575850` attaches it, `0x00570d80` resolves the current slot occupant,
+`0x0066f020` removes/reinserts on unequip, and `0x0055ff20` performs stack
+insertion. The seven sinks are hat, robe, amulet, weapon (staff or wand), ring
+0, ring 1, and a progression-gated ring 2. Inventory/storage ownership,
+stacking, and those seven transitions belong to this service boundary.
+Equipped Clothes attachment painting and the 39 recovered combat/stat FX
+consumers are downstream presentation/combat systems: their complete authored
+inputs remain catalogued, but applying those effects is not part of the hub
+merchant transaction itself.
+
+The full-screen inventory renderer at `0x00568b90` consumes Inventory record 1
+and UI records 20, 21, 30, 31, 33, 49, 62, 75, 76, and 77. The common shop
+renderer at `0x00557d40` uses Skills record 4 for its paired scroll controls;
+the dowsing pre-roll renderer at `0x00558160` additionally uses UI record 15,
+the exact `DOWSE` label, `%d gold`, and the participant ledger. Ordinary Shop
+uses four columns padded to 28 cells; Dowsing uses three columns padded to nine
+cells.
+
+### Reachable-system membership disposition
+
+This table is the exhaustive retail membership boundary used by the Website
+port. `exact-ported` rows require per-member automated coverage and a browser
+receipt before that port can claim completion; `verified-already-at-parity`
+names pre-existing Website behavior independently covered before this pass.
+
+| Member | Native source | Required disposition | Boundary proof |
+| --- | --- | --- | --- |
+| Participant gold, backpack, storage, stable item ownership | profile `+0x58`; inventory roots and insertion `0x0055ff20` | exact-ported | authoritative participant component and isolation tests |
+| Starter Health/Mana stacks | clean retail new-profile census; Potion 7001 subtypes 0/1 | exact-ported | fresh-player catalog test |
+| Fomentius stock: all nine ordered rows | `0x005c8960` | exact-ported | row/range/order and seeded-golden tests |
+| Ordinary atomic buy/reject/remove/stack | `0x0056bf70` | exact-ported | success and zero-mutation rejection tests |
+| Hagatha selectors 0..27, including dormant selector 8 and bundle -1 | `native-hagatha-perk-catalog.json`; `0x0056c340` | exact-ported (8 out-of-system: excluded by native builder) | 28-row catalog and rebuild/bundle/capacity tests |
+| Luthacus two-way transfer | `0x0056cd00` | exact-ported | round-trip/no-gold/no-copy tests |
+| Shlorio fee, untargeted roll, offer buy, clear, close | `0x0055faf0`, `0x0056d110` | exact-ported | seeded lifecycle tests |
+| All 47 dowsing recipes, seven sets, six equipment classes | `native-item-catalog.json` | exact-ported | complete catalog identity/icon tests |
+| Seven equipment sinks and equip/unequip transitions | `0x00570cd0`, `0x00575850`, `0x00570d80`, `0x0066f020` | exact-ported | per-sink and gated-third-ring tests |
+| Common shop, dowsing, inventory screen views | `0x00557d40`, `0x00558160`, `0x00568b90`; atlas rows above | exact-ported | render-contract and browser interaction tests |
+| Four exact survival dialogue introductions and reachable commands | retail dialogue files; builder `0x0050b720`; dispatcher `0x004fb890` | exact-ported | dialogue membership/copy tests |
+| Fomentius actor/balloon animation | `0x0050b110`, `0x0051c1a0`; College 54..58, 160..164 | verified-already-at-parity | existing hub presentation and render tests |
+| Hagatha body/accessory/cross-fade animation | `0x0051adc0`, `0x0051b1d0`; College 45, 89..92, 517..524 | exact-ported | eight-frame and transient-member tests |
+| Luthacus common four-frame composite | `0x0050a4c0`, `0x00501610`; College 10, 126..129 | exact-ported | common animator/composite tests |
+| Shlorio common four-frame strip | `0x0050a4c0`, `0x00501610`; Library 21..24 | exact-ported | common animator/private-room tests |
+| Distance/fade/region interruption and modal teardown | `0x00505010`, `0x00514a20` | exact-ported | range/region/input-block tests |
+| Dormant Luthacus random outfit row | scavenger data row; absent executable command/xref | out-of-system (not wired by the retail builder) | literal/xref and builder inspection |
+| Dormant targeted-dowsing branch | target `+0x344`; constructor xrefs and union helpers above | out-of-system (no retail hub producer) | constructor/xref/writer sweep |
+| Item-use effects, ground loot, archive/persistence producer | non-shop inventory consumers | out-of-system (separate gameplay/save systems) | ownership/call-boundary trace |
+| Equipment FX application and Clothes attachment painting | 86 declarations and 39 downstream consumers | out-of-system (separate combat/stat/render consumers) | complete item catalog plus consumer trace |
+| Annalist, Librarian, Arch Chancellor, Painting common-animator siblings | common animator xrefs outside merchant actors | out-of-system (non-trader services/props) | complete `0x00501610` xref sweep |
+
 ## Not Yet Reversed
 
 These are portability findings, not invitations to fill in plausible behavior:
@@ -713,10 +940,6 @@ These are portability findings, not invitations to fill in plausible behavior:
 - **Shlorio initial fee.** The image value at `DAT_0081A430` is zero while three
   clean live instances observed 650 before their first G8 roll. No save read or
   unambiguous initializer was found. Persist `current_dowsing_fee` explicitly.
-- **Targeted Dowsing cardinality.** The set/type helper paths and eligibility
-  rules are statically pinned, but no live target-item roll was captured. A
-  helper may add several matching prototypes, so two helper calls do not prove
-  “two offers.” Record the branch before fixing its final count/order.
 - **Shlorio multiplayer purchase.** Fomentius, Hagatha, and Luthacus have live
   two-owner evidence. Shlorio uses the same local Shop root, but a dedicated
   connected-client purchase/fee/result proof has not been recorded.
