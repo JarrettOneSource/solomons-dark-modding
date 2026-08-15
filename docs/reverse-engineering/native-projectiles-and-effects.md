@@ -756,21 +756,40 @@ Golem die, then rock hit.
 
 ### Ether Drain (`0x807`)
 
-`EtherDrain` has explicit 40-tick scale-in, 1,000-tick active, and 20-tick scale-out states in
-byte `+0x148`. It owns two `Array<PuppetRef>` collections plus pointer lists for
-spatial cells and presentation children. `0x00606580` refreshes candidate
-identities from the covered world cells; `0x005F8620` is the per-candidate
-effect:
+`EtherDrain` has explicit 40-tick scale-in, 100-tick active, and 20-tick scale-out states in
+byte `+0x148`. Constructor `0x005F8360` initializes presentation scale `+0x140`
+and secondary intensity `+0x14C` to zero. Tick `0x0061CF20` grows scale by
+`0.025` to one, grows intensity by `0.005` during scale-in and `0.01` while
+active, then fades both by `0.05` after the active countdown expires. It owns
+two `Array<PuppetRef>` collections plus pointer lists for spatial cells and
+presentation children.
 
-- actors within the pressure field are pulled toward the center through their
-  virtual force callback; actors close enough receive contact damage using the
-  configured per-second scalar at `+0x150` and flags `0x10A`;
+Candidate refresh `0x00606580` is throttled to once per 100 ticks. Its broad
+cell collection is the ellipse
+`dx^2 + (dy / float32(0.8))^2 <= 1,048,576`, so its horizontal and vertical
+semi-axes are 1,024 and 819.2. The retained candidates are then filtered by
+the actual pressure radius in `0x005F8620`:
+
+- actors at squared distance at most `262,144` (radius 512) are pulled toward
+  the center through their virtual force callback. The radial strength is
+  `1.1 * max(0.1, 1 - distanceSquared / 262144)` before the target's own scale
+  term. Actors at squared distance at most `400` (radius 20) also receive
+  contact damage using the configured `mDamage / 100` scalar at `+0x150` and
+  flags `0x10A`;
 - objects with actor flag `0x400` are also pulled inward. This includes ground
   loot; a captured object is removed at the center and routed through the
   world-item consumption effect. Nonempty `Gold (0x7DC)` and `Sack (0x7DD)`
   containers are explicitly exempted from premature removal.
 
 The target arrays retain group/slot identities rather than raw actor pointers.
+Gameplay pressure/contact is gated to the active portion of the countdown
+(`+0x144 > 50`) and is disabled in scale-out. During that same interval the
+presentation path draws `Integer(5)` normally or `Integer(3)` with enhanced
+effects; only result one creates the common drain child before its additional
+presentation-only draws. The class uses DeadHawg records `177..179`; the stock
+binary also carries the dedicated `sounds\crunchdrain` registry key for this
+effect.
+
 The deleting destructor `0x005FB980` delegates to `0x005F84F0`, which owns the
 array/list cleanup; presentation children remain registered with the world.
 
