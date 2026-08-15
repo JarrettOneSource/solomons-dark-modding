@@ -11,6 +11,7 @@ from static_re_contract_support import ROOT, StaticReTestFailure
 
 
 DOC_PATH = ROOT / "docs/reverse-engineering/native-projectile-and-spell-mechanics.md"
+SKILLS_DOC_PATH = ROOT / "docs/reverse-engineering/native-skills-and-spells.md"
 EARTH_VFX_CATALOG_PATH = ROOT / "docs/reverse-engineering/earth-boulder-vfx-catalog.json"
 AUDIO_DOC_PATH = ROOT / "docs/reverse-engineering/native-audio-events.md"
 FIXTURE_PATH = ROOT / "tests/fixtures/webgame/projectile-goldens.json"
@@ -150,6 +151,65 @@ def test_projectile_spell_native_dispatch_contract_is_complete() -> str:
         "projectile/spell dispatch document",
     )
     return "All five primary handlers, factories, and the shared emitter are pinned"
+
+
+def test_low_mana_primary_branch_and_all_consumers_are_pinned() -> str:
+    mechanics = _document()
+    skills = SKILLS_DOC_PATH.read_text(encoding="utf-8")
+    audio = AUDIO_DOC_PATH.read_text(encoding="utf-8")
+
+    _require_tokens(
+        skills,
+        (
+            "## 2026-08-15 pure-primary low-mana branch closure",
+            "shared mana helper `0x0052B150`",
+            "`rejectIfInsufficient=0`",
+            "MP exactly equal to cost spends the full cost and selects underpowered",
+            "zero MP spends zero but still selects underpowered",
+            "Ether `0x0053CFE0`",
+            "Fire `0x0053DC60`",
+            "Air `0x0053F9C0`",
+            "Water `0x00543860`",
+            "Earth `0x00544C60`",
+            "effective turn input `2 -> 1.2`",
+            "actor mask `0x2` rather than `0x1082`",
+            "zeros the growth field",
+            "float32 `baseCharge=base*charge`",
+        ),
+        "low-mana primary gameplay contract",
+    )
+    _require_tokens(
+        mechanics,
+        (
+            "## 2026-08-15 low-mana presentation and damage consumers",
+            "Phase advances from speed `2.4`, hence `7.2` degrees per tick instead of `9`",
+            "The impact actor does not carry/read `+0x160`",
+            "separately registered Fire particles remain",
+            "width `.5625`, RGBA `(0,1,1,.25)`",
+            "`.5,.3,.1`. Its ZAnimLit source starts at radius",
+            "MiscLights retain their sampled radii but multiply",
+            "`max(1,trunc(normalCount/4))`",
+            "Initial additive alpha is therefore `.1875`",
+            "`max(.25,min((base*charge)*charge,base*1.25))`",
+            "Earth has no persistent weak render flag",
+        ),
+        "low-mana primary visual and contact contract",
+    )
+    _require_tokens(
+        audio,
+        (
+            "## 2026-08-15 low-mana primary audio",
+            "`sounds\\\\fizzle.wav`",
+            "`sounds\\\\magicmissile` at pitch `1`, gain `.75`",
+            "`sounds\\\\throwfire` at pitch `1`, gain `.75`",
+            "registry 162 `sounds\\\\lightningloop__loop`",
+            "`sounds\\\\iceloop__loop`",
+            "every global tick divisible by 50 plays `fizzle` at pitch `.5`",
+            "without inventing an extra press edge",
+        ),
+        "low-mana primary audio contract",
+    )
+    return "The shared low-mana branch and all five primary consumer graphs are pinned"
 
 
 def test_projectile_goldens_pin_live_capture_provenance_and_rank_coverage() -> str:

@@ -2539,3 +2539,76 @@ Fire's bit-four scenery shape gate and exact
 native global-RNG/recipe-scale sample identity are likewise explicit residuals.
 Those are combat/RNG boundaries, not missing rank-one sprite passes, target
 geometry, projectile timeouts, or permission to invent terminal impacts.
+
+## 2026-08-15 low-mana presentation and damage consumers
+
+Shared debit helper `0x0052B150` selects this branch from post-debit MP `<=0`.
+The state is fixed and per emission; there is no interpolation by the fraction
+of mana paid. The exact consumer paths are:
+
+### Ether and Fire flight-only modifiers
+
+Ether handler `0x0053CFE0` sets actor byte `+0x160`. Draw `0x005E0460`
+temporarily applies white alpha `.5` around the complete `0x00535A30` flight
+compositor, so both outer passes and every core/spark/ray draw are halved.
+Phase advances from speed `2.4`, hence `7.2` degrees per tick instead of `9`.
+The impact actor does not carry/read `+0x160`; impact art, light, and audio stay
+normal. Gameplay direct damage is half, quantity is one, and homing moves at
+`2.4` with effective turn input `1.2`.
+
+Fire handler `0x0053DC60` sets actor byte `+0x168`. Draw `0x006099C0` wraps
+the three Fireball body submissions in white alpha `.5`. Tick `0x005FDD90`
+does not read the flag, so its separately registered Fire particles remain
+full strength; impact `0x005E5160` and the outbound light are likewise normal.
+Direct damage is half and the adjacent secondary/proc payloads are absent.
+
+### Air factory parameter nine
+
+Air handler `0x0053F9C0` passes the underpowered result as parameter nine to
+factory `0x00531640`. The factory changes the outer ribbon constructor input
+from width `1`, RGBA `(1,1,1,1)` to width `.75`, RGBA
+`(.5,1,1,.5)`. Constructor `0x0045B2C0` still performs its native second pass:
+at `0x0045B3F4` it halves the input alpha, reconstructs color
+`(0,1,1,alpha/2)`, multiplies width by `.75`, and adds phase `15`. The weak
+inner ribbon is therefore width `.5625`, RGBA `(0,1,1,.25)`. Both retain the
+two-tick body lifetime and independent `0x00534510` tessellation.
+
+The one-shot source corona is unchanged. The endpoint FadeLightning starts at
+alpha `.5` rather than one and still subtracts `.2`, yielding visible levels
+`.5,.3,.1`. Its ZAnimLit source starts at radius
+`.5*(1+U[0,.75))` and intensity `.5`, then retains delta `-.05`. Factory path
+MiscLights retain their sampled radii but multiply the one shared intensity by
+`.25`. Air still creates the first body/contact; chains and learned status
+branches are suppressed in the handler.
+
+### Water forced-Normal quarter-opacity particles
+
+Water handler `0x00543860` changes visual count to
+`max(1,trunc(normalCount/4))`; shipped Enhanced Effects On changes two
+particles per tick to one. The weak lane never constructs
+`Anim_FrostJetEffect_Over`. After Normal construction it multiplies field
+`+0x3C` (additive-core alpha) and `+0x4C` (whole-effect opacity multiplier) by
+`.25`. Initial additive alpha is therefore `.1875`; the ordinary core's final
+alpha is quartered, and opacity `.25` fails the glint gate `>=.899999976`.
+Movement, lifetime, obstruction, and Normal tint recurrence otherwise remain
+owned by the existing Normal actor.
+
+Gameplay damage is half and the actor query mask narrows from `0x1082` to
+`0x2`. Widen/push and the learned Over/Hail/Permafrost/Cold Aura/Harden paths
+are absent; weak ColdSlow uses fixed scalar `.75`.
+
+### Earth charge/damage presentation
+
+Earth has no persistent weak render flag. The same Boulder is visible and the
+weak branch is expressed through its charge and release bases. Every weak tick
+below full charge halves both bases. A charge strictly above `.3` zeros growth;
+a value below the edge still takes the `.00125` float32 actor update and only
+freezes on the following handler tick. Zero MP can therefore materialize and
+retain a Boulder near `0.30125` until release.
+
+Release finalization stores
+`max(.25,min((base*charge)*charge,base*1.25))` as the flight damage pool. This
+supersedes the Website's former linear `base*charge` contact approximation.
+The shell, opening glimmer, called rocks, orientation matrix, rolling loop, and
+impact recipe consume the resulting ordinary Boulder state; no generic weak
+alpha belongs on them.

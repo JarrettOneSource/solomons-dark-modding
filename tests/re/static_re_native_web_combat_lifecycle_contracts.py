@@ -60,8 +60,10 @@ def test_native_web_combat_lifecycle_integration_contract_is_pinned() -> str:
             "50-tick recovery ramp",
             "effective skill-book rank",
             "indexes the catalog mana and damage arrays",
-            "rank-indexed damage payload when emitted",
-            "Rank-one constants are fixtures",
+            "Shared helper\n`0x0052B150` is called with `rejectIfInsufficient=0`",
+            "zero-MP pure-primary casts therefore all\nmaterialize through a fixed weak branch",
+            "`max(0.25,min((base*charge)*charge,base*1.25))`",
+            "Rank-one constants are\nfixtures",
             "Shield current/maximum health",
             "poison payload subtype",
             "Dazzle, and poison status counters",
@@ -115,6 +117,7 @@ def test_native_web_combat_lifecycle_integration_contract_is_pinned() -> str:
         "They do not permit client authority,\nage-based retirement",
         "`SPLIT`: split count 1..2; `SPLITMANY`",
         "`min(15, max(2, 1 + floor(waveOrdinal / 3)))`",
+        "reject insufficient mana before materialization",
     )
     present = [claim for claim in stale_claims if claim in report]
     if present:

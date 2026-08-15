@@ -299,6 +299,29 @@ The Earth regression is the negative contract. `ProcessPendingBotCast` once rewr
 
 The invariant for a replicated held cast is one accepted press edge, at most one stock loop start, persistent local loop ownership while held, one accepted release edge, and a stock-balanced stop. The live fixture records post-call loop reference counts so a renderer cannot hide an ownership leak by merely muting the output.
 
+## 2026-08-15 low-mana primary audio
+
+The pure-primary underpowered return from mana helper `0x0052B150` has
+spell-specific audio consumers:
+
+- Ether plays registry entry 32 / audio-registry offset `+0x598`,
+  `sounds\\fizzle.wav`, at pitch/gain `1`, then registry 57
+  `sounds\\magicmissile` at pitch `1`, gain `.75`.
+- Fire plays the same full-gain fizzle, then registry 97
+  `sounds\\throwfire` at pitch `1`, gain `.75`.
+- Air calls loop-attribute helper `0x00407500` with `.75` rather than one for
+  registry 162 `sounds\\lightningloop__loop`.
+- Water calls the same helper with `.5` rather than one for registry 161
+  `sounds\\iceloop__loop`.
+- Earth does not apply a persistent weak-loop gain. Inside the weak/release
+  branch, every global tick divisible by 50 plays `fizzle` at pitch `.5` and
+  one half of the ordinary Region point attenuation.
+
+These calls happen at emission/sustain time. Ether/Fire must order the fizzle
+before the launch cue; channel gain changes must update the existing owned loop
+without inventing an extra press edge, and Earth's periodic cue must not
+restart either gathering or rolling loops.
+
 ## Not Yet Reversed
 
 - Exact sub-frame device latency, BASS resampler interpolation, and OS/driver mixing are below the permanently disabled campaign boundary. They do not alter trigger order, asset identity, loop ownership, or native-tick timing and are not required by the deterministic browser simulation.

@@ -679,3 +679,46 @@ effect and golem-reflection contracts remain grounded in the decompiled
 branches and native contact ABI above. Enemy- and item-owned uses of the same
 modifiers are tracked in their respective passes instead of being duplicated
 here.
+
+## 2026-08-15 pure-primary low-mana branch closure
+
+### Shared debit semantics and timing
+
+The five pure-primary handlers call shared mana helper `0x0052B150` with a
+negative requested cost and `rejectIfInsufficient=0`. The helper stores
+`max(0,currentMP-cost)` and returns one when that post-debit value is `<=0`.
+Consequently the return is an **underpowered** selector, not a cast-acceptance
+result:
+
+- MP strictly greater than cost spends the full cost and selects normal;
+- MP exactly equal to cost spends the full cost and selects underpowered;
+- MP between zero and cost spends the remainder and selects underpowered; and
+- zero MP spends zero but still selects underpowered.
+
+There is no fractional scale based on the missing-mana percentage. Ether and
+Fire call the helper at the Staff emission marker, after their wind-up. Air,
+Water, and Earth call it on every sustained handler tick. An earlier action-
+start debit or a channel stop at zero therefore changes native behavior.
+
+### Per-handler consequences
+
+| Handler | Underpowered damage/state branch | Suppressed adjacent branches |
+| --- | --- | --- |
+| Ether `0x0053CFE0` | Multiply direct damage by `.5`; force quantity one; multiply speed by `.8` (`3 -> 2.4`); combine the `.75` turn control with that speed scalar for effective turn input `2 -> 1.2`; set projectile byte `+0x160`. | Pierce/bounce payload fields `+0x161/+0x164` are not populated. |
+| Fire `0x0053DC60` | Multiply direct damage by `.5`; zero secondary Fire scalars `+0x154/+0x158/+0x15C`; set projectile byte `+0x168`. | Proc/status fields `+0x16A..+0x16E` are not populated. |
+| Air `0x0053F9C0` | Multiply contact damage by `.5`; pass underpowered as factory parameter nine to `0x00531640`; use endpoint scalar `.5`; set lightning-loop gain `.75`. | Hurricane state/progression, chain helper `0x00641340`, Disintegrate, and Stun are all gated out. The initial target/contact still resolves. |
+| Water `0x00543860` | Multiply contact damage by `.5`; use actor mask `0x2` rather than `0x1082`; force weak ColdSlow scalar `.75`; set ice-loop gain `.5`. | Widen/push are zero; Over, Hail, Permafrost scaling, Cold Aura, and Harden are gated out. Entering the weak branch invokes Harden cleanup `0x00529840` when necessary. |
+| Earth `0x00544C60` | Still constructs `Boulder (0x7D5)`. While charge is below one, each underpowered tick halves both stored release bases. When current charge is strictly above `.3`, it zeros the growth field; below that edge the actor keeps growing until it crosses. | There is no weak-alpha Boulder flag. The weak branch changes charge/damage evolution and owns a periodic fizzle. |
+
+Earth's repeated halves are intentional: a zero-MP hold exponentially reduces
+the stored base while remaining near minimum release charge. Release computes
+float32 `baseCharge=base*charge`, then `quadratic=baseCharge*charge`, caps at
+`base*1.25`, and floors the final damage at `.25`. This floor is the terminal
+damage rule; it must not be applied to each held-tick intermediate.
+
+The branch audit followed each weak flag through its draw/tick/contact consumer
+and adjacent learned paths. Ether/Fire impacts do not read their flight-only
+flags. Air source glow is independent. Water's environmental mask lane is
+removed even though rank-one web enemies normally expose flag `0x2`. These are
+ownership boundaries, not permission to apply one generic half-alpha/half-
+damage rule across all effects.

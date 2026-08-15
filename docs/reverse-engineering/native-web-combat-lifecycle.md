@@ -311,19 +311,23 @@ Fresh progression starts at HP 50 and MP 100. Native general recovery at
 are Ether 6, Fire 12, Air 12/second, Frost 12.5/second, and Boulder 12/second.
 
 Each primary spell's effective skill-book rank, not merely its permanent rank,
-indexes the catalog mana and damage arrays. For the Website authority, one-shot
-mana uses the effective rank on the accepted debit edge, and the authoritative
-projectile captures its rank-indexed damage payload when emitted. Air and Frost
-channels consume the rank-indexed per-second mana and damage values at 100 Hz
-and capture them on each semantic channel emission. Boulder captures the
-rank-indexed base damage on its authoritative held actor and multiplies that
-stored value by charge at contact. Rank-one constants are fixtures, not runtime
-authority after an upgrade.
+indexes the catalog mana and damage arrays. One-shot Ether and Fire pay on the
+actual Staff emission marker and capture their rank-indexed payload then. Air,
+Frost, and Earth invoke the debit on every active handler tick. Shared helper
+`0x0052B150` is called with `rejectIfInsufficient=0`: it spends the available
+remainder, clamps MP to zero, and returns underpowered when post-debit MP is
+`<=0`. Exact-cost, partial-cost, and zero-MP pure-primary casts therefore all
+materialize through a fixed weak branch; only a strictly positive post-debit
+balance produces the normal branch. This supersedes the former bounded web
+rule that rejected insufficient mana. Exact welded-spell debit and weak-branch
+rules remain separately unresolved and must not be inferred from the pure
+primaries.
 
-Exact one-shot versus sustained debit edges remain unresolved for welded
-builds; the web authority must debit once for one-shot casts and per fixed tick
-for channels, reject insufficient mana before materialization, and identify
-that cadence as the bounded web contract until live handler traces close it.
+Boulder captures the rank-indexed release base on its held actor. Its native
+release finalizer is not linear `base*charge`: after weak/release ticks mutate
+the stored base, it uses
+`max(0.25,min((base*charge)*charge,base*1.25))`. Rank-one constants are
+fixtures, not runtime authority after an upgrade.
 
 Primary rank-one values already recovered are Ether random 1..2, speed 3,
 radius 15 and homing/probe; Fire damage 4, speed 4.5, radius 22.5 and one

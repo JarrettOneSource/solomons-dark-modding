@@ -583,6 +583,7 @@ from static_re_projectile_spell_mechanics_contracts import (
     test_fireball_contact_range_and_recast_closure_is_pinned,
     test_frost_jet_operand_widths_and_rank_one_update_ownership_are_pinned,
     test_materialized_projectile_trajectories_pin_native_motion,
+    test_low_mana_primary_branch_and_all_consumers_are_pinned,
     test_primary_targeting_homing_and_staff_cadence_are_pinned,
     test_projectile_contact_events_cross_check_existing_damage_goldens,
     test_projectile_goldens_pin_live_capture_provenance_and_rank_coverage,
@@ -2216,6 +2217,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Earth second-pass visual ownership is pinned",
         test_earth_boulder_second_pass_visual_ownership_is_pinned,
+    ),
+    (
+        "Low-mana primary branch and consumers are pinned",
+        test_low_mana_primary_branch_and_all_consumers_are_pinned,
     ),
     (
         "Air and Frost remain tick queries with exact stop edges",
