@@ -207,7 +207,7 @@ consumer, not an inferred C++ source name.
 | --- | --- |
 | Mana Up `56` | `maxMP(+0x80) = baseMP(+0x78) + mValue`. |
 | Channel Mana `57` | Multiplies mana-recovery scalar `+0x98` by `1 + mValue/100`. |
-| Meditation `58` | Converts `mSeconds` to idle-delay ticks at `+0x884`; stores `mValue - 1` at `+0x890`; `+0x888/+0x88C` hold idle elapsed/ramp state. `0x00656640` applies `((bonus + 1) * +0x98) / tickRate` MP recovery after the ramp. |
+| Meditation `58` | Converts `mSeconds` to idle-delay ticks at `+0x884` and stores `mValue - 1` at `+0x890`; `+0x888/+0x88C` hold idle elapsed/activity ramp. `0x006614D0` increments elapsed, calls `0x00656640` once elapsed reaches the delay, then decrements the activity ramp toward zero. The helper applies `+0x98 * multiplier / tickRate`, where `multiplier=mValue` at zero ramp and `1+(mValue-1)*0.25` while the ramp is positive. |
 | Battle Mage `59` | Initializes scalar `+0x3D4` to `1 - mValue/100`. |
 | Focus `60` | Initializes recharge scalar `+0xD0` to `1 + mValue/100`. |
 | Siege Mage `61` | Initializes its combat scalar `+0xF8` to `1 + mValue/100`. |
@@ -244,7 +244,7 @@ The refresh switch at `0x00661FD0` and the individual action paths implement:
 | Concentrated skill | Exact executable effect |
 | --- | --- |
 | Channel Mana `57` | `+0x98 *= 1 + mConcentration/100`. |
-| Meditation `58` | `0x00659A40` stops resetting idle elapsed `+0x888` while the wizard walks or acts, allowing the lesser moving/acting recovery ramp to persist. |
+| Meditation `58` | Activity hook `0x00659A40` increments ramp `+0x88C` up to the configured delay and ordinarily resets idle elapsed `+0x888`. Concentration suppresses only that elapsed reset, so walking/acting retains the exact quarter-strength bonus while the positive ramp counts down. |
 | Battle Mage `59` | `+0x3D4 -= mConcentration/100`. |
 | Focus `60` | `0x00661F40` rolls `0..99`; rolls `75..99` bypass normal recharge, giving the documented 25% instant-recharge branch. |
 | Siege Mage `61` | `+0xF8 += mConcentration/100`. |
