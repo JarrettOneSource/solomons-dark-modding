@@ -70,12 +70,12 @@ EXPECTED_TRIGGER_ASSET_CELLS = {
     "movement.footstep.splash": r"uniform pool 216..219 `sounds\stepsplash\step1..4`",
     "damage.player.taken": r"uniform pool 228..230 `sounds\Wizard_Ouch\SAY_OUCH1..3`",
     "death.player": r"stream 118 `sounds\DeathGuitar__Stream`; immediate song `death`",
-    "death.skeleton": r"79 `sounds\skeleton_die`",
-    "death.zombie": r"105 `zombiedie`; 108 `zombiepoisonsplat`; conditional 110 `zombie_die_groan`",
-    "death.banshee": r"8 `sounds\bansheedie`; preceding terminal flash uses 34 at `0x004960DF`",
+    "death.skeleton": r"entry 79 / object `+0xDAC`, `sounds\skeleton_die`",
+    "death.zombie": r"105 `zombiedie`; 108 `zombiepoisonsplat` three times when rotten; 110 `zombie_die_groan`",
+    "death.banshee": r"8 `sounds\bansheedie` three times; preceding terminal flash uses 34 at `0x004960DF`",
     "death.unholy": r"stream 146 `UnholyDie__Stream`; 54 `lightningstart`; 59 `magicshieldexplode`",
-    "death.demon": r"20 `sounds\demondies`",
-    "death.imp": r"31 `sounds\fireydeath`",
+    "death.demon": r"34 `flash`, 20 `demondies`, then 31 `fireydeath`",
+    "death.imp": r"permitted split: 47 `ImpSplit`; ordinary branch: 31 `fireydeath`",
     "death.spider": r"82 `sounds\SpiderDie`",
     "death.golem": r"89 `stonebreak`; 33 `flamelashstart`; stream 125 `GolemDie__Stream`; 77 `rockhit`",
     "death.faculty": r"stream 121 `FacultyDie__Stream`",
@@ -83,7 +83,7 @@ EXPECTED_TRIGGER_ASSET_CELLS = {
     "death.portal": r"75 `sounds\PortalDie`",
     "death.coffin": r"15 `sounds\coffinbreak`",
     "death.crow": r"uniform pool 183..184 `sounds\Crow\crow1..2`",
-    "death.maggot": r"uniform pool 199..200 `sounds\MaggotSqueak\squeak1..2`",
+    "death.maggot": r"independent uniform pools 211..213 `sounds\Squish\*` and 199..200 `sounds\MaggotSqueak\squeak1..2`",
     "pickup.coin": r"69 `sounds\pickupcoin`",
     "pickup.bag": r"68 `sounds\pickupbag`",
     "pickup.orb": r"2 `sounds\gotorb`",
@@ -225,11 +225,9 @@ def _expected_registry_ids(asset_cell: str) -> tuple[int, ...]:
     without_literals = re.sub(r"`[^`]*`", "", asset_cell)
     ranges = [
         (int(start), int(end))
-        for start, end in re.findall(r"\b(?:uniform )?pool (\d+)\.\.(\d+)", without_literals)
+        for start, end in re.findall(r"\b(\d+)\.\.(\d+)\b", without_literals)
     ]
-    without_ranges = re.sub(
-        r"\b(?:uniform )?pool \d+\.\.\d+", "", without_literals
-    )
+    without_ranges = re.sub(r"\b\d+\.\.\d+\b", "", without_literals)
     values = {
         int(value)
         for value in re.findall(r"(?<![.A-Za-z0-9_])\d+(?![.A-Za-z0-9_])", without_ranges)
@@ -247,7 +245,7 @@ def _expected_pool_groups(asset_cell: str) -> tuple[tuple[int, ...], ...]:
     without_literals = re.sub(r"`[^`]*`", "", asset_cell)
     groups = [
         tuple(range(int(start), int(end) + 1))
-        for start, end in re.findall(r"\b(?:uniform )?pool (\d+)\.\.(\d+)", without_literals)
+        for start, end in re.findall(r"\b(\d+)\.\.(\d+)\b", without_literals)
     ]
     explicit = re.search(r"\buniform pool (\d+)\s*,\s*(\d+)\b", without_literals)
     if explicit is not None:

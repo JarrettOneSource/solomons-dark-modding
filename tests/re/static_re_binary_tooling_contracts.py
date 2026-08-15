@@ -1783,8 +1783,8 @@ RECORDED_CAPTURE_SHAS: dict[str, tuple[str, int]] = {
     # G10 save-format and G6 progression goldens share one clean base commit.
     "8deaa9400cc1df33748976aa0464e8016c11a46b": ("commit", 2),
     # G5 audio dispatch golden: one clean capture commit/tree pair.
-    "508c5be780692c8e30a8c68d395b31d27f0866e8": ("commit", 1),
-    "0a0a49fedbf242c5be02760a71f4ff9468b4623f": ("tree", 1),
+    "f58a1ecf0a2a490e04c947cc40ea80f924c062a1": ("commit", 1),
+    "078258adce257e619cd0ae3cd486d758b6dbc0e5": ("tree", 1),
     # G6 progression golden additionally records that base commit's tree.
     "a3bc978196605af4ec9b5f6a3be9c0660cd1ae40": ("tree", 1),
     # G1 movement and RNG goldens, and the tree that commit points at.
