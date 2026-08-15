@@ -519,6 +519,13 @@ retiring its materialized posts, leaves, wall geometry, and collision handles.
 
 ## Procedural generation
 
+The contiguous fourteen-phase control-flow chart for every instruction in
+`0x006388B0` is in
+[`boneyard-system.md`](boneyard-system.md#whole-routine-control-flow-map).
+That audit covered all 6,165 instructions, all 70 direct call targets, the
+recursive reroll, and the returning cleanup path before the per-family findings
+below were treated as complete.
+
 `0x006388B0` directly creates these layout records:
 
 | Object | Construction path in generator |
@@ -529,6 +536,15 @@ retiring its materialized posts, leaves, wall geometry, and collision handles.
 | Building | direct factory call near `0x0063A5C4` |
 | Fence | direct factory call near `0x0063D36A` |
 | Tree | helper `0x0062CB00` |
+
+There are exactly seven calls to the general object factory in the routine.
+Their pushed IDs account for three Road sites and one each of Goodie,
+Gravestone, Building, and Fence. There is no factory call or direct constructor
+for Monument `2009` or Terrain `3009`. Working rectangles and lines in the
+topology phase are generator scratch geometry, not serialized Terrain records.
+All twelve retained stock-generator Boneyards independently have zero Terrain
+records and contain no scenery class outside `2001`, `2029`, `2040`, and
+`2061`.
 
 The Tree helper constructs type 2001 at a requested position, chooses its
 `+0x140/+0x142` variants from generation maps or an explicit override, and
@@ -543,10 +559,71 @@ alpha:
 | 6 | 6 |
 | 7 | 4 and 5 |
 
+Together with the Tree helper, the generator's explicit compact constructors
+have this closed output set:
+
+| Generator phase | Compact types | Count/policy |
+| --- | --- | --- |
+| Tree creation through `0x0062CB00` | `0..6` | Variant-dependent Tree debris, possibly two records per Tree |
+| promoted-grave decoration `0x0063BB65..0x0063C4FF` | `7..8` | Directional patches around every selector-8 grave, with a dedicated layout for the reserved nearest site |
+| global rock scatter `0x0063E000..0x0063E2E8` | `21..24` | `50..100`, collision accepted; one-in-ten attempts may cluster after the first root |
+| environment scatter `0x0063DBCD..0x0063DFFF` | `25..28` | mode `0`: none; mode `1`: `15..35`; mode `2`: `30..70`; excludes Dig-site rectangles |
+
+Compact types `9..20`, `29`, and `30` are valid atlas/serialization values,
+but `BoneyardGenerator` has no constructor for them. None occurs in the twelve
+retained procedural outputs. They belong to the broader authored-Boneyard
+format and must not be added to the random generator merely because the
+renderer supports them.
+
 Placement tests at `0x006470E0`, `0x00647720`, and `0x00647B00` reject
 terrain conflicts, road conflicts, and intersections with Goodie, Gravestone,
 Tree, and other occupied geometry. The generator separately checks existing
 Tree 2001 objects and can delete an overlapping candidate.
+
+### Dig-site Gravestone promotion and reservation
+
+The ordinary Gravestone loop does not generate Solomon sites directly. It
+constructs type `2029` at `0x0063A27D`, writes the ordinary overlay selector at
+`0x0063A35B`, and adds only roots strictly inside the generated layout bounds
+inset by `300` on every side to a private candidate list at
+`0x0063A3A7..0x0063A3C2`. The inset rectangle is built from
+`(bounds.x + 300, bounds.y + 300, bounds.w - 600, bounds.h - 600)` and tested
+with strict point-in-rectangle helper `0x00403DA0`.
+
+A later pass promotes a nominal `9..14` of those existing candidates into Dig
+sites. At `0x0063B468..0x0063B487`, the generator evaluates
+`RandomInt(6) + 5`, stores a separate initial offset of `4`, and continues
+until successful promotions have reduced their sum to zero. Each attempt:
+
+1. chooses one candidate uniformly through integer RNG `0x00401170`;
+2. skips a grave already using the last overlay-bank selector;
+3. obtains that last overlay's native rectangle through `0x0063EDE0`, trims
+   it to `x + 10` and `width - 20`, and asks placement owner `0x006470E0`
+   whether the site is clear; and
+4. on success writes `overlayCount - 1` to Gravestone `+0x142` at
+   `0x0063B6CF` and retains the grave in the promoted-site list.
+
+The retail overlay bank has nine entries, so `overlayCount - 1` is selector
+`8`. The first 99 failed attempts pass no collision-output list. From attempt
+100 onward, a failed test returns the overlapping scenery objects and the
+generator removes and destroys them before retrying. The per-site retry count
+reaches `200`; its recovery branch may finish short only after at least four
+sites have already succeeded. All twelve retained native generator outputs
+take the normal path and contain `9..14` selector-8 graves.
+
+The promoted sites are not semantically interchangeable. At
+`0x0063B739..0x0063B826`, the generator computes unscaled squared Euclidean
+distance from every promoted grave to RegionLayout player spawn
+`+0x88F4/+0x88F8`. It retains the first strict minimum. The next scenery pass,
+`0x0063BAD0..0x0063BB40`, removes a Tree when that selected root lies inside
+the Tree variant's native polygon, using point-in-polygon helper `0x00405160`.
+The compact-decoration pass also takes a dedicated branch for this nearest
+site at `0x0063BBB1`. Thus the generator reserves and visually clears the same
+spawn-nearest site later selected for the opening Solomon encounter; choosing
+an arbitrary selector-8 grave can put Solomon at an unreserved site.
+
+Runtime action ownership and the later-wave random-placement exception are in
+[`native-solomon-dig-and-wave-director.md`](native-solomon-dig-and-wave-director.md).
 
 ## Roads, terrain, and packed decorations
 

@@ -234,19 +234,63 @@ The create/save path is `0x0046D7B0`:
 6. invoke RegionLayout virtual `+0x14` to write its 14 sections;
 7. commit through `0x00424890`.
 
-`BoneyardGenerator` is a 6,165-instruction routine with 70 direct call targets.
-The recovered phases are:
+### Whole-routine control-flow map
 
-- establish and log the random seed (`Random Boneyard Seed: %d`);
-- build working arrays of rectangles, lines, points, floats, and indices;
-- partition/interpolate arena geometry and place roads, fences, terrain, and
-  object candidates;
-- load wave definitions through `WaveData_LoadFromFile` at `0x006387F0`;
-- construct default Trigger/TimeLine scripts, including `on START GAME`,
-  `on START WAVE 1`, `on SOLOMON RUNS`, `Fortify Monster HP`, and
-  `Fortify Monster Speed` actions;
-- attach the generated definitions to RegionLayout and release temporary
-  geometry arrays.
+`BoneyardGenerator` is a 6,165-instruction routine with 70 direct call targets.
+The complete control-flow chart below assigns every instruction from entry
+through the returning epilogue to one contiguous phase. The ranges describe
+native ownership and ordering; they do not pretend that the compiler's one
+large routine was authored as fourteen source functions.
+
+| Phase | Inclusive native range | Recovered work and committed output |
+| ---: | --- | --- |
+| 1 | `0x006388B0..0x00638971` | Sample seed `0..999999`, construct and seed the stack RNG, log `Random Boneyard Seed: %d`, and copy all `0x3A` RNG dwords into the active object. |
+| 2 | `0x00638972..0x00638C6C` | Clear prior Road, Fence, scenery, compact, and scratch-owned objects; choose the road flag, initial bounds, and the `3..8` rare-Goodie budget. |
+| 3 | `0x00638C6D..0x006398C4` | Construct the working rectangle/line generator, choose environment mode `0`, `1`, or `2`, partition and spline the arena, merge close points, emit the initial linked Road `3004` chains, build their meshes, and repair road UID links. |
+| 4 | `0x006398C5..0x0063AD53` | Shuffle generated cells from two RNG words and run the six-way population switch: grave plots with rare Goodie `2061` or Gravestone `2029`, Tree `2001` groves, or one Building `2040` with Tree arrangements and two approach Roads. |
+| 5 | `0x0063AD54..0x0063B467` | Select a qualifying entrance side, extend/translate the arena strip, remove Roads crossing the entrance corridor, intersect the retained Road with that corridor, and write player/formation spawn roots. With no qualifying side, recurse at `0x0063ADC9`; the recursive build owns the result and the abandoned frame unwinds. |
+| 6 | `0x0063B468..0x0063BB64` | Promote a nominal `9..14` interior graves to overlay selector `8`, resolve blockers, choose the first strict spawn-nearest promoted grave, adjust conflicting scenery, and remove a Tree whose native polygon covers that reserved root. |
+| 7 | `0x0063BB65..0x0063C4FF` | Decorate every promoted grave with compact types `7` and `8`; the reserved nearest site takes the dedicated layout branch. |
+| 8 | `0x0063C500..0x0063CA31` | Build four expanded perimeter lines, vary their traversal order, plant collision-accepted boundary Trees, rebuild every Road, repair road links/derived crossings, and assign deterministic scenery ordering keys. |
+| 9 | `0x0063CA32..0x0063D2AC` | Load `data/wave.txt` through `WaveData_LoadFromFile`, then construct and attach the generated Trigger, Script, Action, and TimeLine graph, including opening Solomon mode `10` and the wave/fortification scripts. |
+| 10 | `0x0063D2AD..0x0063DAA7` | Build one Fence `3005` chain `300` units inside the selected entrance edge, classify the Road crossing as segment code `2`, collision-trim the gate endpoints, and redistribute the remaining Fence endpoints. The known empty-candidate defect is inside this redistribution pass at `0x0063D78F`. |
+| 11 | `0x0063DAA8..0x0063DBCC` | Plant a second collision-gated Tree strip along the entrance edge, with the environment-mode override passed to the Tree helper. |
+| 12 | `0x0063DBCD..0x0063DFFF` | For environment modes `1` and `2`, collect scenery, Fence-endpoint, and selected Road-endpoint anchors; scatter `15..35` compact types `25..28` around them (`30..70` in mode `2`) while excluding selector-8 grave set pieces. |
+| 13 | `0x0063E000..0x0063E2E8` | Scatter `50..100` compact rock types `21..24`; after the first record, a one-in-ten branch first tries a collision-free cluster near the previous root, otherwise it samples the full arena. |
+| 14 | `0x0063E2E9..0x0063E429` | Copy the fixed RNG object back through the active pointer, destroy every remaining point/line/index/pointer scratch collection, destroy the stack generator at `0x0063E401`, and return. |
+
+The instruction and constructor census closes several older ambiguities:
+
+- all seven calls to the general object factory have an immediate native type:
+  Road `3004` at `0x006395F8`, `0x0063ABAC`, and `0x0063ACB4`;
+  Goodie `2061` at `0x0063A065`; Gravestone `2029` at `0x0063A27D`;
+  Building `2040` at `0x0063A5C4`; and Fence `3005` at `0x0063D36A`;
+- all fifteen Tree insertions route through `0x0062CB00`;
+- direct compact writes cover exactly types `7..8`, `21..24`, and `25..28`,
+  while the Tree helper covers `0..6`; this routine has no creator for compact
+  types `9..20`, `29`, or `30`; and
+- this procedural routine does not construct Terrain `3009` or Monument
+  `2009`. The twelve retained stock-generator outputs independently contain
+  only scenery types `2001`, `2029`, `2040`, and `2061`, compact types
+  `0..8` and `21..28`, and zero Terrain records.
+
+The 70-target direct-call census and all indirect insertion/destruction sites
+were reviewed against this chart. Every serialized family observed in the
+retained outputs has a construction phase above. Script opcode semantics are
+expanded in [`boneyard-scripting.md`](boneyard-scripting.md); scenery,
+collision, compact-record, and Dig-site semantics are expanded in
+[`native-boneyards-and-world.md`](native-boneyards-and-world.md). This is a
+closed algorithm map, not a claim that every unnamed scalar constant has been
+given a designer-authored name.
+
+Closure evidence was reproduced read-only from the pooled Ghidra project with
+`summarize_function_calls.py 0x006388B0`, the complete instruction dump, the
+complete decompile, and focused decompiles of the geometry, Tree, collision,
+Road-finalization, and Fence-candidate helpers. The call summary reports 6,165
+instructions, 70 distinct direct targets, seven calls to factory `0x005B7080`,
+fifteen calls to Tree helper `0x0062CB00`, one recursive call, and the final
+stack-generator destructor at `0x0063E401`; those counts agree with the phase
+chart and output-family census above.
 
 ### Random seed ownership and run lifetime
 
@@ -268,11 +312,15 @@ client begins a fresh host run and must cause a new materialization on match
 start. Keeping the process alive is not evidence that the Arena should remain
 alive.
 
-The generator contains one recursive call at `0x0063ADC9`. Its empty-candidate
-interpolation branch is at `0x0063D78F`, immediately after the candidate lookup
-at `0x0063D781`. The loader's existing Boneyard generator patch redirects that
-branch to cleanup when the candidate count is zero, preventing stock code from
-interpolating an empty candidate list.
+The generator contains one recursive call at `0x0063ADC9`. That earlier branch
+belongs to entrance-side selection: when neither qualifying side was recorded,
+the routine performs a complete recursive reroll and then unwinds the abandoned
+frame. It is separate from the later Fence bug. Fence endpoint redistribution
+checks its candidate count at `0x0063D78F`, immediately after the candidate
+lookup at `0x0063D781`; the stock fall-through can synthesize a null candidate
+and dereference `candidate + 0x1C`. The loader's existing patch redirects only
+that empty Fence-candidate branch to the pass's existing cleanup and outer-loop
+continuation at `0x0063DA59`.
 
 The editor path builder at `0x005824A0` formats
 `%s\mylevels\%s.boneyard` (and the parallel ratings path), then passes it to

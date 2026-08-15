@@ -9,6 +9,7 @@ from repository_identity_contract import (
     test_repository_history_uses_approved_identities,
 )
 from static_re_boneyard_contracts import (
+    test_boneyard_generator_control_flow_and_output_census_is_complete,
     test_boneyard_parser_rejects_empty_truncated_and_trailing_files,
     test_boneyard_scripting_model_and_runtime_anchors_are_registered,
     test_default_boneyard_load_seed_and_compact_decor_findings_are_registered,
@@ -891,6 +892,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Default Boneyard load, seed, and compact-decor findings are registered",
         test_default_boneyard_load_seed_and_compact_decor_findings_are_registered,
+    ),
+    (
+        "Boneyard generator control flow and output census are complete",
+        test_boneyard_generator_control_flow_and_output_census_is_complete,
     ),
     (
         "Solomon Dig encounter and survival wave director are registered",

@@ -172,7 +172,8 @@ host-authored 30-bit run seed.
 `BoneyardGenerator` at `0x006388B0` owns the common seeded path for:
 
 - Tree, Gravestone, Goodie, and Building object records;
-- roads, fences, fence-derived geometry, and terrain/layout geometry;
+- roads, Fence specifications, and working layout geometry; it does not
+  construct serialized Terrain `3009`;
 - compact decoration records, including Tree-adjacent leaves, ground cover,
   shadows, and dark patches;
 - recipes, UID groups, triggers, and the default TimeLine graph.
@@ -280,15 +281,17 @@ the render-input digest even though only the first `0x19` bytes are serialized.
 | ---: | --- | --- |
 | 0–6 | Tree leaves, grass, soil, and tree-adjacent ground cover | Tree helper `0x0062CB00`; the shared generator RNG selects type, offset, rotation, scale, alpha, and flags. |
 | 7–8 | Dark ground patches | `BoneyardGenerator` `0x006388B0`; among the seven corrected flag sites `0x0063BC10..0x0063C45F`. |
-| 9–12 | Paving and flat stones | Same generator and shared RNG path; persistent record contains every draw selector. |
-| 13–18 | Pebbles and small rock scatter | Same generator and shared RNG path. |
-| 19–20 | Twigs and lattice clutter | Same generator and shared RNG path. |
-| 21–24 | Large irregular ground rocks and boulders | Same generator and shared RNG path. The expanded beta.16 baseline contained 50 on both peers with identical full records and bounds. |
-| 25–29 | Shadow/mask sprites and special ground effects | Same persistent generator path; renderer selects art from the table at `0x0081BD20`. The persistent records match, but their render loop also owns a local ambient-effect branch described below. |
-| 30 | Dead roots and stumps | Same generator and shared RNG path. |
+| 9–12 | Paving and flat stones | Valid authored compact records, but no constructor for these types exists in `0x006388B0`; absent from all twelve retained procedural outputs. |
+| 13–18 | Pebbles and small rock scatter | Valid authored compact records, but not emitted by `0x006388B0`; absent from the retained procedural outputs. |
+| 19–20 | Twigs and lattice clutter | Valid authored compact records, but not emitted by `0x006388B0`; absent from the retained procedural outputs. |
+| 21–24 | Large irregular ground rocks and boulders | Generator range `0x0063E000..0x0063E2E8`, using shared RNG. The expanded beta.16 baseline contained 50 on both peers with identical full records and bounds. |
+| 25–28 | Shadow/mask sprites and special ground effects | Environment-mode generator range `0x0063DBCD..0x0063DFFF`; renderer selects art from the table at `0x0081BD20`. The persistent records match, but their render loop also owns a local ambient-effect branch described below. |
+| 29 | Fifth shadow/mask atlas entry | Supported by serialization and renderer update, but not emitted by `0x006388B0`; its `RandomInt(4) + 25` write reaches only `25..28`. |
+| 30 | Dead roots and stumps | Valid authored compact record, but not emitted by `0x006388B0`; absent from the retained procedural outputs. |
 
-No additional persistent compact creator outside the Tree helper and
-`BoneyardGenerator` was found. The missing family was instead transient:
+Within procedural generation, no additional persistent compact creator outside
+the Tree helper and `BoneyardGenerator` was found. The missing runtime family
+that motivated this pass was instead transient:
 
 - At `0x004717E9`, the first branch admits Arena render-list records whose
   object-local byte at `+0x8F20` is 1 or 2. This is the only native guard
@@ -358,6 +361,10 @@ effects.
 | Tree local occlusion alpha/common lighting scalar, Scrub phase, Arena marker tint, and Arena ambient ground effects | Not replicated by stock or framework packets in beta.16; stock updates, initializes, draws, or spawns them from allocator residue and peer-local actor, tick, and RNG state. |
 | Participants, enemies, live loot, casts, and transient effects | Replicated by their dedicated framework ownership/snapshot paths. |
 | Run-static Solomon Dig (`0x1391`) and Lantern (`0x1392`) | Host snapshot state; separate from RegionLayout Tree/Scrub/compact decoration. |
+
+The Terrain entry in this generic replication boundary covers authored
+Boneyards. The stock random generator emits no Terrain records, as established
+by the constructor and retained-output census above.
 
 No framework packet serializes the RegionLayout scenery list or compact
 section directly. The framework owns authority and seed propagation; the

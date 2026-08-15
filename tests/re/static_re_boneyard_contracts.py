@@ -342,6 +342,113 @@ def test_default_boneyard_load_seed_and_compact_decor_findings_are_registered() 
     )
 
 
+def test_boneyard_generator_control_flow_and_output_census_is_complete() -> str:
+    system = _read("docs/reverse-engineering/boneyard-system.md")
+    world = _read("docs/reverse-engineering/native-boneyards-and-world.md")
+    decor = _read(
+        "docs/reverse-engineering/native-default-boneyard-load-seed-and-decor.md"
+    )
+
+    phase_ranges = (
+        "0x006388B0..0x00638971",
+        "0x00638972..0x00638C6C",
+        "0x00638C6D..0x006398C4",
+        "0x006398C5..0x0063AD53",
+        "0x0063AD54..0x0063B467",
+        "0x0063B468..0x0063BB64",
+        "0x0063BB65..0x0063C4FF",
+        "0x0063C500..0x0063CA31",
+        "0x0063CA32..0x0063D2AC",
+        "0x0063D2AD..0x0063DAA7",
+        "0x0063DAA8..0x0063DBCC",
+        "0x0063DBCD..0x0063DFFF",
+        "0x0063E000..0x0063E2E8",
+        "0x0063E2E9..0x0063E429",
+    )
+    missing_phases = [token for token in phase_ranges if token not in system]
+    if missing_phases:
+        raise StaticReTestFailure(
+            "Boneyard generator phase map has an uncovered range: "
+            + ", ".join(missing_phases)
+        )
+    parsed_ranges = [
+        tuple(int(address, 16) for address in token.split(".."))
+        for token in phase_ranges
+    ]
+    if (
+        len(parsed_ranges) != 14
+        or parsed_ranges[0][0] != 0x006388B0
+        or parsed_ranges[-1][1] != 0x0063E429
+        or any(
+            previous[1] + 1 != current[0]
+            for previous, current in zip(parsed_ranges, parsed_ranges[1:])
+        )
+    ):
+        raise StaticReTestFailure(
+            "Boneyard generator phase map is not contiguous from entry to epilogue"
+        )
+
+    required_system = (
+        "Whole-routine control-flow map",
+        "6,165-instruction routine with 70 direct call targets",
+        "one recursive call at `0x0063ADC9`",
+        "separate from the later Fence bug",
+        "`0x0063DA59`",
+        "all seven calls to the general object factory",
+        "`0x006395F8`",
+        "`0x0063ABAC`",
+        "`0x0063ACB4`",
+        "`0x0063A065`",
+        "`0x0063A27D`",
+        "`0x0063A5C4`",
+        "`0x0063D36A`",
+        "this procedural routine does not construct Terrain `3009` or Monument",
+        "types `9..20`, `29`, or `30`",
+        "closed algorithm map",
+        "summarize_function_calls.py 0x006388B0",
+    )
+    missing_system = [token for token in required_system if token not in system]
+    if missing_system:
+        raise StaticReTestFailure(
+            "Boneyard generator control-flow census is incomplete: "
+            + ", ".join(missing_system)
+        )
+
+    required_world = (
+        "fourteen-phase control-flow chart for every instruction",
+        "exactly seven calls to the general object factory",
+        "zero Terrain records",
+        "no scenery class outside `2001`, `2029`, `2040`, and",
+        "`2061`",
+        "`0..6`",
+        "`7..8`",
+        "`21..24`",
+        "`25..28`",
+        "types `9..20`, `29`, and `30`",
+    )
+    missing_world = [token for token in required_world if token not in world]
+    if missing_world:
+        raise StaticReTestFailure(
+            "Boneyard generator output-family census is incomplete: "
+            + ", ".join(missing_world)
+        )
+
+    for token in (
+        "no constructor for these types exists in `0x006388B0`",
+        "`RandomInt(4) + 25` write reaches only `25..28`",
+        "construct serialized Terrain `3009`",
+    ):
+        if token not in decor:
+            raise StaticReTestFailure(
+                f"Boneyard compact/Terrain negative boundary is missing: {token}"
+            )
+
+    return (
+        "all fourteen contiguous generator phases, constructor families, compact "
+        "type boundaries, recursive reroll, Fence recovery, and teardown are pinned"
+    )
+
+
 def test_loading_screen_uses_native_stage_progress_and_shared_d3d9_lifetime() -> str:
     loading = _read("SolomonDarkModLoader/src/loading_screen.cpp")
     renderer = _read("SolomonDarkModLoader/src/loading_screen_renderer.cpp") + _read(
@@ -890,6 +997,16 @@ def test_solomon_dig_and_wave_director_contract_is_registered() -> str:
         "0x00490640",
         "0x00490790",
         "0x004ED980",
+        "0x00467230",
+        "0x00465920",
+        "0x00467160",
+        "0x0063B6CF",
+        "0x0063B739",
+        "0x0063CAE0",
+        "PLACE SOLOMON DIGGING(10)",
+        "first strict-nearest",
+        "Random Solomon",
+        "(1014.7630615234375, 2513.224609375)",
         "trunc(turnRate) + 1",
         "40 + 2 * RandomInt(25)",
         "`95..184`",
@@ -976,6 +1093,7 @@ def test_solomon_dig_and_wave_director_contract_is_registered() -> str:
             + ", ".join(missing_layout)
         )
     return (
-        "Solomon first contact, exact dialogue/retreat timing, generated survival "
-        "schedule, TimeLine/Spawner ownership, and no-wave-HUD boundaries are pinned"
+        "Solomon generation and spawn-nearest opening placement, first contact, "
+        "exact dialogue/retreat timing, generated survival schedule, TimeLine/Spawner "
+        "ownership, and no-wave-HUD boundaries are pinned"
     )

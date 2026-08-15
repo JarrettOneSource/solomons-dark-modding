@@ -27,8 +27,10 @@ The generated graph inspected for this pass is
 
 The encounter is one Arena-owned state chain, not three presentation effects:
 
-1. Boneyard generation places a `Solomon_Dig` actor and compiles the retail
-   wave schedule into a serialized TimeLine graph.
+1. Boneyard generation promotes and reserves candidate Dig graves, emits a
+   `START GAME` script whose placement mode is `10`, and compiles the retail
+   wave schedule into a serialized TimeLine graph. The script runtime, not the
+   geometry generator, constructs the opening `Solomon_Dig` actor.
 2. The Arena tick owns Solomon proximity, control locking, queued voice, and
    the retreat transition.
 3. Solomon's run-away transition trips `SOLOMON RUNS`, whose generated script
@@ -45,6 +47,89 @@ The encounter is one Arena-owned state chain, not three presentation effects:
 The stock HUD does not draw a wave number, score, or remaining-enemy counter.
 The only player-facing start signal is the Solomon voice/run set piece,
 music, and the arrival of enemies.
+
+## Generated Dig sites and opening placement
+
+The geometry generator and script runtime form one causal chain:
+
+1. Generator `0x006388B0` first creates ordinary type-`2029` Gravestones,
+   then promotes a nominal `9..14` eligible interior graves by writing the
+   last overlay selector, `8`, at `0x0063B6CF`.
+2. The generator finds the first promoted grave with the strict-smallest
+   squared Euclidean distance to authored player spawn at
+   `0x0063B739..0x0063B826`. It clears overlapping Trees and gives that root
+   special compact-decoration treatment. The complete promotion and clearing
+   pass is documented in
+   [`native-boneyards-and-world.md`](native-boneyards-and-world.md).
+3. At `0x0063CAE0`, the same generator constructs action `0x418` (`1048`,
+   `PLACE SOLOMON DIGGING`), obtains operand zero through `0x006837D0`, and
+   writes mode `10`. The action is attached to the generated `START GAME`
+   script. It is immediately followed by action `0x3EC` (`1004`,
+   `START NEXT WAVE WHEN`) with operand `3`.
+4. Script dispatcher `0x00689750` sends action `1048` to runtime owner
+   `0x00467230`. That owner builds an eligible selector-8 grave list and calls
+   resident builder `0x00465920`.
+
+### Placement modes and candidate ownership
+
+`0x00467230` is the candidate-policy owner. Its operand-zero jump table maps
+the supported modes as follows:
+
+| Mode | Candidate policy before `0x00465920` |
+| ---: | --- |
+| 2 | every live type-2029 Gravestone with overlay selector 8 |
+| 3 | selector-8 graves whose roots are strictly inside the scripted rectangle |
+| 4 | selector-8 graves accepted by the scripted point/radius test |
+| 5 | selector-8 graves whose native rectangles overlap the scripted rectangle |
+| 6..9 | no candidate-building branch; the empty list reaches the builder |
+| 10 | one grave: the first strict-nearest selector-8 grave to the placement origin |
+
+Mode 10 initializes its origin from local player slot zero at
+`Gameplay +0x1358`; while `Arena +0x28 < 20`, it substitutes the authored
+RegionLayout spawn at `Arena +0x88F4/+0x88F8`. Helper `0x00403B90` computes
+plain `(dx * dx) + (dy * dy)` with no axis scaling or square root. The update
+uses strict `<`, so equal-distance ties keep the first grave in live scenery
+serialization order. At generated `START GAME` entry, the local player is at
+the authored spawn, so both origin branches resolve to the same stock
+placement contract.
+
+Builder `0x00465920` receives that filtered list, rechecks type and overlay,
+and uses native RNG `0x00401170` only to select within it. Mode 10 supplies a
+singleton list, so the RNG call cannot change the chosen opening root. The
+builder then anchors the set piece exactly as follows:
+
+| Resident | Root from selected grave `(gx, gy)` |
+| --- | --- |
+| grave dirt, DeadHawg record 13 | `(gx, gy)` |
+| Lantern type 5010 (`0x1392`) | `(gx - 55, gy + 73)` |
+| `Solomon_Dig` type 5009 (`0x1391`) | `(gx + 10, gy + 113)` |
+
+An empty eligible list creates neither resident. Before dispatching any
+placement mode, `0x00467230` calls `0x00467160`; an existing `Solomon_Dig`
+`0x1391` or `Solomon_DriveBy` `0x139C` suppresses the action. This is the
+duplicate/lifecycle gate, not a render-side check.
+
+### Serialized-stock reconciliation and later-wave exception
+
+The inspected `Generated Boneyards/random seed.boneyard` contains fourteen
+selector-8 graves. Its authored spawn is
+`(1323.68310546875, 3310.110107421875)`, and the strict-nearest grave in
+serialized order is index 12 at
+`(1014.7630615234375, 2513.224609375)`. Static script decoding recovers both
+placement owners:
+
+- trigger UID `37451`, `on START GAME`, runs script UID `37450` and action
+  `PLACE SOLOMON DIGGING(10)`;
+- trigger UID `37398`, `Random Solomon`, is a one-trip `START WAVE` trigger
+  guarded by `RANDOM ROLL(1, 0, 5)` and runs script UID `37397` with
+  `PLACE SOLOMON DIGGING(2, 0)`.
+
+The first encounter is therefore deterministic from generated geometry and
+spawn, not a second seed-random choice. A later wave may place a replacement
+at a uniformly selected eligible grave through mode 2, but only after the
+duplicate gate finds neither resident Solomon type. A port implementing only
+the opening survival encounter must not use that later-wave mode-2 randomness
+for initial placement.
 
 ## `Solomon_Dig` construction and dispatch
 
