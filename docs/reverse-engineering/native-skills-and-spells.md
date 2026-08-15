@@ -32,6 +32,16 @@ records `108..117`.
 The cap/max column is `mCapLevel / mMaxLevel`. Element and discipline rows have
 descriptions but no numeric cap/max table in their CFG.
 
+The two limits have different executable ownership. Offer predicate
+`0x0065ED00` stops ordinary permanent offers once the permanent rank reaches
+`mCapLevel`; apply helper `0x00660320` and Mindstar refresh hard-clamp only at
+`mMaxLevel`. A Creativity Insight double-apply can therefore take `cap-1` to
+`cap+1` when max permits, after which the row is no longer ordinarily offered.
+Property reader `0x0065D540` clamps every requested array index to
+`[0,length-1]`, so short arrays repeat their terminal value. In particular,
+Embers to Imps ID 19 uses `mManaCost[8]=62` for every effective rank at least
+eight; it never reads out of bounds or interpolates.
+
 ### Level-up card art and text ABI
 
 `0x006720F0` renders each ordinary offer as Skills record 13, record 164 in the
@@ -214,7 +224,7 @@ consumer, not an inferred C++ source name.
 | Resist Magic `62` | Adds `mValue/100` to resistance accumulator `+0xA4`. |
 | Creativity `63` | Raises level-up choices from three to four and lowers the native picker eligibility requirement by two; concentrated Insight is detailed below. |
 | Health Up `64` | `maxHP(+0x74) = baseHP(+0x6C) + mValue`. |
-| Enchant Staff `65` | Adds `mDamage` to both staff-melee damage accumulators `+0xC4/+0xC8`. |
+| Enchant Staff `65` | Adds `mDamage` to both staff-melee damage accumulators `+0xC4/+0xC8`. Property reader `0x0065D540` clamps rank indices to the last authored value; the declared rank 15 therefore reuses `mDamage[14]=36` instead of reading out of bounds. |
 | Telekinesis `66` | Stores `mValue * 1.25` in pickup-range scalar `+0xCC`. |
 | Rush `67` | Its learned `mValue` is read by the movement path; concentration modifies the refreshed movement multiplier at `+0x90`. |
 | Deflect `68` | Writes `mValue` to `+0xB8` only while item type `0x1B5C` (staff) is equipped. |
@@ -480,7 +490,7 @@ uses its separate attachment path.
 
 | Selected ID/build | Handler | Created type | Initialization contract |
 | ---: | ---: | --- | --- |
-| `8` Magic Missile | `0x0053CFE0` | `0x7D3 MagicMissile` | Creates the learned quantity in an alternating heading fan; stores nearest-target group/slot, randomized damage, speed/turn scales, bounce/pierce state, and owner flags. |
+| `8` Magic Missile | `0x0053CFE0` | `0x7D3 MagicMissile` | Creates children `i=0..N-1` with `step=N<4?30:20`, `base=aim+(N even?step/2:0)`, and heading `base+(-1)^i*i*step`; all share one cast-time damage roll. Stores nearest-target group/slot, common speed `3*smartFactor`, child turn input `2*smartFactor*0.75^i`, pierce state, and owner flags. Visual scale remains one. |
 | `16` Fireball | `0x0053DC60` | `0x7D4 Fireball` | Creates one aimed fireball; writes damage and Fireball-family secondary payload scalars at `+0x150..+0x15C`, randomized payload state at `+0x160/+0x164`, and three compact proc fields at `+0x168..+0x16E`. |
 | `1000` Ether + Fire | `0x0053E6A0` | `0x7DE FireMissile` | Reads the rebuilt weld vector at progression `+0x774`; creates its quantity in an alternating fan and writes damage, inherited speed/turn scaling, secondary fire payload, bounce/proc state, and randomized seed at `+0x158..+0x178`. |
 | `1001` Ether + Water | `0x0053F3C0` | `0x7E0 FrostMissile` | Uses the same weld-vector fan/target contract; writes damage and speed/turn scaling plus cold-area and slow payload fields at `+0x168/+0x16C`. |
@@ -491,7 +501,7 @@ uses its separate attachment path.
 The three Ether-derived welded missile handlers all read the normalized vector,
 not six CFG files at cast time. They consume the vector's first eight values,
 randomize damage between its first two entries, alternate heading around the
-aim angle, decay per-projectile scaling across the fan, and acquire the nearest
+aim angle, decay per-projectile homing turn input across the fan, and acquire the nearest
 eligible actor through `0x00641160`. Consequently a custom weld implementation
 must reproduce the vector ABI or replace these handlers; swapping projectile
 art alone does not create a new weld behavior.
@@ -670,7 +680,7 @@ the payment fails.
 | `49` | Magic Circle | `0x0063FDE0` creates/index-registers `MagicCircle (0x7EA)` at the aimed point with `mSlow`, color, and ownership state. Every ten ticks the circle attaches `Mod_CircleSlow (0x1B70)` to eligible enemies. The local player gains `mana_recovery * 2 / game_timing_scale` MP per callback. The HP branch is stock-inert: it computes `HP + health_regeneration * 2 / game_timing_scale`, compares that candidate with current HP instead of max HP, and writes current HP unchanged for ordinary positive regeneration. |
 | `50` | Magic Trap | Creates `MagicTrap (0x7F5)`. It derives an element selector from the current stock primary or weld build, derives base damage from that primary, multiplies it by `mDamage`, and registers the armed trap at the aimed point. |
 | `51` | Dampen | `0x00648DF0` queries hostile magic in a rectangle, removes guided/fire/dark missile actors, disrupts hostile caster actions, and performs the CFG's 50% shield-dispel test; it then starts action mode `21` (`Action_PlayerWizard_CastSpin`) at half normal action damage. |
-| `54` | Magic Shield | Combines Magic Shield `mAbsorb` with Explosive Shield state and calls the wizard's virtual `+0x64` to install/refresh shield state. |
+| `54` | Magic Shield | Combines Magic Shield `mAbsorb` with Explosive Shield factor `mDamage/100` and calls the wizard's virtual `+0x64` to install/refresh shield state. Break callback `0x00546650` multiplies the installed absorb pool by that factor for its radial contact (rank 1: `25*0.5=12.5`); it is not a flat Explosive Shield damage value. |
 | `72` | Acid Rain | Creates `AcidRain (0x7FE)` at the aimed point, writes configured damage and caster/world identity, then registers the persistent rain actor. |
 | `73` | Fire Wall | Builds a line perpendicular to the aim vector and creates a series of `Fire_Goodguy (0x7EE)` patches along it, each carrying configured wall damage and caster ownership. |
 | `74` | Ether Drain | Creates `EtherDrain (0x807)`, writes configured per-tick damage, resolves the aimed origin through the world, and registers it. |

@@ -493,6 +493,11 @@ The common rules are:
 - permanent rank is actor row `+0x20`; effective rank is row `+0x22`;
   acquiring another rank replaces every `P[r]` input with the new absolute
   value rather than adding the new row value to the old result;
+- ordinary offers stop at `mCapLevel`, while apply and effective-rank paths
+  clamp at `mMaxLevel`. Creativity Insight can double-apply `cap-1` to
+  `cap+1` when max permits; the row then remains above the ordinary offer
+  ceiling. Property reader `0x0065D540` clamps short arrays to their last
+  authored entry (for example ID 19 `mManaCost` is `62` at every rank >=8);
 - Mindstar raises effective rank by one, capped at the compiled maximum, but
   never changes permanent rank;
 - offensive mana cost is assembled by `0x006741B0` from the base and upgrade
@@ -532,7 +537,7 @@ stock Deflect/Creativity defects are inherited below rather than re-derived.
 | ---: | --- | --- |
 | 8 | **Magic Missile.** On cast, pay resolved cost and create `quantity` homing `MagicMissile 0x7D3` actors. Base quantity is one unless row 10 changes it. Each gets cast-time active-gameplay-RNG damage in the closed interval between `mDamage1[r]` and `mDamage2[r]`, caster ownership, target handle, and current upgrade payload. Rank replaces both endpoints and base cost. | HIGH |
 | 9 | **Smart Missiles.** At Magic Missile creation, `speed_factor = 1 + mSpeed[r]/100`; multiply both projectile speed and turn-rate fields by it. Smart projectiles reacquire after target loss. Add `mManaCost[r]` to the Missile cast cost. State remains row 9 until copied into each missile. | HIGH |
-| 10 | **More Missiles.** At Missile cast, `quantity = round(mQuantity[r])`; create that many alternating-heading projectiles and add `mManaCost[r]` to cost. The fan alternates left/right and applies the native per-projectile scale decay closed by G2. | HIGH |
+| 10 | **More Missiles.** At Missile cast, `quantity = round(mQuantity[r])`; create zero-based children `i=0..N-1` in native order and add `mManaCost[r]` to cost. With `step = N<4 ? 30deg : 20deg` and `base = aim + (N even ? step/2 : 0)`, heading is `base + (-1)^i*i*step` (for example `N=4`: `+10,-10,+50,-50`). One cast-time damage roll is copied unchanged to every child. Visual scale stays `1`; only homing turn input decays, as `2*(1+mSpeed/100)*0.75^i`, while every child speed is `3*(1+mSpeed/100)`. | HIGH |
 | 11 | **Call Leviathan.** On secondary cast, pay `mManaCost[r]`, create `Leviathan 0x7F2`, and build `round(mQuantity[r])` appendages. Its active phase emits `EtherBolt 0x7F3` children carrying `mDamage[r]`; duration/lifecycle belongs to the spawned actor, not progression. | HIGH |
 | 12 | **Planewalker.** On toggle-on, pay `mManaCost[r]`, attach `Mod_Planewalker 0x1B75` for `mDuration[r] * 100` native ticks, save the previous selected spell at wizard `+0x308`, set target flag `+0x138 |= 0x10`, and force Plane Orb 80. Expiry/removal restores plane state/selection. Reapplying keeps the greater remaining duration. | HIGH |
 | 13 | **Piercing.** Refresh caches `pierces=round(mPierces[r])` at `+0x8C0` and residual factor `1-mLoss[r]/100` at `+0x8C4`. A Missile can pass through `pierces` contacts; each subsequent payload is multiplied by the residual factor. Add `mManaCost[r]`. Mutually exclusive with Ether Blast in offers. | HIGH |
@@ -599,7 +604,7 @@ already-closed mechanics.
 | 52 | **Spell Welding.** Learning enables selection of a pair among primaries 8/16/24/32/40. The pair becomes build 1000-1009; `0x00666020` normalizes the two current component vectors and the cast routes consume that vector, including component costs and upgrades. There is no conventional rank array. Exact pair/vector/dispatch semantics are normative in [`spell-welding.md`](spell-welding.md). | HIGH |
 | 53 | **Flash.** Refresh chance/duration at actor `+0x744/+0x748`. When this actor is struck, roll `mChance[r]%` on the active gameplay RNG; success attaches the native dazzle/flash response to the attacker for `mDuration[r]*100` ticks. No mana cost and no additive stacking; reapplication uses modifier merge semantics. | MEDIUM |
 | 54 | **Magic Shield.** Pay `mManaCost[r]`; install/refresh this wizard's shield state with absorb pool `mAbsorb[r]`. Incoming physical and magical damage consumes that pool before HP. Recast replaces/refreshes through the wizard virtual `+0x64`; parallel pools are not added. | HIGH |
-| 55 | **Explosive Shield.** Add `mManaCost[r]` to Magic Shield. When that actor's shield breaks, its break event performs an area contact with `mDamage[r]`; the effect does not fire on an ordinary unbroken refresh. | HIGH |
+| 55 | **Explosive Shield.** Add `mManaCost[r]` to Magic Shield and resolve `factor=mDamage[r]/100`. Magic Shield install writes that factor beside the shield's absorbed pool. On break, the radial contact payload is `installed_absorb_pool * factor` (rank 1: 50%, so a 25-point shield explodes for 12.5), not flat configured damage. It does not fire on an ordinary unbroken refresh. | HIGH |
 
 Magic Circle's mana branch and inert HP branch were read directly from
 `0x005FB020`; they correct the earlier broad “boosts healing and mana” wording
@@ -619,7 +624,7 @@ the inert HP branch. Fixing it is a gameplay balance change, not reconstruction.
 | 62 | **Resist Magic.** On refresh, magic resistance accumulator `+0xA4 += mValue[r]/100`; concentration adds another `0.20`. The common magic-damage path retains `incoming * (1-resistance)`, subject to its native clamps. | HIGH |
 | 63 | **Creativity.** When learned, desired offer count becomes 4 and every offer/item minimum requirement is reduced by 2. Concentration independently gives a 20% Insight roll after offers and applies the selected marked row twice. **Stock defect:** only slot A/index 16 is tested; slot B and Mind Chug never enable it. | HIGH |
 | 64 | **Health Up.** On refresh, `maxHP(+0x74) = baseHP(+0x6C) + mValue[r]`; ratios are restored/clamped. Rank 1 is exactly `+50`. | HIGH-LIVE |
-| 65 | **Enchant Staff.** With a staff, add `mDamage[r]` to both staff damage accumulators `+0xC4/+0xC8`; each melee action uses those absolute refreshed totals. Concentration multiplies staff action timing scalar `action+0x34` by **1.75**, not the advertised 2.0. | HIGH |
+| 65 | **Enchant Staff.** With a staff, add `mDamage[r]` to both staff damage accumulators `+0xC4/+0xC8`; each melee action uses those absolute refreshed totals. The row declares maximum rank 15 but supplies 15 values (`0..14`); native property reader `0x0065D540` clamps rank 15 to the terminal value, so ranks 14 and 15 both contribute `36`. Concentration multiplies staff action timing scalar `action+0x34` by **1.75**, not the advertised 2.0. | HIGH |
 | 66 | **Telekinesis.** On refresh, pickup-range scalar `+0xCC = mValue[r]*1.25`; concentration doubles it to `mValue[r]*2.5`. It changes this actor's pickup query, not item physics or another actor's magnet. | HIGH |
 | 67 | **Rush.** On refresh, movement factor `+0x90 = 1+mValue[r]/100`; concentration multiplies by `1.25`, producing `(1+mValue[r]/100)*1.25`. The movement integrator consumes the actor-private factor. | HIGH |
 | 68 | **Deflect.** While staff type `0x1B5C` is equipped, write chance `mValue[r]` to `+0xB8`; the harmful-contact gate rolls that percent and deflects on success. Without a staff the refreshed field is absent/zero. **Concentration is inert:** stock reads nonexistent `mConcentration` as zero and adds it to poison accumulator `+0xA8`; no advertised x5 reflection branch exists. | HIGH |

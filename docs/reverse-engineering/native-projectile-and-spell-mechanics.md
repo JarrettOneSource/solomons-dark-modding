@@ -137,10 +137,13 @@ speed = 3 * (1 + mSpeed / 100)
 ```
 
 and the rank-1 and controlled rank-2 captures both retained `3.0` world units
-per native tick. When more than one missile is emitted, directions alternate
-symmetrically around aim. The normal angular step is `20` degrees; when the
-quantity is below four, the step is `30` degrees. This fan is the only initial
-spread. Homing/turn work then runs on every tick.
+per native tick. For quantity `N`, the angular step is `30` degrees below four
+and `20` degrees otherwise. Let `base = aim + (N even ? step/2 : 0)`; child
+`i=0..N-1` uses `base + (-1)^i*i*step`. This deliberately non-symmetric native
+order yields `N=4: +10,-10,+50,-50`, not a conventional centered fan. The
+single cast-time damage roll is copied to every child. Every visual scale
+remains `1`; speed is `3*smartFactor`, while homing turn input alone decays as
+`2*smartFactor*0.75^i`. Homing then runs every tick.
 
 The gameplay actor radius is `15`. The target-proximity pass runs every tick
 with the native `6`-unit probe constant. Terrain is tested every fifth tick
@@ -150,8 +153,8 @@ rank fixture windows contain `604` consecutive native ticks. Once age exceeds
 transition, not expiration.
 
 Pierce is held in the actor byte at `+0x161`. A zero value makes the first
-accepted contact remove the missile. A positive value is decremented; speed
-and remaining damage are scaled, the actor is advanced beyond the contact,
+accepted contact remove the missile. A positive value is decremented; visual
+magnitude and remaining damage are scaled, the actor is advanced beyond the contact,
 and it retargets without selecting the same contact as though it were new.
 Thus browser code must not model every Magic Missile as unconditionally
 single-hit.
