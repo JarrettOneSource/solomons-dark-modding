@@ -1,20 +1,33 @@
-# Native enemy hit and death effects
+# Native enemy damage and death presentation
 
 Status: statically verified against retail `SolomonDark.exe` SHA-256
 `03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`.
-This document owns the common hit-overlay ABI and the death-presentation
-handoff for the eight enemy families used by retail Boneyard waves. Reward,
-drop, and child-spawn authority remains in the shared enemy lifecycle.
+This document owns the complete enemy-damage presentation boundary: common
+hit-overlay ABI, every enemy `vtable +0x4C` damage-receiver override,
+absorption/shield hit and break presentation, primary-projectile contact-cue
+dispositions, and the death-presentation handoff for the eight enemy families
+used by retail Boneyard waves. Reward, drop, and child-spawn authority remains
+in the shared enemy lifecycle.
 
 ## Result
 
-Enemy hit feedback is not a five-frame additive white flash and does not reset
-the current action. Positive primary or secondary damage arms two floats on
-the live Actor. The common Actor tick removes `0.05` from each float per fixed
-tick, so a hit refreshes a 20-tick latch. The common renderer draws the exact
-current body/action pose normally, then redraws that pose in red with opacity
-`min(remaining * intensity, 1)`. A damage context flag can suppress the second
-latch, but it does not turn the surviving overlay into an additive blend.
+Enemy damage does not have one presentation path. An unshielded ordinary hit
+arms the common red redraw. Skeleton-family and Zombie receivers can also play
+a throttled family hurt cue before that latch is armed. A shielded hit takes a
+separate early-return path: it plays the shield cue at most once per ten ticks,
+pulses a single additive shield sprite, never arms the red body latch, and
+never carries excess damage into health on the hit that breaks the shield.
+Breaking the shield plays its own cue and creates twenty independent additive
+particles.
+
+The ordinary hit feedback is not a five-frame additive white flash and does
+not reset the current action. Positive primary or secondary damage arms two
+floats on the live Actor. The common Actor tick removes `0.05` from each float
+per fixed tick, so a hit refreshes a 20-tick latch. The common renderer draws
+the exact current body/action pose normally, then redraws that pose in red with
+opacity `min(remaining * intensity, 1)`. A damage context flag can suppress the
+second latch, but it does not turn the surviving overlay into an additive
+blend.
 
 Enemy death is a different ownership thread. The family presenter first
 enters `Badguy::DeathCommon (0x004819D0)`, then removes the live body and
@@ -36,6 +49,160 @@ The authoritative web representation therefore needs the remaining hit latch
 or its exact derived alpha. It must preserve the current pose and apply a
 source-alpha red redraw after the normal body. Five-tick decay, white tint,
 additive blending, and action restart are rejected models.
+
+## Complete damage-receiver census
+
+The earlier hit/death pass stopped after the common Actor latch and the
+terminal family presenters. That was not a complete enemy-damage census: the
+actual polymorphic seam is enemy `vtable +0x4C`. Enumerating that slot across
+the finite native enemy catalog exposes the nonterminal sound overrides and
+the shield early-return hidden inside the common receiver.
+
+| Native receiver membership | Slot target | Damage-presentation behavior | Website disposition |
+| --- | ---: | --- | --- |
+| `Badguy`, DemonSkull, Demon, Coffin, Maggot | `0x0048A290` | Common shield/health receiver | Implement common body-hit behavior for Demon, Coffin, and Maggot. The shield branch is structurally shared, but the stock writer census below proves those families are not reachable Mage-shield recipients; base/DemonSkull are not Website wave families. |
+| Skeleton, SkeletonArcher, SkeletonMage, DireFaculty, Heartmonger | `0x0048A600` | Eligible first hit plays `bonecrack`, then common receiver | Implement for all three Website Skeleton families; DireFaculty/Heartmonger remain outside the Website wave schema. |
+| Imp, GoodImp, GreenImp | `0x0048B1C0` | Rejects contact while byte `+0x234` is nonzero, otherwise common receiver | Website Imp begins in its supported active-flight phase and has no native ejection/materialization phase; the guard is not a presentation substitute. GoodImp/GreenImp are outside the wave schema. |
+| Zombie | `0x0048B1E0` | Eligible first hit plays `zombieouch`, then common receiver | Implement. |
+| Wraith | thunk `0x0048B290` | Exact common receiver | Implement common behavior. |
+| Spider | `0x0048BC80` | Starts native flinch state 2 with a `40 + 2*Integer(21)` timer when damage flag bit 1 is clear, then common receiver | Spider is outside the Website wave schema. |
+| Cocoon | `0x0048BCE0` | Target-release/death presentation followed by common receiver | Cocoon/Webbed is outside the Website wave schema. |
+| Portal | `0x0048C370` | First eligible hit plays `hurtportal`; a separate tick throttle creates its registered hit sprite and occasionally a PortalGroan cue; then common receiver | Portal is outside the Website wave schema. |
+
+Crow is a subordinate helper rather than a `Badguy` damage receiver and has no
+slot in this census. The player-owned Golem receiver `0x00607F60` is likewise
+not a wave enemy: it owns its separate armor/reflect/health path and does not
+call the common red-latch receiver. Neither is evidence for inventing a
+Website wave-family branch.
+
+### Skeleton-family and Zombie hurt cues
+
+`0x0048A600` and `0x0048B1E0` execute before `0x0048A290`, so the eligibility
+test sees the *previous* hit latch. Each cue is requested exactly when:
+
+```text
+shield/absorption +0x180 <= 0
+and common primary hit latch +0x78 == 0
+and damage-context flags 0x0081C6E4 & 0x10 == 0
+```
+
+The common receiver then arms the 20-tick latch. Repeated damage during that
+window refreshes the red redraw but does not replay the family hurt cue. A
+first eligible lethal hit still plays its hurt cue before the terminal
+presenter runs.
+
+| Receiver | Registry object | Exact asset | Pitch |
+| --- | ---: | --- | --- |
+| Skeleton / Archer / Mage (also native DireFaculty/Heartmonger) | entry 12, `+0x228` | `sounds\\bonecrack.wav`, SHA-256 `9b42d96a3d505cc1d631d43b6fde4b7fb9670ed2fa758a7692207f2c514047c4` | `1 + RandomFloat(0.1, signed)`, `[0.9,1.1)` |
+| Zombie | entry 107, `+0x127C` | `sounds\\zombieouch.wav`, SHA-256 `db5400fa0d40ec3507d56d6d29c77ca23dfff4686abe97193b13945da0772d32` | `1 + RandomFloat(0.1, signed)`, `[0.9,1.1)` |
+
+Both are point-gain requests from the enemy world position. They are not
+attack sounds, projectile impact sounds, or death sounds.
+
+## Shield absorption, pulse, and break
+
+Live `Badguy` shield presentation uses these fields:
+
+| Field | Meaning and tick ownership |
+| ---: | --- |
+| `+0x180` | Current absorption/shield health. A positive value selects the shield early-return in `0x0048A290`. |
+| `+0x184` | Shield pulse. Application `0x00477140` writes `3.0`; an audible hit writes `2.0`; common actor tick `0x004835F0` subtracts `0.05` and clamps at zero. |
+| `+0x156` | Shield-hit sound cooldown byte. An audible hit writes `10`; `0x004835F0` decrements it once per fixed tick and saturates at zero. |
+
+### Shield-writer and recipient membership
+
+The shared receiver field does not make every `Badguy` a reachable shield
+recipient. The complete executable xref set for application helper
+`0x00477140` consists of action-marker callback `0x0047CFE0` and the two Mage
+dispatch sites in `0x0047FDE0`. Mage action `0x13` applies the configured self
+shield directly. Action `0x14` resolves an ally, then accepts it only when its
+team byte matches the Mage and its runtime type is exactly Skeleton `0x3E9`,
+SkeletonArcher `0x3EA`, or Zombie `0x3EE`; only then does `0x0047FE8B` call the
+application helper.
+
+The finite Website recipient set is therefore Mage self plus Skeleton, Archer,
+and Zombie allies. SkeletonMage is not an *other-shield* target; Imp, Wraith,
+Demon, Coffin, and subordinate Maggot are also rejected. Maggot still owns the
+ordinary common damage latch through its inherited receiver, but no normal
+stock shield writer makes its positive-shield branch reachable. A web selector
+that shields the nearest arbitrary enemy changes gameplay as well as
+presentation and is not parity.
+
+When `+0x180 > 0`, `0x0048A290` subtracts the staged primary and secondary
+damage components from the shield and returns without calling
+`ActorDamageReaction 0x00627F80`. Consequently:
+
+- the enemy body receives no red hit redraw while the shield absorbs;
+- health is unchanged, including when the staged damage exceeds the remaining
+  shield; the breaking hit does **not** overflow into health;
+- if cooldown `+0x156` is zero, registry entry 42 (`+0x750`), exact asset
+  `sounds\\hitshield.wav` SHA-256
+  `ad5a4870955e5393c17a03c847af274f7a054b62a4c712582206623d1d92ad3f`,
+  plays at `0.8 + RandomFloat(0.05, unsigned)`, or `[0.8,0.85)`, and writes
+  cooldown `10` plus pulse `2.0`; and
+- if the result is nonpositive, shield-break helper `0x0047CE00` runs before
+  the contact returns.
+
+Shield break plays registry entry 74 (`+0xCD0`), exact asset
+`sounds\\popshield.wav` SHA-256
+`b4d6bf4d9a68f11bab92def6e823a53f6b8534c49b96e80bbf25d99972af2503`,
+at fixed pitch `0.8`. It then creates exactly twenty
+`Anim_FadeAdditive` actors (`0x44` bytes, vtable `0x007847F4`) at
+`(enemy.x, enemy.y - 30)` using BadGuys record 69. Each particle independently
+selects:
+
+```text
+rotation = U[0,360) degrees
+initial alpha = 0.5 + U[0,0.75)
+alpha loss = 0.05 per tick
+uniform scale = 1.5 + U[0,0.25)
+velocity = (0,0)
+blend = additive
+```
+
+`Anim_Fade::Tick 0x00454000` retires the particle when its alpha becomes
+nonpositive, so its exact lifetime follows its sampled initial alpha rather
+than a shared fixed strip clock. The helper finally writes shield health zero.
+
+### Active shield renderer
+
+The active shield is not a health-ratio glow and does not duplicate every
+enemy body layer. Skeleton-family renderers `0x0048DEE0`, `0x0048F450`, and
+`0x00491720` (with the same block in sibling renderers) draw one additive
+BadGuys record 49 at `(enemy.x, enemy.y - 30)`. Let `p` be live pulse `+0x184`
+and `L` the Region light scalar at Actor `+0xCC`:
+
+```text
+wobble = min(p, 1)
+brightness = (0.5 * (max(p, 1) - 1) + 0.25) * L
+scale = 1.5 + 0.1 * sin(worldTick * 20 degrees) * wobble
+```
+
+The renderer submits equal RGBA components using `brightness`; it does not
+read shield current/maximum health. Pulse `3.0` on application produces the
+bright materialization, pulse `2.0` on the first unthrottled impact produces
+the hit response, and the constant `0.25 * L` shell remains after pulse
+decays to zero for as long as shield health is positive.
+
+## Primary-spell contact cue boundary
+
+The rank-one spell census rejects a tempting symptom patch:
+
+- Ether and Fire own their already-recovered projectile impact cues and
+  independent impact actors.
+- Air Lightning owns its two-tick bolt plus five-tick target corona but has no
+  rank-one target-contact sound request.
+- Water Frost Jet owns its cast particles and loop but has no target-local hit
+  sprite or sound request.
+- Earth Boulder `0x00620B60` damages every newly contacted root, but the
+  `rockhit` request at `0x0062141B` is not attached to that contact dispatch.
+  It belongs to the boulder's independent vertical ground-bounce integrator
+  (`+0x1E0/+0x1E4`), uses registry entry 77 (`+0xD54`), and only fires on a
+  sufficiently strong bounce at pitch `1 + 0.05 / scale`.
+
+Therefore an enemy-damage event must not synthesize Air, Water, or Earth
+contact audio. Earth rolling/bounce parity remains owned by the primary-spell
+physics system, not by the enemy receiver.
 
 ## Independent effect actors
 
@@ -150,13 +317,15 @@ the native buildup rather than summing independent CSS shakes.
 
 ## Deterministic multiplayer contract
 
-The host owns damage acceptance, the refreshed 20-tick hit epoch, family
-death recipe selection, every cosmetic RNG result, and each created effect
-actor. A snapshot carries the live hit overlay and the current state of every
-surviving death-effect actor. Clients interpolate continuous transforms only.
-They do not reroll debris, infer terminal output from HP, or restart retained
-effects on late join. Terminal audio remains a run-scoped once-only semantic
-event, separate from persistent visual samples.
+The host owns damage acceptance, shield no-overflow semantics, shield pulse and
+cooldown fields, the refreshed 20-tick hit epoch, family hurt/death recipe
+selection, every cosmetic RNG result, and each created effect actor. A snapshot
+carries the active record-49 shield sample, live hit overlay, and current state
+of every surviving break/death effect actor. Clients interpolate continuous
+transforms only. They do not reroll particles/debris, infer a break or terminal
+output from HP, or restart retained effects on late join. Hurt, shield-hit,
+shield-break, and terminal audio are run-scoped once-only semantic events,
+separate from persistent visual samples.
 
 ## XP handoff boundary
 
@@ -170,11 +339,17 @@ complete award and shared level-up contract remains owned by
 
 ## Remaining evidence boundary
 
-The stock constructor/tick ownership, exact family art sets, Skeleton physics,
-per-contact Bouncer damping draw, per-family Unbind clocks, audio identity,
-and family fan-outs above are closed. Full
-numeric physics for Banish, SpriteArray, MoveFade, SmokyBouncer, Zombie's
-clipped fade, and every Coffin/Maggot auxiliary branch remains open. A web port
-may use named deterministic clocks for those classes, but it must preserve the
-recovered class, art, fan-out, blend family, world ownership, stable identity,
-and retirement semantics rather than falling back to a body-strip death pose.
+The damage-receiver slot census, ordinary hit latch, family hurt-sound gates,
+complete shield-writer/recipient membership, absorption/no-overflow branch,
+cooldown/pulse tick, active shield sprite and formula, break cue, and all twenty
+break-particle fields are closed. The
+stock death constructor/tick ownership, exact family art sets, Skeleton
+physics, per-contact Bouncer damping draw, per-family Unbind clocks, death
+audio identity, and family fan-outs above are also closed. Full numeric physics
+for Banish, SpriteArray, MoveFade, SmokyBouncer, Zombie's clipped fade, and
+every Coffin/Maggot auxiliary *death* branch remains open. A web port may use
+named deterministic clocks for those residual death classes, but it must
+preserve the recovered class, art, fan-out, blend family, world ownership,
+stable identity, and retirement semantics rather than falling back to a
+body-strip death pose. Those death residuals do not weaken the closed
+nonterminal damage-presentation contract.

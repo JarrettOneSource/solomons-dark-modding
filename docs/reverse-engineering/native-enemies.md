@@ -59,9 +59,10 @@ object used below. Their complete lifecycle map is in
 [native-projectiles-and-effects.md](native-projectiles-and-effects.md) and
 [native-game-object-catalog.json](native-game-object-catalog.json).
 
-The common 20-tick red hit redraw and the family-specific handoff into
-independent Bouncer, Unbind, Fade, Banish, SpriteArray, and ZAnim death actors
-are owned by
+The complete `vtable +0x4C` receiver census, common 20-tick red hit redraw,
+Skeleton/Zombie hurt cues, shield absorption/pulse/break path, and the
+family-specific handoff into independent Bouncer, Unbind, Fade, Banish,
+SpriteArray, and ZAnim death actors are owned by
 [native-enemy-hit-and-death-effects.md](native-enemy-hit-and-death-effects.md).
 Those effects are not enemy body-strip animation frames.
 
@@ -274,9 +275,12 @@ separate count, so they must not be collapsed into one “multishot” flag.
 selected element. Proven spawned objects include `Firebolt 0x7EB` and
 `GuidedMissile 0x7EC`; other element branches use direct/projectile and status
 paths documented in the projectile catalog. Self shield and ally shield have
-separate toggles and strengths but share the configured interval. Headgear,
-cloak, range, element, shielding, and flaming are all independent config
-axes.
+separate toggles and strengths but share the configured interval. Dispatch
+`0x0047FDE0` applies action `0x13` to self; action `0x14` requires a same-team
+ally whose exact runtime type is Skeleton `0x3E9`, SkeletonArcher `0x3EA`, or
+Zombie `0x3EE` before calling shield helper `0x00477140`. It does not shield an
+arbitrary nearest enemy. Headgear, cloak, range, element, shielding, and
+flaming are all independent config axes.
 
 ## Imp variants
 

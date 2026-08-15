@@ -44,6 +44,11 @@ from static_re_native_session_flow_contracts import (
 from static_re_native_web_combat_lifecycle_contracts import (
     test_native_web_combat_lifecycle_integration_contract_is_pinned,
 )
+from static_re_native_enemy_damage_presentation_contracts import (
+    test_enemy_damage_audio_identity_is_exact,
+    test_enemy_damage_receiver_slot_membership_matches_finite_catalog,
+    test_native_enemy_damage_presenter_contract_is_pinned,
+)
 from static_re_native_class_loadout_contracts import (
     test_native_class_loadout_census_and_identity_are_pinned,
     test_native_class_loadout_definition_to_actor_mapping_is_pinned,
@@ -1888,6 +1893,18 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native-to-Website survival combat integration contract is pinned",
         test_native_web_combat_lifecycle_integration_contract_is_pinned,
+    ),
+    (
+        "Native enemy damage presenter contract is pinned",
+        test_native_enemy_damage_presenter_contract_is_pinned,
+    ),
+    (
+        "Enemy damage receiver slot membership matches the finite catalog",
+        test_enemy_damage_receiver_slot_membership_matches_finite_catalog,
+    ),
+    (
+        "Enemy damage audio identity is exact",
+        test_enemy_damage_audio_identity_is_exact,
     ),
     (
         "Extended target selection completes the native chase latch",
