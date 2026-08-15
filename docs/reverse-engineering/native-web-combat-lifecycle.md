@@ -347,9 +347,17 @@ and attachments, creates one staff/wand bouncer, and sets death drive
 
 The four-frame corpse selector holds the initial frame through death tick 152,
 then selects frame 1 at 153..155, frame 2 at 156..158, and frame 3 from 159.
-Tick 159 also emits the additive burst. Negative internal HP may be clamped to
-zero in the protocol/HUD only when an explicit life/death component carries
-the authoritative epoch and tick.
+Fresh read-only decompilation of player death tick `FUN_00533520` confirms that
+tick 159 also emits a finite `Anim_FadeMoveAdditive_Perspective` burst. That
+edge sets the Arena red scalar to `0.25`, clears the burst object's grid byte
+at `+0x36`, and writes render bias `+0xA0 = -1000`. Its texture pointer is
+`DAT_00819978 + 0x7E0`; with the BadGuys table header `0x38` and record stride
+`0xC4`, this resolves to BadGuys record 10. The Website may keep the still-open
+random radial count, velocity, and scale distribution behind one named bounded
+presentation program, but it must consume the `(run, player, death epoch)`
+tick-159 edge once and render record 10 additively without late-join replay.
+Negative internal HP may be clamped to zero in the protocol/HUD only when an
+explicit life/death component carries the authoritative epoch and tick.
 
 One dead multiplayer participant spectates while another eligible participant
 lives; the world and waves continue. Only all eligible run participants dead
