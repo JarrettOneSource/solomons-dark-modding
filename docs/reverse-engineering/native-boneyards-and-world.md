@@ -437,14 +437,25 @@ disabled, `0x00608AB0` follows its fallback sprite branch and may include the
 enabled secondary art for main variants below six; that fallback does not make
 the secondary canopy part of the complex projected silhouette.
 
-Monument, Building, Goodie, Scrub, Rails, Wall, and other scenery/fence
-painters also reference the Complex Shadows global. This adjacency means the
-web seam belongs to the shared Region/world renderer, not to Tree, Gravestone,
-or Fence special cases. Native outlines remain class-authored data. Tree must
-use the recovered table above; classes whose tables have not yet been extracted
-may retain an explicit native-alpha approximation while preserving source
-ownership, facing-edge selection, radial projection, opacity endpoints,
-painter ordering, and the settings/flag distinction above.
+The complete direct-reference census for `Game.ComplexShadows` is 19 sites in
+17 functions. Settings/controls own two sites and four non-scenery actor/effect
+renderers own `0x004842A0`, `0x0049AEE0`, `0x004D5F40`, and `0x006105F0`.
+The complete persistent Boneyard caster family is therefore the remaining 11
+painters: FenceGrate `0x00600ED0`, `0x006046C0`, Rails `0x00607440`, Tree
+`0x00608AB0`, Monument `0x0060E280`, Building `0x0060EDC0`, Gravestone
+`0x0060F260`, Fencepost `0x00612DC0`, Wall `0x0061E780`, Goodie `0x0061F180`,
+and Scrub `0x00620120`. This fresh read-only census is the closure boundary;
+Road, Terrain, compact records, and arbitrary alpha-bearing main sprites are
+not complex-shadow casters.
+
+This corrects the earlier process failure that left "other scenery" on an
+alpha-hull approximation. No class outside the census may acquire a projected
+shadow from its sprite alpha. The generic projector is used only by the exact
+Tree, Monument, Building, Gravestone, Fencepost, and Goodie authored shapes.
+FenceGrate, Rails, Wall, and Scrub own custom mesh programs. The remaining
+`0x006046C0` painter is also custom rather than an authored-outline consumer.
+An unrecovered custom program must remain explicit; substituting a convex
+alpha hull changes both the silhouette and its transparent gaps.
 
 ## RegionLayout schema
 
