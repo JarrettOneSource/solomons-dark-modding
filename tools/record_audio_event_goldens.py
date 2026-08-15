@@ -680,7 +680,7 @@ def main() -> int:
     session = native_sim.OwnedSoloSession(
         instance=INSTANCE,
         ports=PORTS,
-        mod_id="bot.brain",
+        mod_id="sample.lua.rng_lab",
         participant_id="audiore-g5-solo",
         test_blank_boneyard=False,
         headless=True,
