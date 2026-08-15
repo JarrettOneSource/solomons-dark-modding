@@ -87,20 +87,20 @@ Secondary/welded casts use the same wrapper rules. The common primary cleanup fa
 | `movement.footstep.splash` | Water/splash movement cadence | `0x0047634D` (parallel family sites include `0x0048664F`, `0x00487CCC`, `0x00533FB1`, `0x0060A222`) | uniform pool 216..219 `sounds\stepsplash\step1..4` | `Integer(4)` on the active gameplay stream; point gain. |
 | `damage.player.taken` | Positive, nonterminal HP loss after the ouch deadline | `0x0053074A` | uniform pool 228..230 `sounds\Wizard_Ouch\SAY_OUCH1..3` | `Integer(3)`, then inclusive delay `Integer(20,60)`, same active stream. Gain is spatial gain times `0.25 + 0.75 * (1 - clamp((HP_after - 25)/20,0,1))`. Healing, terminal damage, and presentation-suppressed lanes make no request. |
 | `death.player` | Native player death action | `0x004757DD`; Game Over music `0x005CAFB9` | stream 118 `sounds\DeathGuitar__Stream`; immediate song `death` | Stream is one handle; Game Over first stops music at `0x005CAE3D`. |
-| `death.skeleton` | Skeleton-family terminal branch | `0x0048D368` (siblings `0x0049E9AF`, `0x0049FD5F`) | 79 `sounds\skeleton_die` | Fixed; world point gain. |
-| `death.zombie` | Zombie terminal branch | `0x00494AEE`; poison branches `0x00494883`, `0x004948ED`, `0x00494957`; groan `0x00494B57` | 105 `zombiedie`; 108 `zombiepoisonsplat`; conditional 110 `zombie_die_groan` | Branch/state selection, not an asset RNG pool. |
-| `death.banshee` | Banshee/Wraith terminal branch | `0x0049612B`, `0x00496177`, `0x004961C1` | 8 `sounds\bansheedie`; preceding terminal flash uses 34 at `0x004960DF` | Fixed by terminal sub-branch. |
+| `death.skeleton` | Skeleton-family terminal branch | presenter `0x0048D2A0`; call `0x0048D368` | entry 79 / object `+0xDAC`, `sounds\skeleton_die` | Fixed asset; `RandomFloat(0.2, unsigned) + 0.8` gives pitch `[0.8,1.0)`. Entry 80 `skellyscream` is the adjacent `+0xDD8` object and is not this call. |
+| `death.zombie` | Zombie terminal branch | `0x00494AEE`; rotten splats `0x00494883`, `0x004948ED`, `0x00494957`; groan `0x00494B57` | 105 `zombiedie`; 108 `zombiepoisonsplat` three times when rotten; 110 `zombie_die_groan` | Splats use `[0.9,1.05)`; die and groan use `[0.8,1.0)`. |
+| `death.banshee` | Banshee/Wraith terminal branch | `0x0049612B`, `0x00496177`, `0x004961C1` | 8 `sounds\bansheedie` three times; preceding terminal flash uses 34 at `0x004960DF` | First two pitches `[0.9,1.1)`; third `[0.8,1.2)`; flash fixed-pitch. |
 | `death.unholy` | Unholy/DemonSkull terminal branch | `0x0049645C`; effects `0x0049647F`, `0x0049649C`, `0x004964B3` | stream 146 `UnholyDie__Stream`; 54 `lightningstart`; 59 `magicshieldexplode` | Fixed branch sequence. |
-| `death.demon` | Demon terminal branch | `0x0048760F` | 20 `sounds\demondies` | Fixed. |
-| `death.imp` | Imp terminal fire branch | `0x00482A41` | 31 `sounds\fireydeath` | Fixed asset; point gain and float-RNG pitch. |
+| `death.demon` | Demon death state and terminal split | `0x0048760F`; split helper `0x00482930` | 34 `flash`, 20 `demondies`, then 31 `fireydeath` | Flash and demon die fixed-pitch; split fire uses `[0.8,1.0)`. |
+| `death.imp` | Imp terminal branches | `0x004824A0`; fire call `0x00482A41` | permitted split: 47 `ImpSplit`; ordinary branch: 31 `fireydeath` | Split pitch `[0.9,1.1)`; ordinary fire pitch `[0.8,1.0)`. |
 | `death.spider` | Spider terminal branch | `0x00482E13` | 82 `sounds\SpiderDie` | Fixed asset; point gain and float-RNG pitch. |
 | `death.golem` | Golem terminal branch | `0x0049A6FF`, `0x0049A732`, `0x0049A74B`, `0x0049A785` | 89 `stonebreak`; 33 `flamelashstart`; stream 125 `GolemDie__Stream`; 77 `rockhit` | Fixed ordered sequence selected by the terminal branch. |
 | `death.faculty` | Faculty terminal branch | `0x0049D19B` | stream 121 `FacultyDie__Stream` | Fixed; 122 `FacultyNo__Stream` at `0x0049D4C7` is a nonterminal reaction. |
 | `death.heartmonger` | Heartmonger terminal branch | chain calls `0x004A08FC/0x004A0915`; terminal `0x004A0B6F` | pool 179..180 `Chain\clank1..2`; stream 111 `BreakHeartmonger__Stream` | Chain pool uses `Integer(2)` on the active stream; terminal stream fixed. |
 | `death.portal` | Portal terminal branch | `0x004A2034` | 75 `sounds\PortalDie` | Fixed; world point gain. |
-| `death.coffin` | Coffin terminal branch | `0x0049B549` | 15 `sounds\coffinbreak` | Fixed. Coffin movement/room activity separately rolls 181..182 `CoffinCreak` at `0x004A2AAF`. |
+| `death.coffin` | Coffin terminal branch | `0x0049B549` | 15 `sounds\coffinbreak` | Pitch `[1.0,1.1)`. Coffin movement/room activity separately rolls 181..182 `CoffinCreak` at `0x004A2AAF`. |
 | `death.crow` | Crow terminal/retirement branch | `0x00489226` | uniform pool 183..184 `sounds\Crow\crow1..2` | `Integer(2)` on the active gameplay stream; point gain and float-RNG pitch. |
-| `death.maggot` | Maggot terminal branch | `0x0049C9C6` | uniform pool 199..200 `sounds\MaggotSqueak\squeak1..2` | `Integer(2)` on the active gameplay stream; point gain and float-RNG pitch. |
+| `death.maggot` | Maggot terminal branch | `0x0049C8E0..0x0049C9F0` | independent uniform pools 211..213 `sounds\Squish\*` and 199..200 `sounds\MaggotSqueak\squeak1..2` | `Integer(3)` then `Integer(2)` on the active gameplay stream; both pitches `[1.0,1.2)`. Squeak gain includes a `[0.25,0.5]` multiplier on point attenuation. |
 
 Other enemy contact families are parallel fixed/pool requests: Pike hit 71 at `0x0047766A`; bone attack 11 at `0x00477977`; zombie punch 109 at `0x0047DC33`; Bite pool 176..178 at `0x0048621E`; ArmorCrash pool 173..175 at `0x0048D1CF`; and bone crack 12 at `0x0048A690`. Every pool draw uses the active gameplay stream.
 
@@ -168,7 +168,7 @@ ordinary footstep gain `0.5`. Step1/Step2 use their gain-only wrapper.
 | `pickup.magic_book` | Magic-book acquisition | `0x0056D471` (sibling `0x0056D828`) | stream 129 `magicbookget__stream` | Fixed. The in-world book effect uses stream 130 at `0x006039EF`. |
 | `potion.use` | Effect accepted and item consumed | `0x0056D246` | 24 `sounds\drink` | Fixed. |
 | `potion.invalid` | Potion/action rejected | `0x0056D3D2` | 6 `sounds\badaction` | Fixed. |
-| `level.up` | Native level threshold crossed | `0x00647F6B`, `0x00647FBE` | 52 `sounds\levelup` | Same fixed asset at two fixed pitch/gain requests. Registry 53 `levelupskill` is loaded but has no direct retail dispatch. |
+| `level.up` | Native level threshold crossed | `0x00647F6B`, `0x00647FBE` | 52 `sounds\levelup` | Two overlapping requests at exact pitch multipliers `2` then `3`; both use point gain at the level-up position. Registry 53 `levelupskill` is loaded but has no direct retail dispatch. |
 | `skill.unlock` | Skill purchase/unlock accepted | `0x00670CD3` | 102 `sounds\unlockskill` | Fixed. |
 | `wave.start` | First arena wave enters combat state | `0x00465D22` (spawn-entry siblings `0x00469983`, `0x0046D506`, state site `0x00470E9D`) | Music transition to song `combat`, track `combat` | No RNG. Per-wave number increments have no one-shot stinger. |
 | `wave.end` | Terminal arena completion | `0x00467AA0` | Music crossfade to empty song | No RNG and no wave-complete one-shot; empty song fades/stops the active lane. |

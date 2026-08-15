@@ -12,7 +12,7 @@ death presenter removes the live actor through the shared enemy-death path,
 then constructs a shatter from independently moving sprite objects:
 
 1. Submit the death position for positional feedback.
-2. Play `sounds\skellyscream.wav` with a random pitch in `[0.8, 1.0]`.
+2. Play `sounds\skeleton_die.wav` with a random pitch in `[0.8, 1.0)`.
 3. Add a small `0.1` world-feedback impulse.
 4. Spawn and shuffle 9 base bone fragments, or 18 with `ENHANCED EFFECTS`.
 5. Spawn any body/weapon-specific fragments selected by actor bytes
@@ -130,8 +130,9 @@ world tick. On active ticks it:
 - subtracts `0.015` from the lifetime/opacity timer.
 
 At ground contact, bounce velocity is multiplied by `0.65` and copied back to
-the current vertical velocity. A 50% branch also damps both horizontal velocity
-components by `0.65`. Once the upward bounce is weaker than the `-0.75`
+the current vertical velocity. A fresh `RandomInt(2)` call at each contact
+selects a 50% branch that also damps both horizontal velocity components by
+`0.65`; the choice is not stored at construction. Once the upward bounce is weaker than the `-0.75`
 threshold, all movement and angular velocity are zeroed. The object deletes
 itself when its timer reaches zero. It can also be deleted by the native terrain
 collision test.
@@ -148,7 +149,8 @@ record `+0x4210`, serialized record `86`:
 
 - position: `(actor.x, actor.y - 15)`;
 - initial rotation: random `0..360` degrees;
-- initial alpha: `0.75`, or `1.25` when actor flags `+0x9C & 2` is set
+- initial alpha: `0.75`, or `1.25` when Actor `+0x9C & 2` is set by a lethal
+  contact whose transient secondary-damage component is nonzero
   (rendering clamps it to `1.0`);
 - alpha loss: `0.0225` per tick; and
 - angular velocity: either `-5..-2.5` or `5..7.5` degrees per tick.
@@ -162,12 +164,19 @@ The visual labels below describe the exact extracted crops. The offsets,
 accepted values, selected records, and spawned native classes come directly
 from the executable.
 
+The config-to-actor transfer at `0x00462790` closes the three live-byte
+identities: actor `+0x230` receives Skeleton-family config headgear `+0x80`,
+actor `+0x231` receives Skeleton weapon `+0x78`, and actor `+0x233` receives
+the evaluated armor/random-armor byte `+0x83`. The death presenter therefore
+consumes the same authoritative equipment decisions as construction and live
+rendering; these are not independent cosmetic rolls.
+
 | Actor field | Trigger | Confirmed payload |
 | --- | --- | --- |
-| `+0x230` | values `1`, `2`, `4`, `5` | One random record from pairs `92/93`, `94/95`, `96/97`, or `98/99`; `Anim_Bouncer`, scale `1.2`. |
+| `+0x230` headgear | values `1`, `2`, `4`, `5` | One random record from pairs `92/93`, `94/95`, `96/97`, or `98/99`; `Anim_Bouncer`, scale `1.2`. Retail HELM/HORNED/HOODED use values `1/2/3`, so HOODED intentionally has no branch here. |
 | `+0x231` | values `1..4` | One weapon bouncer: record `2063` sword, `2064` mace, `2065` flail, or `2066` axe. |
 | `+0x231` | value `5` | One scale-3 additive flash using record `15`, seven bouncers using record `55`, a world color/feedback write, then actor timers `+0x30 = 20` and `+0x1B0 = 70`. |
-| `+0x233` | nonzero on type `0x3E9` | Five bouncers: one random record from each pair `100/101`, `102/103`, `104/105`, `106/107`, and `108/109`; plus a scale-3 additive flash using record `15`, placed 35 units above the actor with duration argument `25`. |
+| `+0x233` evaluated armor | nonzero on type `0x3E9` | Five bouncers: one random record from each pair `100/101`, `102/103`, `104/105`, `106/107`, and `108/109`; plus a scale-3 additive flash using record `15`, placed 35 units above the actor with duration argument `25`. |
 
 The `+0x231 == 5` fragment timer is `2.0 * 0.75 = 1.5`; enhanced mode adds
 its shadow but does not replace that timer with `10.0`.
@@ -187,15 +196,13 @@ a collector or spell name.
 
 ## Audio and world feedback
 
-The sound-table builder loads:
-
-- `sounds\skeleton_die.wav` into sound object `+0xD80`; and
-- `sounds\skellyscream.wav` into the next sound object, `+0xDAC`.
-
-The skeleton death presenter calls `+0xDAC`, so its confirmed cue is
-`skellyscream.wav`, despite the adjacent, plausibly named `skeleton_die.wav`.
-The cue is mono 16-bit PCM at 44.1 kHz and is 1.605125 seconds long. The pitch
-argument is uniformly randomized from `0.8` to `1.0`.
+The exact audio catalog loads `sounds\skeleton_die.wav` into registry object
+`+0xDAC` (entry 79) and `sounds\skellyscream.wav` into the next object,
+`+0xDD8` (entry 80). At `0x0048D368`, the presenter adds `0xDAC` to the
+registry base immediately before `Sound::Play 0x00407CD0`; the confirmed cue
+is therefore `skeleton_die.wav`. The pitch expression is
+`RandomFloat(0.2, unsigned) + 0.8`, giving `[0.8,1.0)`. This instruction-level
+result supersedes the earlier decompiler-adjacency interpretation.
 
 After sound playback, the presenter calls `0x0063EEB0` with `0.1`. That writes
 the scene's damped feedback fields at `+0x8E04/+0x8E08`: the accumulator rises

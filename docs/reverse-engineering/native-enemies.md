@@ -59,6 +59,12 @@ object used below. Their complete lifecycle map is in
 [native-projectiles-and-effects.md](native-projectiles-and-effects.md) and
 [native-game-object-catalog.json](native-game-object-catalog.json).
 
+The common 20-tick red hit redraw and the family-specific handoff into
+independent Bouncer, Unbind, Fade, Banish, SpriteArray, and ZAnim death actors
+are owned by
+[native-enemy-hit-and-death-effects.md](native-enemy-hit-and-death-effects.md).
+Those effects are not enemy body-strip animation frames.
+
 ## Shared construction and combat lifecycle
 
 The enemy pipeline is:

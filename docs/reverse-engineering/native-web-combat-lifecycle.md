@@ -405,6 +405,46 @@ and audio loops/streams. It retains session/lobby membership and identity, the
 preceding loadout as preselection, and—under the explicit deviation above—the
 progression books.
 
+## Hit and terminal-effect ownership
+
+The full native evidence is in
+[native-enemy-hit-and-death-effects.md](native-enemy-hit-and-death-effects.md)
+and the Skeleton extraction is independently pinned in
+[skeleton-death-effects-re.md](../skeleton-death-effects-re.md). Common Actor
+damage reaction `0x00627F80` writes the live hit latches to `1`; Actor tick
+`0x00624AC0` subtracts exactly `0.05` per fixed tick. Actor render
+`0x00624B40` then redraws the current action pose red with ordinary alpha
+`min(remaining * intensity, 1)`. The latch is a 20-tick refreshed overlay. It
+does not select a replacement frame, restart an action, become additive, or
+use the Website's former five-tick white flash.
+
+Death removes the living body and registers independent world effect actors.
+The recovered family presenters create Bouncer, Unbind, Fade/MoveFade,
+SmokyBouncer, Banish, SpriteArray, and ZAnim-owned output with their own stable
+identity, art, transform, clock, blend, shadow, and retirement. Skeleton,
+Archer, and Mage use the shipped-default Enhanced Effects shatter sequence
+`113,113,113,115,118,121,120,119,116,121,120,119,116,117,117,117,117,117`,
+a random skull `1819..1822`, record-86 Unbind, and evaluated equipment debris.
+Ordinary enhanced Bouncers start with timer `10`, draw a black shadow at
+`y+2` with Y scale `.75`, lose `.015` alpha per active update, and make a fresh
+50-percent horizontal-damping RNG draw on every ground contact. The Skeleton
+pike exception keeps timer `1.5` while retaining the shadow.
+
+Unbind consumes the lethal secondary-damage bit rather than the Enhanced
+Effects toggle. The current Website damage producer has no native secondary
+component and must use the exact primary-only clocks: Skeleton family
+`.75/.0225`, Imp `1/.025`, Zombie `.75/.05`, Wraith `1/.025`, and Coffin
+`.75/.045` for initial alpha/loss per tick. A future secondary component must
+carry the lethal bit explicitly and select initial alpha `1.25`; it may not be
+inferred from spell element or final HP. Demon and Maggot do not create
+Unbind.
+
+Every death recipe and cosmetic RNG result is host-authored. Persistent effect
+actors replicate as entity state so a late subscriber sees their current
+sample without replaying their birth. Family sound, feedback, reward, child
+spawn, and retirement edges remain ordered run-scoped events. The living actor
+is not retained as a synthetic death-strip owner.
+
 ## Replication and presentation consequence
 
 Each enemy is a first-class replicated entity with a stable type descriptor
@@ -422,11 +462,14 @@ Dazzle, and poison status counters so host movement and client presentation
 refer to the same status epoch.
 
 Monotonic run-scoped events carry attack contacts, impacts, audio, rewards,
-death effects, and Game Over. Persistent effects such as burning, shields, and
+death starts, and Game Over. Persistent effects such as burning, shields, and
 the bounded Mage lightning sample belong in replicated state; one-shot impact,
 terminal, and audio consequences belong to semantic events. In particular,
-the Skeleton/Archer/Mage terminal edge owns registry sound 79
-`sounds\\skeleton_die`; a client scene consumes that host event once rather
+the Skeleton/Archer/Mage terminal edge owns registry entry 79 / object
+`+0xDAC`, `sounds\\skeleton_die`, at randomized pitch `[0.8,1.0)`; entry 80
+`sounds\\skellyscream` is the adjacent `+0xDD8` object and is not the
+presenter's call. A client scene
+consumes that host event once rather
 than inferring it from interpolated HP or replaying retained history on late
 join.
 
@@ -506,7 +549,9 @@ The remaining native gaps are:
 1. exact action programs for Imp, Zombie, Wraith, and Demon; full Coffin
    replenishment timing and Maggot launch/emergence distributions beyond the
    closed three-helper, ownership, and single-bite lifecycle;
-2. exact Wraith alpha, Zombie limb, Demon joint, and non-Skeleton death clocks;
+2. exact Wraith alpha and remaining Zombie limb/Demon joint clocks; numeric
+   physics for non-Skeleton Banish/SpriteArray/MoveFade/SmokyBouncer branches
+   beyond the recovered class, art, fan-out, and ownership;
 3. Wraith inherited collision radius and family-specific attack reach;
 4. upgraded Health Up/Mana Up HUD denominators;
 5. exact debit edges for every primary handler and welded build;
