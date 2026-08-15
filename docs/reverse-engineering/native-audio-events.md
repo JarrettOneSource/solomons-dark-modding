@@ -64,7 +64,7 @@ The five selectable player elements are Ether, Fire, Air, Water/Frost, and Earth
 | `projectile.ether.flight` | Magic Missile birth | `0x0053D9CA` | 57 `sounds\magicmissile` | Launch request is the cast-release request; flight ticks are silent. |
 | `projectile.ether.impact` | Magic Missile contact | `0x005F1FF2` (also `0x005F3F7B`, `0x005F412E`, `0x005F4206`, `0x005F6B60`, `0x005F6FDC` for sibling contact paths) | 58 `sounds\magicmissilehit` | Fixed asset; point gain and float-RNG pitch. |
 | `projectile.fire.flight` | Fire Missile birth | `0x0053E4E0` | 97 `sounds\throwfire` | Launch request is the cast-release request; flight ticks are silent. |
-| `projectile.fire.impact` | Fireball contact | `0x005E5288` inside `0x005E5160` | 30 `sounds\fireballhit` | Fixed asset; point gain and signed float-RNG pitch `1 + U[-0.1,0.1)`. The Fireball removal vslot runs first; null terrain contact owns the same request. |
+| `projectile.fire.impact` | Fireball contact | `0x005E5288` inside `0x005E5160` | 30 `sounds\fireballhit` | Fixed asset; point gain and signed float-RNG pitch `1 + S(0.1)` on the inclusive native lattice `[0.9,1.1]`. The Fireball removal vslot runs first; null terrain contact owns the same request. |
 | `projectile.air.flight` | Ball Lightning cast emission | `0x0053F155` | uniform pool 224 `sounds\throwlightning\1`, 225 `...\2` | `Integer(2)` on the active gameplay stream; cast point gain/pitch. |
 | `projectile.air.impact` | Electric contact/Shock spawn | `0x005F365A` | uniform pool 203..205 `sounds\Shock\s1..s3` | `Integer(3)` on the active gameplay stream; point gain and float-RNG pitch. |
 | `projectile.water.flight` | Frost Missile cast emission | `0x0053F741` | 38 `sounds\frostmissile` | Fixed asset; cast point gain/pitch. |

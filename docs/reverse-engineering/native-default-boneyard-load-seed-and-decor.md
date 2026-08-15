@@ -252,7 +252,7 @@ at all six of these instructions:
 | `0x00624DAD` | Result of local light queries `0x0057F980` or `0x0057F0E0`. |
 | `0x00624DC7` | Forced `1.0` when the owning Arena lighting lane is disabled. |
 
-The dispatcher then calls the Tree virtual renderer. The secondary entry
+The dispatcher then calls the Tree virtual renderer. The secondary overlay entry
 `0x00608830` reads the final value at `0x00608912`, after every constructor
 and tick hook has already run. A live expanded-table capture caught exactly
 this last-writer failure: one otherwise identical Tree had host bits

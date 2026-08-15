@@ -541,21 +541,26 @@ object, not the enemy that requested it.
 ### Spawn-presentation ABI used by the Website port
 
 The eight retail survival-wave families share one facing convention except
-for Imp. The renderers load actor heading onto the x87 stack and call
-`0x00747360`; its ordinary path reaches `FISTP` under the default
-round-to-nearest-even control word. The exact buckets are:
+for Imp. The renderers add the half-step, divide, and call the MSVC helper
+`0x00747360`. Its CPU path stores the x87 value and executes `CVTTSD2SI` at
+`0x00747372..0x00747375`; its fallback performs the same truncation-toward-zero
+conversion with explicit fractional/sign correction. The exact buckets are:
 
 ```text
 Skeleton/Archer/Mage/Zombie/Wraith/Demon:
-  positiveMod(roundEven((headingDegrees + 10.0) / 20.0), 18)
+  positiveMod(truncTowardZero((headingDegrees + 10.0) / 20.0), 18)
 
 Imp:
-  positiveMod(roundEven((headingDegrees + 15.0) / 30.0), 12)
+  positiveMod(truncTowardZero((headingDegrees + 15.0) / 30.0), 12)
 ```
 
 The constants are doubles at `0x007DE810` (`10`), `0x007DE920` (`20`),
 `0x00784D80` (`15`), and `0x00784D50` (`30`). This is observably different
-from JavaScript `Math.round` on exact half buckets.
+from JavaScript `Math.round` and x87 round-to-nearest-even on exact half
+buckets. Instruction witnesses are Skeleton `0x0048DEF1..0x0048DF44`, Mage
+`0x0049174C..0x0049179E`, Archer `0x0048F47C..0x0048F4E5`, and Imp
+`0x00492E18..0x00492E5F`; for example, headings `20` and `30` map to facing
+`1` in the 18-way and 12-way families respectively.
 
 Record placement uses each atlas record's logical registration, not the crop
 center. The bundle loader preserves the logical cell, origin, and `extras`;

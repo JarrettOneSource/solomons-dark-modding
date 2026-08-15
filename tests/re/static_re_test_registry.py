@@ -162,6 +162,7 @@ from static_re_native_menu_shell_contracts import (
 )
 from static_re_boneyard_lighting_contracts import (
     test_boneyard_tree_last_writer_render_path_is_registered,
+    test_complete_native_lighting_and_shadow_system_is_registered,
 )
 from static_lua_mod_state_contracts import (
     test_lua_mod_state_and_events_are_authority_replicated,
@@ -1287,6 +1288,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Boneyard Tree last-writer render path is registered",
         test_boneyard_tree_last_writer_render_path_is_registered,
+    ),
+    (
+        "Complete native lighting and shadow system is registered",
+        test_complete_native_lighting_and_shadow_system_is_registered,
     ),
     (
         "Repository history uses approved project identities",

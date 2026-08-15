@@ -300,8 +300,9 @@ The observed native darkness model is compositional rather than one global
    composites over the already-painted pre-main lanes;
 4. each queued world object is culled, samples a local analytic scalar, and
    builds zero or more complex-shadow records from flagged nearby sources;
-5. the object's painter projects its source-facing outline edges away from
-   each source as black, alpha-tapered quads immediately before its main art;
+5. the object's painter projects authored-normal-visible outline edges away
+   from each source as black, alpha-tapered quads immediately before its main
+   art;
 6. the local scalar is multiplied into the object's renderer color before the
    sprite/mesh is alpha-blended;
 7. late proxy/foreground lanes paint after the shared queue; Tree secondary
@@ -363,15 +364,19 @@ accepts only source records whose `+0x18` flag is set. It writes per-object
 opacity, one-unit-behind light sample, normalized distance, projection length,
 and source radius. When `Game.ComplexShadows` (`0x00B3BCA9`) is enabled, Tree,
 Gravestone, Fencepost, and the adjacent scenery/fence painters consume those
-records. Shared helper `0x00655970` keeps only source-facing outline edges and
-projects each endpoint away from the source by
+records. Shape closer `0x00655570` preserves authored order and stores
+`(edge.dy,-edge.dx)` without winding normalization. Shared helper `0x00655970`
+keeps strict-positive `dot(normal, midpoint-source)` edges and projects each
+endpoint away from the source by
 `(145 - RandomFloat()) * radius`; base alpha is the multi-source factor and
 the projected alpha is `((1 - behindScalar) * (1 - distanceFraction))^3`.
 The ordinary player provider always sets the required flag. Lantern and most
-ordinary effect providers instead pass the retail Multiple Shadows byte,
-which defaults off. Complex Lighting and Complex Shadows both default on, so
-the player-owned forward light casts these silhouettes in the normal stock
-profile even when a nearby Lantern does not.
+ordinary effect providers instead pass the retail Multiple Shadows byte. Fresh
+shipped-Windows initialization defaults that byte on through platform
+capability `0x00B3BCAE`; the preserved sandbox settings profile explicitly
+overrides it off. Complex Lighting and Complex Shadows both default on. See
+[`native-lighting-and-shadow-system.md`](native-lighting-and-shadow-system.md)
+for the complete default derivation, source census, and painter programs.
 
 No volumetric fog equation was found in the reachable gameplay compositor.
 What players perceive as Boneyard darkness is accounted for by the clear and

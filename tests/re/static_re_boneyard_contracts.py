@@ -217,7 +217,7 @@ def test_default_boneyard_load_seed_and_compact_decor_findings_are_registered() 
         "Tree/Scrub, Gravestone, Building, Goodie, Road, Fence, terrain, and compact decor",
         "80 4E 18 01",
         "C6 46 18 01",
-        "Tree `+0x148/+0x14C/+0x150` sway state is not serialized",
+        "Tree `+0x148/+0x14C/+0x150` scan-countdown and occlusion-alpha state is not\n   serialized",
         "Scrub `+0x134` animation phase",
         "Goodie `+0x144` is serialized and conditionally consumed",
         "0x004717E9",

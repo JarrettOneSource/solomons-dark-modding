@@ -663,8 +663,8 @@ def test_native_animation_attachment_and_emitter_facings_are_pinned() -> str:
         facing,
         (
             "`f=((int)heading+7)/15; if f>=24 f-=24`",
-            "`f=((int)heading+10)/20; if f>=18 f-=18; if f<0 f+=18`",
-            "`f=((int)heading+15)/30; if f>=12 f-=12; if f<0 f+=12`",
+            "`f=truncTowardZero((heading+10)/20); positiveMod(f,18)`",
+            "`f=truncTowardZero((heading+15)/30); positiveMod(f,12)`",
             "airborne Maggot",
             "Coffin, Cocoon, Portal",
         ),

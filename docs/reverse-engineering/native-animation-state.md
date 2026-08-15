@@ -259,19 +259,20 @@ selection remain G3 territory.
 
 ## Facing
 
-The enemy renderers below add the half-step, divide, then call `0x00747360`;
-its ordinary `FISTP` path uses the default x87 round-to-nearest-even mode.
-Do not substitute JavaScript `Math.round`, truncation, floating modulo, or a
-continuous sprite rotation. The independently recorded Wizard/DemonSkull path
-retains its integer formula below.
+The enemy renderers below add the half-step, divide, then call `0x00747360`.
+The helper's CPU path executes `CVTTSD2SI` at `0x00747372..0x00747375`, and
+its fallback applies the same truncation-toward-zero semantics. Do not
+substitute JavaScript `Math.round`, round-to-nearest-even, floating modulo, or
+a continuous sprite rotation. The independently recorded Wizard/DemonSkull
+path retains its integer formula below.
 
 <!-- ANIMATION_FACING_BEGIN -->
 | Family | Mapping | Distinct rendered facings |
 | --- | --- | ---: |
 | Wizard, staff, wand, cast sockets; DemonSkull | `f=((int)heading+7)/15; if f>=24 f-=24` | 24 |
-| Skeleton, Archer, Mage, Wraith, Demon, DireFaculty, Heartmonger, Crow, grounded Maggot, Spider | `f=roundEven((heading+10)/20); positiveMod(f,18)` | 18 |
-| Zombie | same 18-way round-even formula after adding its fixed-tick actor-local angular offset `+0x21C` to heading | 18 |
-| Imp, GoodImp, GreenImp | `f=roundEven((heading+15)/30); positiveMod(f,12)` | 12 |
+| Skeleton, Archer, Mage, Wraith, Demon, DireFaculty, Heartmonger, Crow, grounded Maggot, Spider | `f=truncTowardZero((heading+10)/20); positiveMod(f,18)` | 18 |
+| Zombie | same 18-way truncation formula after adding its fixed-tick actor-local angular offset `+0x21C` to heading | 18 |
+| Imp, GoodImp, GreenImp | `f=truncTowardZero((heading+15)/30); positiveMod(f,12)` | 12 |
 | airborne Maggot | renderer truncates its ballistic orientation and wraps it into `[0,9]`; this is spin orientation, not world heading | 10 |
 | Coffin, Cocoon, Portal | heading does not select body art | 1 / none |
 <!-- ANIMATION_FACING_END -->

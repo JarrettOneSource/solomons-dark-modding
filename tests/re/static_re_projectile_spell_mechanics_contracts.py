@@ -558,7 +558,7 @@ def test_fireball_contact_range_and_recast_closure_is_pinned() -> str:
             "`(1,1,0.75)`",
             "`ZAnimLit` vtable `0x0079C4DC`",
             "radius `1.5`, intensity\n  `1 - 0.04*age`",
-            "shipped/default Enhanced\nEffects on halves fade to `[0.025,0.05)`",
+            "shipped/default Enhanced\nEffects on halves fade to inclusive `[0.025,0.05]`",
             "no native\ncollision body/category/contact flags or health authority",
         ),
         "Fireball contact/range/recast closure",
@@ -567,7 +567,7 @@ def test_fireball_contact_range_and_recast_closure_is_pinned() -> str:
         AUDIO_DOC_PATH.read_text(encoding="utf-8"),
         (
             "| `projectile.fire.impact` | Fireball contact | `0x005E5288` inside `0x005E5160` | 30 `sounds\\fireballhit` |",
-            "signed float-RNG pitch `1 + U[-0.1,0.1)`",
+            "signed float-RNG pitch `1 + S(0.1)` on the inclusive native lattice `[0.9,1.1]`",
             "The Fireball removal vslot runs first; null terrain contact owns the same request.",
         ),
         "Fireball impact audio catalog row",
@@ -615,7 +615,7 @@ def test_ether_flight_compositor_and_contact_ownership_are_pinned() -> str:
             "drawable frames are `F[1]..F[19]`",
             "exact sentinel `-9999.0f`",
             "radius `0.75`, intensity `1.0`, delta `-0.05`",
-            "Registry 58 `magicmissilehit` pitch is `f32(1+U[0,0.1))`",
+            "Registry 58 `magicmissilehit` pitch is `f32(1+U(0.1))`",
         ),
         "Ether flight/contact ownership audit",
     )

@@ -180,7 +180,7 @@
     "orientation": "carry the authoritative row-major float32 3x3 matrix; while held postmultiply by a 0.75-degree row-vector Rodrigues rotation about the live heading-derived axis; release preserves the matrix; each surviving flight tick advances position then postmultiplies by hypot(storedDelta)/charge degrees before contact",
     "called_rock_auxiliary": "with Enhanced Effects on and perspective height < 0, draw the same selected BadGuys[2008..2010] record first at base XY and 0.75 main scale, then the rotating full-scale main copy at y+height; otherwise main only",
     "lighting": {
-      "boulder": "vslot +0x0C is Puppet_RenderDispatch; sample inbound Region light at Boulder world XY; no recovered outbound light",
+      "boulder": "vslot +0x0C is Puppet_RenderDispatch and samples inbound Region light at Boulder world XY; independent vslot +0x30 provider 0x005E5670 submits the actor root with radius max(1,2*charge), intensity 0.5, and the retail Multiple-Shadows flag",
       "called_rock": "direct world-animation vslot +0x0C bypasses Puppet_RenderDispatch and ZAnimLitObject; no inbound Region sample and no outbound light",
       "breakup_fragment": "independent ZAnimLitObject wrapper copies fragment XY, uses Puppet_RenderDispatch for inbound Region light, and has no outbound-light intensity/range fields",
       "shadow": "no direct BadGuys[67] shadow reference exists in Boulder draw"

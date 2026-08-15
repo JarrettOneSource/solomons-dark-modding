@@ -398,7 +398,7 @@ float32 per-tick intensity delta `-0.05`, and local Multiple Shadows byte
 `+0x14C` is `0`. The provider passes `min(intensity, 1)`, radius, the followed
 child position, and `localMultipleShadows & DAT_00B3BCAA` to Region. Air's
 source is therefore always `multipleShadows=false`, shares the contact
-corona's sub-`10`-unit jittered position, and has radius `[1,1.75)`. Float
+corona's sub-`10`-unit jittered position, and has radius on the inclusive native lattice `[1,1.75]`. Float
 `50` at `0x00784CF8` is written to Puppet painter sort field `+0xA0`, not to a
 light range. Region expands the radius with its existing inner `75` and outer
 `145` distance constants; no separate Air decay or `50`-unit range exists.
@@ -1078,9 +1078,13 @@ absolute XY and sets its painter/sort offset `+0xA0` to `-15`; it samples
 inbound Region light at that position before calling the child. This wrapper
 has no ZAnimLit intensity/range fields and emits no outbound light. The
 Boulder body likewise enters `Puppet_RenderDispatch` through vslot `+0x0C`
-and samples Region light at its own world position; it has no recovered
-outbound light. After all fragment wrappers are registered, the Boulder
-removes itself.
+and samples Region light at its own world position. After all fragment
+wrappers are registered, the Boulder removes itself. The Boulder body also
+owns a separate outbound provider:
+vslot `+0x30` `0x005E5670` submits its actor root with radius
+`max(1,2*charge)`, intensity `0.5`, and the retail Multiple-Shadows flag. The
+inbound Puppet dispatcher and outbound provider are independent ownership
+lanes; the wrapper observations above do not negate that provider.
 
 The exact shared native RNG seed and interleaving with unrelated actors remain
 unrecovered. Those visual choices must not become authoritative gameplay RNG
@@ -1695,7 +1699,7 @@ the rank-1 Fireball.
 | construction | `0x005E0970` | establishes the Fireball vtable and rank/modifier fields; common heading setter `0x00529380` writes direction `+0x13C/+0x140` and clockwise-from-up degrees `+0x144`; scale `+0x148` and movement scalar `+0x14C` default to one |
 | flight tick | `0x005FDD90` over common actor tick `0x00624AC0` | moves `4.5*direction`, performs actor contact each tick and terrain contact every fifth tick, and creates one cosmetic `Anim_FireParticle` child each tick |
 | body draw | Fireball vtable `0x0079C5BC`, render slot `+0x0C` -> `0x006099C0` | direct self-lit queue draw: ordered core, additive body, then source-over half-alpha body passes; bypasses common Puppet Region-light dispatcher `0x00624B40` |
-| light | vslot `+0x30`, `0x005E50D0` | actor-root point light radius `1+U[0,0.25)`, intensity `0.75`, flag from `Game.MultipleShadows` |
+| light | vslot `+0x30`, `0x005E50D0` | actor-root point light radius `1+U(0.25)`, intensity `0.75`, flag from `Game.MultipleShadows` |
 | contact | `0x005E5160` | dispatches contact/status/optional area work, creates a lit `Anim_FireBurst`, requests `fireballhit`, then removes the Fireball |
 | teardown | deleting destructor `0x005E50A0` | tears down the projectile actor; independently registered ZAnim children retain their own owner/lifetime |
 
@@ -1718,7 +1722,7 @@ The durable atlas catalog maps the relevant `BadGuys` array destinations:
 Record `110` is addressed separately as the shared white circular mask. Body
 draw `0x006099C0` translates to actor `(x,y-10)` and applies stored rotation:
 
-1. record `110`, color `(1,0.5,0)`, alpha `0.2+U[0,0.25)`, scale
+1. record `110`, color `(1,0.5,0)`, alpha `0.2+U(0.25)`, scale
    `(3.2*actorScale,4*actorScale)`, without setting the additive flag;
 2. record `255 + floor(age/3)%12`, white alpha one, scale
    `(2*actorScale,2.5*actorScale)`, additive flag set;
@@ -1747,15 +1751,15 @@ in a world-owned `ZAnim`, and registers it through `0x0063E5B0`. Its tick is
 For Fireball position `P`, unit direction `D`, and actor scale `S`:
 
 ```text
-birth = P + randomUnitVector()*U[0,10*S) + (0,-10) - D*10
+birth = P + randomUnitVector()*U(10*S) + (0,-10) - D*10
 velocity = D*2
-rotation = U[0,360) degrees
+rotation = U(360) degrees
 rotationDelta = +1 degree/tick
-scale = (U[0,1)+0.5)*1.25
+scale = (U(1)+0.5)*1.25
 scaleMultiplier = 0.95/tick
-frame = integer U[0,4) -> BadGuys[267..270]
-dBase = (U[0,0.1)+0.1)*0.5 -> [0.05,0.10)
-d = dBase*0.5 with Enhanced Effects -> [0.025,0.05)
+frame = RandomInt(4) -> BadGuys[267..270]
+dBase = (U(0.1)+0.1)*0.5 -> inclusive [0.05,0.10]
+d = dBase*0.5 with Enhanced Effects -> inclusive [0.025,0.05]
 ```
 
 Initial modulation is white `(1,1,1,1)`. Each tick subtracts `d` from red and
@@ -1765,7 +1769,7 @@ record and restores blend/color afterward. `Game.EnhancedEffects` at
 `0x00B3BCAD` halves `dBase` when enabled, changing the lifetime band from
 roughly 10--20 ticks to 20--40 ticks without changing emission cadence or actor
 class. The shipped Website-equivalent Windows capability/default policy has
-Enhanced Effects on, so the browser uses `[0.025,0.05)`. An older inspected
+Enhanced Effects on, so the browser uses inclusive `[0.025,0.05]`. An older inspected
 performance-profile sample had the configurable off branch; it is supporting
 alternate-state evidence, not the shipped-default policy.
 
@@ -1789,16 +1793,18 @@ than asking a renderer to invent historical emissions.
 ### Light and impact replacement
 
 The flight light provider `0x005E50D0` submits at the actor root with radius
-`1+U[0,0.25)`, intensity `0.75`, and `DAT_00B3BCAA` Multiple Shadows. Retail's
-default is off. This provider is not a sprite pass and does not imply reciprocal
-inbound lighting: both Fireball and particle visuals are self-lit as established
-by their render-queue slots.
+`1+U(0.25)`, intensity `0.75`, and `DAT_00B3BCAA` Multiple Shadows. Retail's
+fresh shipped-Windows missing-key default is on through capability byte
+`0x00B3BCAE`; the preserved sandbox profile explicitly overrides it off. This
+provider is not a sprite pass and does not imply reciprocal inbound lighting:
+both Fireball and particle visuals are self-lit as established by their
+render-queue slots.
 
 On contact, `0x005E5160` builds `Anim_FireBurst` (`0x00453470`; tick
 `0x004575B0`; draw `0x0045E2D0`) over records `251..254`. Phase advances
 `0.25`/tick, selecting one frame per four ticks and ending after exactly 16
-visible ticks (semantic ages `0..15`); position moves upward one unit/tick. Initial scale is `U[1,1.1)`,
-rotation is `U[0,360)`, and signed angular speed has magnitude `U[0.5,1.5)`.
+visible ticks (semantic ages `0..15`); position moves upward one unit/tick. Initial scale is `1+U(0.1)`,
+rotation is `U(360)`, and signed angular speed has magnitude `0.5+U(1)`.
 The burst first draws record `110` at `5*scale`, orange, with alpha
 `0.5*(1-phase/4)`, then draws the 251--254 frame additively under tint
 `(1,1,0.75,1)`.
@@ -2028,8 +2034,8 @@ audio and presentation allocation. Null terrain contact skips actor damage but
 owns the same replacement presentation and audio:
 
 - point sound registry `30`, `sounds\\fireballhit`, is requested at the
-  Fireball root with world point gain and pitch `1 + signed U[0,0.1)`, hence
-  `[0.9,1.1)`; the exact stock WAV is 30,530 bytes, SHA-256
+  Fireball root with world point gain and pitch `1 + S(0.1)`, hence
+  inclusive `[0.9,1.1]`; the exact stock WAV is 30,530 bytes, SHA-256
   `9bfad709cfb932b7e836c58f781a42ee78907a0211bac5d14a2583d721192738`;
 - `Anim_FireBurst` constructor `0x00453470` receives singleton descriptor
   `+0x4788` for registered `BadGuys[251..254]` and starts at `(P.x,P.y-10)`;
@@ -2038,8 +2044,8 @@ owns the same replacement presentation and audio:
   descriptor count four, so visible semantic ages are exactly `0..15`: frames
   `0..3` each last four ticks and there is no visible age-16 frame;
 - specialized tick `0x004575B0` also moves `y -= 1` and adds signed angular
-  velocity of magnitude `U[0.5,1.5)` degrees/tick. Scale is `U[1,1.1)` and
-  initial rotation is `U[0,360)`;
+  velocity of magnitude `0.5+U(1)` degrees/tick. Scale is `1+U(0.1)` and
+  initial rotation is `U(360)`;
 - draw `0x0045E2D0` first submits record `110` source-over at `5*scale`, tint
   `(1,0.5,0)`, and alpha `0.5*(1-age/16)`, then submits the current impact frame
   additively with tint `(1,1,0.75)`;
@@ -2057,7 +2063,7 @@ removal precedes, rather than follows, the independently owned burst and sound.
 
 The contact burst has no Enhanced Effects branch. The flight child retains the
 already recovered global `DAT_00B3BCAD` branch: shipped/default Enhanced
-Effects on halves fade to `[0.025,0.05)` while off uses `[0.05,0.10)`; cadence
+Effects on halves fade to inclusive `[0.025,0.05]` while off uses inclusive `[0.05,0.10]`; cadence
 stays one child per successful Fireball tick. `Fire_Goodguy 0x7EE`, Embers,
 Explode, status fields, and area damage remain separate actor/gameplay lanes.
 
@@ -2224,7 +2230,7 @@ promote other projectiles or scenery.
 Each of the two calls to tessellator `0x00534510` independently gates one
 branch with `RandomInt(2)` at `0x00534A11`. If selected, four textured vertices
 and six indices append to that same ribbon layer and inherit its draw state.
-Attachment is `U[0,2)` along the exact QuickSpline. Registered branch records
+Attachment is `U(2)` along the exact QuickSpline. Registered branch records
 are:
 
 | record | crop/logical/origin | local geometry quad |
@@ -2232,11 +2238,11 @@ are:
 | 375 | `39x73` / `90x146` / `(-18.5,-27.5)` | `(-38,-64),(1,-64),(-38,9),(1,9)` |
 | 376 | `40x185` / `96x372` / `(-20,-77.5)` | `(-40,-170),(0,-170),(-40,15),(0,15)` |
 
-Scale is `0.25+U[0,0.5)` with a `1/30` exact-one override. X mirror,
+Scale is `0.25+U(0.5)` with a `1/30` exact-one override. X mirror,
 geometry-record choice, and UV/image-record choice are independent. All four
 geometry/texture pairings are valid. Angle uses the chosen geometry's first
 coordinate pair with the second negated, converts through atan2, normalizes to
-degrees, then adds `U[0,45)` before translation to the spline point.
+degrees, then adds `U(45)` before translation to the spline point.
 
 Layer phases are construction-time `-3*managerTick` and `+15`, not transient
 ID or redraw time. Native random displacement uses the unsigned mixer:
@@ -2264,7 +2270,7 @@ advances by exactly 100 while the leg remainder is greater than 50, then also
 considers the exact endpoint. A midpoint can therefore occur twice. It emits a
 Region `MiscLight` only when squared distance from the original source is at
 least 48400. Each source is `(sample.x,sample.y+35)`, radius
-`0.75+U[0,0.25)`, with one factory-shared intensity `0.25+U[0,0.75)`.
+`0.75+U(0.25)`, with one factory-shared intensity `0.25+U(0.75)`.
 Insufficient-mana parameter nine quarters that intensity; it is not target
 mode. The directional-shadow flag is Enhanced Effects `DAT_00B3BCAD`, shipped
 On, not Multiple Shadows.
@@ -2376,9 +2382,10 @@ A separate width-four rail shadow has alpha
 gaps must remain transparent.
 
 Rails `0x00607440`, Wall generated shape through `0x006561A0`, and Scrub's
-transformed asset quad are other class-specific paths. Convex alpha hull is
-allowed only as an explicitly bounded fallback for an unrecovered caster; it
-must not replace these authored/custom owners.
+transformed asset quad are other class-specific paths. The then-unrecovered
+classes were an explicit interim boundary, not permission for a production
+fallback. The later complete direct-reference census closes them: no
+materialized native caster may be replaced by a convex alpha hull.
 
 ### Target/range/contact adjacency at the third-pass baseline
 
@@ -2514,7 +2521,7 @@ counter, so all impacts in one tick share phase and the phase advances one per
 tick. ZAnimLit writes radius `0.75`, intensity `1.0`, delta `-0.05`, local
 multiple-shadows false, and Puppet painter bias `100`; the last value is not a
 light radius. Same-tick update makes first drawable intensity `0.95`.
-Registry 58 `magicmissilehit` pitch is `f32(1+U[0,0.1))`.
+Registry 58 `magicmissilehit` pitch is `f32(1+U(0.1))`.
 
 ### Integrated Website status and explicit authority boundary
 

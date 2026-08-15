@@ -328,9 +328,12 @@ distance(existing, candidate)^2
 
 Equality at the circle boundary is not containment. A nonzero flag bypasses
 this suppression. The ordinary player passes one; the Lantern passes the
-`Multiple Shadows` setting, whose retail default is off. Provider order and
-the fixed-tick misc-light append order are therefore part of a future
-spell/enemy adapter's presentation contract.
+`Multiple Shadows` setting. Fresh shipped-Windows initialization defaults that
+setting on through capability byte `0x00B3BCAE`; the preserved sandbox profile
+explicitly overrides it off. Provider order and the fixed-tick misc-light
+append order are therefore part of a future spell/enemy adapter's presentation
+contract. The complete default derivation and source chart are in
+[`native-lighting-and-shadow-system.md`](native-lighting-and-shadow-system.md).
 
 This expanded inventory defines source adapters for future combat parity; it
 does not make dormant enemy, modifier, or spell systems part of an entry-only
@@ -355,15 +358,15 @@ The source record's `+0x18` flag is not merely a light-list containment hint.
 With `Game.ComplexLighting` (`0x00B3BCA8`) enabled, complex query
 `0x0057F0E0` also requires that flag before it appends directional shadow work
 for a world object. `Game.ComplexShadows` (`0x00B3BCA9`) then controls whether
-the object painters emit that work. Both settings default to true in the
-retail initializer and in the inspected clean stock profile. The separate
-`Game.MultipleShadows` setting (`0x00B3BCAA`) defaults to false. Consequently
-the ordinary player source always participates because provider `0x005299A0`
-submits flag `1`; the default Lantern usually illuminates without casting this
-directional shadow because it submits the Multiple Shadows byte. The visible
-orange staff orb is therefore supporting presentation evidence for the source,
-not its owner: the native contract is the player-owned point 15 world units
-along heading.
+the object painters emit that work. Complex Lighting and Complex Shadows
+default true. `Game.MultipleShadows` (`0x00B3BCAA`) defaults to the platform
+capability byte, which is true on the shipped Windows path; the inspected
+sandbox profile stores an explicit false override. Consequently the ordinary
+player always participates because provider `0x005299A0` submits flag `1`, and
+a fresh-default Lantern also casts directional work because it submits the
+Multiple Shadows byte. The visible orange staff orb is supporting presentation
+evidence for the source, not its owner: the native contract is the player-owned
+point 15 world units along heading.
 
 For every eligible source inside the same elliptical 145-unit falloff,
 `0x0057F0E0` appends this 0x24-byte record to the object list at `+0xAC`:
@@ -385,11 +388,12 @@ Multiple Shadows interaction; summing darkness or choosing only the nearest
 source is not equivalent.
 
 Shared geometry helper `0x00655970` consumes the class's explicit object-local
-outline. For each outline edge it computes the edge midpoint and normal,
-rejects edges that do not face the source, and projects both endpoints radially
-away from the source by the record's fixed projection distance. It submits one
-black two-triangle quad per accepted edge. The two object-edge vertices use
-the record's base factor as alpha. The two projected vertices use
+outline. Shape closer `0x00655570` retains authored order and stores normal
+`(edge.dy,-edge.dx)` without winding normalization. The projector accepts an
+edge only when `dot(normal, midpoint-source)>0`, then projects both endpoints
+radially away from the source by the record's fixed projection distance. It
+submits one black two-triangle quad per accepted edge. The two object-edge
+vertices use the record's base factor as alpha. The two projected vertices use
 `((1 - behindScalar) * (1 - distanceFraction))^3`, yielding the native soft
 tail through ordinary per-vertex interpolation. This is directional silhouette
 geometry, not a blurred ellipse beneath the object.
