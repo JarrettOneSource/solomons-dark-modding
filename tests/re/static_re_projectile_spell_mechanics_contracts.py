@@ -426,6 +426,44 @@ def test_projectile_presentation_and_fire_goodguy_semantics_are_pinned() -> str:
     return "Atlas hooks, frame cadence, world queue, and damaging 0x7EE trails are pinned"
 
 
+def test_primary_targeting_homing_and_staff_cadence_are_pinned() -> str:
+    doc = _document()
+    heading = "## 2026-08-14 targeting, range, homing, and one-shot cadence correction"
+    _require(heading in doc, "primary targeting/homing/cadence correction is absent")
+    closure = doc.split(heading, maxsplit=1)[1]
+    _require_tokens(
+        closure,
+        (
+            "`0x00529AD0`",
+            "30-degree aperture",
+            "lower `+0xFC` priority first",
+            "Gravestone constructor\n`0x005E5C30`",
+            "priority `1000`",
+            "dot product at least `0.71`",
+            "vslot `+0x34` attachment offset",
+            "exactly `(grave.x, grave.y-20)`",
+            "no native fixed 205-unit reach",
+            "QuickSpline middle control point half that distance",
+            "nearest unused\neligible actor within radius `200`",
+            "float32\n`0.600000024`",
+            "`spawn + aimDirection*100`",
+            "`0x00641160`",
+            "float32\n`999999`",
+            "turn accumulator `0.01`",
+            "heading += 2 * turnAccumulator * movementScalar * signedAngularDelta",
+            "Losing a target clears\nthe handle for rank 1",
+            "Terrain lookahead runs every fifth age tick",
+            "There is no native\nfixed flight lifetime",
+            "float32 rate\n`0.075`",
+            "Fire uses `0.05625`",
+            "still-held Ether or Fire primary immediately queues the next\naction",
+            "Protocol v13",
+        ),
+        "primary targeting, homing, range, and Staff cadence document",
+    )
+    return "Lightning fallback/arc, Ether homing, ranges, and held Staff cadence are pinned"
+
+
 def test_fireball_contact_range_and_recast_closure_is_pinned() -> str:
     doc = _document()
     heading = "## 2026-08-14 Fireball contact, range, and recast closure"

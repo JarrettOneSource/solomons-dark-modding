@@ -578,6 +578,7 @@ from static_re_projectile_spell_mechanics_contracts import (
     test_fireball_contact_range_and_recast_closure_is_pinned,
     test_frost_jet_operand_widths_and_rank_one_update_ownership_are_pinned,
     test_materialized_projectile_trajectories_pin_native_motion,
+    test_primary_targeting_homing_and_staff_cadence_are_pinned,
     test_projectile_contact_events_cross_check_existing_damage_goldens,
     test_projectile_goldens_pin_live_capture_provenance_and_rank_coverage,
     test_projectile_presentation_and_fire_goodguy_semantics_are_pinned,
@@ -2222,6 +2223,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "projectile presentation and Fire_Goodguy semantics are pinned",
         test_projectile_presentation_and_fire_goodguy_semantics_are_pinned,
+    ),
+    (
+        "Primary targeting, homing, range, and Staff cadence are pinned",
+        test_primary_targeting_homing_and_staff_cadence_are_pinned,
     ),
     (
         "Fireball contact, range, and recast closure is pinned",

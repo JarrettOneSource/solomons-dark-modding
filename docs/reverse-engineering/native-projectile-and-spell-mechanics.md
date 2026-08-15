@@ -1929,8 +1929,8 @@ and behaviorally wrong for held one-shot casting.
 
 ### Implementation consequence and bounded unknowns
 
-The authoritative simulation must acquire/retain Air targets, publish explicit
-source/midpoint/endpoint geometry for every bolt, and carry stable Ether target
+The authoritative simulation now acquires/retains Air targets, publishes explicit
+source/midpoint/endpoint geometry for every bolt, and carries stable Ether target
 identity plus heading/turn state. Renderers may consume those semantic facts;
 they must not infer targets or rebuild homing history from snapshots. Boneyard
 wave enemies and Gravestone `2029` are the presently materialized native
@@ -1939,6 +1939,18 @@ class remain outside this Website slice; supported enemies retain base priority
 zero and Gravestone uses its recovered priority `1000`. Exact
 global collection insertion order only matters for an exact equal-priority,
 equal-distance tie and remains unspecified.
+
+The combined Website implementation uses distinct Region-bound range and
+world-obstruction queries so a targetable Gravestone cannot incorrectly shorten
+the acquisition ray. Protocol v13 carries the player's retained Air target,
+each bolt's target/source/control/end geometry, and each Ether actor's target,
+heading, and turn accumulator. Focused authority, protocol, interpolation, and
+renderer regressions exercise combat-priority selection, Gravestone fallback,
+off-axis QuickSpline control, Ether launch-probe selection, move-then-steer
+ordering, target loss without rank-1 retargeting, terrain lookahead, and the
+faster held-repeat Staff program. Browser and canonical receipts are recorded
+in the Website parity ledger because they exercise the integrated asset and
+renderer tree rather than this mechanics-only repository.
 
 ## 2026-08-14 Fireball contact, range, and recast closure
 
