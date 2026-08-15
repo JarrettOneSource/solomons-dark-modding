@@ -354,9 +354,71 @@ callsite `0x00470107`, it follows the queue and supplies the cheaper flattened
 result. The normal player light submission at `0x005299A0` is anchored 15 world
 units along the player heading and uses recovered parameters `radius = 2.6`,
 `intensity = 1`, and flag `1`; it is enabled by the corresponding player/drive
-state predicate. The level-up lane changes that source while its 180-tick timer
-is positive. These sources therefore own both a visible ground light field and
-subsequent object samples; they are not merely invisible scalar records.
+state predicate. Every provider pass draws DeadHawg record `18` into the
+offscreen raster field at scale `2.6 - RandomFloat(0.2)`. While the player's
+level-up timer is positive, the analytic source radius separately becomes
+`2.6 * (1 + player+0x268) + sin(pi * timer / 180)`; the ordinary constructor
+sets `player+0x268` to zero. These sources therefore own both a visible ground
+light field and subsequent object samples; they are not merely invisible
+scalar records, and the raster jitter must not replace the analytic radius.
+
+### Player-owned level-up beam and sparkle lane
+
+A real level transition reaches `0x00528A20` and writes `180.0` to player
+`+0x168`; the same owner requests registry 52 `sounds\levelup` once at gain
+`1.0`. `Player::Tick` at `0x0053380E` checks the positive timer, decrements
+it first, and, only when the player point is inside the primary view rectangle,
+allocates one `Anim_Sparkle` in the actor-owned child list at `+0x16C`. Let `T`
+be the post-decrement timer. Spawned values are `179..0`; the final child has
+zero alpha. The newly inserted list member is ticked in the same player tick,
+so its first rendered state has life `177` and local Y advanced by `-0.1`.
+Actor/world pause freezes both the emitter and its children; picker UI or wall
+time does not consume either lifetime.
+
+The shared point/rectangle predicate at `0x00403DA0..0x00403DEF` is half-open:
+`x >= left && x < right && y >= top && y < bottom`. A point on the left or top
+edge emits; a point exactly on the right or bottom edge does not.
+
+The exact local spawn program is:
+
+```text
+x = RandomFloat(30, signed=true)       // magnitude [0,30], independent sign
+y = -20 - RandomFloat(playerY - primaryViewTop)
+angle = RandomFloat(360)
+alpha = 0.75 * sin(pi * T / 180) * (1 - abs(x) / 30)
+RGB = (1, 1, 1)
+```
+
+`Anim_Sparkle` constructor `0x00453980` starts at life `180`. Tick
+`0x00453A30` subtracts `3` from life and `0.1` from local Y, retiring the child
+at life `<= 0`; a child therefore lasts 60 player ticks and may outlive the
+180-tick emitter. Draw `0x00458230` uses the fixed spawn alpha, random angle,
+and uniform scale `sin(pi * life / 180)` with BadGuys record `73` (`12 x 13`,
+SHA-256 `a8aaa295bc2876d2e446298bbb7bf2a8db61c53cf53937ab0bf58c02a5c0327e`).
+
+Player presentation `0x0052A640` first draws a beam while `T > 0` and the
+player remains inside the primary view, then draws the actor-owned sparkle
+list. It maps BadGuys record `36` (`27 x 88`, SHA-256
+`226c28f84963c74e46ea18abcfddaec71e6e19b18f3e32ec7d20ebe8c70406da`)
+onto this world quad:
+
+```text
+p0 = (playerX - 35, primaryViewTop - 200)
+p1 = (playerX + 35, primaryViewTop - 200)
+p2 = (playerX - 40, playerY - 10)
+p3 = (playerX + 40, playerY - 10)
+RGBA = (1, 1, 0.9, 0.5 * sin(pi * T / 180))
+```
+
+The immediate `Arena::Render` caller invokes player vtable slot `+0x24` at
+`0x0046FEF6..0x0046FEFE`, after shared world-queue flush `0x0046FDAA` and
+before later proxy/foreground banks. Neither this player draw nor
+`Anim_Sparkle::Draw` changes renderer blend selector `renderer+0x221`.
+Selector zero is the initialized ordinary state
+`SRCALPHA, INVSRCALPHA, ADD`; adjacent genuinely additive renderers explicitly
+switch to selector one and restore zero. The beam and sparkle lane is therefore
+ordinary source-alpha, in beam-then-child order, and is not a Y-sorted actor
+body layer or a picker overlay.
 
 Complex-shadow query `0x0057F0E0` uses the same elliptical source field but
 accepts only source records whose `+0x18` flag is set. It writes per-object

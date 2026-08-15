@@ -455,6 +455,38 @@ flag `0x20`, and stores three points used by the lightning presentation. Its
 short strike-energy counter drives `Anim_FadeLightning` and the generated
 lightning mesh. The alternative moving-cloud mode is enabled at `+0x180` and
 advances the cloud and its 15 presentation control points along its heading.
+Magic Tornado initialization `0x005E2440` stores
+`frequency_factor = 1 + mSpeed/100` at `+0x154` and adds
+`trunc(mDuration * 100)` ticks to the base lifetime. In moving-cloud mode the
+strike countdown resets to `trunc(numerator / frequency_factor)` for a uniform
+integer `numerator` in `[30,120]`. Translation uses the cloud's separate fixed
+motion path: the configured `mSpeed` property is strike frequency, not
+translation speed.
+
+### Embers to Imps and GoodImp (`0x7D6`, `0x3ED`)
+
+`Ember::Tick 0x0060D7E0` checks the mode short at `+0x164`. When a mode-2
+Ember is spent and its group byte `+0x5C` is authoritative zero, it creates a
+`GoodImp 0x3ED`, copies team/owner state, writes the Ember's snapshotted damage
+short to both Imp attack lanes `+0x1B4/+0x1B8`, copies the lifetime short to
+Imp `+0x23C`, and registers the summon. The same retirement branch creates a
+`Fire 0x7E3` patch before removing the Ember.
+
+GoodImp construction `0x00529FE0` defaults `+0x23C` to 300 ticks. Initialize
+`0x0052A050` acquires the nearest eligible target for a locally authoritative
+Imp. Tick `0x0052C1A0` owns pursuit and decrements the lifetime once per tick,
+with an additional decrement while no target is available. Expiry creates a
+`Fire 0x7E3` patch and removes the Imp.
+
+### Lightning Stun modifier (`0x1B6A`)
+
+Lightning `0x0053F9C0` creates `Mod_Stun 0x1B6A` only when the wizard's
+resolved movement factor at `+0x288` is below one. It copies that factor to
+modifier `+0x1C` and writes a fixed 25-tick lifetime at `+0x14`. Constructor
+`0x00623180` defaults the factor to one; apply `0x006231B0` multiplies target
+movement `+0x120`. Specialized merge `0x00625850` retains the maximum remaining
+duration and minimum movement factor, so stronger reapplication wins without a
+parallel modifier.
 
 ### Acid Rain (`0x7FE`)
 

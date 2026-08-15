@@ -563,6 +563,61 @@ def test_native_scene_world_sort_key_and_ties_are_pinned() -> str:
     return "native world queue key, lane order, and stable ties are pinned"
 
 
+def test_native_player_level_up_presentation_is_pinned() -> str:
+    doc = _read(DOC_PATH)
+    for token in (
+        "Player-owned level-up beam and sparkle lane",
+        "Spawned values are `179..0`",
+        "only when the player point is inside the primary view rectangle",
+        "first rendered state has life `177` and local Y advanced by `-0.1`",
+        "Actor/world pause freezes both",
+        "`x >= left && x < right && y >= top && y < bottom`",
+        "exactly on the right or bottom edge does not",
+        "x = RandomFloat(30, signed=true)",
+        "y = -20 - RandomFloat(playerY - primaryViewTop)",
+        "angle = RandomFloat(360)",
+        "0.75 * sin(pi * T / 180) * (1 - abs(x) / 30)",
+        "RGB = (1, 1, 1)",
+        "life `180`",
+        "subtracts `3` from life and `0.1` from local Y",
+        "lasts 60 player ticks and may outlive",
+        "BadGuys record `73` (`12 x 13`",
+        "a8aaa295bc2876d2e446298bbb7bf2a8db61c53cf53937ab0bf58c02a5c0327e",
+        "BadGuys record `36` (`27 x 88`",
+        "226c28f84963c74e46ea18abcfddaec71e6e19b18f3e32ec7d20ebe8c70406da",
+        "p0 = (playerX - 35, primaryViewTop - 200)",
+        "p1 = (playerX + 35, primaryViewTop - 200)",
+        "p2 = (playerX - 40, playerY - 10)",
+        "p3 = (playerX + 40, playerY - 10)",
+        "0.5 * sin(pi * T / 180)",
+        "after shared world-queue flush",
+        "SRCALPHA, INVSRCALPHA, ADD",
+        "ordinary source-alpha",
+        "beam-then-child order",
+        "not a Y-sorted actor",
+        "2.6 - RandomFloat(0.2)",
+        "2.6 * (1 + player+0x268) + sin(pi * timer / 180)",
+    ):
+        if token not in doc:
+            raise StaticReTestFailure(
+                f"player level-up presentation lost native witness {token!r}"
+            )
+    visual_sweep = _read(ROOT / "docs/bugs/visualsweep-2026-08-01.md")
+    if "emits additive sparkle particles" in visual_sweep:
+        raise StaticReTestFailure(
+            "superseded additive level-up sparkle claim returned"
+        )
+    for token in (
+        "stamps its `2.6 - RandomFloat(0.2)`\nraster light on every eligible provider pass",
+        "may trail for as many as 59 ticks after the emitter stops",
+    ):
+        if token not in visual_sweep:
+            raise StaticReTestFailure(
+                f"level-up visual sweep lost corrected lifecycle witness {token!r}"
+            )
+    return "player level-up owner, lifetimes, assets, geometry, blend, and light split are pinned"
+
+
 def test_native_scene_camera_transform_and_backdrop_rate_are_pinned() -> str:
     doc, golden, captures = _load_fixture()
     transform = (

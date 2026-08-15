@@ -147,6 +147,11 @@ EVENT_SPECS: tuple[EventSpec, ...] = (
         (request(159, "loop_start", "0x00549F57"),),
     ),
     EventSpec(
+        "cast.earth.boulder_created",
+        "Earth dispatcher allocates, registers, and stores the native Boulder actor",
+        (request(87, "play_gain", "0x00544FA8", parameter_logic="world point gain"),),
+    ),
+    EventSpec(
         "cast.earth.charge_hold",
         "Earth boulder remains held while charge grows",
         silent_reason="gatherrocks remains live from its transition edge; charge ticks issue no new dispatch",
@@ -154,10 +159,7 @@ EVENT_SPECS: tuple[EventSpec, ...] = (
     EventSpec(
         "cast.earth.release",
         "bounded Earth release and native selector transition 0x28 -> 0",
-        (
-            request(159, "loop_stop", "0x00549758", gain=0.0),
-            request(87, "play_gain", "0x00544FA8", parameter_logic="world point gain"),
-        ),
+        (request(159, "loop_stop", "0x00549758", gain=0.0),),
     ),
     EventSpec(
         "projectile.ether.flight",
@@ -319,7 +321,38 @@ EVENT_SPECS: tuple[EventSpec, ...] = (
     EventSpec("pickup.magic_book", "magic-book acquisition stream", (request(129, "stream_play", "0x0056D471"),)),
     EventSpec("potion.use", "potion effect accepted and consumed", (request(24, "play_gain", "0x0056D246"),)),
     EventSpec("potion.invalid", "potion/action rejected", (request(6, "play_gain", "0x0056D3D2"),)),
-    EventSpec("level.up", "native level threshold crossed", (request(52, "play_pitch_gain", "0x00647F6B", parameter_logic="two fixed level-up pitches are dispatched at 0x00647F6B and 0x00647FBE"),)),
+    EventSpec(
+        "level.up",
+        "one local level-award invocation crosses at least one threshold",
+        (
+            request(
+                52,
+                "play_gain",
+                "0x00528A3E",
+                parameter_logic="fixed gain=1; once after the complete local threshold loop",
+            ),
+        ),
+    ),
+    EventSpec(
+        "skill.turn_undead.cast",
+        "accepted Turn Undead cast enters the skill handler before its target query",
+        (
+            request(
+                52,
+                "play_pitch_gain",
+                "0x00647F6B",
+                pitch=2.0,
+                parameter_logic="fixed pitch=2; point-derived gain",
+            ),
+            request(
+                52,
+                "play_pitch_gain",
+                "0x00647FBE",
+                pitch=3.0,
+                parameter_logic="fixed pitch=3; separately recomputed point-derived gain",
+            ),
+        ),
+    ),
     EventSpec("skill.unlock", "skill purchase/unlock accepted", (request(102, "play_gain", "0x00670CD3"),)),
     EventSpec(
         "wave.start",

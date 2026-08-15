@@ -18,6 +18,8 @@ AUDIO_EVENTS_DOC = ROOT / "docs/reverse-engineering/native-audio-events.md"
 FIXTURE = ROOT / "tests/fixtures/webgame/progression-goldens.json"
 RECORDER = ROOT / "tools/record_progression_goldens.py"
 SKILL_CATALOG = ROOT / "docs/reverse-engineering/native-skill-catalog.json"
+SPELL_WELDING_DOC = ROOT / "docs/reverse-engineering/spell-welding.md"
+NATIVE_SKILLS_DOC = ROOT / "docs/reverse-engineering/native-skills-and-spells.md"
 
 LEVEL_THRESHOLDS = (
     0,
@@ -693,6 +695,127 @@ def test_native_progression_offer_pool_selection_and_rng_are_pinned() -> str:
     return "all 82 eligibility rows and three actor-private ordered offers are exact"
 
 
+def test_native_spell_welding_picker_art_contract_is_pinned() -> str:
+    doc = read_text(SPELL_WELDING_DOC)
+    _require_tokens(
+        doc,
+        (
+            "triangle\n`P0/P1/P2` uses the first component color",
+            "triangle `P1/P2/P3` uses the\nsecond",
+            "deterministic x87 float-to-integer rounding before ARGB packing",
+            "No\nrandom number is consumed by this overlay path.",
+            "normal Welding offer uses Skills frame record 14",
+            "actual synthetic icon records are `108..117`, not `81..90`",
+            "Skills record 13 in white at scale `1.15`",
+            "draws the synthetic icon twice (shadow then main)",
+            "`Welded Lighting + Fireball`",
+            "There are no six\ncomponent-name/learned-level rows",
+            "`Burning Bolt`",
+            "`Crawling Shock`",
+            "exact `ARCANE ` (including its trailing space)",
+            "medium name, maximum width 140",
+            "body-font lowercase `primary cast`",
+            "centered, white, unshadowed quick-description",
+            "vertically centered around local Y 230",
+            "source case preserved",
+            "black shadows at `(+1,+1)`",
+            "conditional eighth call draws `casting` or\n`concentrate`",
+            "Website offer\nparity therefore suppresses this lane",
+        ),
+        "native Spell Welding picker lost a recovered mesh, frame, icon, title, or evidence boundary",
+    )
+    rows = re.findall(
+        r"(?m)^\| (10\d\d) \| (1\d\d) \| `([^`]+)` \| `([^`]+)` \| ([\d, ]+) \|$",
+        doc,
+    )
+    expected = [
+        (str(1000 + index), str(108 + index))
+        for index in range(10)
+    ]
+    if [(build, record) for build, record, _, _, _ in rows] != expected:
+        raise StaticReTestFailure(
+            "native Spell Welding picker no longer maps all ten builds to records 108..117"
+        )
+    recipes = [
+        tuple(int(value) for value in recipe.split(", "))
+        for _, _, _, _, recipe in rows
+    ]
+    if recipes != [
+        (8, 16, 10, 18, 9, 17),
+        (8, 32, 10, 34, 9, 33),
+        (8, 24, 10, 25, 9, 26),
+        (16, 24, 18, 25, 17, 26),
+        (32, 24, 34, 25, 33, 26),
+        (16, 32, 18, 34, 17, 33),
+        (8, 40, 10, 43, 9, 42),
+        (16, 40, 18, 43, 17, 42),
+        (32, 40, 34, 43, 33, 42),
+        (24, 40, 25, 43, 26, 42),
+    ]:
+        raise StaticReTestFailure(
+            "native Spell Welding stat rebuild lost one of its six-ID recipes"
+        )
+    synthetic_names = [name for _, _, name, _, _ in rows]
+    if synthetic_names != [
+        "Burning Bolt",
+        "Frost Missile",
+        "Ball Lightning",
+        "Flame Lash",
+        "Blizzard Beam",
+        "Steam Jet",
+        "Ethereal Boulder",
+        "Meteor Swarm",
+        "Hailstones",
+        "Crawling Shock",
+    ]:
+        raise StaticReTestFailure(
+            "native Spell Welding picker lost one of its synthetic names"
+        )
+    pair_descriptions = [description for _, _, _, description, _ in rows]
+    if pair_descriptions != [
+        "Welded Magic Missile + Fireball",
+        "Welded Magic Missile + Frost Jet",
+        "Welded Magic Missile + Lightning",
+        "Welded Lighting + Fireball",
+        "Welded Lightning + Frost Jet",
+        "Welded Fireball + Frost Jet",
+        "Welded Magic Missile + Boulder",
+        "Welded Fireball + Boulder",
+        "Welded Frost Jet + Boulder",
+        "Welded Lightning + Boulder",
+    ]:
+        raise StaticReTestFailure(
+            "native Spell Welding picker lost one of its exact white pair descriptions"
+        )
+    return "all ten weld cards pin split art, synthetic names, white pair text, and records 108..117"
+
+
+def test_native_skill_picker_text_and_palette_abi_is_pinned() -> str:
+    doc = read_text(NATIVE_SKILLS_DOC)
+    for token in (
+        "Level-up card art and text ABI",
+        "`#FFE5FF`, `#FFCBCB`, `#E5FFFF`, `#CBCBFF`, `#CBFFCB`, `#FFE5CB`,",
+        "`#CBD8FF`, and `#E5E5E5`",
+        "medium name at Y `452.5`, maximum width 140",
+        "body-font lowercase `primary cast`",
+        "`secondary cast`",
+        "vertically centered around Y `532.5`",
+        "opaque black at `(+1,+1)`",
+        "Medium height is 16 with a 17-pixel line step",
+        "` ETHER`, ` FIRE`, ` AIR`, ` WATER`, ` EARTH`, `BODY `, `MIND `, and",
+        "`ARCANE `",
+        "preserves source case",
+        "`RING OF FIRE 2` uses the uppercase medium advance 135",
+        "lowercase advances 82/116/69",
+        "Current offer-surface parity must\nsuppress this lane",
+    ):
+        if token not in doc:
+            raise StaticReTestFailure(
+                f"native skill picker text/palette ABI lost witness {token!r}"
+            )
+    return "skill picker palette, case, font lanes, spacing, and anchors are pinned"
+
+
 def test_native_progression_five_live_effect_formulas_are_pinned() -> str:
     fixture = _load_json_object(FIXTURE, "native skill-effect golden is unreadable")
     effects = _unique_rows(
@@ -921,7 +1044,7 @@ def test_native_progression_actor_layout_and_all_skill_rows_are_pinned() -> str:
         raise StaticReTestFailure(
             "native skill catalog no longer supplies one name for every documented effect"
         )
-    medium_ids = {14, 19, 26, 28, 29, 33, 50, 53, 80}
+    medium_ids = {14, 29, 33, 50, 53, 80}
     live_ids = {23, 56, 57, 64, 79}
     for skill_id in range(82):
         name, effect, confidence = documented[skill_id]
@@ -952,6 +1075,31 @@ def test_native_progression_actor_layout_and_all_skill_rows_are_pinned() -> str:
         if confidence != expected_confidence:
             raise StaticReTestFailure(
                 f"native skill {skill_id} confidence changed from {expected_confidence} without new evidence"
+            )
+    closure_claims = {
+        19: (
+            "Ember::Tick 0x0060D7E0",
+            "GoodImp::Tick 0x0052C1A0",
+            "`300` native ticks",
+        ),
+        26: (
+            "wizard `+0x288`",
+            "`+0x14=25` native ticks",
+            "minimum movement factor",
+        ),
+        28: (
+            "frequency_factor = 1 + mSpeed[r]/100",
+            "trunc(numerator / frequency_factor)",
+            "uniform integer `numerator` in `[30,120]`",
+            "strike frequency, not cloud translation",
+        ),
+    }
+    for skill_id, claims in closure_claims.items():
+        effect = documented[skill_id][1]
+        missing_claims = [claim for claim in claims if claim not in effect]
+        if missing_claims:
+            raise StaticReTestFailure(
+                f"native skill {skill_id} lost fresh static closure claims: {missing_claims}"
             )
     return "all 82 catalog rows and the player/bot-private ABI are explicit"
 

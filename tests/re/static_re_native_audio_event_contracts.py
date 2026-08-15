@@ -48,8 +48,9 @@ EXPECTED_TRIGGER_ASSET_CELLS = {
     "cast.water.channel_hold": "no new request",
     "cast.water.channel_stop": "stop 161",
     "cast.earth.charge_start": r"start 159 `sounds\gatherrocksloop__loop`",
+    "cast.earth.boulder_created": r"87 `sounds\startboulder`",
     "cast.earth.charge_hold": "no new request",
-    "cast.earth.release": r"stop 159; 87 `sounds\startboulder`",
+    "cast.earth.release": r"stop 159",
     "projectile.ether.flight": r"57 `sounds\magicmissile`",
     "projectile.ether.impact": r"58 `sounds\magicmissilehit`",
     "projectile.fire.flight": r"97 `sounds\throwfire`",
@@ -91,6 +92,7 @@ EXPECTED_TRIGGER_ASSET_CELLS = {
     "potion.use": r"24 `sounds\drink`",
     "potion.invalid": r"6 `sounds\badaction`",
     "level.up": r"52 `sounds\levelup`",
+    "skill.turn_undead.cast": r"52 `sounds\levelup`, twice",
     "skill.unlock": r"102 `sounds\unlockskill`",
     "wave.start": "Music transition to song `combat`, track `combat`",
     "wave.end": "Music crossfade to empty song",
@@ -285,7 +287,7 @@ def test_native_audio_document_trigger_asset_rows_are_exact() -> str:
         f"{AUDIO_TRIGGER_DOCUMENT_CLAIM}: duplicate document trigger rows {duplicates} make asset selection ambiguous",
     )
     _require(
-        len(parsed_rows) == 64
+        len(parsed_rows) == 66
         and tuple(events) == EXPECTED_EVENT_CLASSES
         and {
             "cast.air.channel_start",
@@ -293,7 +295,7 @@ def test_native_audio_document_trigger_asset_rows_are_exact() -> str:
             "death.player",
             "music.menu_transition",
         }.issubset(events),
-        f"{AUDIO_TRIGGER_DOCUMENT_CLAIM}: document must enumerate the exact 64 trigger rows in reviewed order",
+        f"{AUDIO_TRIGGER_DOCUMENT_CLAIM}: document must enumerate the exact 66 trigger rows in reviewed order",
     )
     for row in parsed_rows:
         event = row["event"]
@@ -302,7 +304,24 @@ def test_native_audio_document_trigger_asset_rows_are_exact() -> str:
             row["assets"] == expected_assets,
             f"{AUDIO_TRIGGER_DOCUMENT_CLAIM}: {event} doc row requested assets are {row['assets']!r}, expected {expected_assets!r}; its fixed, pool, loop, or stream selection could drift from the fixture and catalog",
         )
-    return "all 64 audio trigger rows structurally pin fixed assets, pool ranges, loop/stream ids, and music requests"
+    level_up = next(row for row in parsed_rows if row["event"] == "level.up")
+    _require(
+        level_up["sites"] == "`0x0067C30B -> 0x005C88B0 -> 0x00528A3E`"
+        and "Gain `1.0`, once after `0x0067C250`" in level_up["selection"]
+        and level_up["assets"] == r"52 `sounds\levelup`",
+        "audio trigger document confuses the once-per-award level owner with Turn Undead's separate pitched registry-52 reuse",
+    )
+    turn_undead = next(
+        row for row in parsed_rows if row["event"] == "skill.turn_undead.cast"
+    )
+    _require(
+        turn_undead["sites"] == "`0x00647F6B`; `0x00647FBE`"
+        and turn_undead["assets"] == r"52 `sounds\levelup`, twice"
+        and "pitch `2.0`, then pitch `3.0`" in turn_undead["selection"]
+        and "point-derived gain" in turn_undead["selection"],
+        "audio trigger document lost Turn Undead's ordered pitched registry-52 reuse",
+    )
+    return "all 66 audio trigger rows structurally pin fixed assets, pool ranges, loop/stream ids, and music requests"
 
 
 def test_native_audio_event_census_and_dispatch_golden_are_pinned() -> str:
@@ -515,8 +534,11 @@ def test_native_audio_event_census_and_dispatch_golden_are_pinned() -> str:
         "audio dispatch timeline no longer covers every census class at least once",
     )
     _require(
-        timeline_counts["cast.earth.release"] == 2
+        timeline_counts["cast.earth.boulder_created"] == 1
+        and timeline_counts["cast.earth.release"] == 1
         and timeline_counts["cast.water.channel_start"] == 2
+        and timeline_counts["level.up"] == 1
+        and timeline_counts["skill.turn_undead.cast"] == 2
         and timeline_counts["wave.start"] == 1
         and timeline_counts["wave.end"] == 1,
         "audio dispatch timeline lost multi-request cast phases or unique wave transitions",
@@ -606,7 +628,7 @@ def test_native_audio_event_census_and_dispatch_golden_are_pinned() -> str:
         "audio trigger catalog lookup can silently choose a duplicate or omit a registry slot",
     )
     _require(
-        len(EXPECTED_TRIGGER_ASSET_CELLS) == 64
+        len(EXPECTED_TRIGGER_ASSET_CELLS) == 66
         and EXPECTED_TRIGGER_ASSET_CELLS["movement.footstep.splash"].startswith(
             "uniform pool 216..219"
         )
@@ -712,8 +734,35 @@ def test_native_audio_event_census_and_dispatch_golden_are_pinned() -> str:
         Counter(documented) == Counter(EXPECTED_EVENT_CLASSES),
         "native audio document no longer maps every event class exactly once",
     )
+    level_rows = timeline_by_event["level.up"]
+    turn_rows = timeline_by_event["skill.turn_undead.cast"]
+    _require(
+        len(level_rows) == 1
+        and level_rows[0]["dispatch_operation"] == "play_gain"
+        and level_rows[0]["native_trigger_site"] == "0x00528A3E"
+        and level_rows[0]["parameters"]["observed_gain"] == 1.0
+        and level_rows[0]["parameters"]["observed_pitch"] == 1.0
+        and "once after the complete local threshold loop"
+        in level_rows[0]["parameters"]["native_parameter_logic"],
+        "audio dispatch golden lost the once-per-award level-up wrapper contract",
+    )
+    _require(
+        len(turn_rows) == 2
+        and [row["request_ordinal"] for row in turn_rows] == [1, 2]
+        and [row["native_trigger_site"] for row in turn_rows]
+        == ["0x00647F6B", "0x00647FBE"]
+        and all(row["dispatch_operation"] == "play_pitch_gain" for row in turn_rows)
+        and [row["parameters"]["observed_pitch"] for row in turn_rows]
+        == [2.0, 3.0]
+        and all(row["parameters"]["observed_gain"] == 1.0 for row in turn_rows)
+        and all(
+            "point-derived gain" in row["parameters"]["native_parameter_logic"]
+            for row in turn_rows
+        ),
+        "audio dispatch golden lost Turn Undead's ordered pitch-2/pitch-3 wrapper contract",
+    )
     return (
-        "64 gameplay/UI event classes retain clean quiet provenance, exact "
+        "66 gameplay/UI event classes retain clean quiet provenance, exact "
         "dispatch sites, requested assets, parameters, and music witnesses"
     )
 

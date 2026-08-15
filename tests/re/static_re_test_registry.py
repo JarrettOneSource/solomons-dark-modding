@@ -75,6 +75,7 @@ from static_re_native_animation_contracts import (
     test_native_animation_state_lists_and_legal_transitions_are_pinned,
 )
 from static_re_native_scene_composition_contracts import (
+    test_native_player_level_up_presentation_is_pinned,
     test_native_scene_camera_transform_and_backdrop_rate_are_pinned,
     test_native_scene_decor_determinism_path_is_pinned,
     test_native_scene_physical_layer_list_is_pinned,
@@ -137,6 +138,8 @@ from static_re_native_progression_contracts import (
     test_native_progression_golden_and_recorder_provenance_are_pinned,
     test_native_progression_level_curve_and_xp_awards_are_pinned,
     test_native_progression_offer_pool_selection_and_rng_are_pinned,
+    test_native_skill_picker_text_and_palette_abi_is_pinned,
+    test_native_spell_welding_picker_art_contract_is_pinned,
 )
 from static_re_native_menu_shell_contracts import (
     test_designed_menu_focus_model_consumes_g14_intents,
@@ -1031,6 +1034,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_native_scene_world_sort_key_and_ties_are_pinned,
     ),
     (
+        "Native player level-up presentation is pinned",
+        test_native_player_level_up_presentation_is_pinned,
+    ),
+    (
         "Native scene camera transform and backdrop rate are pinned",
         test_native_scene_camera_transform_and_backdrop_rate_are_pinned,
     ),
@@ -1201,6 +1208,14 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native progression actor layout and all skill rows are pinned",
         test_native_progression_actor_layout_and_all_skill_rows_are_pinned,
+    ),
+    (
+        "Native skill picker text and palette ABI is pinned",
+        test_native_skill_picker_text_and_palette_abi_is_pinned,
+    ),
+    (
+        "Native Spell Welding picker art contract is pinned",
+        test_native_spell_welding_picker_art_contract_is_pinned,
     ),
     (
         "Native progression golden and recorder provenance are pinned",

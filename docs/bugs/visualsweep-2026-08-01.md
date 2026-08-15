@@ -117,11 +117,15 @@ The owner-era unspent-skill-point hypothesis is false. Native level-up at
 `0x0067C250` calls `0x005C88B0` only after a real local level transition.
 `0x005C88B0` resolves the local player actor, and `0x00528A20` writes `180.0`
 to `actor +0x168`. Player tick helper `0x00533520` decrements that timer by one
-per native tick and emits additive sparkle particles while it is positive.
-Player light submission at `0x005299A0` also pulses the stored player-source
-radius from the same timer; a separate randomized value belongs only to its
-immediate draw helper. The effect therefore clears after 180 player ticks and
-legitimately starts again on the next level transition.
+per native tick and emits ordinary source-alpha sparkle particles while it is
+positive.
+Player light submission at `0x005299A0` stamps its `2.6 - RandomFloat(0.2)`
+raster light on every eligible provider pass; the positive level-up timer only
+adds the separate analytic `sin(pi * timer / 180)` radius pulse. The emitter
+and beam stop after 180 player ticks, but each actor-owned sparkle lives for 60
+ticks and may trail for as many as 59 ticks after the emitter stops. A new real
+level transition resets the player-owned timer to 180 and starts the lane
+again.
 
 The visually adjacent Planewalker effect is a different lifecycle. Its
 modifier owns `actor +0x138` bit `0x10`; controlled set/clear evidence is kept

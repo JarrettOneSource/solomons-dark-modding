@@ -190,11 +190,68 @@ IDs `0x51..0x5A` according to build 1000..1009; normal skills use their entry's
 display selector at `+0x30`. `0x00665FF0` refreshes that selector after skill
 state changes.
 
-The level-up weld presentation is built at `0x00671810`: it selects the mixed
-build's element colors and art, then adds randomized overlay color treatment.
-`0x006720F0` renders component rows with names and learned levels. This UI is a
-view of the current synthetic build and component skills; it does not own the
-cast-time stats.
+The level-up weld presentation is built at `0x00671810`. The common card path
+first draws Skills record 13 in white at scale `1.15`. An ordinary skill then
+draws Skills record 164 once in its root color. Welding replaces that ordinary
+record-164 draw with one deterministic split-color mesh: triangle
+`P0/P1/P2` uses the first component color and triangle `P1/P2/P3` uses the
+second. Positions and UVs come from record 164, all positions are scaled by
+`1.15`, renderer modulation is applied component-wise, and `0x00747360`
+performs deterministic x87 float-to-integer rounding before ARGB packing. No
+random number is consumed by this overlay path.
+
+The normal Welding offer uses Skills frame record 14. Its ten display selectors
+`0x51..0x5A` index the Skills subarray whose first entry is atlas record 27, so
+the actual synthetic icon records are `108..117`, not `81..90`. `0x006720F0`
+draws the synthetic icon twice (shadow then main). Progression vtable
+`0x007A0CD4` slot `+0x84 -> 0x00663B30` maps row 52 and build 1000..1009 to one
+synthetic name. The name is medium-font, root-tinted, and shadowed in the normal
+name lane; exact `ARCANE ` (including its trailing space) occupies the family
+lane. The `Welded ...` pair string is a
+separate centered, white, unshadowed quick-description line. There are no six
+component-name/learned-level rows in this renderer: the six IDs below are
+stat-rebuild recipe data only.
+
+| Build | Record | Synthetic name | White pair description | Stat recipe IDs |
+| ---: | ---: | --- | --- | --- |
+| 1000 | 108 | `Burning Bolt` | `Welded Magic Missile + Fireball` | 8, 16, 10, 18, 9, 17 |
+| 1001 | 109 | `Frost Missile` | `Welded Magic Missile + Frost Jet` | 8, 32, 10, 34, 9, 33 |
+| 1002 | 110 | `Ball Lightning` | `Welded Magic Missile + Lightning` | 8, 24, 10, 25, 9, 26 |
+| 1003 | 111 | `Flame Lash` | `Welded Lighting + Fireball` | 16, 24, 18, 25, 17, 26 |
+| 1004 | 112 | `Blizzard Beam` | `Welded Lightning + Frost Jet` | 32, 24, 34, 25, 33, 26 |
+| 1005 | 113 | `Steam Jet` | `Welded Fireball + Frost Jet` | 16, 32, 18, 34, 17, 33 |
+| 1006 | 114 | `Ethereal Boulder` | `Welded Magic Missile + Boulder` | 8, 40, 10, 43, 9, 42 |
+| 1007 | 115 | `Meteor Swarm` | `Welded Fireball + Boulder` | 16, 40, 18, 43, 17, 42 |
+| 1008 | 116 | `Hailstones` | `Welded Frost Jet + Boulder` | 32, 40, 34, 43, 33, 42 |
+| 1009 | 117 | `Crawling Shock` | `Welded Lightning + Boulder` | 24, 40, 25, 43, 26, 42 |
+
+The `Lighting` spelling in build 1003 is the retail string. The card-text
+cluster in `0x006720F0` has seven calls to centered text wrapper `0x004A57C0`:
+shadow/main for name, family, and classification, plus one white
+quick-description call. An earlier conditional eighth call draws `casting` or
+`concentrate`; it is not a component row. Neither the card cluster nor
+split-mesh helper `0x00671810` contains a component-row text loop.
+
+The exact card text ABI is:
+
+- medium name, maximum width 140, source case preserved, at local Y 150;
+- skill-font `ARCANE ` at local Y `150 + measured wrapped-name height`;
+- body-font lowercase `primary cast` at local Y 280;
+- medium white pair description, source case preserved, maximum width 140,
+  vertically centered around local Y 230;
+- black shadows at `(+1,+1)` only for the name, family, and classification.
+
+The classification calls are an exact static card-function ABI, but their
+pixels are not proved on the level-up offer surface. The same-SHA sealed
+Ring-of-Fire offer capture has no classification pixels even though its row is
+category 2 and the Wizard path constructs `secondary cast`. Website offer
+parity therefore suppresses this lane, including Welding's `primary cast`,
+until a targeted live call/clip-state capture resolves the runtime condition.
+
+At the observed card top `302.5`, those fixed anchors are Y `452.5` and
+`582.5`; medium line height is 16 with a 17-pixel line step. Synthetic names and
+pair descriptions remain Title Case. This UI reads the current synthetic build
+but does not own cast-time stats.
 
 ## Custom-content boundary discovered here
 

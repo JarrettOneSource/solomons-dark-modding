@@ -32,6 +32,45 @@ records `108..117`.
 The cap/max column is `mCapLevel / mMaxLevel`. Element and discipline rows have
 descriptions but no numeric cap/max table in their CFG.
 
+### Level-up card art and text ABI
+
+`0x006720F0` renders each ordinary offer as Skills record 13, record 164 in the
+skill root tint, frame record 5, then the icon shadow/main pair. The eight
+packed root tints, in root order Ether, Fire, Air, Water, Earth, Body, Mind,
+Arcane, are `#FFE5FF`, `#FFCBCB`, `#E5FFFF`, `#CBCBFF`, `#CBFFCB`, `#FFE5CB`,
+`#CBD8FF`, and `#E5E5E5`. Advanced rows retain their actual root tint rather
+than sharing a generic advanced color.
+
+Centered text wrapper `0x004A57C0` does not itself change case. The ordinary
+offer uses the compiled uppercase display name resolved for its row, while the
+quick description preserves source case from the CFG. This split is also
+capture-proved: `RING OF FIRE 2` uses the uppercase medium advance 135, while
+`blast all` / `surrounding` / `enemies` use lowercase advances 82/116/69. At
+the observed card top `302.5`, the ordinary card lanes are:
+
+- medium name at Y `452.5`, maximum width 140, with rank suffix appended;
+- skill-font family at `452.5 + measured wrapped-name height`;
+- body-font lowercase `primary cast` for category 1 or `secondary cast` for
+  category 2 at Y `582.5`; other categories leave this lane empty;
+- medium quick description in pure white, no shadow, maximum width 140,
+  vertically centered around Y `532.5`.
+
+Name, family, and classification draw opaque black at `(+1,+1)` before the
+root-tinted main pass. Medium height is 16 with a 17-pixel line step. Family
+strings deliberately retain the spaces left after removing the compiled root
+labels: ` ETHER`, ` FIRE`, ` AIR`, ` WATER`, ` EARTH`, `BODY `, `MIND `, and
+`ARCANE `. The extracted lowercase medium glyphs visually read as small caps;
+changing the provided case changes advances and is not equivalent. Welding
+replaces the ordinary record-164 tint with its split mesh and uses the special text
+contract in [`spell-welding.md`](spell-welding.md).
+
+That classification call is a static card-function ABI, not yet a proved
+visible level-up-offer lane. The same-SHA sealed Ring-of-Fire offer capture has
+no classification pixels at Y `574..583`, although row 21 is category 2 and the
+Wizard path constructs `secondary cast`. Current offer-surface parity must
+suppress this lane until a targeted live call/clip-state capture resolves the
+runtime condition; name, family, and white description are directly visible.
+
 | ID | Name | Family | Cap / max | Skills record | Tunable value properties |
 | ---: | --- | --- | ---: | ---: | --- |
 | 0 | Element of Ether | element | — | `27` | — |
@@ -636,7 +675,7 @@ the payment fails.
 | `73` | Fire Wall | Builds a line perpendicular to the aim vector and creates a series of `Fire_Goodguy (0x7EE)` patches along it, each carrying configured wall damage and caster ownership. |
 | `74` | Ether Drain | Creates `EtherDrain (0x807)`, writes configured per-tick damage, resolves the aimed origin through the world, and registers it. |
 | `76` | Call Comet | Calls `0x0063FD00`, which creates `Comet (0x80C)` with the configured freeze and damage values at the selected point. |
-| `77` | Turn Undead | `0x00647EF0` queries the area and acts only on `Skeleton (0x3E9)`, `SkeletonArcher (0x3EA)`, `SkeletonMage (0x3EB)`, and `Zombie (0x3EE)`. It turns each away from the cast point, writes the flee heading/state, scales its attack strength by `mWeaken` when not already stamped, and records the current tick for the flee interval. |
+| `77` | Turn Undead | `0x00647EF0` first reuses registry 52 `sounds\levelup` twice with point-derived gain and exact pitches `2.0` and `3.0`, then queries the area and acts only on `Skeleton (0x3E9)`, `SkeletonArcher (0x3EA)`, `SkeletonMage (0x3EB)`, and `Zombie (0x3EE)`. It turns each away from the cast point, writes the flee heading/state, scales its attack strength by `mWeaken` when not already stamped, and records the current tick for the flee interval. This reuse is separate from the same asset's gain-1 level-transition owner at `0x00528A20`. |
 | `78` | Mindstar | Toggles progression byte `+0x8DD`, refreshes progression state, and produces the activation presentation; no projectile class is allocated. |
 | `79` | Regenerate | Toggles progression byte `+0x8DE`, refreshes progression state, and produces the activation presentation; regeneration then runs from player progression/tick state. |
 

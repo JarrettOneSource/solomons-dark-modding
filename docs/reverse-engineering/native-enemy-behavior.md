@@ -369,6 +369,12 @@ The fixture is an acceptance oracle, not a replacement for the state tables:
 one trace proves the executed branch and timing, while the static reconstruction
 specifies the unexecuted config branches.
 
+GoodImp's lifetime is now closed independently of recipe generalization. Its
+constructor/default Ember path assigns 300 ticks. Each ordinary tick decrements
+the lifetime once, and the targetless branch decrements it a second time. On
+expiry it creates the Fire release presentation and removes the allied actor;
+it does not enter the hostile reward-death path.
+
 ## Not Yet Reversed
 
 - Recipe `+0x82`, `+0x98`, and `+0xA8` have no independent recovered live-brain
@@ -379,6 +385,6 @@ specifies the unexecuted config branches.
   not yet simplified.
 - Dire Faculty primary/secondary index 3 have editor labels but no executable
   event branch in `0x004804D0`; they are dormant, not missing browser work.
-- GoodImp lifetime duration and several boss recovery frame constants remain
-  executable-trace/state-machine facts rather than generalized recipe fields.
-  Preserve the native trace behavior; do not infer them from unrelated fields.
+- Several boss recovery frame constants remain executable-trace/state-machine
+  facts rather than generalized recipe fields. Preserve the native trace
+  behavior; do not infer them from unrelated fields.

@@ -21,6 +21,11 @@ The evidence stack is:
   progression routines at `0x006594E0`, `0x0065F5B0`, `0x00660220`,
   `0x006614D0`, `0x00661530`, `0x006623F0`, `0x0067C250`, `0x0067CB70`, and
   `0x00680AB0`;
+- a serialized 2026-08-15 read-only headless-Ghidra closure pass over
+  `Ember::Tick 0x0060D7E0`, the GoodImp lifecycle at
+  `0x00529FE0/0x0052A050/0x0052C1A0`, Lightning `0x0053F9C0`,
+  `Mod_Stun 0x00623180/0x006231B0/0x00625850`, and StormCloud
+  `0x005E22E0/0x005E2440/0x006021A0`;
 - the generated 82-row native catalog and its exact CFG arrays;
 - the landed spell/effect lifecycle work in
   [`native-skills-and-spells.md`](native-skills-and-spells.md) and
@@ -206,6 +211,14 @@ On every crossed threshold, `0x0067C250` increments the actor's level, advances
 the previous/next threshold fields, refills that actor's HP and MP, and queues
 one level-up choice in local non-network mode. A single large award can cross
 multiple levels and repeats those actions for every threshold.
+
+After that threshold loop, the local-only tail runs once through
+`0x0067C30B -> 0x005C88B0 -> 0x00528A20`. That player owner both rearms the
+180-tick presentation lane and requests registry 52 `sounds\levelup` once at
+gain `1.0`. Therefore one award crossing N levels creates N pending choices but
+only one presentation rearm and one level-up sound. Separate award invocations
+remain distinct events even when a sparse snapshot observes their sequence as
+a gap.
 
 **Stock cap defect and browser rule.** Level 75 is entered at 8,500,000 XP.
 The last table value, 10,000,000, is the threshold to leave level 75. Stock has
@@ -528,7 +541,7 @@ stock Deflect/Creativity defects are inherited below rather than re-derived.
 | 16 | **Fireball.** On cast, pay `mManaCost[r]`, create one `Fireball 0x7D4`, and copy `mDamage[r]` plus rows 17-20/22 into its impact payload. Direct impact dispatches that base damage through the common damage path. | HIGH |
 | 17 | **Embers.** Fireball impact creates `round(mFragments[r])` ember children, each with `mDamage[r]`; add `mManaCost[r]` to Fireball cost. Embers-to-Imps and Immolate replace/extend the spent-ember event, not the learned row. | HIGH |
 | 18 | **Explode.** Fireball impact performs an area query of configured `mRadius[r]` and applies `mDamage[r]` splash payload; add `mManaCost[r]`. Its result is impact-local, with no refreshed actor scalar. | HIGH |
-| 19 | **Embers to Imps.** On spent-ember event, create allied Imp actors instead of merely retiring those fragments and give them `mDamage[r]` attack payload; add `mManaCost[r]`. The summoned actor owns its later chase state; the caster row owns rank. Mutually exclusive with Immolate. | MEDIUM |
+| 19 | **Embers to Imps.** In `Ember::Tick 0x0060D7E0`, a spent authoritative mode-2 Ember creates `GoodImp 0x3ED` and `Fire 0x7E3`, copies its owner/team, writes the snapshotted `mDamage[r]` payload to both Imp attack lanes, and gives the Imp `300` native ticks. `GoodImp::Tick 0x0052C1A0` owns nearest-target chase, decrements lifetime once per tick and once more while targetless, then creates Fire and removes the Imp. Add `mManaCost[r]`; mutually exclusive with Immolate. | HIGH |
 | 20 | **Immolate.** On ember impact/expiry, apply an additional explosion carrying `mDamage[r]`; add `mManaCost[r]`. Mutually exclusive with Embers to Imps. | HIGH |
 | 21 | **Ring of Fire.** Pay `mManaCost[r]`; create the expanding `MovingFire 0x7E6` segment ring and terminal `Shockwave 0x7E7`, each attributed to the caster and carrying `mDamage[r]`. Contact pushes enemies through the ring actor's event path. | HIGH |
 | 22 | **Burn.** Refresh `mDamage[r]` at actor `+0x89C`. Qualifying fire contact attaches/refreshes `Mod_Burn 0x1B73`, whose timed tick applies that damage payload. It has no separate mana cost. | HIGH |
@@ -546,9 +559,9 @@ object, and each emitted world actor carries that actor's ownership.
 | ---: | --- | --- |
 | 24 | **Lightning.** A held cast performs an ordered ray/chain query every native tick. Primary contact payload is `mDamage[r] / 100` per 100 Hz tick and mana use is `mManaCost[r] / 100` before actor modifiers. There is no projectile lifetime. Every subsequent chain hop multiplies the prior hop's damage by `0.6`. | HIGH |
 | 25 | **Chaining.** The per-tick Lightning query may append `round(mArcs[r])` additional distinct targets; add `mManaCost[r]/100` mana per held tick. The target list prevents reuse within that tick; each appended hop uses the `0.6` damage decay. | HIGH |
-| 26 | **Stun.** A Lightning contact creates/refreshes `Mod_Stun 0x1B6A` carrying `mStunAmount[r]` as the native slowdown/hold percentage; add `mManaCost[r]/100` per held tick. The modifier owns target-local duration/merge state. | MEDIUM |
+| 26 | **Stun.** Lightning `0x0053F9C0` consumes the refreshed movement factor derived from `mStunAmount[r]` at wizard `+0x288`; when it is below one, contact creates `Mod_Stun 0x1B6A`, copies that factor to modifier `+0x1C`, and sets `+0x14=25` native ticks. Apply `0x006231B0` multiplies target movement `+0x120`; merge `0x00625850` keeps the maximum remaining duration and minimum movement factor. Add `mManaCost[r]/100` per held tick. | HIGH |
 | 27 | **Magic Storm.** Pay `mManaCost[r]`; create `StormCloud 0x7F0` for 1,000 active ticks. At its authoritative strike cadence, choose a target with the active gameplay RNG and draw damage between `mDamage1[r]` and `mDamage2[r]`; dispatch electric flag `0x20`. | HIGH |
-| 28 | **Magic Tornado.** Changes Magic Storm to the moving-cloud mode at cloud `+0x180`, gives it `mSpeed[r]` movement input and `mDuration[r]*100` duration input, and adds `mManaCost[r]`. Rank replaces those inputs; the cloud owns its later path. | MEDIUM |
+| 28 | **Magic Tornado.** Magic Storm enables moving-cloud mode at cloud `+0x180`, computes `frequency_factor = 1 + mSpeed[r]/100`, and adds `trunc(mDuration[r]*100)` ticks to the StormCloud's base 1,000-tick lifetime. `StormCloud::Tick 0x006021A0` resets each strike countdown to `trunc(numerator / frequency_factor)` for a uniform integer `numerator` in `[30,120]`, then authoritatively chooses one hostile target and rolls the configured storm damage. `mSpeed` changes strike frequency, not cloud translation; add `mManaCost[r]`. | HIGH |
 | 29 | **Hurricane.** While Lightning is held, the handler can create storm/hurricane strikes using cached damage endpoints `mDamage1[r]/mDamage2[r]` at progression `+0x8D4/+0x8D8`; add `mManaCost[r]/100` per held tick. Each strike uses its event-time active gameplay RNG draw. Mutually exclusive with Disintegrate in offers. | MEDIUM |
 | 30 | **Prismatic Shock.** Pay `mManaCost[r]`; the rectangular cast wave attaches `Mod_Prismatic 0x1B76` for `mDuration[r]*100` ticks. Apply sets target byte `+0x15C |= 0x20`; removal clears that bit. When an incoming contact's flags share `0x20`, `Badguy_Contact 0x0048A290` subtracts the secondary damage component a second time. This is the exact electric-susceptibility effect. | HIGH |
 | 31 | **Disintegrate.** Refresh `round(mChance[r])` at progression `+0x8D2`; add `mManaCost[r]/100` per Lightning tick. On a successful active-gameplay-RNG percentile roll, the current Lightning contact sets transient flag `0x4`; `Badguy_Contact` forces HP to zero only when post-hit HP is below `0.20 * maxHP`. Mutually exclusive with Hurricane. | HIGH |
@@ -630,7 +643,7 @@ They are stock behavior, including the defects; G6 does not invent fixes.
 | 74 | **Ether Drain.** Pay `mManaCost[r]`; create `EtherDrain 0x807` with scale-in, 100 active ticks, and scale-out. Nearby actors are pulled inward and close actors receive `mDamage[r]/100` per-tick contact with flags `0x10A`; loose objects are also pulled and consumable nonempty Gold/Sack containers are protected from premature removal. | HIGH |
 | 75 | **Iron Golem.** When Raise Golem creates a summon, set golem byte `+0x210`, write `reflectRatio=mReflect[r]/100` at `+0x214`, and include `mManaCost[r]` in the summon cost. After the 400-tick assembly grace, a nearby physical source receives `incomingPrimary * reflectRatio`; secondary incoming damage is not reflected. | HIGH |
 | 76 | **Call Comet.** Pay `mManaCost[r]`; create `Comet 0x80C`, copy damage `mDamage[r]` to `+0x13C` and freeze duration `mFreeze[r]*100` to `+0x140`. Impact creates the large FreezeWave burst, applies damage, and dispatches that freeze duration to the area. | HIGH |
-| 77 | **Turn Undead.** Pay `mManaCost[r]`; affect only Skeleton, Archer, Mage, and Zombie. Set flee heading/state for `mFlee[r]*100` ticks and, once per stamped application, multiply attack strength by `1-mWeaken[r]/100`. Reapplication refreshes control state without repeatedly compounding the weakening stamp. | HIGH |
+| 77 | **Turn Undead.** Before its target query, dispatch registry 52 `sounds\levelup` twice as a fixed ordered pair at pitches `2.0` then `3.0`; each request separately derives gain from the cast point. Pay `mManaCost[r]`; affect only Skeleton, Archer, Mage, and Zombie. Set flee heading/state for `mFlee[r]*100` ticks and, once per stamped application, multiply attack strength by `1-mWeaken[r]/100`. Reapplication refreshes control state without repeatedly compounding the weakening stamp. | HIGH |
 | 78 | **Mindstar.** Toggle actor byte `+0x8DD`. On refresh, add `maxMP * mHoard[r]/100` to actor `+0x740`, then add one temporary effective rank to every learned row `8..77`, capped at each compiled maximum. Permanent ranks do not change. | HIGH |
 | 79 | **Regenerate.** Toggle actor byte `+0x8DE`. Refresh adds `maxMP * mHoard[r]/100` to actor `+0x740`. Each specialized progression update adds `1.5/game_timing_scale` HP; with generic health regeneration the combined per-update delta is `(1.5 + health_regeneration(+0x9C)/10)/game_timing_scale`, capped at max HP. Rank changes only the hoard percentage. | HIGH-LIVE |
 | 80 | **Plane Orb.** Runtime-only primary forced by Planewalker. Cast creates `PlaneOrb 0x7EF`, copies caster ownership, derives payload `+0x154` from equipped-item state, and uses the plane-side contact lifecycle. It has no CFG, learned ranks, or ordinary offer eligibility. | MEDIUM |
@@ -792,7 +805,7 @@ using this order:
 - **Row 81 has no recovered consumer (LOW).** It occupies native selector space
   beside weld-special handling, but no CFG, ordinary acquisition, cast, passive,
   or event path was reachable. Reserve it and never offer it.
-- **Rows 14, 19, 26, 28, 29, 33, 50, 53, and 80 remain MEDIUM.** Their catalog
+- **Rows 14, 29, 33, 50, 53, and 80 remain MEDIUM.** Their catalog
   inputs, state locations, and principal consumers are statically recovered,
   but a complete live event trajectory or one initializer edge was not safely
   reachable in the solo fixture. Implement only the stated behavior; do not
