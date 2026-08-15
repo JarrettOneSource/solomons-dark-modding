@@ -1077,10 +1077,37 @@ def test_native_progression_actor_layout_and_all_skill_rows_are_pinned() -> str:
                 f"native skill {skill_id} confidence changed from {expected_confidence} without new evidence"
             )
     closure_claims = {
+        16: (
+            "`mDamage16[r] - mDamage18[r]`",
+            "private random seed",
+            "impact presentation precede",
+        ),
+        17: (
+            "`360/N`",
+            "pre-ticked ten times",
+            "Contact consumes an Ember without running its retirement mode",
+        ),
+        18: (
+            "`visual_scale=(mRadius[r]-10)*0.18+1`",
+            "dimension `visual_scale*110`",
+            "`mDamage[r]*0.5`",
+        ),
         19: (
             "Ember::Tick 0x0060D7E0",
             "GoodImp::Tick 0x0052C1A0",
-            "`300` native ticks",
+            "`mDamage[r]*0.5`",
+            "`300` ticks",
+            "Contact-consumed Embers do not convert",
+        ),
+        20: (
+            "life `1`",
+            "footprint dimension `110`",
+            "Contact-consumed Embers do not immolate",
+        ),
+        22: (
+            "exactly `200` ticks",
+            "`mDamage[r]/200`",
+            "maximum per-tick damage",
         ),
         26: (
             "wizard `+0x288`",

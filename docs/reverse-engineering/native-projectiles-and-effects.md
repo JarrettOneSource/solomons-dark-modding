@@ -465,18 +465,36 @@ translation speed.
 
 ### Embers to Imps and GoodImp (`0x7D6`, `0x3ED`)
 
-`Ember::Tick 0x0060D7E0` checks the mode short at `+0x164`. When a mode-2
-Ember is spent and its group byte `+0x5C` is authoritative zero, it creates a
-`GoodImp 0x3ED`, copies team/owner state, writes the Ember's snapshotted damage
-short to both Imp attack lanes `+0x1B4/+0x1B8`, copies the lifetime short to
-Imp `+0x23C`, and registers the summon. The same retirement branch creates a
-`Fire 0x7E3` patch before removing the Ember.
+`Ember::Tick 0x0060D7E0` checks the mode short at `+0x164`. Only a naturally
+spent, grounded Ember with life below `1` enters the retirement branch; actor
+contact consumes it without retirement. When an authoritative mode-2 Ember is
+spent, it creates `GoodImp 0x3ED`, copies team/owner state, writes one half of
+the snapshotted damage short to both Imp attack lanes `+0x1B4/+0x1B8`, copies
+the lifetime short to Imp `+0x23C`, and registers the summon. The same branch
+creates a `Fire 0x7E3` patch before removing the Ember. Mode 1 instead invokes
+the common explosion helper with scale `1`, no fragments, and one-half of its
+snapshotted Immolate damage per returned target.
 
 GoodImp construction `0x00529FE0` defaults `+0x23C` to 300 ticks. Initialize
 `0x0052A050` acquires the nearest eligible target for a locally authoritative
 Imp. Tick `0x0052C1A0` owns pursuit and decrements the lifetime once per tick,
 with an additional decrement while no target is available. Expiry creates a
 `Fire 0x7E3` patch and removes the Imp.
+
+### Fire Burn modifier (`0x1B73`)
+
+The common fire helper `0x00624300` reads the attacker's cached Burn row at
+`+0x89C` and calls `0x00624210`. A positive payload constructs
+`Mod_Burn 0x1B73` with exactly `200` native ticks and stores damage per tick as
+`payload/200`, so uninterrupted lifetime damage equals the authored row-22
+value. `Mod_Burn::Tick 0x00629A40` applies that fixed amount on every tick with
+damage flags `0x18`. Specialized merge `0x00627690` keeps the greater remaining
+duration and greater per-tick damage; it does not stack parallel instances.
+
+The modifier's presentation cycles BadGuys records `333..342` by
+`(global_tick/3)%10`, uses additive fire art and a target-scaled glow, and
+ramps the initial 50 ticks. This is target-owned modifier presentation, not a
+new projectile or a caster-local skill timer.
 
 ### Lightning Stun modifier (`0x1B6A`)
 

@@ -189,6 +189,48 @@ area lane, dispatches through `0x0063E7D0`, and removes the Fireball. The
 per-tick Fireball trail is transient `Anim_FireParticle`/`ZAnim` presentation;
 it is not a persistent `Fire_Goodguy` gameplay actor.
 
+The complete impact payload is constructed by `0x0053DC60`. It copies row 16
+base damage, row 18 explosion damage/radius, row 17 Ember damage/count, the
+mutually exclusive row 19 or 20 retirement mode and damage, a 300-tick GoodImp
+lifetime for mode 2, and a private integer seed in `[0,1000000]`. Mana is the
+sum of active rows 16-20; inactive mutually-exclusive rows contribute zero.
+Accepted actor contact deals row-16 damage minus row-18 explosion damage when
+Explode is active, otherwise the full row-16 damage. The projectile is removed
+and `fireballhit` plus the common 16-tick impact presentation are requested
+before the optional area/fragment work.
+
+`0x00642BF0` owns that area/fragment work. For Explode it receives
+`visual_scale=(radius-10)*0.18+1`, queries the native rectangular footprint
+with dimension `visual_scale*110`, and gives every returned hostile fixed
+damage `explode_damage*0.5`. The same path runs for actor and terrain impacts.
+It then seeds a private RNG from the Fireball seed. For `N>0`, step is `360/N`,
+the first base heading is uniform in `[0,360]`, and child `i` uses the current
+base plus signed uniform jitter of magnitude at most `step/3` before the base
+advances by one step. Horizontal speed is
+`(1.5 + U[0,0.5])*0.75`, spawn position is impact plus ten times that velocity,
+height is `-6`, and vertical velocity is `-(2 + U[0,3])`. Every child carries
+the snapshotted Ember and retirement payload and is ticked exactly ten times
+immediately after registration.
+
+`Ember::Tick 0x0060D7E0` advances airborne motion by
+`min(abs(vertical_velocity),1)`, adds gravity `0.15`, bounces with multiplier
+`-0.5`, halves horizontal velocity on each bounce, and settles when rebound
+magnitude is at most `0.5`. Grounded life falls by `0.015` per tick from its
+initial `3`; animation phase advances by `0.25` and wraps at `4`. A normal
+contact consumes the Ember after applying its damage and Burn helper and does
+not execute a retirement mode. Only a naturally spent grounded Ember below
+life `1` runs mode 1 or 2. Mode 1 re-enters the area helper at scale `1`, no
+fragments, and fixed target damage `spent_damage*0.5`. Mode 2 creates GoodImp
+with both attack endpoints `spent_damage*0.5`, lifetime `300`, and a sibling
+`Fire 0x7E3` patch. Mode zero remains until life reaches zero.
+
+Ember presentation is not a Fireball trail alias. Its draw path
+`0x0060DDD0` uses BadGuys records `267..270` at actor position plus height,
+BadGuys 15 for the orange glow, and `251..254` for contact. The main sprite is
+source-alpha plus an additive phase layer; alpha is `min(life,1)`, while the
+glow uses `min(life*0.2,1)` and `min(life,1)` scale. Its optional enhanced
+airborne geometry is presentation-only.
+
 The new contact golden observed one `4.0` HP transition at a projectile-to-
 target-center distance of `30.5124151`. The target took no additional HP
 damage during the following `499` observed ticks. That observation constrains

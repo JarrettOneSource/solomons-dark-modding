@@ -172,6 +172,11 @@ temporary ally by Ember. Creation is itself group-zero gated. Treating all
 minions as `GoodGuy`, or treating them all as non-enemy actors, would therefore
 be incorrect.
 
+The conversion writes one half of the snapshotted Embers-to-Imps damage to
+both inherited Imp attack endpoints `+0x1B4/+0x1B8`; it does not copy the full
+row value. Ordinary Imp presentation is reused unchanged: BadGuys records
+`285..332` for body/facing and `333..342` for its upper fire effect.
+
 The constructor seeds a 300-tick lifetime at `+0x23C`. The tick resolves its
 target from the durable actor-world group/slot pair at `+0x240/+0x242`, runs
 the inherited Imp behavior at `0x00485DC0`, decrements the lifetime (twice
