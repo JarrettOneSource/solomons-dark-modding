@@ -150,8 +150,10 @@ The exact wave-flag transforms recovered at `0x0046B390` are:
 - `SHIELD`, `SHIELDOTHERS`: self/other shield health 50 and interval 10;
   `SHIELDSTRONG` multiplies both shield-health lanes by 9 and `SHIELDFAST`
   halves the interval;
-- `SPLIT`: split count 1..2; `SPLITMANY`: native wave-scaled split count whose
-  exact formula remains open;
+- `SPLIT`: remaining split depth 1..2. `SPLITMANY` uses
+  `q = trunc((wave - 25) / 5)` and inclusive range `[q + 1,q + 3]`: a first
+  draw below two writes two, otherwise a second independent draw from that
+  range is the depth. Retail waves 35/42 therefore produce depth 3..5/4..6;
 - `MANYMAGGOTS`: maximum 50; `STRONGMAGGOTS`: child HP/damage 5;
 - `POISONARROW`: secondary damage primary times 3; `FIREARROW`: secondary
   damage primary;
@@ -229,6 +231,15 @@ eligible target and is still inside the family contact/reach geometry. A
 target that dies, disconnects, leaves reach, or is replaced by reacquisition
 takes no marker damage. Exact per-family weapon shapes remain open; the named
 center-distance Website bounds below are the temporary marker-time geometry.
+
+That temporary geometry must remain coherent with the recovered native actor
+response. `MoveStep` separates overlapping circles to
+`actorRadius + targetRadius + 0.1`; the `0.1` is part of the shared native
+collision contract, not optional render clearance. Website melee eligibility
+therefore uses the greater of the named center reach and that complete settled
+contact distance. Omitting the `0.1` leaves Skeletons, Imps, and some Zombies
+permanently outside their own marker reach after ordinary collision response,
+making player-forced transient overlap the only path to damage.
 
 Confirmed family ownership beyond the Skeleton template is:
 
@@ -450,7 +461,9 @@ survival loop complete; none is promoted to recovered retail timing:
   extra-arrow spacing is 4 degrees, and at most eight extra arrows are
   accepted. These are web bounds, not recovered native formulas;
 - center-distance attack reaches are Demon 180, Imp 28, Skeleton 36, Archer
-  240, Mage 220, Wraith 52, and Zombie 48;
+  240, Mage 220, Wraith 52, and Zombie 48; melee marker eligibility is the
+  greater of that family bound and
+  `actorRadius + targetRadius + nativeSeparationEpsilon` as required above;
 - terminal presentation windows are Coffin 31, Demon 49, Imp 19,
   Skeleton/Archer/Mage 24, and Wraith/Zombie 36 ticks;
 - enemy projectile `(speed, contact radius, lifetime, homing)` programs are
@@ -471,9 +484,10 @@ survival loop complete; none is promoted to recovered retail timing:
   config unit with ally range 240, and four ticks for the Mage lightning
   effect sample. The Wraith's 50-tick Dazzle ramp is exact native evidence,
   not part of this bounded list;
-- Wraith collision radius is 20. `SPLITMANY` is bounded to
-  `min(15, max(2, 1 + floor(waveOrdinal / 3)))` until its exact native formula
-  is closed;
+- Wraith collision radius is 20. Imp splitting is exact rather than a web
+  bound: each permitted death emits two children at one-lower depth, the
+  pre-pair live-Imp guard is 68, and persistent Imp construction is capped at
+  70;
 - overlapping poison keeps the strongest damage-per-tick lane and the longest
   remaining duration, rather than claiming an unrecovered native stacking
   rule;

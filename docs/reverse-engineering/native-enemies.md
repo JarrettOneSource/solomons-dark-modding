@@ -173,7 +173,7 @@ compiled transformations are:
 | `RANGEUP`, `RANGEDOWN`, `RANGEEASY` | `0x0E..0x10` | range selectors 2, 1, 3 |
 | `SHIELD`, `SHIELDOTHERS` | `0x11`, `0x12` | self/other shield, interval 10, strength 50 |
 | `SHIELDSTRONG`, `SHIELDFAST` | `0x13`, `0x14` | shield strength x9 / interval halved |
-| `SPLIT`, `SPLITMANY` | `0x15`, `0x16` | random 1..2 / wave-scaled split count |
+| `SPLIT`, `SPLITMANY` | `0x15`, `0x16` | remaining depth 1..2 / two-draw wave depth (retail wave 35: 3..5; wave 42: 4..6) |
 | `MANYMAGGOTS`, `STRONGMAGGOTS` | `0x17`, `0x18` | max Maggots 50 / Maggot HP and damage 5 |
 | `POISONARROW`, `FIREARROW` | `0x19`, `0x1A` | arrow type 2 with derived extra damage / arrow type 1 |
 | `ARMOR` | `0x1B` | enable armor and adjust HP |
@@ -275,10 +275,22 @@ axes.
 ## Imp variants
 
 `Imp 0x3EC` uses `0x00485DC0` for its flying chase and `0x00492E10` for
-rendering. `0x004824A0` handles death splitting. `SPLIT` chooses one or two
-children; `SPLITMANY` derives a count from wave progression. Child Imps are
-created through the config path rather than cloned as raw memory, which lets
-the path reduce/retain split state and makes recursive splitting possible.
+rendering. `BuildEnemyConfig 0x0046B390` writes remaining split depth to recipe
+`+0x84`: `SPLIT` selects depth one or two. For `SPLITMANY`, let
+`q = trunc((wave - 25) / 5)`; it samples inclusive `[q + 1, q + 3]`, clamps to
+two when that first sample is below two, and otherwise samples the same range
+again through inclusive helper `0x00448450`. Retail uses the flag only at waves
+35 and 42, producing depths `3..5` and `4..6`.
+
+`Imp::Death 0x004824A0` treats that value as depth, not child count. When depth
+is positive and live global `DAT_00819914 <= 68`, its angle loop is exactly
+`-90, +90` degrees. Both the raw factory path `0x00462730(0x3EC)` and evaluated
+recipe path `0x00463B50(parent +0x1D0)` overwrite child actor
+`+0x210 = parent +0x210 - 1` before registration at `0x0063F6D0`, so both
+children recurse equally. `Imp::Imp 0x00473E30` increments the live counter and
+marks constructions above 70 deleted; `0x00473FA0`, `0x00474D90`, and
+`0x004784F0` decrement it. The pre-pair split guard therefore permits a
+68-to-70 transition but no unbounded tree.
 
 `GoodImp 0x3ED` is a different factory class and team relationship, not a
 green recolor of hostile Imp. It targets hostile actors, expires on a
