@@ -575,6 +575,7 @@ from static_re_projectile_spell_mechanics_contracts import (
     test_air_lightning_cadence_and_contact_light_source_are_pinned,
     test_cast_glyph_emitter_index_and_offsets_are_pinned,
     test_cast_glyph_emitter_resolves_every_recorded_projectile_spawn,
+    test_class_specific_rails_wall_shadow_painters_are_pinned,
     test_earth_charge_curve_and_release_geometry_are_exact,
     test_earth_boulder_second_pass_visual_ownership_is_pinned,
     test_ether_flight_compositor_and_contact_ownership_are_pinned,
@@ -2242,6 +2243,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Ether flight compositor and contact ownership are pinned",
         test_ether_flight_compositor_and_contact_ownership_are_pinned,
+    ),
+    (
+        "Rails and Wall custom shadow painters are pinned",
+        test_class_specific_rails_wall_shadow_painters_are_pinned,
     ),
     (
         "Cast glyph emitter index arithmetic and element offsets are pinned",

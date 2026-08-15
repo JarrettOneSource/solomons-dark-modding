@@ -279,9 +279,10 @@ The primary call gives `0x00531640` the staff cast point, a half-distance
 direction-derived middle point, and the clipped or retained-target endpoint.
 A contacted actor contributes a `-20` Y attachment offset. Primary segments
 enable the source glow; chained segments disable it and perturb the middle
-point by a random radial vector. `0x00531640` also walks the path in `50`-unit
-steps and emits auxiliary world-light/draw work only once a sample is at least
-`220` units from the original source (`48400` squared-distance constant).
+point by a random radial vector. `0x00531640` also walks both straight control
+legs in `100`-unit steps, considers the exact endpoint of each leg, and emits
+auxiliary Region lights only once a sample is at least `220` units from the
+original source (`48400` squared-distance constant).
 
 `Anim_LightningBolt` has vtable `0x0078556C`, object size `0x70`, integer
 lifetime `+0x2C = 2`, tick `0x00453BD0`, and render `0x004575D0`. Its constructor
@@ -645,15 +646,17 @@ Over render `0x00457A00` omits the half-core draw:
    `min(3*min(0.5*phase,lifetime),1)`.
 
 The draw-state byte set to `1` resolves through `0x004208A0` to D3D
-`SRCALPHA, ONE`; zero is ordinary `SRCALPHA, INVSRCALPHA`. These objects enter
-the common transient/world lists and are culled, Y-sorted, camera-transformed,
-and locally lit by the common world dispatcher. They are not screen overlays.
+`SRCALPHA, ONE`; zero is ordinary `SRCALPHA, INVSRCALPHA`. Normal enters a
+`ZAnim` transient Y-sort queue; Over enters a direct Region ObjectManager and
+draws later. Both call the child renderer directly and bypass the common
+local-light dispatcher. They are not screen overlays.
 `Text_Draw` at `0x00415130` writes the submitted scale directly to all three
 matrix diagonal entries; `0x00414540` then transforms the registered
 pixel-space quad. There is no texture-dimension normalization. The renderer's
-float local color is multiplied by common Region-light channels before final
-byte quantization, so a web renderer must not pre-quantize the cyan-to-white
-red channel before composing that tint.
+float local color uses the restored white multiplier before final byte
+quantization. A web renderer must not pre-quantize the cyan-to-white float tint:
+it must multiply first, then truncate each final channel rather than round it
+when packing the submitted color.
 
 #### Exact atlas records and learned-branch separation
 
@@ -1423,23 +1426,23 @@ and tables above.
 
 | Slice | Native press/hold/release contract | Native world visual contract | Native cast audio contract |
 | --- | --- | --- | --- |
-| Ether / Magic Missile (`8`, type `0x7D3`) | one actor on the press action marker; holding the same press does not duplicate that action | spawn at staff emitter plus `(0,+10)`; velocity `3` world units/tick; radius `15`; two-pass body compositor `0x00535A30` with `BadGuys[110..112]`; world queued; no fixed lifetime; record 53 is contact-only | registry 57 `sounds\\magicmissile` once at emission; flight is silent |
-| Fire / Fire Missile (`16`, type `0x7D4`) | one actor on the press action marker | emitter plus `(0,+10)` plus `20` along aim; velocity `4.5`/tick; radius `22.5`; core `BadGuys[110]`; main strip `BadGuys[255..266]`, frame `(age/3)%12`; per-tick cosmetic trail `BadGuys[267..270]` | registry 97 `sounds\\throwfire` once at emission; flight is silent |
+| Ether / Magic Missile (`8`, type `0x7D3`) | one actor on each Staff action marker; a still-held primary queues the next action after the prior action ends | spawn at staff emitter plus `(0,+10)`; velocity `3` world units/tick; radius `15`; two-pass body compositor `0x00535A30` with `BadGuys[110..112]`; world queued; no fixed lifetime; record 53 is contact-only | registry 57 `sounds\\magicmissile` once at emission; flight is silent |
+| Fire / Fire Missile (`16`, type `0x7D4`) | one actor on each Staff action marker; held input requeues after action end without a release edge | emitter plus `(0,+10)` plus `20` along aim; velocity `4.5`/tick; radius `22.5`; core `BadGuys[110]`; main strip `BadGuys[255..266]`, frame `(age/3)%12`; per-tick cosmetic trail `BadGuys[267..270]` | registry 97 `sounds\\throwfire` once at emission; flight is silent |
 | Air / Lightning (`24`) | start on press, sustain once per held tick, stop on release; constant Staff action is `K=0` on insertion and `K=7` thereafter; no projectile actor | reach-205 rank-1 ray; each tick creates a two-tick dual ribbon using `BadGuys[44]`, a one-shot source corona, and a five-tick endpoint corona whose four circles all use `BadGuys[110]` plus paired forks `[1836..1839]` | registry 54 `sounds\\lightningstart` on the start edge; registry 162 `sounds\\lightningloop__loop` owned for the channel lifetime |
 | Water / Frost Jet (`32`) | start on press, emit once per held tick, stop on release; constant Staff action is `K=0` on insertion and `K=7` thereafter; no persistent gameplay projectile | rank-1 cone reach `205` is immediate gameplay only; shipped Enhanced Effects default emits two speed-`4` visual transients/tick; 75% Normal / 25% Over, 32-33 ticks; `BadGuys[30]` core plus `[28]` glint only | registry 44 `sounds\\icestart` on the start edge; registry 161 `sounds\\iceloop__loop` owned for the channel lifetime |
-| Earth / Boulder (`40`, type `0x7D5`) | create on the first active tick; charge while the selected primary remains latched; after input release, the player tick retains Earth while charge is strictly below `0.3`, then releases the same cached actor on the following eligible tick | constructor charge is float32 `0.18`; the first post-tick actor row is age `1` at `0.181250006`; add float32 `0.00125` per active tick and clamp at `1`; a two-frame request reaches update `97` at `0.301249892` while still held, then first flies at age `98`; held radius `15`; release speed `3`/tick; persistent aura record 15 surrounds the discretely rebuilt/depth-sorted `[168..171]` shell; additive opening record 86 fades in about 29 ticks; called rocks and breakup use `[2008..2010]`; shell orientation freezes on release but the whole visual retains stock jitter | actor creation plays registry 87 `sounds\\startboulder` once; registry 159 `sounds\\gatherrocksloop__loop` starts with Earth and stops on primary transition or charge cap; moving boulder owns registry 168 `sounds\\rollingstoneloop__loop` |
+| Earth / Boulder (`40`, type `0x7D5`) | create on the first active tick; charge while the selected primary remains latched; after input release, the player tick retains Earth while charge is strictly below `0.3`, then releases the same cached actor on the following eligible tick | constructor charge is float32 `0.18`; the first post-tick actor row is age `1` at `0.181250006`; add float32 `0.00125` per active tick and clamp at `1`; a two-frame request reaches update `97` at `0.301249892` while still held, then first flies at age `98`; held radius `15`; release speed `3`/tick; persistent aura record 15 surrounds the discretely rebuilt/depth-sorted `[168..171]` shell; additive opening record 86 fades in about 29 ticks; called rocks and breakup use `[2008..2010]`; held orientation composes `0.75` degrees/tick and released flight keeps rolling by stored-distance/charge before contact | actor creation plays registry 87 `sounds\\startboulder` once; registry 159 `sounds\\gatherrocksloop__loop` starts with Earth and stops on primary transition or charge cap; moving boulder owns registry 168 `sounds\\rollingstoneloop__loop` |
 
-### Deliberate PoC boundary
+### Historical first-slice PoC boundary (superseded)
 
-The Website slice is authorized to implement only cast input, animation,
-emission/channel lifecycle, replication, rendering, and the audio requests
-listed above. It therefore must not consume mana, apply damage or status,
-acquire or home toward targets, collide with actors or terrain, emit impact
-audio/debris, or enforce the unrecovered gameplay cooldown/rank progression.
-Without contact, Ether and Fire actors retain the named web containment policy.
-Earth now owns authoritative terrain contact and must not inherit that policy:
-the native actor has no fixed timer or range, and a long unobstructed Earth
-flight remains live until contact or teardown.
+This paragraph records the boundary of the original presentation-only slice;
+the targeting, contact, and impact closures later in this ledger supersede it.
+That first slice intentionally omitted mana, damage/status, target acquisition,
+homing, collision, and impact presentation while those owners were unrecovered.
+It used a collision-free web containment policy for Ether and Fire. The
+integrated implementation has removed that policy: Earth, Ether, and Fire have
+no fixed native timer or range and remain live until contact or teardown.
+Unrecovered HP/resistance/status/death and Earth damage-pool semantics remain
+out of scope rather than being approximated.
 
 This boundary also forbids reconstructing one-shot audio from interpolated
 positions. Authoritative player state must latch a monotonic emission sequence;
@@ -1555,8 +1558,9 @@ not an effect constructor.
 There is no native fixed flight lifetime. Terrain or actor contact enters
 `0x005F1F00`; a missing owner also removes the actor. Deleting destructor
 `0x005E4F80` restores `MagicMissile::vftable`, calls inherited teardown
-`0x006289F0`, and frees when requested. The Website's collision-free 500-tick
-containment horizon is therefore not a recovered native duration.
+`0x006289F0`, and frees when requested. The initial Website slice's
+collision-free 500-tick containment horizon was therefore not a recovered
+native duration and is removed in the integrated implementation.
 
 ### Exact flight compositor
 
@@ -1619,13 +1623,13 @@ visible cloud does not alter radius 15, culling ownership, or painter key.
 ordinary flight. `0x005F1F00` owns two distinct contact presentation paths:
 
 - With no pierce left, construct `Anim_FadeMM` (vtable `0x007848C4`) at the
-  missile position. Its scale is `2 * missileVisualScale`; lifetime/alpha
-  scalar starts at 2. Shared tick `0x00454000` subtracts 0.1 and removes at
-  zero, yielding 20 ticks. Render `0x00457110` calls the complete Ether
-  compositor with the `-9999` phase sentinel, which selects the global render
-  clock. The animation is wrapped by `ZAnimLit`: initial light scalar 0.75,
-  multiplier 1, delta -0.05 per tick, radius 100. The wrapper owns child
-  deletion and disappears with the child.
+  missile position. Its fixed scale is `2 * missileVisualScale`; alpha scalar
+  starts at 2. Shared tick `0x00454000` stores the float32 subtraction of 0.1
+  before removal, and same-tick registration yields 19 drawable states.
+  Render `0x00457110` calls the complete Ether compositor with `-9999`, which
+  selects the global fixed-tick counter. `ZAnimLit` owns radius 0.75,
+  intensity 1, delta -0.05, and painter bias 100; 100 is not a radius. The
+  wrapper owns child deletion and disappears with the child.
 - With pierce remaining, decrement it, scale damage and visual magnitude, and
   advance along heading in steps capped at 5 world units until the continuation
   predicate clears. Each step constructs additive `Anim_FadeAdditive` (vtable
@@ -1724,7 +1728,9 @@ draw `0x006099C0` translates to actor `(x,y-10)` and applies stored rotation:
 
 This is a 36-tick body cycle and a three-draw composite. Records `111` and
 `112` are adjacent shared spark/ray masks, but this Fireball draw does not call
-them.
+them. The record-110 alpha RNG is consumed on each body draw, not once per
+simulation tick; a deterministic web projection must therefore key that
+flicker to the accepted presentation frame rather than projectile age.
 
 Constructor instructions at `0x005E097A` install vtable `0x0079C5BC`. Its
 render-queue slot `+0x0C` is direct body draw `0x006099C0`, not common Puppet
@@ -2010,8 +2016,9 @@ draw as the complete Fire primary.
 
 The constructor's collision category is `0x700`; its recovered actor radius is
 `22.5`. The tick's `20`-unit current-cell query is broad-phase reach, not a
-Fireball range limit. No hard flight timer exists. A web-only 500-tick deletion
-must therefore not masquerade as contact or play an impact.
+Fireball range limit. No hard flight timer exists. The legacy web-only
+500-tick deletion must therefore remain removed and must never masquerade as
+contact or play an impact.
 
 ### Contact replacement, light, and audio corrections
 
@@ -2073,3 +2080,462 @@ two-pass burst, direct/self-lit wrapper, moving light, shipped Enhanced branch,
 bounded actor-authority lane, and the corrected Fire impact row in
 `native-audio-events.md`, including call site, stock WAV, pitch, and null-terrain
 ownership. The touched Python contract modules also pass bytecode compilation.
+
+## 2026-08-14 third-pass presentation and Region-shadow closure
+
+This section supersedes the earlier claims that both rank-1 Frost classes use
+the same locally lit Y queue, the Boulder orientation stops on release, the
+Lightning factory samples path lights every 50 units, and a visible-alpha hull
+is a native complex-shadow representation. Evidence is the preserved retail
+`SolomonDark.exe`, 4,723,200 bytes, SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`,
+inspected through read-only Ghidra replicas plus raw PE bytes. No live process
+or desktop state was required.
+
+### Frost Jet: two managers, same-tick birth update, and exact wire state
+
+The two rank-1 classes keep the recovered record/passes and 75/25 class split,
+but register into different owners:
+
+| class | registration | update/draw placement | inbound Region light |
+| --- | --- | --- | --- |
+| Normal | `0x00543CF5..0x00543D03` calls `0x0063E5E0`; `ZAnim` in `Region+0x8B70`, bias zero | current child Y in the shared queue, submitted after ordinary actors and static/scenery on equal rows | none; `ZAnim` `0x005E01E0` tail-calls child `+0x0C` |
+| Over | `0x00543B8A..0x00543B9C`; direct `Region+0x1E0` ObjectManager | insertion order in a post-world-queue pass | none; manager `0x004023F0` calls child `+0x0C` directly |
+
+Arena flushes the shared queue at `0x0046FDA4`, then draws Over at
+`0x0046FFB7..0x0046FFBD`, before screen/camera overlays. Courtyard flushes at
+`0x0051FD21`, draws Over at `0x0051FE94`, then draws the late College and
+southern foreground banks from `0x0051FEB7` onward. Mortuary, Library,
+StoreRoom, and Office direct-manager calls are `0x0050F3A1`, `0x00511AD0`,
+`0x00519C03`, and `0x0051A725`; later room effects/foreground still follow.
+The browser seam must therefore distinguish `world-sorted` from
+`post-world-queue`; Over must not be approximated with a fake Y or huge bias.
+Within sorted roots, Normal's equal-row family follows ordinary dynamic and
+static/scenery submissions.
+
+Region tick order is player manager `0x0063F127..0x0063F139`, Normal manager
+`0x0063F162..0x0063F168`, then Over `0x0063F16D..0x0063F173`. A player-created
+Frost child is inserted before its destination manager updates, and
+ObjectManager `0x004022A0` observes the live count. Both classes therefore
+receive one complete update before first draw. First-visible age is one:
+
+- Normal phase `0.05000000074505806`, additive alpha
+  `0.699999988079071`, and position `origin+velocity`;
+- Over phase `0.02500000037252903`, core alpha
+  `0.012500000186264515`, glint alpha `0.03750000149011612`, and one advanced
+  position.
+
+Lifetime compare/delete `0x00453780..0x00453797` removes on newly stored
+`lifetime <= 0`. The killing update is not drawn. Native visible ages are
+`1..31` or `1..32`, not constructor age zero plus 32/33 frames. Every recurrence
+consumes `floor(ageTicks)` completed updates; fractional presentation age must
+not execute a premature extra iteration.
+
+Normal obstruction is not point-only. Prediction begins at caster position,
+uses mask `0x380`, and computes
+`steps = lifetime/0.04 + jitterRadius` without a float store between division
+and addition. `0x00403B40` stores float32 born-origin-to-hit distance in
+particle `+0x50`; point is always copied to `+0x54/+0x58`. Handler
+`0x00543E05..0x00543EBC` separately compares caster radial squares and sets
+the distance to zero only when strict `originSq > hitSq`; equality does not.
+The point remains. Update `0x004536B8..0x004536D1` subtracts float32 current
+speed and triggers at `remaining <= 0`, snaps to the stored point, chooses the
+global-RNG sign, sets
+`velocity=(sign*oldVy*0.5, sign*-oldVx*0.5)`, writes sentinel `999999`, then
+advances once with the new velocity. The semantic snapshot must carry coherent
+`obstructionPoint` and `obstructionDistance`, including numeric zero.
+
+Heading fields `+0x2C/+0x30` retain the born heading through splay. Core and
+glint sprite rotations remain that heading even while glint lead follows the
+changed velocity. The web needs an explicit born heading; reconstructing it
+from post-splay direction is false. Handler float-store boundaries for the
+phase/radian/sine/final heading are `0x00543A90/0x00543AA4/0x00543AB1/
+0x00543ACB` for Over and `0x00543BAD/0x00543BC1/0x00543BCE/0x00543BEE`
+for Normal.
+
+Final local color packing is also native-visible. `0x0041FE50` stores float32
+RGBA and multiplies it by the restored renderer multiplier. Code
+`0x0041FEEB..0x0041FF45` multiplies by double 255 and helper `0x00747360`
+uses `CVTTSD2SI`. In-range channels truncate toward zero: 0.5 becomes 127,
+not 128, and effective alpha is `trunc(alpha*255)/255`. Neither Frost class
+samples Region light.
+
+### Boulder: continued flight roll and CalledRock auxiliary copy
+
+Constructor `0x005FA270` initializes matrix `Boulder+0x154` through
+`0x00402CC0`. Release `0x005E5450` only changes the held/flight bytes at
+`+0x1DC/+0x1DD`; it preserves the matrix.
+
+Tick `0x00609D84..0x00609E33` derives the normalized axis for heading `h`:
+
+```text
+(cos(h), sin(h)/sqrt(1.64), 0.8*sin(h)/sqrt(1.64))
+```
+
+The held branch at `0x00609E3D..0x00609E5D` postmultiplies the accumulated
+matrix by a `0.75`-degree row-vector Rodrigues rotation around the current live
+aim axis. Flight/contact vslot `0x00620B60` first stores
+`position += speed*(sin(h),-cos(h))`, measures the actual float32 stored delta,
+stores `theta=float32(hypot(delta)/charge)` degrees, and postmultiplies the
+same matrix before collision begins at `0x00620CBA`. A terminal contact tick
+moves and rotates; an early arena/range guard can delete before both.
+
+Helper `0x00403340` constructs row-vector Rodrigues `R`; multiply helper
+`0x00402D40` proves `Mnext=Mold*R`. Draw `0x0060AC40` evaluates local row vector
+`[x y z 1]*M`, rejects strict `z<=-40`, sorts surviving rocks by ascending Z,
+and passes only transformed X/Y to sprite drawing. Nine authoritative finite
+float32 row-major matrix fields are required. Age/heading reconstruction,
+component interpolation, and `R*M` all lose native state.
+
+Golden held vectors are:
+
+```text
+h0 once:
+[1,0,0, 0,0.9999143481,0.01308959536,
+ 0,-0.01308959536,0.9999143481]
+
+h0 then h90 (R0*R90):
+[0.9999143481,0.008177005686,-0.01022125687,
+ -0.008042513393,0.9998814464,0.01313068997,
+ 0.01032741554,-0.01304737944,0.9998615980]
+```
+
+At speed three, full charge rolls three degrees per tick. Observed minimum
+release charge `0.3012498915195465` rolls `9.95850944519043` degrees/tick.
+
+`Anim_CalledRock::Render` `0x0045E440` owns the remaining gathering pass.
+When Enhanced Effects is nonzero and perspective height `+0x20<0`, it first
+draws the same selected lit-rock record `BadGuys[2008..2010]` at base XY and
+`0.75*mainScale`, then draws the full-scale rotating main copy at `y+height`.
+At nonnegative height or Enhanced Effects Off only the main copy draws. Both
+are direct/self-lit. `BadGuys[18]` belongs neighboring dust/fade actors and is
+not this auxiliary pass.
+
+Boulder and Player are ordinary Puppet roots; same-row insertion puts the
+later-created Boulder after Player. The Staff orb is nested inside the Player
+draw and is not a separately queued native root. Stock can place the entire
+Boulder behind or ahead of the entire Player according to its Y row. A web
+requirement that the Boulder always cover its owner's orb is thus a deliberate
+targeted presentation policy, not a stock invariant, and must not globally
+promote other projectiles or scenery.
+
+### Lightning branch mesh and one-shot MiscLights
+
+Each of the two calls to tessellator `0x00534510` independently gates one
+branch with `RandomInt(2)` at `0x00534A11`. If selected, four textured vertices
+and six indices append to that same ribbon layer and inherit its draw state.
+Attachment is `U[0,2)` along the exact QuickSpline. Registered branch records
+are:
+
+| record | crop/logical/origin | local geometry quad |
+| ---: | --- | --- |
+| 375 | `39x73` / `90x146` / `(-18.5,-27.5)` | `(-38,-64),(1,-64),(-38,9),(1,9)` |
+| 376 | `40x185` / `96x372` / `(-20,-77.5)` | `(-40,-170),(0,-170),(-40,15),(0,15)` |
+
+Scale is `0.25+U[0,0.5)` with a `1/30` exact-one override. X mirror,
+geometry-record choice, and UV/image-record choice are independent. All four
+geometry/texture pairings are valid. Angle uses the chosen geometry's first
+coordinate pair with the second negated, converts through atan2, normalizes to
+degrees, then adds `U[0,45)` before translation to the spline point.
+
+Layer phases are construction-time `-3*managerTick` and `+15`, not transient
+ID or redraw time. Native random displacement uses the unsigned mixer:
+
+```text
+u = x ^ (x << 21); u ^= u >>> 11
+mixRaw(x) = imul(u ^ (u << 4), 0x0A67CFCF) >>> 0
+abs32(v) = signed(v)>=0 ? v : (0x80000000-(v&0x7fffffff))>>>0
+```
+
+Per sample, angle magnitude comes from `s0%360000`, sign from
+`abs32(mixRaw(s0))%2`, radius from the next mixed state modulo 360000, and the
+following state is the third signed-absolute mix. A semantic seed may replace
+the unrecovered process-global starting word, but the intra-layer recurrence
+must not be substituted by xorshift.
+
+Record 44 UV construction maps normalized top and bottom half-rectangles
+through the registered atlas record. For `N` ribbon pairs, `v[0]=0`,
+`v[N-1]=0`, and each interior `v[i]` is one for odd `i` and `0.5` for even
+`i`; both vertices in a pair share V. The seven-pair rank-1 sequence is
+`[0,1,0.5,1,0.5,1,0]`, not binary alternation.
+
+Factory `0x00531640` walks source-to-middle and middle-to-end separately. It
+advances by exactly 100 while the leg remainder is greater than 50, then also
+considers the exact endpoint. A midpoint can therefore occur twice. It emits a
+Region `MiscLight` only when squared distance from the original source is at
+least 48400. Each source is `(sample.x,sample.y+35)`, radius
+`0.75+U[0,0.25)`, with one factory-shared intensity `0.25+U[0,0.75)`.
+Insufficient-mana parameter nine quarters that intensity; it is not target
+mode. The directional-shadow flag is Enhanced Effects `DAT_00B3BCAD`, shipped
+On, not Multiple Shadows.
+
+MiscLights are constructed once and must enroll only at Air transient age
+zero. Provider lights, including the false-flag five-age contact `ZAnimLit`,
+are submitted first; Region replays MiscLights as a tail batch. One-way
+containment makes that order observable. A false-flag contact never creates a
+directional record, but every accepted source contributes to each record's
+`behindScalar` and can remove its shadow tail. For source zero, midpoint 350,
+and endpoint 650, emitted x positions are `[350,350,450,550,650]` at y+35.
+
+### Region complex-shadow geometry
+
+Shape close helper `0x00655570` stores each authored edge normal exactly as
+`(dy,-dx)`. It performs no signed-area or winding normalization. Projector
+`0x00655970` computes `normalize(edgeMidpoint-source)` and accepts strict
+positive dot product. Mixed winding in the stock tables is intentional. For
+the CCW square `(-1,-1),(1,-1),(1,1),(-1,1)` and source `(-10,0)`, top, right,
+and bottom edges pass; the left/source-facing edge does not.
+
+Each accepted edge becomes one four-vertex/six-index quad with alpha lanes
+`[base,base,tip,tip]`, where
+`tip=((1-behindScalar)*(1-distanceFraction))^3`. Repeated flat-alpha strips are
+not native gradient geometry.
+
+The exact Gravestone table `0x0081BE50`, selector short `+140`, is:
+
+```text
+0  [-19.5,-3.5; 19.5,-3.5; 19.5,12.5; -20.5,12.5]
+1  [-6.5,0.5; 2.5,0.5; 2.5,6.5; -6.5,6.5]
+2  [-19,23; -19,-7; 17,-7; 17,23]
+3  [-9,14; -9,3; 6,3; 6,14]
+4  [-13,14; -13,7; 10,7; 10,14]
+5  [-14,5; -14,-3; 13,-3; 13,4]
+6  [-15,7; -15,-14; 13,-14; 13,7]
+7  [-15.5,6.5; -15.5,-8.5; 15.5,-8.5; 15.5,6.5]
+8  [-12.5,16.5; -12.5,-3.5; 12.5,-3.5; 12.5,16.5]
+9  [-18.5,10.5; -18.5,-0.5; 18.5,-0.5; 18.5,10.5]
+10 [-19.5,13.5; -19.5,1.5; 19.5,1.5; 19.5,13.5]
+11 [-15.5,13.5; -15.5,-7.5; 15.5,-7.5; 15.5,13.5]
+12 [-16.5,15.5; -16.5,-5.5; 18.5,-5.5; 18.5,15.5]
+13 [-14.5,8.5; -14.5,-4.5; 16.5,-4.5; 16.5,8.5]
+14 [-19.5,8.5; -19.5,-5.5; 19.5,-5.5; 19.5,8.5]
+15 [-17.5,11.5; -17.5,-4.5; 17.5,-4.5; 17.5,11.5]
+16 [-15.5,7.5; -15.5,-4.5; 15.5,-4.5; 15.5,7.5]
+```
+
+Fencepost table `0x0081B0B8` indexes `selector+7*style`; base rows zero through
+six are:
+
+```text
+0 [-11.5,9.5; -11.5,-8.5; 11.5,-8.5; 11.5,9.5]
+1 [8.5,11.5; -14.5,7.5; -8.5,-10.5; 14.5,-6.5]
+2 [5.5,13.5; -15.5,4.5; -5.5,-9.5; 14.5,-3.5]
+3 [1.5,14.5; -16.5,1.5; -0.5,-10.5; 16.5,-0.5]
+4 [-1.5,14.5; -16.5,-0.5; 2.5,-12.5; 16.5,1.5]
+5 [-4.5,13.5; -15.5,-3.5; 2.5,-13.5; 15.5,4.5]
+6 [-8.5,12.5; -14.5,-5.5; 7.5,-12.5; 14.5,7.5]
+```
+
+Style-one rows are the corresponding base row multiplied by `0.45`, then
+translated by y `-1`.
+
+Monument painter `0x0060E280` indexes 21 authored rows at `0x00819EE8`:
+
+```text
+0/1   [(-51,22),(-51,-27),(50,-27),(50,22)]
+2/3   [(19,-29),(-27,-29),(-27,25),(19,25)]
+4/5   [(-14,-32),(-14,30),(35,30),(35,-32)]
+6     [(19,-21),(-17,-21),(-17,20),(19,20)]
+7/8   [(21,-48),(-23,-48),(-23,49),(21,49)]
+9     [(18,-23),(-20,-23),(-20,22),(18,22)]
+10    [(-33.5,22.5),(-33.5,-11.5),(34.5,-11.5),(34.5,22.5)]
+11/12 [(-68.5,-22.5),(71.5,-22.5),(71.5,33.5),(-68.5,33.5)]
+13/14 [(-23,-15),(24,-15),(24,19),(-23,19)]
+15/16 [(-26,-18),(28,-18),(28,17),(-26,17)]
+17    [(-25,-16),(28,-16),(28,27),(-25,27)]
+18    [(-11,-10),(11,-10),(11,10),(-11,10)]
+19    [(-3.5,8.5),(-11.5,-5.5),(5.5,-14.5),(14.5,1.5)]
+20    [(-2.5,14.5),(-14.5,1.5),(-1.5,-10.5),(12.5,3.5)]
+```
+
+Goodie painter `0x0061F180` indexes `0x0081B390` by subtype, not visible
+phase. Static initialization closes row zero only:
+`[(-33.5,22.5),(-33.5,-11.5),(34.5,-11.5),(34.5,22.5)]`.
+
+Building painter `0x0060EDC0` indexes four authored rows at `0x0081B430`:
+
+```text
+0 [(92.5,140.5),(56.5,140.5),(54.5,161.5),(31.5,161.5),
+   (31.5,155.5),(-31.5,155.5),(-32.5,161.5),(-57.5,161.5),
+   (-56.5,139.5),(-93.5,139.5),(-93.5,-19.5),(92.5,-19.5)]
+1 [(-60,103),(-60,116),(-82,132),(-103,117),(-103,77),(-91,77),
+   (-91,-23),(-101,-23),(-102,-49),(101,-49),(101,-23),(90,-23),
+   (90,77),(103,77),(103,108),(82,132),(59,108),(59,103)]
+2 [(74,141),(-75,141),(-75,85),(-132,85),(-132,-61),(131,-61),
+   (131,85),(74,85)]
+3 [(-64.5,132),(-64.5,6),(65.5,6),(65.5,132)]
+```
+
+FenceGrate uses custom renderer `0x00600ED0`, shared by intact, broken, and
+Gate. Builder `0x005E8100` insets endpoints by 12 and derives the shortened
+line, count, and nominal `13.333333` step. For each directional record and bar
+index, center is `shortStart+0.5*step+i*step`. Projection creates one tapered
+quad with near half-width two/base alpha and far half-width eight/zero alpha.
+A separate width-four rail shadow has alpha
+`0.1*behindScalar+0.9*baseAlpha` and a one-eighth endpoint/source offset. Bar
+gaps must remain transparent.
+
+Rails `0x00607440`, Wall generated shape through `0x006561A0`, and Scrub's
+transformed asset quad are other class-specific paths. Convex alpha hull is
+allowed only as an explicitly bounded fallback for an unrecovered caster; it
+must not replace these authored/custom owners.
+
+### Target/range/contact adjacency at the third-pass baseline
+
+This subsection records Website `5d532e4` before the query/contact closure
+that follows it; its “Website currently” statements are historical, not the
+integrated status.
+
+Read-only comparison of the native call chains to Website commit `5d532e4`
+confirms that cast-facing, Air acquisition/Gravestone fallback and spline arc,
+Ether acquisition/homing/default repeat rate, and Fire's registered body/trail/
+light/burst sprite stack already match their recovered rank-1 contracts.
+
+The remaining semantic boundary is actor contact, not visual targeting:
+
+- Fire handles age-divisible-by-five terrain lookahead before movement, then
+  moves `4.5`, queries the current spatial cell at `0x00641220` with broad
+  radius `20` and mask `6`, runs native geometry/contact filters, calls
+  `0x005E5160` on acceptance, and still creates one final flight particle. The
+  Website currently has only terrain contact, so enemy contact never produces
+  its otherwise-correct burst/light/registry-30 hit cue.
+- Ether's web contact is an approximate center-distance-below-six deletion.
+  Native mask/geometry contact owns `0x005F1F00`, whose normal rank-1 endpoint
+  replaces the missile with the 19-drawable-frame `Anim_FadeMM`, the full Ether compositor,
+  outbound light, and magic-missile hit audio.
+- Water's 205-unit, 15-degree, mask-`0x1082` query at `0x00543860`/
+  `0x00641B10` is immediate, multi-target, and per-target line-clipped; visual
+  Frost children are not the damage projectiles.
+- Earth `0x00620B60` owns actor geometry/contact and its distinct-target list
+  separately from terrain breakup.
+- Air's 30-degree Region-bound acquisition and visual ray are implemented, but
+  the per-held-tick native contact/damage dispatch is a separate authoritative
+  consequence.
+
+None of these actor lanes may be replaced by an inferred circle-overlap across
+every web `kind=enemy`. Exact modeled enemy collision/category/eligibility and
+combat-authority fields must be published before enabling the contacts. Until
+that adjacent trace is closed, geometry and VFX parity can be exact while the
+gameplay-contact limitation remains explicit.
+
+### Exact FenceGrate builder split and rank-one query ABI
+
+All grate variants call custom shadow painter `0x00600ED0`, but their builders
+produce distinct common fields:
+
+| class | builder/update | stored segment and count |
+| --- | --- | --- |
+| intact FenceGrate | `0x005E8100` | inset full A/B by 12; step is normalized direction times float `13.333333015441895`; `trunc(shortLength/storedStepLength)+1` |
+| FenceGrate_Broken | `0x005EC6E0` | side-owned randomized approximately-52-unit subsegment, inset 12 and working inset 6; step length 8; truncation-plus-one count |
+| moving Gate | `0x005ED100`, called by builder `0x005F73C0` and moving tick `0x005ED5F0` | copy current leaf endpoints, inset 4, step from shortened length/4.5, truncation-plus-one count (normally five) |
+
+Exact multiples add one bar because conversion helper `0x00747360` truncates
+positive finite values before the explicit increment. Renderer centers remain
+`shortStart + 0.5*step + i*step`. Broken pieces do not use the serialized full
+post span, and Gate re-materializes from live leaf endpoints each movement
+tick.
+
+The common Puppet/query fields recovered from constructors and query helpers
+are flags `+0x14`, body radius `+0x30` (base default 15), pending removal
+`+0x05`, active/retention `+0xF9`, handle `+0x5C/+0x5E`, and native priority
+`+0xFC`. Coffin `0x00479940` clears flags at `0x00479A34`; subsequent
+registration can add only `0x40`, so Coffin is ineligible for every rank-one
+primary mask discussed here. `+0xF9` is active world membership, not a Wraith
+hidden-state bit.
+
+Point query `0x00641220 -> 0x00522E30` divides each coordinate by the 100-unit
+cell size, stores float32, and converts through `0x00747360` with truncation
+toward zero, not floor. It searches only that cell's current pointer vector in
+ascending slot order. Native `-0.25 / 100`, for example, selects cell zero.
+Geometry helper `0x00410470` requires strict
+`distance < queryRadius + candidateBodyRadius`; equality and overlaps whose
+roots lie across the cell boundary miss. The first qualifying actor wins.
+
+Rectangle/circle broadphases `0x00522F50` and `0x00523140` convert both
+inclusive AABB endpoints through the same float32/truncation pipeline, then
+visit cell X in the outer loop, cell Y in the inner loop, and live vector slots
+ascending within each cell. This proves per-cell slot order, not a global actor
+registration sort. The Website's persisted `registrationOrder` is a
+deterministic projection until native rebind timing and exact cell-slot
+identity are authoritative.
+
+Fire `0x005FDD90` uses radius 20/mask 6 after its 4.5-unit move. Actor contact
+`0x005E5160` removes, emits registry-30 hit audio and the 16-age burst/light,
+then the actor-contact return path creates one final normal Fire particle;
+terrain contact returns before it. Ether moves then uses radius 6, mask 2
+while age `<200` and target `+0xF9` remains active, otherwise mask 6. Contact
+`0x005F1F00` creates registry-58 hit audio and a construction-20-update full Ether
+compositor/ZAnimLit before removal.
+
+Water `0x00641B10` is a strict root-only reach-205/full-aperture-30-degree
+multi-target query with LOS and mask `0x1082`; candidate radius does not enter
+its final range test, and no target-local Frost burst exists. Earth gathers all
+eligible roots strictly within `75*charge`, tracks handles already contacted,
+and does not fracture merely because it touched an actor. Air visual fallback
+may end on a Gravestone, but held damage dispatch applies only to bit-two
+actors and rank one does not chain.
+
+HP/resistance/status/death, exact recipe-scale/global-RNG samples, spatial
+rebind timing, Earth's pool/toughness/shrink terminal decision, and mask-six
+bit-four scenery shape acceptance remain outside the recovered web authority.
+
+### Exact Rails/Wall painters and Ether FadeMM lifecycle
+
+Rails builder `0x005F0EC0` stores `P=A+4u`, `P1=B-4u`,
+`s=f32(u*13.333333015441895)`, and
+`N=trunc(distance(P,P1)/length(s))+1`. Shadow renderer `0x00607440` uses
+`Q=P+N*s` as its far baseline and emits exactly two width-10 black line quads
+per current light record. Their endpoint pairs are projected from `P/Q` by
+divisors `5` and `1.5`; alpha is
+`f32(0.9*record.base+0.1*record.behind)`. There is no render-time RNG.
+
+Wall builder `0x005EEBB0` extends each unconnected endpoint 15 units outward
+and leaves connected endpoints untouched. Renderer `0x0061E780` calls segment
+helper `0x006561A0` once per record. It emits vertices `[S0,S1,E0,E1]` and
+indices `[0,1,2,2,1,3]`, where `E0/E1` are radially projected by record
+`+0x1C`; near alpha is record `+0x10`, far alpha is exactly
+`((1-record+0x14)*(1-record+0x18))^3`. Wrapper `0x00624B40` clears and rebuilds
+the record array each render. Neither Rails nor Wall owns a retained shadow
+lifetime. The generated random-seed Boneyard contains no segment code 3 or 4,
+so exact tests require story/synthetic fixtures rather than claiming a shipped
+browser observation.
+
+Ether contact `0x005F1F00` initializes Anim_FadeMM scalar `F[0]=f32(2.0)`,
+fixed XY scale `f32(2.0*missileVisualScale)`, and decrement `f32(0.1)`.
+`0x00454000` stores `F[n+1]=f32(F[n]-f32(0.1))` before removing on `<=0`.
+Immediate registration into Region `+0x8B70` means the child updates in its
+birth tick: drawable frames are `F[1]..F[19]` (19 web-visible ages), and tick
+20 removes before render. Fixed scale never decays; final pass alpha is
+`f32(passAlpha*F)` with no FadeMM clamp.
+
+FadeMM render passes exact sentinel `-9999.0f` to compositor `0x00535A30`.
+The equality branch substitutes the active Arena/global 100-Hz fixed-tick
+counter, so all impacts in one tick share phase and the phase advances one per
+tick. ZAnimLit writes radius `0.75`, intensity `1.0`, delta `-0.05`, local
+multiple-shadows false, and Puppet painter bias `100`; the last value is not a
+light radius. Same-tick update makes first drawable intensity `0.95`.
+Registry 58 `magicmissilehit` pitch is `f32(1+U[0,0.1))`.
+
+### Integrated Website status and explicit authority boundary
+
+The integrated Website projection now carries the recovered actor eligibility
+fields, projected per-cell slot order, and discrete spell state over protocol
+v18. Coffin is excluded from the
+rank-one masks. Air target/Gravestone selection, Ether acquisition and homing,
+Fire and Ether point-contact replacement, Earth orientation, Frost obstruction
+state, and all presentation/light/painter owners above are authoritative rather
+than reconstructed from renderer history. Fire record-110 flicker consumes the
+presentation-frame sample; no primary actor uses the legacy 500-tick timeout.
+
+Water's strict reach-205/half-aperture-15-degree/LOS query, Earth's strict
+root-distance-below-`75*charge` distinct-contact query, and Air's selected
+flags-bit-two endpoint are recovered, regression-tested, and connected to the
+Website's existing authoritative enemy HP/lifecycle. Fire and Ether publish
+the same projected damage edge after their point queries. This models the
+observable rank-one contact and hit presentation without claiming exact native
+resistance/status/push math, recipe-scale RNG, or Earth's pool/toughness/shrink
+and terminal-fracture decision; actor contact never invents an Earth breakup.
+Fire's bit-four scenery shape gate and exact
+native global-RNG/recipe-scale sample identity are likewise explicit residuals.
+Those are combat/RNG boundaries, not missing rank-one sprite passes, target
+geometry, projectile timeouts, or permission to invent terminal impacts.

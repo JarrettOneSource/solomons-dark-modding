@@ -13,7 +13,9 @@
     "mode": "headless, existing analyzed project copied to a disposable project, -readOnly -noanalysis",
     "passes": [
       "owner/constructor/tick/release/contact/draw/destructor",
-      "rock-list builder/Fibonacci sphere/called-rock/fragment/asset adjacency"
+      "rock-list builder/Fibonacci sphere/called-rock/fragment/asset adjacency",
+      "held and released orientation writers/matrix multiplication/draw composition",
+      "called-rock Enhanced Effects auxiliary draw"
     ]
   },
   "actor": {
@@ -52,6 +54,8 @@
     { "address": "0x005FE430", "role": "rebuild central rock plus Fibonacci-sphere shell", "vtable_slot": "0x68" },
     { "address": "0x00411400", "role": "deterministic Fibonacci-sphere point generator" },
     { "address": "0x00402CC0", "role": "initialize Boulder orientation matrix to identity with zero translation" },
+    { "address": "0x00403340", "role": "build row-vector Rodrigues rotation and postmultiply the Boulder matrix" },
+    { "address": "0x00402D40", "role": "matrix multiply proving orientation recurrence M_next = M_old * R" },
     { "address": "0x0060AC40", "role": "glimmer crossfade, matrix transform, depth sort, and main rock draw", "vtable_slot": "0x1C" },
     { "address": "0x0043A8A0", "role": "orthographic projection helper; copy transformed X/Y and ignore Z" },
     { "address": "0x00453890", "role": "Anim_CalledRock constructor" },
@@ -87,8 +91,10 @@
     "shell_scale_cap": 1.0,
     "main_draw_depth_plane_strictly_greater_than": -40.0,
     "main_draw_scale_minimum_float32": 0.44999998807907104,
-    "held_orientation_axis": [0.0, -0.8, 1.0],
+    "orientation_axis_base_vector": [0.0, -0.8, 1.0],
+    "orientation_axis_from_heading": "(cos(h), sin(h)/sqrt(1.64), 0.8*sin(h)/sqrt(1.64))",
     "held_orientation_degrees_per_tick": 0.75,
+    "flight_orientation_degrees_per_tick": "float32(hypot(float32-stored position delta) / charge)",
     "held_collision_radius": 15.0,
     "immediate_release_collision_radius_charge_factor": 45.0,
     "normal_flight_collision_radius_charge_factor": 75.0,
@@ -127,6 +133,8 @@
     "called_rock_fall_gravity": 1.0,
     "called_rock_positive_height_velocity": 0.25,
     "called_rock_remove_height_strictly_greater_than": 10.0,
+    "called_rock_enhanced_auxiliary_height_strictly_less_than": 0.0,
+    "called_rock_enhanced_auxiliary_scale_factor": 0.75,
     "breakup_fragment_count_minimum": 8,
     "breakup_fragment_count_charge_factor": 30.0,
     "breakup_fragment_direction_y_scale": 0.8,
@@ -153,11 +161,11 @@
     "breakup_fragment_wrapper_sort_offset": -15.0
   },
   "assets": [
-    { "atlas": "BadGuys", "record": 18, "role": "optional called-rock dust/fade auxiliary", "width": 40, "height": 34 },
+    { "atlas": "BadGuys", "record": 18, "role": "adjacent dust/fade actors only; not Anim_CalledRock's Enhanced Effects auxiliary copy", "width": 40, "height": 34 },
     { "atlas": "BadGuys", "record": 15, "role": "persistent green-white charged-boulder aura; held and flight", "width": 38, "height": 37, "sha256": "5abc42fa09f09a5fefe3df9281d2102e6b93a48249edb4e21f36f73e1a0011eb" },
     { "atlas": "BadGuys", "record": 86, "role": "short additive opening flash only; never the persistent aura or boulder body", "width": 94, "height": 94 },
     { "atlas": "BadGuys", "records": [168, 169, 170, 171], "role": "main depth-sorted body variants; 171 is the central pebble", "dimensions": [[37, 33], [33, 32], [38, 34], [17, 17]] },
-    { "atlas": "BadGuys", "records": [2008, 2009, 2010], "role": "lit called-rock and breakup fragment variants", "dimensions": [[37, 33], [33, 32], [38, 34]] }
+    { "atlas": "BadGuys", "records": [2008, 2009, 2010], "role": "lit called-rock main and below-zero Enhanced auxiliary copies, plus breakup fragment variants", "dimensions": [[37, 33], [33, 32], [38, 34]] }
   ],
   "render_contract": {
     "shell_point_count": "ceil(30 * assembly_charge), plus one central variant-3 rock",
@@ -169,7 +177,8 @@
     "ordering": "transform local XYZ by Boulder +0x154 matrix, keep strict transformed Z > -40, sort ascending transformed Z, then draw main bank; rank-1 radius <= 30 makes the cull branch unreachable for valid shell rocks",
     "projection": "0x0043A8A0 copies transformed X/Y exactly and ignores Z; registration is Boulder actor transform plus that orthographic XY offset",
     "main_draw_scale": "max(stored rock scale, float32(0.45))",
-    "orientation": "while held, rotate +0x154 by 0.75 degrees/tick about normalized axis (0,-0.8,1); preserve the final matrix unchanged in flight; apparent released motion comes from whole-root jitter and aura, not continued shell spin",
+    "orientation": "carry the authoritative row-major float32 3x3 matrix; while held postmultiply by a 0.75-degree row-vector Rodrigues rotation about the live heading-derived axis; release preserves the matrix; each surviving flight tick advances position then postmultiplies by hypot(storedDelta)/charge degrees before contact",
+    "called_rock_auxiliary": "with Enhanced Effects on and perspective height < 0, draw the same selected BadGuys[2008..2010] record first at base XY and 0.75 main scale, then the rotating full-scale main copy at y+height; otherwise main only",
     "lighting": {
       "boulder": "vslot +0x0C is Puppet_RenderDispatch; sample inbound Region light at Boulder world XY; no recovered outbound light",
       "called_rock": "direct world-animation vslot +0x0C bypasses Puppet_RenderDispatch and ZAnimLitObject; no inbound Region sample and no outbound light",
@@ -183,7 +192,7 @@
     "visual_samples": [
       "main shell variant and scale",
       "called-rock emission, spawn radius/direction/variant/rotation",
-      "optional dust and loose fragment emission",
+      "adjacent dust/fade and loose fragment emission",
       "breakup fragment variant, direction, placement, scale, and lifetime"
     ],
     "web_consequence": "seed visual choices from stable spell/particle identity; never consume authoritative gameplay RNG"
@@ -191,7 +200,7 @@
   "lifecycle": {
     "hold": "one cached actor follows the live staff emitter and aim while charge grows",
     "release": "0x005E5450 flips +0x1DC/+0x1DD from held to flight without replacing identity",
-    "flight": "straight motion and 0x00620B60 contact query every native tick; direction is the final held world-aim sample and does not home or retarget after release; the actor position is velocity-advanced before the query, so terminal breakup registers at that advanced sample; no native fixed timeout or range recovered",
+    "flight": "straight motion and 0x00620B60 contact query every native tick; direction is the final held world-aim sample and does not home or retarget after release; the actor position is float32-advanced and the authoritative matrix rolls by stored-delta/charge before the query, so terminal breakup registers at that advanced and rotated sample; no native fixed timeout or range recovered",
     "impact": "0x0060B700 restores saved charge, emits independently rooted Anim_BoulderBit children inside ZAnimLitObject wrappers, registers the wrappers, then removes the Boulder; the semantic event must retain native global birth tick for modulo-three motion",
     "interruption": "dispatcher/player primary transition and world actor teardown stop gather ownership; destructor clears both lists; web owner removal, death, scene replacement, and disconnect must remove the semantic actor/effects and balance loops"
   },

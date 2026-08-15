@@ -84,7 +84,8 @@ def test_earth_boulder_second_pass_visual_ownership_is_pinned() -> str:
     _require("floor(30*old_charge)" in _document(), "assembly rebuild edge is absent")
     _require("must therefore not remove Earth" in _document(), "native range ownership drifted")
     _require(
-        "preserve the final matrix unchanged in flight" in catalog["render_contract"]["orientation"],
+        "each surviving flight tick advances position then postmultiplies"
+        in catalog["render_contract"]["orientation"],
         "released-shell orientation ownership drifted",
     )
     return "Earth aura/flash, assembly, root transform, released orientation, and range are pinned"
@@ -551,10 +552,35 @@ def test_ether_flight_compositor_and_contact_ownership_are_pinned() -> str:
             "Flight itself requests no sound",
             "does not construct a separate source glow or launch trail",
             "Do not infer impact from containment expiry or disappearance",
+            "drawable frames are `F[1]..F[19]`",
+            "exact sentinel `-9999.0f`",
+            "radius `0.75`, intensity `1.0`, delta `-0.05`",
+            "Registry 58 `magicmissilehit` pitch is `f32(1+U[0,0.1))`",
         ),
         "Ether flight/contact ownership audit",
     )
     return "Ether records 110..112 own flight; record 53 and FadeMM remain contact-owned"
+
+
+def test_class_specific_rails_wall_shadow_painters_are_pinned() -> str:
+    doc = _document()
+    _require_tokens(
+        doc,
+        (
+            "Rails builder `0x005F0EC0`",
+            "`N=trunc(distance(P,P1)/length(s))+1`",
+            "`Q=P+N*s`",
+            "exactly two width-10 black line quads",
+            "divisors `5` and `1.5`",
+            "Wall builder `0x005EEBB0`",
+            "Renderer `0x0061E780` calls segment",
+            "helper `0x006561A0`",
+            "indices `[0,1,2,2,1,3]`",
+            "Neither Rails nor Wall owns a retained shadow",
+        ),
+        "Rails and Wall class-specific shadow painters",
+    )
+    return "Rails and Wall use their exact custom current-frame shadow painters"
 
 
 def test_air_lightning_cadence_and_contact_light_source_are_pinned() -> str:
