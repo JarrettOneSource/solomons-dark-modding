@@ -168,7 +168,7 @@ ordinary footstep gain `0.5`. Step1/Step2 use their gain-only wrapper.
 | `pickup.magic_book` | Magic-book acquisition | `0x0056D471` (sibling `0x0056D828`) | stream 129 `magicbookget__stream` | Fixed. The in-world book effect uses stream 130 at `0x006039EF`. |
 | `potion.use` | Effect accepted and item consumed | `0x0056D246` | 24 `sounds\drink` | Fixed. |
 | `potion.invalid` | Potion/action rejected | `0x0056D3D2` | 6 `sounds\badaction` | Fixed. |
-| `level.up` | Native level threshold crossed | `0x00647F6B`, `0x00647FBE` | 52 `sounds\levelup` | Two overlapping requests at exact pitch multipliers `2` then `3`; both use point gain at the level-up position. Registry 53 `levelupskill` is loaded but has no direct retail dispatch. |
+| `level.up` | Local native level threshold loop completes | `0x00528A3E`, reached by `0x0067C250 -> 0x005C88B0 -> 0x00528A20` | 52 `sounds\levelup` | One request at scalar `1.0` per completed threshold loop, paired with the PlayerActor's 180-tick sparkle/light timer. It is not replayed for each queued picker offer. The separate pitch-`2`/pitch-`3` calls at `0x00647F6B` and `0x00647FBE` belong only to skill 77 Turn Undead. Registry 53 `levelupskill` is loaded but has no direct retail dispatch. |
 | `skill.unlock` | Skill purchase/unlock accepted | `0x00670CD3` | 102 `sounds\unlockskill` | Fixed. |
 | `wave.start` | First arena wave enters combat state | `0x00465D22` (spawn-entry siblings `0x00469983`, `0x0046D506`, state site `0x00470E9D`) | Music transition to song `combat`, track `combat` | No RNG. Per-wave number increments have no one-shot stinger. |
 | `wave.end` | Terminal arena completion | `0x00467AA0` | Music crossfade to empty song | No RNG and no wave-complete one-shot; empty song fades/stops the active lane. |
@@ -181,6 +181,11 @@ ordinary footstep gain `0.5`. Step1/Step2 use their gain-only wrapper.
 | `ui.confirm` | Game Over continue/button activation | `0x005CF7BA` | 0 `sounds\click` | Fixed gain 1. Other action handlers use the same registry object. |
 | `ui.back` | Storage/backpack close | `0x0056CE80` | 4 `sounds\backpack_close` | Fixed. Surfaces whose Back is an ordinary action button use 0 `click`; focus movement alone remains silent. |
 | `music.menu_transition` | Scene/menu song selection | title `0x0058A033`; selection `0x00593CA6`; academy sites `0x00508AF2`, `0x00508B7F`, `0x0050F94B`, `0x00510E07`, `0x005110E7`, `0x00512CC7` | `prelude`, `selection`, or `academy` through `Music::PlayCrossfade` | No RNG; caller supplies transition duration. |
+
+Asset 52 has one separate non-census consumer: `skill.turn_undead`, skill 77's
+undead-area effect. `0x00647F6B` and `0x00647FBE` inside `0x00647EF0` issue
+two point requests at pitch multipliers `2` then `3`. Those calls are not a
+level threshold transition and must not be folded back into `level.up`.
 
 ## Playback semantics
 

@@ -13,6 +13,8 @@ from static_re_contract_support import ROOT, StaticReTestFailure, read_text
 
 
 DOC = ROOT / "docs/reverse-engineering/native-progression-and-skills.md"
+SKILL_PICKER_DOC = ROOT / "docs/skill-picker-re.md"
+AUDIO_EVENTS_DOC = ROOT / "docs/reverse-engineering/native-audio-events.md"
 FIXTURE = ROOT / "tests/fixtures/webgame/progression-goldens.json"
 RECORDER = ROOT / "tools/record_progression_goldens.py"
 SKILL_CATALOG = ROOT / "docs/reverse-engineering/native-skill-catalog.json"
@@ -250,6 +252,57 @@ def _close(actual: float, expected: float, tolerance: float, consequence: str) -
         raise StaticReTestFailure(
             f"{consequence}: expected {expected!r}, recorded {actual!r}"
         )
+
+
+def test_native_level_up_presentation_and_picker_reveal_are_pinned() -> str:
+    picker = read_text(SKILL_PICKER_DOC)
+    audio = read_text(AUDIO_EVENTS_DOC)
+    _require_tokens(
+        picker,
+        (
+            "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+            "`0x0067C250` consumes every crossed threshold",
+            "tail-calls\n   `0x005C88B0` exactly once",
+            "writes float `180.0` to PlayerActor `+0x168`",
+            "BadGuys record 73",
+            "180 ticks / 1.8 s",
+            "36--60 ticks, not one fixed 60-tick lifetime",
+            "`x = RandomFloat(30, true)`",
+            "`y = -20 - RandomFloat(playerY - viewportTop, false)`",
+            "exact five-word order",
+            "unsigned Y magnitude, signed-X magnitude, signed-X sign, unsigned angle",
+            "closed endpoint domain and intermediate float32 stores",
+            "The X sign\n   is chosen by the second word's bit 6",
+            "moves Y by\n   `-0.1` per tick",
+            "`sin(particleTimer degrees)` as uniform scale",
+            "there is no\n   independent random-alpha multiplier",
+            "`0x005299A0` observes the same `+0x168` timer",
+            "`(actor[+0x268] + 1) * 2.6 + sin(timer degrees)`",
+            "`2.6 - RandomFloat(0.2, false)` is not stored",
+            "rather than adding a second\n   player light",
+            "opening reveal is therefore 40\nticks / 0.4 s at 100 Hz",
+            "`0.5 * revealAlpha`",
+            "`revealAlpha^3`",
+            "must not replay the threshold\nsound/effect",
+            "does not\ncall `0x005C88B0`",
+            "entry 64 `sounds\\openpanel`",
+            "entry 102 `sounds\\unlockskill`",
+            "Entry 53 `sounds\\levelupskill` is loaded but no retail",
+        ),
+        "native level-up presentation lost a timer, render lane, queue, or audio witness",
+    )
+    _require_tokens(
+        audio,
+        (
+            "| `level.up` | Local native level threshold loop completes | `0x00528A3E`",
+            "One request at scalar `1.0` per completed threshold loop",
+            "Asset 52 has one separate non-census consumer: `skill.turn_undead`",
+            "`0x00647F6B` and `0x00647FBE` inside `0x00647EF0` issue\n"
+            "two point requests at pitch multipliers `2` then `3`",
+        ),
+        "native audio map merged the level transition back into Turn Undead",
+    )
+    return "level-up actor effect, picker reveal lanes, queue semantics, and corrected audio ownership are pinned"
 
 
 def test_native_progression_level_curve_and_xp_awards_are_pinned() -> str:

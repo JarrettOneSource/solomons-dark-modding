@@ -7,6 +7,25 @@ This is the level-up option picker. It is not the `Select a Spell` acquisition
 dialog and it does not assign runtime primary or belt inputs. See
 `spell-picker-re.md` for that separate native surface boundary.
 
+## Evidence Receipt
+
+This report targets the retail Beta 0.72.5 executable at
+`SolomonDarkAbandonware/SolomonDark.exe`, PE32 preferred base `0x00400000`,
+size `4,723,200`, SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`.
+The function addresses below are preferred-image virtual addresses recovered
+from the read-only Ghidra project for that exact executable. The settled stock
+screen witness remains
+`tests/fixtures/webgame/menu-reference-captures/skill-picker.png`.
+
+The shipped authored-script membership was also swept with
+`tools/decode_boneyard_scripts.py`. Of the six shipped `.boneyard` scene
+files, only Story 0 owns `LEVEL UP` triggers: UID 57029 applies action 1090
+`MODIFY XP ACCUMULATION` with operand `25.0`, and UID 57098 applies the same
+action with operand `30.0` when the player is level 3. Those one-shot global
+triggers modify Story XP accumulation; they do not create the level-up sound,
+sparkles, light, curtain, or picker.
+
 ## Level-Up Gate
 
 `0x0067C250` is the native level-up routine. It updates:
@@ -42,6 +61,99 @@ level. The loader stages the bot's current XP from the live source progression
 or debug-sync request, then lets `0x0067C250` advance the bot progression's
 level and threshold fields. This path does not write progression level, HP, max HP, MP, or max MP directly. HP/MP limit changes remain owned by the native
 skill-choice apply and refresh path below.
+
+## Threshold Presentation and Picker Reveal
+
+The local threshold transition and the picker are adjacent but separately
+owned native systems:
+
+1. `0x0067C250` consumes every crossed threshold, refills HP/MP, and queues
+   the local choices. After the threshold loop it calls trigger fanout
+   `0x0068BA90(13)`, creates the picker through `0x0065F480(0)`, and tail-calls
+   `0x005C88B0` exactly once.
+2. `0x005C88B0` always calls `0x00528A20` for the local PlayerActor. A second
+   `0x0052A220` branch runs only when progression flags `+0x878 & 0x400` are
+   set; it is an actor-associated bonus-light branch, not the ordinary
+   threshold effect.
+3. `0x00528A20` writes float `180.0` to PlayerActor `+0x168`, then dispatches
+   sound-registry member `+0x908`, entry 52 `sounds\levelup`, once at scalar
+   `1.0` (`0x00528A3E`). The old attribution of calls `0x00647F6B` and
+   `0x00647FBE` to level-up was wrong: their only caller is skill 77 Turn
+   Undead (`0x00647EF0`), where they request the same asset at pitches 2 and 3
+   before applying the undead flee/weaken effect.
+4. Player tick `0x00533520` enters the effect branch while `+0x168` is
+   positive, subtracts exactly `1.0`, and, when the player is in the visible
+   viewport, creates one `Anim_Sparkle` (`0x00453980`) from exact
+   BadGuys record 73. Starting from 180, the branch therefore emits 180
+   sparkles over 180 ticks / 1.8 s; the emitter values used by those births run from 179
+   through 0.
+5. Each sparkle is constructed with timer 180, decay 3, and a fixed
+   `RandomFloat(360, false)` angle. Player tick then adds
+   `RandomFloat(2, false)` to the decay, so individual particles survive
+   36--60 ticks, not one fixed 60-tick lifetime. For a player whose world Y is
+   `playerY` and whose viewport top is `world + 0x8BD0`, the exact birth
+   offsets are
+   `x = RandomFloat(30, true)` and
+   `y = -20 - RandomFloat(playerY - viewportTop, false)`. Particle tick
+   `0x00453A30` subtracts that fixed decay from the timer and moves Y by
+   `-0.1` per tick; the angle does not advance. Render `0x00458230` uses
+   `sin(particleTimer degrees)` as uniform scale. Birth alpha is fixed at
+   `(1 - abs(x) / 30) * sin(emitterTimer degrees) * 0.75`; there is no
+   independent random-alpha multiplier.
+   The calls consume the active gameplay RNG in this exact five-word order:
+   unsigned Y magnitude, signed-X magnitude, signed-X sign, unsigned angle,
+   then unsigned decay. Each magnitude uses the stock float primitive's
+   closed endpoint domain and intermediate float32 stores: integer sample
+   `k` from bound 100001, `f32(f32(f32(k) / 100000) * magnitude)`. The X sign
+   is chosen by the second word's bit 6. Thus `x = -30`, `x = +30`, angle
+   `360`, and decay `5` are all reachable; treating signed X as one draw or
+   using a half-open browser random changes both the distribution and later
+   stream membership.
+6. Player light submission `0x005299A0` observes the same `+0x168` timer. Its
+   stored region-light record is still the ordinary heading-offset player
+   source with intensity 1 and flag 1, but its radius is
+   `(actor[+0x268] + 1) * 2.6 + sin(timer degrees)`. The separate immediate
+   draw-helper argument `2.6 - RandomFloat(0.2, false)` is not stored as the
+   region-light radius. The Website's ordinary player source models the
+   baseline `actor[+0x268] == 0` lane, so the threshold variation replaces
+   radius 2.6 with `2.6 + sin(timer degrees)` rather than adding a second
+   player light. The sparkle and light belong to the PlayerActor, not to
+   `LevelupScreen`.
+
+This means one large XP grant which crosses several levels plays one ordinary
+level-up sound and arms one 1.8-second actor effect, even though it queues
+several choices. Rebuilding the next queued offer must not replay the threshold
+sound/effect. Forced picker action `0x0067C320` increments pending choices and
+opens a screen with build delay 10 and forced flag `+0x624 = 1`; it does not
+call `0x005C88B0` and therefore does not synthesize a level transition.
+
+`LevelupScreen` construction at `0x00658620` initializes reveal alpha
+`screen + 0x100` to `0` and direction `screen + 0x104` to `+1`. Tick/build
+`0x0066F920` clamps
+`alpha + direction * 0.025` to `[0,1]`; the opening reveal is therefore 40
+ticks / 0.4 s at 100 Hz. Apply input at `0x00671470` is gated until alpha is
+exactly 1. Render `0x0067DF80` owns the screen-space presentation:
+
+- full-viewport black alpha is `0.5 * revealAlpha`;
+- the ambient ring/arc family uses `0.1 * revealAlpha`;
+- the panel/content lane uses `revealAlpha^3` before reaching its settled
+  geometry.
+
+Screen-registry member `+0xB18` is entry 64 `sounds\openpanel`; member
+`+0x11A0` is entry 102 `sounds\unlockskill`, requested when another queued
+choice is rebuilt. Entry 53 `sounds\levelupskill` is loaded but no retail
+dispatch was found. These screen sounds must not be substituted for the
+PlayerActor-owned entry-52 threshold request.
+
+The screen renderer draws a translucent curtain over the already rendered
+world and does not contain a selective enemy/effect visibility branch. The
+stock actor-world pause holds non-player actor clocks while PlayerActor ticks
+continue, which lets the local sparkle/light advance beneath the picker. A web
+renderer that additionally suppresses paused non-local actors, enemy
+projectiles, primary spells, and transient effects during the modal is a
+browser presentation policy, not a recovered native field write. It must keep
+that policy separate from the proven curtain timing and preserve scenery, the
+local player, its level-up effect, and the fixed HUD.
 
 ## Option Roll
 

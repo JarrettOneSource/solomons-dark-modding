@@ -274,6 +274,14 @@ provider `0x005E6220` submits the Lantern root with `radius=0.65`, intensity
 `DAT_00B3BCAA`. Thus its per-render intensity lies in `[0.55,0.75)` and is
 presentation RNG, not authored layout state.
 
+The player's 180-tick level-up variation changes that same source rather than
+submitting a second light. `0x005299A0` computes the stored source radius as
+`(actor[+0x268] + 1) * 2.6 + sin(actor[+0x168] degrees)`; with both fields zero,
+this reduces to the ordinary 2.6 radius. Its separate immediate draw-helper
+argument is `2.6 - RandomFloat(0.2, false)`. That randomized draw value is not
+written into the 0x1C-byte Region light record; the record retains the formula
+above, intensity 1, and flag 1.
+
 The Lantern is one member of a shared source protocol. The retail executable
 has 36 direct references to generic submitter `0x0057FE40`: one Arena replay
 of stored source records and 35 class-owned provider functions. The provider

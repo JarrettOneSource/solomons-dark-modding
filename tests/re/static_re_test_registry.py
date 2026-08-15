@@ -130,6 +130,7 @@ from static_re_native_loot_selector_contracts import (
     test_native_loot_selector_tables_and_decision_traces_are_pinned,
 )
 from static_re_native_progression_contracts import (
+    test_native_level_up_presentation_and_picker_reveal_are_pinned,
     test_native_progression_actor_layout_and_all_skill_rows_are_pinned,
     test_native_progression_five_live_effect_formulas_are_pinned,
     test_native_progression_golden_and_recorder_provenance_are_pinned,
@@ -1174,6 +1175,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native loot physics, lifetimes, and multiplayer credit are pinned",
         test_native_loot_physics_lifetimes_and_multiplayer_credit_are_pinned,
+    ),
+    (
+        "Native level-up presentation and picker reveal are pinned",
+        test_native_level_up_presentation_and_picker_reveal_are_pinned,
     ),
     (
         "Native progression level curve and XP awards are pinned",

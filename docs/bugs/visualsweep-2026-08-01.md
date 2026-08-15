@@ -118,8 +118,9 @@ The owner-era unspent-skill-point hypothesis is false. Native level-up at
 `0x005C88B0` resolves the local player actor, and `0x00528A20` writes `180.0`
 to `actor +0x168`. Player tick helper `0x00533520` decrements that timer by one
 per native tick and emits additive sparkle particles while it is positive.
-Player light submission at `0x005299A0` also adds randomized light while the
-same timer is positive. The effect therefore clears after 180 player ticks and
+Player light submission at `0x005299A0` also pulses the stored player-source
+radius from the same timer; a separate randomized value belongs only to its
+immediate draw helper. The effect therefore clears after 180 player ticks and
 legitimately starts again on the next level transition.
 
 The visually adjacent Planewalker effect is a different lifecycle. Its
