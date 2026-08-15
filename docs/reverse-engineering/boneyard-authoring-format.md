@@ -128,10 +128,13 @@ Constructor `0x005E46D0`, Sync `0x005E0050`.
 | `0x04` | `bool` | `secondaryVisible` | enables the supported secondary layer |
 
 Render and bounds evidence is at `0x00608480`, `0x00608830`, and
-`0x00608AB0`. The auxiliary/reference bank is DeadHawg 228 through 242. Main
-variants 0 through 18 map to DeadHawg 264 through 282. Loaded Tree variants 15
-through 18 are replaced by runtime `Scrub` 2062 objects in post-load
-materialization `0x006531B0`; the stored file record remains Tree 2001.
+`0x00608AB0`. Main selector `n` directly chooses auxiliary/reference record
+`DeadHawg[228+n]` and complex-shadow shape `0x0081B910 + n*0x34` for
+materialized variants 0 through 14; the secondary selector does not affect
+either choice. Main variants 0 through 18 map to visible DeadHawg 264 through
+282. Loaded Tree variants 15 through 18 are replaced by runtime `Scrub` 2062
+objects in post-load materialization `0x006531B0`; the stored file record
+remains Tree 2001.
 
 ### Monument 2009
 

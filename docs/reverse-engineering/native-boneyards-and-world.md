@@ -396,14 +396,55 @@ adjacent object family:
 | Fencepost | `0x00612DC0` | 14-entry style/frame table at `0x0081B0B8` |
 | FenceGrate | `0x00600ED0` | sibling custom projected-mesh path |
 
+Tree's outline source is now closed rather than approximate. Static initializer
+`0x005BF6A0` constructs fifteen `0x34`-byte shapes at `0x0081B910`, one for
+each materialized Tree main variant `0..14`. `Tree::RenderBoundsAndShadow`
+`0x00608AB0` reads the main selector at `+0x140`, computes
+`0x0081B910 + selector * 0x34` at `0x00608C85..0x00608C95`, and passes that
+shape to `0x00655970` for every record in the object's `+0xAC` shadow list.
+The same painter selects `DeadHawg[228 + mainVariant]` through the manager bank
+at `+0x1A90/+0x1A94`; this resolves the previously open selector relation for
+DeadHawg 228..242. The dynamic complex-shadow branch never reads secondary
+selector `+0x142`, secondary-enable byte `+0x144`, or current Tree alpha
+`+0x150` when selecting its silhouette.
+
+The initializer appends each vertex through `0x006554B0`, applies the listed
+common translation through `0x006554F0`, and closes the edge/normal arrays
+through `0x00655570`. The resulting object-local `(x,y)` vertices are exact:
+
+```text
+ 0: (-2,12)   (18,9)    (17,-8)   (-5,-4)
+ 1: (3,14)    (14,-3)   (-4,-13)  (-19,3)
+ 2: (1,9)     (15,-2)   (7,-13)   (-15,-3)
+ 3: (7,7)     (27,1)    (24,-16)  (4,-11)
+ 4: (5,10)    (12,-8)   (-3,-17)  (-20,-1)
+ 5: (-20,8)   (-12,-2)  (7,6)     (0,17)
+ 6: (-19.5,12.5) (-19.5,-12.5) (19.5,-12.5) (19.5,12.5)
+ 7: (-6,10)   (-6,-1)   (7,-1)    (8,10)
+ 8: (-6,10)   (-6,-1)   (7,-1)    (8,10)
+ 9: (-1.5,1.5) (-1.5,-1.5) (1.5,-1.5) (1.5,1.5)
+10: (-1.5,1.5) (-1.5,-1.5) (1.5,-1.5) (1.5,1.5)
+11: (0.5,2.5) (-2.5,-0.5) (0.5,-3.5) (3.5,-0.5)
+12: (0.5,2.5) (-2.5,-0.5) (0.5,-3.5) (3.5,-0.5)
+13: (-1.5,1.5) (-1.5,-1.5) (1.5,-1.5) (1.5,1.5)
+14: (-1.5,1.5) (-1.5,-1.5) (1.5,-1.5) (1.5,1.5)
+```
+
+Stored Tree variants `15..18` cannot index past this table in an ordinary
+loaded Arena: post-load materialization `0x006531B0` replaces them with Scrub
+2062 objects, whose painter owns a separate shadow path. With Complex Shadows
+disabled, `0x00608AB0` follows its fallback sprite branch and may include the
+enabled secondary art for main variants below six; that fallback does not make
+the secondary canopy part of the complex projected silhouette.
+
 Monument, Building, Goodie, Scrub, Rails, Wall, and other scenery/fence
 painters also reference the Complex Shadows global. This adjacency means the
 web seam belongs to the shared Region/world renderer, not to Tree, Gravestone,
-or Fence special cases. Exact native outline coordinates remain class-authored
-data; a browser implementation may derive stable silhouettes from the already
-extracted native alpha art, but must preserve source ownership, facing-edge
-selection, radial projection, opacity endpoints, painter ordering, and the
-settings/flag distinction above.
+or Fence special cases. Native outlines remain class-authored data. Tree must
+use the recovered table above; classes whose tables have not yet been extracted
+may retain an explicit native-alpha approximation while preserving source
+ownership, facing-edge selection, radial projection, opacity endpoints,
+painter ordering, and the settings/flag distinction above.
 
 ## RegionLayout schema
 
@@ -641,7 +682,11 @@ Tree serializes two short selectors at `+0x140/+0x142` and an enable byte at
 Its tick tests nearby actors and updates target/current visibility alpha at
 `+0x14C/+0x150` for main variants 0 through 5. The renderer composes the main,
 secondary foreground, and bounds/shadow groups; the secondary path is
-conditional and only applies to the supported variants.
+conditional and only applies to the supported variants. The bounds/shadow
+painter maps main variants `0..14` directly to auxiliary DeadHawg `228..242`
+and exact complex-shadow shapes `0x0081B910 + variant*0x34`; neither mapping
+uses the secondary selector. Loaded variants `15..18` become Scrub objects
+before this Tree painter can index either 15-entry bank.
 
 Monument and Building share the simple short-selector serializer at
 `0x005E0E20`. Gravestone serializes main selector `+0x140`, overlay selector
