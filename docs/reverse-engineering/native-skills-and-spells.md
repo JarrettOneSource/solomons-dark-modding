@@ -668,9 +668,9 @@ the payment fails.
 
 | Skill ID | Skill | Native creation/application path |
 | ---: | --- | --- |
-| `11` | Call Leviathan | Creates `Leviathan (0x7F2)`, resolves a target point in front of the caster, writes configured damage/quantity state, registers it, and lets Leviathan spawn `EtherBolt (0x7F3)` children. |
-| `12` | Planewalker | `0x00548700` toggles the state. Enabling allocates `Mod_Planewalker (0x1B75)`, writes `mDuration`, attaches it, saves the previous selected spell at wizard `+0x308`, and forces selected spell `80` (Plane Orb). Disabling routes through the modifier-removal helper. |
-| `15` | Phasing | `0x0052A0B0` walks forward along the cast heading in collision-tested increments, accepts the first clear point within 20 probes, updates the wizard position/world membership, and emits the phase traversal effect. No separate cooldown is written by this helper. |
+| `11` | Call Leviathan | Creates `Leviathan (0x7F2)` at the resolved aimed point, writes configured damage/quantity state, builds the complete appendage list, registers it, and lets the 1600-tick active actor spawn targeted `EtherBolt (0x7F3)` children every 75..100 ticks per appendage. |
+| `12` | Planewalker | `0x00548700` toggles the state. Enabling allocates `Mod_Planewalker (0x1B75)`, writes `mDuration*100`, attaches it, saves the previous selected spell at wizard `+0x308`, forces selected spell `80` (Plane Orb), and clears Ether Blast charge. Casting while active removes the modifier; removal/expiry restores selection and owns the off edge. |
+| `15` | Phasing | `0x0052A0B0` tests distances `80..270` in 10-unit increments, relocates to the first collision-clear point, updates world membership, and emits the `BadGuys[53]` traversal effect plus `phase` audio only on success. All 20 failures leave position and presentation unchanged. No separate cooldown is written by this helper. |
 | `21` | Ring of Fire | Calls `0x0063F920`, which creates the ring's `MovingFire (0x7E6)` segments and final `Shockwave (0x7E7)` from the supplied damage/owner flags. |
 | `23` | Firewalker | Toggles progression byte `+0x8DC`; enabling it creates `Fire_Goodguy (0x7EE)` and disabling it refreshes progression state. The player tick emits the trail while enabled. Refresh adds the scalar `mHoard=50` as an absolute MP reserve at `+0x740`, not a percentage of max MP. |
 | `27` | Magic Storm | Creates `StormCloud (0x7F0)` at the aimed point, copies caster/world identity, damage range and arc state, and registers the persistent cloud. |

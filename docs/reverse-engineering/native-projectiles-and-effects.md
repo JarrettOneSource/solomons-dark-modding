@@ -566,12 +566,74 @@ heading, velocity, owner group, and configured damage, and registers the bolt.
 The configured appendage quantity controls the list built for the Leviathan;
 the configured damage is copied to child `+0x14C`.
 
+Constructor `0x005E8FB0`, appendage initializer `0x005F4750`, tick
+`0x006145D0`, and draw `0x006151D0` close the authored clocks and RNG order.
+The central actor starts at scale zero, grows by float32 `0.025` to one, owns
+`round(16 * game_timing_scale)=1600` active ticks, then shrinks by float32
+`0.04` until removal. Each appendage starts with random heading, radial jitter,
+one of two 15-direction sprite banks, and a `[0,99]` shot counter. It first
+queries a 300-unit target lane with a 50-unit footprint. A retained target is
+identity-resolved each tick, the countdown decrements, and a shot resets it to
+`75 + RandomInt(26)`. Sprite bank selection toggles on a successful
+`RandomInt(2)==1` roll. The draw path depth-sorts appendages by their recovered
+heading frame and selects `BadGuys[343 + bank*15 + frame]` (`343..372`), while
+the central portal is drawn once normally and once at half alpha in the
+additive pass. The live actor renews `PlaneCross__Loop`; cast activation owns
+`LeviathanRoar__Stream`.
+
 `EtherBolt` is a deliberately small straight projectile. `0x006034F0` adds its
 velocity at `+0x13C/+0x140` to position each tick, expires after 100 ticks plus
 a fade, and uses `0x00641220` for point/radius actor intersection. On contact it
 emits `Anim_FadeMM`, dispatches its `+0x14C` damage only on the authoritative
 group, and removes itself. It does not perform the terrain-segment test used by
 `MagicMissile`.
+
+### Plane Orb (`0x7EF`)
+
+Planewalker's forced primary is a separate persistent actor, not a recolored
+Magic Missile. Inline creator `0x0052D8C0` writes damage
+`2 * progression[+0x8D0] / game_timing_scale`; `+0x8D0` is the sum of effective
+Ether line ranks `8,10,9,13,14,15,12`. Initializer `0x005E2230` writes velocity
+`aim * 1.75`, lifetime `1000`, visual scale `0.5`, and acceleration scalar `1`.
+Constructor `0x005E2180` consumes one native float draw for maximum scale
+`1 + RandomFloat(0,1.5)`.
+
+`0x005FB460` advances position by `(acceleration+1)*velocity`, grows scale by
+`0.01` to its random maximum, and recurs acceleration by float32
+`*0.980000019`. After lifetime expiration it shrinks scale by `0.02` until
+removal. Every sixth authoritative tick a hostile query centered at
+`(x,y-15)` with radius `2*scale` applies `stored_damage * 5` to every returned
+target; this five-payload pulse after a six-tick counter is intentional stock
+behavior. There is no terrain segment or placement collision.
+
+Draw `0x005E8720` rotates the additive core by `global_tick % 360`. Special
+pass `0x00601910` builds the surrounding ring as seven segments, or fifteen
+with Enhanced Effects, between scale-proportional inner and outer radii and
+rotates it from the same global clock. Enhanced Effects also emits the
+perspective `BadGuys[11]` motes recovered in the actor tick. Creation owns the
+world flash plus `distortreality` and pitched `lightningstart` audio requests.
+
+### Ether Blast and Ether Burn (`0x1B74`)
+
+The charge state belongs to the wizard, not to each Missile. At
+`0x0054B866..0x0054BA19`, `PlayerWizard::Tick` adds float32 `0.007` while the
+wizard is idle from its firing state, Magic Missile is selected, its full
+cached cost is affordable, the charge cap is nonzero, and plane flag `0x10` is
+clear. It clamps to the cached cap and the Planewalker branch forcibly resets
+it. At the head of `0x0053CFE0`, a positive round-to-nearest-even charge count
+is consumed before the ordinary Missile creation. The pulse is centered 200
+units down the cast heading with radius 350, flashes by `0.1` per charge, and
+attaches one `Mod_EtherBurn` to each returned hostile target.
+
+The modifier value is `min(charges*0.15,0.95) * target_max_hp`, with `0.001`
+used for a nonpositive result, and lifetime is 300 ticks. Merge
+`0x00627690` retains maximum remaining lifetime and maximum reduction. Apply
+callback `0x00623950` invalidates the target's derived-health cache; the target
+modifier lane therefore owns the temporary maximum-health reduction and
+restores the maximum when the modifier expires without synthesizing healing.
+Tick `0x00629CD0` emits one additive `Anim_FadeAdditive` per tick, selecting
+`BadGuys[246 + (global_tick/6)%5]`, anchored at `(target.x,target.y-15)` with
+target-scale-aware random size and modifier fade alpha.
 
 ### Raise Golem and Iron Golem (`0x7F4`)
 
