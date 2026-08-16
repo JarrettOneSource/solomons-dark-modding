@@ -612,6 +612,9 @@ with Enhanced Effects, between scale-proportional inner and outer radii and
 rotates it from the same global clock. Enhanced Effects also emits the
 perspective `BadGuys[11]` motes recovered in the actor tick. Creation owns the
 world flash plus `distortreality` and pitched `lightningstart` audio requests.
+The callsite proves that the second request changes pitch, but the bounded pass
+did not close the scalar; browser code must not label a guessed playback rate
+as native parity.
 
 ### Ether Blast and Ether Burn (`0x1B74`)
 
@@ -772,8 +775,9 @@ the actual pressure radius in `0x005F8620`:
 
 - actors at squared distance at most `262,144` (radius 512) are pulled toward
   the center through their virtual force callback. The radial strength is
-  `1.1 * max(0.1, 1 - distanceSquared / 262144)` before the target's own scale
-  term. Actors at squared distance at most `400` (radius 20) also receive
+  `intensity * 1.1 * max(0.1, 1 - distanceSquared / 262144)` along the
+  normalized inward vector. Flag-`0x400` objects multiply by that falloff a
+  second time. Actors at squared distance at most `400` (radius 20) also receive
   contact damage using the configured `mDamage / 100` scalar at `+0x150` and
   flags `0x10A`;
 - objects with actor flag `0x400` are also pulled inward. This includes ground
@@ -788,7 +792,9 @@ presentation path draws `Integer(5)` normally or `Integer(3)` with enhanced
 effects; only result one creates the common drain child before its additional
 presentation-only draws. The class uses DeadHawg records `177..179`; the stock
 binary also carries the dedicated `sounds\crunchdrain` registry key for this
-effect.
+effect. That registry association is not a recovered creation or tick playback
+callsite: `PlaneCross__Loop` renewal is proven in `0x0061CF20`, while a
+`crunchdrain` birth one-shot remains an explicit bounded inference.
 
 The deleting destructor `0x005FB980` delegates to `0x005F84F0`, which owns the
 array/list cleanup; presentation children remain registered with the world.
