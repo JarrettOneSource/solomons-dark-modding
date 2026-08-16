@@ -263,7 +263,12 @@ def test_native_animation_state_lists_and_legal_transitions_are_pinned() -> str:
         "GoodImp 0x3ED": ("ally_release", "12-facing"),
         "GreenImp 0x7FC": ("death_handoff", "12-facing"),
         "Zombie 0x3EE": ("punch_windup/active/recovery", "angular offset", "18 facings"),
-        "Wraith 0x3EF": ("fade", "alpha/overlays", "18 facings"),
+        "Wraith 0x3EF": (
+            "attack/cooldown",
+            "facing-only",
+            "does not consume an action pose or fade-alpha lane",
+            "18 facings",
+        ),
         "DemonSkull 0x3F0": ("beam", "scream", "24 facings"),
         "Demon 0x3F1": ("bomb_windup/active/recovery", "fire_special", "18 facings"),
         "DireFaculty 0x3F2": ("primary_windup/active/recovery", "secondary_windup/active/recovery", "29 banks x 18"),
