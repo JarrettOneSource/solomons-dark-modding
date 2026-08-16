@@ -212,7 +212,8 @@ would otherwise lose byte identity. All 15 captures agree on every fixed value.
 | element root row | `+0x82C i32` | element table value | selected definition, written by `0x005D0290` |
 | Discipline root row | `+0x830 i32` | Discipline table value | selected definition, written by `0x005D0290` |
 | serialized opaque slot | `+0x834 i32` | sample-dependent | `0x006594E0` assigns `FUN_00401170(1000000,0)`; serialized by `0x0065EE80`, but not class identity |
-| local skill-picker flag | `+0x839 u8` | `0` | local actor initialization |
+| level-up screen active | `+0x838 u8` | `0` | screen constructor sets it; SAVE SKILL clears it before close |
+| current-offer Sorceror action available | `+0x839 u8` | `0` | granted from owned selector 17 at `+0x7DD`; card, reroll, or save consumes it |
 | special-choice argument | `+0x844 i32` | sample-dependent/opaque | not attributable to a class definition |
 | primary spell row | `+0x86C i32` | element table value | selected definition, written by `0x005D0290` |
 | secondary spell row | `+0x870 i32` | element table value | selected definition, written by `0x005D0290` |

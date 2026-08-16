@@ -169,7 +169,7 @@ ordinary footstep gain `0.5`. Step1/Step2 use their gain-only wrapper.
 | `potion.use` | Effect accepted and item consumed | `0x0056D246` | 24 `sounds\drink` | Fixed. |
 | `potion.invalid` | Potion/action rejected | `0x0056D3D2` | 6 `sounds\badaction` | Fixed. |
 | `level.up` | Local native level threshold loop completes | `0x00528A3E`, reached by `0x0067C250 -> 0x005C88B0 -> 0x00528A20` | 52 `sounds\levelup` | One request at scalar `1.0` per completed threshold loop, paired with the PlayerActor's 180-tick sparkle/light timer. It is not replayed for each queued picker offer. The separate pitch-`2`/pitch-`3` calls at `0x00647F6B` and `0x00647FBE` belong only to skill 77 Turn Undead. Registry 53 `levelupskill` is loaded but has no direct retail dispatch. |
-| `skill.unlock` | Skill purchase/unlock accepted | `0x00670CD3` | 102 `sounds\unlockskill` | Fixed. |
+| `skill.unlock` | Next queued level-up offer is rebuilt after the prior picker close | `0x00670CD3` | 102 `sounds\unlockskill` | Fixed gain 1; not card hover, card activation, or the first threshold screen. |
 | `wave.start` | First arena wave enters combat state | `0x00465D22` (spawn-entry siblings `0x00469983`, `0x0046D506`, state site `0x00470E9D`) | Music transition to song `combat`, track `combat` | No RNG. Per-wave number increments have no one-shot stinger. |
 | `wave.end` | Terminal arena completion | `0x00467AA0` | Music crossfade to empty song | No RNG and no wave-complete one-shot; empty song fades/stops the active lane. |
 | `dig.shovel` | Accepted dig strike | `0x0048207A` | uniform pool 209..210 `sounds\shovel\shovel1..2` | `Integer(2)` on the active gameplay stream; point gain and float-RNG pitch. |
@@ -181,6 +181,17 @@ ordinary footstep gain `0.5`. Step1/Step2 use their gain-only wrapper.
 | `ui.confirm` | Game Over continue/button activation | `0x005CF7BA` | 0 `sounds\click` | Fixed gain 1. Other action handlers use the same registry object. |
 | `ui.back` | Storage/backpack close | `0x0056CE80` | 4 `sounds\backpack_close` | Fixed. Surfaces whose Back is an ordinary action button use 0 `click`; focus movement alone remains silent. |
 | `music.menu_transition` | Scene/menu song selection | title `0x0058A033`; selection `0x00593CA6`; academy sites `0x00508AF2`, `0x00508B7F`, `0x0050F94B`, `0x00510E07`, `0x005110E7`, `0x00512CC7` | `prelude`, `selection`, or `academy` through `Music::PlayCrossfade` | No RNG; caller supplies transition duration. |
+
+The level-up picker has a statically recovered screen-local sequence in
+addition to the live census rows above. `0x0066FAA4` plays entry 64
+`sounds\openpanel` at gain/pitch 1 when the build delay completes;
+`0x00671635` plays entry 1 `sounds\pickskill` only when a card is activated;
+and `0x00670D35` plays `openpanel` at gain 1, pitch 0.75 when closing begins.
+Pointer hover/focus is silent. Sorceror's Charm ROLL AGAIN uses entry 93
+`sounds\summon` at gain 1, pitch 0.8 (`0x00671532`); SAVE SKILL uses entry 0
+`sounds\click` (`0x00671568`). A subsequent queued offer uses the existing
+`skill.unlock` row. Entry 53 `sounds\levelupskill` remains loaded but has no
+retail dispatch.
 
 Asset 52 has one separate non-census consumer: `skill.turn_undead`, skill 77's
 undead-area effect. `0x00647F6B` and `0x00647FBE` inside `0x00647EF0` issue

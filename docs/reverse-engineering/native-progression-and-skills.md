@@ -446,13 +446,20 @@ pre/post actor snapshot and applied choice:
 | 3 | Enchant Staff 65, Magic Circle 49, Smart Missiles 9 | Enchant Staff 65 |
 | 4 | Magic Circle 49, Mana Up 56, Smart Missiles 9 | Magic Circle 49 |
 
-Stock has no reroll and no skip. A pending local choice must resolve before
-normal play resumes. Reopening with unchanged book/level/seed reproduces the
-same selection. The live recorder deliberately rewrites `79225` before each
-of its three independent rolls; the later native bot apply/refresh flow may
-replace the field, but the builder itself never writes it. A browser
-convenience reroll would be a new mechanic and must not consume the gameplay
-stream. Concentrated Creativity then independently has a
+The ordinary picker has no unconditional reroll or skip: a pending local
+choice still blocks normal play. Selector 17 `SORCEROR'S CHARM`, however,
+enables the screen's two authored sibling actions while current-offer byte
+`+0x839` is set. ROLL AGAIN writes
+`active_gameplay_rng.Integer(1_000_000)` to actor-private offer seed `+0x834`,
+clears `+0x839`, and rebuilds without decrementing pending count. SAVE SKILL
+moves one count from pending `+0x44` to deferred `+0x48`, closes the screen,
+and `0x0065F480` merges that deferred count back on a later screen creation.
+Neither action exists without the owned byte at `+0x7DD` (the
+`+0x7CC + selector` span). Reopening with unchanged book/level/seed still
+reproduces the same selection. The live recorder deliberately rewrites
+`79225` before each of its three independent rolls; the builder itself never
+writes `+0x834`, while the explicit charm reroll action does. Concentrated
+Creativity then independently has a
 20% `RandomInt(5)==1` Insight chance, marks one eligible displayed row, and applies
 that row twice when chosen. The shipped branch checks only concentration slot
 A/index 16, not slot B or Mind Chug; preserve that verdict from the landed

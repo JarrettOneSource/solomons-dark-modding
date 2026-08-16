@@ -139,11 +139,80 @@ exactly 1. Render `0x0067DF80` owns the screen-space presentation:
 - the panel/content lane uses `revealAlpha^3` before reaching its settled
   geometry.
 
-Screen-registry member `+0xB18` is entry 64 `sounds\openpanel`; member
-`+0x11A0` is entry 102 `sounds\unlockskill`, requested when another queued
-choice is rebuilt. Entry 53 `sounds\levelupskill` is loaded but no retail
-dispatch was found. These screen sounds must not be substituted for the
-PlayerActor-owned entry-52 threshold request.
+The complete screen-owned sound sequence is distinct from the PlayerActor
+threshold request:
+
+- When the screen's one-tick constructor delay reaches zero, `0x0066FAA4`
+  requests registry member `+0xB18`, entry 64 `sounds\openpanel`, at gain 1
+  and pitch 1.
+- Merely changing the active `UiRect` does not dispatch audio. This includes
+  pointer hover and any non-native keyboard/gamepad focus graph supplied by a
+  port.
+- Activating a skill card requests member `+0x44`, entry 1
+  `sounds\pickskill`, at `0x00671635`, gain 1 and pitch 1.
+- Starting any close from settled alpha requests `sounds\openpanel` again at
+  `0x00670D35`, this time with gain 1 and pitch `0.75`. Card selection sets
+  close direction to `-0.75`; the save action uses `-1`.
+- When a closing screen reaches zero alpha and another pending choice remains,
+  `0x00670C9D..0x00670CC4` restores reveal alpha/direction to `1`, writes ten
+  ticks to build delay `+0x78`, and sets hidden-content byte `+0x604`. The
+  branch then requests member `+0x11A0`, entry 102 `sounds\unlockskill`, at
+  `0x00670CD3`. Render `0x0067DF80` tests `+0x604` at `0x0067EAC1` and skips
+  the offer/control content while it is set. On the delay's `1 -> 0`
+  transition, the builder replaces the options, clears `+0x604` at
+  `0x0066FCE4`, and exposes the next offer settled. This is a 10-tick blank
+  rebuild handoff, not a second 40-tick reveal and not an immediate card swap.
+
+Entry 53 `sounds\levelupskill` is loaded but no retail dispatch was found.
+None of these screen sounds substitutes for the PlayerActor-owned entry-52
+threshold request.
+
+## Sorceror's Charm Actions
+
+The previous conclusion that stock had no reroll or deferred choice was
+incorrect. It came from tracing only the card loop in `0x00671470`. A complete
+active-`UiRect` sweep exposes two sibling actions, both rendered only while
+`progression + 0x839` is nonzero.
+
+`progression + 0x7CC + selector` is the durable Hagatha ownership byte span,
+so selector 17 `SORCEROR'S CHARM` is exactly `progression + 0x7DD`.
+Normal screen creation `0x0065F480(0)` clears `+0x839`, then grants one action
+when `+0x7DD != 0`. A queued-offer rebuild grants it again. Either side action
+or a card selection clears `+0x839`, so one displayed offer cannot use both
+actions and cannot reroll twice.
+
+The right sibling `UiRect` is `screen + 0x540`. Activation at `0x006714D9`:
+
+1. replaces the actor-private offer seed `progression + 0x834` with
+   `RandomInt(1_000_000)` from the active gameplay stream;
+2. clears the current-offer action byte `+0x839`;
+3. requests registry member `+0x1014`, entry 93 `sounds\summon`, at
+   `0x00671532`, gain 1 and pitch `0.8`; and
+4. sets the screen rebuild delay to two ticks without decrementing pending
+   choices. It does not set hidden-content byte `+0x604`, so the old offer
+   remains drawn during those two ticks before the replacement is built.
+
+The left sibling `UiRect` is `screen + 0x48C`. Activation at `0x00671546`:
+
+1. requests member `+0x18`, entry 0 `sounds\click`, at `0x00671568`;
+2. starts a close at direction `-1`;
+3. clears `+0x839` and the screen-active byte `+0x838`;
+4. decrements current pending choices at `progression + 0x44`; and
+5. increments deferred choices at `progression + 0x48`.
+
+The next call to `0x0065F480` adds all deferred choices back into `+0x44` and
+clears `+0x48` before creating the screen. This is the stock **SAVE SKILL**
+meaning behind the charm description "preserves the reroll for later": it
+defers this unresolved skill choice until a later level-up screen, where the
+owned charm grants a fresh one-use reroll action.
+
+Tick/build `0x0066F920` also establishes the settled side-control hit boxes.
+For `n` cards, `panelWidth = n * 200 + 60`; both rectangles are 255 by 100 at
+`y = 450 - 177.5 + 50 = 322.5`. SAVE SKILL begins at
+`x = 800 - panelWidth / 2 - 140`; ROLL AGAIN begins at
+`x = 800 + panelWidth / 2 + 40`. Render `0x0067DF80` draws authored UI record
+57 at the SAVE SKILL rectangle and record 56 at ROLL AGAIN. These are native
+atlas members and interaction regions, not replacement HTML labels.
 
 The screen renderer draws a translucent curtain over the already rendered
 world and does not contain a selective enemy/effect visibility branch. The
@@ -239,7 +308,8 @@ comparison cannot exclude Spell Welding.
 
 ## Choice Apply
 
-`0x00671470` is the level-up screen apply handler. For a selected option id it:
+`0x00671470` is the level-up screen apply handler. After the two Sorceror's
+Charm sibling branches above, its card loop handles a selected option id:
 
 1. Reads the option id from the native option array.
 2. Optionally maps the id through progression vtable slot `+0x34` for the UI
