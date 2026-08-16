@@ -1044,7 +1044,7 @@ def test_native_progression_actor_layout_and_all_skill_rows_are_pinned() -> str:
         raise StaticReTestFailure(
             "native skill catalog no longer supplies one name for every documented effect"
         )
-    medium_ids = {14, 29, 33, 50, 53, 80}
+    medium_ids = {29, 33, 53}
     live_ids = {23, 56, 57, 64, 79}
     for skill_id in range(82):
         name, effect, confidence = documented[skill_id]
@@ -1078,7 +1078,7 @@ def test_native_progression_actor_layout_and_all_skill_rows_are_pinned() -> str:
             )
     closure_claims = {
         16: (
-            "`mDamage16[r] - mDamage18[r]`",
+            "row-16 `mDamage[r]` minus row-18 `mDamage[r]`",
             "private random seed",
             "impact presentation precede",
         ),

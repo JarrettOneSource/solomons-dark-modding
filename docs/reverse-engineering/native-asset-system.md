@@ -340,6 +340,12 @@ gameplay-system document. `paintbkg` is not a world tile: `0x005BED10` uses it
 as the background for portrait capture and writes the result as
 `Portraits\\portrait%d.raw`.
 
+`etherplane` is closed separately: PlaneOrb slot-`+0x24` renderer
+`0x00601910` binds the handle stored at `+0x31C5DC` / `DAT_00B3BC0C` and maps
+the shipped 128 by 128 RGBA image over its center-fan/annulus mesh with
+repeat-wrapped `world_xy/192` UVs. Its source SHA-256 is
+`cd9aee555fecde2d4917e1776f6bff927c8957e813659dcf163798a2c9e398fb`.
+
 There is likewise no omitted loose arena-ground file. `Arena::Render`
 `0x0046EC80` and `Bonedit::Render` `0x004D5F40` begin with an opaque-black
 Direct3D render-target clear through `0x0041D840` and `0x00440D40`, then tile

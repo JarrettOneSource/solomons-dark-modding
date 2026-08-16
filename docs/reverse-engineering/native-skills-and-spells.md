@@ -365,7 +365,10 @@ action timing scalar at `+0x34` by `1.75`.
 Raise Golem is skill-ID case `45` in `0x0054CC50`. It creates factory type
 `0x7F4`, writes `mHP` to current/max HP `+0x170/+0x174`,
 `mDamage1` to `+0x1F0`, `mDamage2` to `+0x1F4`, copies owner/world
-identity, and places the summon at a collision-adjusted target point. Learned
+identity, and ignores cursor aim: exact `RandomSign(45)` chooses a point 100
+units along the caster's current heading plus or minus 45 degrees, native
+resolver `0x00645910` collision-adjusts it with radius 25 and scenery mask
+`0x205`, and the summon starts facing back toward `casterFacing+180`. Learned
 Iron Golem `75` sets byte `+0x210` and writes `mReflect/100` to
 `+0x214`.
 
@@ -499,7 +502,7 @@ uses its separate attachment path.
 | `1001` Ether + Water | `0x0053F3C0` | `0x7E0 FrostMissile` | Uses the same weld-vector fan/target contract; writes damage and speed/turn scaling plus cold-area and slow payload fields at `+0x168/+0x16C`. |
 | `1002` Ether + Air | `0x0053EDB0` | `0x7DF BallLightning` | Uses the same weld-vector fan/target contract; writes damage, inherited speed/turn scaling, electric payload magnitude/duration, and inherited missile state at `+0x168..+0x170`. |
 | `1009` Air + Earth | `0x00545FC0` | `0x7E5 GroundSpark` | Creates a central spark and, outside the alternate/bot path, two side sparks. Each receives heading-derived motion plus vector-derived damage/effect fields at `+0x1A0..+0x1B0`. |
-| `80` Plane Orb | inline in `0x0054CAF0` | `0x7EF PlaneOrb` | Creates one aimed orb, copies caster group/world identity, derives `+0x154` from equipped-item state, registers it, and triggers the world flash, confirmed `distortreality`, and a `lightningstart` request whose pitch scalar remains unresolved. |
+| `80` Plane Orb | inline in `0x0054CAF0` | `0x7EF PlaneOrb` | Creates one aimed orb, copies caster group/world identity, derives `+0x154` from equipped-item state, registers it, emits the exact 27-child `0x0052D360` birth burst, requests `distortreality` at Region point gain and `lightningstart` at pitch `2.0` with the same gain, then writes Region alpha `0.1`. |
 
 The three Ether-derived welded missile handlers all read the normalized vector,
 not six CFG files at cast time. They consume the vector's first eight values,
@@ -668,29 +671,29 @@ the payment fails.
 
 | Skill ID | Skill | Native creation/application path |
 | ---: | --- | --- |
-| `11` | Call Leviathan | Creates `Leviathan (0x7F2)` at the resolved aimed point, writes configured damage/quantity state, builds the complete appendage list, registers it, and lets the 1600-tick active actor spawn targeted `EtherBolt (0x7F3)` children every 75..100 ticks per appendage. |
+| `11` | Call Leviathan | Creates `Leviathan (0x7F2)` at the resolved aimed point. Ordinary casts select an integer appendage count in `[1,mQuantity]`; the complete Bug-Master outfit forces the configured maximum and doubles this spell's damage. The owner builds the corresponding authored one-through-five appendage layout, registers it, and lets the 1600-update active branch spawn targeted `EtherBolt (0x7F3)` children on each appendage's independent 75..100-update cadence. |
 | `12` | Planewalker | `0x00548700` toggles the state. Enabling allocates `Mod_Planewalker (0x1B75)`, writes `mDuration*100`, attaches it, saves the previous selected spell at wizard `+0x308`, forces selected spell `80` (Plane Orb), and clears Ether Blast charge. Casting while active removes the modifier; removal/expiry restores selection and owns the off edge. |
 | `15` | Phasing | `0x0052A0B0` tests distances `80..270` in 10-unit increments, relocates to the first collision-clear point, updates world membership, and emits the `BadGuys[53]` traversal effect plus `phase` audio only on success. All 20 failures leave position and presentation unchanged. No separate cooldown is written by this helper. |
 | `21` | Ring of Fire | Calls `0x0063F920`, which creates the ring's `MovingFire (0x7E6)` segments and final `Shockwave (0x7E7)` from the supplied damage/owner flags. |
-| `23` | Firewalker | Toggles progression byte `+0x8DC`; enabling it creates `Fire_Goodguy (0x7EE)` and disabling it refreshes progression state. The player tick emits the trail while enabled. Refresh adds the scalar `mHoard=50` as an absolute MP reserve at `+0x740`, not a percentage of max MP. |
+| `23` | Firewalker | Toggles progression byte `+0x8DC`; enabling it immediately creates one damage-enabled `Fire_Goodguy (0x7EE)` without advancing the periodic geometry counter. While enabled and outside player mode `2`, the player tick emits another patch on every global tick divisible by ten. Those periodic patches cycle their contact-geometry byte `true,false,false`; every patch still owns the exact seven-word randomized birth, DeadHawg fire animation, lifetime, and ambient loop. Refresh adds scalar `mHoard=50` as an absolute MP reserve at `+0x740`, not a percentage of max MP. |
 | `27` | Magic Storm | Creates `StormCloud (0x7F0)` at the aimed point, copies caster/world identity, damage range and arc state, and registers the persistent cloud. |
-| `30` | Prismatic Shock | `0x00645540` creates the cast-wave presentation, performs a rectangular hostile query, and allocates/attaches `Mod_Prismatic (0x1B76)` through the contact ABI for every returned target. |
+| `30` | Prismatic Shock | `0x00645540` creates one caster-attached `Anim_PrismaticSpray`, performs a mask-`2` radius-350 hostile query immediately, and allocates/attaches `Mod_Prismatic (0x1B76)` through the contact ABI for every returned target. |
 | `35` | Ring of Ice | `0x00644460` creates three `Anim_Iceblast` bursts, the radial debris field, and `FreezeWave (0x7E8)` with configured damage, owner identity, and optional item-effect flag. |
 | `41` | Earthquake | Creates `Earthquake (0x7F1)` at the caster position and writes the configured duration before registration. |
-| `45` | Raise Golem | Enforces the one/two-summon limit, creates `Golem (0x7F4)` at a collision-adjusted point, writes HP and both damage values, and folds learned Iron Golem reflection into the summon; see the detailed summon section above. |
+| `45` | Raise Golem | Enforces the one/two-summon limit, ignores cursor aim, consumes signed 45-degree placement plus the shared radius-25 elliptical collision resolver, creates `Golem (0x7F4)` facing 180 degrees back from the committed caster facing, writes HP and both damage values, and folds learned Iron Golem reflection into the summon; see the detailed summon section above. |
 | `46` | Stoneskin | Constructs `Mod_StoneSkin` directly through `0x006237A0`, writes configured duration, and attaches the reference to the caster; it does not create a world projectile. |
-| `48` | Teleport | Calls `0x00644A00` around the world virtual `+0x12C` relocation query and writes the accepted destination back to the wizard. |
+| `48` | Teleport | Calls `0x00644A00` at the source, asks world virtual `+0x12C` for a destination, writes that non-null point to the wizard, then calls `0x00644A00` again at the destination. Arena `0x00465440` owns the shuffled 100-unit safety-grid selection and radius-40 collision adjustment; indoor Regions return `(0,0)` through `0x00508900`. Aim is not an input to this virtual. |
 | `49` | Magic Circle | `0x0063FDE0` creates/index-registers `MagicCircle (0x7EA)` at the aimed point with `mSlow`, color, and ownership state. Every ten ticks the circle attaches `Mod_CircleSlow (0x1B70)` to eligible enemies. The local player gains `mana_recovery * 2 / game_timing_scale` MP per callback. The HP branch is stock-inert: it computes `HP + health_regeneration * 2 / game_timing_scale`, compares that candidate with current HP instead of max HP, and writes current HP unchanged for ordinary positive regeneration. |
-| `50` | Magic Trap | Creates `MagicTrap (0x7F5)`. It derives an element selector from the current stock primary or weld build, derives base damage from that primary, multiplies it by `mDamage`, and registers the armed trap at the aimed point. |
+| `50` | Magic Trap | Creates `MagicTrap (0x7F5)`. It derives an element selector from the current stock primary or weld build before damage lookup. Selector `0..4` resolves effective-rank primary `8,16,24,32,40`; Ether consumes one inclusive `FloatRange(mDamage1,mDamage2)`, while the other four read their selected skill's single `mDamage` without a damage draw. It stores `f32(base*trap mDamage)` and registers the armed trap at the aimed point. The air selector attaches one target-owned `Mod_ElectricBurn`: 100 damage updates at `trapPayload/100`, max-remaining-duration merge with replacement payload, one jittered radius-one Region light and `electric__loop` renewal per update, and no lightning sprite because the trap fixes chain count to zero. |
 | `51` | Dampen | `0x00648DF0` queries hostile magic in a rectangle, removes guided/fire/dark missile actors, disrupts hostile caster actions, and dispels shields when `RandomInt(100) < 0x33` (51/100 outcomes, despite the authored 50% display text); it then starts action mode `21` (`Action_PlayerWizard_CastSpin`) at half normal action damage. |
 | `54` | Magic Shield | Combines Magic Shield `mAbsorb` with Explosive Shield factor `mDamage/100` and calls the wizard's virtual `+0x64` to install/refresh shield state. Break callback `0x00546650` multiplies the installed absorb pool by that factor for its radial contact (rank 1: `25*0.5=12.5`); it is not a flat Explosive Shield damage value. |
 | `72` | Acid Rain | Creates `AcidRain (0x7FE)` at the aimed point, writes configured damage and caster/world identity, then registers the persistent rain actor. |
-| `73` | Fire Wall | Builds a 300-unit line perpendicular to aim and creates eleven `Fire_Goodguy (0x7EE)` patches at 30-unit intervals including both endpoints. Patch scale follows `0.8+0.6*sin(pi*d/300)`, each birth adds an unsigned `RandomFloat(10)` radial offset in a random unit direction, life is overwritten with scalar `7` (700 ticks under the shared `-0.01/tick` recurrence), and damage/caster ownership use the common Fire-patch contact path. Creation requests `ignite` then `fireballhit`. |
+| `73` | Fire Wall | Builds a 300-unit line perpendicular to aim and creates eleven `Fire_Goodguy (0x7EE)` patches at 30-unit intervals including both endpoints. Patch scale follows `0.8+0.6*sin(pi*d/300)`, each birth adds an unsigned `RandomFloat(10)` radial offset in a random unit direction, life is overwritten with scalar `7` (700 ticks under the shared `-0.01/tick` recurrence), and the creation loop forces `+0x160=1` on every patch so all eleven own common Fire-patch contact. Creation requests `ignite` then `fireballhit`. |
 | `74` | Ether Drain | Creates `EtherDrain (0x807)`, writes `mDamage / 100` as the radius-20 contact scalar, resolves the aimed origin through the world, and registers its 1,000-active-tick radius-512 pressure field. Constructor `0x005F8360` derives that countdown as `100 ticks/s * 10 s`; tick `0x0061CF20` decrements it once per fixed tick. Candidate identities refresh through the class-owned arrays; nonempty Gold/Sack containers are protected from center capture. The actor renews `PlaneCross__Loop`; the associated `crunchdrain` registry entry still lacks a recovered playback callsite. |
 | `76` | Call Comet | Calls `0x0063FD00`, which creates `Comet (0x80C)` with Permafrost-scaled freeze seconds at `+0x13C` and damage at `+0x140`; impact converts the former to FreezeWave ticks and uses the latter as damage. |
 | `77` | Turn Undead | `0x00647EF0` first reuses registry 52 `sounds\levelup` twice with point-derived gain and exact pitches `2.0` and `3.0`, then queries a strict 500-diameter/mask-2 area and acts only on `Skeleton (0x3E9)`, `SkeletonArcher (0x3EA)`, `SkeletonMage (0x3EB)`, and `Zombie (0x3EE)`. It turns both heading lanes away from the cast point, writes `round(mFlee*100)` as the target-owned countdown at `+0x20C`, and scales attack strength once when the old field still holds the untouched `<=-9000` sentinel. The common hostile tick decrements positive countdowns. The cast also creates 35 BadGuys-record-48 fade/scale children for exactly 20 ticks; this reuse is separate from the same sound asset's gain-1 level-transition owner at `0x00528A20`. |
-| `78` | Mindstar | Toggles progression byte `+0x8DD`, refreshes progression state, and produces the activation presentation; no projectile class is allocated. |
-| `79` | Regenerate | Toggles progression byte `+0x8DE`, refreshes progression state, and produces the activation presentation; regeneration then runs from player progression/tick state. |
+| `78` | Mindstar | Toggles progression byte `+0x8DD`, writes the cyan Region feedback lane, plays the shared stream, and refreshes progression state. No projectile, player-attached sprite, or world actor is allocated. |
+| `79` | Regenerate | Toggles progression byte `+0x8DE`, writes the orange Region feedback lane, plays the shared stream, and refreshes progression state. No projectile, player-attached sprite, or world actor is allocated; regeneration then runs from player progression/tick state. |
 
 ### Complete right-click presentation and lifecycle contract
 
@@ -704,6 +707,24 @@ and actor contracts; its source executable is the 4,723,200-byte retail image
 with SHA-256
 `03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`.
 
+### Native secondary belt presenter
+
+The catalog's top-level `belt_presentation` closes the shared HUD owner for all
+23 rows. `BeltButton::Present` (`0x005D3E10`) owns eight 53 x 53 slots, resolves
+their default right-mouse/number-key bindings, and draws the input hint only
+when the slot has content. Keyboard hints are black Fonts group-8 labels over
+the horizontally sized `UI.22` three-piece plaque; right mouse is `UI.100`.
+Both paths retain the native lower-viewport clipping.
+
+Cooldown presentation is a dark-red `(0.5,0.1,0.1,0.75)` 53 x 53 square
+radial fan over `[360*(1-remaining/capacity),360]`, split at crossed 45-degree
+boundaries. Painter order is cooldown square fan first, skill icon second.
+Cooling icons use white base alpha `0.25`; ready icons enter at white base alpha
+`0.75`, and the Hub independently installs the quarter-RGB scene multiplier.
+The presenter never tests any of the four toggle-state bytes, so active
+Planewalker, Firewalker, Mindstar, and Regenerate icons do not brighten, pulse,
+or otherwise diverge from their cooldown/ready state.
+
 The presentation census is not a generic particle substitution:
 
 | Skill IDs | Native presentation owner |
@@ -713,15 +734,24 @@ The presentation census is not a generic particle substitution:
 | `12,23,46,54,78,79` | Player/progression or a target-owned modifier owns the visible state. Toggle-off, expiry, overload, absorbed-hit, and shield-break are real presentation edges, not silent data changes. |
 | `15,30,48,51,77` | The helper emits registered additive children at the accepted world point. Dampen alone also queues mode `21` CastSpin, whose phase advances `2.5` per tick and completes on strict `phase > 180` after 73 action ticks. |
 
-The exact visual anchors are `BadGuys[343..372,11,39]` for
+The exact visual anchors are `BadGuys[11,22,39,343..372]` for
 Leviathan/EtherBolt, `BadGuys[53]` for Phasing, `DeadHawg[46..77]` for both
-moving and persistent friendly fire, `BadGuys[10,11]` for Prismatic Shock,
-`DeadHawg[16,17]` for Ring of Ice, `DeadHawg[200..202]` plus
+moving and persistent friendly fire, `BadGuys[75,11,45]` plus the loose
+repeat-wrapped `images/etherplane.png` mesh for Plane Orb,
+`BadGuys[58,111,10,11]` for Prismatic Shock,
+`DeadHawg[114,121]` plus `BadGuys[72]` for Ring of Ice,
+`DeadHawg[200..202]` plus
 `BadGuys[2008..2010,62]` for Earthquake, `Golem[1..208]` plus the supplemental
 Golem rows listed in the catalog, `BadGuys[90]` for Teleport,
-`BadGuys[48,7]` for Magic Circle, `BadGuys[393..400,16,158..167,15]` for
-Magic Trap, `BadGuys[10,11,48]` for Dampen, `BadGuys[68]` for the 20-particle
-Magic Shield break, `DeadHawg[177..179]` for Ether Drain, and
+`BadGuys[48,7]` for Magic Circle (centered spin-away ring particles and a
+player-attached recovery pulse respectively),
+`BadGuys[111,112,15,85,16,158..167,17,74]` for Magic Trap's armed body,
+shadow, independently fading shimmer, and terminal burst,
+`BadGuys[10,11,48]` for Dampen,
+`BadGuys[49,68,15,158..167,17,74]` plus `DeadHawg[2,18]` for the Magic Shield
+shell, 20-particle break, Explosive Shield composite, and light-only Shockwave,
+`BadGuys[75,38,10,11,36]` plus `DeadHawg[177..179]` for the Ether Drain
+parent, clouds, free debris, capture pulse, and captured-object flare, and
 `DeadHawg[5,203..207,6]` plus `BadGuys[51,15]` for Call Comet. These records
 are world-painter inputs with their recovered additive/depth modes; skill
 icons remain the separate `Skills` rows in the catalog.
@@ -735,11 +765,15 @@ hashes are recorded per member in the catalog and summarized in
 [`native-audio-events.md`](native-audio-events.md#secondary-and-advanced-right-click-events).
 
 Magic Shield break callback `0x00546650` specifically plays `popshield`,
-spawns exactly 20 `Anim_FadeAdditive` children from `BadGuys[68]`, conditionally
-dispatches the Explosive Shield radial contact, and only then clears absorb and
-explosion state. `Mod_StoneSkin` is separate: its `+0x1C/+0x20/+0x24`
+spawns exactly 20 `Anim_FadeAdditive` children from `BadGuys[68]` at `y-35`
+with scale `2+Float(0.25)` and alpha `0.5+Float(0.75)`, conditionally dispatches
+the Explosive Shield radial contact and complete 502-word visual program, and
+only then clears absorb and explosion state. The helper's two half-payload
+contact lanes sum to the full configured payload at the target. `Mod_StoneSkin`
+is separate: its `+0x1C/+0x20/+0x24`
 callbacks at `0x00624490/0x006244C0/0x00626840` all route through the
-`stoneskin` one-shot after the modifier callback; the unrelated loaded
+`stoneskin` one-shot after the modifier apply, refresh, and removal callbacks;
+natural expiry therefore requests it exactly once. The unrelated loaded
 `stoneskinhit` and general `stonebreak` samples are not assigned to those
 modifier callbacks. Apply callback `0x00624490` also sets actor material flag
 `+0x138 |= 1`. Player renderer `0x0054BA80` reflects that flag through global
@@ -752,8 +786,12 @@ composed wizard body/equipment layer, not a separate particle sprite.
 Mindstar and Regenerate are also a deliberate shared-audio pair. Dispatcher
 calls `0x0054FF05` and `0x0054FFD4` both request
 `sounds\\mindstar__stream`, then toggle `+0x8DD` or `+0x8DE` and immediately
-run progression refresh. Regenerate does not own a separate projectile or
-healing-loop sample.
+run progression refresh. The complete two dispatcher branches contain no
+allocation or actor-registration call: their only visual presentation is the
+Region feedback write, cyan `(0, 0.5, 1, pointGain)` for Mindstar and orange
+`(1, 0.5, 0, pointGain)` for Regenerate, both with loss `0.1`. Consequently
+neither toggle owns a caster flash, player overlay, projectile, or persistent
+world sprite, and Regenerate does not own a separate healing-loop sample.
 
 The absence of other IDs from this switch is meaningful. Upgrades such as
 More Missiles, Chaining, Embers, Chill Wind, Hail, Rock Surge, Cold Aura,
@@ -770,12 +808,26 @@ generic modifier merge callback `0x00626A60` keeps the greater remaining
 duration when another modifier of the same type is attached. This explains why
 the cast helper saves the former spell selection and forces Plane Orb: Plane
 Orb is the active plane-side primary, while the modifier owns entry/exit.
+Plane Orb is a complete sibling lifecycle inside this right-click system: its
+1,000-tick countdown (999 active-branch updates before fade starts at age
+1,000), terminal scale fade, textured center-fan/annulus pass,
+27-particle birth burst, enhanced per-update mote, two birth sounds, and
+low-alpha Region flash remain owned by runtime primary 80 rather than the
+modifier body.
 
 Prismatic Shock and the elemental trap effects use the same modifier factory
 and reference-counted attachment ABI as the primary missiles. Magic Trap's
 selector adds `Burn (0x1B73)` for fire, `ElectricBurn (0x1B6B)` for air, and
 `ColdSlow (0x1B69)` for water; ether/earth retain the trap's direct contact
-payload without one of those three modifier branches.
+payload without one of those three modifier branches. The air branch writes
+ElectricBurn duration `100`, damage `trapPayload/100`, chain count zero,
+scalar one, and the trap group. Its merge callback keeps the greater remaining
+duration while replacing those payload fields. Each live tick consumes signed
+`Float(.25)` for a radius-one target light of intensity `.5+jitter`, renews
+`electric__loop`, consumes `Integer(3)` plus conditional `Float(.5)` on result
+one, and applies the stored damage. Chain count zero bypasses every
+`Anim_FadeLightning` allocation, so adding a target lightning sprite would be
+non-native.
 
 ## Closure result
 

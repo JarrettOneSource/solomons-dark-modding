@@ -533,8 +533,11 @@ The float primitive at `0x00401310` draws integer bound `100001`, divides by
 the stored `100000`, and multiplies by the requested magnitude. Both `0.0` and
 the positive endpoint are reachable. A signed request uses the integer
 sampler's sign behavior. Public range wrappers are `0x00448450` (integer) and
-`0x00448480` (float) — the integer wrapper has an equal-endpoint fast path, the
-float wrapper orders its endpoints with `fucomp`.
+`0x00448480` (float). The integer wrapper has an equal-endpoint fast path. The
+float wrapper uses `fucomp` only for the equal-endpoint fast path; otherwise it
+stores `f32(second-first)`, draws the inclusive primitive on that signed span,
+then returns `f32(first+draw)`. It therefore preserves argument order rather
+than sorting the endpoints, and an equal pair consumes no RNG word.
 
 The divisor is not a literal. It is a per-object field at `this+0xE4`, the dword
 immediately after the 55 state words, which the constructor `0x00401110` sets to

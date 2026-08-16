@@ -45,6 +45,7 @@ All objects in this document derive from the `Puppet` actor layout built by
 | vtable `+0x18` | mark/remove callback used by projectile expiry and impact |
 | vtable `+0x1C` | normal world draw when the common render dispatcher is used |
 | vtable `+0x20` | alternate draw selected by Puppet render flags |
+| vtable `+0x24` | texture-geometry pass used by PlaneOrb and other classes that override it |
 | vtable `+0x28` | auxiliary world/effect draw pass on classes that override it |
 | vtable `+0x30` | world sprite/shadow pass using `0x0057FE40` on most effects |
 | vtable `+0x64` and above | class-specific target, contact, impact, or teardown callbacks |
@@ -85,6 +86,93 @@ handler. Several effects allocate a native modifier through
 `GameObjectFactory_Create (0x005B7080)` and pass its reference in the contact
 context. Modifier type IDs are documented with the factory map below.
 
+### Region-owned full-screen feedback lane
+
+Right-click feedback is not a set of independent actor overlays. `Region`
+owns one shared color, alpha, and alpha-loss lane:
+
+| Field | Role |
+| ---: | --- |
+| `Region +0x8E14/+0x8E18/+0x8E1C` | red, green, and blue |
+| `Region +0x8E20` | current alpha |
+| `Region +0x8E24` | alpha loss per fixed update |
+
+`0x00448600` overwrites all five values. Several actor factories and ticks
+inline the same writes. `Region::Tick (0x0063EFC0)` performs one stored-float
+subtraction per 100 Hz update and clamps alpha to zero. The main Region render
+at `0x0046EC80` checks alpha after the world/effect passes, installs the stored
+RGBA with `0x0041FE50`, draws one viewport-sized rectangle, then restores
+white. The lane is ordinary alpha composition below the separate HUD, not an
+additive world sprite. A later write replaces an earlier flash; concurrent
+flashes are never accumulated or max-composited.
+
+Most world-point flashes seed alpha from Region vtable slot `+0x100`. For a
+point `P`, camera center `C`, and visible world width `W`, that callback returns
+linear falloff from one at distance `0.25W` to zero at `1.1W`. It multiplies
+the result by `0.1` while the local-player alternate/death byte at `+0x160` is
+set. The RGB and per-tick loss remain unattenuated. Calls identified as fixed
+below bypass that point gain and write alpha one directly.
+
+The complete right-click membership is:
+
+| ID / ability | Region-lane writes in native order |
+| --- | --- |
+| `11` Call Leviathan | first scale-in update: `(1, 0.5, 1, pointGain)`, loss `0.05` (`0x006145D0`) |
+| `12` Planewalker | enable only: fixed `(1, 0, 1, 1)`, loss `0.1`; disable does not write (`0x00548700`) |
+| `15` Phasing | accepted traversal: `(0, 1, 1, pointGain)`, loss `0.025` (`0x0052A220`, `0x00645B50`) |
+| `21` Ring of Fire | creation: `(1, 0.5, 0, pointGain)`, loss `0.01` (`0x0063F920`) |
+| `23` Firewalker | every on/off toggle, before the state flip: `(1, 0.5, 0, pointGain)`, loss `0.1` (`0x0054CDAB`) |
+| `27` Magic Storm | no Region-lane write; StormCloud owns its separate render-target weather flash and float32 `0.1` decay (`0x006021A0`, `0x00602C30`) |
+| `30` Prismatic | creation consumes `RandomInt(5)` and selects red, orange, yellow, green, or cyan; selected RGB plus `pointGain`, loss `0.05` (`0x00452C50`, `0x00645540`) |
+| `35` Ring of Ice | creation: `(0.9, 1, 1, pointGain)`, loss `0.01` (`0x00644460`) |
+| `41` Earthquake | accepted cast: fixed `(0.8, 1, 0.8, 1)`, loss `0.025` (`0x0054DF34..0x0054DF84`) |
+| `45` Raise Golem | no Region-lane write; assembly, impact, shake, lighting, and death feedback are actor/world owned |
+| `46` Stoneskin | accepted cast: fixed white `(1, 1, 1, 1)`, loss `0.1` (`0x0054D87B..0x0054D8B5`) |
+| `48` Teleport | source fixed white/loss `0.025`, then destination white with `pointGain`/loss `0.025`; the destination write immediately replaces the source write (`0x0054D6AC..0x0054D723`, `0x00644A00`). Each call also registers one additive BadGuys-90 `Anim_FadeScale` at `point.y-15`, alpha `2`, loss `0.1`, and independent `RandomFloat(360)` rotation. The source starts at scale `(1,1)` and recurs by `*1.1`; the destination starts at `(8,8)` and recurs by `*0.96`. Both therefore retire after 20 ticks. |
+| `49` Magic Circle | lifetime counter first reaches `1498`: `(0.75, 1, 1, pointGain)`, loss `0.1` (`0x006006E0`) |
+| `50` Magic Trap | initialization writes selector RGB with fixed alpha one/loss `0.1`; one-shot trigger rewrites the same selector RGB with `pointGain`/loss `0.05` (`0x005E95D0`, `0x005F5C80`) |
+| `51` Dampen | no Region-lane write; the named `flash.wav` and additive wave children are world feedback |
+| `54` Magic Shield | apply/refresh: `(0.5, 1, 1, pointGain)`, loss `0.1`; Explosive Shield break: same color and point gain, loss `0.05` (`0x00529EE0`, `0x00648790`) |
+| `72` Acid Rain | no Region-lane write |
+| `73` Fire Wall | accepted cast: `(1, 0.5, 0, pointGain)`, loss `0.1` (`0x0054F6E0`) |
+| `74` Ether Drain | first scale-in update: `(1, 0.5, 1, pointGain)`, loss `0.05` (`0x0061CF20`) |
+| `76` Call Comet | impact: fixed white `(1, 1, 1, 1)`, loss `0.005`; removal does not own the lane (`0x0061E9C0`) |
+| `77` Turn Undead | no Region-lane write |
+| `78` Mindstar | every on/off toggle: `(0, 0.5, 1, pointGain)`, loss `0.1` (`0x0054FF5E`) |
+| `79` Regenerate | every on/off toggle: `(1, 0.5, 0, pointGain)`, loss `0.1` (`0x0055002D`) |
+
+The complete Mindstar and Regenerate dispatcher branches (`0x0054FF05` and
+`0x0054FFD4`) contain no allocation or actor-registration call. These Region
+writes are their entire visual program; adding a caster flash or world sprite
+would introduce a non-native presentation owner.
+
+Magic Trap indexes the process table at `0x0081CCA8 + selector*16`. Static
+initialization `0x00782C70..0x00782DBA` establishes the complete table:
+
+| Selector | RGBA | Contact addition |
+| ---: | --- | --- |
+| `0` | `(1, 0.1, 1, 1)` | direct contact only |
+| `1` | `(1, 0.35, 0.1, 1)` | fire helper / `Mod_Burn` |
+| `2` | `(0.1, 1, 1, 1)` | `Mod_ElectricBurn` |
+| `3` | `(0.1, 0.5, 1, 1)` | `Mod_ColdSlow` |
+| `4` | `(0.1, 1, 0.1, 1)` | direct contact only |
+| `5` | `(1, 0.5, 0.1, 1)` | direct contact only |
+| `6` | `(0.1, 0.5, 0.5, 1)` | direct contact only |
+| `7` | `(0.75, 0.75, 0.75, 1)` | direct contact only |
+| `8` | `(1, 1, 1, 1)` | direct contact only |
+
+The final ordinary primary selectors are Magic `0`, Fire `1`, Lightning `2`,
+Ice `3`, and Earth `4`. At `0x0054EB5C..0x0054ED04`, selector byte `7` is a
+synthetic-build sentinel rather than a final trap element. The factory reads
+the current build at wizard progression `+0x750`, subtracts `1000`, and uses
+the complete 15-row jump table at `0x0055012C`. Rows `1000..1009` are the ten
+welds: each consumes `RandomInt(2)` and resolves one of its two component
+selectors. Rows `1010..1014` are the pure Ether, Fire, Water, Air, and Earth
+builds and resolve fixed selectors `0,1,3,2,4` respectively. Planewalker's
+Plane Orb cast override does not replace this selected-build source. The
+resolved selector, not the wizard's character element or temporary sentinel,
+owns trap color, contact kind, and additional modifier.
+
 ## Factory and lifecycle map
 
 The retail factory contains the following 46 projectile/effect classes. The
@@ -115,13 +203,13 @@ animation objects can add art not visible as a literal in the parent method.
 | `0x7EC` | `GuidedMissile` | `0x005E7E00` | `0x00600B40` | draw `0x00612960`; target/contact `0x005F42C0`, `0x005F3EE0` | BadGuys 110..112, 381..382 |
 | `0x7ED` | `Gravestone` | `0x005E5C30` | `0x00624AC0` | draw `0x0060F0F0`, `0x0060F260`; interaction `0x005F2EB0` | DeadHawg 97..113 |
 | `0x7EE` | `Fire_Goodguy` | `0x005E76C0` | `0x005FF050` | draw `0x00610F90`; area contact `0x005FF1D0` | DeadHawg 46..77 |
-| `0x7EF` | `PlaneOrb` | `0x005E2180` | `0x005FB460` | draw `0x005E8720`; special pass `0x00601910` | BadGuys 75 core; child BadGuys 11 motes |
+| `0x7EF` | `PlaneOrb` | `0x005E2180` | `0x005FB460` | draw `0x005E8720`; texture mesh `0x00601910`; birth helper `0x0052D360` | BadGuys 75 core; loose `etherplane`; child BadGuys 11/45 particles |
 | `0x7F0` | `StormCloud` | `0x005E22E0` | `0x006021A0` | full draw `0x005E8970`; weather/overlay pass `0x00602C30` | child bolt/cloud animations |
 | `0x7F1` | `Earthquake` | `0x005E8EA0` | `0x00613200` | draw `0x00613E10` | BadGuys 62, 2008..2010; DeadHawg 200..202 |
 | `0x7F2` | `Leviathan` | `0x005E8FB0` | `0x006145D0` | draw `0x006151D0`; sprite pass `0x005E90C0` | BadGuys 11, 39, 343..372 |
-| `0x7F3` | `EtherBolt` | `0x005E2950` | `0x006034F0` | full draw `0x005E29A0`; contact in tick | child fade animation |
+| `0x7F3` | `EtherBolt` | `0x005E2950` | `0x006034F0` | full draw `0x005E29A0`; contact in tick | BadGuys 22; child Ether FadeMM |
 | `0x7F4` | `Golem` | `0x005F57E0` | `0x00615CD0` | init `0x005F5B40`; articulated draw `0x00617820`; contact `0x00607F60`; death `0x00619730` | Golem 1..208; BadGuys 15, 62, 86, 238..245, 2008..2010; DeadHawg 78..87; UI 23 |
-| `0x7F5` | `MagicTrap` | `0x005E2CC0` | `0x00603710` | draw `0x00619CD0`; auxiliary `0x005E9700` | BadGuys 16, 110..112, 393..400 |
+| `0x7F5` | `MagicTrap` | `0x005E2CC0` | `0x00603710` | draw `0x00619CD0`; auxiliary `0x005E9700`; terminal `0x005F5C80` | BadGuys 111,112,15,85,16,158..167,17,74; fire modifier 333..342 |
 | `0x7F6` | `Bonus` | `0x005E2D90` | `0x006039C0` | draw `0x0061A260` | BadGuys 7, 61, 122..157 |
 | `0x7F7` | `DemonBomb` | `0x005E2F00` | `0x00603CA0` | draw `0x0061A690`; auxiliary `0x005E9970` | BadGuys 267..270; DeadHawg 46..77 |
 | `0x7FA` | `GreenFire` | `0x005EA4C0` | `0x005FF050` | draw `0x0061BBF0`; area contact `0x005FF1D0` | Unholy 9..40 |
@@ -259,7 +347,28 @@ The vtables and constructor chains establish these native families:
   persistent `Fire` actor. They share the animated-fire list and area-contact
   callback while changing allegiance, movement, sprites, and effect state.
 - `FreezeWave` extends `Shockwave`; both maintain a list so one expanding wave
-  does not repeatedly apply its contact payload to the same actor.
+  does not repeatedly apply its contact payload to the same actor. The Ring
+  factory `0x00644460` starts float32 life at `0.924` and radius at `75`.
+  `0x005FFDC0` subtracts `0.01`, adds six radius units, queries only every
+  tenth age tick, multiplies alpha by `0.9` below life `0.12375`, and retires on
+  update 93. Its vtable light slot resolves to the same `0x005E7AA0` callback
+  as Shockwave: radius is `waveRadius/140`, intensity is the current alpha, and
+  shadows are disabled. The factory's presentation children are independent
+  world actors. Three additive DeadHawg-114 fades start at life `4.5`, decay
+  `0.05`, consume one `Float(360)` rotation each, scale by `1.02`, `1.015`, and
+  `1.01`, and use perspective Y `0.8`. One normal DeadHawg-121 fade starts at
+  life `1.75`, decay `0.01`, and scale `1.5`. It also constructs 100
+  `Anim_WhirlSnow` children, or 200 with Enhanced Effects, all using
+  `BadGuys[72]` rather than records 203..207. Constructor/tick/draw
+  `0x004588E0/0x00453F70/0x00458A00` consumes angle `Float(360)`, angular
+  velocity `10+Float(10)`, radius `20+Float(40)`, radial velocity
+  `1+Float(4)`, height `50+Float(250)`, scale `1-Float(0.5)`, rotation
+  `Float(360)`, and life `2+Float(1.5)`. Tick advances angle, multiplies angular
+  velocity by `0.975^2`, multiplies height by `0.99`, expands radius by
+  `radialVelocity*min(angularVelocity,1)`, advances rotation, and subtracts
+  `0.02` life. The complete factory consumes `3+8*N` visual draws (803 normal
+  or 1,603 enhanced), and these children persist for as many as 175 ticks,
+  outliving the 93-tick gameplay wave. Records 16/17 are not this program.
 - `TragicCircle` extends `MagicCircle` and keeps the base circle tick while
   replacing both its particle presentation and actor-side effect.
 - `DarkFireball` extends `Firebolt`; `Silk` extends `Arrow`; `SkullMissile`
@@ -401,13 +510,58 @@ are being recovered with `tools/ghidra-scripts/trace_call_arguments.py`.
 The cast dispatcher only seeds these objects. Their actual cadence, target
 selection, child effects, and expiry live in the actor ticks below.
 
+### Prismatic Shock cast animation
+
+`0x00645540` creates one `Anim_PrismaticSpray` through constructor
+`0x004543B0`; the helper does not create a fixed triangle of atlas records.
+Construction consumes one sign word for angular velocity `+/-1`, starts radius
+scalar `2`, alpha `0`, and countdown `100`, and attaches the animation to the
+caster. The helper then requests `prismaticspray__stream` at point gain and
+`lightningstart` at pitch `0.8` with the same gain. Only after those requests
+does `RandomInt(5)` select the Region color. The gameplay query is a
+mask-`2`, radius-`350` circle centered on the caster; every returned target
+receives `Mod_Prismatic (0x1B76)` immediately during the cast helper.
+
+Tick `0x00460360` follows the caster at `(x,y-25)`, adds float32 `0.025` to
+alpha capped at one, advances heading by signed six degrees, grows the radius
+by float32 `0.065` for the first 50 ticks, then shrinks it by float32 `0.075`
+for the final 50. Each tick first consumes a discarded signed `RandomFloat(5)`
+and then registers exactly three independently owned children:
+
+- two additive `BadGuys[111]` `Anim_FadeAdditive` children. Each independently
+  selects one of the five prismatic colors, applies
+  `clamp(color*1.5,0,1)` and then a per-RGB floor of `0.5`, chooses radius
+  `waveRadius*[30,90]`, rotation `[0,360]`, scale `[0.25,1]`, and life
+  `[0.25,1.25]`; default loss `0.1` is multiplied by `0.25`, so loss is
+  `0.025/tick`.
+- one additive perspective `BadGuys[10]` or `[11]`
+  `Anim_FadeMoveAdditive_Perspective`. It independently selects and brightens
+  the same palette, chooses radius `waveRadius*[50,80]`, record by
+  `RandomInt(2)`, rotation `[0,360]`, scale `[1,3]`, and outward velocity
+  `[0.15,1]` along the current heading. Life is `[0.5,1]`, loss is
+  `0.015/tick`, and draw applies the common `0.8` Y-perspective factor.
+
+The parent draw `0x00459500` uses inline `BadGuys[58]` with additive blend,
+not records 10/11. Its per-draw alpha is
+`0.5*parentAlpha*(0.5+RandomFloat(0.5))`, rotation is
+`heading*angularSign`, and scale is
+`(angularSign*waveRadius*1.5, waveRadius*1.2)`. The tick consumes exactly 19
+RNG words: two for the discarded signed float, five for each record-111
+child, and seven for the moving record-10/11 child. The parent retires after
+its hundredth update; all registered children finish their own fade/movement
+lifetimes afterward.
+
 ### Magic Circle (`0x7EA`)
 
-`MagicCircle` starts with a 1,500-tick lifetime at `+0x144`. Its tick
-`0x006006E0` decrements that counter, emits the class's ring particles through
-virtual `+0x64` every tick, and invokes the area-effect callback at virtual
-`+0x68` every ten ticks. `0x005FB020` queries the circle footprint and has two
-separate effects:
+`MagicCircle` starts with a 1,500-tick lifetime at `+0x144`, fixed scale `4`,
+footprint width `420`, Y-perspective `0.8` (half extents `210x168`), and RGBA
+`(1,1,1,0.5)`. Its tick `0x006006E0` decrements that counter, writes a
+shadow-casting Region light at the circle center with radius `scale*0.5 = 2`
+and intensity `0.75+RandomFloat(0.25,signed=true)` (`0.5..1`), emits the
+class's ring particles through virtual `+0x64` every tick, and invokes the
+area-effect callback at virtual `+0x68` when the ten-tick counter is zero
+before increment. The first actor update is therefore an effect pulse.
+`0x005FB020` queries the circle footprint and has two separate effects:
 
 - eligible non-player actors receive `Mod_CircleSlow (0x1B70)`; its value is
   copied from circle `+0x140`;
@@ -418,24 +572,84 @@ separate effects:
   candidate with current HP instead of max HP, and for ordinary positive
   regeneration writes current HP unchanged.
 
-The ring renderer `0x005F3CA0` creates `Anim_SpinAwayAdditive` children using
-the color stored at `+0x14C..+0x158`. The circle removes itself when the
-lifetime reaches zero; the children are registered animation actors rather
-than raw pointers owned by the circle.
+When the local player is inside on an effect pulse, the callback also attaches
+one additive `Anim_FadeScale` using `BadGuys[7]` to that player. It starts at
+local `(0,-15)`, tint `(0.5,1,1)`, random rotation `[0,360]`, scale
+`1+RandomFloat(1)*0.65` (`1..1.65`), life `[0.5,0.75]`, loss `0.05/tick`, and
+multiplies both scale axes by `1.1` each tick. Record 7 is not a persistent
+sprite at the circle center.
+
+Ring emitter `0x005F3CA0` creates one `Anim_SpinAwayAdditive` child on even
+global ticks and two on odd global ticks. Every child uses centered
+`BadGuys[48]`; there is no 24-point ellipse. Base scale `(4,3.2)` is multiplied
+by `0.975+RandomFloat(0.025)`, initial life is
+`min(remaining/100,1)*(0.5+RandomFloat(0.5))`, loss is `0.05/tick`, rotation is
+`RandomFloat(360)`, and signed angular velocity is
+`+/-(0.5+RandomFloat(1))` degrees/tick. Each child consumes five RNG words.
+The circle removes itself when lifetime reaches zero; its registered record-48
+and record-7 animation actors finish independently.
 
 ### Magic Trap (`0x7F5`)
 
 `MagicTrap` stores its derived element at `+0x13C`, the full-charge payload
-`primaryBaseDamage * mDamage` at `+0x140`, charge fraction at `+0x144`, charge
+`f32(selectedPrimaryBaseDamage * trap mDamage)` at `+0x140`, charge fraction at `+0x144`, charge
 increment at `+0x148`, animation frame at `+0x14C`, age at `+0x150`, and the
-decaying armed shimmer at `+0x154`. Charge is clamped to one; the shipped
-configuration reaches full charge after 800 native ticks.
-`0x00603710` registers it in the world's effect draw list each tick and, for
-the authoritative local group, polls its trigger footprint every 25 ticks.
+decaying armed shimmer at `+0x154`. The increment is the float32 result of
+`1 / (mFullChargeSeconds * 100)` and is added with one float32 rounding per
+tick before the charge is clamped to one; the shipped eight-second
+configuration reaches the clamp on update 800. `0x00603710` registers the
+trap in the world's effect draw list each tick and, for the authoritative
+local group, polls a 130-wide group-2 footprint on ages divisible by 25.
+
+Dispatcher `0x0054CC50` finishes selector ownership before it computes that
+payload. A welded build first consumes `Integer(2)` and chooses one component;
+selector `0..4` then maps to primary skill `8,16,24,32,40` and looks up that
+specific skill's effective rank. Ether loads `mDamage1` and `mDamage2` and
+calls inclusive float-range wrapper `0x00448480`, consuming exactly one more
+gameplay RNG word. Fire, air, water, and earth load their selected skill's
+single `mDamage` and consume no damage draw. The resulting base is multiplied
+by Magic Trap's ranked `mDamage` and rounded into `+0x140`. Consequently a
+welded trap does not use the equipped synthetic spell's aggregate damage, and
+an Ether trap does not deterministically use Magic Missile's maximum.
+
+Initialization `0x005E95D0` writes the selector color to the Region lane,
+plays `settrap__Stream`, and then plays the bound primary's start sample:
+selector `0..4` maps to `magicmissile`, `throwfire`, `lightningstart`,
+`icestart`, and `startboulder`. The armed presentation is not a generic
+eight-frame trap sprite:
+
+- draw `0x00619CD0` bobs by `5*sin(age degrees)-12`; its charge scale is
+  `0.5+0.5*charge`, multiplied by `0.75` while charge is strictly below the
+  float32 threshold `0.9900000095`. At that bobbed point it draws additive
+  `BadGuys[111]` rotated by `+2*age` degrees and `BadGuys[112]` rotated by
+  `-3*age`, both with perspective Y scale `0.8`, and alpha
+  `0.5-0.125*sin(age degrees)` multiplied by the pre-full charge scale. It
+  then draws additive selector-colored `BadGuys[15]` at the unbobbed trap
+  point, scale two, alpha `0.375-0.125*sin(age degrees)` with the same
+  pre-full multiplier. Finally it restores normal blending and draws opaque
+  `BadGuys[85]` at the bobbed point with X scale
+  `1-0.1*sin(2*age degrees)` and Y scale
+  `1+0.1*cos(age degrees)`. The unused `+0x14C` quarter-frame accumulator
+  still advances and wraps, but records `393..400` are not submitted by this
+  shipped draw path.
+- auxiliary slot `0x005E9700` draws normal `BadGuys[15]` in black at alpha
+  `0.5` and scale `0.75` as the trap shadow.
+- shimmer starts at float32 `3`, multiplies by
+  `0.8999999761581421` before each emission, and is set to zero below
+  `0.10000000149011612`. Updates 1 through 32 therefore each register one
+  normal `BadGuys[16]` `Anim_Fade_Perspective`. Each consumes
+  `Float(360)` rotation then `Float(0.25)` alpha jitter, uses the selector
+  tint, scale `3*shimmer` with perspective Y `0.8`, starts alpha at
+  `0.75+jitter`, and loses float32 `0.05` per tick. These children finish
+  independently if the trap detonates.
 
 `0x005F5C80` is the one-shot trigger. It emits the element-colored burst,
-queries group `2`, sets damage to `fullChargePayload * charge`, dispatches to
-every actor returned, and removes the trap. The element payload is explicit:
+queries a separate 300-wide group-2 footprint, sets damage to
+`f32(fullChargePayload * charge)` with no minimum clamp, dispatches to every
+actor returned, and removes
+the trap. Thus a hostile inside the 130-wide arming footprint triggers one
+detonation that reaches every eligible target inside the wider 300-wide
+payload footprint. The element payload is explicit:
 
 | Trap element selector | Additional native effect |
 | ---: | --- |
@@ -444,17 +658,153 @@ every actor returned, and removes the trap. The element payload is explicit:
 | `3` | `Mod_ColdSlow (0x1B69)` |
 | other | direct trap contact only |
 
+The water branch constructs `Mod_ColdSlow` with slow factor
+`f32(0.5 / permafrostSlowScale)` and lifetime
+`max(50, trunc(tickRate * 4 * charge))`; at the retail 100 Hz tick rate this is
+`max(50, trunc(400*charge))`. The conversion call at `0x005F6271` truncates
+toward zero, so ordinary rounding is observably wrong after the minimum floor
+stops dominating.
+
+The air-selector branch is a target-owned modifier, not a lightning sprite.
+Terminal helper `0x005F5C80` constructs `Mod_ElectricBurn` type `0x1B6B`,
+writes duration `100` at `+0x14`, per-update damage
+`trapContactDamage / 100.0` at `+0x1C`, chain count zero at `+0x20`, scalar one
+at `+0x24`, and the trap group byte at `+0x28`; it then attaches the modifier
+and clears the trap's direct-contact damage. Constructor `0x006231D0` and
+merge callback `0x00625A70` establish one modifier per target: reattachment
+keeps the greater remaining duration but replaces damage, chain count, scalar,
+and group from the new payload rather than stacking a parallel actor.
+
+`Mod_ElectricBurn::Tick` at `0x00628F10` consumes signed `Float(0.25)` every
+live update and appends a target-position, non-shadow-casting Region misc light
+with radius one and intensity `0.5+jitter`; the same live edge renews
+`sounds\\electric__loop`. Its authoritative contact path supplies the stored
+per-update damage and flags `0xA`, consumes `Integer(3)`, and only when that
+draw equals one consumes another `Float(0.5)` for the native contact scalar
+`0.25+jitter`. The trap writes chain count zero, so the later
+`Anim_FadeLightning` direct/chain branch is never entered: the complete
+100-update trap payload is damage, light, loop renewal, and exact RNG
+consumption with no submitted lightning sprite.
+
+The trigger presentation first registers one normal `BadGuys[15]` fade at
+`(x,y-25)`, scale six, alpha one, loss `0.1`. It then replays two additive
+`BadGuys[158..167]` sprite arrays and 100 additive `Anim_FuzzySpear` children
+at `(x,y-35)`. The arrays consume `Float(360)` rotations, use scale six, and
+advance by float32 `0.15` and `0.225` frames per tick. Each spear consumes
+`Float(360)` heading, `Float(2)` speed jitter, `Integer(5)` double-speed gate,
+`Float(1)` alpha jitter, and `Float(1.5)` scale jitter; it uses the same
+record-17/record-74 two-pass draw, 75-unit start, velocity, `0.95` damping,
+`0.035` alpha loss, and presentation-time horizontal sign as Explosive
+Shield. Construction therefore consumes exactly `2+100*5 = 502` RNG words.
+The trigger also plays `trap__stream`, writes selector-colored point-gain
+Region feedback with loss `0.05`, and starts camera/world pulse `1.25`, which
+the Region multiplies by `0.94` and clears below `0.001`.
+
 The deleting destructor `0x005E95A0` delegates to the normal `Puppet`
 teardown; the trigger's presentation objects are world-owned.
 
+### Dampen helper (`0x00648DF0`)
+
+The dispatcher passes sentinel `-1`, so the helper first consumes one
+`RandomInt(100000)` action-identity word. It then resolves hostile magic,
+including the per-shield `RandomInt(100) < 0x33` dispel rolls, before creating
+the visual field. The visual program is 390 independently registered wrapper
+objects, not one expanding ring:
+
+- 360 source-over `Anim_MoveFade` children, one for every integer heading
+  `0..359`. Each selects BadGuys record 10 or 11 with `RandomInt(2)`, starts at
+  the caster, moves radially at `6+RandomFloat(4)` units per tick, and damps its
+  velocity by `0.96`, except `RandomInt(6)==3` selects `0.93`. Rotation is an
+  independent `RandomFloat(360)`, uniform scale is
+  `1.5+RandomFloat(0.5)`, alpha starts at one and loses
+  `0.01+RandomFloat(0.02)` per tick, and its grayscale tint is
+  `RandomFloat(0.25)` in every RGB channel. A final `RandomInt(5)` chooses the
+  native registration lane but does not change those parameters. Thus each
+  child consumes exactly eight RNG words and follows its own 34-to-100-tick
+  fade/movement lifetime.
+- 30 additive perspective `Anim_FadeAdditive_Perspective` children using
+  BadGuys record 48 at the caster. Each consumes rotation
+  `RandomFloat(360)`, scale `0.75+RandomFloat(4.75)`, and initial alpha
+  `0.5+RandomFloat(1)`; alpha loses `0.1` per tick and the draw applies the
+  common `0.8` Y perspective.
+
+The visual suffix therefore consumes exactly 2,970 RNG words after gameplay
+resolution. `flash.wav` and `dampen__stream.wav` are the only presentation
+audio, and Dampen writes no Region full-screen feedback lane. The separate
+mode-21 CastSpin action remains a 73-update player animation and is not the
+owner of these independently expiring world children.
+
+### Magic Shield break and Explosive Shield (`0x00546650`, `0x00648790`)
+
+Magic Shield is player-owned state, not a persistent world actor. Install or
+refresh writes the absorb pool and Explosive Shield factor to the wizard; the
+player renderer draws additive `BadGuys[49]` at `(x,y-30)`. Its base scale is
+`1.5`. An absorbed hit starts a 40-tick pulse at scalar `2`, subtracts `0.05`
+per tick, drives red brightness with
+`0.5*(max(pulse,1)-1)+0.25`, and drives scale with
+`1.5+0.1*sin(age*20 degrees)*min(pulse,1)`.
+
+Break callback `0x00546650` plays `popshield` and registers exactly 20
+additive `BadGuys[68]` `Anim_FadeAdditive` children at `(x,y-35)`. Each child
+consumes, in order, `Float(360)` rotation, `Float(0.75)` alpha jitter, and
+`Float(0.25)` scale jitter. Alpha starts at `0.5+jitter`, loses `0.05` per
+tick, and is clamped to one only while drawing. Uniform scale is
+`2+jitter`. The break prefix therefore consumes exactly 60 RNG words. It then
+calls the Explosive Shield helper only when the installed factor is positive,
+and clears the absorb/factor fields after that one terminal dispatch.
+
+Explosive Shield helper `0x00648790` uses fixed radius scalar `2` and payload
+`installed_absorb * mDamage/100`. Its presentation program is, in registration
+order:
+
+- one normal `BadGuys[15]` `Anim_Fade` at `(x,y-25)`, scale `2*6=12`, alpha
+  `1`, loss `0.1`;
+- one normal `DeadHawg[2]` `Anim_FadeScale` at `(x,y-35)`, scale `2.5`, scale
+  factor `1.01`, alpha `1.5`, loss `0.05`;
+- two additive `Anim_SpriteArray` children over `BadGuys[158..167]` at
+  `(x,y-35)`, scale `6`, independently consuming `Float(360)` rotation. Their
+  frame increments are `(0*0.1+0.2)*0.75 = 0.15` and
+  `(1*0.1+0.2)*0.75 = 0.225` per tick; each removes itself when its float32
+  frame reaches the ten-record array length;
+- 100 additive `Anim_FuzzySpear` children. Each consumes `Float(360)` heading,
+  `Float(2)` speed jitter, `Integer(5)` double-speed gate, `Float(1)` alpha
+  jitter, and `Float(1.5)` scale jitter. It begins 75 units along the native
+  clockwise heading, moves at `3+jitter` units per tick (doubled only when the
+  integer result is `2`), multiplies velocity by `0.95`, starts alpha at
+  `1+jitter`, loses `0.035` per tick, and uses scale `2+jitter`. Draw
+  `0x00458B70` emits `BadGuys[17]` at authored scale with a fresh random
+  horizontal sign and then `BadGuys[74]` at the child scale; both use the same
+  position, rotation, clamped alpha, white color, and additive blend.
+
+The helper's construction suffix consumes exactly `2 + 100*5 = 502` RNG
+words; the per-draw FuzzySpear mirror is presentation-time RNG and is not part
+of that construction count. It writes Region feedback `(0.5,1,1,pointGain)`
+with loss `0.05` and directly writes camera/world pulse magnitude `1.25`.
+Region tick subsequently multiplies that magnitude by `0.94` and zeros it
+below `0.001`.
+
+The immediate hostile query radius is `2*55 = 110`. The helper writes
+`payload*0.5` to both contact lanes `0x0081C6E8` and `0x0081C6EC`; native
+target contact sums those lanes, so the HP delta is the full payload, not half
+or double. It also creates one light-only `Shockwave (0x7E7)` with radius `75`,
+growth `6/tick`, push/alpha scalar `1`, life `0.35`, fade threshold `0.0375`,
+and damage zero. That wave retains the standard ten-tick distinct-target
+Dazzle/query and tracked radial push behavior while its `0x005E7AA0` callback
+submits the expanding no-shadow Region light; it owns no main-pass sprite.
+
 ### Magic Storm / Storm Cloud (`0x7F0`)
 
-`StormCloud` begins with a 1,000-tick active lifetime. `0x006021A0` ramps its
-scale and alpha in, emits two cloud particles per tick (five in the enhanced
-presentation mode), and fades out after the active counter expires. On the
-authoritative group it periodically queries the hostile footprint, chooses a
-random target, rolls damage between `+0x178/+0x17C`, dispatches contact with
-flag `0x20`, and stores three points used by the lightning presentation. Its
+`StormCloud` begins with a 1,000-tick active lifetime and a 50-tick first-strike
+counter. `0x006021A0` starts scale at `0.01`, multiplies it by `1.2`, grows
+alpha by `0.05`, emits two cloud particles per tick (five in the enhanced
+presentation mode), and after active expiry subtracts float32 `0.01` until the
+101st fade update retires it. On the authoritative group it queries a 500-unit
+hostile footprint, chooses a random target, rolls damage between
+`+0x178/+0x17C`, dispatches contact with flag `0x20`, and stores three points
+used by the lightning presentation. After target selection the geometry draws
+source distance/unit vector (height 175, radius 100), midpoint distance/unit
+vector (height 90, radius 200), then damage; the target endpoint is 15 units
+high. Its
 short strike-energy counter drives `Anim_FadeLightning` and the generated
 lightning mesh. The alternative moving-cloud mode is enabled at `+0x180` and
 advances the cloud and its 15 presentation control points along its heading.
@@ -464,7 +814,112 @@ Magic Tornado initialization `0x005E2440` stores
 strike countdown resets to `trunc(numerator / frequency_factor)` for a uniform
 integer `numerator` in `[30,120]`. Translation uses the cloud's separate fixed
 motion path: the configured `mSpeed` property is strike frequency, not
-translation speed.
+translation speed. Constructor `0x005E22E0` first consumes signed `Float(1)`
+for phase `+0x150`, then `Float(360)` and `Float(2)` for each of fifteen
+control-point angle/speed pairs. Point `i` receives
+`(1 - i/15 * 0.95) * (2 + draw) * 4`. Tornado initializer `0x005E2440`
+multiplies phase by 15 before consuming its `Float(360)` heading, so every
+cloud advances the authoritative stream by 31 visual draws and the moving
+variant by a 32nd.
+
+Tick creates child rain before movement and strike work: two
+`Anim_Raindrop`s, five with Enhanced Effects, integer-halved to one or two for
+Tornado. Each consumes `Float(200)` and one unit-vector draw. Constructor/tick/
+draw `0x00454170/0x004541A0/0x00458F90` starts height at `-175`, adds 20 to it
+and four to streak length until ground, then grows the ground mark from `0.1`
+by `1.1` until scale exceeds one. The falling width-two streak grades from RGBA
+`(0.8,0.95,1,0.5)` to `(0.4,0.95,1,0)` and the ground alpha is `1-scale^2`.
+
+Moving Enhanced draw `0x005E8970` samples a QuickSpline through root, root plus
+the unit vector at `globalTick*0.5` degrees times 30, and root minus 175 Y.
+Fifteen iterations at `0.2` steps
+draw `BadGuys[84]` at `t` and `t+0.1`; scale begins `0.2` and recurs as
+`scale*1.1+0.1`, rotations are control angle and `angle*1.35`, perspective Y is
+`0.8`, and tint is `(0.8,1,1)`. It finishes with `BadGuys[78]` at root minus
+`50*scale`, scale `3.75*cloudScale`, and half alpha. Auxiliary painter
+`0x00602C30` separately composites a shared weather render target in
+moving/static branches and owns the strike flash; it is not one cloud sprite.
+Light callback `0x005EB5C0` submits radius `2`, intensity `0.5*alpha`, and no
+shadow. Tornado tick consumes `Float(2)` and translates itself and all fifteen
+points by float32 `0.349999994`.
+
+The auxiliary painter is now resolved completely. It shifts the painter root
+up 175 units and always sources exact `BadGuys[78]`
+(`DAT_00819978 + 0x3BF0`). A stationary cloud clears the shared transparent
+render target, draws these three source-over passes around its midpoint, then
+draws that target at the cloud root with scale five:
+
+1. white, alpha `cloudAlpha*2`, rotation
+   `age*0.0625*0.5*phase` degrees, scale
+   `(cloudScale, cloudScale*0.8)`;
+2. RGB `(0.8,1,1)`, alpha `cloudAlpha*0.75`, rotation
+   `(age/24)*0.5*phase` degrees, scale
+   `(cloudScale*0.75, cloudScale*0.8*0.75)`, and target-local Y
+   `cloudScale*(-50)/5`;
+3. RGB `(0.8,1,1)`, alpha
+   `cloudAlpha*(0.5+sin(age*0.5 degrees)*0.5)*0.75`, rotation
+   `age*0.125*phase` degrees, X scale `cloudScale*0.5`, Y scale
+   `cloudScale*0.8*(0.5+sin(age/6 degrees)*0.25)`, and target-local Y
+   `cloudScale*(-30)/5`.
+
+The final scale-five composite therefore places the second and third pass at
+world-local Y `-50*cloudScale` and `-30*cloudScale`, respectively, in addition
+to the common `-175` painter-root shift. The moving branch skips the render
+target and draws another additive `BadGuys[78]` at local Y
+`-175-50*cloudScale`, RGB `(0.8,1,1)`, alpha `cloudAlpha*0.5`, rotation
+`(age/24)*0.5*phase`, and uniform scale `cloudScale*3.75`.
+
+Cloud field `+0x14C` is the strike/ambient-flash gate. A successful target
+selection writes one, and the common tail subtracts float32 `0.1` during that
+same update, so the first post-tick state is `0.9`. Independently, every tick
+ends with `RandomInt(1000)`; result three restores the field to one after the
+decay and emits its positioned weather sound. This draw is therefore part of
+the authoritative RNG stream even while the cloud is fading; a winning roll
+also consumes `Float(0.35)` for the Thunder stream's volume multiplier. While the field
+is nonzero, `0x00602C30` selects diffuse color instead of texture RGB and draws
+a white alpha-mask of `BadGuys[78]` at local Y `-175`, rotation
+`age*0.0625*phase`, scale `(cloudScale*4, cloudScale*0.8*4)`. The native source
+sets the renderer alpha from `+0x14C` and immediately overwrites it with
+`cloudAlpha*0.75` before queuing the quad; consequently `+0x14C` gates the
+ten-tick branch rather than continuously fading its opacity.
+
+### Firewalker `Fire_Goodguy` birth and contact ownership (`0x7EE`)
+
+Firewalker has no BadGuys-record-11 ember child. Fresh instruction ranges
+`0x0054B39A..0x0054B53C` and `0x0054CDD1..0x0054CF48` create and register only
+`Fire_Goodguy 0x7EE`; constructor `0x005E76C0` inherits `Fire 0x005E7130`, and
+draw `0x00610F90` owns only the additive DeadHawg `46..77` strip. BadGuys 11
+belongs to adjacent Ether presentation and must not be attributed to this
+ability. A Burn learned on the target remains the separate modifier-owned
+BadGuys `333..342` path below.
+
+Toggle-on creates one patch immediately, sets its `+0x160` contact-geometry
+byte to one, and leaves the process-global periodic counter at `0x00819E54`
+unchanged. The active player tick creates another patch whenever the global
+tick is divisible by ten and player mode is not two, even when velocity is
+zero. Each periodic birth sets `+0x160` only when the counter's pre-increment
+value is zero, then advances and wraps it as `0,1,2,0`; the resulting geometry
+sequence is therefore `true,false,false`. Visually identical disabled patches
+still tick, draw, fade, and renew `lowfire__loop`, but never build the collision
+point list in `0x005FF1D0`.
+
+Every activation or periodic birth consumes exactly seven RNG words in this
+order: inherited constructor `Float(32)` phase, constructor `Sign(1)` mirror,
+signed `Float(10)` (magnitude plus sign), unsigned `Float(8)`, `Float(0.5)`,
+and `Float(0.25)`. For player velocity `(vx,vy)`, the two offset draws produce
+`position += (vy,-vx)*signed10 + (vx,vy)*unsigned8`. Scale is multiplied by
+`1-Float(0.5)`. Cached rank duration is multiplied by
+`1.1-Float(0.25)`, then tick `0x005FF050` subtracts float32 `0.01` until
+removal. Cached rank damage is copied unchanged. Contact polling occurs only
+on global ticks divisible by three; the strict center radius is
+`32*patchScale`, and target radius does not widen it.
+
+Fire Wall uses the same actor and contact method but not Firewalker's periodic
+geometry cycle. Its creation loop `0x0054F759..0x0054F8EC` writes
+`Fire_Goodguy +0x160=1` unconditionally at `0x0054F883` for every one of the
+eleven patches. Consequently all wall patches build contact geometry and can
+damage; `+0x160=false` is specific to two of every three periodic Firewalker
+births.
 
 ### Embers to Imps and GoodImp (`0x7D6`, `0x3ED`)
 
@@ -495,9 +950,16 @@ damage flags `0x18`. Specialized merge `0x00627690` keeps the greater remaining
 duration and greater per-tick damage; it does not stack parallel instances.
 
 The modifier's presentation cycles BadGuys records `333..342` by
-`(global_tick/3)%10`, uses additive fire art and a target-scaled glow, and
-ramps the initial 50 ticks. This is target-owned modifier presentation, not a
-new projectile or a caster-local skill timer.
+`(global_tick/3)%10`. Every modifier tick consumes `RandomFloat(0.25)` and
+registers one additive `Anim_FadeAdditive` at `(target.x,target.y-15)`, with
+uniform scale `(1+draw)*target.scale`, alpha `fade*0.125`, and alpha loss
+`0.01` per tick. It then consumes `RandomFloat(0.1)` and appends a Region
+misc-light at the unshifted target point with radius `0.1+draw`, intensity
+`fade`, and shadow flag false. Here `fade` is one until the remaining duration
+falls below 50 ticks, then `remaining/50`; this is a terminal fade, not an
+initial ramp. The animation and misc-light therefore consume exactly two
+active gameplay RNG words per modifier tick. This is target-owned modifier
+presentation, not a new projectile or a caster-local skill timer.
 
 ### Lightning Stun modifier (`0x1B6A`)
 
@@ -511,8 +973,10 @@ parallel modifier.
 
 ### Acid Rain (`0x7FE`)
 
-`AcidRain` has a 1,500-tick active lifetime, a separate fade/ground-residue
-scalar, and a 25-tick authoritative hit cadence after its initial delay.
+`AcidRain` consumes `Float(1)` for its private presentation phase, starts at
+scale `0.01`, and has a 1,500-tick active lifetime, a separate
+fade/ground-residue scalar, and a 25-tick authoritative hit cadence after its
+initial 50-tick delay.
 `0x00604E90` emits two `Anim_AcidRaindrop` children every tick, or five while
 the shipped Enhanced Effects byte is enabled. It queries the hostile area,
 shuffles the candidate list through `0x005E41F0`, and damages exactly
@@ -520,30 +984,111 @@ shuffles the candidate list through `0x005E41F0`, and damages exactly
 the shuffled entry at index zero first, increments the damaged count, and
 breaks when `floor(n / 3) < damaged`; this is why one or two candidates still
 produce one contact. Its contact uses the damage written at
-`+0x154`, normalized by the native per-second tick divisor, with flags `0x18`.
-The rain does not allocate a poison modifier; its damage is direct. It removes
-itself only after both the active lifetime and residual fade have elapsed.
+`+0x154`, divides it by the compiled double `6.0` at `0x007852E0`, stores the
+result as float32 in the shared contact record, and sets flags `0x18`. This is
+not the generic `/100` fire/contact normalizer.
+The rain does not allocate a poison modifier; its damage is direct. Each drop
+starts at height `-175`, advances by 20 while its streak velocity gains four,
+then grows its ground sprite from `0.1` by float32 `1.100000023841858`.
+Its falling width-three procedural streak grades from RGBA
+`(0.7,0.95,0.75,1)` to `(0.4,0.95,1,0)`, with a quarter-alpha `BadGuys[0]`
+head tinted `0xb3f2bf`; the ground sprite uses tint `0xccffcc` and alpha
+`1-scale^2`. After the configured drops, a one-in-four gate may construct a
+BadGuys-10 splash,
+consuming the recovered discarded rotation, rotation, scale, distance, and
+unit-vector draws; life is `0.25`, decay `0.0125`, and velocity damping `0.95`.
+Parent painter `0x005EB290` owns two distinct BadGuys-10 passes. With field
+scale `s`, ground/residue scalar `g`, age `a`, and constructor phase `p`, the
+first is additive, tint `(0.41,0.55,0.32)`, alpha `0.75*g`, rotation
+`a*0.03125*p` degrees, and scale `(5*s,4*s)`. The second is tint
+`(0.25,0.45,0.15)`, source-over, alpha `g`, rotation `-0.5*a` degrees,
+local Y `-50*s`,
+and scale `(7.5*s*p,6*s)`. Auxiliary pass `0x005EB1D0`, while rain alpha is
+positive, draws BadGuys-10 source-over at the field root with tint `(0.05,0.1,0.05)`,
+that rain alpha, and uniform scale `4.5`; it is not a red quarter-scale sprite.
+After activity, ground alpha takes 100 ticks to fade and remaining rain alpha
+takes 2,000, yielding the 3,600-tick maximum ownership window. Light callback
+`0x005EB5C0` submits radius `2`, intensity `0.5*alpha`, and no shadow.
 
 ### Earthquake (`0x7F1`)
 
-`Earthquake` owns a pointer list and a short duration counter at `+0x13C`.
-`0x00613200` writes the exact terminal intensity
-`+0x15C = min(remaining, 200) / 200`, then submits a camera-displacement
-candidate
-`(RandomFloat(3, signed=true), sin(remaining * 20 degrees) * 10 * intensity)`
-to Region helper `0x00448590`. That helper replaces Region
-`+0x8E0C/+0x8E10` only when the candidate's squared magnitude is greater than
-the vector already stored there, so simultaneous shake owners use the largest
-vector rather than summing. The counter is decremented after the submission
-and the actor removes itself when it reaches zero.
+Constructor `0x005E8EA0` installs duration at `+0x13C`, an initialized
+`PointerList` at `+0x140`, scenery cursor zero at `+0x158`, intensity one at
+`+0x15C`, `RandomFloat(360)` floor rotation at `+0x160`, birth flag one at
+`+0x164`, green-overlay scalar two at `+0x168`, and floor phase `-5` at
+`+0x16C`. Initializer `0x005F45A0` performs the group-`4` scenery query with a
+1,024-unit supplied width. The underlying spatial query `0x00523140` halves
+that width and accepts only strict center distance `< 512`; it appends every
+returned scenery pointer and shuffles the complete list with `0x005E41F0`.
+That shuffle consumes one `RandomInt(N)` for every index `0..N-1`, swapping
+the current entry with the selected entry; it is not Fisher-Yates. Constructors
+for Tree `2001`, Gravestone `2029`, and Building `2040` assign group `4`;
+Goodie `2061` assigns `0x2004`, so every stock-generated scene object matches
+the group-`4` mask. The stored per-scenery wobble field is consumed by Tree
+drawing, while every matched entry remains eligible to own dust.
 
-Every 30 ticks it queries the hostile footprint, shuffles it, and disrupts up
-to half of the returned actors: current action state is cancelled or replaced
-by a pause action and heading/reaction state is perturbed. Earthquake has no
-damage property in its CFG and does not seed the normal damage contact ABI.
-Its other work is presentation and terrain debris: it animates registered
-floor fragments and creates `Anim_BoulderBit`/lit children around the
-epicenter.
+Tick `0x00613200` first advances floor phase by float32 `0.05` and drains the
+green scalar by the same amount. Crossing `0.6` or `3.0` resets that scalar to
+one; only the `3.0` crossing requests `QuakeCrackSmall__Stream`. The birth flag
+requests `rockhit` and `QuakeCracks__Stream`, both at Region perspective gain,
+then clears itself. The live actor renews `earthquake__loop` through global
+maximum-intensity owner `DAT_0081CB70`. It writes
+`+0x15C = min(pre-decrement remaining, 200) / 200`, consumes
+`RandomFloat(3, signed=true)`, and submits camera candidate
+`(randomX, sin(remaining * 20 degrees) * 10 * intensity)` to Region helper
+`0x00448590`. That helper replaces Region `+0x8E0C/+0x8E10` only when the
+candidate's squared magnitude exceeds the vector already stored there, so
+simultaneous shake owners select the largest vector instead of summing. The
+duration is then decremented; zero schedules removal, but the current update
+continues.
+
+The authoritative pulse tests **post-decrement** `remaining % 30 == 0`. It
+queries group `2` at strict center distance `< 512`, applies the same
+full-bound shuffle, and visits exactly `floor(N/2)` shuffled entries. For each
+local selected hostile it cancels the current action unless that action is
+already `Action_Badguy_Pause`, consumes `RandomInt(2)`, and on result one
+constructs a pause whose constructor consumes `RandomInt(50)` and lasts
+`round((50 + draw) / actor_time_scale)` ticks. It always then consumes
+`RandomSign(15)` and adds the exact `-15` or `+15` result to heading.
+Remote-entry rejection still
+uses one of the half-list slots. Earthquake has no damage CFG property and
+never enters the normal damage-contact ABI.
+
+When pulse intensity is at least `0.99`, the actor also creates one registered
+`Anim_Quake` using BadGuys record `62`: rotation consumes `RandomFloat(360)`,
+scale selector consumes `RandomInt(4)` and produces
+`(2 + selector, 0.8 * (2 + selector))`, and alpha magnitude is `intensity^3`.
+`Anim_Quake::Tick 0x00454200` advances its sine phase by two degrees and scale
+by float32 `0.005` per axis. At each `abs(sin(phase)) < 0.01` edge it consumes
+`RandomFloat(0.75)`, adds `0.25 + draw` to both scales, and multiplies alpha by
+float32 `0.95`. Draw `0x00459350` uses
+`min(1, alpha * abs(sin(phase)))`; the child removes at 360 degrees after 180
+updates.
+
+Independently on every update, the shuffled scenery cursor advances one entry;
+reaching the end resets it to zero and deliberately leaves a blank update. A
+selected entry consumes `RandomSign(1)` for its exact `-1` or `+1` multiplier
+(forced to one below rotation `-2` and to negative one above `2`) and adds
+`RandomFloat(1.5) * multiplier` to its wobble. Enhanced Effects then tests
+`RandomInt(30) == 1`. Success creates a BadGuys-`10`
+`Anim_FadeSin_Move`: velocity X `(RandomFloat(0.25)+0.25)/3`, magnitude
+`RandomFloat(0.5)+0.5`, tint `(30,17,0)`, rotation `RandomFloat(360)`, scale
+`RandomFloat(2)+2`, and radial offset `RandomFloat(30)` along a one-word native
+random unit vector. Its position advances by velocity, sine phase advances by
+`0.5` degrees, alpha is `abs(sin(phase))*magnitude`, and it retires at 180
+degrees after 360 updates.
+
+Every update, with or without Enhanced Effects, also tests
+`RandomInt(15) == 1` for a `ZAnimLitObject`-wrapped `Anim_BoulderBit`. A
+successful birth consumes the native direction, four hidden `Anim_Bouncer`
+constructor draws, BadGuys-record selector `2008..2010`, radius, bounce,
+height, collision-radius offset, two-stage scale clamp, scale multiplier, and
+speed draws in their constructor/caller order. Its bouncer state moves and
+accelerates vertically on two of every three global ticks, reflects through
+damping `0.3`, may damp planar velocity by `0.65`, spins, and loses alpha by
+`0.015` plus subclass loss `0.025` until retirement. Enhanced Effects changes
+initial alpha from two to ten and adds the dark `0.75`-scale underlay; the lit
+wrapper supplies normal inbound Region lighting and depth ownership.
 
 Draw callback `0x00613E10` renders the Earthquake floor record with alpha
 `0.75 * intensity`, actor rotation `+0x160`, and scale `(1.5, 1.2)`. It always
@@ -556,37 +1101,92 @@ renderer state after the overlay.
 
 ### Call Leviathan and Ether Bolt (`0x7F2`, `0x7F3`)
 
-`Leviathan` is a three-phase actor: scale-in, active appendages, then scale-out.
-It owns a `PointerList` at `+0x15C`; each 0x34-byte appendage record keeps local
-geometry, target group/slot identity, heading, a shot countdown, and sprite
-selection. During `0x006145D0` an untargeted appendage searches locally; a live
-target is then resolved by identity and tracked. When its countdown expires it
-emits `Anim_FadeMM`, creates `EtherBolt (0x7F3)`, writes the selected target
-heading, velocity, owner group, and configured damage, and registers the bolt.
-The configured appendage quantity controls the list built for the Leviathan;
-the configured damage is copied to child `+0x14C`.
+`Leviathan` owns its entire effect. The actor has a `PointerList` at `+0x15C`;
+each 0x34-byte appendage record stores base XY, an independent spin angle and
+angular delta, deployment, aim heading, authored sprite scale, sprite bank,
+depth key, target group/slot identity, recoil XY, and shot countdown. Cast
+dispatcher `0x0054CC50` first lets constructor `0x005E8FB0` consume
+`Float(360)` for actor rotation. Without `FX_MAXLEVIATHAN`, it then consumes one
+integer draw and selects the appendage count uniformly from inclusive
+`[1, round(mQuantity)]`. With that bit it skips the selector and uses the
+configured maximum. The bit is granted by the complete five-piece
+Pandimensional Bug-Master's Outfit; the same set separately applies
+`FX_ONESPELLDAMAGE *2 "Call Leviathan"`, so maximum quantity and doubled child
+damage are distinct native effects.
 
-Constructor `0x005E8FB0`, appendage initializer `0x005F4750`, tick
-`0x006145D0`, and draw `0x006151D0` close the authored clocks and RNG order.
-The central actor starts at scale zero, grows by float32 `0.025` to one, owns
-`round(16 * game_timing_scale)=1600` active ticks, then shrinks by float32
-`0.04` until removal. Each appendage starts with random heading, radial jitter,
-one of two 15-direction sprite banks, and a `[0,99]` shot counter. It first
-queries a 300-unit target lane with a 50-unit footprint. A retained target is
-identity-resolved each tick, the countdown decrements, and a shot resets it to
-`75 + RandomInt(26)`. Sprite bank selection toggles on a successful
-`RandomInt(2)==1` roll. The draw path depth-sorts appendages by their recovered
-heading frame and selects `BadGuys[343 + bank*15 + frame]` (`343..372`), while
-the central portal is drawn once normally and once at half alpha in the
-additive pass. The live actor renews `PlaneCross__Loop`; cast activation owns
-`LeviathanRoar__Stream`.
+Initializer `0x005F4750` has five authored layouts, not a generated radial
+distribution. Every appendage consumes exactly five gameplay-RNG words in
+this order: base-Y range, `Float(360)` spin, `Float(2,3)` angular delta,
+`Integer(2)` bank, and `Integer(100)` shot countdown.
 
-`EtherBolt` is a deliberately small straight projectile. `0x006034F0` adds its
-velocity at `+0x13C/+0x140` to position each tick, expires after 100 ticks plus
-a fade, and uses `0x00641220` for point/radius actor intersection. On contact it
-emits `Anim_FadeMM`, dispatches its `+0x14C` damage only on the authoritative
-group, and removes itself. It does not perform the terrain-segment test used by
-`MagicMissile`.
+| Chosen quantity | Portal maximum scale | Ordered `(baseX, baseY range, initial heading, sprite scale)` records |
+| ---: | ---: | --- |
+| 1 | `0.75` | `(0, -Float(20,40), 10, 2.1)` |
+| 2 | `0.85` | `(-10, -Float(20,40), 10, 2.1)`; `(10, -Float(10,20), 135, 2)` |
+| 3 | `0.95` | `(0, -Float(20,40), 10, 2.1)`; `(15, -Float(10,20), 135, 2)`; `(-15, -Float(10,20), 225, 2)` |
+| 4 | `1` | `(-10, -Float(20,40), 10, 2.1)`; `(10, -Float(20,50), 10, 2)`; `(18, -Float(10,20), 135, 2)`; `(-18, -Float(10,20), 225, 2)` |
+| 5 | `1` | `(0, -Float(40,50), 10, 2.25)`; `(-18, -Float(20,40), 10, 2.1)`; `(18, -Float(20,50), 10, 2)`; `(18, -Float(10,20), 135, 2)`; `(-18, -Float(10,20), 225, 2)` |
+
+The parent starts at scale zero. Repeated stored-float32 `+0.025` leaves update
+40 at `0.9999995827674866`; update 41 clamps to one, changes state, and also
+executes active update one. Active ages `41..1640` are exactly 1,600 updates.
+Age 1640 decrements the active counter to zero and the independent scale-out
+branch immediately stores its first `-0.04`; age 1664 reaches zero and removes
+the owner. Thus scale-in and active overlap on age 41, active and scale-out
+overlap on age 1640, and the union is 1,664 live tick invocations.
+
+On every active update and for every appendage, spin advances by its stored
+delta, recoil XY recurs by float32 `*0.8999999761581421`, aim heading adds
+`0.20000000298023224 + Float(5.800000190734863)`, and deployment either recurs
+by float32 `*0.949999988079071` while the parent's pre-decrement remaining count
+is greater than 15 or adds float32 `0.07000000029802322` for the final 15
+active updates. The depth key is `round(nativeHeadingVector(heading).y*100)`.
+Acquisition/firing is enabled only while deployment is strictly below
+`0.05000000074505806`; from initial one, the first qualifying deployment is
+active update 59.
+
+An unset appendage asks `0x00641500` for the nearest visible hostile in a
+50-degree lane of range 300. Acquiring writes only the target identity; heading
+and countdown work begin on the next update. A retained identity is resolved
+every update. A lost/dead identity is cleared without same-update reacquisition.
+For a live target, heading is recomputed with native `atan2`, the countdown is
+decremented, and a value below one fires. The reset is `75 + Integer(26)`.
+After firing, a separate `Integer(2)` toggles the 0/1 sprite bank only when its
+result equals one, and recoil becomes `nativeHeadingVector(heading)*10`.
+
+The local appendage root is
+`(baseX + recoilX + 2*spinUnitX,
+  baseY + recoilY + 4*spinUnitY + 35 + deployment*100)`.
+Presentation chooses 15-direction frame
+`wrap15((round(heading)+12)/24)`, record
+`BadGuys[343 + bank*15 + frame]`, sprite wobble
+`sin(headingDegrees)*5 degrees`, and the authored scale above. The 30 atlas
+records' first `extras` points are the native muzzle sockets; the shot position
+is that socket transformed by the same scale/wobble matrix. Appendages are
+depth-sorted by their stored key. The record-39 portal is drawn once normally
+and once again at half alpha in the additive pass.
+
+Each shot also registers an Ether `Anim_FadeMM` at the muzzle with scale `1.5`,
+initial fade scalar one, and float32 decrement `0.05`, yielding 19 drawable
+states. Enhanced Effects additionally consumes five RNG words on every parent
+tick and emits one additive-perspective `BadGuys[11]` mote: random heading,
+`parentScale*20` radial birth, `-Float(5)` Y jitter, uniform scale
+`0.5+Float(0.5)`, velocity `Float(3)` along the heading, velocity damping
+`0.95`, and fade decrement `0.1*(2+Float(0.15))`. The live actor renews
+`PlaneCross__Loop`; cast creation owns `LeviathanRoar__Stream`.
+
+`EtherBolt` constructor `0x005E2950` seeds a 100-count and alpha one. Tick
+`0x006034F0` always adds velocity before decrementing the count. When the count
+reaches zero on update 100, it starts stored-float32 subtraction of
+`0.009999999776482582`. The 100th fade subtraction remains slightly positive;
+the 101st crosses zero and removes the bolt. Point/radius-10 hostile collision
+through `0x00641220` still runs on every fade update and there is no terrain
+test. Contact registers the same 19-drawable-state Ether FadeMM at scale two,
+wraps it in `ZAnimLit` with radius `0.75`, initial intensity one, delta `-0.05`,
+and painter bias 100, dispatches `+0x14C` damage only for the authoritative
+owner group, then removes the bolt. Draw `0x005E29A0` is additive
+`BadGuys[22]`, not record 11, at actor-local `(0,-25)`, with stored heading and
+a fresh `0.5+Float(0.5)` opacity sample each render frame.
 
 ### Plane Orb (`0x7EF`)
 
@@ -598,25 +1198,55 @@ Ether line ranks `8,10,9,13,14,15,12`. Initializer `0x005E2230` writes velocity
 Constructor `0x005E2180` consumes one native float draw for maximum scale
 `1 + RandomFloat(0,1.5)`.
 
-`0x005FB460` advances position by `(acceleration+1)*velocity`, grows scale by
-`0.01` to its random maximum, and recurs acceleration by float32
-`*0.980000019`. After lifetime expiration it shrinks scale by `0.02` until
-removal. Every sixth authoritative tick a hostile query centered at
+`0x005FB460` advances position by `(acceleration+1)*velocity` before its
+countdown branch on every update, including fade. Starting from countdown
+`1000`, ages `1..999` grow scale by `0.01` to its random maximum and recur
+acceleration by float32 `*0.980000019`; age `1000` enters the terminal branch
+and shrinks scale by `0.02` until removal. Every sixth active authoritative
+update a hostile query centered at
 `(x,y-15)` with radius `2*scale` applies `stored_damage * 5` to every returned
 target; this five-payload pulse after a six-tick counter is intentional stock
 behavior. There is no terrain segment or placement collision.
 
-Draw `0x005E8720` rotates the additive core by `global_tick % 360`. Special
-pass `0x00601910` builds the surrounding ring as seven segments, or fifteen
-with Enhanced Effects, between scale-proportional radii `25*scale` and
-`50*scale`, applies vertical scale `0.8`, and rotates it from the same global
-clock. The core is additive `BadGuys[75]`, scale
-`(-0.75*scale,0.6*scale)`. Enhanced Effects also emits one perspective
-`BadGuys[11]` mote every active tick. Creation owns the world flash plus
-`distortreality` and pitched `lightningstart` audio requests. The callsite
-proves that the second request changes pitch, but the bounded pass did not
-close the scalar; browser code must not label a guessed playback rate as
-native parity.
+Draw `0x005E8720` rotates the additive `BadGuys[75]` core by
+`(global_tick % 360) * 1.5` degrees and scales it
+`(-0.75*scale,0.6*scale)`. Slot-`+0x24` pass `0x00601910` is a separate
+source-over textured mesh, not a second sprite. Bootstrap `0x005BBD90` proves
+that `DAT_00B3BC0C` is the exact 128 by 128 loose asset
+`images/etherplane.png` (SHA-256
+`cd9aee555fecde2d4917e1776f6bff927c8957e813659dcf163798a2c9e398fb`).
+The mesh starts with a center vertex and adds inner/outer pairs at radii
+`25*scale` and `50*scale`, with Y multiplied by `0.8`. It has `N=7` angular
+segments normally and `N=15` with Enhanced Effects, `1+2*N` vertices, and
+exactly `3*N` triangles: one center-fan triangle and two annulus triangles per
+segment including the closing sector. Heading starts at `global_tick % 360`
+and advances by `360/N`. Every vertex samples the repeat-wrapped texture at
+`world_xy / 192`, from the instruction-proved `/3 * 1/64` UV path.
+
+Enhanced Effects also emits one `BadGuys[11]`
+`Anim_FadeMoveAdditive_Perspective` after each active-branch parent update. It
+consumes five RNG words in order: `Float(360)` heading, `Float(5)` upward
+jitter, `Float(0.5,1)` scale, `Float(3)` speed, and `Float(0.15,0.3)` life-loss
+factor. Initial position is the updated parent point plus
+`20*updated_scale*unit(heading)`, then Y subtracts `15+Float(5)`; color is
+`(1,0.5,1,1)`. Life starts at one and loses
+`0.1*Float(0.15,0.3)` per tick; velocity recurs by float32 `*0.95` and the
+perspective draw multiplies Y scale by `0.8`. Children remain independently
+registered after parent fade/removal.
+
+Creation also calls `0x0052D360(position,100,true,true)`. Its nine headings
+`0,40,...,320` each create one `BadGuys[11]` and two `BadGuys[45]` perspective
+particles: 27 children and exactly 180 RNG words. The record-11 child consumes
+six words: radius, the magnitude and sign words for signed ten-degree jitter,
+scale, inward speed, and life loss. Each record-45 child consumes seven,
+adding its randomized green channel.
+All move inward, damp velocity by `0.95`, and use the same perspective
+lifecycle. Together with the PlaneOrb constructor's maximum-scale draw, a cast
+consumes 181 RNG words before any enhanced update. The creator then requests
+`distortreality` at Region point gain and `lightningstart` at exact pitch
+`2.0` with the same gain (`0x0052D9B1..0x0052DA1F`). Finally
+`0x0052DA24` writes Region alpha `0.1`; Planewalker's retained magenta Region
+color makes this a low-alpha unattenuated magenta flash.
 
 ### Ether Blast and Ether Burn (`0x1B74`)
 
@@ -643,8 +1273,27 @@ target-scale-aware random size and modifier fade alpha.
 ### Raise Golem and Iron Golem (`0x7F4`)
 
 `Golem` is a summoned actor rather than a one-frame cast effect. Secondary
-dispatcher `0x0054CC50` creates it at a collision-adjusted target point,
-copies caster ownership, and writes:
+dispatcher `0x0054CC50` does not use the cursor. It consumes
+`RandomSign(45)`, adds the exact `-45` or `+45` result to the caster's current
+heading, and builds an unadjusted point 100 units away on that heading. It
+recomputes and commits caster facing from that pre-adjustment vector, then
+passes the point to collision resolver `0x00645910` with radius `25`, scenery
+mask `0x205`, and actor exclusion `0`. Because `0x205` omits flag `0x400`,
+summon placement ignores live actor bodies.
+
+The collision resolver returns the requested point when clear. Otherwise it
+starts `searchRadius=25` and `expansionMultiplier=1`. Each ring computes
+`count = round-even(pi * (searchRadius + 25) / searchRadius)`, stores
+`step=float32(360/count)`, consumes `RandomFloat(360)` for phase, and tests the
+float32 ellipse
+`point + (sin(heading)*searchRadius, -cos(heading)*searchRadius*0.8)` while the
+float32 heading accumulator remains below 360. A failed ring performs
+`searchRadius += expansionMultiplier*25`, then consumes `RandomFloat(1)` and
+sets `expansionMultiplier *= 1+draw`. This is shared resolver behavior, not a
+fixed six-heading or circular search. The Golem is created at the returned
+point with initial body heading `casterFacing+180`, copies caster ownership,
+and then its constructor consumes `RandomInt(2)` for limb selector `+0x1E4`.
+It writes:
 
 | Field | Cast-time value |
 | ---: | --- |
@@ -718,7 +1367,9 @@ The draw path is now closed down to its authored geometry and bank switches:
 - while age is below 200 it draws one textured assembly quad with local
   vertices `(-35,-200), (35,-200), (-40,25), (40,25)` and green-white-green
   color `(0.5,1,0.5)`; alpha is
-  `sin((200-age)/200) * 0.5` in the native degree-trig convention;
+  `sin(((200-age)/200) * pi) * 0.5`; the runtime `pi` global is initialized
+  from static float `0x007DE8A8`, so the pulse is zero at both assembly ends
+  and peaks at age 100;
 - the body elevation is exactly `0` below age 100, `-20` for ages 100..199,
   and `-40` from age 200 onward;
 - heading is normalized, native-rounded, then quantized with
@@ -742,6 +1393,16 @@ The draw path is now closed down to its authored geometry and bank switches:
   `0x00428A60` before `Text_Draw`, so the web renderer must preserve
   per-part painter order rather than draw bank order.
 
+Age 200 also enables a connector pass before the sorted body list. It uses
+directional Golem banks `97..112` at the two articulated endpoints, two
+quarter-point BadGuys-15 green joints between them, and half-scale Golem bank
+`65..80` endpoint caps. The endpoint-Y comparison reverses the endpoint draw
+order so this internal articulation preserves native depth. After the sorted
+front chassis record, its mode-one branch temporarily enables additive blend
+and draws directional Golem bank `81..96` at the same point with a per-frame
+green scalar `0.5 + RandomFloat(0.3)`. These banks are real parts of the active
+Golem painter, not unused rows in the atlas.
+
 The null-sprite record in that sorted list is not an untextured placeholder.
 Its branch binds `DAT_00819978 + 0xBB4`, which the BadGuys atlas registry maps
 to exact record `15`, and draws the record twice at the center: scale
@@ -761,8 +1422,11 @@ Golem die, then rock hit.
 
 ### Ether Drain (`0x807`)
 
-`EtherDrain` has explicit 40-tick scale-in, 1,000-tick active, and 20-tick scale-out states in
-byte `+0x148`. Constructor `0x005F8360` computes the active countdown as
+`EtherDrain` has nominal 40-tick scale-in, 1,000-tick active, and 20-tick
+scale-out states in byte `+0x148`. The scale is stored as float32 after every
+addition: 40 additions of the encoded `0.025` produce
+`0.9999995827674866`, so the `scale >= 1` transition actually occurs on update
+41. Constructor `0x005F8360` computes the active countdown as
 `float32(0x00820230) * double(0x007DE810) = 100 * 10 = 1,000`, rounds it through
 `0x00747360`, and stores the result at `+0x144`. It initializes presentation scale `+0x140`
 and secondary intensity `+0x14C` to zero, seeds rotation from
@@ -773,31 +1437,55 @@ countdown expires. At the end of each tick rotation advances by twice the
 post-update scale. It owns two `Array<PuppetRef>` collections plus pointer
 lists for spatial cells and presentation children.
 
-Candidate refresh `0x00606580` is throttled to once per 100 ticks. Its broad
-cell collection is the ellipse
-`dx^2 + (dy / float32(0.8))^2 <= 1,048,576`, so its horizontal and vertical
-semi-axes are 1,024 and 819.2. The retained candidates are then filtered by
-the actual pressure radius in `0x005F8620`:
+Candidate refresh `0x00606580` is driven by countdown `+0x180`, which starts
+at zero. Scale-in subtracts five before the common one-count decrement, active
+subtracts only the common one, and scale-out subtracts ten before the common
+one. Consequently the actor refreshes on ages `1`, `18`, and `35`, next on age
+`105`, and then every 100 ticks through age `1005`; scale-out refreshes are
+harmless because pressure is already gated off. Its broad cell collection is
+the strict ellipse `dx^2 + (dy / float32(0.8))^2 < 1,048,576`, so its
+horizontal and vertical semi-axes are 1,024 and 819.2. The retained candidates
+are then filtered by the actual pressure radius in `0x005F8620`:
 
 - actors at squared distance at most `262,144` (radius 512) are pulled toward
   the center through their virtual force callback. The radial strength is
   `intensity * 1.1 * max(0.1, 1 - distanceSquared / 262144)` along the
   normalized inward vector. Flag-`0x400` objects multiply by that falloff a
-  second time. Actors at squared distance at most `400` (radius 20) also receive
-  contact damage using the configured `mDamage / 100` scalar at `+0x150` and
-  flags `0x10A`;
+  second time. Actors at squared distance strictly below `400` (radius 20)
+  receive contact damage using the configured `mDamage / 100` scalar at
+  `+0x150` and flags `0x10A`. The scalar doubles below squared distance `225`
+  (radius 15), doubles again below `100` (radius 10), and doubles once more for
+  target flag bit `0x1`. Each dispatched hostile contact then consumes
+  `RandomFloat(0.5)` for the native contact lane at `+0x18`;
 - objects with actor flag `0x400` are also pulled inward. This includes ground
   loot; a captured object is removed at the center and routed through the
   world-item consumption effect. Nonempty `Gold (0x7DC)` and `Sack (0x7DD)`
   containers are explicitly exempted from premature removal.
 
 The target arrays retain group/slot identities rather than raw actor pointers.
-Gameplay pressure/contact is gated to the active portion of the countdown
-(`+0x144 > 50`) and is disabled in scale-out. During that same interval the
-presentation path draws `Integer(5)` normally or `Integer(3)` with enhanced
-effects; only result one creates `SuckCloud` before its additional child RNG.
-A separate `Integer(50)==1` branch creates `SuckDebris` using DeadHawg records
-`177..179`.
+Gameplay pressure/contact is gated by the post-transition state and
+`+0x144 > 50`, so it runs for ages `41..990` inclusive (950 ticks) and is
+disabled for the final 50 active-countdown ticks and scale-out. Child creation
+is inside the state-at-entry active branch and therefore runs for ages
+`42..990` inclusive (949 ticks). It draws `Integer(5)` normally or `Integer(3)`
+with enhanced effects; only result one creates `Anim_SuckCloud`. That spawned
+branch consumes eight gameplay RNG words including the gate: constructor
+`Float(1.5), Float(360), Float(0.15), Float(3), Integer(2)`, then radial
+`Float(100)` and a unit heading. The selected BadGuys record is `10` or `11`.
+It starts at that radial offset, flies toward the parent's snapshotted center
+at half its constructor speed, advances a sine-fade phase toward 180 degrees,
+and retires without a parent callback.
+
+An independent `Integer(50)==1` branch creates free-floating
+`Anim_SuckDebris` using DeadHawg records `177..179`. A successful spawn consumes
+five words including the gate: two constructor `Float(360)` values, a unit
+heading, and `Integer(3)` for the record. It starts 1,024 units from the parent,
+moves inward as remaining distance falls by a speed beginning at one and
+growing by `0.05`, and consumes `Float(17), Integer(100), Float(5)` every child
+tick. Gate result three halves the speed. Its two rotations add respectively
+`3+Float(17)` and `3+Float(5)`, and its perpendicular draw oscillation is
+`sin(firstRotation)*remainingDistance/7`. Completion calls `0x005EE840` with
+`0.5`: this writes capture pulse two but does not create a flare.
 
 Draw `0x005EE120` composes the parent from four additive `BadGuys[75]` galaxy
 layers. Given scale `s`, intensity `i`, and rotation `r`, they are:
@@ -813,12 +1501,14 @@ Every draw also emits source-over `BadGuys[38]` tinted `0xFF4080` at scale
 `s*0.25*(0.980000019 + RandomFloat(0,0.06999993))`. A positive capture pulse
 at `+0x19C` adds a second source-over, white `BadGuys[38]` layer whose alpha is
 the pulse and whose scale is `pulse*s`. The pulse decrements by `0.1` per
-parent tick. Direct center capture writes `2` before the same-tick decrement,
-so the first visible value is `1.9`; child completion writes `2` after the
-parent tick. `SuckCloud` completes with callback parameter `0.5` and creates no
-flare. `SuckDebris` completes with parameter `1.5` and creates additive
-`BadGuys[36]` at `(parent.x,parent.y-42)`, scale and initial alpha `1.5`, then
-fades by `0.05` per tick for 30 ticks.
+parent tick. Callback `0x005EE840` always writes pulse `2`; a callback parameter
+at least one also creates additive `BadGuys[36]`. Direct center capture calls
+it with `1`, before the same-tick pulse decrement, so its first visible pulse
+is `1.9` and its flare starts at scale/alpha `1`. `Anim_Sucked` destruction
+calls it with `1.5`, producing the scale/alpha-`1.5` flare at the parent Y
+offset. Free-floating `SuckDebris` calls it with `0.5` after the parent tick,
+so its first visible pulse is `2` and it creates no flare. `SuckCloud` has no
+callback. Every flare fades by `0.05` per tick.
 
 Point-light callback `0x005EE780` places a radius-2 light at the actor root
 with intensity `min(s,1)*(0.5 + RandomFloat(0,0.5))`; the native
@@ -837,14 +1527,41 @@ array/list cleanup; presentation children remain registered with the world.
 
 ### Call Comet (`0x80C`)
 
-`Comet` stores configured damage at `+0x13C`, freeze duration at `+0x140`, and
-its fall countdown at `+0x14C`. `0x006220D0` emits an ice-blast child each tick,
-updates the world-impact intensity, and calls `0x0061E9C0` when the countdown
-expires. The impact creates the large burst/debris presentation, invokes the
-same FreezeWave creation helper used by Ring of Ice with the comet damage, and
-then queries the impact area and dispatches the comet freeze scalar through
-contact field `0x0081C6E8`. It finally restores the world-color state and
-removes itself. The deleting destructor uses ordinary `Puppet` teardown.
+`Comet` stores configured damage at `+0x140`, freeze duration at `+0x13C`, and
+its fall countdown at `+0x14C`; this corrects the earlier swapped field labels.
+Construction consumes `Float(1)` for heading. Each of the 400 updates in
+`0x006220D0` consumes `Float(0.5), Float(360), Integer(2), Float(0.5)` and
+registers a BadGuys-51 trail. The trail uses scale `2.5`, life
+`0.5*(0.5+draw)` with `0.025` decay, and multiplies rotation by `0.99` or
+`1.015`. The warning edge occurs when the post-update counter first falls below
+175, leaving 174 ticks. At zero, `0x0061E9C0` creates the large burst/debris
+presentation, invokes the same FreezeWave creation helper used by Ring of Ice
+with the comet freeze field, queries the 400-unit impact area, and dispatches
+damage through contact field `0x0081C6E8`. It finally restores world color and
+removes itself. Fall painter `0x005F0DB0` submits radius-2 light at constant
+intensity `0.5`.
+
+Impact `0x0061E9C0` registers additive perspective `BadGuys[15]` at scale 10,
+gray `0.75`, life 5 and decay `0.01`, plus normal `DeadHawg[6]` at scale 2,
+life 10 and decay `0.01`. It next consumes one initial `Float(360)` and fills a
+radial ring with independent `Anim_Bouncer` records selected by `RandomInt(5)`
+from DeadHawg 203..207. Each bouncer consumes four constructor draws (vertical
+velocity `-(2+Float(3))`, height `-Float(20)`, rotation `Float(360)`, rotation
+speed `1+Float(10)`), then record selection, signed `Float(0.25)+0.8` scale,
+`Float(10)+80` radial offset, `Float(2.5)+0.5` horizontal-speed factor, signed
+`Float(1)+1` life factor, and signed `Float(3)+8` angular increment. X velocity
+alone is multiplied by `1.5`.
+
+`Anim_Bouncer` tick/draw `0x00456720/0x00456A60` returns before translation,
+rotation, and life decay on global ticks divisible by three while height is
+nonzero; otherwise it integrates horizontal motion and height with gravity
+`0.4`. Ground contact consumes a fresh `Float(10)` rotation speed
+and `Integer(2)` damping gate, applies bounce and optional horizontal damping
+`0.65`, and settles when bounce velocity exceeds `-0.75`. Rotation advances
+and life loses `0.015` on each non-skipped airborne update and every settled
+update. These debris actors and impact fades are
+world-owned after the Comet retires; DeadHawg-6 can persist for 1,000 ticks.
+The deleting destructor uses ordinary `Puppet` teardown.
 
 ## Enemy-owned projectile presentation closure
 

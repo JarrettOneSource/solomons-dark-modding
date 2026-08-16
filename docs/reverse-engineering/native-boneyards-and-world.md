@@ -315,6 +315,12 @@ ten retail functions:
 | `Mod_Burn` (`0x00629A40`) | `0x00629CAE` |
 | `Mod_EtherBurn` (`0x00629CD0`) | `0x00629ED8` |
 
+`Mod_ElectricBurn` consumes signed `Float(0.25)` on every live update and
+submits radius one at its target with intensity `0.5+jitter` and flag zero.
+Magic Trap's air selector installs it for 100 updates with chain count zero;
+that use therefore owns only this misc light and its ambient loop as
+presentation, not an `Anim_FadeLightning` child.
+
 Both generic submitters apply the source flag before rasterization. Flag zero
 calls containment test `0x0057E2F0`; an existing source suppresses the new one
 only when its intensity is at least as high and its 145-scaled circle strictly

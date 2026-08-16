@@ -254,9 +254,11 @@ Its native fields establish these semantics:
   `0.12`;
 - lifetime `+0x144` starts at `2.0` and falls by `0.01` per tick, for `200`
   native ticks;
-- fade alpha `+0x148` rises by `0.05` per tick to `1.0`; constructor lane
-  `+0x14C` is a separate unsigned `RandomFloat(1)` horizontal-shape sample;
-- scale is stored at `+0x150`, damage at `+0x158`, and draw alpha at `+0x15C`;
+- scale-in `+0x148` rises by `0.05` per tick to `1.0`; constructor lane
+  `+0x14C` is a separate `RandomSign(1)` horizontal mirror, so it is exactly
+  `-1` or `+1` rather than a continuously sampled width;
+- base scale is stored at `+0x150`, damage at `+0x158`, and draw alpha at
+  `+0x15C` (initialized to one);
 - while damage is positive, every tick divisible by three performs a strict
   circular `32 * scale` radius contact pass and dispatches through the same
   fire helper and contact lane. Every accepted target consumes one unsigned
@@ -277,9 +279,13 @@ actors.
 The Ring helper `0x0063F920` does not give all of its children the authored
 damage. It creates exactly 30 `MovingFire 0x7E6` presentation actors, then one
 `Shockwave 0x7E7` gameplay actor. The MovingFire loop uses base headings
-`0,12,...,348` degrees. Each child adds a signed `U[0,2]`-degree heading
-jitter, chooses a radial `U[0,30]` spawn offset with the native `0.8` vertical
-projection, and adds 25 units of its heading vector before registration. Its
+`0,12,...,348` degrees. Construction consumes the common Fire constructor's
+`RandomFloat(frame_count)` phase and `RandomSign(1)` mirror first. Each child
+then adds a signed `U[0,2]`-degree heading jitter, chooses a radial
+`U[0,30]` spawn distance and an independent random-unit heading for that
+offset (with the native `0.8` vertical projection), and adds 25 units of its
+clockwise-from-up `(sin(theta),-cos(theta))` heading vector before
+registration. The final construction draw is the movement-speed jitter. Its
 initial movement is `2.5*(1-U[0,0.025])` along that heading and each component
 is multiplied by `1.01` per tick. Scale is `2.75`; remaining life is `1.05`
 and falls by `0.01` per tick. The helper never writes its damage field, so the
@@ -290,9 +296,9 @@ its velocity and multiplies the two velocity components by their stored
 `1.01` factors. Common draw `0x00610F90` uses additive `DeadHawg[46..77]`, a
 base `1.1*scale` transform, alpha
 `min(draw_alpha*remaining_life,1)`, and local position `(actor_x, actor_y-20)`.
-The fade lane scales both axes while the sampled `+0x14C` value scales the X
-axis only, so the final sprite scale is
-`(1.1*scale*fade*shape_sample, 1.1*scale*fade)`. The drawn atlas record is
+The scale-in lane scales both axes while the `+0x14C` sign mirrors the X axis,
+so the final sprite scale is
+`(1.1*scale*scale_in*mirror_sign, 1.1*scale*scale_in)`. The drawn atlas record is
 `DeadHawg[46 + round_to_even(atlas_phase)]`; it does not derive from actor age
 or the phase-step field. This is the visible expanding ring; it is not thirty
 parallel damage sources.
@@ -302,8 +308,9 @@ tick, push scalar `1`, remaining life `1.155`, fade threshold `0.12375`, and
 the row-21 damage. Tick `0x005FF8C0` grows the radius before subtracting `0.01`
 from remaining life. During the final fade band it multiplies the push scalar
 by float32 `0.899999976` per tick. Every ten actor ticks it queries the expanding footprint,
-retains each accepted actor only once, applies `mDamage*0.5`, runs the Fire/Burn
-helper, and attaches the fixed 400-tick Dazzle response. On the separate
+retains each accepted actor only once, writes `mDamage*0.5` to each of the two
+native damage lanes (the target sums them back to full `mDamage`), runs the
+Fire/Burn helper, and attaches the fixed 400-tick Dazzle response. On the separate
 two-tick lane it pushes each retained live actor radially through
 `0x00525800`. Ring activation requests `bigfire` followed by `nuke`; the
 MovingFire children do not own those one-shots.
@@ -316,8 +323,9 @@ matching analytic source with radius `wave_radius/140`, intensity equal to the
 current push scalar, and shadow flag false. The light therefore expands with
 the gameplay radius and fades under the same float32 `*0.899999976` recurrence;
 it must not be approximated as a DOM/Pixi glow unrelated to Region lighting.
-The retained-target lane normalizes `(target-waveOrigin)` to unit length, then
-adds that vector times `waveRadius*pushScalar` on every even actor tick. Contact
+The retained-target lane does not normalize its delta. On every even actor
+tick it adds `(target-waveOrigin)*pushScalar*radiusGrowth`, where the fixed
+radius growth is `6`. Contact
 query/insertion runs first, so a target discovered on tick 10 is already in the
 list when tick 10 performs its push.
 
@@ -360,17 +368,20 @@ children for the supplemental contact geometry.
 
 The common Fire tick advances the independently initialized atlas phase by the
 actor's phase step (`0.25` for Fire/Fire_Goodguy, float32 `0.12` for
-MovingFire), subtracts `0.01` from remaining life, raises fade alpha by `0.05`
+MovingFire), subtracts `0.01` from remaining life, raises scale-in by `0.05`
 to a ceiling of one, and invokes area contact
 on global ticks divisible by three while damage is positive. Contact uses a
 strict circular radius `32*scale`, consumes one unsigned `RandomFloat(0.5)`
 response draw per accepted target, runs Burn when the actor mask enables it,
 and feeds the authored damage through the native per-second normalization
-`(damage / Game+0xC00) * 3 * 0.5`. `MyApp` construction
+`(damage / Game+0xC00) * 3 * 0.5` in each of two target damage lanes. `MyApp` construction
 `0x0040BA23..0x0040BA30` is the sole exact `+0xC00` writer and copies the
 float at `0x007DE9B8`, which is exactly `100.0`. Stock contact is therefore
-`damage*0.015` on every accepted three-tick pulse; it is not a flat authored
-damage hit.
+`damage*0.015` in each lane, which the target sums to semantic
+`damage*0.03` on every accepted three-tick pulse; it is not a flat authored
+damage hit. Fire construction and contact RNG are also ordered: phase, mirror
+sign, actor-specific construction draws, then one unsigned `RandomFloat(0.5)`
+response draw for every accepted target.
 
 ## Air: Lightning
 

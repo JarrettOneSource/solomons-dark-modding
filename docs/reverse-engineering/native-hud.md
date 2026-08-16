@@ -105,7 +105,7 @@ When `progression+0x740` reserve is nonzero, stock caps usable mana at `maximum 
 
 ### Cast cards, belt slots, cooldown, and charges
 
-The two large `UI.47`/`UI.48` cards are fixed primary/secondary cast affordances. The eight input slots are ordered left-to-right by the G14 intent slot index `0..7`, even when empty. Empty slots keep their logical 53 x 53 boxes and emit no sprite. Populated item slots draw a black `+5,+5` shadow followed by the base art. Counts render above their `UI.22` backing at the viewport bottom.
+The two large `UI.47`/`UI.48` cards are fixed primary/secondary cast affordances. Game construction owns eight `BeltButton` objects at `Game+0x5EC`, stride `0xEC`; each object's byte `+0xE8` is its input-slot index `0..7`. The eight input slots are ordered left-to-right by that index, even when empty. Each logical box is 53 x 53 and the horizontal pitch is 60 px. Empty slots emit no sprite. Populated item slots draw a black `+5,+5` shadow followed by the base art.
 
 For a skill entry, remaining cooldown is `skill_entry+0x64` and capacity is `skill_entry+0x68`, both in 100 Hz native ticks. Remaining decrements once per fixed tick; the HUD samples it per render. `0x005C6D30` calls the sector builder `0x00416330`, which emits through `0x00416450` in 45-degree segments. For `remaining > 0`:
 
@@ -114,7 +114,11 @@ end_degrees = 360 * (1 - remaining / capacity)
 covered sector = [end_degrees, 360]
 ```
 
-Positive mathematical angle maps from screen-right toward screen-up, so the covered sector retreats counter-clockwise through the icon as remaining time decreases. The active icon has steady alpha `0.25`; the ready icon has steady alpha `0.375`. No cooldown-complete flash, scale pulse, or oscillating alpha was observed.
+Positive mathematical angle maps from screen-right toward screen-up. The builder intersects each ray with the 53 x 53 **square**, inserts every crossed 45-degree square-corner boundary, and emits a center-origin triangle fan; this is not a circular pie wedge. `BeltButton::Present` sets the fan's base RGBA to `(0.5,0.1,0.1,0.75)`, draws that dark-red cooldown square fan first, changes the skill-icon base to white alpha `0.25`, and only then draws the icon. The ready path instead reaches the icon with base RGBA `(1,1,1,0.75)`. The captured final icon alpha was steady `0.25` while cooling down and `0.375` when ready. No cooldown-complete flash, scale pulse, oscillating alpha, or Planewalker/Firewalker/Mindstar/Regenerate toggle highlight exists in this presenter.
+
+Before slot contents, a clear `gameplay+0x1AC2` installs renderer RGB multiplier `(0.25,0.25,0.25)` with alpha multiplier `1`; the Hub therefore presents the same art through its quarter-RGB scene modulation. Gameplay leaves the multiplier unchanged. This scene modulation is separate from the base RGBA transitions above.
+
+The input hint is emitted only when the slot has visible content. The default binding table at `0x00B3BCD0` is `[0x201,0x02,0x03,0x04,0x05,0x06,0x07,0x08]`: right mouse for slot 0 and DirectInput number keys `1..7` for slots 1..7. All hints begin at white alpha `0.6`. Mouse pseudo-keys use `UI.98..100` for left/middle/right; default slot 0 therefore centers `UI.100` at local `(26.5,60)`, allowing its 31 px height to cross the viewport bottom. Keyboard bindings use the stock name from `0x004299F0`, Fonts group 8 (`Fonts.535..626`, header `[10,3,28]`) at native scale, and a three-piece `UI.22` plaque. Its width is measured text width plus 6, its local left is `(53-width)/2`, and its top is 53; the black centered label uses local x `26.5` and baseline y `64`. The default single-digit plaques are therefore 13 x 15.
 
 Earth hold adds no HUD charge meter, ring, count, or card fill. Its only charge presentation is the G2 world-space Boulder scale. The exact float32 recurrence starts at `0.18`, adds float32 `0.00125` per 100 Hz tick in the neutral fixture, and reaches 1 after 656 updates (about 6.56 seconds). Implement that from [`native-projectile-and-spell-mechanics.md`](native-projectile-and-spell-mechanics.md#exact-charge-time-to-magnitude-curve); do not invent an on-card progress bar.
 

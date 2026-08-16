@@ -84,19 +84,19 @@ event.
 | Skill | Native event sequence |
 | --- | --- |
 | Call Leviathan `11` | Activation requests `LeviathanRoar__Stream`; the live actor renews `PlaneCross__Loop` until its scale-out teardown. |
-| Planewalker `12` | Enable requests `planewalker__Stream`; removal/expiry at `0x0052F470` requests `PlanewalkerOff__Stream`; active plane state renews `PlaneCross__Loop`. |
+| Planewalker `12` | Enable requests `planewalker__Stream`; removal/expiry at `0x0052F470` requests `PlanewalkerOff__Stream`; active plane state renews `PlaneCross__Loop`. Each forced Plane Orb birth requests `distortreality` at Region point gain, then `lightningstart` at exact pitch `2.0` with the same gain (`0x0052D9B1..0x0052DA1F`). |
 | Phasing `15` | Accepted collision-tested relocation requests `phase`. |
 | Ring of Fire `21` | Helper `0x0063F920` requests `bigfire`, then `nuke`, while creating the 30 fire segments and Shockwave. |
-| Firewalker `23` | Toggle activation requests the `ignite` gain/pitch sequence; live `Fire_Goodguy` patches renew `lowfire__loop`. |
+| Firewalker `23` | Toggle-on activation requests the `ignite` gain/pitch sequence; toggle-off is silent. Live `Fire_Goodguy` patches renew `lowfire__loop` until the last independently retained patch retires. |
 | Magic Storm `27` | Cast requests `magicstorm`; strikes request `lightningstart` and `thunder__Stream`; the cloud renews `rainfall__loop` and `steadywind__loop`. |
-| Prismatic Shock `30` | Helper `0x00645540` requests `prismaticspray__stream` and pitched `lightningstart`. |
+| Prismatic Shock `30` | Helper `0x00645540` requests `prismaticspray__stream` at Region point gain, then `lightningstart` at exact pitch `0.8` and the same gain. |
 | Ring of Ice `35` | Helper `0x00644460` requests `ringofice` once while creating its bursts and FreezeWave. |
-| Earthquake `41` | Live intensity renews `earthquake__loop`; crack branches request `QuakeCracks__Stream` or `QuakeCrackSmall__Stream`, and debris can request `rockhit`. |
-| Raise Golem `45` | Assembly milestones request `QuakeCrackSmall__Stream`; AI/death edges request `GolemProvoke__Stream`, `KnockbackGolem`, `stonestep`, `GolemDie__Stream`, `stonebreak`, and `rockhit` at their owning transitions. |
-| Stoneskin `46` | Accepted cast requests `StoneSkin__Stream`; modifier callbacks `0x00624490/0x006244C0/0x00626840` request `stoneskin`. They do not request the adjacent loaded `stoneskinhit` or general `stonebreak` objects. |
-| Teleport `48` | Accepted safe relocation requests `teleport`. |
+| Earthquake `41` | The first live tick requests `rockhit` and `QuakeCracks__Stream` in that order at Region perspective gain. Live intensity renews `earthquake__loop`; crossing floor phase `3.0` requests `QuakeCrackSmall__Stream`. The earlier `0.6` floor crossing has no sound. |
+| Raise Golem `45` | Assembly milestones request `QuakeCrackSmall__Stream`; AI edges request `GolemProvoke__Stream`, `KnockbackGolem`, and `stonestep`. Terminal branch `0x0049A6FF..0x0049A785` requests `stonebreak`, `flamelashstart`, `GolemDie__Stream`, then `rockhit` in that exact order. |
+| Stoneskin `46` | Accepted cast requests `StoneSkin__Stream`; modifier apply, refresh, and removal callbacks `0x00624490/0x006244C0/0x00626840` each request `stoneskin`. Natural expiry therefore owns one terminal `stoneskin` request. They do not request the adjacent loaded `stoneskinhit` or general `stonebreak` objects. |
+| Teleport `48` | Burst helper `0x00644A00` requests `teleport` once at the source and once at the selected destination, in that order. |
 | Magic Circle `49` | Actor tick requests `magiccircle` exactly when remaining lifetime equals `1498`. |
-| Magic Trap `50` | Initialize `0x005E95D0` requests `settrap__Stream`; terminal trigger requests `trap__stream`. |
+| Magic Trap `50` | Initialize `0x005E95D0` requests `settrap__Stream`, then the bound-primary start cue; terminal trigger requests `trap__stream`. An air-selector target's live 100-update `Mod_ElectricBurn` renews `electric__loop`; merge extends the existing target-owned modifier rather than adding a second loop owner. |
 | Dampen `51` | Accepted helper requests `flash` and `dampen__stream` before its CastSpin presentation. |
 | Magic Shield `54` | Install/refresh requests `magicshieldup`; absorbed contact requests `hitshield`; break `0x00546650` requests `popshield`; learned Explosive Shield adds `magicshieldexplode`. |
 | Acid Rain `72` | Cast reuses `magicstorm`; live damage/residue requests pitched `acidsizzle`; rain/residue renew `rainfall__loop`. |

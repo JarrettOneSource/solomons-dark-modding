@@ -24,7 +24,7 @@ def test_boneyard_tree_last_writer_render_path_is_registered() -> str:
         "`0x00624D3E`",
         "`0x00624DAD`",
         "`0x00624DC7`",
-        "overlay entry",
+        "secondary entry",
         "`0x00608830`",
         "`0x00608912`",
         "`0x3DD62F07`",
