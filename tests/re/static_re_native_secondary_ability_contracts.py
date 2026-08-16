@@ -181,6 +181,13 @@ def test_native_secondary_ability_art_audio_and_lifecycle_are_pinned() -> str:
         raise StaticReTestFailure("Magic Shield pulse lifecycle drifted")
     if abilities[72]["timing"].get("targets_per_pulse") != "min(n, floor(n/3)+1)":
         raise StaticReTestFailure("Acid Rain exact shuffled target count drifted")
+    if abilities[74]["timing"] != {
+        "scale_in_ticks": 40,
+        "active_ticks": 1000,
+        "scale_out_ticks": 20,
+        "phases": ["scale_in", "active", "scale_out"],
+    }:
+        raise StaticReTestFailure("Ether Drain fixed-tick lifecycle drifted")
     if abilities[51]["action"] != {
         "mode": 21,
         "name": "Action_PlayerWizard_CastSpin",
@@ -211,6 +218,7 @@ def test_native_secondary_ability_documents_and_generator_are_wired() -> str:
             "min(n, floor(n / 3) + 1)",
             "two `Anim_AcidRaindrop`",
             "five while",
+            "100 * 10 = 1,000",
         ),
         "audio": (
             "### Secondary and advanced right-click events",

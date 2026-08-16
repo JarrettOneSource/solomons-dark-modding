@@ -761,8 +761,10 @@ Golem die, then rock hit.
 
 ### Ether Drain (`0x807`)
 
-`EtherDrain` has explicit 40-tick scale-in, 100-tick active, and 20-tick scale-out states in
-byte `+0x148`. Constructor `0x005F8360` initializes presentation scale `+0x140`
+`EtherDrain` has explicit 40-tick scale-in, 1,000-tick active, and 20-tick scale-out states in
+byte `+0x148`. Constructor `0x005F8360` computes the active countdown as
+`float32(0x00820230) * double(0x007DE810) = 100 * 10 = 1,000`, rounds it through
+`0x00747360`, and stores the result at `+0x144`. It initializes presentation scale `+0x140`
 and secondary intensity `+0x14C` to zero, seeds rotation from
 `RandomFloat(0,360)`, and clears the capture pulse at `+0x19C`. Tick
 `0x0061CF20` grows scale by `0.025` to one, grows intensity by `0.005` during
