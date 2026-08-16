@@ -367,10 +367,16 @@ tick 159 also emits a finite `Anim_FadeMoveAdditive_Perspective` burst. That
 edge sets the Arena red scalar to `0.25`, clears the burst object's grid byte
 at `+0x36`, and writes render bias `+0xA0 = -1000`. Its texture pointer is
 `DAT_00819978 + 0x7E0`; with the BadGuys table header `0x38` and record stride
-`0xC4`, this resolves to BadGuys record 10. The Website may keep the still-open
-random radial count, velocity, and scale distribution behind one named bounded
-presentation program, but it must consume the `(run, player, death epoch)`
-tick-159 edge once and render record 10 additively without late-join replay.
+`0xC4`, this resolves to BadGuys record 10. The closed constructor emits
+exactly 18 actors at base angles `0,20,...,340` degrees with signed jitter
+bounded by 8 degrees, radius `15 + RandomFloat(5)`, and speed
+`3 + RandomFloat(1)`. Each starts at scale `(0.5,0.2)`, tint
+`(0.5,0.5,0.5,1)`, damping `0.9`, and alpha one. Alpha loses `0.1` before
+each move, so ages one through nine draw at `0.9..0.1` and age ten retires.
+The Website must consume the `(run, player, death epoch)` tick-159 edge once
+and render the complete record-10 set additively without late-join replay.
+Its stable per-epoch random samples are a documented authority policy for the
+unavailable process-global RNG position, not an open numeric approximation.
 Negative internal HP may be clamped to zero in the protocol/HUD only when an
 explicit life/death component carries the authoritative epoch and tick.
 
@@ -381,12 +387,15 @@ produces one host-authored, replay-safe terminal event for that run nonce.
 ## Game Over, run reset, and Website deviation
 
 Retail Arena terminal `0x004633D0` performs audio actions then calls
-`Game_OnGameOver 0x005CB570`. Boneyard mode is fade-only. Tick 1000 is the
-input-acceptance threshold, not automatic close. Accepted input performs stock
-cleanup and follows the post-run front end through MainMenu/Hall of Fame and
-then Create. The preceding element/discipline are preselected, but explicit
-confirmation is required. Game Over retires a run; it does not tear down the
-loader lobby or transport.
+`Game_OnGameOver 0x005CB570`. Boneyard mode is fade-only. Its entry black
+starts at one, loses `0.025` per tick, and becomes clear at tick 40 while the
+terminal Arena remains resident and frozen. Tick 1000 is the input-acceptance
+threshold, not automatic close. Accepted Boneyard input starts a separate
+exit-black lane at zero and adds `0.0025` per tick; exact black is reached at
+exit tick 400, the renderer arms the close gate there, and a later tick follows
+stock cleanup through MainMenu/Hall of Fame and then Create. The preceding
+element/discipline are preselected, but explicit confirmation is required.
+Game Over retires a run; it does not tear down the loader lobby or transport.
 
 The Website product request intentionally shortens the visible post-run path:
 after its Game Over acknowledgement it returns directly to the retained-choice

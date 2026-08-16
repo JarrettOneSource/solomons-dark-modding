@@ -184,6 +184,63 @@ and derive a bounded presentation clock from that epoch. It must not call the
 complete local death virtual merely to animate a remote actor, because that
 virtual also performs actor removal and local/remote ownership side effects.
 
+## Corpse compositor and tick-159 burst
+
+A 2026-08-16 read-only pass closed the corpse painter rather than treating
+`Clothes[28..99]` as two flattened sprite sheets. `PlayerWizard::Render`
+(`FUN_00538550`) selects a four-frame, six-facing corpse index
+`frame * 6 + facing`. Frame zero is held through death tick 152, frames one
+and two cover 153..155 and 156..158, and frame three begins at tick 159. The
+six-facing selector is `(heading_degrees + 30) / 60 mod 6`; equipped hats
+retain the separate 24-way `(heading_degrees + 7) / 15 mod 24` selector.
+
+Each ordinary corpse pass has this exact ownership and draw order:
+
+1. the equipped robe virtual at slot `+0x38` (`FUN_00578510`), using the
+   corpse index;
+2. `Clothes[28 + index]` in the actor primary color;
+3. `Clothes[52 + index]` in the actor secondary color;
+4. the equipped hat virtual at slot `+0x20` (`FUN_005758F0`).
+
+The robe virtual is itself six ordered layers. Its style selector at item
+`+0x1C` chooses primary ranges `76..99`, `100..123`, or `124..147` and
+secondary ranges `148..171`, `172..195`, or `196..219`. It then draws fixed
+primary ranges `220..243` and `268..291`, followed by fixed secondary ranges
+`244..267` and `292..315`. Thus `Clothes[76..99]` is the style-zero robe
+bank, not an untinted independent attachment.
+
+The hat virtual selects primary ranges `316..339`, `340..363`, `364..387`,
+or `388..411`. Selectors zero through two share secondary range `412..435`;
+selector three uses `436..459`. For death frames zero through two, and for
+all selector-zero-through-two frames, the renderer reads point zero from
+`Clothes[76 + index]`, adds native offset `(0, 25)`, and submits the normal
+24-way hat at that anchor. Selector three switches only its terminal frame to
+the dedicated six-facing primary/secondary ranges `16..21` and `22..27`,
+submitted at actor origin. At frame three the renderer first repeats the
+complete robe/body/hat pass in black at `(0, 4)`, then submits the ordinary
+colored pass. That is the terminal corpse shadow; it is not the living actor
+ellipse.
+
+The same tick-159 branch creates exactly 18
+`Anim_FadeMoveAdditive_Perspective` objects with BadGuys record 10. Their
+base directions are `0, 20, ... 340` degrees and each receives signed native
+random jitter with bound 8 degrees. Spawn radius is `15 + RandomInt(5)` and
+speed is `3 + RandomInt(1)` along the same direction. Each sprite starts at
+scale `(0.5, 0.2)`, additive color `(0.5, 0.5, 0.5, 1)`, and velocity damping
+`0.9`. `Anim_Fade` initializes alpha to one; `FUN_00452F20` subtracts the
+global at `0x007845E8`, recovered as exactly `0.1`, before moving and damping
+each tick. The objects therefore have ten active updates and retire when the
+updated alpha reaches zero. The branch also writes Arena red scalar `0.25`,
+clears the corpse grid byte at `+0x36`, and sets sort bias `+0xA0` to
+`-1000.0`.
+
+The retail random source is the shared process-global stream. A network web
+port cannot reproduce its draw position without serializing that stream, so
+presentation-only particles may derive stable per-death-epoch samples while
+preserving the recovered count, bounds, recurrence, and one-shot edge. Such a
+seed is a deterministic authority policy, not evidence of the retail RNG
+sequence.
+
 ## Staff and wand drop lifecycle
 
 The only PlayerWizard staff-bouncer allocation site is in `FUN_00534120`:
@@ -221,6 +278,41 @@ The staff bouncer's recovered methods show no spawn recursion:
 References to `Anim_StaffBouncer::vftable` identify only
 `FUN_00534120` as a constructor site. Repeated visible drops therefore require
 repeated terminal dispatch into `FUN_00534120`.
+
+The 2026-08-16 item/render follow-up closes the bouncer's visible membership
+and recurrence. `FUN_004608D0` selects `Clothes[5 + image]` for the six staff
+images; `FUN_00460920` selects the registered wand sprite at `Clothes[15]`.
+The retail recipe catalog maps staff recipes 8, 18, 33, and 34 to images 1, 3,
+0, and 2. Wand recipes 2, 13, 28, and 41..45 carry images 2, 4, 3, and 5;
+their death bouncer still uses the common wand sprite. An absent override uses
+staff image zero.
+
+`Anim_Bouncer` construction and `FUN_00534120` initialize the dropped item as
+follows:
+
+- horizontal direction comes from the player's heading, speed is `1.5`, and
+  radial placement is `15 + RandomFloat(10)`; the death branch additionally
+  advances X by twice its horizontal X velocity exactly as emitted;
+- perspective height is `-RandomFloat(20)`, while both perspective velocity
+  and its retained bounce seed start at `-(2 + RandomFloat(3))`;
+- rotation starts at `RandomFloat(360)` degrees and angular speed at
+  `1 + RandomFloat(10)` degrees per active update;
+- airborne motion skips world ticks divisible by three. Other ticks integrate
+  XY and height, add gravity `0.4`, and advance rotation;
+- each ground contact multiplies the retained bounce seed by `0.65` and copies
+  that value into perspective velocity. It rerolls angular speed, and a fresh
+  50-percent draw multiplies horizontal velocity by `0.65`. A new perspective
+  velocity greater than `-0.75` zeros height, both velocity lanes, and angular
+  motion;
+- the death path sets lifetime `99999`. `FUN_0045BE20` submits a black shadow
+  at item Y plus 2 with Y scale `0.75`, followed by the rotated normal item.
+
+The retained bounce seed is distinct from the gravity-adjusted impact
+velocity. Damping the latter can enter a non-settling discrete cycle and is
+not the stock recurrence. The shared process-global RNG position and absolute
+world-tick modulus are not portable presentation inputs; a web renderer may
+use a stable per-death-epoch sample/phase, but must retain the recovered
+domains, recurrence, independent world ownership, and one-shot epoch.
 
 The loader currently attempts to limit remote death with
 `death_transition_stock_tick_seen`, but resets that flag when:

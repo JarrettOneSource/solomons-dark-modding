@@ -62,6 +62,37 @@ those glyphs and draws only the fullscreen fade layers. The Boneyard
 Consequently, a black terminal frame in that mode is the retail Game Over
 presentation, not evidence that the object failed to install.
 
+The Game Over object is not an opaque-black hold. Fresh decompilation of its
+constructor, tick (`FUN_005CF4F0`), and renderer (`FUN_005C9030`) recovered
+the complete fixed-tick envelope:
+
+| Field | Initial value | Tick recurrence | Render role |
+|---|---:|---|---|
+| `+0x78` | `1.0` | `max(0, value - 0.025)` | entry black overlay; transparent after 40 ticks |
+| `+0x7C` | `-1.5` | `min(1, value + 0.005)` | normal-mode GAME/OVER alpha |
+| `+0x80` | `-2.0` | `min(1, value + 0.005)` | normal-mode continue-prompt alpha |
+| `+0xA4` | `0.0` | input-path dependent | exit black overlay |
+| `+0xA8` | `0` | renderer sets only after exit alpha is exactly `1.0` | transition-ready gate |
+| `+0xAC` | `0` | increment by one | input/timeout clock |
+
+Normal mode draws GameOver atlas record 0 at viewport center X and center
+Y minus 175, record 1 at center X and center Y plus 125, and the continue
+prompt at `(width / 2, height - 50)`. The records are respectively `307 x 119`
+and `306 x 120`. Boneyard mode suppresses all three semantic glyphs, but it
+retains both black overlays and therefore reveals the resident Arena beneath
+the entry fade after 40 ticks.
+
+The tick-1000 Boneyard edge synthesizes an accepted input; it does not jump
+immediately to the next surface. Accepted Boneyard input raises exit alpha by
+exactly `0.0025` per tick, taking 400 ticks to reach black. The ordinary mouse
+branch uses `0.05` (20 ticks), while its alternate/controller branch uses
+`0.004` (250 ticks). Render observes exact opacity, sets `+0xA8`, and only a
+later tick follows the completion lineage. A web Boneyard port must therefore
+freeze its terminal Arena image, run the 40-tick black-to-clear entry, hold it
+clear through the input gate, and remain on Game Over for the complete
+400-tick clear-to-black exit. Treating `gameOverTicks / 150` as a single
+increasing alpha reverses the native entry fade and hides the authored hold.
+
 The completion path is also mode-specific:
 
 - the normal story branch archives the completed run, creates scene type
