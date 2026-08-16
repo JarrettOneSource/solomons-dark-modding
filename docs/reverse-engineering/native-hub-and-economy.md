@@ -987,6 +987,13 @@ Shrinking large records to fit a generic 64-pixel box, reversing that layer
 order, discarding the second layer, ignoring Hat/Robe colors, or leaving
 Staff/Wand upright changes the native icon contract.
 
+Recipe UID 0 is also the integration boundary with the Player death
+compositor: the equipped starter Hat and Robe retain the element's default
+selector-zero palette, and the starter Staff retains selector zero. They are
+not missing purchased-recipe rows. The Website therefore represents those
+three authored starter objects with `recipeIndex: null` while still treating
+them as the stock death appearance.
+
 The equip path is not a purchase side effect. `0x00570cd0` validates an item,
 `0x00575850` attaches it, `0x00570d80` resolves the current slot occupant,
 `0x0066f020` removes/reinserts on unequip, and `0x0055ff20` performs stack
