@@ -141,6 +141,11 @@ from static_re_native_progression_contracts import (
     test_native_skill_picker_text_and_palette_abi_is_pinned,
     test_native_spell_welding_picker_art_contract_is_pinned,
 )
+from static_re_native_secondary_ability_contracts import (
+    test_native_secondary_ability_art_audio_and_lifecycle_are_pinned,
+    test_native_secondary_ability_documents_and_generator_are_wired,
+    test_native_secondary_ability_membership_rank_and_identity_are_closed,
+)
 from static_re_native_menu_shell_contracts import (
     test_designed_menu_focus_model_consumes_g14_intents,
     test_native_menu_browser_tab_measurement_records_are_aggregable,
@@ -1220,6 +1225,18 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native progression golden and recorder provenance are pinned",
         test_native_progression_golden_and_recorder_provenance_are_pinned,
+    ),
+    (
+        "Native secondary ability membership, rank, and identity are closed",
+        test_native_secondary_ability_membership_rank_and_identity_are_closed,
+    ),
+    (
+        "Native secondary ability art, audio, and lifecycle are pinned",
+        test_native_secondary_ability_art_audio_and_lifecycle_are_pinned,
+    ),
+    (
+        "Native secondary ability documents and generator are wired",
+        test_native_secondary_ability_documents_and_generator_are_wired,
     ),
     (
         "Native menu screen census and live layouts are pinned",

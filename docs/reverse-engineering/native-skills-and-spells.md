@@ -263,15 +263,18 @@ The refresh switch at `0x00661FD0` and the individual action paths implement:
 | Enchant Staff `65` | Staff-action scalar `action + 0x34` is multiplied by the executable constant `1.75`. The CFG says “2x Attack Speed”; the shipped constant is not 2.0. |
 | Telekinesis `66` | Doubles `+0xCC`. |
 | Rush `67` | `+0x90 *= 1 + mConcentration/100`. |
-| Deflect `68` | Reads missing property `mConcentration` and adds the resulting zero to `+0xA8`, the Resist Poison accumulator. No physical-reflection branch exists for selected ID `68`. This makes the CFG text “Reflects physical damage x5” nonfunctional in this executable. |
+| Deflect `68` | The refresh switch reads missing property `mConcentration` and adds the resulting zero to `+0xA8`, but this is not the complete effect owner. `PlayerActorMagicDamage 0x00548150` separately checks concentration slots `16/20` or Mind Chug after a successful Deflect and reflects exactly `incoming*5` to a nearby non-null physical source through `0x0063E7D0`. |
 | Resist Poison `69` | `+0xA8 += mConcentration/100`. |
 | Faster Caster `70` | `+0x94 += mConcentration/100`. |
 | Fortunate Flailing `71` | Multiplies damage for any non-normal proc by `1.2`. |
 
-`0x0065D540` returns zero for a property absent from a CFG, which is the
-instruction-level reason the Deflect branch is inert. A search of all direct
-ID-`68` comparisons found no second selected-ID handler that implements the
-advertised reflection.
+`0x0065D540` does return zero for the absent Deflect CFG property, so the
+refresh-time poison-accumulator write is inert. The older conclusion that the
+whole concentrated skill was inert is superseded by the event-time branch at
+`0x005481A6..0x005483A8`: it rolls the actor-private chance, faces the source,
+requests `swipe.wav` at pitch `1+RandomFloat(1,signed)`, cancels the incoming
+event, and applies the advertised five-times physical reflection when the
+source/range/concentration gates pass.
 
 ### Creativity Insight eligibility
 
@@ -679,15 +682,78 @@ the payment fails.
 | `48` | Teleport | Calls `0x00644A00` around the world virtual `+0x12C` relocation query and writes the accepted destination back to the wizard. |
 | `49` | Magic Circle | `0x0063FDE0` creates/index-registers `MagicCircle (0x7EA)` at the aimed point with `mSlow`, color, and ownership state. Every ten ticks the circle attaches `Mod_CircleSlow (0x1B70)` to eligible enemies. The local player gains `mana_recovery * 2 / game_timing_scale` MP per callback. The HP branch is stock-inert: it computes `HP + health_regeneration * 2 / game_timing_scale`, compares that candidate with current HP instead of max HP, and writes current HP unchanged for ordinary positive regeneration. |
 | `50` | Magic Trap | Creates `MagicTrap (0x7F5)`. It derives an element selector from the current stock primary or weld build, derives base damage from that primary, multiplies it by `mDamage`, and registers the armed trap at the aimed point. |
-| `51` | Dampen | `0x00648DF0` queries hostile magic in a rectangle, removes guided/fire/dark missile actors, disrupts hostile caster actions, and performs the CFG's 50% shield-dispel test; it then starts action mode `21` (`Action_PlayerWizard_CastSpin`) at half normal action damage. |
+| `51` | Dampen | `0x00648DF0` queries hostile magic in a rectangle, removes guided/fire/dark missile actors, disrupts hostile caster actions, and dispels shields when `RandomInt(100) < 0x33` (51/100 outcomes, despite the authored 50% display text); it then starts action mode `21` (`Action_PlayerWizard_CastSpin`) at half normal action damage. |
 | `54` | Magic Shield | Combines Magic Shield `mAbsorb` with Explosive Shield factor `mDamage/100` and calls the wizard's virtual `+0x64` to install/refresh shield state. Break callback `0x00546650` multiplies the installed absorb pool by that factor for its radial contact (rank 1: `25*0.5=12.5`); it is not a flat Explosive Shield damage value. |
 | `72` | Acid Rain | Creates `AcidRain (0x7FE)` at the aimed point, writes configured damage and caster/world identity, then registers the persistent rain actor. |
-| `73` | Fire Wall | Builds a line perpendicular to the aim vector and creates a series of `Fire_Goodguy (0x7EE)` patches along it, each carrying configured wall damage and caster ownership. |
+| `73` | Fire Wall | Builds a 300-unit line perpendicular to aim and creates eleven `Fire_Goodguy (0x7EE)` patches at 30-unit intervals including both endpoints. Patch scale follows `0.8+0.6*sin(pi*d/300)`, each birth adds an unsigned `RandomFloat(10)` radial offset in a random unit direction, life is overwritten with scalar `7` (700 ticks under the shared `-0.01/tick` recurrence), and damage/caster ownership use the common Fire-patch contact path. Creation requests `ignite` then `fireballhit`. |
 | `74` | Ether Drain | Creates `EtherDrain (0x807)`, writes configured per-tick damage, resolves the aimed origin through the world, and registers it. |
-| `76` | Call Comet | Calls `0x0063FD00`, which creates `Comet (0x80C)` with the configured freeze and damage values at the selected point. |
-| `77` | Turn Undead | `0x00647EF0` first reuses registry 52 `sounds\levelup` twice with point-derived gain and exact pitches `2.0` and `3.0`, then queries the area and acts only on `Skeleton (0x3E9)`, `SkeletonArcher (0x3EA)`, `SkeletonMage (0x3EB)`, and `Zombie (0x3EE)`. It turns each away from the cast point, writes the flee heading/state, scales its attack strength by `mWeaken` when not already stamped, and records the current tick for the flee interval. This reuse is separate from the same asset's gain-1 level-transition owner at `0x00528A20`. |
+| `76` | Call Comet | Calls `0x0063FD00`, which creates `Comet (0x80C)` with Permafrost-scaled freeze seconds at `+0x13C` and damage at `+0x140`; impact converts the former to FreezeWave ticks and uses the latter as damage. |
+| `77` | Turn Undead | `0x00647EF0` first reuses registry 52 `sounds\levelup` twice with point-derived gain and exact pitches `2.0` and `3.0`, then queries a strict 500-diameter/mask-2 area and acts only on `Skeleton (0x3E9)`, `SkeletonArcher (0x3EA)`, `SkeletonMage (0x3EB)`, and `Zombie (0x3EE)`. It turns both heading lanes away from the cast point, writes `round(mFlee*100)` as the target-owned countdown at `+0x20C`, and scales attack strength once when the old field still holds the untouched `<=-9000` sentinel. The common hostile tick decrements positive countdowns. The cast also creates 35 BadGuys-record-48 fade/scale children for exactly 20 ticks; this reuse is separate from the same sound asset's gain-1 level-transition owner at `0x00528A20`. |
 | `78` | Mindstar | Toggles progression byte `+0x8DD`, refreshes progression state, and produces the activation presentation; no projectile class is allocated. |
 | `79` | Regenerate | Toggles progression byte `+0x8DE`, refreshes progression state, and produces the activation presentation; regeneration then runs from player progression/tick state. |
+
+### Complete right-click presentation and lifecycle contract
+
+[`native-secondary-ability-catalog.json`](native-secondary-ability-catalog.json)
+is the machine-readable closure artifact for these exact 23 category-2 rows.
+It joins each row to its complete authored rank table, targeting mode,
+factory/modifier identities, fixed-tick cadence, atlas records, audio registry
+identity and file hash, authority boundary, and teardown rule. It is generated
+only from the checked-in skill/audio catalogs plus the recovered dispatcher
+and actor contracts; its source executable is the 4,723,200-byte retail image
+with SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`.
+
+The presentation census is not a generic particle substitution:
+
+| Skill IDs | Native presentation owner |
+| --- | --- |
+| `11,27,41,45,49,50,72,74,76` | A persistent world actor owns its own scale/alpha or body state, child-animation cadence, ambient renewal, and terminal fade/impact. |
+| `21,35,73` | The cast helper creates the complete radial/linear child set immediately; `MovingFire`, `Fire_Goodguy`, `Shockwave`, or `FreezeWave` then own their separate lifetimes and contacts. |
+| `12,23,46,54,78,79` | Player/progression or a target-owned modifier owns the visible state. Toggle-off, expiry, overload, absorbed-hit, and shield-break are real presentation edges, not silent data changes. |
+| `15,30,48,51,77` | The helper emits registered additive children at the accepted world point. Dampen alone also queues mode `21` CastSpin, whose phase advances `2.5` per tick and completes on strict `phase > 180` after 73 action ticks. |
+
+The exact visual anchors are `BadGuys[343..372,11,39]` for
+Leviathan/EtherBolt, `BadGuys[53]` for Phasing, `DeadHawg[46..77]` for both
+moving and persistent friendly fire, `BadGuys[10,11]` for Prismatic Shock,
+`DeadHawg[16,17]` for Ring of Ice, `DeadHawg[200..202]` plus
+`BadGuys[2008..2010,62]` for Earthquake, `Golem[1..208]` plus the supplemental
+Golem rows listed in the catalog, `BadGuys[90]` for Teleport,
+`BadGuys[48,7]` for Magic Circle, `BadGuys[393..400,16,158..167,15]` for
+Magic Trap, `BadGuys[10,11,48]` for Dampen, `BadGuys[68]` for the 20-particle
+Magic Shield break, `DeadHawg[177..179]` for Ether Drain, and
+`DeadHawg[5,203..207,6]` plus `BadGuys[51,15]` for Call Comet. These records
+are world-painter inputs with their recovered additive/depth modes; skill
+icons remain the separate `Skills` rows in the catalog.
+
+Audio is likewise lifecycle-owned. Long-lived actors renew ambient wrappers
+(`PlaneCross`, `lowfire`, `rainfall`, `steadywind`, `earthquake`, or `comet`)
+while live, and teardown merely stops renewal. One-shots/streams fire on their
+native cast, strike, assembly, hit, break, impact, toggle, or expiry edge.
+Snapshots never replay them. The complete asset/event lists and registry
+hashes are recorded per member in the catalog and summarized in
+[`native-audio-events.md`](native-audio-events.md#secondary-and-advanced-right-click-events).
+
+Magic Shield break callback `0x00546650` specifically plays `popshield`,
+spawns exactly 20 `Anim_FadeAdditive` children from `BadGuys[68]`, conditionally
+dispatches the Explosive Shield radial contact, and only then clears absorb and
+explosion state. `Mod_StoneSkin` is separate: its `+0x1C/+0x20/+0x24`
+callbacks at `0x00624490/0x006244C0/0x00626840` all route through the
+`stoneskin` one-shot after the modifier callback; the unrelated loaded
+`stoneskinhit` and general `stonebreak` samples are not assigned to those
+modifier callbacks. Apply callback `0x00624490` also sets actor material flag
+`+0x138 |= 1`. Player renderer `0x0054BA80` reflects that flag through global
+byte `0x00819E5D`; the wizard body/equipment compositors, including the path at
+`0x00538F30`, enable their material pass and set RGBA exactly
+`(0.5, 0.5, 0.5, 1.0)` before drawing, then restore white and the previous
+renderer state. Stoneskin is therefore a grey material treatment on every
+composed wizard body/equipment layer, not a separate particle sprite.
+
+Mindstar and Regenerate are also a deliberate shared-audio pair. Dispatcher
+calls `0x0054FF05` and `0x0054FFD4` both request
+`sounds\\mindstar__stream`, then toggle `+0x8DD` or `+0x8DE` and immediately
+run progression refresh. Regenerate does not own a separate projectile or
+healing-loop sample.
 
 The absence of other IDs from this switch is meaningful. Upgrades such as
 More Missiles, Chaining, Embers, Chill Wind, Hail, Rock Surge, Cold Aura,

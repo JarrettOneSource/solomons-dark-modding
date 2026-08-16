@@ -114,6 +114,18 @@ and button release do not cancel that action. Hit presentation interrupts
 neither action art nor locomotion. Respawn starts a new actor at `idle` rather
 than traversing a reverse death edge.
 
+### Stoneskin material composition
+
+`Mod_StoneSkin` apply callback `0x00624490` sets actor flag `+0x138 |= 1`.
+Wizard renderer `0x0054BA80` exposes that state through global byte
+`0x00819E5D` while it composes the wizard. The body/equipment compositor paths
+(directly witnessed at `0x00538F30`) enable the material render state, apply
+RGBA `(0.5, 0.5, 0.5, 1.0)` to each robe, fixed body, head, and equipped-item
+draw, and restore white plus the former state afterward. It is orthogonal to
+the action selector and Magic Shield pulse: Stoneskin changes the material of
+the currently selected pose instead of selecting an animation or drawing a
+standalone effect.
+
 ### Wizard action pose programs
 
 These are presentation programs, not spell behavior. The queue insertion is

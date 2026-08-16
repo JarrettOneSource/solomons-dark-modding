@@ -1,0 +1,2610 @@
+{
+  "schema": "solomon-dark-native-secondary-ability-catalog-v1",
+  "source": {
+    "executable": "SolomonDarkAbandonware/SolomonDark.exe",
+    "size": 4723200,
+    "sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+    "image_base": "0x00400000",
+    "dispatcher": "0x0054CC50",
+    "skill_catalog": "docs/reverse-engineering/native-skill-catalog.json",
+    "audio_catalog": "docs/reverse-engineering/native-audio-catalog.json"
+  },
+  "summary": {
+    "ability_count": 23,
+    "skill_ids": [
+      11,
+      12,
+      15,
+      21,
+      23,
+      27,
+      30,
+      35,
+      41,
+      45,
+      46,
+      48,
+      49,
+      50,
+      51,
+      54,
+      72,
+      73,
+      74,
+      76,
+      77,
+      78,
+      79
+    ],
+    "fixed_tick_hz": 100,
+    "input_slots": 8,
+    "default_right_click_slot": 0,
+    "default_secondary_binding": "0x201",
+    "keyboard_slot_bindings": [
+      "0x02",
+      "0x03",
+      "0x04",
+      "0x05",
+      "0x06",
+      "0x07",
+      "0x08"
+    ]
+  },
+  "abilities": [
+    {
+      "skill_id": 11,
+      "name": "Call Leviathan",
+      "family": "ether",
+      "category": 2,
+      "skills_atlas_icon_record": 38,
+      "config_path": "data/wizardskills/call_leviathan.cfg",
+      "config_sha256": "29bb5627daa2b1f32e7bf08b3c5e11e268aa96436a63346eae7bf169fac1a8a0",
+      "rank_config": {
+        "mDescription": "Rips a hole into the mapped B9-Epsilon(s) psuedoquadrant of the Ether, known habitation of Leviathan.",
+        "mQDescription": "call leviathan from the ether",
+        "mStats": [
+          "Damage: %d:mDamage",
+          "Appendages: up to %d:mQuantity",
+          "Mana Cost: %d:mManaCost%"
+        ],
+        "mCapLevel": 5,
+        "mMaxLevel": 10,
+        "mDamage": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          15,
+          20
+        ],
+        "mQuantity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        "mManaCost": [
+          75,
+          75,
+          80,
+          80,
+          80,
+          80,
+          75,
+          70,
+          65,
+          60,
+          55,
+          50,
+          50
+        ]
+      },
+      "dispatcher": "0x0054CC50",
+      "action": {
+        "mode": null,
+        "name": "immediate_secondary_dispatch"
+      },
+      "targeting": "aimed_world_point",
+      "trigger": "press_edge",
+      "actors": [
+        {
+          "type_id": "0x7F2",
+          "name": "Leviathan"
+        },
+        {
+          "type_id": "0x7F3",
+          "name": "EtherBolt"
+        }
+      ],
+      "gameplay": "Scale in, maintain mQuantity independently tracking appendages, fire straight EtherBolts with mDamage, then scale out; bolts live 100 ticks plus fade and contact only under caster authority.",
+      "timing": {
+        "phases": [
+          "scale_in",
+          "active",
+          "scale_out"
+        ],
+        "bolt_lifetime_ticks": 100
+      },
+      "art": [
+        {
+          "atlas": "BadGuys",
+          "records": "343..372",
+          "owner": "Leviathan appendage/body compositor",
+          "mode": "world_depth_sorted"
+        },
+        {
+          "atlas": "BadGuys",
+          "records": "11,39",
+          "owner": "Leviathan child flashes and EtherBolt",
+          "mode": "additive"
+        }
+      ],
+      "authority": "Caster authority selects targets, creates EtherBolts, and applies their contacts; presentation actors are replicated snapshots.",
+      "cleanup": "Leviathan owns its appendage list and retires after scale-out; EtherBolts retire on contact or post-100-tick fade; region teardown stops loop renewal.",
+      "evidence": [
+        "0x0054CC50",
+        "0x006145D0",
+        "0x006151D0",
+        "0x006034F0"
+      ],
+      "audio": [
+        {
+          "path": "sounds/LeviathanRoar__Stream.wav",
+          "trigger": "Leviathan activation",
+          "mode": "stream",
+          "registry_index": 127,
+          "registry_member_offset": "0x000013AC",
+          "native_class": "SoundStream",
+          "sha256": "67d19694db3f9865e8083365bdb2986dbae4827868f335a7070b5e46e632fcec"
+        },
+        {
+          "path": "sounds/PlaneCross__Loop.wav",
+          "trigger": "renewed while the ether actor is active",
+          "mode": "ambient_loop_request",
+          "registry_index": 166,
+          "registry_member_offset": "0x00001A0C",
+          "native_class": "SoundLoop",
+          "sha256": "04d3bc7b433ef47b758933456e9feecb83924fa9b0ec31e0aeedb0946cd14a24"
+        }
+      ],
+      "disposition": "closed_native_contract"
+    },
+    {
+      "skill_id": 12,
+      "name": "Planewalker",
+      "family": "ether",
+      "category": 2,
+      "skills_atlas_icon_record": 39,
+      "config_path": "data/wizardskills/planewalker.cfg",
+      "config_sha256": "a098304dca53d77a3d0a90f06d5bf848bbc801819ddc60b16e5f123efafa2cbe",
+      "rank_config": {
+        "mDescription": "Your wizard steps halfway into the mapped 9th-Sigma pseudoquadrant of the ether, which is known to be devoid of matter.",
+        "mQDescription": "become one with the ether plane",
+        "mStats": [
+          "Damage: 2/second per Ether skill point",
+          "Duration: %d:mDuration% seconds",
+          "Mana Cost: %d:mManaCost%"
+        ],
+        "mCapLevel": 8,
+        "mMaxLevel": 12,
+        "mDuration": [
+          0,
+          8,
+          10,
+          12,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          25
+        ],
+        "mManaCost": [
+          0,
+          100,
+          150,
+          200,
+          250,
+          275,
+          300,
+          325,
+          350,
+          375,
+          400,
+          425,
+          435
+        ]
+      },
+      "dispatcher": "0x0054CC50",
+      "action": {
+        "mode": null,
+        "name": "immediate_secondary_dispatch"
+      },
+      "targeting": "self",
+      "trigger": "toggle_or_expiry",
+      "actors": [
+        {
+          "type_id": "0x1B75",
+          "name": "Mod_Planewalker"
+        },
+        {
+          "type_id": "0x7EF",
+          "name": "PlaneOrb"
+        }
+      ],
+      "gameplay": "Enable matterless plane state for mDuration, save the prior primary, force runtime skill 80 Plane Orb, merge by maximum remaining duration, and restore the saved primary on toggle-off or expiry.",
+      "timing": {
+        "duration": "mDuration * 100 fixed ticks"
+      },
+      "art": [
+        {
+          "atlas": "BadGuys",
+          "records": "PlaneOrb actor contract",
+          "owner": "forced Plane Orb primary",
+          "mode": "additive_world"
+        }
+      ],
+      "authority": "The authoritative player owns modifier duration, collision flag 0x10, saved-primary restoration, and Plane Orb contacts.",
+      "cleanup": "Modifier removal at 0x00623810 calls 0x0052F470, clears plane state, restores selection, and stops renewing plane ambience.",
+      "evidence": [
+        "0x0054CC50",
+        "0x00548700",
+        "0x00623800",
+        "0x00623810",
+        "0x0052F470",
+        "0x00626A60"
+      ],
+      "audio": [
+        {
+          "path": "sounds/planewalker__Stream.wav",
+          "trigger": "enable",
+          "mode": "stream",
+          "registry_index": 136,
+          "registry_member_offset": "0x000013F4",
+          "native_class": "SoundStream",
+          "sha256": "1243f30337c134c4d59f1cf8fbd2eb79fa0ce4a8e6e053866ec82ac0ec7689ea"
+        },
+        {
+          "path": "sounds/PlanewalkerOff__Stream.wav",
+          "trigger": "disable or modifier expiry",
+          "mode": "stream",
+          "registry_index": 135,
+          "registry_member_offset": "0x000013EC",
+          "native_class": "SoundStream",
+          "sha256": "f95191b9c552b177d96d7269259350695727636d6287af7bbf93ffc08dc8d322"
+        },
+        {
+          "path": "sounds/PlaneCross__Loop.wav",
+          "trigger": "renewed while plane state is active",
+          "mode": "ambient_loop_request",
+          "registry_index": 166,
+          "registry_member_offset": "0x00001A0C",
+          "native_class": "SoundLoop",
+          "sha256": "04d3bc7b433ef47b758933456e9feecb83924fa9b0ec31e0aeedb0946cd14a24"
+        }
+      ],
+      "disposition": "closed_native_contract"
+    },
+    {
+      "skill_id": 15,
+      "name": "Phasing",
+      "family": "ether",
+      "category": 2,
+      "skills_atlas_icon_record": 42,
+      "config_path": "data/wizardskills/phasing.cfg",
+      "config_sha256": "d2615aff242059299004ccd30bdb5cb90b029208742982319faf38748fb9bb39",
+      "rank_config": {
+        "mDescription": "A quick and limited planar teleport in the direction you are facing.",
+        "mQDescription": "A limited teleport through the ether",
+        "mStats": [
+          "Mana Cost: %d:mManaCost%\"\r\n\t\"Cooldown: %d:mCooldown% second"
+        ],
+        "mCapLevel": 1,
+        "mMaxLevel": 1,
+        "mManaCost": [
+          0,
+          75
+        ],
+        "mCooldown": [
+          0,
+          1
+        ]
+      },
+      "dispatcher": "0x0054CC50",
+      "action": {
+        "mode": null,
+        "name": "immediate_secondary_dispatch"
+      },
+      "targeting": "aim_heading_forward_probe",
+      "trigger": "press_edge_with_skill_cooldown",
+      "actors": [],
+      "gameplay": "Probe at most 20 forward positions along cast heading, relocate to the first collision-clear point, and update world membership atomically.",
+      "timing": {
+        "probe_limit": 20,
+        "cooldown": "mCooldown * 100 fixed ticks"
+      },
+      "art": [
+        {
+          "atlas": "BadGuys",
+          "records": "53",
+          "owner": "Anim_FadeAdditive traversal markers",
+          "mode": "additive_world"
+        }
+      ],
+      "authority": "Only the authoritative simulation resolves collision and commits the destination; observers consume the resulting position and traversal event.",
+      "cleanup": "Traversal children are world-owned and self-expire; rejected probes spend no extra cooldown beyond the native cast gate.",
+      "evidence": [
+        "0x0054CC50",
+        "0x0052A0B0",
+        "0x0063FEE0"
+      ],
+      "audio": [
+        {
+          "path": "sounds/phase.wav",
+          "trigger": "accepted relocation",
+          "mode": "one_shot",
+          "registry_index": 67,
+          "registry_member_offset": "0x00000B9C",
+          "native_class": "Sound",
+          "sha256": "cbd9572e6910191bab3b856120e39c67573efd708514b3443eac27bc0c6f48d3"
+        }
+      ],
+      "disposition": "closed_native_contract"
+    },
+    {
+      "skill_id": 21,
+      "name": "Ring of Fire",
+      "family": "fire",
+      "category": 2,
+      "skills_atlas_icon_record": 48,
+      "config_path": "data/wizardskills/ring_of_fire.cfg",
+      "config_sha256": "48f89fb58825485827fb8c852233139385d1c542550fcee7c2d6ab8c536a4fd0",
+      "rank_config": {
+        "mDescription": "Surrounds the caster with an expanding ring of fire and brimstone that pushes back enemies.",
+        "mQDescription": "blast all surrounding enemies",
+        "mStats": [
+          "Damage: %d:mDamage%",
+          "Mana Cost: %d:mManaCost%"
+        ],
+        "mCapLevel": 5,
+        "mMaxLevel": 10,
+        "mDamage": [
+          2,
+          5,
+          10,
+          15,
+          20,
+          30,
+          40,
+          70,
+          90,
+          120
+        ],
+        "mManaCost": [
+          70,
+          75,
+          80,
+          85,
+          90,
+          95,
+          100,
+          105,
+          110,
+          115,
+          120
+        ]
+      },
+      "dispatcher": "0x0054CC50",
+      "action": {
+        "mode": null,
+        "name": "immediate_secondary_dispatch"
+      },
+      "targeting": "caster_center",
+      "trigger": "press_edge",
+      "actors": [
+        {
+          "type_id": "0x7E6",
+          "name": "MovingFire"
+        },
+        {
+          "type_id": "0x7E7",
+          "name": "Shockwave"
+        }
+      ],
+      "gameplay": "Create exactly 30 moving fire segments at 12-degree steps with jitter and one expanding Shockwave; the wave damages, dazzles once per target, and pushes tracked targets radially.",
+      "timing": {
+        "segment_count": 30,
+        "angle_step_degrees": 12,
+        "shockwave_query_period_ticks": 10
+      },
+      "art": [
+        {
+          "atlas": "DeadHawg",
+          "records": "46..77",
+          "owner": "MovingFire frame strip",
+          "mode": "additive_world"
+        }
+      ],
+      "authority": "Caster authority creates segments and the wave, owns unique-target contact, and applies radial displacement.",
+      "cleanup": "Each fire segment follows Fire lifetime/fade; Shockwave removes itself after expansion and releases its unique-target list.",
+      "evidence": [
+        "0x0054CC50",
+        "0x0063F920",
+        "0x005FF8C0",
+        "0x00610F90"
+      ],
+      "audio": [
+        {
+          "path": "sounds/bigfire.wav",
+          "trigger": "ring creation",
+          "mode": "one_shot",
+          "registry_index": 9,
+          "registry_member_offset": "0x000001A4",
+          "native_class": "Sound",
+          "sha256": "d70d4a94b490b7ea7f72d26a06edb50e7906a6a5ca095e1e80744fd17bf17868"
+        },
+        {
+          "path": "sounds/nuke.wav",
+          "trigger": "shockwave creation",
+          "mode": "one_shot",
+          "registry_index": 63,
+          "registry_member_offset": "0x00000AEC",
+          "native_class": "Sound",
+          "sha256": "a8ab88bb44f30289f7b473bc9f153b4cfc03b1985e77b7b29a7ec0761f8b2cfb"
+        }
+      ],
+      "disposition": "closed_native_contract"
+    },
+    {
+      "skill_id": 23,
+      "name": "Firewalker",
+      "family": "fire",
+      "category": 2,
+      "skills_atlas_icon_record": 50,
+      "config_path": "data/wizardskills/firewalker.cfg",
+      "config_sha256": "971f0931b19490b69b6eafd5fbd64abb1c3ade1ba9fdfed2f1e13666b9210c27",
+      "rank_config": {
+        "mDescription": "Your wizard leaves a trail of fire as he walks.",
+        "mQDescription": "drop a trail of fire behind you",
+        "mStats": [
+          "Damage: %d:mDamage% / sec\"\r\n\t\"Flame Duration: %d:mDuration% seconds\"\r\n\t\"Hoards %d:mHoard% mana when active"
+        ],
+        "mCapLevel": 3,
+        "mMaxLevel": 8,
+        "mDamage": [
+          0,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "mDuration": [
+          0,
+          2.5,
+          2.6,
+          2.75,
+          2.85,
+          2.95,
+          3.1,
+          3.2,
+          3.3
+        ],
+        "mHoard": 50
+      },
+      "dispatcher": "0x0054CC50",
+      "action": {
+        "mode": null,
+        "name": "immediate_secondary_dispatch"
+      },
+      "targeting": "self_trail",
+      "trigger": "toggle",
+      "actors": [
+        {
+          "type_id": "0x7EE",
+          "name": "Fire_Goodguy"
+        }
+      ],
+      "gameplay": "Toggle progression +0x8DC; while active the player tick emits damaging Fire_Goodguy trail patches and reserves exactly 50 MP as an absolute hoard.",
+      "timing": {
+        "patch_lifetime_ticks": 200,
+        "contact_period_ticks": 3,
+        "mana_reserve": 50
+      },
+      "art": [
+        {
+          "atlas": "DeadHawg",
+          "records": "46..77",
+          "owner": "Fire_Goodguy animation",
+          "mode": "additive_world"
+        },
+        {
+          "atlas": "BadGuys",
+          "records": "11",
+          "owner": "player-tick moving additive ember",
+          "mode": "additive_world"
+        }
+      ],
+      "authority": "The authoritative player owns toggle, reserve, trail cadence, and Fire contacts; patches carry owner identity.",
+      "cleanup": "Toggle-off stops new patches and removes the reserve; existing patches complete their own 200-tick fade/contact lifetime.",
+      "evidence": [
+        "0x0054CC50",
+        "0x00548B00",
+        "0x005FF050",
+        "0x005FF1D0",
+        "0x00610F90"
+      ],
+      "audio": [
+        {
+          "path": "sounds/ignite.wav",
+          "trigger": "toggle activation with native pitch triplet",
+          "mode": "one_shot",
+          "registry_index": 46,
+          "registry_member_offset": "0x00000800",
+          "native_class": "Sound",
+          "sha256": "0c0a6f6055b0746e8f1921d04214e47a359ee36b6ea88301f73047f7f45e935f"
+        },
+        {
+          "path": "sounds/lowfire__loop.wav",
+          "trigger": "renewed by live fire patches",
+          "mode": "ambient_loop_request",
+          "registry_index": 163,
+          "registry_member_offset": "0x000018EC",
+          "native_class": "SoundLoop",
+          "sha256": "8d42e14b1848f1f2b45fabb52c1f83620a986557416f59ee08f78e630439ce8a"
+        }
+      ],
+      "disposition": "closed_native_contract"
+    },
+    {
+      "skill_id": 27,
+      "name": "Magic Storm",
+      "family": "air",
+      "category": 2,
+      "skills_atlas_icon_record": 54,
+      "config_path": "data/wizardskills/magic_storm.cfg",
+      "config_sha256": "695765f0cfa1f1af2ef5f1baf427bbc8fd1dd092bc7a71001d027e330f507683",
+      "rank_config": {
+        "mDescription": "Spawn a small but intense electro-magic thunderstorm.",
+        "mQDescription": "spawn a small but intense storm",
+        "mStats": [
+          "Damage: %d:mDamage1% - %d:mDamage2%",
+          "Mana Cost: %d:mManaCost%"
+        ],
+        "mCapLevel": 5,
+        "mMaxLevel": 10,
+        "mDamage1": [
+          2,
+          4,
+          6,
+          8,
+          10,
+          12,
+          15,
+          18,
+          20,
+          25
+        ],
+        "mDamage2": [
+          3,
+          6,
+          9,
+          12,
+          14,
+          18,
+          22,
+          30,
+          40,
+          50
+        ],
+        "mManaCost": [
+          65,
+          70,
+          70,
+          70,
+          70,
+          65,
+          65,
+          65,
+          60,
+          60,
+          50
+        ]
+      },
+      "dispatcher": "0x0054CC50",
+      "action": {
+        "mode": null,
+        "name": "immediate_secondary_dispatch"
+      },
+      "targeting": "aimed_world_point",
+      "trigger": "press_edge",
+      "actors": [
+        {
+          "type_id": "0x7F0",
+          "name": "StormCloud"
+        }
+      ],
+      "gameplay": "Spawn a stationary storm for 1000 active ticks, randomly select hostile targets at the native 30..120 cadence, roll mDamage1..mDamage2, and generate lightning geometry; Magic Tornado upgrades frequency and duration without changing the base placement contract.",
+      "timing": {
+        "active_ticks": 1000,
+        "strike_reset_ticks": "uniform integer 30..120, divided by tornado frequency factor"
+      },
+      "art": [
+        {
+          "atlas": "BadGuys",
+          "records": "cloud particles plus record 11 lightning children",
+          "owner": "StormCloud tick/draw",
+          "mode": "alpha_ramp_additive_world"
+        }
+      ],
+      "authority": "Caster authority chooses targets, consumes RNG, and applies damage; all strike points and short energy state are snapshot-visible.",
+      "cleanup": "After 1000 active ticks the cloud fades, ceases target queries, then retires and stops ambient renewal.",
+      "evidence": [
+        "0x0054CC50",
+        "0x005E22E0",
+        "0x006021A0",
+        "0x005E8970"
+      ],
+      "audio": [
+        {
+          "path": "sounds/magicstorm.wav",
+          "trigger": "accepted cast",
+          "mode": "one_shot",
+          "registry_index": 61,
+          "registry_member_offset": "0x00000A94",
+          "native_class": "Sound",
+          "sha256": "87a2987ef6a67c21a8c57e8c5f17d88b78e6071b97cf34c6fd9a12ff613ebdcb"
+        },
+        {
+          "path": "sounds/lightningstart.wav",
+          "trigger": "each strike",
+          "mode": "one_shot",
+          "registry_index": 54,
+          "registry_member_offset": "0x00000960",
+          "native_class": "Sound",
+          "sha256": "1542ec3ab4e41624b5e8d073000a02bb36a3f8c733bf709835768f095494dceb"
+        },
+        {
+          "path": "sounds/thunder__Stream.wav",
+          "trigger": "strike presentation",
+          "mode": "stream",
+          "registry_index": 143,
+          "registry_member_offset": "0x0000142C",
+          "native_class": "SoundStream",
+          "sha256": "c2bc1376ed9a5bc8de7b96f08c16448253a7cfbe35b35a085a282d0a50d12f0a"
+        },
+        {
+          "path": "sounds/rainfall__loop.wav",
+          "trigger": "renewed while cloud is active",
+          "mode": "ambient_loop_request",
+          "registry_index": 167,
+          "registry_member_offset": "0x00001A6C",
+          "native_class": "SoundLoop",
+          "sha256": "a27e5ea5d44bb5daf6b80dee6f0f5c9123a5bddfc198340c633b8791c4733a79"
+        },
+        {
+          "path": "sounds/steadywind__loop.wav",
+          "trigger": "renewed while cloud is active",
+          "mode": "ambient_loop_request",
+          "registry_index": 171,
+          "registry_member_offset": "0x00001BEC",
+          "native_class": "SoundLoop",
+          "sha256": "2c87905f66fa7b02ab18c6b9e5d875ed2c9258ce37c961ba858c17d031141487"
+        }
+      ],
+      "disposition": "closed_native_contract"
+    },
+    {
+      "skill_id": 30,
+      "name": "Prismatic Shock",
+      "family": "air",
+      "category": 2,
+      "skills_atlas_icon_record": 57,
+      "config_path": "data/wizardskills/prismatic_shock.cfg",
+      "config_sha256": "daeb2a139d9eed9a03a25aefb99c58ddd6d82cbd92442f34b1a4aa739ef5b7f6",
+      "rank_config": {
+        "mDescription": "Cast a manly prismatic miasma that makes foes more susceptible to lightning.",
+        "mQDescription": "make enemies susceptible to lightning",
+        "mStats": [
+          "Lightning Damage: +100%%",
+          "Duration: %d:mDuration% seconds",
+          "Mana Cost: %d:mManaCost%"
+        ],
+        "mCapLevel": 3,
+        "mMaxLevel": 8,
+        "mDuration": [
+          0,
+          10,
+          15,
+          18,
+          20,
+          22,
+          24,
+          26,
+          30
+        ],
+        "mManaCost": [
+          0,
+          70,
+          70,
+          70,
+          70,
+          65,
+          65,
+          65,
+          60
+        ]
+      },
+      "dispatcher": "0x0054CC50",
+      "action": {
+        "mode": null,
+        "name": "immediate_secondary_dispatch"
+      },
+      "targeting": "caster_center_rectangle",
+      "trigger": "press_edge",
+      "actors": [
+        {
+          "type_id": "0x1B76",
+          "name": "Mod_Prismatic"
+        }
+      ],
+      "gameplay": "Emit the prismatic cast wave, query the hostile rectangle, and attach/merge a duration modifier that doubles lightning susceptibility.",
+      "timing": {
+        "duration": "mDuration * 100 fixed ticks"
+      },
+      "art": [
+        {
+          "atlas": "BadGuys",
+          "records": "10,11",
+          "owner": "prismatic additive wave children",
+          "mode": "additive_world"
+        }
+      ],
+      "authority": "Caster authority owns rectangle membership and modifier attachment; modifier duration/status is replicated with the target.",
+      "cleanup": "World-owned wave children self-expire; the target-owned modifier expires or merges by native modifier rules.",
+      "evidence": [
+        "0x0054CC50",
+        "0x00645540",
+        "0x00627230"
+      ],
+      "audio": [
+        {
+          "path": "sounds/prismaticspray__stream.wav",
+          "trigger": "accepted cast",
+          "mode": "stream",
+          "registry_index": 137,
+          "registry_member_offset": "0x000013FC",
+          "native_class": "SoundStream",
+          "sha256": "3eabc7fb5d4ecb30476dc0dee52305f66e47ae212ca47bdf8d087961a77cdc7d"
+        },
+        {
+          "path": "sounds/lightningstart.wav",
+          "trigger": "wave spark with native pitch",
+          "mode": "one_shot",
+          "registry_index": 54,
+          "registry_member_offset": "0x00000960",
+          "native_class": "Sound",
+          "sha256": "1542ec3ab4e41624b5e8d073000a02bb36a3f8c733bf709835768f095494dceb"
+        }
+      ],
+      "disposition": "closed_native_contract"
+    },
+    {
+      "skill_id": 35,
+      "name": "Ring of Ice",
+      "family": "water",
+      "category": 2,
+      "skills_atlas_icon_record": 62,
+      "config_path": "data/wizardskills/ring_of_ice.cfg",
+      "config_sha256": "9405a808a93e7a860a1b83aebf4869b613d68589b1394173111df3ee59d89f34",
+      "rank_config": {
+        "mDescription": "Surrounds the caster with an expanding ring of ice that freezes enemies into immobility.",
+        "mQDescription": "freeze all surrounding enemies",
+        "mStats": [
+          "Freeze: %d:mDamage% seconds",
+          "Mana Cost: %d:mManaCost%"
+        ],
+        "mCapLevel": 5,
+        "mMaxLevel": 10,
+        "mDamage": [
+          5,
+          10,
+          20,
+          30,
+          35,
+          40,
+          45,
+          50,
+          55,
+          60,
+          75
+        ],
+        "mManaCost": [
+          35,
+          40,
+          50,
+          60,
+          70,
+          80,
+          90,
+          95,
+          100,
+          105,
+          110
+        ]
+      },
+      "dispatcher": "0x0054CC50",
+      "action": {
+        "mode": null,
+        "name": "immediate_secondary_dispatch"
+      },
+      "targeting": "caster_center",
+      "trigger": "press_edge",
+      "actors": [
+        {
+          "type_id": "0x7E8",
+          "name": "FreezeWave"
+        }
+      ],
+      "gameplay": "Create three ice-blast bursts, radial debris, and an expanding wave which applies ColdSlow or Frozen once per target, optional FrostBurn, and configured freeze payload.",
+      "timing": {
+        "query_period_ticks": 10,
+        "ice_blast_count": 3
+      },
+      "art": [
+        {
+          "atlas": "DeadHawg",
+          "records": "16,17",
+          "owner": "radial ice burst/debris",
+          "mode": "additive_world"
+        }
+      ],
+      "authority": "Caster authority owns the unique-target list, status selection, contact, and optional item-effect branch.",
+      "cleanup": "FreezeWave and registered burst children self-expire after expansion/fade and release target references.",
+      "evidence": [
+        "0x0054CC50",
+        "0x00644460",
+        "0x005FFDC0"
+      ],
+      "audio": [
+        {
+          "path": "sounds/ringofice.wav",
+          "trigger": "wave creation",
+          "mode": "one_shot",
+          "registry_index": 76,
+          "registry_member_offset": "0x00000D28",
+          "native_class": "Sound",
+          "sha256": "b6442d06818350c43d135684916f05216ed90dccf2b27f2a5667c2c31482013b"
+        }
+      ],
+      "disposition": "closed_native_contract"
+    },
+    {
+      "skill_id": 41,
+      "name": "Earthquake",
+      "family": "earth",
+      "category": 2,
+      "skills_atlas_icon_record": 68,
+      "config_path": "data/wizardskills/earthquake.cfg",
+      "config_sha256": "86dcbc10d884eb1c372ce64abbc448c430381b8b0924eb3417a2bf8dca50c22f",
+      "rank_config": {
+        "mDescription": "Shaking the earth causes a tremendous disruption in your foe's ability to concentrate, pursue, and aim.",
+        "mQDescription": "makes enemies clumsy and impotent",
+        "mStats": [
+          "Duration: %d:mDuration% seconds",
+          "Mana Cost: %d:mManaCost%"
+        ],
+        "mCapLevel": 5,
+        "mMaxLevel": 10,
+        "mDuration": [
+          0,
+          10,
+          15,
+          18,
+          20,
+          22,
+          24,
+          26,
+          28,
+          30
+        ],
+        "mManaCost": [
+          0,
+          75,
+          80,
+          85,
+          90,
+          95,
+          100,
+          105,
+          110,
+          115,
+          120
+        ]
+      },
+      "dispatcher": "0x0054CC50",
+      "action": {
+        "mode": null,
+        "name": "immediate_secondary_dispatch"
+      },
+      "targeting": "caster_center",
+      "trigger": "press_edge",
+      "actors": [
+        {
+          "type_id": "0x7F1",
+          "name": "Earthquake"
+        }
+      ],
+      "gameplay": "Shake the world for mDuration, every 30 ticks query hostile actors and disrupt up to half after shuffling; it deals no direct damage.",
+      "timing": {
+        "duration": "mDuration * 100 fixed ticks",
+        "disrupt_period_ticks": 30
+      },
+      "art": [
+        {
+          "atlas": "DeadHawg",
+          "records": "200..202",
+          "owner": "registered floor crack fragments",
+          "mode": "world_depth_sorted"
+        },
+        {
+          "atlas": "BadGuys",
+          "records": "2008..2010,62",
+          "owner": "boulder debris and lit children",
+          "mode": "additive_world"
+        }
+      ],
+      "authority": "Caster authority shuffles targets and cancels/pauses actions; world shake and debris are presentation state.",
+      "cleanup": "Counter zero retires the actor, clears world-shake contribution, releases its pointer list, and stops quake-loop renewal.",
+      "evidence": [
+        "0x0054CC50",
+        "0x005E8EA0",
+        "0x00613200",
+        "0x00613E10"
+      ],
+      "audio": [
+        {
+          "path": "sounds/earthquake__loop.wav",
+          "trigger": "renewed while intensity is nonzero",
+          "mode": "ambient_loop_request",
+          "registry_index": 154,
+          "registry_member_offset": "0x0000158C",
+          "native_class": "SoundLoop",
+          "sha256": "ac56c68d267f5d9c7431b8cadd5b6bd4e73ae6101e144ff9769d2aac1a529068"
+        },
+        {
+          "path": "sounds/QuakeCracks__Stream.wav",
+          "trigger": "large crack event",
+          "mode": "stream",
+          "registry_index": 139,
+          "registry_member_offset": "0x0000140C",
+          "native_class": "SoundStream",
+          "sha256": "86e0ff907b480cde99a14ad4743946214040fca0fb3fe0f26036762f559375c8"
+        },
+        {
+          "path": "sounds/QuakeCrackSmall__Stream.wav",
+          "trigger": "small crack event",
+          "mode": "stream",
+          "registry_index": 138,
+          "registry_member_offset": "0x00001404",
+          "native_class": "SoundStream",
+          "sha256": "bc66694a8413cddaf3ca22b05de99ba3d8d59090317e3d89c983a1d3b09ef09f"
+        },
+        {
+          "path": "sounds/rockhit.wav",
+          "trigger": "debris impact",
+          "mode": "one_shot",
+          "registry_index": 77,
+          "registry_member_offset": "0x00000D54",
+          "native_class": "Sound",
+          "sha256": "865484cf3d7c2e199fb46f069973c43893122e934f0f46ba33d30eeeac4de25b"
+        }
+      ],
+      "disposition": "closed_native_contract"
+    },
+    {
+      "skill_id": 45,
+      "name": "Raise Golem",
+      "family": "earth",
+      "category": 2,
+      "skills_atlas_icon_record": 72,
+      "config_path": "data/wizardskills/raise_golem.cfg",
+      "config_sha256": "13698d4e1f50c8165f9ba9ac2f6298a24c69fabd7baa2e9373b85bf870dcad63",
+      "rank_config": {
+        "mDescription": "Summons a golem to both deliver and receive beatings.",
+        "mQDescription": "summon a golem",
+        "mStats": [
+          "Health: %f:mHP%",
+          "Damage: %d:mDamage1% - %d:mDamage2%",
+          "Mana Cost: %d:mManaCost%"
+        ],
+        "mCapLevel": 8,
+        "mMaxLevel": 12,
+        "mHP": [
+          50,
+          100,
+          150,
+          200,
+          250,
+          300,
+          350,
+          400,
+          450,
+          500,
+          550,
+          600,
+          700
+        ],
+        "mDamage1": [
+          1,
+          4,
+          6,
+          8,
+          10,
+          12,
+          14,
+          16,
+          18,
+          20,
+          22,
+          24,
+          26
+        ],
+        "mDamage2": [
+          2,
+          6,
+          8,
+          10,
+          12,
+          14,
+          16,
+          18,
+          20,
+          22,
+          24,
+          26,
+          30
+        ],
+        "mManaCost": [
+          8,
+          10,
+          20,
+          30,
+          40,
+          50,
+          60,
+          70,
+          80,
+          90,
+          100
+        ]
+      },
+      "dispatcher": "0x0054CC50",
+      "action": {
+        "mode": null,
+        "name": "immediate_secondary_dispatch"
+      },
+      "targeting": "collision_adjusted_aimed_world_point",
+      "trigger": "press_edge",
+      "actors": [
+        {
+          "type_id": "0x7F4",
+          "name": "Golem"
+        },
+        {
+          "type_id": "0x7E9",
+          "name": "Knockback"
+        }
+      ],
+      "gameplay": "Enforce one summon or two with Iron Golem, assemble at ages 0/50/100/200, activate contact at age 400, acquire/chase/attack hostiles, and reflect incoming primary damage when upgraded.",
+      "timing": {
+        "assembly_milestones": [
+          0,
+          50,
+          100,
+          200
+        ],
+        "contact_enable_age": 400,
+        "natural_expiry": false
+      },
+      "art": [
+        {
+          "atlas": "Golem",
+          "records": "1..208",
+          "owner": "articulated body-part compositor",
+          "mode": "world_depth_sorted"
+        },
+        {
+          "atlas": "BadGuys",
+          "records": "15,36,62,86,238..245,2008..2010",
+          "owner": "assembly, attack, and child effects",
+          "mode": "mixed_world"
+        },
+        {
+          "atlas": "DeadHawg",
+          "records": "78..87",
+          "owner": "death fragments",
+          "mode": "world_depth_sorted"
+        },
+        {
+          "atlas": "UI",
+          "records": "23",
+          "owner": "summon status marker",
+          "mode": "screen_overlay"
+        }
+      ],
+      "authority": "Caster authority owns cap replacement, AI, target identity, contact, reflection, death, and child Knockback creation.",
+      "cleanup": "No natural expiry; replacement, death, disconnect, or region teardown retires body/AI and releases child collections while registered fragments finish independently.",
+      "evidence": [
+        "0x0054CC50",
+        "0x005F57E0",
+        "0x005F5B40",
+        "0x00615CD0",
+        "0x00617820",
+        "0x00607F60",
+        "0x00619730"
+      ],
+      "audio": [
+        {
+          "path": "sounds/QuakeCrackSmall__Stream.wav",
+          "trigger": "assembly milestones",
+          "mode": "stream",
+          "registry_index": 138,
+          "registry_member_offset": "0x00001404",
+          "native_class": "SoundStream",
+          "sha256": "bc66694a8413cddaf3ca22b05de99ba3d8d59090317e3d89c983a1d3b09ef09f"
+        },
+        {
+          "path": "sounds/GolemProvoke__Stream.wav",
+          "trigger": "provoke",
+          "mode": "stream",
+          "registry_index": 126,
+          "registry_member_offset": "0x000013A4",
+          "native_class": "SoundStream",
+          "sha256": "88394eabae8728019803317c69dc8a7e991bb2ce32863f250a2d0726e7f15228"
+        },
+        {
+          "path": "sounds/KnockbackGolem.wav",
+          "trigger": "attack impact",
+          "mode": "one_shot",
+          "registry_index": 51,
+          "registry_member_offset": "0x000008DC",
+          "native_class": "Sound",
+          "sha256": "2452f75de45f6e6c30d7bc9993ba6f86e638ef0b2a101daca38814e65946e090"
+        },
+        {
+          "path": "sounds/stonestep.wav",
+          "trigger": "movement step",
+          "mode": "one_shot",
+          "registry_index": 92,
+          "registry_member_offset": "0x00000FE8",
+          "native_class": "Sound",
+          "sha256": "d02824968e070e0efdeb3c350afd004ff9252dd6da806aebf9c6b3da5d01c5f5"
+        },
+        {
+          "path": "sounds/GolemDie__Stream.wav",
+          "trigger": "death",
+          "mode": "stream",
+          "registry_index": 125,
+          "registry_member_offset": "0x0000139C",
+          "native_class": "SoundStream",
+          "sha256": "cee482491c4aa21672bf7bbd4c314ab185a5e15f9daadfaa5351d0e3ca8fea56"
+        },
+        {
+          "path": "sounds/stonebreak.wav",
+          "trigger": "death fragment release",
+          "mode": "one_shot",
+          "registry_index": 89,
+          "registry_member_offset": "0x00000F64",
+          "native_class": "Sound",
+          "sha256": "1bb6ea8c298424eddedad619ec713b23f8187986a8ecdc28173a0b17d2070abc"
+        },
+        {
+          "path": "sounds/rockhit.wav",
+          "trigger": "assembly/death impact",
+          "mode": "one_shot",
+          "registry_index": 77,
+          "registry_member_offset": "0x00000D54",
+          "native_class": "Sound",
+          "sha256": "865484cf3d7c2e199fb46f069973c43893122e934f0f46ba33d30eeeac4de25b"
+        }
+      ],
+      "disposition": "closed_native_contract"
+    },
+    {
+      "skill_id": 46,
+      "name": "Stoneskin",
+      "family": "earth",
+      "category": 2,
+      "skills_atlas_icon_record": 73,
+      "config_path": "data/wizardskills/stoneskin.cfg",
+      "config_sha256": "e681825bd466a9836fbad18c437622d13f3277f3ca194e2773998bdca964bfe3",
+      "rank_config": {
+        "mDescription": "Temporarily renders your wizard impervious to all physical and magical harm.",
+        "mQDescription": "renders wizard briefly invulnerable",
+        "mStats": [
+          "Duration: %f:mDuration% seconds\"\r\n\t\"Mana Cost: %d:mManaCost%"
+        ],
+        "mCapLevel": 3,
+        "mMaxLevel": 10,
+        "mDuration": [
+          0,
+          6,
+          6.5,
+          7,
+          7.5,
+          8,
+          8.5,
+          9,
+          10
+        ],
+        "mManaCost": [
+          0,
+          10,
+          20,
+          30,
+          40,
+          50,
+          60,
+          70,
+          80
+        ]
+      },
+      "dispatcher": "0x0054CC50",
+      "action": {
+        "mode": null,
+        "name": "immediate_secondary_dispatch"
+      },
+      "targeting": "self",
+      "trigger": "press_edge_refreshable",
+      "actors": [
+        {
+          "type_id": "0x1B71",
+          "name": "Mod_StoneSkin"
+        }
+      ],
+      "gameplay": "Attach a duration modifier which sets actor flag 0x1 and makes the wizard impervious; reapplication retains the greater remaining duration.",
+      "timing": {
+        "duration": "mDuration * 100 fixed ticks"
+      },
+      "art": [
+        {
+          "atlas": "player",
+          "records": "actor flag 0x1 material treatment",
+          "owner": "target-owned modifier presentation",
+          "mode": "actor_overlay"
+        }
+      ],
+      "authority": "The authoritative player owns modifier duration and rejects physical/magical damage while active.",
+      "cleanup": "Expiry or teardown clears invulnerability/tint and emits the removal presentation exactly once.",
+      "evidence": [
+        "0x0054CC50",
+        "0x006237A0",
+        "0x00624490",
+        "0x006244C0",
+        "0x00626840"
+      ],
+      "audio": [
+        {
+          "path": "sounds/StoneSkin__Stream.wav",
+          "trigger": "accepted cast",
+          "mode": "stream",
+          "registry_index": 142,
+          "registry_member_offset": "0x00001424",
+          "native_class": "SoundStream",
+          "sha256": "033f53f0529caac2f5f59f7501a60917e30b1af44035e1ab92a27d0959511d62"
+        },
+        {
+          "path": "sounds/stoneskin.wav",
+          "trigger": "modifier apply/refresh callbacks",
+          "mode": "one_shot",
+          "registry_index": 90,
+          "registry_member_offset": "0x00000F90",
+          "native_class": "Sound",
+          "sha256": "7d3337d2d05ddfb63f0129406c6f1867de0262535b055b9aa69d633dbd261635"
+        }
+      ],
+      "disposition": "closed_native_contract"
+    },
+    {
+      "skill_id": 48,
+      "name": "Teleport",
+      "family": "arcane",
+      "category": 2,
+      "skills_atlas_icon_record": 75,
+      "config_path": "data/wizardskills/teleport.cfg",
+      "config_sha256": "c2c885d0694e4ab36f75b9d53d7df85f4bcacb8f9eb87128c185df8b50a32318",
+      "rank_config": {
+        "mDescription": "Immediately teleports your wizard to the safest place nearby.",
+        "mQDescription": "teleport to a safe place",
+        "mStats": [
+          "Cooldown: %d:mCooldown% seconds\"\r\n\t\"Mana Cost: %d:mManaCost%"
+        ],
+        "mCapLevel": 3,
+        "mMaxLevel": 8,
+        "mCooldown": [
+          0,
+          60,
+          30,
+          15,
+          10,
+          5,
+          4,
+          3,
+          1
+        ],
+        "mManaCost": [
+          0,
+          10,
+          10,
+          9,
+          9,
+          8,
+          7,
+          6,
+          5
+        ]
+      },
+      "dispatcher": "0x0054CC50",
+      "action": {
+        "mode": null,
+        "name": "immediate_secondary_dispatch"
+      },
+      "targeting": "safe_relocation_near_aim",
+      "trigger": "press_edge_with_skill_cooldown",
+      "actors": [],
+      "gameplay": "Ask the world relocation query for a safe nearby destination and atomically move the wizard to the accepted point.",
+      "timing": {
+        "cooldown": "mCooldown * 100 fixed ticks"
+      },
+      "art": [
+        {
+          "atlas": "BadGuys",
+          "records": "90",
+          "owner": "teleport additive burst",
+          "mode": "additive_world"
+        }
+      ],
+      "authority": "Only authoritative world collision selects and commits the destination; observers render the relocation event.",
+      "cleanup": "Registered burst children self-expire; rejected relocation leaves no persistent actor.",
+      "evidence": [
+        "0x0054CC50",
+        "0x00644A00"
+      ],
+      "audio": [
+        {
+          "path": "sounds/teleport.wav",
+          "trigger": "accepted teleport",
+          "mode": "one_shot",
+          "registry_index": 95,
+          "registry_member_offset": "0x0000106C",
+          "native_class": "Sound",
+          "sha256": "a91651f4369aa2147729d043e0b29b758ec1481877b931bb800fe1828ca329a2"
+        }
+      ],
+      "disposition": "closed_native_contract"
+    },
+    {
+      "skill_id": 49,
+      "name": "Magic Circle",
+      "family": "arcane",
+      "category": 2,
+      "skills_atlas_icon_record": 76,
+      "config_path": "data/wizardskills/magic_circle.cfg",
+      "config_sha256": "d9a6cf2f8cedf610df4441214638621fcf6eb077de108939aed223e6c43dd2c2",
+      "rank_config": {
+        "mDescription": "Surrounds the caster with a magic circle that slows time, boosts healing, and boosts mana recovery.",
+        "mQDescription": "slows time, boosts life and mana",
+        "mStats": [
+          "Circle Slowdown: %d:mSlow%%%",
+          "Mana Cost: %d:mManaCost%"
+        ],
+        "mCapLevel": 3,
+        "mMaxLevel": 8,
+        "mSlow": [
+          0,
+          50,
+          60,
+          70,
+          75,
+          80,
+          85,
+          90,
+          95
+        ],
+        "mManaCost": [
+          0,
+          75,
+          80,
+          85,
+          90,
+          95,
+          100,
+          105,
+          110,
+          115,
+          120
+        ]
+      },
+      "dispatcher": "0x0054CC50",
+      "action": {
+        "mode": null,
+        "name": "immediate_secondary_dispatch"
+      },
+      "targeting": "aimed_world_point",
+      "trigger": "press_edge",
+      "actors": [
+        {
+          "type_id": "0x7EA",
+          "name": "MagicCircle"
+        },
+        {
+          "type_id": "0x1B70",
+          "name": "Mod_CircleSlow"
+        }
+      ],
+      "gameplay": "Maintain a 1500-tick circle, every 10 ticks slow eligible enemies and restore local MP at twice normal recovery; retain the shipped inert HP branch.",
+      "timing": {
+        "lifetime_ticks": 1500,
+        "effect_period_ticks": 10
+      },
+      "art": [
+        {
+          "atlas": "BadGuys",
+          "records": "48",
+          "owner": "per-tick ring particle",
+          "mode": "additive_world"
+        },
+        {
+          "atlas": "BadGuys",
+          "records": "7",
+          "owner": "Anim_SpinAwayAdditive effect child",
+          "mode": "additive_world"
+        }
+      ],
+      "authority": "Caster authority owns slow attachment and local MP recovery; circle/color/lifetime state is replicated.",
+      "cleanup": "At zero lifetime the circle unregisters; world-owned spin-away children finish independently.",
+      "evidence": [
+        "0x0054CC50",
+        "0x0063FDE0",
+        "0x006006E0",
+        "0x005F3CA0",
+        "0x005FB020"
+      ],
+      "audio": [
+        {
+          "path": "sounds/magiccircle.wav",
+          "trigger": "actor lifetime reaches 1498",
+          "mode": "one_shot",
+          "registry_index": 56,
+          "registry_member_offset": "0x000009B8",
+          "native_class": "Sound",
+          "sha256": "18e8efdd324e9c3f96aca245d109d50796418ada18685c8e391c5f122921e4c3"
+        }
+      ],
+      "disposition": "closed_native_contract"
+    },
+    {
+      "skill_id": 50,
+      "name": "Magic Trap",
+      "family": "arcane",
+      "category": 2,
+      "skills_atlas_icon_record": 77,
+      "config_path": "data/wizardskills/magic_trap.cfg",
+      "config_sha256": "b4a73c8189e76659f7637b6ae10318e358c8d889a71231bdf54ec4a473f1881c",
+      "rank_config": {
+        "mDescription": "Binds your primary spell into a trap that detonates when an enemy walks near.  The longer the trap lies idle, the more damage it does.",
+        "mQDescription": "bind a spell into a trap",
+        "mStats": [
+          "Damage: 0 - %d:mDamage%x Primary Spell Damage",
+          "Full Charge: 8 seconds",
+          "Mana Cost: %d:mManaCost%"
+        ],
+        "mCapLevel": 8,
+        "mMaxLevel": 12,
+        "mDamage": [
+          0,
+          5,
+          7,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          18,
+          20
+        ],
+        "mManaCost": [
+          0,
+          25,
+          30,
+          35,
+          40,
+          45,
+          50,
+          55,
+          60,
+          65,
+          70
+        ]
+      },
+      "dispatcher": "0x0054CC50",
+      "action": {
+        "mode": null,
+        "name": "immediate_secondary_dispatch"
+      },
+      "targeting": "aimed_world_point",
+      "trigger": "press_edge",
+      "actors": [
+        {
+          "type_id": "0x7F5",
+          "name": "MagicTrap"
+        },
+        {
+          "type_id": "0x1B73",
+          "name": "Mod_Burn"
+        },
+        {
+          "type_id": "0x1B6B",
+          "name": "Mod_ElectricBurn"
+        },
+        {
+          "type_id": "0x1B69",
+          "name": "Mod_ColdSlow"
+        }
+      ],
+      "gameplay": "Bind the current primary element and base damage into a trap, charge linearly to full over 800 ticks, poll every 25 ticks, then detonate once for charge-scaled damage and the element-specific status.",
+      "timing": {
+        "full_charge_ticks": 800,
+        "trigger_poll_period_ticks": 25
+      },
+      "art": [
+        {
+          "atlas": "BadGuys",
+          "records": "393..400,16",
+          "owner": "charging trap body and shimmer",
+          "mode": "additive_world"
+        },
+        {
+          "atlas": "BadGuys",
+          "records": "158..167,15",
+          "owner": "element-colored trigger burst",
+          "mode": "additive_world"
+        }
+      ],
+      "authority": "Caster authority derives the primary payload, owns charge/query RNG, applies contacts/statuses, and removes the trap.",
+      "cleanup": "Trigger is terminal and removes the trap after emitting world-owned children; ordinary teardown releases the Puppet without replaying trigger effects.",
+      "evidence": [
+        "0x0054CC50",
+        "0x005E95D0",
+        "0x00603710",
+        "0x005F5C80",
+        "0x00619CD0"
+      ],
+      "audio": [
+        {
+          "path": "sounds/settrap__Stream.wav",
+          "trigger": "trap initialization",
+          "mode": "stream",
+          "registry_index": 140,
+          "registry_member_offset": "0x00001414",
+          "native_class": "SoundStream",
+          "sha256": "32e4b7ab20002a21895d1e314a8641b01b4c17d3bd76789997acbb0cf43b2ea4"
+        },
+        {
+          "path": "sounds/trap__stream.wav",
+          "trigger": "one-shot trigger",
+          "mode": "stream",
+          "registry_index": 144,
+          "registry_member_offset": "0x00001434",
+          "native_class": "SoundStream",
+          "sha256": "f575c617afd3da0eb5a65016b9eec178e82da536a9bf410e617dd76dc8c158d8"
+        }
+      ],
+      "disposition": "closed_native_contract"
+    },
+    {
+      "skill_id": 51,
+      "name": "Dampen",
+      "family": "arcane",
+      "category": 2,
+      "skills_atlas_icon_record": 78,
+      "config_path": "data/wizardskills/dampen.cfg",
+      "config_sha256": "a06835c71bc2f21dff7e34bfc1eb6da48165f9688c797f13177c9854aba37535",
+      "rank_config": {
+        "mDescription": "Attempts to dampen hostile magic in an area around the caster.",
+        "mQDescription": "Dampens hostile magic",
+        "mStats": [
+          "Repels Bolts",
+          "Disrupt Mages: 6 _s(.7)_o(0,1)_iseconds",
+          "Chance to Dispel Shields: 50%%",
+          "Mana Cost: %d:mManaCost%"
+        ],
+        "mCapLevel": 1,
+        "mMaxLevel": 1,
+        "mManaCost": [
+          0,
+          90
+        ]
+      },
+      "dispatcher": "0x0054CC50",
+      "action": {
+        "mode": 21,
+        "name": "Action_PlayerWizard_CastSpin",
+        "ticks": 73
+      },
+      "targeting": "caster_center_rectangle",
+      "trigger": "press_edge",
+      "actors": [
+        {
+          "type_id": "action:21",
+          "name": "Action_PlayerWizard_CastSpin"
+        }
+      ],
+      "gameplay": "Remove hostile guided/fire/dark missiles in range, disrupt hostile casters, roll RandomInt(100) < 0x33 (51 accepted values despite the authored 50 percent display text) to dispel shields, and queue the 73-tick cast-spin action.",
+      "timing": {
+        "cast_spin_ticks": 73,
+        "shield_dispel_numerator": 51,
+        "shield_dispel_denominator": 100
+      },
+      "art": [
+        {
+          "atlas": "BadGuys",
+          "records": "10,11,48",
+          "owner": "dampen flash and additive wave children",
+          "mode": "additive_world"
+        }
+      ],
+      "authority": "Caster authority owns projectile removal, action disruption, and shield-dispel RNG; action pose is replicated presentation.",
+      "cleanup": "World children self-expire; cast spin is atomic except death and completes after its strict phase boundary.",
+      "evidence": [
+        "0x0054CC50",
+        "0x00648DF0",
+        "0x00448860"
+      ],
+      "audio": [
+        {
+          "path": "sounds/flash.wav",
+          "trigger": "accepted cast",
+          "mode": "one_shot",
+          "registry_index": 34,
+          "registry_member_offset": "0x000005F0",
+          "native_class": "Sound",
+          "sha256": "dfbee90531011a439650ee0bbf30a3c5ea9469ccd97a9979c05ba73f3db9c05c"
+        },
+        {
+          "path": "sounds/dampen__stream.wav",
+          "trigger": "accepted cast",
+          "mode": "stream",
+          "registry_index": 117,
+          "registry_member_offset": "0x0000135C",
+          "native_class": "SoundStream",
+          "sha256": "afc7ef6fa91604257c17abf6276190343c7a556709426c9c9ba4f7e165c106b1"
+        }
+      ],
+      "disposition": "closed_native_contract"
+    },
+    {
+      "skill_id": 54,
+      "name": "Magic Shield",
+      "family": "arcane",
+      "category": 2,
+      "skills_atlas_icon_record": 81,
+      "config_path": "data/wizardskills/magic_shield.cfg",
+      "config_sha256": "62134c9f4536fb86ab32e0adaf94a93186cbe351a0faf45b82e17ad66a26a0c0",
+      "rank_config": {
+        "mDescription": "Surrounds the caster with a bubble that absorbs all physical and magical damage.",
+        "mQDescription": "absorbs damage",
+        "mStats": [
+          "Absorb: %d:mAbsorb% damage",
+          "Mana Cost: %d:mManaCost%"
+        ],
+        "mCapLevel": 7,
+        "mMaxLevel": 12,
+        "mAbsorb": [
+          0,
+          25,
+          50,
+          100,
+          200,
+          250,
+          300,
+          350,
+          400,
+          450,
+          500,
+          550,
+          600
+        ],
+        "mManaCost": [
+          0,
+          80,
+          80,
+          80,
+          80,
+          80,
+          75,
+          70,
+          65,
+          60,
+          55,
+          50,
+          50
+        ]
+      },
+      "dispatcher": "0x0054CC50",
+      "action": {
+        "mode": null,
+        "name": "immediate_secondary_dispatch"
+      },
+      "targeting": "self",
+      "trigger": "press_edge_refreshable",
+      "actors": [],
+      "gameplay": "Install or refresh mAbsorb on the wizard; incoming damage drains the pool and drives a 40-tick hit pulse. If Explosive Shield is learned, break damage is absorb times mDamage/100.",
+      "timing": {
+        "hit_pulse_ticks": 40,
+        "hit_pulse_start": 2.0,
+        "hit_pulse_decay_per_tick": 0.05
+      },
+      "art": [
+        {
+          "atlas": "BadGuys",
+          "records": "68",
+          "owner": "20 Anim_FadeAdditive particles on shield break",
+          "mode": "additive_world"
+        }
+      ],
+      "authority": "Authoritative damage contact drains absorb and conditionally creates the radial break contact; pulse/break sequence is snapshot-visible.",
+      "cleanup": "Break clears absorb and explosive factor after one particle/contact event; death, disconnect, and region teardown clear the residual pulse.",
+      "evidence": [
+        "0x0054CC50",
+        "0x00529EE0",
+        "0x00546650",
+        "0x00648790",
+        "0x0054BA80"
+      ],
+      "audio": [
+        {
+          "path": "sounds/magicshieldup.wav",
+          "trigger": "install or refresh",
+          "mode": "one_shot",
+          "registry_index": 60,
+          "registry_member_offset": "0x00000A68",
+          "native_class": "Sound",
+          "sha256": "74305127ff81aaf41abe9001d8498f7c14b46fed099d7b28c49bad4bc23f06cc"
+        },
+        {
+          "path": "sounds/hitshield.wav",
+          "trigger": "absorbed hit",
+          "mode": "one_shot",
+          "registry_index": 42,
+          "registry_member_offset": "0x00000750",
+          "native_class": "Sound",
+          "sha256": "ad5a4870955e5393c17a03c847af274f7a054b62a4c712582206623d1d92ad3f"
+        },
+        {
+          "path": "sounds/popshield.wav",
+          "trigger": "shield break",
+          "mode": "one_shot",
+          "registry_index": 74,
+          "registry_member_offset": "0x00000CD0",
+          "native_class": "Sound",
+          "sha256": "b4d6bf4d9a68f11bab92def6e823a53f6b8534c49b96e80bbf25d99972af2503"
+        },
+        {
+          "path": "sounds/magicshieldexplode.wav",
+          "trigger": "Explosive Shield radial contact",
+          "mode": "one_shot",
+          "registry_index": 59,
+          "registry_member_offset": "0x00000A3C",
+          "native_class": "Sound",
+          "sha256": "5a3abd93fc1d490b0f9988f1acebc948c5fed9669f070012c97c778010854b8a"
+        }
+      ],
+      "disposition": "closed_native_contract"
+    },
+    {
+      "skill_id": 72,
+      "name": "Acid Rain",
+      "family": "advanced",
+      "category": 2,
+      "skills_atlas_icon_record": 99,
+      "config_path": "data/wizardskills/acid_rain.cfg",
+      "config_sha256": "b4055ec3c3fac4dede41be000dd13948c01366802b75f84acb9afeccd365bfc0",
+      "rank_config": {
+        "mDescription": "Spawn a shower of hot acid.",
+        "mQDescription": "spawn a shower of hot acid",
+        "mStats": [
+          "Damage: %f:mDamage%_s(.7)_o(0,1)_i / second",
+          "Mana Cost: %d:mManaCost%"
+        ],
+        "mCapLevel": 5,
+        "mMaxLevel": 10,
+        "mDamage": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          12
+        ],
+        "mManaCost": [
+          70,
+          70,
+          70,
+          70,
+          70,
+          70,
+          70,
+          70,
+          70,
+          70,
+          70
+        ]
+      },
+      "dispatcher": "0x0054CC50",
+      "action": {
+        "mode": null,
+        "name": "immediate_secondary_dispatch"
+      },
+      "targeting": "aimed_world_point",
+      "trigger": "press_edge",
+      "actors": [
+        {
+          "type_id": "0x7FE",
+          "name": "AcidRain"
+        },
+        {
+          "type_id": "animation",
+          "name": "Anim_AcidRaindrop"
+        }
+      ],
+      "gameplay": "Rain for 1500 active ticks, emit two drops per tick or five with Enhanced Effects, and after the startup delay shuffle hostile candidates and damage exactly min(n, floor(n/3)+1) every 25 ticks; damage is direct, not poison.",
+      "timing": {
+        "active_ticks": 1500,
+        "damage_period_ticks": 25,
+        "drops_per_tick": 2,
+        "enhanced_drops_per_tick": 5,
+        "targets_per_pulse": "min(n, floor(n/3)+1)"
+      },
+      "art": [
+        {
+          "atlas": "BadGuys",
+          "records": "10 plus AcidRaindrop child art",
+          "owner": "rain/drop/residue renderers",
+          "mode": "additive_world"
+        }
+      ],
+      "authority": "Caster authority shuffles candidates and applies direct periodic damage; drops/residue are presentation state.",
+      "cleanup": "The actor retires only after active lifetime and residue fade both end; loop renewal stops with residue ownership.",
+      "evidence": [
+        "0x0054CC50",
+        "0x005E3540",
+        "0x00604E90",
+        "0x005E3600",
+        "0x005EB290",
+        "0x005EB1D0"
+      ],
+      "audio": [
+        {
+          "path": "sounds/magicstorm.wav",
+          "trigger": "accepted cast",
+          "mode": "one_shot",
+          "registry_index": 61,
+          "registry_member_offset": "0x00000A94",
+          "native_class": "Sound",
+          "sha256": "87a2987ef6a67c21a8c57e8c5f17d88b78e6071b97cf34c6fd9a12ff613ebdcb"
+        },
+        {
+          "path": "sounds/acidsizzle.wav",
+          "trigger": "damage/residue pulses with native pitch",
+          "mode": "one_shot",
+          "registry_index": 3,
+          "registry_member_offset": "0x0000009C",
+          "native_class": "Sound",
+          "sha256": "14b50ede8d3b280d65877a0c5d51a331e0da5c6b0d70da20c9345584c7453341"
+        },
+        {
+          "path": "sounds/rainfall__loop.wav",
+          "trigger": "renewed through active rain and residue",
+          "mode": "ambient_loop_request",
+          "registry_index": 167,
+          "registry_member_offset": "0x00001A6C",
+          "native_class": "SoundLoop",
+          "sha256": "a27e5ea5d44bb5daf6b80dee6f0f5c9123a5bddfc198340c633b8791c4733a79"
+        }
+      ],
+      "disposition": "closed_native_contract"
+    },
+    {
+      "skill_id": 73,
+      "name": "Fire Wall",
+      "family": "advanced",
+      "category": 2,
+      "skills_atlas_icon_record": 100,
+      "config_path": "data/wizardskills/fire_wall.cfg",
+      "config_sha256": "259f87680c4edf2935d2d9fe59b69d59c6a94cc8bb39095a21c7fb5b124b2625",
+      "rank_config": {
+        "mDescription": "Spawn a wall of burning flame.",
+        "mQDescription": "spawn a wall of flame",
+        "mStats": [
+          "Damage: %f:mDamage%_s(.7)_o(0,1)_i / second",
+          "Mana Cost: %d:mManaCost%"
+        ],
+        "mCapLevel": 5,
+        "mMaxLevel": 10,
+        "mDamage": [
+          0,
+          2,
+          3,
+          4,
+          5,
+          6,
+          8,
+          10,
+          11,
+          12,
+          15
+        ],
+        "mManaCost": [
+          70,
+          70,
+          70,
+          70,
+          70,
+          70,
+          70,
+          70,
+          70,
+          70,
+          70
+        ]
+      },
+      "dispatcher": "0x0054CC50",
+      "action": {
+        "mode": null,
+        "name": "immediate_secondary_dispatch"
+      },
+      "targeting": "line_perpendicular_to_aim",
+      "trigger": "press_edge",
+      "actors": [
+        {
+          "type_id": "0x7EE",
+          "name": "Fire_Goodguy"
+        }
+      ],
+      "gameplay": "Create eleven independently damaging Fire_Goodguy patches at 30-unit intervals across the 300-unit line perpendicular to aim; each patch contacts nearby hostiles every third tick.",
+      "timing": {
+        "patch_count": 11,
+        "line_length": 300,
+        "patch_spacing": 30,
+        "patch_lifetime_scalar": 7,
+        "patch_lifetime_ticks": 700,
+        "contact_period_ticks": 3
+      },
+      "art": [
+        {
+          "atlas": "DeadHawg",
+          "records": "46..77",
+          "owner": "Fire_Goodguy strip for every wall patch",
+          "mode": "additive_world"
+        }
+      ],
+      "authority": "Caster authority resolves wall geometry, creates patches, and owns their repeated contacts.",
+      "cleanup": "Patches fade and retire independently after the overwritten life scalar 7 reaches zero at 0.01 per tick (700 ticks); teardown stops their low-fire renewal.",
+      "evidence": [
+        "0x0054CC50",
+        "0x005FF050",
+        "0x005FF1D0",
+        "0x00610F90"
+      ],
+      "audio": [
+        {
+          "path": "sounds/ignite.wav",
+          "trigger": "wall creation",
+          "mode": "one_shot",
+          "registry_index": 46,
+          "registry_member_offset": "0x00000800",
+          "native_class": "Sound",
+          "sha256": "0c0a6f6055b0746e8f1921d04214e47a359ee36b6ea88301f73047f7f45e935f"
+        },
+        {
+          "path": "sounds/fireballhit.wav",
+          "trigger": "wall creation accent",
+          "mode": "one_shot",
+          "registry_index": 30,
+          "registry_member_offset": "0x00000540",
+          "native_class": "Sound",
+          "sha256": "9bfad709cfb932b7e836c58f781a42ee78907a0211bac5d14a2583d721192738"
+        },
+        {
+          "path": "sounds/lowfire__loop.wav",
+          "trigger": "renewed while patches are live",
+          "mode": "ambient_loop_request",
+          "registry_index": 163,
+          "registry_member_offset": "0x000018EC",
+          "native_class": "SoundLoop",
+          "sha256": "8d42e14b1848f1f2b45fabb52c1f83620a986557416f59ee08f78e630439ce8a"
+        }
+      ],
+      "disposition": "closed_native_contract"
+    },
+    {
+      "skill_id": 74,
+      "name": "Ether Drain",
+      "family": "advanced",
+      "category": 2,
+      "skills_atlas_icon_record": 101,
+      "config_path": "data/wizardskills/ether_drain.cfg",
+      "config_sha256": "0e88f01e63e406ed7d7094f987950ebeea93c10f2438856a47716116135b75c0",
+      "rank_config": {
+        "mDescription": "Rips a hole into the mapped Theta(g)-27 psuedoquadrant of the Ether, known to have a severe pressure differential.",
+        "mQDescription": "Rip a consuming hole into the ether",
+        "mStats": [
+          "Damage: %d:mDamage%_s(.7)_o(0,1)_i / second",
+          "Duration: 10 seconds",
+          "Mana Cost: %d:mManaCost%"
+        ],
+        "mCapLevel": 5,
+        "mMaxLevel": 10,
+        "mDamage": [
+          0,
+          5,
+          7,
+          10,
+          12,
+          15,
+          17,
+          20,
+          22,
+          24,
+          25
+        ],
+        "mManaCost": [
+          75,
+          80,
+          80,
+          80,
+          80,
+          80,
+          75,
+          70,
+          65,
+          60,
+          55,
+          50,
+          50
+        ]
+      },
+      "dispatcher": "0x0054CC50",
+      "action": {
+        "mode": null,
+        "name": "immediate_secondary_dispatch"
+      },
+      "targeting": "aimed_world_point",
+      "trigger": "press_edge",
+      "actors": [
+        {
+          "type_id": "0x807",
+          "name": "EtherDrain"
+        }
+      ],
+      "gameplay": "Scale in for 40 ticks, refresh covered-cell candidate identities, pull actors and eligible loot inward, apply mDamage close to center for 1000 active ticks, consume empty/ordinary loot at center, then scale out for 20 ticks.",
+      "timing": {
+        "scale_in_ticks": 40,
+        "active_ticks": 1000,
+        "scale_out_ticks": 20,
+        "phases": [
+          "scale_in",
+          "active",
+          "scale_out"
+        ]
+      },
+      "art": [
+        {
+          "atlas": "DeadHawg",
+          "records": "177..179",
+          "owner": "pressure-field animated core",
+          "mode": "additive_world"
+        }
+      ],
+      "authority": "Caster authority owns candidate identity arrays, forces, contacts, and loot consumption; visual children are replicated.",
+      "cleanup": "Scale-out precedes retirement; destructor releases both PuppetRef arrays and cell lists while registered children self-expire.",
+      "evidence": [
+        "0x0054CC50",
+        "0x005F8360",
+        "0x006060C0",
+        "0x0061CF20",
+        "0x00606580",
+        "0x005F8620",
+        "0x005EE120",
+        "0x005EE780"
+      ],
+      "audio": [
+        {
+          "path": "sounds/distortreality.wav",
+          "trigger": "state transition",
+          "mode": "one_shot",
+          "registry_index": 23,
+          "registry_member_offset": "0x0000040C",
+          "native_class": "Sound",
+          "sha256": "3fa59accc564838ea1896f95539ee0acecd9345c3e2c1adceaadee0dd870194e"
+        },
+        {
+          "path": "sounds/lightningstart.wav",
+          "trigger": "state transition with native pitch",
+          "mode": "one_shot",
+          "registry_index": 54,
+          "registry_member_offset": "0x00000960",
+          "native_class": "Sound",
+          "sha256": "1542ec3ab4e41624b5e8d073000a02bb36a3f8c733bf709835768f095494dceb"
+        },
+        {
+          "path": "sounds/PlaneCross__Loop.wav",
+          "trigger": "renewed while field is active",
+          "mode": "ambient_loop_request",
+          "registry_index": 166,
+          "registry_member_offset": "0x00001A0C",
+          "native_class": "SoundLoop",
+          "sha256": "04d3bc7b433ef47b758933456e9feecb83924fa9b0ec31e0aeedb0946cd14a24"
+        },
+        {
+          "path": "sounds/steadywind__loop.wav",
+          "trigger": "renewed while field is active",
+          "mode": "ambient_loop_request",
+          "registry_index": 171,
+          "registry_member_offset": "0x00001BEC",
+          "native_class": "SoundLoop",
+          "sha256": "2c87905f66fa7b02ab18c6b9e5d875ed2c9258ce37c961ba858c17d031141487"
+        }
+      ],
+      "disposition": "closed_native_contract"
+    },
+    {
+      "skill_id": 76,
+      "name": "Call Comet",
+      "family": "advanced",
+      "category": 2,
+      "skills_atlas_icon_record": 103,
+      "config_path": "data/wizardskills/call_comet.cfg",
+      "config_sha256": "d69cdb49c08a375753c7db53c91a482c4171ec633b41359a57f4fb4a207dd291",
+      "rank_config": {
+        "mDescription": "Calls a large comet from the firmament, freezing enemies and dealing tremendous damage.",
+        "mQDescription": "calls down a freezing comet",
+        "mStats": [
+          "Freeze: %d:mFreeze% seconds",
+          "Damage: %d:mDamage%",
+          "Mana Cost: %d:mManaCost%"
+        ],
+        "mCapLevel": 5,
+        "mMaxLevel": 10,
+        "mFreeze": [
+          0,
+          10,
+          20,
+          30,
+          35,
+          40,
+          45,
+          50,
+          55,
+          60,
+          75,
+          100
+        ],
+        "mDamage": [
+          0,
+          50,
+          70,
+          90,
+          110,
+          120,
+          130,
+          140,
+          150,
+          160,
+          170,
+          200
+        ],
+        "mManaCost": [
+          0,
+          100,
+          110,
+          120,
+          130,
+          140,
+          150,
+          160,
+          170,
+          180,
+          190,
+          200
+        ]
+      },
+      "dispatcher": "0x0054CC50",
+      "action": {
+        "mode": null,
+        "name": "immediate_secondary_dispatch"
+      },
+      "targeting": "aimed_world_point",
+      "trigger": "press_edge",
+      "actors": [
+        {
+          "type_id": "0x80C",
+          "name": "Comet"
+        },
+        {
+          "type_id": "0x7E8",
+          "name": "FreezeWave"
+        }
+      ],
+      "gameplay": "Count down a falling comet while emitting ice-blast children, impact for mDamage, create the shared FreezeWave with mFreeze, query the area, restore world color, and retire.",
+      "timing": {
+        "impact": "when actor +0x14C countdown reaches zero"
+      },
+      "art": [
+        {
+          "atlas": "DeadHawg",
+          "records": "5",
+          "owner": "falling comet body",
+          "mode": "world_depth_sorted"
+        },
+        {
+          "atlas": "BadGuys",
+          "records": "51,15",
+          "owner": "trail and impact children",
+          "mode": "additive_world"
+        },
+        {
+          "atlas": "DeadHawg",
+          "records": "203..207,6",
+          "owner": "impact burst/debris",
+          "mode": "mixed_world"
+        }
+      ],
+      "authority": "Caster authority owns countdown, impact query, damage/freeze contacts, and the spawned FreezeWave.",
+      "cleanup": "Impact is terminal, restores world color, stops loop renewal, and leaves only registered debris/wave children to finish.",
+      "evidence": [
+        "0x0054CC50",
+        "0x0063FD00",
+        "0x005F0C50",
+        "0x006220D0",
+        "0x0061E9C0",
+        "0x005E3CD0",
+        "0x005F0DB0"
+      ],
+      "audio": [
+        {
+          "path": "sounds/comet__loop.wav",
+          "trigger": "renewed while falling",
+          "mode": "ambient_loop_request",
+          "registry_index": 152,
+          "registry_member_offset": "0x000014CC",
+          "native_class": "SoundLoop",
+          "sha256": "b8c4c69e2220778492eb25118a6c4a72169f5db3ee9e14e56210e8aba6d8fc80"
+        },
+        {
+          "path": "sounds/cometwhistle.wav",
+          "trigger": "late fall countdown",
+          "mode": "one_shot",
+          "registry_index": 16,
+          "registry_member_offset": "0x000002D8",
+          "native_class": "Sound",
+          "sha256": "d0ca5910d9dbe434937c1d11ddfe1957fd287a13b81b7ee27f63fb969a3d4cb6"
+        },
+        {
+          "path": "sounds/explodesteam.wav",
+          "trigger": "impact layers",
+          "mode": "one_shot",
+          "registry_index": 27,
+          "registry_member_offset": "0x000004BC",
+          "native_class": "Sound",
+          "sha256": "f93fca2917072811b96f4ec4c3c864c66f0bb785f05c6113e1931661471df090"
+        },
+        {
+          "path": "sounds/magicshieldexplode.wav",
+          "trigger": "impact layer",
+          "mode": "one_shot",
+          "registry_index": 59,
+          "registry_member_offset": "0x00000A3C",
+          "native_class": "Sound",
+          "sha256": "5a3abd93fc1d490b0f9988f1acebc948c5fed9669f070012c97c778010854b8a"
+        },
+        {
+          "path": "sounds/bigfire.wav",
+          "trigger": "impact layer",
+          "mode": "one_shot",
+          "registry_index": 9,
+          "registry_member_offset": "0x000001A4",
+          "native_class": "Sound",
+          "sha256": "d70d4a94b490b7ea7f72d26a06edb50e7906a6a5ca095e1e80744fd17bf17868"
+        },
+        {
+          "path": "sounds/ringofice.wav",
+          "trigger": "FreezeWave creation",
+          "mode": "one_shot",
+          "registry_index": 76,
+          "registry_member_offset": "0x00000D28",
+          "native_class": "Sound",
+          "sha256": "b6442d06818350c43d135684916f05216ed90dccf2b27f2a5667c2c31482013b"
+        }
+      ],
+      "disposition": "closed_native_contract"
+    },
+    {
+      "skill_id": 77,
+      "name": "Turn Undead",
+      "family": "advanced",
+      "category": 2,
+      "skills_atlas_icon_record": 104,
+      "config_path": "data/wizardskills/turn_undead.cfg",
+      "config_sha256": "08384f58fc36c6bcaac6abbafc5ec06212110db15c70c71f7d811364f421a4e3",
+      "rank_config": {
+        "mDescription": "Weakens lesser undead and causes them to flee the caster for a time.",
+        "mQDescription": "weakens lesser undead",
+        "mStats": [
+          "Flee Duration: %d:mFreeze% seconds",
+          "Weaken: %d:mWeaken%%%",
+          "Mana Cost: %d:mManaCost%"
+        ],
+        "mCapLevel": 5,
+        "mMaxLevel": 10,
+        "mFlee": [
+          0,
+          3,
+          3.5,
+          3.75,
+          4,
+          4.25,
+          4.5,
+          4.75,
+          5,
+          5.25,
+          5.5,
+          6
+        ],
+        "mWeaken": [
+          0,
+          10,
+          20,
+          30,
+          40,
+          50,
+          60,
+          65,
+          70,
+          75,
+          80,
+          85
+        ],
+        "mManaCost": [
+          0,
+          100,
+          110,
+          120,
+          130,
+          135,
+          140,
+          145,
+          150,
+          155,
+          160,
+          161
+        ]
+      },
+      "dispatcher": "0x0054CC50",
+      "action": {
+        "mode": null,
+        "name": "immediate_secondary_dispatch"
+      },
+      "targeting": "aimed_area",
+      "trigger": "press_edge",
+      "actors": [],
+      "gameplay": "Affect only Skeleton, SkeletonArcher, SkeletonMage, and Zombie: turn them away, stamp flee timing, and scale attack strength by mWeaken once.",
+      "timing": {
+        "flee_duration": "mFlee * 100 fixed ticks"
+      },
+      "art": [
+        {
+          "atlas": "BadGuys",
+          "records": "48",
+          "owner": "turn-undead additive burst",
+          "mode": "additive_world"
+        }
+      ],
+      "authority": "Caster authority owns area membership, eligible-type filtering, one-time weaken stamp, heading, and flee deadline.",
+      "cleanup": "The cast burst self-expires; each target returns to its ordinary behavior when its flee deadline elapses or it dies.",
+      "evidence": [
+        "0x0054CC50",
+        "0x00647EF0"
+      ],
+      "audio": [
+        {
+          "path": "sounds/levelup.wav",
+          "trigger": "accepted cast at pitch 2.0",
+          "mode": "one_shot",
+          "registry_index": 52,
+          "registry_member_offset": "0x00000908",
+          "native_class": "Sound",
+          "sha256": "ca01cafec3167ee5bb37f0cb6605196d38bca45c7b755d5fa11781d3e4a5ea92"
+        },
+        {
+          "path": "sounds/levelup.wav",
+          "trigger": "accepted cast at pitch 3.0",
+          "mode": "one_shot",
+          "registry_index": 52,
+          "registry_member_offset": "0x00000908",
+          "native_class": "Sound",
+          "sha256": "ca01cafec3167ee5bb37f0cb6605196d38bca45c7b755d5fa11781d3e4a5ea92"
+        }
+      ],
+      "disposition": "closed_native_contract"
+    },
+    {
+      "skill_id": 78,
+      "name": "Mindstar",
+      "family": "advanced",
+      "category": 2,
+      "skills_atlas_icon_record": 105,
+      "config_path": "data/wizardskills/mindstar.cfg",
+      "config_sha256": "5fdd8330614955a440ae64b6ae9f5731bdadcb89d89db00351ebc32f2022a50b",
+      "rank_config": {
+        "mDescription": "Supplements your cognitive nexus with certain magical energies, or possibly entities, boosting all skills.",
+        "mQDescription": "boosts all skills",
+        "mStats": [
+          "Boost: +1 to skills\"\r\n\t\"Hoards %d:mHoard%%% of mana when active"
+        ],
+        "mCapLevel": 3,
+        "mMaxLevel": 8,
+        "mHoard": [
+          0,
+          60,
+          40,
+          30,
+          25,
+          20,
+          15,
+          10,
+          5
+        ]
+      },
+      "dispatcher": "0x0054CC50",
+      "action": {
+        "mode": null,
+        "name": "immediate_secondary_dispatch"
+      },
+      "targeting": "self",
+      "trigger": "toggle",
+      "actors": [],
+      "gameplay": "Toggle progression +0x8DD, temporarily add one effective rank to every learned skill ID 8..77 except Mindstar itself, clamp to each compiled maximum, and reserve the configured percentage of MP.",
+      "timing": {
+        "refresh": "immediate on toggle and every normal progression refresh"
+      },
+      "art": [
+        {
+          "atlas": "player",
+          "records": "caster-centered activation flash",
+          "owner": "dispatcher presentation",
+          "mode": "actor_overlay"
+        }
+      ],
+      "authority": "The authoritative progression component owns the toggle, temporary ranks, mana reserve, and overload shutdown.",
+      "cleanup": "Toggle-off, mana overload, death/session reset, or actor teardown removes temporary ranks and reserve in one progression refresh.",
+      "evidence": [
+        "0x0054CC50",
+        "0x00661E40",
+        "0x006639D0",
+        "0x006623F0"
+      ],
+      "audio": [
+        {
+          "path": "sounds/mindstar__stream.wav",
+          "trigger": "toggle on or off",
+          "mode": "stream",
+          "registry_index": 132,
+          "registry_member_offset": "0x000013D4",
+          "native_class": "SoundStream",
+          "sha256": "8a4310894e1401f9d47e58ae4f9202aec1e1eb0f6dd34db6987e6e3e753b5de8"
+        }
+      ],
+      "disposition": "closed_native_contract"
+    },
+    {
+      "skill_id": 79,
+      "name": "Regenerate",
+      "family": "advanced",
+      "category": 2,
+      "skills_atlas_icon_record": 106,
+      "config_path": "data/wizardskills/regenerate.cfg",
+      "config_sha256": "0a455d6e31ff7677b940cc0d9482487899bb48fa2cfd85fd0ac0b56c72d36e2a",
+      "rank_config": {
+        "mDescription": "Supplements your visceral node magically to increase your health recovery.",
+        "mQDescription": "boosts health recovery",
+        "mStats": [
+          "Recover: 1 HP every 1.5 seconds\"\r\n\t\"Hoards %d:mHoard%%% of mana when active"
+        ],
+        "mCapLevel": 3,
+        "mMaxLevel": 8,
+        "mHoard": [
+          0,
+          25,
+          21,
+          18,
+          15,
+          12,
+          10,
+          8,
+          6
+        ]
+      },
+      "dispatcher": "0x0054CC50",
+      "action": {
+        "mode": null,
+        "name": "immediate_secondary_dispatch"
+      },
+      "targeting": "self",
+      "trigger": "toggle",
+      "actors": [],
+      "gameplay": "Toggle progression +0x8DE, reserve the configured percentage of MP, and while active add 1.5/tickRate HP per fixed update in addition to ordinary regeneration, capped at max HP.",
+      "timing": {
+        "healing_per_update": "1.5 / tickRate",
+        "refresh": "fixed update while active"
+      },
+      "art": [
+        {
+          "atlas": "player",
+          "records": "caster-centered activation flash",
+          "owner": "dispatcher presentation",
+          "mode": "actor_overlay"
+        }
+      ],
+      "authority": "The authoritative progression component owns toggle, reserve, healing, cap, and overload shutdown.",
+      "cleanup": "Toggle-off, mana overload, death/session reset, or actor teardown stops healing and removes reserve immediately.",
+      "evidence": [
+        "0x0054CC50",
+        "0x006614D0",
+        "0x006639D0",
+        "0x006623F0"
+      ],
+      "audio": [
+        {
+          "path": "sounds/mindstar__stream.wav",
+          "trigger": "toggle on or off",
+          "mode": "stream",
+          "registry_index": 132,
+          "registry_member_offset": "0x000013D4",
+          "native_class": "SoundStream",
+          "sha256": "8a4310894e1401f9d47e58ae4f9202aec1e1eb0f6dd34db6987e6e3e753b5de8"
+        }
+      ],
+      "disposition": "closed_native_contract"
+    }
+  ]
+}

@@ -247,15 +247,21 @@ stationary skeleton fixture showed no later HP decrement.
 
 Its native fields establish these semantics:
 
-- animation phase `+0x140` advances by `0.25` per tick;
+- atlas phase `+0x13C` is initialized by unsigned `RandomFloat(frame_count)`;
+  tick `0x005FF050` adds the independent phase step at `+0x140` and subtracts
+  the frame count once when the result reaches it. The Fire base constructor
+  writes exact `0.25` to the step; `MovingFire` replaces it with float32
+  `0.12`;
 - lifetime `+0x144` starts at `2.0` and falls by `0.01` per tick, for `200`
   native ticks;
-- alpha `+0x148` rises by `0.05` per tick to `1.0`;
+- fade alpha `+0x148` rises by `0.05` per tick to `1.0`; constructor lane
+  `+0x14C` is a separate unsigned `RandomFloat(1)` horizontal-shape sample;
 - scale is stored at `+0x150`, damage at `+0x158`, and draw alpha at `+0x15C`;
-- while damage is positive, every tick divisible by three performs a
-  `32 * scale` radius contact pass and dispatches through the same fire helper
-  and contact lane. A target that remains inside may therefore be hit on more
-  than one pulse.
+- while damage is positive, every tick divisible by three performs a strict
+  circular `32 * scale` radius contact pass and dispatches through the same
+  fire helper and contact lane. Every accepted target consumes one unsigned
+  `RandomFloat(0.5)` response draw before damage is applied. A target that
+  remains inside may therefore be hit on more than one pulse.
 
 This is the positive-lifetime trail actor observed by the botmana campaign.
 The corrected stock secondary dispatcher at `0x0054CC50` creates live damaged
@@ -265,6 +271,106 @@ The earlier byte-toggle experiment described in
 did not reproduce that stock path. A browser implementation must preserve the
 distinction between Fireball's cosmetic particles and these damaging residual
 actors.
+
+### Ring of Fire and Firewalker closure
+
+The Ring helper `0x0063F920` does not give all of its children the authored
+damage. It creates exactly 30 `MovingFire 0x7E6` presentation actors, then one
+`Shockwave 0x7E7` gameplay actor. The MovingFire loop uses base headings
+`0,12,...,348` degrees. Each child adds a signed `U[0,2]`-degree heading
+jitter, chooses a radial `U[0,30]` spawn offset with the native `0.8` vertical
+projection, and adds 25 units of its heading vector before registration. Its
+initial movement is `2.5*(1-U[0,0.025])` along that heading and each component
+is multiplied by `1.01` per tick. Scale is `2.75`; remaining life is `1.05`
+and falls by `0.01` per tick. The helper never writes its damage field, so the
+three-tick Fire contact branch remains dormant for these 30 children.
+
+`MovingFire::Tick 0x005FF870` first runs the common Fire tick, then advances by
+its velocity and multiplies the two velocity components by their stored
+`1.01` factors. Common draw `0x00610F90` uses additive `DeadHawg[46..77]`, a
+base `1.1*scale` transform, alpha
+`min(draw_alpha*remaining_life,1)`, and local position `(actor_x, actor_y-20)`.
+The fade lane scales both axes while the sampled `+0x14C` value scales the X
+axis only, so the final sprite scale is
+`(1.1*scale*fade*shape_sample, 1.1*scale*fade)`. The drawn atlas record is
+`DeadHawg[46 + round_to_even(atlas_phase)]`; it does not derive from actor age
+or the phase-step field. This is the visible expanding ring; it is not thirty
+parallel damage sources.
+
+The sibling Shockwave is initialized with radius `75`, radius growth `6` per
+tick, push scalar `1`, remaining life `1.155`, fade threshold `0.12375`, and
+the row-21 damage. Tick `0x005FF8C0` grows the radius before subtracting `0.01`
+from remaining life. During the final fade band it multiplies the push scalar
+by float32 `0.899999976` per tick. Every ten actor ticks it queries the expanding footprint,
+retains each accepted actor only once, applies `mDamage*0.5`, runs the Fire/Burn
+helper, and attaches the fixed 400-tick Dazzle response. On the separate
+two-tick lane it pushes each retained live actor radially through
+`0x00525800`. Ring activation requests `bigfire` followed by `nuke`; the
+MovingFire children do not own those one-shots.
+
+Shockwave's `0x005E7AA0` draw slot is a light provider, not a hidden missile
+sprite. It converts the actor point through Region vslot `+0xF4`, then submits
+to the Arena light-field manager at `Region+0x8C44` through `0x0057FE40`.
+That call draws DeadHawg record 18 into the raster light map and records the
+matching analytic source with radius `wave_radius/140`, intensity equal to the
+current push scalar, and shadow flag false. The light therefore expands with
+the gameplay radius and fades under the same float32 `*0.899999976` recurrence;
+it must not be approximated as a DOM/Pixi glow unrelated to Region lighting.
+The retained-target lane normalizes `(target-waveOrigin)` to unit length, then
+adds that vector times `waveRadius*pushScalar` on every even actor tick. Contact
+query/insertion runs first, so a target discovered on tick 10 is already in the
+list when tick 10 performs its push.
+
+Fire Wall case `73` in `0x0054CC50` closes the sibling linear geometry. It
+normalizes the aim-perpendicular vector, takes endpoints 150 units to either
+side of the aimed point, and sets a 30-unit step. The inclusive loop therefore
+creates eleven `Fire_Goodguy 0x7EE` patches at distances
+`d=0,30,...,300`. Their constructor scale is multiplied by
+`0.8+0.6*sin(pi*d/300)` and life is overwritten with scalar `7`. Because the
+shared tick subtracts `0.01`, each wall patch owns 700 ticks rather than the
+constructor's 200 ticks. After constructor
+RNG, each birth consumes unsigned `RandomFloat(10)` plus the native random-unit
+heading draw to offset the patch. The two creation cues are requested in fixed
+order, `ignite` then `fireballhit`; each live patch uses the already recovered
+DeadHawg 46..77 strip, damage/Burn cadence, and `lowfire__loop` renewal.
+
+Turn Undead helper `0x00647EF0` uses a strict 500-diameter query (`250` radius,
+mask `2`) centered at the caster. For eligible undead it writes the away angle
+to `+0x6C` and `+0x19C`, then writes `round(mFlee*100)` to `+0x20C`; base
+hostile tick `0x004835F0` decrements that positive field. This disproves the
+older timestamp interpretation. Weakening occurs only when the pre-cast field
+is the untouched `<=-9000` sentinel, so later casts refresh control without
+compounding attack reduction. Its presentation creates 35 source-alpha
+`Anim_FadeScale_Perspective` children over BadGuys record 48 at the cast point.
+The first angle is `RandomFloat(360)`; subsequent angles add
+`20+RandomFloat(40)`. Each child draws at `1+RandomFloat(1)` initial scale,
+multiplies scale by `1.1` per tick, and loses `0.05` alpha/life per tick for a
+20-tick lifetime.
+
+Firewalker is owned by a different player-tick branch at
+`0x0054B35C..0x0054B53C`. While progression byte `+0x8DC` is set, player mode
+is not `2`, and the global tick is divisible by ten, it creates one
+`Fire_Goodguy 0x7EE`. No nonzero-movement test guards this creation. Birth is
+the player point plus signed `U[0,10]` times the perpendicular velocity vector
+and unsigned `U[0,8]` times the velocity vector. The constructor scale is
+multiplied by `1-U[0,0.5]`; damage is copied from progression `+0x894`; and
+remaining life is progression `+0x898` multiplied by
+`1.1-U[0,0.25]`. A global three-value counter marks exactly one of each three
+children for the supplemental contact geometry.
+
+The common Fire tick advances the independently initialized atlas phase by the
+actor's phase step (`0.25` for Fire/Fire_Goodguy, float32 `0.12` for
+MovingFire), subtracts `0.01` from remaining life, raises fade alpha by `0.05`
+to a ceiling of one, and invokes area contact
+on global ticks divisible by three while damage is positive. Contact uses a
+strict circular radius `32*scale`, consumes one unsigned `RandomFloat(0.5)`
+response draw per accepted target, runs Burn when the actor mask enables it,
+and feeds the authored damage through the native per-second normalization
+`(damage / Game+0xC00) * 3 * 0.5`. `MyApp` construction
+`0x0040BA23..0x0040BA30` is the sole exact `+0xC00` writer and copies the
+float at `0x007DE9B8`, which is exactly `100.0`. Stock contact is therefore
+`damage*0.015` on every accepted three-tick pulse; it is not a flat authored
+damage hit.
 
 ## Air: Lightning
 

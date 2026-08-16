@@ -380,7 +380,10 @@ than drawable missile sprites:
 
 - Shockwave expands its radius, fades near expiry, queries intersecting actors
   every ten ticks, applies `Dazzle (0x1B6E)` once per actor, and can also push
-  tracked actors radially through `0x00525800`.
+  tracked actors radially through `0x00525800`. Draw slot `0x005E7AA0` submits
+  DeadHawg record 18 to the Region light field with radius `waveRadius/140`,
+  intensity equal to the fading push scalar, and shadow flag false; there is no
+  separate main-pass Shockwave missile sprite.
 - FreezeWave uses the same expanding/list pattern and selects `ColdSlow
   (0x1B69)` or `Frozen (0x1B6F)` according to target flags. Object flag
   `+0x174 & 0x10` adds `FrostBurn (0x1B78)` before contact dispatch.
@@ -510,9 +513,13 @@ parallel modifier.
 
 `AcidRain` has a 1,500-tick active lifetime, a separate fade/ground-residue
 scalar, and a 25-tick authoritative hit cadence after its initial delay.
-`0x00604E90` emits `Anim_AcidRaindrop` children every tick, queries the hostile
-area, shuffles the candidate list, and damages at most roughly one third of
-the returned actors on a pulse. Its contact uses the damage written at
+`0x00604E90` emits two `Anim_AcidRaindrop` children every tick, or five while
+the shipped Enhanced Effects byte is enabled. It queries the hostile area,
+shuffles the candidate list through `0x005E41F0`, and damages exactly
+`min(n, floor(n / 3) + 1)` returned actors on a pulse. The loop always consumes
+the shuffled entry at index zero first, increments the damaged count, and
+breaks when `floor(n / 3) < damaged`; this is why one or two candidates still
+produce one contact. Its contact uses the damage written at
 `+0x154`, normalized by the native per-second tick divisor, with flags `0x18`.
 The rain does not allocate a poison modifier; its damage is direct. It removes
 itself only after both the active lifetime and residual fade have elapsed.
@@ -520,15 +527,32 @@ itself only after both the active lifetime and residual fade have elapsed.
 ### Earthquake (`0x7F1`)
 
 `Earthquake` owns a pointer list and a short duration counter at `+0x13C`.
-`0x00613200` derives the shake/intensity ramp from the remaining counter,
-updates global world-shake state, and removes the actor when the counter
-reaches zero. Every 30 ticks it queries the hostile footprint, shuffles it,
-and disrupts up to half of the returned actors: current action state is
-cancelled or replaced by a pause action and heading/reaction state is
-perturbed. Earthquake has no damage property in its CFG and does not seed the
-normal damage contact ABI. Its other work is presentation and terrain debris:
-it animates registered floor fragments and creates `Anim_BoulderBit`/lit
-children around the epicenter.
+`0x00613200` writes the exact terminal intensity
+`+0x15C = min(remaining, 200) / 200`, then submits a camera-displacement
+candidate
+`(RandomFloat(3, signed=true), sin(remaining * 20 degrees) * 10 * intensity)`
+to Region helper `0x00448590`. That helper replaces Region
+`+0x8E0C/+0x8E10` only when the candidate's squared magnitude is greater than
+the vector already stored there, so simultaneous shake owners use the largest
+vector rather than summing. The counter is decremented after the submission
+and the actor removes itself when it reaches zero.
+
+Every 30 ticks it queries the hostile footprint, shuffles it, and disrupts up
+to half of the returned actors: current action state is cancelled or replaced
+by a pause action and heading/reaction state is perturbed. Earthquake has no
+damage property in its CFG and does not seed the normal damage contact ABI.
+Its other work is presentation and terrain debris: it animates registered
+floor fragments and creates `Anim_BoulderBit`/lit children around the
+epicenter.
+
+Draw callback `0x00613E10` renders the Earthquake floor record with alpha
+`0.75 * intensity`, actor rotation `+0x160`, and scale `(1.5, 1.2)`. It always
+draws one copy, adds a second at `rotation + 170 degrees` when scalar `+0x16C`
+is greater than `0.6`, and adds a third at `rotation + 305 degrees` when that
+scalar is greater than `3.0`. When green-overlay scalar `+0x168` is positive,
+the same one/two/three-copy sequence is redrawn in `(0, 1, 0)` with alpha
+`0.75 * intensity * min(+0x168, 1)`. The callback restores both color and
+renderer state after the overlay.
 
 ### Call Leviathan and Ether Bolt (`0x7F2`, `0x7F3`)
 
@@ -576,6 +600,35 @@ movement, and attack state machine. Attack state `0x25` creates
 `Knockback (0x7E9)` through the common factory. The summon retains its
 owner/world identity throughout instead of storing a raw PlayerWizard pointer.
 
+The summon has a separate, persistent articulation state rather than deriving
+its pose from one animation frame:
+
+| Field | Native use |
+| ---: | --- |
+| `+0x1D8` | action byte: `0` locomotion, `1` attack, `2` provoke |
+| `+0x1DC` | temporary facing offset used by the attack wind-up/recovery |
+| `+0x1E0` | attack tick |
+| `+0x1E4` | alternating attacking-limb selector |
+| `+0x1E8/+0x1EC` | left/right limb modes `0..3` |
+| `+0x1F8` | post-impact turn lock |
+| `+0x1FC` | attack end tick, seeded as `90 - RandomInt(20)` |
+| `+0x200` | idle-provoke random bound; `0`, then `1200`, and `75` after an attack |
+| `+0x204` | provoke countdown, seeded to `100` and retained through `-50` |
+| `+0x208` | assembly/active age |
+| `+0x218` | target-search countdown |
+| `+0x220/+0x224` | independently randomized limb rotations in `[0,8)` |
+| `+0x228` | owned list of sortable 0x1C-byte draw-part records |
+
+Assembly advances `+0x208` by two per tick through age 200 and emits its
+owned impact/debris presentation at ages `0, 50, 100, 200`; active ticks then
+advance it by one. During attack, the selected limb uses mode 1 through tick
+37. Tick 37 creates the 90-degree, range-50, impulse-120 Knockback actor; the
+recovery changes the selected limb to mode 2 and the other limb to mode 1.
+The facing offset is `+/-38` degrees before tick 25, zero through impact, and
+the opposite `-/+47` degrees during recovery. The provoke branch reaches its
+effect at countdown zero, then holds both limbs in mode 3 during the negative
+countdown tail before returning to locomotion.
+
 Contact callback `0x00607F60` is gated until age `+0x208` reaches 400.
 After that assembly grace period it subtracts the contact ABI's primary and
 secondary damage from `+0x170`. When `+0x214` is nonzero, a non-null,
@@ -593,9 +646,55 @@ those parts. Supplemental direct selections are BadGuys records
 and the colors of the DeadHawg fragments emitted on death. Those death
 fragments and other child animations are world-owned after registration.
 
+The draw path is now closed down to its authored geometry and bank switches:
+
+- while age is below 200 it draws one textured assembly quad with local
+  vertices `(-35,-200), (35,-200), (-40,25), (40,25)` and green-white-green
+  color `(0.5,1,0.5)`; alpha is
+  `sin((200-age)/200) * 0.5` in the native degree-trig convention;
+- the body elevation is exactly `0` below age 100, `-20` for ages 100..199,
+  and `-40` from age 200 onward;
+- heading is normalized, native-rounded, then quantized with
+  `(heading + 9) / 22` into sixteen directional records; a second index is
+  calculated from heading plus 180 degrees;
+- the four always-present chassis banks are `113..128`, `129..144`,
+  `145..160`, and `161..176`. At age 100 the draw list adds the procedural
+  center element, the two limb banks `1..16` and `33..48`, and five pieces
+  from bank `65..80`, with the last two using the opposite-facing index;
+- limb modes above one switch the limbs to banks `17..32` and `49..64`.
+  Limb mode one instead keeps the base bank and forces rotations `+45` and
+  `-45` degrees; the ordinary modes use `+0x220/+0x224`;
+- the exact common sprite scale is `1.1109999418258667`. One central piece
+  uses scale `0.8`; the remaining authored forward/lateral offsets use
+  `-20, -15, -12, -5, 1, 8, 10, 12, 15, 30, 38, 50, 70` as recovered from
+  the draw branch;
+- Iron sets the base RGB scalar to `0.35` (`0x595959` at 8-bit precision).
+  Chassis modes 2 and 3 then draw untinted overlay banks `177..192` and
+  `193..208` over the two side pieces;
+- the 0x1C-byte part records are sorted by their stored Y coordinate through
+  `0x00428A60` before `Text_Draw`, so the web renderer must preserve
+  per-part painter order rather than draw bank order.
+
+The null-sprite record in that sorted list is not an untextured placeholder.
+Its branch binds `DAT_00819978 + 0xBB4`, which the BadGuys atlas registry maps
+to exact record `15`, and draws the record twice at the center: scale
+`2 + RandomFloat(0.25)` at center Y and scale
+`1.5 + RandomFloat(0.25)` at center Y plus 5. Both copies use RGB
+`(0.5 + RandomFloat(0.3), 1, 0.5)` and participate at the null record's sorted
+Y position. Those draws are presentation-owned and must not consume the
+authoritative simulation RNG on a client.
+
+Death method `0x00619730` constructs 30 `DeadHawg 78..87` bouncers and one
+short `BadGuys 86` additive star. Its construction consumes exactly 273 RNG
+draws: 30 full-range shuffle draws, seven parameters for each rock, and three
+star parameters. The runtime RNG advances immediately while presentation
+retains the pre-consumption state so those world-owned children can replay the
+same trajectories. The associated cue order is stone break, Flame Lash start,
+Golem die, then rock hit.
+
 ### Ether Drain (`0x807`)
 
-`EtherDrain` has explicit scale-in, 100-tick active, and scale-out states in
+`EtherDrain` has explicit 40-tick scale-in, 1,000-tick active, and 20-tick scale-out states in
 byte `+0x148`. It owns two `Array<PuppetRef>` collections plus pointer lists for
 spatial cells and presentation children. `0x00606580` refreshes candidate
 identities from the covered world cells; `0x005F8620` is the per-candidate

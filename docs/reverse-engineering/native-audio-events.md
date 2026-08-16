@@ -73,6 +73,39 @@ The five selectable player elements are Ether, Fire, Air, Water/Frost, and Earth
 | `projectile.earth.flight_end` | Boulder stops renewing the wrapper | wrapper stop `0x0040B189` | stop 168 | No RNG; occurs on previous gain `positive -> 0`. |
 | `projectile.earth.impact` | Boulder contact accumulator crosses its threshold | `0x0062141B` | 77 `sounds\rockhit` | Fixed; world point gain. |
 
+### Secondary and advanced right-click events
+
+The complete per-member file hashes, registry indices, and wrapper classes are
+in
+[`native-secondary-ability-catalog.json`](native-secondary-ability-catalog.json).
+This table pins event ownership; an ability snapshot is never itself an audio
+event.
+
+| Skill | Native event sequence |
+| --- | --- |
+| Call Leviathan `11` | Activation requests `LeviathanRoar__Stream`; the live actor renews `PlaneCross__Loop` until its scale-out teardown. |
+| Planewalker `12` | Enable requests `planewalker__Stream`; removal/expiry at `0x0052F470` requests `PlanewalkerOff__Stream`; active plane state renews `PlaneCross__Loop`. |
+| Phasing `15` | Accepted collision-tested relocation requests `phase`. |
+| Ring of Fire `21` | Helper `0x0063F920` requests `bigfire`, then `nuke`, while creating the 30 fire segments and Shockwave. |
+| Firewalker `23` | Toggle activation requests the `ignite` gain/pitch sequence; live `Fire_Goodguy` patches renew `lowfire__loop`. |
+| Magic Storm `27` | Cast requests `magicstorm`; strikes request `lightningstart` and `thunder__Stream`; the cloud renews `rainfall__loop` and `steadywind__loop`. |
+| Prismatic Shock `30` | Helper `0x00645540` requests `prismaticspray__stream` and pitched `lightningstart`. |
+| Ring of Ice `35` | Helper `0x00644460` requests `ringofice` once while creating its bursts and FreezeWave. |
+| Earthquake `41` | Live intensity renews `earthquake__loop`; crack branches request `QuakeCracks__Stream` or `QuakeCrackSmall__Stream`, and debris can request `rockhit`. |
+| Raise Golem `45` | Assembly milestones request `QuakeCrackSmall__Stream`; AI/death edges request `GolemProvoke__Stream`, `KnockbackGolem`, `stonestep`, `GolemDie__Stream`, `stonebreak`, and `rockhit` at their owning transitions. |
+| Stoneskin `46` | Accepted cast requests `StoneSkin__Stream`; modifier callbacks `0x00624490/0x006244C0/0x00626840` request `stoneskin`. They do not request the adjacent loaded `stoneskinhit` or general `stonebreak` objects. |
+| Teleport `48` | Accepted safe relocation requests `teleport`. |
+| Magic Circle `49` | Actor tick requests `magiccircle` exactly when remaining lifetime equals `1498`. |
+| Magic Trap `50` | Initialize `0x005E95D0` requests `settrap__Stream`; terminal trigger requests `trap__stream`. |
+| Dampen `51` | Accepted helper requests `flash` and `dampen__stream` before its CastSpin presentation. |
+| Magic Shield `54` | Install/refresh requests `magicshieldup`; absorbed contact requests `hitshield`; break `0x00546650` requests `popshield`; learned Explosive Shield adds `magicshieldexplode`. |
+| Acid Rain `72` | Cast reuses `magicstorm`; live damage/residue requests pitched `acidsizzle`; rain/residue renew `rainfall__loop`. |
+| Fire Wall `73` | Creation requests `ignite` and `fireballhit`; live fire patches renew `lowfire__loop`. |
+| Ether Drain `74` | State transition requests `distortreality` and pitched `lightningstart`; the live field renews `PlaneCross__Loop` and `steadywind__loop`. |
+| Call Comet `76` | Fall renews `comet__loop` and later requests `cometwhistle`; impact layers request `explodesteam`, `magicshieldexplode`, `bigfire`, and `ringofice`. |
+| Turn Undead `77` | Helper `0x00647EF0` requests `levelup` at pitch `2.0`, then again at pitch `3.0`, before its target query. |
+| Mindstar `78` / Regenerate `79` | Dispatcher calls `0x0054FF05` and `0x0054FFD4` both request `mindstar__stream` on either toggle edge; neither owns a persistent sound. |
+
 Secondary/welded casts use the same wrapper rules. The common primary cleanup fan-out also stops 157 fire (`0x00549736`), 160 ice beam (`0x00549747`), 172 steam (`0x00549769`), and 165 meteor (`0x0054977A`). Start sites include 33 `flamelashstart` plus 157 at `0x0054A2C8/0x0054A2D9`, 44 plus 160 at `0x0054A480/0x0054A491`, 172 plus 157 at `0x0054A5DB/0x0054A5EC`, 159 at `0x0054A76A`, 165 at `0x0054A89D`, and 160 plus 159 at `0x0054AA3F/0x0054AA50`. These are fixed choices; they do not create a second ownership model.
 
 ### Melee, movement, damage, and death
