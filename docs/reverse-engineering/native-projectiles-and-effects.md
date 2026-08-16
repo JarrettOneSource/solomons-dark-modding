@@ -677,7 +677,7 @@ and group from the new payload rather than stacking a parallel actor.
 
 `Mod_ElectricBurn::Tick` at `0x00628F10` consumes signed `Float(0.25)` every
 live update and appends a target-position, non-shadow-casting Region misc light
-with radius one and intensity `0.5+jitter`; the same live edge renews
+with radius `0.5+jitter` and intensity one; the same live edge renews
 `sounds\\electric__loop`. Its authoritative contact path supplies the stored
 per-update damage and flags `0xA`, consumes `Integer(3)`, and only when that
 draw equals one consumes another `Float(0.5)` for the native contact scalar

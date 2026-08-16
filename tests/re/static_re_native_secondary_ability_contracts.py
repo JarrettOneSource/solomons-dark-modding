@@ -15,6 +15,7 @@ AUDIO_CATALOG = ROOT / "docs/reverse-engineering/native-audio-catalog.json"
 SKILLS_DOC = ROOT / "docs/reverse-engineering/native-skills-and-spells.md"
 EFFECTS_DOC = ROOT / "docs/reverse-engineering/native-projectiles-and-effects.md"
 AUDIO_DOC = ROOT / "docs/reverse-engineering/native-audio-events.md"
+LIGHTING_DOC = ROOT / "docs/reverse-engineering/native-lighting-and-shadow-system.md"
 GENERATOR = ROOT / "tools/generate_native_secondary_ability_catalog.py"
 
 EXPECTED = {
@@ -514,8 +515,8 @@ def test_native_secondary_ability_art_audio_and_lifecycle_are_pinned() -> str:
         "trigger_presentation_rng_words": 502,
         "electric_burn_duration_ticks": 100,
         "electric_burn_damage_divisor": 100,
-        "electric_burn_light_radius": 1,
-        "electric_burn_light_base_intensity": 0.5,
+        "electric_burn_light_base_radius": 0.5,
+        "electric_burn_light_intensity": 1,
         "electric_burn_signed_jitter_bound": 0.25,
         "electric_burn_integer_bound": 3,
         "electric_burn_conditional_float_bound": 0.5,
@@ -634,6 +635,7 @@ def test_native_secondary_ability_documents_and_generator_are_wired() -> str:
     skills = read_text(SKILLS_DOC)
     effects = read_text(EFFECTS_DOC)
     audio = read_text(AUDIO_DOC)
+    lighting = read_text(LIGHTING_DOC)
     generator = read_text(GENERATOR)
     witnesses = {
         "skills": (
@@ -662,6 +664,16 @@ def test_native_secondary_ability_documents_and_generator_are_wired() -> str:
             "Mindstar `78` / Regenerate `79`",
             "Stoneskin `46`",
         ),
+        "lighting": (
+            "### Website-modeled right-click actor dispositions",
+            "MovingFire, Fire_Goodguy",
+            "EtherFade variant one",
+            "radius `0.5+S(0.25)`, intensity 1",
+            "intensity `min(remainingTicks/50,1)`",
+            "target's embedded Action manager at `actor+0x104`",
+            "creator registration and a tick-local",
+            "append ordinal for each synchronous batch",
+        ),
         "generator": (
             "SECONDARY_IDS = (",
             "BELT_PRESENTATION = {",
@@ -670,9 +682,15 @@ def test_native_secondary_ability_documents_and_generator_are_wired() -> str:
             "unresolved audio path",
         ),
     }
-    documents = {"skills": skills, "effects": effects, "audio": audio, "generator": generator}
+    documents = {
+        "skills": skills,
+        "effects": effects,
+        "audio": audio,
+        "lighting": lighting,
+        "generator": generator,
+    }
     for name, tokens in witnesses.items():
         missing = [token for token in tokens if token not in documents[name]]
         if missing:
             raise StaticReTestFailure(f"secondary {name} contract lost witnesses {missing}")
-    return "right-click RE prose, exact Acid Rain branch, audio census, and generator are wired"
+    return "right-click RE prose, lighting ownership/order, audio census, and generator are wired"

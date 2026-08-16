@@ -316,7 +316,7 @@ ten retail functions:
 | `Mod_EtherBurn` (`0x00629CD0`) | `0x00629ED8` |
 
 `Mod_ElectricBurn` consumes signed `Float(0.25)` on every live update and
-submits radius one at its target with intensity `0.5+jitter` and flag zero.
+submits radius `0.5+jitter` at its target with intensity one and flag zero.
 Magic Trap's air selector installs it for 100 updates with chain count zero;
 that use therefore owns only this misc light and its ambient loop as
 presentation, not an `Anim_FadeLightning` child.

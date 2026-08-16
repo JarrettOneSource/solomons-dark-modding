@@ -345,6 +345,33 @@ These providers are present in the Arena owner list only while their actor or
 wrapper lifecycle enrolls them. The table is a source adapter catalog, not a
 request to synthesize dormant actors in the web port.
 
+### Website-modeled right-click actor dispositions
+
+The complete Website right-click actor union now activates the following
+members of that provider catalog. Its replicated light registration is the
+owner's native manager lane plus stable registration ordinal; actor ID or
+snapshot-array position is not a substitute.
+
+| Website member | Native manager lane | Light disposition |
+| --- | --- | --- |
+| MovingFire, Fire_Goodguy | actor `+0x310` | `0x005E7610`: root, radius `0.6`, intensity `min(1,3*alpha)`, `MS`, only while alpha is positive |
+| Shockwave, FreezeWave | actor `+0x310` | `0x005E7AA0`: root, radius `waveRadius/140`, intensity wave alpha, false flag |
+| Leviathan | actor `+0x310` | `0x005E90C0`: root, radius one, intensity one, `MS` |
+| EtherBolt | actor `+0x310` | `0x005E9160`: root, radius `0.5`, intensity one, `MS` |
+| Golem | actor `+0x310` | `0x005E94C0`: root, radius one, intensity `0.75`, `MS` |
+| MagicTrap | actor `+0x310` | `0x005E97A0`: root, radius `0.25`, intensity one, false flag |
+| StormCloud, AcidRain | actor `+0x310` | `0x005EB5C0`: root, radius two, intensity `0.5*alpha`, false flag |
+| EtherDrain | actor `+0x310` | `0x005EE780`: root, radius two, intensity `min(scale,1)*(0.5+U(0.5))`, `MS` |
+| Comet | actor `+0x310` | `0x005F0DB0`: root, radius two, intensity `0.5`, `MS` |
+| EtherFade variant one | transient `+0x8B70` | borrowed `ZAnimLit 0x005E48E0`: root, radius wrapper scale, intensity `min(alpha,1)`, local `MS` flag |
+| MagicCircle | actor `+0x310` | no persistent provider; its actor registration orders the one-tick MiscLight below |
+| Mod_Burn, Mod_ElectricBurn | target's embedded Action manager | no persistent provider; the target registration and attachment order own the one-tick MiscLights below |
+
+These rows are active membership, not optional presentation decoration. All
+persistent rows join the provider pass before any MiscLight, even though a
+modifier may have appended its one-tick record earlier during fixed-tick
+execution.
+
 ### Website-modeled enemy projectile dispositions
 
 The Website projectile union is a strict subset of that catalog. Its per-member
@@ -423,16 +450,32 @@ never retained across `Region::Tick` clears.
 | Air `ZAnimSplit 0x00531640` | `0x00531D61`, `0x00531EBE` | straight-leg samples described below |
 | dark-lightning sibling `0x00531F00` | `0x00532734`, `0x00532891` | same 100-unit/endpoint sampler and 220-unit source-distance gate |
 | dark-lightning sibling `0x005328D0` | `0x005331B5`, `0x00533312` | same sampler; weak/fizzle parameter quarters shared intensity |
-| `MagicCircle 0x006006E0` | `0x00600834` | root, radius `0.75+U(0.25)`, intensity from the circle phase, true flag |
+| `MagicCircle 0x006006E0` | `0x00600834` | root, radius `0.5*circle scale` (two for the shipped scale four), intensity `0.75+S(0.25)`, true flag |
 | `EyeLaser 0x006054F0` | `0x00605742` | current laser point, radius 1, intensity 1, true flag |
 | `Mod_ElectricBurn 0x00628F10` | `0x00628FE8` | owner root, radius `0.5+S(0.25)`, intensity 1, false flag |
-| `Mod_Burn 0x00629A40` | `0x00629CAE` | owner root, radius `0.1+U(0.1)`, intensity `min(age/50,1)`, false flag |
-| `Mod_EtherBurn 0x00629CD0` | `0x00629ED8` | owner root, radius `0.1+U(0.1)`, intensity `min(age/50,1)`, false flag |
+| `Mod_Burn 0x00629A40` | `0x00629CAE` | owner root, radius `0.1+U(0.1)`, intensity `min(remainingTicks/50,1)`, false flag |
+| `Mod_EtherBurn 0x00629CD0` | `0x00629ED8` | owner root, radius `0.1+U(0.1)`, intensity `min(remainingTicks/50,1)`, false flag |
 
-None of these three modifier classes is currently a Website enemy-effect
-snapshot member. `burning-fire` and the Mage lightning endpoint sprites are
-different actor/factory-owned presentations. The modifier rows therefore stay
-catalogued dormant rather than being inferred from those visuals.
+`Mod_Burn` and `Mod_ElectricBurn` are active target-owned members of the
+Website right-click system. `Mod_EtherBurn` remains catalogued but dormant.
+The pre-existing `burning-fire` enemy role and Mage lightning endpoint sprites
+are different actor/factory-owned presentations and must not stand in for any
+modifier MiscLight.
+
+The append order is recovered rather than inferred. Common actor tick
+`0x00624AC0` calls `0x006247A0` before the owner's subclass body. That helper
+walks the target's embedded Action manager at `actor+0x104` (count `+0x10C`)
+in stable stored order and invokes each live action's tick slot `+0x08`.
+`0x00625150`/`0x006243C0` attach globally created actions after their
+applicability slot `+0x24` accepts the target. Consequently modifier lights
+append in target registration order and attachment order, before that same
+actor's subclass-owned MiscLights. For example, `SkeletonMage::Tick
+0x00490860` completes the common/base tick through `0x00484B90` before it
+creates its Air pulse. MagicCircle appends at its own actor-manager position;
+Air transients then append during the later transient-manager pass. A web
+authority must therefore serialize the creator registration and a tick-local
+append ordinal for each synchronous batch, then preserve sample order within
+that batch.
 
 ### Air path-source exact loop
 
