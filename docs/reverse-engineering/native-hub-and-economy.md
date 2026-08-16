@@ -702,10 +702,13 @@ It was recovered from retail `0.72.5` `SolomonDark.exe`, SHA-256
 `03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`,
 in the checked-in Ghidra project. The G8 live golden above independently
 corroborates the initial gold, generated stock, dowsing fee, and state changes.
-A new live backbuffer receipt was not produced: the locally built loader
-rejected this retail image before process launch because its build stamp is not
-in that loader's supported-build table. Nothing below is inferred from that
-failed launch.
+A live 1600x900 client-area backbuffer receipt was added on 2026-08-15 as
+`tests/fixtures/webgame/menu-reference-captures/inventory-screen.png` (SHA-256
+`0d99c6bb3f1815aa061fd4ee49e7bfccbd0ee058ea69b0e8936155c7e5156d8b`).
+The process executable independently hashes to the retail digest above. The
+receipt covers the settled ordinary InventoryScreen state; shop, dowsing, and
+dialogue membership below remains instruction- and asset-backed unless an
+individual row says otherwise.
 
 ### Trader actors and animation
 
@@ -852,11 +855,16 @@ matching-type recipes, not two, three, or four random offers. No retail hub
 producer reaches it, so targeted dowsing is dormant and outside the reachable
 hub trader system rather than unknown.
 
-The common Shop grid is four columns; Dowsing uses three. The renderer pads
-the ordinary grid to 28 slots and the dowsing result grid to nine. Before a
-dowsing roll it renders `DOWSE`, the current `%d gold` fee, the gold icon, and
-the insufficient-funds state. `InventoryScreen` independently displays the
-same participant gold ledger. These are views of authoritative state, never
+The common Shop grid is four columns; Dowsing switches its result grid to
+three. Twenty-eight is the ordinary StoreGrid's retained object/page capacity,
+not permission to flatten all 28 objects into one invented browser grid.
+`0x00550db0` performs the common grid's normal and overlay passes with the
+authored 4-by-2 draw bounds, while Skills record 4 supplies the paired scroll
+decoration behind the retained StoreGrid controls. Dowsing retains at most
+nine result cells. Before a dowsing roll it
+renders `DOWSE`, the current `%d gold` fee, the gold icon, and the
+insufficient-funds state. `InventoryScreen` independently displays the same
+participant gold ledger. These are views of authoritative state, never
 client-side balances.
 
 ### Inventory and equipment membership
@@ -885,11 +893,70 @@ merchant transaction itself.
 
 The full-screen inventory renderer at `0x00568b90` consumes Inventory record 1
 and UI records 20, 21, 30, 31, 33, 49, 62, 75, 76, and 77. The common shop
-renderer at `0x00557d40` uses Skills record 4 for its paired scroll controls;
-the dowsing pre-roll renderer at `0x00558160` additionally uses UI record 15,
-the exact `DOWSE` label, `%d gold`, and the participant ledger. Ordinary Shop
-uses four columns padded to 28 cells; Dowsing uses three columns padded to nine
-cells.
+family uses Skills record 4 for its paired scroll decoration;
+its selected-item detail renderer `0x00565e00` additionally reaches UI records
+12 and 72 plus the item-type icon table. The dowsing pre-roll renderer at
+`0x00558160` additionally uses UI record 15, the exact `DOWSE` label,
+`%d gold`, and the participant ledger. Ordinary Shop has four columns and
+two authored draw passes over its scrollable StoreGrid; Dowsing changes the
+result grid to three columns and retains at most nine cells.
+
+### Full stock UI correction and presentation closure
+
+The first 2026-08-15 Website pass closed authoritative inventory and merchant
+mechanics but incorrectly labelled its custom DOM modal as an exact stock UI
+port. That claim is withdrawn. The stock presentation is a related class
+family, not a skin over the transaction kernel:
+
+| Owner | Vtable | Lifecycle/update | Render/action membership |
+| --- | --- | --- | --- |
+| `Shop` | `0x00794D7C` | ctor `0x0055E800`, slide/alpha `0x00550D80`, action `0x0055EF40` | root `0x00557D40`, grid passes `0x00550DB0`, detail `0x00565E00` |
+| `PerkShop` | `0x00790374` | ctor `0x004F5890`, rebuild `0x0055F270` | common root/grid, detail suffix `0x00554690`, purchase `0x0056C340` |
+| `InventoryShop` | `0x0079044C` | ctor `0x004F59A0` | common root/grid, two-owner transfer `0x0056CD00` |
+| `DowsingShop` | `0x00790524` | ctor `0x004F5AB0`, update `0x005512F0`, state rebuild `0x0055F9F0` | root `0x00558160`, result/grid `0x00554E20`, red flash `0x00551350`, action `0x0055FAF0` |
+| `InventoryGrid` | `0x00794C64` | ctor `0x0055D830`, input/state `0x0055FEE0`/`0x0055CEE0` | item/overlay draw `0x0055A070` |
+| `InventoryScreen` | `0x00794F54` | ctor `0x00560380`, update `0x00551A10`, close `0x00555810` | root `0x00568B90`, detail/help `0x00556940` |
+| `MsgBox` and dialogue controls | `0x00788E04` | ctor `0x004A98E0`, fade `0x005AB710`, primary/secondary controls `0x005AB7E0`/`0x005AB980`, lines `0x005BCCB0` | modal root `0x005C4530`; trader builder/dispatcher `0x0050B720`/`0x004FB890` |
+
+The common Shop settles at a logical 604x400 rect, horizontally centred, and
+slides vertically by 100 logical pixels under the active screen alpha. The
+InventoryScreen and MsgBox families have independent reveals: inventory adds
+`0.025` per native tick; MsgBox adds `0.035` and draws a black curtain at
+`0.75 * alpha`. These timings and ownership boundaries are not optional CSS
+transitions.
+
+At 1600x900 the inventory witness proves the following settled membership:
+
+- opaque black stage, with STATS at upper left and EQUIP at upper right;
+- centre seal plus the live wizard/equipment preview and Kills/Awesomeness;
+- a BACKPACK grid of 22 columns by 4 rows (88 authored slots), filled
+  column-major so indices 0 and 1 occupy the first column's first two rows,
+  not 28 row-major slots;
+- seven equip sinks around the right-hand preview, selected-item/stat panes,
+  paired InventoryGrid/page state, and the complete fixed chrome;
+- bottom-left gold icon/ledger, centre belt slots, and bottom-right exit
+  control; and
+- the exact Inventory, UI, Skills, Clothes/player, and bitmap-font art paths.
+
+The browser port must therefore render one fixed 1600x900 native stage from
+the recovered atlases and bitmap fonts, with transparent semantic hit targets
+over the native controls. Visible HTML headings, generic buttons, CSS leather,
+CSS gold frames, a 28-cell backpack, or a generic responsive modal do not
+satisfy this contract. The common Shop, PerkShop, InventoryShop, both Dowsing
+states, all four dialogue introductions/choice branches, the full inventory
+screen, scrolling/paging, item details, affordability, selection, transfer,
+equip/unequip, close, fade, and interrupted teardown states are one mandatory
+presentation membership.
+
+`DowsingShop` owns two feedback members which cannot be collapsed into button
+disabled state. Successful rolling writes `1.0` to `DowsingShop+0x360` at
+`0x0055FC18`; `0x005512F0` subtracts the image double `0.05` each 100 Hz tick,
+and `0x00551350` draws a full-screen `(1,0,0,alpha)` rectangle. The resulting
+red flash lasts 20 ticks, or 200 ms, and belongs to the roll transition rather
+than the later item purchase. If the participant cannot pay the roll fee,
+`0x0055FAF0` constructs a `MsgBox` with `NOT ENOUGH GOLD!`, the exact
+compensation paragraph, and the executable literal `OKAY` at `0x007930D8`;
+the transaction remains unchanged.
 
 ### Reachable-system membership disposition
 
@@ -909,7 +976,7 @@ names pre-existing Website behavior independently covered before this pass.
 | Shlorio fee, untargeted roll, offer buy, clear, close | `0x0055faf0`, `0x0056d110` | exact-ported | seeded lifecycle tests |
 | All 47 dowsing recipes, seven sets, six equipment classes | `native-item-catalog.json` | exact-ported | complete catalog identity/icon tests |
 | Seven equipment sinks and equip/unequip transitions | `0x00570cd0`, `0x00575850`, `0x00570d80`, `0x0066f020` | exact-ported | per-sink and gated-third-ring tests |
-| Common shop, dowsing, inventory screen views | `0x00557d40`, `0x00558160`, `0x00568b90`; atlas rows above | exact-ported | render-contract and browser interaction tests |
+| Common Shop/PerkShop/InventoryShop, both Dowsing states, InventoryScreen, and trader MsgBox views | vtables and renderer family in the correction above | exact-ported | render-contract tests plus the two-participant hub-trader browser receipt |
 | Four exact survival dialogue introductions and reachable commands | retail dialogue files; builder `0x0050b720`; dispatcher `0x004fb890` | exact-ported | dialogue membership/copy tests |
 | Fomentius actor/balloon animation | `0x0050b110`, `0x0051c1a0`; College 54..58, 160..164 | verified-already-at-parity | existing hub presentation and render tests |
 | Hagatha body/accessory/cross-fade animation | `0x0051adc0`, `0x0051b1d0`; College 45, 89..92, 517..524 | exact-ported | eight-frame and transient-member tests |

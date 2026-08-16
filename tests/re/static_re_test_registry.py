@@ -121,6 +121,7 @@ from static_re_native_hub_economy_contracts import (
     test_native_hub_entity_census_and_interactions_are_pinned,
     test_native_hub_inventory_generation_and_rng_provenance_are_pinned,
     test_native_hub_price_formulas_and_transaction_constants_are_pinned,
+    test_native_hub_trader_ui_family_and_inventory_capture_are_pinned,
 )
 from static_re_native_loot_selector_contracts import (
     test_native_loot_actor_private_seed_lifecycle_replays_bit_exact,
@@ -1156,6 +1157,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native hub Dig and run boundary fields are pinned",
         test_native_hub_dig_and_run_boundary_fields_are_pinned,
+    ),
+    (
+        "Native hub/trader UI family and inventory capture is pinned",
+        test_native_hub_trader_ui_family_and_inventory_capture_are_pinned,
     ),
     (
         "Native loot golden provenance and recorder contract are pinned",

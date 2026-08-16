@@ -22,6 +22,12 @@ RECORDER_PATH = ROOT / "tests/re/record_live_hub_economy_goldens.py"
 HAGATHA_CATALOG_PATH = (
     ROOT / "docs/reverse-engineering/native-hagatha-perk-catalog.json"
 )
+TRADER_CATALOG_PATH = (
+    ROOT / "docs/reverse-engineering/native-hub-trader-catalog.json"
+)
+INVENTORY_CAPTURE_PATH = (
+    ROOT / "tests/fixtures/webgame/menu-reference-captures/inventory-screen.png"
+)
 INTENT_SCHEMA_PATH = ROOT / "webgame-contracts/intent-schema.json"
 RNG_DOC_PATH = ROOT / "docs/reverse-engineering/native-movement-and-tick.md"
 DIG_DOC_PATH = ROOT / "docs/design/dig-npc-movement-lock-2026-07-28.md"
@@ -44,6 +50,9 @@ EXPECTED_LOADER_SHA256 = (
 )
 EXPECTED_FIXTURE_SHA256 = (
     "770fa976c9faea7eab731ba6d40b3798c548546dfec6a62780862b0b59c3ae3f"
+)
+EXPECTED_INVENTORY_CAPTURE_SHA256 = (
+    "0d99c6bb3f1815aa061fd4ee49e7bfccbd0ee058ea69b0e8936155c7e5156d8b"
 )
 
 EXPECTED_REGIONS = {
@@ -229,6 +238,110 @@ def _require_regex(text: str, pattern: str, consequence: str) -> re.Match[str]:
     if match is None:
         raise StaticReTestFailure(consequence)
     return match
+
+
+def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
+    doc = _read(DOC_PATH, "the native hub/trader UI implementation contract is absent")
+    raw_catalog = _read(
+        TRADER_CATALOG_PATH,
+        "the machine-readable native hub/trader catalog is absent",
+    )
+    try:
+        catalog = json.loads(raw_catalog)
+    except json.JSONDecodeError as exc:
+        raise StaticReTestFailure(
+            f"the native hub/trader catalog is not reviewable JSON: {exc}"
+        ) from exc
+    if catalog.get("schema_version") != 2:
+        raise StaticReTestFailure("hub/trader consumers lost the complete UI-family schema")
+    if catalog.get("source", {}).get("sha256") != EXPECTED_RETAIL_SHA256:
+        raise StaticReTestFailure("hub/trader UI provenance no longer names retail 0.72.5")
+
+    ui = catalog.get("ui")
+    if not isinstance(ui, dict):
+        raise StaticReTestFailure("hub/trader catalog lost its UI ownership section")
+    inventory = ui.get("inventory_screen")
+    shops = ui.get("shop_family")
+    dialogue = ui.get("dialogue")
+    if not isinstance(inventory, dict) or not isinstance(shops, dict) or not isinstance(dialogue, dict):
+        raise StaticReTestFailure("inventory, shop, or MsgBox membership disappeared")
+    if ui.get("stage_pixels") != [1600, 900] or ui.get("native_logical_size") != [1280, 720]:
+        raise StaticReTestFailure("native hub UI fixed-stage geometry drifted")
+    if (
+        inventory.get("backpack_columns"),
+        inventory.get("backpack_rows"),
+        inventory.get("backpack_authored_cells"),
+    ) != (22, 4, 88):
+        raise StaticReTestFailure("inventory no longer retains the recovered 22 by 4 grid")
+    if inventory.get("backpack_fill_order") != "column-major: index / 4 selects x; index % 4 selects y":
+        raise StaticReTestFailure("inventory no longer retains the recovered column-major slot order")
+    if shops.get("ordinary_draw_bounds") != [4, 2] or shops.get("ordinary_retained_capacity") != 28:
+        raise StaticReTestFailure("ordinary Shop conflated its 4 by 2 draw page with retained capacity")
+    if ui.get("dowsing_retained_capacity") != 9 or ui.get("dowsing_columns") != 3:
+        raise StaticReTestFailure("DowsingShop lost its complete 3 by 3 result family")
+    if ui.get("dowsing_flash") != {
+        "state_field": "DowsingShop+0x360",
+        "set_to": 1.0,
+        "decrement_per_native_tick": 0.05,
+        "duration_native_ticks": 20,
+        "duration_ms_at_100_hz": 200,
+        "color_rgba": [1.0, 0.0, 0.0, "state_field"],
+        "trigger": "successful dowsing roll",
+    }:
+        raise StaticReTestFailure("DowsingShop red-flash timing or trigger drifted")
+    if ui.get("insufficient_gold_msgbox") != {
+        "title": "NOT ENOUGH GOLD!",
+        "body": "Peering into the mirror at the endless, swirling, impossible colors of the ether is debilitating.  It is unthinkable that anyone would do so without just compensation, plus a little extra.",
+        "primary_button": "OKAY",
+    }:
+        raise StaticReTestFailure("DowsingShop insufficient-gold MsgBox copy drifted")
+    if dialogue.get("fade_step_per_native_tick") != 0.035 or dialogue.get("curtain_alpha") != 0.75:
+        raise StaticReTestFailure("MsgBox reveal timing or curtain alpha drifted")
+    if ui.get("browser_asset_policy", {}).get("visible_html_controls") is not False:
+        raise StaticReTestFailure("visible generic HTML controls can replace stock atlas presentation")
+
+    functions = catalog.get("functions")
+    required_functions = {
+        "shop_render": "0x00557D40",
+        "shop_item_detail_render": "0x00565E00",
+        "inventory_screen_render": "0x00568B90",
+        "inventory_grid_render": "0x0055A070",
+        "msgbox_render": "0x005C4530",
+        "ordinary_purchase": "0x0056BF70",
+        "perk_purchase": "0x0056C340",
+        "inventory_transfer": "0x0056CD00",
+        "dowsing_purchase": "0x0056D110",
+    }
+    if not isinstance(functions, dict) or any(
+        functions.get(name) != address for name, address in required_functions.items()
+    ):
+        raise StaticReTestFailure("hub/trader UI ownership or purchase dispatch addresses drifted")
+
+    if not INVENTORY_CAPTURE_PATH.is_file():
+        raise StaticReTestFailure("the stock 1600 by 900 inventory visual fixture is absent")
+    actual_hash = hashlib.sha256(INVENTORY_CAPTURE_PATH.read_bytes()).hexdigest()
+    if actual_hash != EXPECTED_INVENTORY_CAPTURE_SHA256:
+        raise StaticReTestFailure("the stock inventory visual fixture no longer matches its reviewed capture")
+    png = INVENTORY_CAPTURE_PATH.read_bytes()[:24]
+    if png[:8] != b"\x89PNG\r\n\x1a\n" or int.from_bytes(png[16:20], "big") != 1600 or int.from_bytes(png[20:24], "big") != 900:
+        raise StaticReTestFailure("the inventory visual fixture lost its exact 1600 by 900 client dimensions")
+
+    _require_tokens(
+        doc,
+        (
+            "Full stock UI correction and presentation closure",
+            "`Shop` | `0x00794D7C`",
+            "`PerkShop` | `0x00790374`",
+            "`InventoryShop` | `0x0079044C`",
+            "`DowsingShop` | `0x00790524`",
+            "`InventoryGrid` | `0x00794C64`",
+            "`InventoryScreen` | `0x00794F54`",
+            "`MsgBox` and dialogue controls | `0x00788E04`",
+            "22 columns by 4 rows (88 authored slots)",
+        ),
+        "native hub/trader UI documentation lost a sibling class or recovered grid member",
+    )
+    return "stock InventoryScreen, every trader UI sibling, MsgBox, and purchase dispatcher are pinned"
 
 
 def _load_fixture() -> tuple[str, str, dict[str, Any], dict[int, dict[str, Any]], dict[str, dict[str, Any]]]:
