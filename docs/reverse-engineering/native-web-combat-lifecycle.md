@@ -495,12 +495,17 @@ where the native programs above remain open. These values make the requested
 survival loop complete; none is promoted to recovered retail timing:
 
 - locomotion advances one gait pose per 2 world units;
-- unresolved direct-action programs are Demon bomb marker/end/recovery
-  `6/11/36`, Imp contact marker/end/cooldown `6/11/18`, Wraith drain
-  marker/end/cooldown `4/9/50`, and Zombie swipe marker/end/knockback
-  `5/9/24` ticks. Coffin is excluded from this direct-action list: it uses the
-  exact three-helper opening edge and the separate bounded child program
-  below;
+- unresolved direct-action programs are Imp contact marker/end/cooldown
+  `6/11/18` and Wraith drain marker/end/cooldown `4/9/50`. Demon bomb is now
+  recovered as selector array `[0,0,0,1,1,1,1,1,0]`, rate
+  `0.09375 * attack_speed`, marker 4, and strict end 8. Zombie beat is now
+  recovered as selected-arm pose thresholds 50/100, locomotion threshold 80,
+  hit marker 100, completion 125, and constructor rate
+  `(0.9 + RandomFloat(0.25)) * attack_speed`. A deterministic network port can
+  serialize that constructor roll without claiming the retail global RNG
+  sequence.
+  Coffin is excluded from this direct-action list: it uses the exact
+  three-helper opening edge and the separate bounded child program below;
 - Archer range modes 0/1/2/3 use bounded `(minimum, maximum)` bands
   `(120,240)`, `(80,180)`, `(180,320)`, `(100,320)`; Mage modes use
   `(100,220)`, `(70,165)`, `(150,300)`, `(80,300)`. Archer leading projection
@@ -550,12 +555,15 @@ and focused actor/config/combat tests together.
 
 The remaining native gaps are:
 
-1. exact action programs for Imp, Zombie, Wraith, and Demon; full Coffin
-   replenishment timing and Maggot launch/emergence distributions beyond the
-   closed three-helper, ownership, and single-bite lifecycle;
-2. exact Wraith alpha and remaining Zombie limb/Demon joint clocks; numeric
-   physics for non-Skeleton Banish/SpriteArray/MoveFade/SmokyBouncer branches
-   beyond the recovered class, art, fan-out, and ownership;
+1. exact action programs for Imp and Wraith, and full Coffin replenishment
+   timing and Maggot
+   launch/emergence distributions beyond the closed three-helper, ownership,
+   and single-bite lifecycle;
+2. numeric physics for non-Skeleton Banish/SpriteArray/MoveFade/SmokyBouncer
+   branches beyond the recovered class, art, fan-out, and ownership. Wraith
+   body opacity, Imp flight presentation, Zombie articulation, and Demon
+   joint/bob clocks are closed by renderers `0x00496220`, `0x00492E10`,
+   `0x00493390`, and `0x00498BA0` plus their constructor/tick writers;
 3. Wraith inherited collision radius and family-specific attack reach;
 4. upgraded Health Up/Mana Up HUD denominators;
 5. exact debit edges for every primary handler and welded build;

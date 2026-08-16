@@ -302,6 +302,20 @@ marks constructions above 70 deleted; `0x00473FA0`, `0x00474D90`, and
 `0x004784F0` decrement it. The pre-pair split guard therefore permits a
 68-to-70 transition but no unbounded tree.
 
+The renderer's distinct body selector is actor `+0x220`. Constructor
+`0x00473E30` writes `RandomInt(4)` there, and `0x00492E10` selects
+`BadGuys[285 + 12*variant + facing12]`. This is a constructor/collision-rerolled
+body variant, not an action-progress or contact pose. The same renderer draws
+the independent `333..342` upper effect at local `(0,-10)` from phase `+0x214`
+and alpha `+0x228`. Tick `0x00485DC0` advances that phase by
+`abs(horizontalVelocity)*0.25` modulo 10 and integrates vertical offset/velocity
+`+0x218/+0x21C` with gravity `0.4`. On a ground crossing it launches upward at
+`-(3+RandomFloat(3))`, rerolls `+0x220`, rerolls signed body angle `+0x224` in
+the 60-degree domain, and resets upper-effect alpha to 1; that alpha loses
+`0.05` per moving tick. A port must not animate contact by walking the four
+body banks, pulse the body opacity, synthesize a spawn-age bob, or add Portal
+records `251..254`.
+
 `GoodImp 0x3ED` is a different factory class and team relationship, not a
 green recolor of hostile Imp. It targets hostile actors, expires on a
 temporary ally lifetime, produces final Fire presentation, and does not run
@@ -320,10 +334,30 @@ selectors control presentation, while poison punch DPS, PoisonPool DPS, and
 duration remain separate numeric fields. Death creates `PoisonPool 0x806`
 with the configured pool payload before completing common rewards/drops.
 
+`Action_Zombie_Beat` is not a ten-frame swipe strip. Constructor `0x0044A490`
+clears progress `+0x234`, toggles arm side `+0x238`, and stores
+`(0.9 + RandomFloat(0.25)) * attack_speed`. Tick `0x00449300` gives the
+selected arm pose 0 below progress
+50, pose 1 from 50 through 99, and pose 2 from 100 onward. The hit callback is
+the crossing of 100 and the action completes at 125. Locomotion phase remains
+live below progress 80. Renderer `0x00493390` then plants the selected arm,
+other arm, and head from the body record's authored point records after adding
+the actor-local angle `+0x21C` to heading.
+
+The remaining Zombie articulation is also actor-owned, not a renderer clock.
+Constructor `0x004740C0` seeds two `[0,360)` phases, signed head angle
+`[-65,65)`, two `[0,20)` arm angles, and a random initial attack side. Renderer
+`0x00493390` derives quantized body/head angles from those sine phases, then the
+beat adds `+0x23C/3` body lean and `round(+0x23C/10)` to the selected arm.
+Crossings 50 and 100 both launch the vertical render offset before the common
+tick applies gravity `0.4` and clamps it back to ground.
+
 Wraith does not merely run straight chase. `0x00486C30` alternates approach,
-orbit/retreat, attack, and fade/visibility state while maintaining target
-identity. Its hit path applies `Dazzle 0x1B6E`; flaming adds the shared burn
-presentation. Death art/reward presentation uses `0x00495600`.
+orbit/retreat, and attack/cooldown state while maintaining target identity.
+Its hit path applies `Dazzle 0x1B6E`; flaming adds the shared burn presentation.
+Renderer `0x00496220` does not read an action/fade alpha: it draws only
+`BadGuys[2070+facing]`, opaque white, at local `(0,+15)` and scale 2. Death
+art/reward presentation uses `0x00495600`.
 
 ## Bosses
 
@@ -357,6 +391,21 @@ Demon atlas. Event `0x0049A270` creates `DemonBomb 0x7F7` and transfers primary
 damage. Death `0x00482930` first performs common boss presentation/rewards,
 then creates the configured number of radial `Imp 0x3EC` children with the
 boss arena/team/combat scalars. The boss tick can also emit Fire presentation.
+
+The DemonBomb action is `Action_Demon_Spit`, constructed at `0x0044DD40` and
+ticked at `0x0044DF00`. Its exact controller-selector array is
+`[0,0,0,1,1,1,1,1,0]`; progress advances by
+`0.09375 * attack_speed`, event marker 4 calls `0x0049A270`, and the strict
+completion boundary is progress greater than 8. The selected controller is
+stored at actor `+0x2DC`. It therefore cannot be represented by the Website's
+former twelve-index `0,0,1,1,2...` approximation.
+
+The living controller's common vertical bob is
+`-abs(sinDeg(+0x140*0.25))*3`. Constructor `0x00479150` seeds the two renderer
+joint offsets `+0x2D4/+0x2D8` to `0/1`; renderer `0x00498BA0` adds those to
+`2*sinDeg(globalFixedTick)`. Bomb pose 1 replaces the two results with
+`+40/-40` degrees. Tick `0x00487300` also advances the five cosmetic phase
+lanes `+0x260..+0x270` by exactly `0.25` per fixed tick with wrap.
 
 ### Dire Faculty
 
@@ -565,16 +614,15 @@ buckets. Instruction witnesses are Skeleton `0x0048DEF1..0x0048DF44`, Mage
 Record placement uses each atlas record's logical registration, not the crop
 center. The bundle loader preserves the logical cell, origin, and `extras`;
 the Website anchor formula is `cropSize / 2 - origin`. Articulated native
-renderers also consume point records as joint/attachment inputs. Those later
-joint fields are not part of the current Website snapshot. Constructor-spawn
-composition is:
+renderers also consume point records as joint/attachment inputs.
+Constructor-spawn composition is:
 
 | Family | Spawn composition and native child order |
 | --- | --- |
 | Skeleton | limbs `1585 + pose*18 + facing`; selected body bank; optional weapon overlay; headgear bases `1477`, `1495`, `1531`, or `1549` plus facing |
 | SkeletonArcher | limbs `1585 + facing`; body `451 + facing`; selected shared headgear |
 | SkeletonMage | limbs `1585 + facing`; body `1729 + facing`; selected shared headgear; alternate bank begins at `1459` |
-| Imp | main `285 + variant*12 + facing`; upper effect `333..342` at actor offset `(0,-10)` |
+| Imp | main `285 + constructorVariant(+0x220)*12 + facing`; upper effect `333..342` at actor offset `(0,-10)`; contact does not select a separate body bank |
 | Zombie | base `2365 + facing`; body `2203 + bodyType*18 + facing`; rear/front arms from `2095` and `2149` with the flyblown spawn pose when configured; head `2293 + headType*18 + facing` |
 | Wraith | complete record `2070 + facing`, scale `2`, renderer transform offset `(0,+15)` |
 | Demon | controller `19 + pose*18 + facing`; component banks `1..18`, `62..79`, `80..97`, and `98..115` consume controller attachment records; death uses `55..61` |
@@ -589,11 +637,11 @@ family-colored marker.
 The native constructors seed some cosmetic selectors and articulation phases
 from the process-global RNG. A network port that does not serialize those
 fields cannot claim matching RNG sequence merely because it uses the correct
-records. It may project a deterministic cosmetic value into the exact stock
-domain, while retaining a neutral reachable joint pose, but locomotion,
-attack, Wraith fade, Zombie limb state, Demon joints, Coffin combat opening,
-death, and child effects remain authoritative actor state and must be
-replicated before the presentation advances them.
+records. Imp flight phase/height/rotation/effect alpha, Zombie limb/head/body
+state, Demon joints/bob, Coffin combat opening, death, and child effects remain
+authoritative actor state and must be replicated before presentation samples
+them. Wraith is the exception established by its renderer: its live body has
+no action-alpha lane to serialize.
 
 ## Custom-content and multiplayer consequences
 

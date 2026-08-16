@@ -133,7 +133,7 @@ animation objects can add art not visible as a literal in the parent method.
 | `0x802` | `TragicCircle` | `0x005E3840` | `0x00605C00` | ring particles `0x005EBE20`; actor query/effect `0x005F7010` | BadGuys 7, 10..11, 48 |
 | `0x804` | `DarkFireball` | `0x005E3A10` | `0x00605C80` | draw `0x0061CB20`; trail `0x005ED940`; impact `0x005F76B0` | BadGuys 10..11, 251..266 |
 | `0x805` | `DireFire` | `0x005EDC90` | `0x00605D30` | draw `0x0061CD40`; area contact `0x005FF1D0` | BadGuys 10..11; DeadHawg 46..77 |
-| `0x806` | `PoisonPool` | `0x005E3B00` | `0x005F8030` | auxiliary draw `0x005EDFA0`; poison contact in tick | selected sprite / primitive draw |
+| `0x806` | `PoisonPool` | `0x005E3B00` | `0x005F8030` | auxiliary draw `0x005EDFA0`; poison contact in tick | DeadHawg 0, submitted twice |
 | `0x807` | `EtherDrain` | `0x005F8360` | `0x0061CF20` | auxiliary draw `0x005EE120`; sprite pass `0x005EE780` | DeadHawg 177..179 |
 | `0x808` | `Silk` | `0x005F05D0` | `0x005F8B50` | full draw `0x00606A10`; inherited arrow draw `0x0060F590`; tether `0x005F92C0` | BadGuys 2, 27, 255..282; DeadHawg 14 |
 | `0x80B` | `EvilEmber` | `0x005E0CC0` | `0x0060D7E0` | draw `0x0060DDD0`; hostile contact `0x005F2980` | BadGuys 15, 251..254, 267..270 |
@@ -573,6 +573,156 @@ same FreezeWave creation helper used by Ring of Ice with the comet damage, and
 then queries the impact area and dispatches the comet freeze scalar through
 contact field `0x0081C6E8`. It finally restores the world-color state and
 removes itself. The deleting destructor uses ordinary `Puppet` teardown.
+
+## Enemy-owned projectile presentation closure
+
+The five projectile classes reachable from the Boneyard enemy graph use the
+same fixed-tick actor lifetime described above, but their visible submission
+is not interchangeable. The following reconstruction joins each constructor,
+tick, draw, contact, and animation-wrapper handoff. Values called “random” are
+drawn from the native shared stream; a deterministic network renderer may
+project entity identity into the same finite domain, but must not claim the
+retail RNG sequence.
+
+### Arrow `0x7DA`
+
+`Arrow_Draw 0x0060F590` always submits BadGuys record `2` as the shaft and
+rotates it by the projectile heading at `+0x170`. Element state adds a separate
+overlay instead of selecting a directional arrow bank:
+
+- fire uses `255 + ((globalTick / 5) % 12)`;
+- poison uses `271 + ((actorAge / 6) % 12)`, green-tinted and additive; and
+- normal has no elemental overlay.
+
+The overlay is planted at `(x, y + height)`, rotated by heading plus 180
+degrees, and uses the native randomized scale domain. `0x005E5EC0` is the
+Arrow's force-response slot, not a periodic trail callback: it accumulates the
+incoming scalar at `+0x178` and, only after the total exceeds one, removes the
+Arrow and hands record 2 to an `Anim_SpinAway` child with randomized
+rotation/scale. Ordinary flight therefore has no record-2 trail actor. Fire
+contact separately reaches `0x005E5D30` and creates the `251..254`
+`Anim_FireBurst`; normal and poison contact do not invent that fire burst.
+Thus `255..266` and `271..282` are elemental overlays, not twelve arrow
+facings, and `Anim_SpinAway` must not be emitted on a timer.
+
+### Firebolt `0x7EB`
+
+Constructor `0x005E1D00` initializes a 400-tick lifetime. Tick
+`0x00600880` increments and wraps the 12-step phase at `+0x148`; on each even
+global fixed tick it calls trail creator `0x006125B0`. Draw `0x00612760`
+uses alpha `min(remainingLifetime/100,1)`, so the projectile is fully opaque
+at birth and fades only through its final 100 ticks. It draws the inline
+BadGuys record-15 orange glow at scale 2 and submits
+`BadGuys[255 + phase]` additively at local Y `-15`, rotated by heading plus
+180 degrees, with a per-draw scale in `[1,1.5)`.
+
+The even-tick trail creator takes the current `+0x148` phase, hence the same
+`255..266` record as the parent on that tick. It creates a source-over
+`Anim_Fade` at `(x,y-15)` plus a random radial displacement of magnitude
+`[0,5)`, rotation `heading+180`, paired scale in `[0.75,1)`, alpha one, and
+per-tick alpha loss `0.1 * [1.5,2)`, or `[0.15,0.2)`. Visible trail ages are
+therefore `0..5` or `0..6`; there is no twelve-tick red/additive child.
+
+Impact `0x005E7C20` creates `Anim_FireBurst` over records `251..254` at
+`(x,y-1)`, then removes the projectile. Shared tick `0x00457540` advances the
+four-frame selector by `0.25` and specialized tick `0x004575B0` moves it up
+one unit/tick, so visible ages are exactly `0..15` and every record lasts four
+ticks. Draw `0x0045E2D0` first submits record 110 source-over at five times
+the burst scale, orange and fading as `0.5*(1-age/16)`, then submits the
+current `251..254` frame additively under tint `(1,1,0.75)`. Its `ZAnimLit`
+wrapper starts radius `1.5`, intensity `1`, intensity delta `-0.04`, depth
+bias `50`, and Multiple Shadows false. Records `251..254` are therefore never
+Firebolt flight frames.
+
+### GuidedMissile `0x7EC`
+
+Constructor `0x005E7E00` writes zero to active selector `+0x180`. Draw
+`0x00612960` uses `min(remainingLifetime/100,1)`, so it too fades out only at
+the end of its lifetime. Mage launch multiplies the constructor's 2000-tick
+clock by `0.2`, yielding the exact 400-tick hostile lifetime. Tick
+`0x00600B40` advances phase `p` at `6*speed`, reduces speed by `0.075` to the
+constructor minimum `0.75 + RandomFloat(0.45)`, and begins at speed `3`.
+
+The draw translates to local Y `-15` and keeps both submissions additive. It
+draws selected main record `110 + selector` with white alpha `[0.5,1)` and
+scale
+`1.1 + abs(sin(p*15 degrees))*0.15*visualScale`, where constructor
+`visualScale` is `[0.9,1.1)`. Cold retains selector zero and color
+`(0.25,0.5,1,1)`; Mage poison helper `0x00473330` changes selector to one and
+color to `(0.25,1,0.25,1)`. The sibling is always record `112`, with alpha
+`abs(sin(p*6 degrees))*0.55`, rotation `p*0.5`, and scale
+`[1,1.3)*visualScale`. Neither layer rotates to projectile heading, and the
+main selector never cycles by age.
+Impact `0x005F3EE0` transfers those fields into `Anim_FadeGM`, whose draw
+`0x0045DC90` draws the selected main twice and adds records `111` and `112`.
+The wrapper starts at scale and alpha two; common tick `0x00454000` subtracts
+`0.1` alpha per tick, giving twenty visible states. Its one-time phase is
+`RandomFloat(360)`; main scale uses the same 15-degree wave, while records 111
+and 112 use three- and six-degree waves respectively.
+
+### DemonBomb `0x7F7`
+
+Constructor `0x005E2F00` chooses a lifetime in the inclusive 100..200-tick
+settled domain and initializes vertical offset `+0x150` to `-35`, vertical
+velocity `+0x154` to zero, and bounce velocity `+0x158` to `-3`. Demon event
+`0x0049A270` launches it straight along the actor heading at speed `[2,3)`;
+it is not homing. Tick `0x00603CA0` multiplies horizontal speed by `0.995`,
+adds gravity `+0.1` to the vertical velocity, bounces with multiplier `0.85`,
+and only decrements the 100..200 counter after horizontal speed falls below
+one (or contact settles it). Draw `0x0061A690`
+samples `RandomInt(4)` three times and submits three BadGuys layers from
+`267..270` at the projectile plus the vertical offset; the latter two use
+additive composition, with exact scales `2`, `2`, and `1.5` and no sprite
+rotation. The same draw selects the secondary DeadHawg
+`46 + ((globalTick / 2) % 32)` pass at local Y `-20`, scale `(1,0.5)`, only
+while horizontal speed is at most two. Its alpha is one at speed at most one
+and `1-speed*0.5` between one and two.
+Auxiliary `0x005E9970` supplies the ground submission. Terminal tick creates
+two independently owned Fire `0x7E3` gameplay/presentation actors: one at
+`(x,y-10)` and one at `(x +/- [10,20),y+5)`. Each receives the Bomb damage,
+starts on a random record in DeadHawg `46..77`, advances by `0.25` frame per
+tick, and receives lifetime field five, which the Fire tick consumes at
+`0.01/tick` for 500 ticks. This is not a synthetic 32-tick
+`demon-bomb-impact` animation. It is a layered ballistic compositor followed
+by two persistent Fire actors, not one homing, rotating four-frame sprite.
+
+### PoisonPool `0x806`
+
+Disassembly of `0x005EDFA0` proves the draw receiver is the DeadHawg singleton
+record-zero slot (`singleton +0x38`), so both visible passes use **DeadHawg
+record 0**. Raw constructor instructions `0x005E3B09..0x005E3B43` leave the
+initial `FLD1` value on the x87 stack while converting
+`tickRate(100)*30` to the integer damage clock. They therefore initialize
+alpha `a=1`, scale `s=1`, and an exact 3000-tick damage lifetime; neither
+start value is randomized. Tick `0x005F8030` applies:
+
+```text
+s = min(s + 0.025, 1.6)
+if damage_lifetime_expired:
+    a = a - 0.005
+    remove when a <= 0
+```
+
+The draw submits:
+
+```text
+outer: alpha = 0.5*a, scale = s
+inner: alpha = (sin(age degrees)*0.25 + 0.75)*a
+       scale = max(s - 0.6, 0)*s*0.75
+```
+
+While sufficiently opaque, the tick has a one-in-twenty particle branch.
+The damage/contact lifetime and the visual fade are consequently separate:
+removing the pool at the damage expiry edge truncates native presentation.
+
+### Network-port ownership consequence
+
+Live projectile state and transient trail/impact state must be replicated as
+different lifetimes. A client cannot infer an impact from disappearance,
+because expiry, terrain contact, actor contact, and late subscription all
+produce the same missing-parent observation. Additive blend belongs to the
+individual native layer, and DeadHawg record 0 must be resident even though
+the neighboring persistent Fire class uses records `46..77`.
 
 ## Closure result for this subsystem
 
