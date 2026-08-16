@@ -544,3 +544,140 @@ The read-only Lua verification attempted on 2026-08-14 found the user's stock
 process but could not connect to `SolomonDarkModLoader_LuaExec`; the loader Lua
 runtime was not initialized. No process was restarted or mutated. Static and
 serialized evidence above is independent of that unavailable check.
+
+## Entrance retirement, camera region, and post-transition spawning — 2026-08-16
+
+This follow-up closes the generated survival transition that begins when
+Solomon runs. It uses the same retail executable identified above (4,723,200
+bytes, SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`)
+and the generated reference Arena `Generated Boneyards/random seed.boneyard`
+(266,811 bytes, SHA-256
+`dda683d9f9e34649b3a510b2790650fc99103e51316d4b95eb6593fe98d7d448`).
+The reference Arena is `(0,0,2339.889892578125,3460.110107421875)`, starts the
+player at `(1323.68310546875,3310.110107421875)`, and places the entry Gate on
+the horizontal segment from `(1227.173828125,3160.10986328125)` to
+`(1377.173828125,3160.10986328125)`.
+
+### Generated region construction
+
+`BoneyardGenerator 0x006388B0` authors a 400-unit entrance extension and a
+three-action `SOLOMON RUNS` script:
+
+1. `LOCK/UNLOCK CAMERA` mode 0 (`1065`) with the combat rectangle;
+2. `SLEEP(4.0)`; and
+3. `DESTROY OFF-CAMERA OBJECTS` (`1066`).
+
+The generated entrance has two realized vertical orientations. The combat
+rectangle height is the final Arena height minus exactly `400.0` (qword
+`0x0078E600`). For a south/bottom entry it starts at the Arena origin. For a
+north/top entry its Y is shifted by exactly `375.0` (qword `0x00798FA8`) while
+retaining that reduced height. The stock generator sets the corresponding
+player facing to 0 or 180 degrees and builds the spawn inset with the recovered
+150/300-unit constants. The reference file therefore locks to
+`(0,0,2339.889892578125,3060.110107421875)`. A second authentic generated run
+observed on 2026-08-16 used full bounds
+`(0,0,3674.89013671875,2125.10986328125)`, a north spawn at
+`(1258.9234619140625,150)`, a Gate at Y `300.00006103515625`, and the exact
+target `(0,375,3674.89013671875,1725.10986328125)`.
+
+### Camera and cleanup ownership
+
+`LOCK/UNLOCK CAMERA 0x00464B20` mode 0 intersects the authored combat
+rectangle with the full Arena and writes target endpoints at Arena
+`+0x8E98..+0x8EA4`. It snapshots the current camera endpoints into
+`+0x8EA8..+0x8EB4` and stores float32 blend `0.01` at `+0x8EB8`. Arena tick
+`0x0046E570` recursively lerps each current endpoint toward its target, then
+multiplies the float blend by exact double `1.01` (`0x00785C90`) and caps it at
+one. The player-follow viewport at `+0x8BCC..+0x8BD8` is clipped to that
+interpolated region. Unlock mode 1 restores the full Arena target and uses
+float `0.001`; the generated script never invokes it.
+
+`DESTROY OFF-CAMERA OBJECTS 0x004728B0` runs after the 4.0-second/400-fixed-tick
+sleep. It removes scenery, roads, compact/decor records, bridges, and derived
+spatial records outside `+0x8E98..+0x8EA4`, then rebuilds the affected caches.
+It does **not** iterate the Fence manager at Arena `+0x885C`. The entry Gate is
+therefore not destroyed or replaced. It becomes unreachable in ordinary play
+because the active camera/encounter region retires its entrance side; treating
+the transition as a Gate deletion is the wrong ownership model.
+
+Player tick `0x00548B00` and its ordinary movement path do not read the camera
+target rectangle. The executable does not establish a separate invisible
+combat-wall write in this script. A browser port that hard-confines an
+authoritative player to the sealed combat region is an explicit one-way safety
+adaptation, not evidence that `1065` itself is collision.
+
+### Exact Spawner placement search
+
+`Spawner::Tick 0x0046D000` chooses a raw point before collision placement:
+
+- location 1 is uniform over the original Arena rectangle;
+- the other location path chooses one eligible player slot and adds a random
+  unit vector of length 100, with camera-center fallback when no player is
+  available; and
+- `MAXENEMIES` is not consulted at runtime by Spawner.
+
+The selected recipe supplies its collision radius to `0x00463D30`. That helper
+first accepts the raw point if collision and the selected light/visibility
+policy accept it. Otherwise it searches ellipse-compressed rings around the
+raw point. Ring radius begins at one actor radius and grows by that radius.
+For each ring, the angular sample count is derived from its circumference,
+angle spacing is `360/count`, the starting angle is one inclusive native
+`RandomFloat(360)`, and Y is multiplied by exact `0.8`. Each candidate must be
+inside the current camera target reduced by the actor radius, except policy 0
+(`dark`) bypasses that rectangle check. Dark search alone switches to direct
+policy 3 after the radius reaches exact float `350.0`, resets to two actor
+radii, and continues. Collision is checked again before returning.
+
+`0x00466200` maps the generated position policy exactly as follows: 0 dark
+(light scalar below zero), 1 light (above zero), 2 offscreen, 3 direct, and 4
+outside the supplied rectangle/edge policy. These are placement predicates;
+they are not alternate wave schedules.
+
+### Exterior-birth conclusion and Website policy
+
+Stock does not provide a mathematical no-exterior-birth guarantee for every
+generated wave record. An `anywhere`/location-1 raw point is sampled from the
+full Arena, and a collision-free point accepted by dark policy may return
+before the camera-target containment branch. In the observed authentic run,
+all 16 sampled first-wave births happened to lie inside the combat region, but
+that observation does not override the reachable static branch.
+
+The Website requirement is therefore sharper than the native accident: after
+`SOLOMON RUNS`, every raw point and every retry candidate must be admitted only
+inside the authoritative combat rectangle. It preserves the native wave graph,
+near-player versus anywhere selection, player sampling, actor radius,
+collision query, radial retry order, and deterministic Web RNG projection, but
+intentionally removes the retired entrance strip from the spawn domain. This
+same authoritative rectangle also makes the web transition one-way for
+players after sealing. Custom/mod Boneyards do not own the generated
+`SOLOMON RUNS` lifecycle and must retain their authored full bounds.
+
+### Validation matrix
+
+- generated south and north entrances recover their exact combat rectangles;
+- mode-0 interpolation begins at `0.01`, grows by `1.01`, caps at one, and the
+  400-tick cleanup/seal boundary is distinct from camera interpolation;
+- the two Gate leaves remain in replicated state while the camera and active
+  region exclude the entry strip;
+- player movement cannot cross back into the retired strip after sealing;
+- near-player and anywhere bursts retain native schedule/RNG consumption and
+  collision-radius-aware radial placement;
+- every post-transition enemy root is inside the combat rectangle, including
+  forced raw points in the retired entrance strip and dark-policy cases;
+- default generated runs own this transition, while every mod/custom Arena is
+  a negative member; and
+- browser proof must physically cross the entry Gate, trigger Solomon, observe
+  camera contraction, attempt a return, and inspect every enemy root against
+  the authoritative combat rectangle.
+
+### Web projection boundary
+
+The authoritative Website server does not own the native Arena light raster
+queried by placement policy 0. Its requested confined placement path therefore
+uses the recovered collision/ring search but does not claim exact
+dark-versus-light candidate identity or the native 350-unit fallback rerun.
+The web's retained half-unit mobility probe compensates for collision shapes
+that have not yet been recovered as exact native actor geometry. Both are
+explicit boundaries; the native branches remain catalogued above rather than
+being silently described as implemented parity.

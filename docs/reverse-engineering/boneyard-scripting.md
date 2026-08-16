@@ -799,3 +799,33 @@ compiled enemy family, and a few editor-hidden ItemRecipe selectors are named
 by offset in the decoder; that is a semantic naming boundary, not an unknown
 payload boundary. The Arena's unrelated reserved header fields remain covered
 by [`boneyard-system.md`](boneyard-system.md).
+
+## Runtime closure for camera lock and off-camera cleanup — 2026-08-16
+
+The generated survival sequence `1065, SLEEP(4.0), 1066` is now instruction
+closed. `LOCK/UNLOCK CAMERA 0x00464B20` mode 0 installs an intersected target
+rectangle, snapshots the current endpoints, and starts a recursive float32
+lerp at `0.01`, multiplying its factor by exact `1.01` per 100-Hz Arena tick
+until capped at one. `DESTROY OFF-CAMERA OBJECTS 0x004728B0` executes 400 ticks
+later and prunes the scenery/road/decor/bridge/derived managers against that
+target before rebuilding spatial caches. It does not prune the Fence manager,
+so a generated Gate is retained even when its entrance is outside the active
+region.
+
+The two generated vertical entrance cases use a 400-unit Arena extension. A
+south entry targets `(full.x, full.y, full.w, full.h-400)`. A north entry
+targets `(full.x, full.y+375, full.w, full.h-400)`. The script has no generated
+unlock action. Player movement does not consume the target rectangle directly;
+any web-side one-way movement boundary is a declared gameplay-safety adaptation
+at the replicated active-region owner, not a reinterpretation of action 1065.
+
+Spawner placement remains independent script work. Location 1 samples the full
+Arena, the default location samples 100 units around a selected player, and
+policy 0 dark candidates can bypass target-rectangle containment inside
+`0x00463D30`. Consequently the retail control flow permits an entrance-side
+birth even though an observed generated run did not produce one. The Website
+closes that undesirable reachable branch by confining post-transition
+raw-point admission and retry placement to the replicated combat rectangle
+while leaving custom Boneyards outside the generated lifecycle. Because its
+authority does not own the native light raster, it does not claim exact
+dark-versus-light candidate identity or the 350-unit dark fallback rerun.
