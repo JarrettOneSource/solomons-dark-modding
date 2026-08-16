@@ -619,9 +619,9 @@ Constructor-spawn composition is:
 
 | Family | Spawn composition and native child order |
 | --- | --- |
-| Skeleton | limbs `1585 + pose*18 + facing`; selected body bank; optional weapon overlay; headgear bases `1477`, `1495`, `1531`, or `1549` plus facing |
-| SkeletonArcher | limbs `1585 + facing`; body `451 + facing`; selected shared headgear |
-| SkeletonMage | limbs `1585 + facing`; body `1729 + facing`; selected shared headgear; alternate bank begins at `1459` |
+| Skeleton | limbs `1585 + trunc(+0x144)*18 + facing`; selected body bank and optional weapon overlay use `trunc(+0x150)`; headgear bases `1477`, `1495`, `1531`, or `1549` plus facing |
+| SkeletonArcher | limbs `1585 + trunc(+0x144)*18 + facing`; body `451 + trunc(+0x150)*18 + facing`; selected shared headgear |
+| SkeletonMage | limbs `1585 + trunc(+0x144)*18 + facing`; body `1729 + trunc(+0x150)*18 + facing`; selected shared headgear; alternate bank begins at `1459` |
 | Imp | main `285 + constructorVariant(+0x220)*12 + facing`; upper effect `333..342` at actor offset `(0,-10)`; contact does not select a separate body bank |
 | Zombie | base `2365 + facing`; body `2203 + bodyType*18 + facing`; rear/front arms from `2095` and `2149` with the flyblown spawn pose when configured; head `2293 + headType*18 + facing` |
 | Wraith | complete record `2070 + facing`, scale `2`, renderer transform offset `(0,+15)` |

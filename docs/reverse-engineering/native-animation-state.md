@@ -237,7 +237,7 @@ and transformed.
 | Skeleton pike `0x10` | `[1, 2 x11, 1]` at indices `0..12`, written to `+0x150` | `p += 0.125 * attack_speed * marker_multiplier`; callback `2`, strict end `12` |
 | Archer shot `0x11` | `[3,4,5,6,7,6,7,6,7,6,7,6,7,8,8,8,8]` at indices `0..16`, written to `+0x150` | `p += 0.0843750015 * attack_speed`; callback `13`, strict end `16` |
 | Mage cast `0x12` | short branch `[2 x24,3,4 x13,3,0 x3]`; long branch `[2 x30,3,4 x13,3,0 x3]`, written to `+0x150` | `p += 0.253125012 * (1 + roll) * attack_speed`; callback `25`/`31`, strict paired end `41`/`47` |
-| Skeleton family locomotion | articulated 18-facing banks: Skeleton `775..918` (8), `1045..1116` (4), `1333..1458` (7), `1585..1728` (8); Archer `451..612` (9) plus shared 8; Mage `1459..1476` (1), `1729..1818` (5), `1585..1728` (8) | renderer truncates fixed-tick locomotion/action phases at `+0x144/+0x150`; no render-side advance |
+| Skeleton family locomotion/action composition | shared limbs always select `facing + 18*trunc(+0x144)` from `1585..1728`; the independently selected body and any weapon overlay use `facing + 18*trunc(+0x150)`. Skeleton body banks contain 12 unarmored-claw, 9 armored-claw, 4 ordinary-weapon, or 3 pike poses; Archer body `451..612` contains 9; Mage body `1729..1818` contains 5 and its constructor seeds pose 0 or 1. | renderers `0x0048DEE0`, `0x0048F450`, and `0x00491720` truncate both fields separately; action ticks write only `+0x150`, while movement advances `+0x144`. Neither selector advances during render. |
 | Imp family | `facing + 12*constructorVariant(+0x220)` over four complete directional body banks; body rotation is `+0x224`; `333 + trunc(+0x214)` is the ten-record upper effect with alpha `+0x228` | constructor `0x00473E30` seeds phase `+0x214` in `[0,10)`, height/velocity `+0x218/+0x21C` at zero, variant `RandomInt(4)`, signed body angle `RandomFloat(45,true)`, and effect alpha zero. While horizontal velocity is non-zero, tick `0x00485DC0` advances phase by `abs(velocity)*0.25` modulo 10, integrates height/velocity with gravity `+0.4`, and drains effect alpha by `0.05`. A ground crossing re-launches with vertical velocity `-(3+RandomFloat(3))`, rerolls the variant and signed `60`-degree angle, and resets effect alpha to `1`; contact does not select another body strip. |
 | Zombie beat `0x17` | the selected arm uses pose `0` for `p<50`, pose `1` for `50<=p<100`, and pose `2` for `p>=100`; `+0x238` alternates which arm receives that pose while the other remains at rest | `Action_Zombie_Beat` constructor `0x0044A490` clears `p` at `+0x234`, toggles `+0x238`, and stores `(0.9 + RandomFloat(0.25)) * attack_speed`; tick `0x00449300` fires the contact callback on crossing `100` and completes at `p>=125`; locomotion phase continues through `p<80` |
 | Zombie locomotion/body | 18-way articulated selectors over `2088..2202`, `2203..2256`, `2275..2292`, `2293..2346`, and `2365..2508`; the renderer transforms the two arm banks and head from authored body-record points | constructor `0x004740C0` seeds `+0x210/+0x214` in `[0,360)`, signed head angle `+0x218` in `[-65,65)`, arm angles `+0x228/+0x22C` in `[0,20)`, and a random initial attack side. Idle tick `0x004863A0` advances those phases by `RandomFloat(1)` and `RandomFloat(0.75)`. Renderer `0x00493390` quantizes body rotation to `round(sinDeg(+0x210)*45/10)*10`, head rotation to `round(sinDeg(+0x214*0.5)*20/5)*5 + +0x218`, and draws rear/front arm rotations as `-+0x228` / `+0x22C`. During beat, `+0x23C` adds a side-selected arm swing `round(+0x23C/10)` and body lean `+/- +0x23C/3`; threshold crossings 50 and 100 launch vertical actor offset `+0x240` with velocities in `[-3.5,-3)` and `[-1.5,-1)`, followed by gravity `+0.4` and clamp at ground. |
@@ -258,6 +258,43 @@ and transformed.
 The exact skeleton-family rates above are repeated from G3 only because they
 are the clock-to-frame boundary. Damage callbacks, target rules, and action
 selection remain G3 territory.
+
+### Skeleton-family selector-axis correction — 2026-08-16
+
+Fresh read-only instruction extraction from the preserved Beta 0.72.5 image
+closes a selector ambiguity that the earlier range census did not state
+strongly enough. Each of the three renderers reads both actor fields before
+drawing: Skeleton `0x0048DFF0/0x0048DFFB`, Archer
+`0x0048F5CA/0x0048F5D5`, and Mage `0x0049185A/0x00491865` load and truncate
+`+0x144` followed by `+0x150`. The first result indexes the shared limb vector
+at BadGuys owner `+0x49DC`; the second result indexes the family body vector.
+Skeleton weapon overlays also reuse the second result. No claw, shot, or cast
+branch substitutes the action-array index for the limb selector.
+
+This establishes two independent authoritative axes:
+
+- `+0x144` is the eight-pose locomotion selector and remains the only input to
+  shared Skeleton-family limbs, including throughout an attack;
+- `+0x150` is the body/action selector. The claw, weapon, pike, shot, and cast
+  action ticks write their recovered array value here, and the renderer uses
+  that value for the body and equipment layers.
+
+The claw table is selected by the live armor byte, not by a cosmetic or actor
+identity roll: `+0x233==0` uses unarmored `[4..11]`, while `+0x233==1` uses
+armored `[2..9]`. The unarmored body vector contains twelve complete facing
+banks (`1117..1332`). The armored vector contains nine (`613..774`); selector
+9 therefore reaches the vector's range guard. `FUN_0043A6B0` grows that slot
+with the zeroed Sprite constructor `0x004138A0`, so the shipped final armored
+claw pose has no authored torso pixels. It must not be clamped to pose 8 or
+aliased to the adjacent record-775 weapon vector.
+
+Constructor and action lifetime evidence also separates idle from gait.
+Badguy constructor `0x00473390` initializes `+0x150=0`; Mage constructor
+`0x0048ABB0` replaces it with `RandomInt(2)`. Action ticks update `+0x150` and
+leave their final written selector on cancellation/completion; ordinary
+movement updates `+0x144` without copying it into `+0x150`. A network port
+must consequently retain body pose as actor state, interpolate only the
+authoritative action progress, and never infer torso pose from locomotion.
 
 ## Facing
 
