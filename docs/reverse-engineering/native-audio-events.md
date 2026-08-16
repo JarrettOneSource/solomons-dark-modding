@@ -176,10 +176,15 @@ ordinary footstep gain `0.5`. Step1/Step2 use their gain-only wrapper.
 | `dig.throw_dirt` | Dig debris emission | `0x004820FE` | uniform pool 222..223 `sounds\throwdirt\throwdirt1..2` | `Integer(2)` on the active gameplay stream; point gain and float-RNG pitch. |
 | `shop.purchase` | Debit and item transfer both succeed | `0x0056C10E` | 25 `sounds\dropcoins` | Fixed; dispatch follows the successful transaction. Registry 13 `buysell` is loaded but this retail path does not call it. |
 | `shop.purchase_rejected` | Purchase precondition fails | `0x0056C1A6` | 6 `sounds\badaction` | Fixed. |
-| `shop.storage_transfer` | Storage transfer accepted | `0x0056CE80`, then `0x0056CF1A` | 4 `backpack_close`, then 0 `click` | Fixed ordered pair after the transfer. |
+| `shop.storage_return_double` | Selected storage item is second-activated into backpack | common action `0x0055F054`, callback `0x0056CE80` | 0 `click`, then 4 `backpack_close` | The common action click precedes the accepted callback. Backpack second activation remains ordinary InventoryScreen use/equip behavior. |
+| `shop.storage_drag_start` | Storage item crosses the drag threshold | `0x0056CF1A` | 0 `click` | Fixed. Backpack-to-storage is also drag-only but its ordinary InventoryScreen drag start has no separate sound request. |
+| `shop.storage_drag_drop` | Either storage drag direction is accepted | `0x0056F55A` | 0 `click` | Pitch 0.75, gain 1. Invalid release restores the source silently. |
+| `shop.dowsing_roll` | DOWSE fee accepted and result generation begins | `0x0055FAF0`, `0x0055FE17` | 1 `pickskill` through `SoundEcho`, then 23 `distortreality` | Echo requests at 0/250/500/750 ms use gains 1/0.25/0.0625/0.015625. Distortion pitch is `0.8 + Float(0.1,false)`; that Float precedes `Integer(2)` offer count. |
+| `shop.dowsing_purchase` | Dowsing offer purchase succeeds | common `0x0056C10E`, callback `0x0056D18B` | 25 `dropcoins`, then 23 `distortreality` | Next-fee `Integer(10)` precedes the Float; distortion pitch is `1.0 + Float(0.1,false)`. |
 | `ui.focus` | Pointer hover/focus changes without activation | no call | no request | Retail menus are mouse-driven and have no native focus sound. The designed browser focus graph must remain silent. |
 | `ui.confirm` | Game Over continue/button activation | `0x005CF7BA` | 0 `sounds\click` | Fixed gain 1. Other action handlers use the same registry object. |
-| `ui.back` | Storage/backpack close | `0x0056CE80` | 4 `sounds\backpack_close` | Fixed. Surfaces whose Back is an ordinary action button use 0 `click`; focus movement alone remains silent. |
+| `ui.shop_close` | Common Shop DONE closes the service | `0x0055EFA8` | 64 `sounds\openpanel` | Fixed; the close direction still uses the asset named `openpanel`. |
+| `ui.inventory_close` | Standalone InventoryScreen closes | `0x00555853` | 64 `sounds\openpanel` | Fixed. |
 | `music.menu_transition` | Scene/menu song selection | title `0x0058A033`; selection `0x00593CA6`; academy sites `0x00508AF2`, `0x00508B7F`, `0x0050F94B`, `0x00510E07`, `0x005110E7`, `0x00512CC7` | `prelude`, `selection`, or `academy` through `Music::PlayCrossfade` | No RNG; caller supplies transition duration. |
 
 The level-up picker has a statically recovered screen-local sequence in
@@ -192,6 +197,12 @@ Pointer hover/focus is silent. Sorceror's Charm ROLL AGAIN uses entry 93
 `sounds\click` (`0x00671568`). A subsequent queued offer uses the existing
 `skill.unlock` row. Entry 53 `sounds\levelupskill` remains loaded but has no
 retail dispatch.
+
+Standalone InventoryScreen opening is also silent. The keyboard edge at
+`0x005CB3A3` and HUD callback at `0x005D8165` call opener `0x005C6F10`
+directly, and neither that opener nor constructor `0x00560380` requests
+audio. Registry 5 `sounds\backpack_open` is not an InventoryScreen-open
+event; its filename must not be used to invent one.
 
 Asset 52 has one separate non-census consumer: `skill.turn_undead`, skill 77's
 undead-area effect. `0x00647F6B` and `0x00647FBE` inside `0x00647EF0` issue

@@ -28,6 +28,9 @@ TRADER_CATALOG_PATH = (
 INVENTORY_CAPTURE_PATH = (
     ROOT / "tests/fixtures/webgame/menu-reference-captures/inventory-screen.png"
 )
+TRADER_CAPTURE_MANIFEST_PATH = (
+    ROOT / "tests/fixtures/webgame/native-hub-trader-ui-captures.json"
+)
 INTENT_SCHEMA_PATH = ROOT / "webgame-contracts/intent-schema.json"
 RNG_DOC_PATH = ROOT / "docs/reverse-engineering/native-movement-and-tick.md"
 DIG_DOC_PATH = ROOT / "docs/design/dig-npc-movement-lock-2026-07-28.md"
@@ -252,7 +255,7 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
         raise StaticReTestFailure(
             f"the native hub/trader catalog is not reviewable JSON: {exc}"
         ) from exc
-    if catalog.get("schema_version") != 2:
+    if catalog.get("schema_version") != 5:
         raise StaticReTestFailure("hub/trader consumers lost the complete UI-family schema")
     if catalog.get("source", {}).get("sha256") != EXPECTED_RETAIL_SHA256:
         raise StaticReTestFailure("hub/trader UI provenance no longer names retail 0.72.5")
@@ -260,13 +263,66 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
     ui = catalog.get("ui")
     if not isinstance(ui, dict):
         raise StaticReTestFailure("hub/trader catalog lost its UI ownership section")
+    transaction_audio = catalog.get("transaction_audio")
+    if not isinstance(transaction_audio, dict) or transaction_audio.get("native_tick_ms") != 10:
+        raise StaticReTestFailure("hub/trader transaction audio ownership disappeared")
+    assets = transaction_audio.get("assets")
+    if not isinstance(assets, dict) or {
+        name: (assets.get(name, {}).get("registry_index"), assets.get(name, {}).get("sha256"))
+        for name in (
+            "click", "backpack_close", "badaction", "dropcoins",
+            "openpanel", "distortreality", "pickskill",
+        )
+    } != {
+        "click": (0, "8aeebcfeb69625bee2ee78fe9c63939e6b40edcc89d5facf2c0d35e1b5920307"),
+        "backpack_close": (4, "32fa4ca58d0fe1eb967bb50f20dffc0edb98b25ca74c719edc2b70b9e4312319"),
+        "badaction": (6, "0ca71924473e6a45156f0dbd450ff7a158d39015179697c83c7b04824e3256d6"),
+        "dropcoins": (25, "b72d44080d99fdae8e7dce83b5f1b6a553d503a753df2deacea7ee8829ba4376"),
+        "openpanel": (64, "637a76288c852d813921c7789b211f573f88c56d6036e2e1f3e1cf558f0ae743"),
+        "distortreality": (23, "3fa59accc564838ea1896f95539ee0acecd9345c3e2c1adceaadee0dd870194e"),
+        "pickskill": (1, "494d1b973bd3f319199199ec9cf851491caee10c3d72dbe61acda69d28daabe4"),
+    }:
+        raise StaticReTestFailure("exact hub/trader sound registry assets drifted")
+    if transaction_audio.get("ordinary_purchase") != {
+        "success": {"call_site": "0x0056C10E", "sound": "dropcoins"},
+        "rejected": {"call_site": "0x0056C1A6", "sound": "badaction"},
+        "activation_click_before_callback": "0x0055F054",
+    }:
+        raise StaticReTestFailure("ordinary purchase click/outcome sequencing drifted")
+    if transaction_audio.get("teardown", {}).get("standalone_inventory_open") != {
+        "sound": None,
+        "keyboard_call_site": "0x005CB3A3",
+        "hud_call_site": "0x005D8165",
+        "opener": "0x005C6F10",
+        "constructor": "0x00560380",
+    }:
+        raise StaticReTestFailure("silent InventoryScreen open ownership drifted")
+    dowsing_audio = transaction_audio.get("dowsing_roll", {})
+    if (
+        dowsing_audio.get("rng_order_prefix")
+        != ["Float(0.1,false) for distortion pitch", "Integer(2) for offer count"]
+        or dowsing_audio.get("echo", {}).get("tick_offsets") != [0, 25, 50, 75]
+        or dowsing_audio.get("echo", {}).get("gains") != [1.0, 0.25, 0.0625, 0.015625]
+        or dowsing_audio.get("distortion", {}).get("pitch") != "0.8 + Float(0.1,false)"
+        or transaction_audio.get("dowsing_purchase", {}).get("rng_order_suffix")
+        != ["Integer(10) for next fee", "Float(0.1,false) for distortion pitch"]
+        or transaction_audio.get("dowsing_purchase", {}).get("distortion", {}).get("pitch")
+        != "1.0 + Float(0.1,false)"
+    ):
+        raise StaticReTestFailure("dowsing SoundEcho, distortion, or RNG ordering drifted")
     inventory = ui.get("inventory_screen")
     shops = ui.get("shop_family")
+    hagatha = ui.get("hagatha_perk_pane")
+    dowsing = ui.get("dowsing_presentation")
     dialogue = ui.get("dialogue")
-    if not isinstance(inventory, dict) or not isinstance(shops, dict) or not isinstance(dialogue, dict):
-        raise StaticReTestFailure("inventory, shop, or MsgBox membership disappeared")
-    if ui.get("stage_pixels") != [1600, 900] or ui.get("native_logical_size") != [1280, 720]:
-        raise StaticReTestFailure("native hub UI fixed-stage geometry drifted")
+    if any(not isinstance(member, dict) for member in (inventory, shops, hagatha, dowsing, dialogue)):
+        raise StaticReTestFailure("inventory, shop, subclass, or Chat membership disappeared")
+    if (
+        ui.get("stage_pixels") != [1600, 900]
+        or ui.get("coordinate_space")
+        != "direct 1600x900 stage pixels; no 1280x720 conversion"
+    ):
+        raise StaticReTestFailure("native hub UI direct-stage geometry drifted")
     if (
         inventory.get("backpack_columns"),
         inventory.get("backpack_rows"),
@@ -275,10 +331,313 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
         raise StaticReTestFailure("inventory no longer retains the recovered 22 by 4 grid")
     if inventory.get("backpack_fill_order") != "column-major: index / 4 selects x; index % 4 selects y":
         raise StaticReTestFailure("inventory no longer retains the recovered column-major slot order")
-    if shops.get("ordinary_draw_bounds") != [4, 2] or shops.get("ordinary_retained_capacity") != 28:
-        raise StaticReTestFailure("ordinary Shop conflated its 4 by 2 draw page with retained capacity")
+    if (
+        inventory.get("backpack_slot_center_origin") != [60, 532]
+        or inventory.get("backpack_slot_visible_origin") != [24, 496]
+        or inventory.get("backpack_slot_pitch") != [75, 75]
+        or inventory.get("backpack_slot_extent") != [72, 72]
+        or inventory.get("backpack_slot_rgba") != [1.0, 1.0, 1.0, 0.4]
+        or inventory.get("stats_content_rect") != [103, 89, 320, 320]
+        or inventory.get("equip_content_rect") != [1177, 89, 320, 320]
+    ):
+        raise StaticReTestFailure("InventoryScreen live-draw geometry drifted")
+    if inventory.get("mode_geometry") != {
+        "companion": {
+            "left_content_rect": [103, 89, 320, 320],
+            "right_content_rect": [1177, 89, 320, 320],
+            "player_preview": False,
+        },
+        "standalone": {
+            "left_content_rect": [50, 89, 320, 320],
+            "right_content_rect": [1230, 89, 320, 320],
+            "player_preview": {
+                "center": [800, 249],
+                "heading_index": 9,
+                "heading_degrees": 135,
+                "scale": 1.25,
+            },
+        },
+    }:
+        raise StaticReTestFailure("standalone and companion InventoryScreen geometry drifted")
+    if inventory.get("starter_loadout") != {
+        "constructor": "0x005CFA80",
+        "recipe_uid": 0,
+        "equipment": {
+            "hat": {"name": "Hat", "native_type_id": 7005, "icon_records": [34, 38]},
+            "robe": {"name": "Robe", "native_type_id": 7006, "icon_records": [64, 67]},
+            "weapon": {"name": "Staff", "native_type_id": 7004, "icon_records": [72]},
+        },
+        "backpack": [
+            {"slot": 0, "name": "Health Potion", "native_type_id": 7001, "native_subtype": 0},
+            {"slot": 1, "name": "Mana Potion", "native_type_id": 7001, "native_subtype": 1},
+        ],
+        "visual_lane_aliases": {
+            "primary": "hat",
+            "secondary": "robe",
+            "attachment": "weapon",
+            "hand_boxes": ["weapon", "weapon"],
+        },
+        "equipment_color_source": "current wizard appearance primary color plus white secondary",
+    }:
+        raise StaticReTestFailure("InventoryScreen lost the stock five-object starter loadout")
+    if inventory.get("item_icon_render_contract") != {
+        "scale": "natural atlas logical size; no fit-to-cell scaling",
+        "ring": {"render": "0x005788B0", "translation": [0, 0], "rotation_degrees": 0},
+        "amulet": {
+            "render": "0x00578910",
+            "translation": [0, -5],
+            "rotation_degrees": 0,
+            "layer_order": ["shared record 30 or 31", "recipe-specific record 18 through 29"],
+        },
+        "staff": {
+            "render": "0x00578A90",
+            "translation": [-22.94306, 32.76608],
+            "rotation_degrees": 35,
+            "matrix": [0.81915, 0.57358, -0.57358, 0.81915, -22.94306, 32.76608],
+        },
+        "hat": {"render": "0x005779B0", "translation": [0, 0], "rotation_degrees": 0},
+        "robe": {"render": "0x00577B90", "translation": [0, 0], "rotation_degrees": 0},
+        "wand": {
+            "render": "0x00579720",
+            "translation": [0, 0],
+            "rotation_degrees": 45,
+            "matrix": [0.70711, 0.70711, -0.70711, 0.70711, 0, 0],
+        },
+        "recipe_color_source": ["effective_color1", "effective_color2"],
+        "recipe_color_consumers": ["hat", "robe"],
+        "untinted_classes": ["ring", "amulet", "staff", "wand"],
+        "recipe_color_catalog": "docs/reverse-engineering/native-item-catalog.json",
+        "null_recipe_color": "native white default",
+    }:
+        raise StaticReTestFailure("equipment item icon transforms, scale, or tint ownership drifted")
+    interaction = inventory.get("interaction_contract")
+    if not isinstance(interaction, dict):
+        raise StaticReTestFailure("InventoryScreen lost its native input-object ownership")
+    if (
+        interaction.get("selection_owner") != "InventoryGrid"
+        or interaction.get("pointer_press") != "0x0056F760"
+        or interaction.get("pointer_release") != "0x0056FC90"
+        or interaction.get("drag_threshold_pixels") != 10
+        or interaction.get("double_activation_window_native_ticks") != 50
+        or interaction.get("double_activation_window_ms_at_100_hz") != 500
+    ):
+        raise StaticReTestFailure("InventoryScreen press, release, or double-activation timing drifted")
+    potion_use = interaction.get("potion_use")
+    if not isinstance(potion_use, dict) or (
+        potion_use.get("dispatcher") != "0x0056D1B0"
+        or potion_use.get("accepted_sound_call_site") != "0x0056D246"
+        or potion_use.get("accepted_sound_registry_index") != 24
+        or potion_use.get("accepted_sound_registry_member_offset") != "0x438"
+        or potion_use.get("accepted_sound_path") != "sounds\\drink"
+        or potion_use.get("accepted_sound_sha256")
+        != "61fdcc02a31b1c1c43264cb6ed8d02717e9dba2c5123167ad6e309053e28f322"
+        or potion_use.get("subtypes") != {
+            "0": {"effect": "set current health to maximum"},
+            "1": {"effect": "set current mana to maximum"},
+            "2": {
+                "effect": "quadruple all attack damage",
+                "duration_native_ticks": 6000,
+                "duration_seconds": 60,
+            },
+            "3": {
+                "effect": "clear poison and grant poison immunity",
+                "duration_native_ticks": 1000,
+                "duration_seconds": 10,
+            },
+            "4": {
+                "effect": "grant concentration of all skills at once",
+                "duration_native_ticks": 6000,
+                "duration_seconds": 60,
+            },
+            "5": {"effect": "set current health and mana to maximum"},
+        }
+        or potion_use.get("accepted_stack_mutation")
+        != "decrement exactly one; remove and destroy the live item when the stack reaches zero"
+    ):
+        raise StaticReTestFailure("native potion double-activation dispatcher or effect table drifted")
+    item_info = interaction.get("item_info")
+    if not isinstance(item_info, dict) or (
+        item_info.get("owner") != "ItemInfo"
+        or item_info.get("vtable") != "0x007946A4"
+        or item_info.get("constructor") != "0x00553B80"
+        or item_info.get("render") != "0x005C3A60"
+        or item_info.get("content_builder") != "0x0057C4B0"
+        or item_info.get("initial_delay_native_ticks") != 20
+        or item_info.get("equipment_without_recipe") != "name only"
+        or item_info.get("potion_instruction") != "Double-click to drink"
+        or item_info.get("potion_copy") != {
+            "health-potion": "Restores your health to maximum",
+            "mana-potion": "Restores your mana to maximum",
+            "wizard-chug": "Quadruples the damage of all attacks for 60 seconds",
+            "antidote": "Cures poisoning and grants immunity to poison for 10 seconds",
+            "mind-chug": "Grants concentration of all skills (at once) for 60 seconds",
+            "rejuvenation-potion": "Restores your health and mana to maximum",
+        }
+    ):
+        raise StaticReTestFailure("ItemInfo ownership, delay, or complete potion copy drifted")
+    dragger = interaction.get("dragger")
+    if not isinstance(dragger, dict) or {
+        key: dragger.get(key)
+        for key in ("owner", "vtable", "constructor", "update", "render", "pointer_move", "pointer_release")
+    } != {
+        "owner": "InventoryDragger",
+        "vtable": "0x00794294",
+        "constructor": "0x00550990",
+        "update": "0x0056E950",
+        "render": "0x005579A0",
+        "pointer_move": "0x0055E030",
+        "pointer_release": "0x0056EC30",
+    }:
+        raise StaticReTestFailure("InventoryDragger lifecycle ownership drifted")
+    if interaction.get("luthacus_inventory_shop") != {
+        "callback": "0x0056CD00",
+        "backpack_second_activation": "ordinary InventoryScreen use or equip",
+        "backpack_to_storage": "drag only",
+        "storage_to_backpack": ["second activation", "drag"],
+        "valid_drop": "only the opposite owner",
+        "invalid_drop": "restore the same source object without mutation",
+    }:
+        raise StaticReTestFailure("Luthacus asymmetric drag and activation ownership drifted")
+    required_clothing = interaction.get("required_clothing")
+    if not isinstance(required_clothing, dict) or (
+        required_clothing.get("hat", {}).get("title")
+        != "A WIZARD WOULD NEVER REMOVE HIS HAT!"
+        or required_clothing.get("robe", {}).get("title")
+        != "A WIZARD WOULD NEVER REMOVE HIS ROBE!"
+        or required_clothing.get("hat", {}).get("primary_button") != "OKAY"
+        or required_clothing.get("robe", {}).get("primary_button") != "OKAY"
+        or required_clothing.get("direct_removal")
+        != "reject, restore the equipped object, and open MsgBox"
+    ):
+        raise StaticReTestFailure("mandatory Hat/Robe release branches drifted")
+    trace = inventory.get("live_draw_trace")
+    if not isinstance(trace, dict) or (
+        trace.get("hooked_draw_functions") != ["0x004142E0", "0x004143D0", "0x00414540"]
+        or trace.get("settled_first_frame_draw_count") != 481
+        or trace.get("client_pixels") != [1600, 900]
+    ):
+        raise StaticReTestFailure("InventoryScreen live draw-call provenance disappeared")
+    if (
+        shops.get("ordinary_columns"),
+        shops.get("ordinary_rows"),
+        shops.get("ordinary_retained_capacity"),
+    ) != (7, 4, 28):
+        raise StaticReTestFailure("ordinary Shop lost its complete 7 by 4 StoreGrid")
+    if shops.get("background_tile_repeat") != [4, 2]:
+        raise StaticReTestFailure("ordinary Shop lost its distinct 4 by 2 background tiling pass")
+    if shops.get("background_color") != {"red": 0.85, "green": 1.0, "blue": 0.85}:
+        raise StaticReTestFailure("ordinary Shop background color modulation drifted")
+    if (
+        shops.get("price_font_logical_size") != [26, 26]
+        or shops.get("price_text_baseline_offset_from_slot_visible_top") != 67
+        or shops.get("first_row_price_glyph_visible_y") != [113, 124]
+        or shops.get("first_column_price_glyph_right_edge_x") != 605
+    ):
+        raise StaticReTestFailure("ordinary Shop price font or traced glyph placement drifted")
+    if (
+        shops.get("constructor_layout_argument") != [215, -20, 604, 400]
+        or shops.get("settled_stage_rect") != [498, -20, 604, 430]
+        or shops.get("grid_slot_center_origin") != [575, 92.5]
+        or shops.get("grid_slot_visible_origin") != [539, 56.5]
+        or shops.get("grid_slot_pitch") != [75, 75]
+        or shops.get("grid_slot_extent") != [72, 72]
+        or shops.get("grid_slot_rgba") != [1.0, 1.0, 1.0, 0.6]
+    ):
+        raise StaticReTestFailure("common Shop settled root or exact StoreGrid geometry drifted")
+    if shops.get("done_detail_visible_rects") != {
+        "UI.72": [714.5, 358, 171, 58],
+        "UI.12": [732.5, 361.5, 135, 47],
+        "UI.86": [737, 366, 126, 38],
+    }:
+        raise StaticReTestFailure("common Shop DONE/detail stack geometry drifted")
+    if shops.get("done_detail_color_pass") != {
+        "UI.72_rgba": [1.0, 1.0, 1.0, 1.0],
+        "UI.12_rgba": [1.0, 1.0, 1.0, 0.85],
+        "UI.86_rgba": [0.75, 1.0, 0.75, 1.0],
+        "DONE_text_rgba": [1.0, 1.0, 1.0, 1.0],
+        "alpha_basis": "each alpha is multiplied by the service root alpha",
+    }:
+        raise StaticReTestFailure("common Shop DONE/detail renderer-state pass drifted")
+    if (
+        shops.get("title_glyph_visible_y") != [14, 34]
+        or shops.get("title_text_baseline_y") != 32
+        or shops.get("done_text_visible_rect") != [760, 374, 80, 20]
+        or shops.get("done_text_baseline_y") != 392
+    ):
+        raise StaticReTestFailure("common Shop title or DONE text placement drifted")
+    if shops.get("activation") != "first activation selects; activating the same selected cell invokes the subclass callback":
+        raise StaticReTestFailure("shop selection and second-activation dispatch drifted")
+    if (
+        shops.get("affordable_price_rgba") != [0.85, 0.73, 0.44, 1.0]
+        or shops.get("unaffordable_price_rgba") != [1.0, 0.5, 0.5, 1.0]
+        or shops.get("shared_gold_hex") != "#D9BA70"
+        or shops.get("background_composite_passes") != ["normal", "additive"]
+        or shops.get("background_tile_extent") != [264, 264]
+        or shops.get("background_clip_rect") != [498, -20, 604, 400]
+        or shops.get("background_blend_state_field") != "RenderContext+0x3F1"
+        or shops.get("background_blend_state_apply") != "0x004208A0"
+    ):
+        raise StaticReTestFailure("shop color or duplicate background composite passes drifted")
     if ui.get("dowsing_retained_capacity") != 9 or ui.get("dowsing_columns") != 3:
         raise StaticReTestFailure("DowsingShop lost its complete 3 by 3 result family")
+    if hagatha != {
+        "owner": "companion InventoryScreen left pane",
+        "outer_content_rect": [103, 89, 320, 320],
+        "title": "CHARMS/CURSES",
+        "title_glyph_visible_rect": [169, 139, 168, 15],
+        "title_text_baseline_y": 152.5,
+        "title_rgba": [0.85, 0.73, 0.44, 1.0],
+        "inner_panel_rect": [139, 129, 227, 238],
+        "inner_panel_fill_rgba": [0.1, 0.1, 0.09, 1.0],
+        "inner_panel_outline_rgba": [1.0, 1.0, 1.0, 1.0],
+        "inner_panel_outline_pixels": 1,
+        "inner_panel_background_atlas_record": None,
+        "slot_atlas_record": "Inventory.10",
+        "slot_visible_origin": [164.2, 169.2],
+        "slot_visible_extent": [57.6, 57.6],
+        "slot_pitch": [60, 60],
+        "slot_scale": 0.8,
+        "empty_slot_rgb": [0.5, 0.5, 0.5],
+        "occupied_slot_rgb": [1.0, 1.0, 1.0],
+        "owned_icon_atlas": "Skills",
+        "owned_icon_record": "127 + selector",
+        "columns": 3,
+        "rows": 3,
+        "bundle_atlas_record": "Inventory.5",
+        "bundle_visible_rect": [207, 263, 92, 50],
+    }:
+        raise StaticReTestFailure("Hagatha lost the traced companion InventoryScreen perk pane")
+    if dowsing != {
+        "pre_roll": {
+            "mirror_header_visible_rect": [693, 54.5, 214, 41],
+            "reference_drop_rect": [750, 101, 100, 149],
+            "button_visible_rect": [623.5, 265.5, 353, 69],
+            "button_side_visible_rects": [[669, 259.5, 70, 85], [861, 259.5, 70, 85]],
+            "button_records": [101, 54],
+            "button_art_rgba": [1.0, 1.0, 1.0, 1.0],
+            "label": "DOWSE",
+            "label_text_baseline_y": 302,
+            "fee_text_baseline_y": 322.5,
+            "label_and_fee_rgba": [0.85, 0.73, 0.44, 1.0],
+        },
+        "result": {
+            "slot_visible_origin": [689, 94],
+            "slot_visible_extent": [72, 72],
+            "slot_pitch": [75, 75],
+            "columns": 3,
+            "rows": 3,
+            "background_record": "UI.49",
+            "background_composite_passes": ["normal", "additive"],
+            "background_color": {
+                "red": 1.0,
+                "green_range": [0.6, 0.8],
+                "blue": 1.0,
+                "green_formula": "sin(nativeTick * 0.5 * pi / 180) * 0.1 + 0.7",
+                "period_native_ticks": 720,
+            },
+        },
+    }:
+        raise StaticReTestFailure("DowsingShop pre-roll or result composition drifted")
     if ui.get("dowsing_flash") != {
         "state_field": "DowsingShop+0x360",
         "set_to": 1.0,
@@ -295,8 +654,87 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
         "primary_button": "OKAY",
     }:
         raise StaticReTestFailure("DowsingShop insufficient-gold MsgBox copy drifted")
-    if dialogue.get("fade_step_per_native_tick") != 0.035 or dialogue.get("curtain_alpha") != 0.75:
-        raise StaticReTestFailure("MsgBox reveal timing or curtain alpha drifted")
+    if (
+        dialogue.get("owner") != "Chat"
+        or dialogue.get("vtable") != "0x0079061C"
+        or dialogue.get("panel_nine_slice_helper") != "0x00417760"
+        or dialogue.get("panel_edge_uv_fraction") != 0.05
+        or dialogue.get("panel_center_uv_origin") != [0.95, 0.95]
+        or dialogue.get("stage_rect") != [476.5, 26, 647, 420]
+        or dialogue.get("content_rect") != [561.5, 111, 477, 250]
+        or dialogue.get("corner_centers")
+        != [[521, 70.5], [1079, 70.5], [521, 401.5], [1079, 401.5]]
+        or dialogue.get("title_text_baseline_y") != 90
+        or dialogue.get("primary_choice_text_baseline_y") != 226
+        or dialogue.get("secondary_choice_text_baseline_y") != 256
+        or dialogue.get("done_text_baseline_y") != 396
+        or dialogue.get("default_text_rgba") != [0.85, 0.73, 0.44, 1.0]
+        or dialogue.get("primary_action_rgba") != [0.55, 0.75, 0.55, 1.0]
+        or dialogue.get("primary_action_scale") != 1.25
+        or dialogue.get("fade_step_per_native_tick") != 0.05
+        or dialogue.get("curtain_alpha") != 0
+        or dialogue.get("normal_scroll_pixels_per_tick") != 0.125
+        or dialogue.get("accelerated_scroll_pixels_per_tick") != 0.8
+    ):
+        raise StaticReTestFailure("trader Chat ownership, geometry, or timing drifted")
+    emphasis = dialogue.get("inline_emphasis")
+    if (
+        not isinstance(emphasis, dict)
+        or emphasis.get("source_delimiter") != "*"
+        or emphasis.get("exact_text_command_marker") != "_"
+        or emphasis.get("command_marker_field") != "ExactText+0x4D414"
+        or emphasis.get("italic_command") != "i"
+        or emphasis.get("italic_factor_field") != "ExactText+0x4D418"
+        or emphasis.get("italic_factor") != 0.125
+        or emphasis.get("font_line_height_field") != "ExactText+0xD410"
+        or emphasis.get("font_line_height") != 24
+        or emphasis.get("glyph_quad_horizontal_delta_pixels") != 3
+        or "_iless_i" not in emphasis.get("chat_string_rewrite", "")
+    ):
+        raise StaticReTestFailure("Chat inline ExactText emphasis ownership or quad shear drifted")
+    msgbox = ui.get("msgbox")
+    if not isinstance(msgbox, dict) or (
+        msgbox.get("owner") != "MsgBox"
+        or msgbox.get("vtable") != "0x00788E04"
+        or msgbox.get("fade_step_per_native_tick") != 0.035
+        or msgbox.get("curtain_alpha_multiplier") != 0.75
+        or msgbox.get("horizontal_edge_record") != 10
+        or msgbox.get("vertical_edge_record") != 79
+        or msgbox.get("background_enabled_field") != "HoverBox+0xB8"
+        or msgbox.get("background_enabled_default") is not True
+        or msgbox.get("background_enable_write") != "0x005C3957"
+        or msgbox.get("background_render_branch") != "0x005C46E5..0x005C4818"
+        or msgbox.get("ui_atlas_record_array_base_offset") != "0x38"
+        or msgbox.get("ui_atlas_record_stride") != "0xC4"
+        or msgbox.get("layout_rect_at_full_alpha") != [560.5, 183, 479, 334]
+        or msgbox.get("interior_background_record") != 49
+        or msgbox.get("interior_background_object_offset") != "UI atlas+0x25BC"
+        or msgbox.get("interior_fill")
+        != "repeat UI 49 from the clip top-left and scissor surplus tiles to the clip rectangle"
+        or msgbox.get("interior_clip_inflate_pixels") != 25
+        or msgbox.get("interior_clip_rect") != [535.5, 158, 529, 384]
+        or msgbox.get("interior_visibility")
+        != "authored UI 49 obscures the companion InventoryScreen/service inside the clip; the companion remains visible outside it beneath the curtain"
+        or msgbox.get("outer_visible_rect") != [522, 145.5, 556, 409]
+        or msgbox.get("inner_nine_slice_record") != 17
+        or msgbox.get("inner_nine_slice_object_offset") != "UI atlas+0x0D3C"
+        or msgbox.get("inner_nine_slice_helper") != "0x00417760"
+        or msgbox.get("inner_nine_slice_edge_uv_fraction") != 0.05
+        or msgbox.get("inner_nine_slice_inflate_pixels") != 20
+        or msgbox.get("inner_visible_rect") != [540.5, 163, 519, 374]
+        or msgbox.get("skull_header_visible_rect") != [669, 97, 262, 67]
+        or msgbox.get("primary_button_visible_rect") != [623.5, 397.5, 353, 69]
+        or msgbox.get("primary_button_side_visible_rects")
+        != [[696, 391.5, 70, 85], [834, 391.5, 70, 85]]
+        or msgbox.get("primary_button_art_rgba") != [1.0, 1.0, 1.0, 1.0]
+        or msgbox.get("primary_button_text_rgba") != [0.85, 0.73, 0.44, 1.0]
+        or msgbox.get("arrow_centers_and_scales")
+        != [[800, 592, 1], [725, 579, 0.75], [875, 579, 0.75]]
+        or msgbox.get("title_text_baseline_y") != 252
+        or msgbox.get("body_text_baseline_y") != 287.5
+        or msgbox.get("primary_button_text_baseline_y") != 440
+    ):
+        raise StaticReTestFailure("dowsing MsgBox ownership, composition, or reveal timing drifted")
     if ui.get("browser_asset_policy", {}).get("visible_html_controls") is not False:
         raise StaticReTestFailure("visible generic HTML controls can replace stock atlas presentation")
 
@@ -306,7 +744,15 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
         "shop_item_detail_render": "0x00565E00",
         "inventory_screen_render": "0x00568B90",
         "inventory_grid_render": "0x0055A070",
+        "chat_render": "0x004F9380",
+        "chat_update": "0x004FFEE0",
+        "chat_action": "0x004FFC40",
+        "exact_text_render": "0x0043BCD0",
+        "exact_text_command_aware_wrap": "0x0043D230",
+        "hoverbox_constructor": "0x005C38F0",
         "msgbox_render": "0x005C4530",
+        "ui_panel_render": "0x005C3F40",
+        "hagatha_perk_pane_primitive": "0x00550CC0",
         "ordinary_purchase": "0x0056BF70",
         "perk_purchase": "0x0056C340",
         "inventory_transfer": "0x0056CD00",
@@ -326,6 +772,68 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
     if png[:8] != b"\x89PNG\r\n\x1a\n" or int.from_bytes(png[16:20], "big") != 1600 or int.from_bytes(png[20:24], "big") != 900:
         raise StaticReTestFailure("the inventory visual fixture lost its exact 1600 by 900 client dimensions")
 
+    raw_capture_manifest = _read(
+        TRADER_CAPTURE_MANIFEST_PATH,
+        "the stock trader/Chat visual capture manifest is absent",
+    )
+    try:
+        capture_manifest = json.loads(raw_capture_manifest)
+    except json.JSONDecodeError as exc:
+        raise StaticReTestFailure(
+            f"the stock trader/Chat visual capture manifest is not reviewable JSON: {exc}"
+        ) from exc
+    captures = capture_manifest.get("captures")
+    provenance = capture_manifest.get("provenance")
+    if (
+        capture_manifest.get("schema_version") != 1
+        or not isinstance(captures, list)
+        or len(captures) != 18
+        or not isinstance(provenance, dict)
+        or provenance.get("executable_sha256") != EXPECTED_RETAIL_SHA256
+        or provenance.get("client_pixels") != [1600, 900]
+        or "debugger-instrumented/runtime-staged" not in provenance.get("instrumentation_disclosure", "")
+    ):
+        raise StaticReTestFailure("stock trader/Chat capture provenance or complete state census drifted")
+    required_capture_states = {
+        "Fomentius Shop with companion InventoryScreen",
+        "Fomentius selected affordable offer",
+        "Hagatha PerkShop with companion InventoryScreen",
+        "Hagatha selected perk",
+        "Luthacus InventoryShop with both containers",
+        "Luthacus selected backpack object",
+        "Shlorio DowsingShop pre-roll",
+        "Shlorio DowsingShop result grid",
+        "Shlorio insufficient-gold MsgBox",
+        "Fomentius Chat intro",
+        "Fomentius Chat question state",
+        "Hagatha Chat intro",
+        "Hagatha Chat question state",
+        "Luthacus Chat intro",
+        "Luthacus Chat question state",
+        "Shlorio Chat intro",
+        "Shlorio Chat question state",
+        "Shlorio scrolling price explanation",
+    }
+    if {capture.get("state") for capture in captures if isinstance(capture, dict)} != required_capture_states:
+        raise StaticReTestFailure("stock trader/Chat capture state membership drifted")
+    for capture in captures:
+        if not isinstance(capture, dict):
+            raise StaticReTestFailure("stock trader/Chat capture row is not an object")
+        relative_path = capture.get("file")
+        expected_hash = capture.get("sha256")
+        if not isinstance(relative_path, str) or not isinstance(expected_hash, str):
+            raise StaticReTestFailure("stock trader/Chat capture row lost its path or hash")
+        capture_path = TRADER_CAPTURE_MANIFEST_PATH.parent / relative_path
+        if not capture_path.is_file() or hashlib.sha256(capture_path.read_bytes()).hexdigest() != expected_hash:
+            raise StaticReTestFailure(f"stock trader/Chat capture drifted: {relative_path}")
+        capture_png = capture_path.read_bytes()[:24]
+        if (
+            capture_png[:8] != b"\x89PNG\r\n\x1a\n"
+            or int.from_bytes(capture_png[16:20], "big") != 1600
+            or int.from_bytes(capture_png[20:24], "big") != 900
+        ):
+            raise StaticReTestFailure(f"stock trader/Chat capture lost 1600 by 900 dimensions: {relative_path}")
+
     _require_tokens(
         doc,
         (
@@ -336,12 +844,35 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
             "`DowsingShop` | `0x00790524`",
             "`InventoryGrid` | `0x00794C64`",
             "`InventoryScreen` | `0x00794F54`",
-            "`MsgBox` and dialogue controls | `0x00788E04`",
+            "`Chat` | `0x0079061C`",
+            "`MsgBox` | `0x00788E04`",
+            "seven columns by four rows",
             "22 columns by 4 rows (88 authored slots)",
+            "alpha `0.6`",
+            "alpha `0.4`",
+            "`#D9BA70`",
+            "`#FF8080`",
+            "`sin(nativeTick * 0.5 * pi / 180) * 0.1 + 0.7`",
+            "The UI atlas object array starts at `+0x38` with stride `0xc4`",
+            "repeats UI 49 from that clip's top-left",
+            "calls native nine-slice helper `0x00417760` with UI 17",
+            "renderer helper `0x00417760`",
+            "`_c(.55f,.75f,.55f)_s(1.25)`",
+            "recipe-UID-0 loadout",
+            "translated `(0,-5)`",
+            "rotated `+35` degrees",
+            "rotated `+45` degrees",
+            "`effective_color1` and `effective_color2`",
+            "`InventoryScreen::PointerPress` at `0x0056f760`",
+            "`InventoryDragger`",
+            "`ItemInfo`",
+            "`Double-click to drink`",
+            "`A WIZARD WOULD NEVER REMOVE HIS HAT!`",
+            "`A WIZARD WOULD NEVER REMOVE HIS ROBE!`",
         ),
         "native hub/trader UI documentation lost a sibling class or recovered grid member",
     )
-    return "stock InventoryScreen, every trader UI sibling, MsgBox, and purchase dispatcher are pinned"
+    return "stock InventoryScreen, every trader UI sibling, Chat, MsgBox, and purchase dispatcher are pinned"
 
 
 def _load_fixture() -> tuple[str, str, dict[str, Any], dict[int, dict[str, Any]], dict[str, dict[str, Any]]]:

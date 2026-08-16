@@ -276,6 +276,15 @@ returns failure without a partial transfer. Fomentius, Hagatha, and Shlorio are
 buy-only: there is no sell price, buyback, cancellation refund, or later refund
 path. Closing a catalog does not refund an already completed purchase.
 
+The transaction owns its outcome audio. Ordinary purchase success calls
+registry member 25, `sounds\\dropcoins`, at `0x0056C10E`; an insufficient-funds
+rejection calls registry member 6, `sounds\\badaction`, at `0x0056C1A6`.
+Hagatha's specialized purchase callback retains the same outcomes at
+`0x0056CAEA` and `0x0056CC04`. The common Shop action has already played
+registry member 0, `sounds\\click`, at `0x0055F054` before invoking either
+purchase callback on the second activation. Selection and transaction outcome
+are distinct native requests rather than one generic UI click.
+
 One object in a native Shop list is one unit of stock. The fixture groups
 identical Fomentius objects into `{quantity}` solely to make the recording
 readable; `stock_count` retains the ungrouped object count.
@@ -445,7 +454,8 @@ Pressing DOWSE in callback `0x0055FAF0`:
 
 1. rejects without mutation when participant gold is below the current fee;
 2. spends exactly that fee through `0x005A7C60`;
-3. calls the native Float presentation effect once;
+3. starts the native `pickskill` echo and consumes `Float(0.1,false)` for the
+   following distortion pitch;
 4. chooses `Integer(2)+3`, producing three or four offer slots;
 5. with no target item, repeatedly draws `Integer(47)` from the 47-entry native
    prototype catalog through `0x00554A70`, rejects ineligible or duplicate
@@ -460,6 +470,14 @@ presentation Float call used the captured active stream object. Each fixture
 roll includes the complete before/after state, return addresses
 `0x0055FE2A`, `0x00554A94`, `0x0055FE8E`, and price binding function
 `0x0055ACB0`.
+
+The Float draw is before the offer-count `Integer(2)`, not after the result
+list. The roll then calls `sounds\\distortreality` at `0x0055FE17` with pitch
+`0.8 + Float(0.1,false)` and gain 1. `SoundEcho` (`0x00407E50`, constructor
+`0x004084A0`, tick `0x00408550`) owns four `pickskill` requests at native ticks
+0, 25, 50, and 75—0, 250, 500, and 750 ms—with gains 1, 0.25, 0.0625, and
+0.015625. That Float consumption is part of the authoritative economic RNG
+order even though its result affects only audio pitch.
 
 If a target item exists at DowsingShop `+0x344`, the static branch first invokes
 the set-matching helper `0x00554AF0` twice, then invokes type-matching helper
@@ -476,6 +494,12 @@ on success callback `0x0056D110` clears the list and rolls the **next** fee:
 next_dowsing_fee = (Integer(10) + 10) * 50   // 500..950
 ```
 
+The successful purchase plays the common `dropcoins` request, then consumes
+`Float(0.1,false)` and calls `sounds\\distortreality` at `0x0056D18B` with
+pitch `1.0 + Float(0.1,false)` and gain 1. The next-fee integer draw precedes
+that Float. A rejected offer purchase takes the common `badaction` branch and
+does not clear the offers or advance either draw.
+
 Merely paying DOWSE does not reroll the fee. The G8 trials intentionally bought
 no result item, so their 650 fee stayed fixed across all eight rolls per
 process. There is no sell or refund path: closing discards offers, not the fee
@@ -489,6 +513,17 @@ Scavenged Goods storage at profile `+0x8C` (absolute pointer
 `DAT_0081A3BC`). It neither prices items nor changes gold. There is no random
 inventory, stock limit, restock, sale, or refund. The apparent catalog is the
 buyer's own storage, including retained Sacks from earlier runs.
+
+Live retail input plus callback `0x0056CD00` fixes the asymmetric gesture
+contract. A second activation in the lower backpack remains ordinary
+InventoryScreen behavior—potions drink and equipment equips; it does **not**
+deposit the item. Backpack-to-storage is drag-only. Storage-to-backpack accepts
+either a second activation of the selected storage cell or a drag. The common
+Shop action plays `click` before the storage double-activation callback; the
+accepted callback then plays `backpack_close` at `0x0056CE80`. Starting a
+storage drag plays `click` at `0x0056CF1A`, and an accepted native dragger
+release plays `click` at `0x0056F55A` with pitch 0.75. Invalid release restores
+the exact source object without transfer audio.
 
 This owner-private behavior is already live-proven in
 [`inventory-item-investigation.md`](../inventory-item-investigation.md#hub-inventory-shop-ownership-boundary):
@@ -706,9 +741,13 @@ A live 1600x900 client-area backbuffer receipt was added on 2026-08-15 as
 `tests/fixtures/webgame/menu-reference-captures/inventory-screen.png` (SHA-256
 `0d99c6bb3f1815aa061fd4ee49e7bfccbd0ee058ea69b0e8936155c7e5156d8b`).
 The process executable independently hashes to the retail digest above. The
-receipt covers the settled ordinary InventoryScreen state; shop, dowsing, and
-dialogue membership below remains instruction- and asset-backed unless an
-individual row says otherwise.
+settled trader and Chat witnesses listed in
+`tests/fixtures/webgame/native-hub-trader-ui-captures.json` were captured from
+that same retail image on the Mac mini. Those later witnesses are explicitly
+debugger-instrumented/runtime-staged: a temporary injected helper invoked the
+stock constructors and adjusted gold/dialogue state, while the retail code and
+retail renderers built every visible pixel. They are layout/render evidence,
+not evidence that the staged entry sequence itself is naturally reachable.
 
 ### Trader actors and animation
 
@@ -777,9 +816,11 @@ slots to the following exact titles:
 
 Dialogue commands `!BUYPERKS`, `!INVENTORY`, `!BUYPOTIONS`, and the dowsing
 service reach the same shop roots through `0x004fb890`; the dialogue is
-replaced, not left underneath the shop. Retail dialogue text remains sourced
-from `data/dialogue/survival/{witch,potionguy,scavenger,dowser}.txt` and is the
-portable text authority.
+replaced, not left underneath the shop. The runtime loads the aggregate
+`data/dialogue/survival.txt`. That aggregate differs from some retained
+per-NPC source fragments, so its reachable rows—not
+`survival/{witch,potionguy,scavenger,dowser}.txt`—are the portable text
+authority.
 
 The scavenger data file also declares `Outfit me Randomly` / `!RANDOMEQUIP`,
 but that row is dormant in this retail build. The ordinary hub builder at
@@ -855,13 +896,40 @@ matching-type recipes, not two, three, or four random offers. No retail hub
 producer reaches it, so targeted dowsing is dormant and outside the reachable
 hub trader system rather than unknown.
 
-The common Shop grid is four columns; Dowsing switches its result grid to
-three. Twenty-eight is the ordinary StoreGrid's retained object/page capacity,
-not permission to flatten all 28 objects into one invented browser grid.
-`0x00550db0` performs the common grid's normal and overlay passes with the
-authored 4-by-2 draw bounds, while Skills record 4 supplies the paired scroll
-decoration behind the retained StoreGrid controls. Dowsing retains at most
-nine result cells. Before a dowsing roll it
+The common `StoreGrid` is visibly seven columns by four rows, retains 28
+objects, and fills column-major: `column = floor(index / 4)` and
+`row = index % 4`. Dowsing switches its result grid to three columns and
+retains at most nine cells. The `4,2` arguments passed by `0x00550db0` to
+`0x00416020` are not grid bounds: decompilation proves that helper repeats the
+UI record 49 cracked-dark texture four by two times as the shop background.
+Every repeat keeps the record's native 264-by-264 logical extent; the Shop
+clips that 1056-by-528 submission to its `(498,-20,604,400)` content rectangle.
+The arguments do not stretch four copies to 151-by-200 cells.
+The ordinary field modulates that texture by native RGB `(0.85,1.0,0.85)`.
+That is not a single opaque texture pass. `0x00550db0` calls the same
+`0x00416020(0,0,4,2)` tiling pass twice: once in the normal state, then again
+after setting render-context byte `+0x3F1` to `1` and applying it through
+`0x004208a0`, before restoring the byte to `0`. The second pass is additive.
+The same two-pass sequence exists in `0x00554e20` for DowsingShop. This is
+visibly material: at stage `(700,45)` the browser's former one-pass rendering
+was RGB `(26,29,21)`, while the retail capture is `(52,58,44)`. A one-pass
+port therefore preserves the texture and tint but still renders both shop
+fields at roughly half stock luminance.
+`0x0055a7ad` draws every Inventory-record-10 StoreGrid cell at alpha `0.6`,
+then restores white; the same cells in the backpack path at `0x0055a070` use
+alpha `0.4`. These are authored renderer-state changes, not opacity inherited
+from a modal parent.
+Item prices are not drawn with the Skills font: their live glyph sprites have
+the 26-square body-font logical size. In the first StoreGrid row their visible
+glyphs occupy y=113..124, with the text baseline 67 pixels below the slot's
+visible top and the first-column glyph run ending at x=605. This is why using
+the extracted Skills font silently loses every price digit. Affordable prices,
+shop titles, Hagatha's pane title, DOWSE/fee text, and MsgBox control labels use
+the shared native RGBA `(0.85,0.73,0.44,1)`, which quantizes to `#D9BA70` in
+the browser. Unaffordable prices use `(1,0.5,0.5,1)` or `#FF8080`.
+Conflating that tiling pass with StoreGrid geometry caused the first Website
+port's false 4-by-2/paging model. Skills record 4 supplies the paired scroll
+decoration behind the store controls. Before a dowsing roll it
 renders `DOWSE`, the current `%d gold` fee, the gold icon, and the
 insufficient-funds state. `InventoryScreen` independently displays the same
 participant gold ledger. These are views of authoritative state, never
@@ -880,6 +948,45 @@ records 46..51. Equipment icon records are catalogued per recipe; Sack uses
 70/71, Perk uses Skills record `127 + selector` (bundle uses Inventory 10),
 and Misc uses 42..45.
 
+New-character inventory is not empty. `0x005CFA80` constructs the same
+recipe-UID-0 loadout for all 15 element/discipline choices: a type-7005 `Hat`
+in the hat sink, type-7006 `Robe` in the robe sink, type-7004 `Staff` in the
+weapon sink, then one type-7001 Health Potion in backpack slot 0 and one
+type-7001 Mana Potion in slot 1. `0x00571980` supplies those three exact base
+equipment labels. The local participant projection repeats Hat as the primary
+visual lane, Robe as the secondary lane, and Staff as the attachment lane;
+those are aliases of the three equipped objects rather than five items. The
+InventoryScreen similarly draws that one Staff in both hand boxes.
+
+The equipment icons are class-owned render methods, not scaled thumbnails.
+The inventory draw trace and vtable slot `+0x0C` methods recover this complete
+family:
+
+| Item class | Draw owner | Stock Inventory-atlas transform |
+| --- | --- | --- |
+| Ring | `0x005788B0` | selected recipe record, natural scale, centred |
+| Amulet | `0x00578910` | both recipe layers at natural scale, translated `(0,-5)` |
+| Staff | `0x00578A90` | selected record at natural scale, rotated `+35` degrees; matrix `(0.81915,0.57358,-0.57358,0.81915,-22.94306,32.76608)` |
+| Hat | `0x005779B0` | both recipe layers at natural scale and their authored trim origins |
+| Robe | `0x00577B90` | both recipe layers at natural scale and their authored trim origins |
+| Wand | `0x00579720` | selected record at natural scale, rotated `+45` degrees; matrix `(0.70711,0.70711,-0.70711,0.70711,0,0)` |
+
+For the recipe-UID-0 loadout, Hat draws Inventory 34 then 38, Robe draws 64
+then 67, and Staff draws 72. In the settled EQUIP pane their bases are
+`(1337,179)`, `(1337,277)`, and `(1257,259)` / `(1417,259)` respectively.
+The starter Hat/Robe primary color comes from the new wizard's current
+appearance color and their secondary color is white; it is not a fixed item
+recipe tint. Purchased Hat and Robe objects instead use the two ordered color
+fields from their row in `native-item-catalog.json` (`effective_color1` and
+`effective_color2`, with null meaning the native white default). Their methods
+are the only item-icon members which call the render-color setter
+`0x0041FE50`; Ring, Amulet, Staff, and Wand remain white regardless of recipe
+color metadata. Amulet also has a class-specific painter order: its shared
+record 30/31 layer is drawn first and its recipe-specific record 18..29 second.
+Shrinking large records to fit a generic 64-pixel box, reversing that layer
+order, discarding the second layer, ignoring Hat/Robe colors, or leaving
+Staff/Wand upright changes the native icon contract.
+
 The equip path is not a purchase side effect. `0x00570cd0` validates an item,
 `0x00575850` attaches it, `0x00570d80` resolves the current slot occupant,
 `0x0066f020` removes/reinserts on unequip, and `0x0055ff20` performs stack
@@ -897,9 +1004,9 @@ family uses Skills record 4 for its paired scroll decoration;
 its selected-item detail renderer `0x00565e00` additionally reaches UI records
 12 and 72 plus the item-type icon table. The dowsing pre-roll renderer at
 `0x00558160` additionally uses UI record 15, the exact `DOWSE` label,
-`%d gold`, and the participant ledger. Ordinary Shop has four columns and
-two authored draw passes over its scrollable StoreGrid; Dowsing changes the
-result grid to three columns and retains at most nine cells.
+`%d gold`, and the participant ledger. Ordinary Shop exposes all 28 retained
+cells as a seven-column by four-row StoreGrid; Dowsing changes the result grid
+to three columns and retains at most nine cells.
 
 ### Full stock UI correction and presentation closure
 
@@ -916,14 +1023,100 @@ family, not a skin over the transaction kernel:
 | `DowsingShop` | `0x00790524` | ctor `0x004F5AB0`, update `0x005512F0`, state rebuild `0x0055F9F0` | root `0x00558160`, result/grid `0x00554E20`, red flash `0x00551350`, action `0x0055FAF0` |
 | `InventoryGrid` | `0x00794C64` | ctor `0x0055D830`, input/state `0x0055FEE0`/`0x0055CEE0` | item/overlay draw `0x0055A070` |
 | `InventoryScreen` | `0x00794F54` | ctor `0x00560380`, update `0x00551A10`, close `0x00555810` | root `0x00568B90`, detail/help `0x00556940` |
-| `MsgBox` and dialogue controls | `0x00788E04` | ctor `0x004A98E0`, fade `0x005AB710`, primary/secondary controls `0x005AB7E0`/`0x005AB980`, lines `0x005BCCB0` | modal root `0x005C4530`; trader builder/dispatcher `0x0050B720`/`0x004FB890` |
+| `Chat` | `0x0079061C` | ctor `0x004F5D90`, init/update `0x004FFEC0`/`0x004FFEE0`, advance `0x004FFB00`, close `0x004FCB40` | root `0x004F9380`, pointer `0x004FFBC0`, action `0x004FFC40`, content `0x004FD6A0`, builder/dispatcher `0x0050B720`/`0x004FB890` |
+| `MsgBox` | `0x00788E04` | ctor `0x004A98E0`, fade `0x005AB710`, primary/secondary controls `0x005AB7E0`/`0x005AB980`, lines `0x005BCCB0` | modal root `0x005C4530`; insufficient-dowsing feedback only in this trader family |
 
-The common Shop settles at a logical 604x400 rect, horizontally centred, and
-slides vertically by 100 logical pixels under the active screen alpha. The
-InventoryScreen and MsgBox families have independent reveals: inventory adds
-`0.025` per native tick; MsgBox adds `0.035` and draws a black curtain at
-`0.75 * alpha`. These timings and ownership boundaries are not optional CSS
-transitions.
+At 1600x900 the common Shop root settles directly in stage coordinates at
+`(498,-20,604,430)` and slides vertically by exactly 100 stage pixels under
+the companion InventoryScreen alpha. Dispatcher `0x00514A20` constructs and
+attaches a separate 0x5D8-byte InventoryScreen for every service and stores it
+at `Gameplay+0x15a0`; the service overlay is never a standalone modal.
+
+A live settled-frame draw trace on 2026-08-16 detoured the retail centered,
+positioned, and transformed sprite paths at `0x004142e0`, `0x004143d0`, and
+`0x00414540`. The first complete Fomentius/InventoryScreen frame contained 481
+calls. This distinguishes constructor layout inputs from final transformed
+quads: the constructor passes 400 as the content-height argument, while the
+settled root rectangle is 430 pixels high. The common StoreGrid begins at
+centre `(575,92.5)`, uses the complete Inventory record 10 at 72x72 pixels,
+and advances by `(75,75)`; its first visible quad is therefore
+`(539,56.5,72,72)`. The seven-by-four grid is column-major. Its UI-record-74
+frame repeats five times across the top and ten times down each side, with
+UI-record-73 corner quads extending from x=475.5 through x=1123.5 and y=-65.5
+through y=415.5. The DONE/detail stack is the exact UI 72, 12, and 86 quads at
+`(714.5,358,171,58)`, `(732.5,361.5,135,47)`, and
+`(737,366,126,38)`; its DONE glyphs occupy `(760,374,80,20)` from baseline
+y=392. Render helper `0x00565e00` draws UI 72 white at the service alpha,
+UI 12 white at `0.85` times the service alpha, and UI 86 at
+`(0.75,1,0.75)` at the service alpha before resetting white for the DONE text.
+The service title glyphs occupy y=14..34 from baseline y=32. Both text
+rows are inside the stock draw list,
+not DOM labels layered over the atlas controls.
+
+The subclass traces close the non-common composition as well. `PerkShop`
+replaces the companion InventoryScreen's left STATS contents with its authored
+CHARMS/CURSES view; it does not construct a detached card over that pane. The
+pane remains `(103,89,320,320)`. Its three-by-three cells are Inventory record
+10 transformed to 0.8 scale: visible cells begin at `(164.2,169.2)`, measure
+57.6 square, and advance by 60 pixels. The pane interior is not tiled UI 49:
+helper `0x00550cc0` paints the rectangle `(139,129,227,238)` opaque
+`(0.1,0.1,0.09,1)`, resets white, and adds a one-pixel white outline. Empty
+cells are tinted `(0.5,0.5,0.5)`; occupied cells are white and composite the
+owned perk's Skills record `127 + selector`. The bundle remains full-white
+Inventory record 5. The CHARMS/CURSES glyph bounds are
+`(169,139,168,15)` from baseline y=152.5, and the bundle uses Inventory record 5 at
+`(207,263,92,50)`.
+
+Before a dowsing roll, UI record 15 occupies `(693,54.5,214,41)` above the
+black `(750,101,100,149)` reference-item sink. The DOWSE control is UI record
+101 at `(623.5,265.5,353,69)`, flanked by UI record 54 at
+`(669,259.5,70,85)` and `(861,259.5,70,85)`; DOWSE and its fee use baselines
+y=302 and y=322.5. After a roll, the result grid is
+three by three with 72-square Inventory-record-10 cells beginning at
+`(689,94)` and advancing by 75 in both axes. Its purple field is not another
+asset: `0x00554e20` reuses the UI-record-49 shop background with red and blue
+at 1.0 through the same normal-plus-additive duplicate passes. Its green channel is
+`sin(nativeTick * 0.5 * pi / 180) * 0.1 + 0.7`, ranging from 0.6 through 0.8
+with a 720-tick (7.2-second) period. Random per-render tint is therefore not a
+native approximation. The pre-roll UI-101 body and both mirrored UI-54 ends
+are white; only DOWSE and `%d gold` use the shared native gold color.
+
+Trader conversation is `Chat`, not `MsgBox`. Its UI-record-11 nine-slice root
+settles at `(476.5,26,647,420)`, with content `(561.5,111,477,250)`, title
+centre `(800,90)`, and SKIP/DONE text baseline y=396. The four UI-record-11
+centres are `(521,70.5)`, `(1079,70.5)`, `(521,401.5)`, and
+`(1079,401.5)`, producing exact 89-square corner bounds. In the question state,
+the primary 1.25-scale choice baseline is y=226 and the optional price-choice
+baseline is y=256. The nine-slice is renderer helper `0x00417760`, not four
+corners over a generic fill: it mirrors the complete UI-11 quadrant for the
+corners, stretches its rightmost five-percent UV strip across the horizontal
+edges, its bottom five-percent strip across the vertical edges, and its
+bottom-right five-percent square across the interior. Chat title, body,
+secondary choice, and SKIP/DONE use `(0.85,0.73,0.44,1)`; the authored primary
+action directive `_c(.55f,.75f,.55f)_s(1.25)` changes that row to
+`(0.55,0.75,0.55,1)` at scale 1.25. It has no full-screen curtain. Alpha advances by `0.05` per
+100 Hz tick. Intro copy starts at
+`contentHeight - 36` and scrolls by `0.125` pixels per tick; pointer acceleration
+adds `0.675` for 0.8 pixels per tick. Natural completion or SKIP exposes the
+question state; a price answer loads another scrolling intro and returns to
+questions. A command answer replaces Chat with the service, while a terminal
+Chat closes. InventoryScreen adds `0.025` per native tick. The separate MsgBox
+adds `0.035` and draws a black curtain at `0.75 * alpha`. These timings and
+ownership boundaries are not optional CSS transitions.
+
+Chat also preserves the dialogue file's inline emphasis. The survival source
+uses paired asterisks, such as `*very legal*` and `*less*`; the live Chat string
+at `Chat+0xb0` rewrites those pairs to ExactText italic toggles (the latter was
+observed as `_iless_i`). ExactText's command marker is `_` at `+0x4d414`, and
+`ExactText_Render` `0x0043bcd0` toggles italic on command `i`. In the Chat font,
+the italic factor at `+0x4d418` is `0.125` and the line height at `+0xd410` is
+24 pixels. The renderer consequently adds three pixels to both top x
+coordinates of every italic glyph quad and subtracts three pixels from both
+bottom x coordinates. A Mac retail frame of Hagatha's price explanation
+confirmed that `LESS` has this right-leaning shear and that neither source
+asterisk is painted. Command-aware wrapper `0x0043d230` skips the inline
+commands while laying out the final string. Stripping the delimiters and
+rendering an ordinary upright run therefore loses stock presentation.
 
 At 1600x900 the inventory witness proves the following settled membership:
 
@@ -938,17 +1131,116 @@ At 1600x900 the inventory witness proves the following settled membership:
   control; and
 - the exact Inventory, UI, Skills, Clothes/player, and bitmap-font art paths.
 
+The same draw trace fixes the inventory geometry independently of the capture:
+the backpack slot centres begin at `(60,532)`, advance by 75 in both axes, and
+draw full 72x72 Inventory-record-10 quads beginning at `(24,496)`. Those cells
+are white at alpha `0.4`; contained item sprites are not subjected to the cell
+alpha. The left and right 320x320 content panes are `(103,89)` and
+`(1177,89)`, each closed by
+four transformed Inventory-record-8 corners. The authored lower frame uses
+Inventory-record-8 outer corners at `(-100,477)`, `(1627,477)`,
+`(-100,739)`, and `(1627,739)`, with UI-record-71 divider ends at x=-30.5 and
+x=1579.5 on y=465 and y=793. The upper chrome is not a tiled generic panel:
+it is the asymmetric UI 20/29/30/31/32/33 composition plus UI 107..110 corner
+members recovered in the trace. Those exact authored calls are the renderer
+contract.
+
+InventoryScreen has two render modes rather than one movable modal. The
+service-companion mode uses panes `(103,89,320,320)` and
+`(1177,89,320,320)` and suppresses the central player preview. Standalone
+inventory shifts the left pane 53 pixels outward to `(50,89,320,320)`, shifts
+the right pane to `(1230,89,320,320)`, and renders the live composite wizard at
+centre `(800,249)`, heading index 9 (135 degrees), scale 1.25. The dispatcher
+selects the companion mode through the separately owned InventoryScreen; this
+53-pixel distinction cannot be inferred from whether a CSS overlay happens to
+cover the centre.
+
+Inventory input is also a native object family, not a row of detached equip
+buttons. `InventoryScreen::PointerPress` at `0x0056f760` asks the active
+`InventoryGrid` for the object under the pointer, retains both the current and
+previous object, and detects a second activation of the same object inside 50
+native ticks (500 ms at the 100 Hz simulation rate). A settled single click
+creates `ItemInfo` (`0x007946a4`, constructor `0x00553b80`, renderer
+`0x005c3a60`). That object waits 20 native ticks on the ordinary press path,
+then paints an opaque black contextual rectangle beside the selected object,
+clamped to the client, and renders its own `ExactText` line list. It does not
+paint selected name/rarity text at screen centre and it does not create an
+`EQUIP ...` control.
+
+The `ItemInfo` content list is built by the selected item's common method
+`0x0057c4b0`: the item's `+0x1c` virtual supplies its name and `+0x30` supplies
+its description. Recipe-less starter Hat, Robe, and Staff therefore display
+their names without a fabricated rarity. Potion method `0x00571c80` supplies
+the exact descriptions `Restores your health to maximum`, `Restores your mana
+to maximum`, `Quadruples the damage of all attacks for 60 seconds`, `Cures
+poisoning and grants immunity to poison for 10 seconds`, `Grants concentration
+of all skills (at once) for 60 seconds`, and `Restores your health and mana to
+maximum` for subtypes 0..5, followed by `Double-click to drink`. The double
+activation dispatcher is `0x0056d920`.
+
+That second activation reaches the central inventory-use dispatcher
+`0x0056d1b0`; potion use is an authoritative inventory transaction, not a
+presentation-only click. Subtype 0 sets current health to maximum, subtype 1
+sets current mana to maximum, subtype 2 arms 6000 native ticks (60 seconds) of
+four-times attack damage, subtype 3 clears poison and arms 1000 ticks (10
+seconds) of poison immunity, subtype 4 arms 6000 ticks (60 seconds) of
+all-skills concentration, and subtype 5 restores both health and mana. An
+accepted use decrements exactly one stack member and removes/destroys the live
+item when the count reaches zero. The accepted branch calls registry sound 24
+at `0x0056d246`: `sounds\\drink`, registry member `+0x438`, retail WAV size
+32642 and SHA-256
+`61fdcc02a31b1c1c43264cb6ed8d02717e9dba2c5123167ad6e309053e28f322`.
+These effects, stack ownership, and sound are one branch of the recovered
+double-activation seam.
+
+Once pointer travel crosses the native 10-pixel drag threshold
+(`_DAT_007de984`), `InventoryDragger`
+(`0x00794294`) owns the object: constructor `0x00550990`, update
+`0x0056e950`, renderer `0x005579a0`, and pointer move/release members
+`0x0055e030`/`0x0056ec30`. The source grid no longer paints the held object.
+The dragger paints the class-owned natural-size item icon at the pointer through
+shadow, ordinary, and pulsing passes. Every accepting equipment sink becomes
+bright green while held. Dropping backpack equipment into one of those sinks
+attaches it and reinserts any displaced object into the backpack; dropping
+removable equipped equipment into the backpack unequips it; an invalid release
+restores the exact source object without a transaction. Live stock witnesses
+confirmed all three states with the starter Staff, including its two hand-box
+aliases.
+
+The same `InventoryDragger` owns Luthacus transfers. It hides the held item in
+the lower backpack or upper StoreGrid, retains the natural-size three-pass icon
+at the pointer, and transfers only when released over the opposite owner. This
+is not a pair of click-to-move lists: source ownership, 10-pixel drag threshold,
+valid opposite-owner sink, invalid restore, and the asymmetric
+double-activation branch are one native input system.
+
+Hat and Robe are protected invariants, not ordinary emptyable sinks.
+`InventoryScreen::PointerRelease` at `0x0056fc90` rejects a direct removal and
+opens MsgBox instead. The hat title is `A WIZARD WOULD NEVER REMOVE HIS HAT!`,
+followed by `A wizard might switch hats.  A wizard might even wear his hat at a
+jaunty angle.  But a wizard would never, under any circumstances, remove his
+hat altogether.` and `After all, if you're not wearing a wizard hat, how would
+people know to be awed by the presence of a wizard?`. The robe title is `A
+WIZARD WOULD NEVER REMOVE HIS ROBE!`, followed by `A long, intimidating flowing
+robe looks debonaire on both a gluttonously fat slob and a pathetically wasted
+weakling.` and `Strip away the robe and people might make comments about the
+kind of physique you get from years in wizarding school.  And then you'd have a
+completely avoidable disintegration on your conscience.` Both use `OKAY` and
+the common MsgBox presentation. Dropping a replacement Hat or Robe into its
+sink remains valid; only leaving either sink empty is forbidden.
+
 The browser port must therefore render one fixed 1600x900 native stage from
 the recovered atlases and bitmap fonts, with transparent semantic hit targets
 over the native controls. Visible HTML headings, generic buttons, CSS leather,
-CSS gold frames, a 28-cell backpack, or a generic responsive modal do not
+CSS gold frames, a 28-cell backpack, visible centre-screen item labels,
+procedural equip buttons, or a generic responsive modal do not
 satisfy this contract. The common Shop, PerkShop, InventoryShop, both Dowsing
 states, all four dialogue introductions/choice branches, the full inventory
-screen, scrolling/paging, item details, affordability, selection, transfer,
+screen, Chat scrolling/question states, item details, affordability, selection, transfer,
 equip/unequip, close, fade, and interrupted teardown states are one mandatory
 presentation membership.
 
-`DowsingShop` owns two feedback members which cannot be collapsed into button
+`DowsingShop` owns audio and visual feedback members which cannot be collapsed into button
 disabled state. Successful rolling writes `1.0` to `DowsingShop+0x360` at
 `0x0055FC18`; `0x005512F0` subtracts the image double `0.05` each 100 Hz tick,
 and `0x00551350` draws a full-screen `(1,0,0,alpha)` rectangle. The resulting
@@ -956,7 +1248,42 @@ red flash lasts 20 ticks, or 200 ms, and belongs to the roll transition rather
 than the later item purchase. If the participant cannot pay the roll fee,
 `0x0055FAF0` constructs a `MsgBox` with `NOT ENOUGH GOLD!`, the exact
 compensation paragraph, and the executable literal `OKAY` at `0x007930D8`;
-the transaction remains unchanged.
+the transaction remains unchanged. The settled MsgBox is its own authored
+composition: UI 107..110 enclose `(522,145.5,556,409)`, a complete
+UI-record-17 nine-slice encloses `(540.5,163,519,374)`, and rotated UI record 18
+forms the skull header at centre `(800,121)` with visible bounds
+`(669,97,262,67)`. Three UI-8
+arrows sit at `(800,592)` scale 1 and `(725,579)`/`(875,579)` scale 0.75. The
+OKAY control is UI 101 at `(623.5,397.5,353,69)` with UI-54 sides at
+`(696,391.5,70,85)` and `(834,391.5,70,85)`. Copy begins at x=609; the title,
+body, and OKAY baselines are y=252, y=287.5, and y=440. `UiPanel_Render`
+`0x005c3f40` repeats UI 10 along its horizontal edges and UI 79 along its
+vertical edges, then draws the UI 107..110 corners. That base pass is not the
+whole MsgBox. `HoverBox` construction at `0x005c38f0` writes 1 to the background
+flag at object `+0xb8`, and the MsgBox constructor leaves it enabled. The
+`0x005c4530` root tests that byte at `0x005c46e5`; its taken branch clips to the
+full-alpha layout rectangle inflated by 25 pixels, `(535.5,158,529,384)`, and
+repeats UI 49 from that clip's top-left. It then inflates the same layout
+rectangle by 20 pixels to `(540.5,163,519,374)` and calls native nine-slice
+helper `0x00417760` with UI 17. The UI atlas object array starts at `+0x38` with
+stride `0xc4`, so the branch operands `+0x25bc` and `+0x0d3c` resolve exactly to
+records 49 and 17; `+0x658` later in the root independently resolves to UI 8.
+Thus stock owns both the leather texture and the continuous gold inner rails;
+the companion InventoryScreen/service remains visible only outside that filled
+clip beneath the 0.75 curtain. The UI-101 button and UI-54 ends are white; only
+`OKAY` uses the shared gold text color. Four loose UI-17 corners, a generic
+leather panel, or a reused shop button do not reproduce this owner.
+
+Opening the standalone InventoryScreen is silent. The normal keyboard edge at
+`0x005CB3A3` and the HUD inventory control callback at `0x005D8165` both call
+`0x005C6F10` directly; that opener and constructor `0x00560380` make no sound
+request. Registry member 5, `sounds\\backpack_open`, belongs to inventory
+mutation paths and must not be inferred from its filename. Shop DONE calls
+registry member 64, `sounds\\openpanel`, at `0x0055EFA8` and then tears down
+the service. Standalone InventoryScreen close calls that same member at
+`0x00555853`. These are `openpanel` requests despite the direction of the
+transition; substituting `click` or `backpack_close` changes the retail event
+contract.
 
 ### Reachable-system membership disposition
 
@@ -972,12 +1299,12 @@ names pre-existing Website behavior independently covered before this pass.
 | Fomentius stock: all nine ordered rows | `0x005c8960` | exact-ported | row/range/order and seeded-golden tests |
 | Ordinary atomic buy/reject/remove/stack | `0x0056bf70` | exact-ported | success and zero-mutation rejection tests |
 | Hagatha selectors 0..27, including dormant selector 8 and bundle -1 | `native-hagatha-perk-catalog.json`; `0x0056c340` | exact-ported (8 out-of-system: excluded by native builder) | 28-row catalog and rebuild/bundle/capacity tests |
-| Luthacus two-way transfer | `0x0056cd00` | exact-ported | round-trip/no-gold/no-copy tests |
-| Shlorio fee, untargeted roll, offer buy, clear, close | `0x0055faf0`, `0x0056d110` | exact-ported | seeded lifecycle tests |
+| Luthacus asymmetric drag/double-activation transfer | `0x0056cd00`, `0x0056f55a` | exact-ported | both drag directions, storage double-return, backpack normal-use, invalid-restore, no-gold/no-copy tests |
+| Shlorio fee, untargeted roll, offer buy, clear, close | `0x0055faf0`, `0x0056d110` | exact-ported | seeded lifecycle tests and two-participant owner-isolation browser receipt |
 | All 47 dowsing recipes, seven sets, six equipment classes | `native-item-catalog.json` | exact-ported | complete catalog identity/icon tests |
 | Seven equipment sinks and equip/unequip transitions | `0x00570cd0`, `0x00575850`, `0x00570d80`, `0x0066f020` | exact-ported | per-sink and gated-third-ring tests |
-| Common Shop/PerkShop/InventoryShop, both Dowsing states, InventoryScreen, and trader MsgBox views | vtables and renderer family in the correction above | exact-ported | render-contract tests plus the two-participant hub-trader browser receipt |
-| Four exact survival dialogue introductions and reachable commands | retail dialogue files; builder `0x0050b720`; dispatcher `0x004fb890` | exact-ported | dialogue membership/copy tests |
+| Common Shop/PerkShop/InventoryShop, both Dowsing states, InventoryScreen, trader Chat, and trader MsgBox views | vtables and renderer family in the correction above | exact-ported | render-contract tests plus the two-participant hub-trader browser receipt |
+| Four exact survival dialogue introductions, reachable commands, and price-return branches | runtime aggregate `data/dialogue/survival.txt`; Chat vtable `0x0079061C`; builder `0x0050b720`; dispatcher `0x004fb890` | exact-ported | dialogue state/copy tests and stock witnesses |
 | Fomentius actor/balloon animation | `0x0050b110`, `0x0051c1a0`; College 54..58, 160..164 | verified-already-at-parity | existing hub presentation and render tests |
 | Hagatha body/accessory/cross-fade animation | `0x0051adc0`, `0x0051b1d0`; College 45, 89..92, 517..524 | exact-ported | eight-frame and transient-member tests |
 | Luthacus common four-frame composite | `0x0050a4c0`, `0x00501610`; College 10, 126..129 | exact-ported | common animator/composite tests |
@@ -985,7 +1312,8 @@ names pre-existing Website behavior independently covered before this pass.
 | Distance/fade/region interruption and modal teardown | `0x00505010`, `0x00514a20` | exact-ported | range/region/input-block tests |
 | Dormant Luthacus random outfit row | scavenger data row; absent executable command/xref | out-of-system (not wired by the retail builder) | literal/xref and builder inspection |
 | Dormant targeted-dowsing branch | target `+0x344`; constructor xrefs and union helpers above | out-of-system (no retail hub producer) | constructor/xref/writer sweep |
-| Item-use effects, ground loot, archive/persistence producer | non-shop inventory consumers | out-of-system (separate gameplay/save systems) | ownership/call-boundary trace |
+| All six potion-use effects, stack mutation, and accepted/rejected audio | `0x0056d1b0`, `0x0056d246`, `0x0056d3d2` | exact-ported | per-subtype authoritative inventory/effect/audio tests |
+| Ground loot and archive/persistence producer | non-shop inventory consumers | out-of-system (separate gameplay/save systems) | ownership/call-boundary trace |
 | Equipment FX application and Clothes attachment painting | 86 declarations and 39 downstream consumers | out-of-system (separate combat/stat/render consumers) | complete item catalog plus consumer trace |
 | Annalist, Librarian, Arch Chancellor, Painting common-animator siblings | common animator xrefs outside merchant actors | out-of-system (non-trader services/props) | complete `0x00501610` xref sweep |
 
@@ -1007,9 +1335,6 @@ These are portability findings, not invitations to fill in plausible behavior:
 - **Shlorio initial fee.** The image value at `DAT_0081A430` is zero while three
   clean live instances observed 650 before their first G8 roll. No save read or
   unambiguous initializer was found. Persist `current_dowsing_fee` explicitly.
-- **Shlorio multiplayer purchase.** Fomentius, Hagatha, and Luthacus have live
-  two-owner evidence. Shlorio uses the same local Shop root, but a dedicated
-  connected-client purchase/fee/result proof has not been recorded.
 - **G1 Float presentation.** Shlorio's `Float(0.1,false)` and Student constructor
   floats use the mechanism G1 recovered, but no native Float golden exists.
   Prices, quantities, and Dig yield do not depend on those values; visual

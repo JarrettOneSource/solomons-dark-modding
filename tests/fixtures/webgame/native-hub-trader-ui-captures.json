@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "provenance": {
+    "captured_utc_dates": ["2026-08-15", "2026-08-16"],
+    "machine": "Jarretts-Mac-mini.local",
+    "runtime": "CrossOver bottle SolomonDark",
+    "executable_path": "/Users/jarrett/Projects/Solomon Dark/SolomonDarkAbandonware/SolomonDark.exe",
+    "executable_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+    "client_pixels": [1600, 900],
+    "capture_kind": "retail client-area render",
+    "instrumentation_disclosure": "debugger-instrumented/runtime-staged: temporary injected helpers invoked stock constructors and staged gold/dialogue state; the retail executable and retail renderer produced every visible surface",
+    "helper_sha256": {
+      "solomon-stock-ui-helper.c": "bc7f43e0bd21d12355b68d2a407405acd1443ce55068fffb12229ad1e0da6951",
+      "solomon-stock-ui-helper.exe": "3232e4cb0485cd717b9710dd00fb4694d08a0bfe7570d75b79ae27b7c7af40c6",
+      "solomon-stock-control-v4.dll": "a794138a5c9c113c997a1e02dc802d94aef973e5065b55961a89bab49c9b447d",
+      "solomon-export-injector.c": "96f750ae045a0291e40f3050561e7bffd5b4cfb71730c038882704eb703a8724",
+      "solomon-export-injector.exe": "37ded0d97c2cf1ffbe1ec767d76868883758178d177a2460e027367d5747d25d",
+      "solomon-backbuffer-capture-v3.dll": "8b5c867bf200e9763dbabd56db6a7fec680203812c325996c3357259b36618b8"
+    }
+  },
+  "captures": [
+    {"file": "menu-reference-captures/trader-fomentius-shop.png", "state": "Fomentius Shop with companion InventoryScreen", "sha256": "9ef4744cc0627bb580af9db6faa879368958fdc7c763706c1cb12630519c7506"},
+    {"file": "menu-reference-captures/trader-fomentius-selected.png", "state": "Fomentius selected affordable offer", "sha256": "36e7fa67505c44e63b62de87d1bde1152ef3cc7002291402a18da39dce2c202c"},
+    {"file": "menu-reference-captures/trader-hagatha-shop.png", "state": "Hagatha PerkShop with companion InventoryScreen", "sha256": "981d7645abe78dc24a65506c894d476d6a89fe53031399b121fbb1ed270514f9"},
+    {"file": "menu-reference-captures/trader-hagatha-selected.png", "state": "Hagatha selected perk", "sha256": "844136d5441c2afa528dcfbb1296ee0bfed2a055c2f5a380c72f25e0cbdabb89"},
+    {"file": "menu-reference-captures/trader-luthacus-shop.png", "state": "Luthacus InventoryShop with both containers", "sha256": "66106f8cf3fcc6c27857b4e8c962c057863c0f84516b8ce716836473404d71dd"},
+    {"file": "menu-reference-captures/trader-luthacus-selected.png", "state": "Luthacus selected backpack object", "sha256": "741474ef5f4aabdc4e1aa73ede98d9172c4281e1b39bd0baff361dd6662f2390"},
+    {"file": "menu-reference-captures/trader-shlorio-preroll.png", "state": "Shlorio DowsingShop pre-roll", "sha256": "267ef4839503a971dd8cef7c13095ce9c547dc5c7dae9b8cf39733b935467fee"},
+    {"file": "menu-reference-captures/trader-shlorio-results.png", "state": "Shlorio DowsingShop result grid", "sha256": "d14e3fb7bf26e9699a5f6d72ddcc91498bbd5fee7558cd06065f4806a1e2c3e5"},
+    {"file": "menu-reference-captures/trader-shlorio-insufficient-gold.png", "state": "Shlorio insufficient-gold MsgBox", "sha256": "8916f9d046521635e73d556a8e595321741b498fc1cc9df42230239f61e0fdbe"},
+    {"file": "menu-reference-captures/trader-fomentius-chat-intro.png", "state": "Fomentius Chat intro", "sha256": "f950b624a06faead86e1583f8db9aec5abc43e06bb6f1928feacb83315bf5f80"},
+    {"file": "menu-reference-captures/trader-fomentius-chat-choices.png", "state": "Fomentius Chat question state", "sha256": "d87e4681b3cedc031859de75963f022e97035de4c880938312a42fd4749bf292"},
+    {"file": "menu-reference-captures/trader-hagatha-chat-intro.png", "state": "Hagatha Chat intro", "sha256": "e8cc312c275c95d006bfa7936419a938f3b3a38c462835a7afb224eb8c5ee8b0"},
+    {"file": "menu-reference-captures/trader-hagatha-chat-choices.png", "state": "Hagatha Chat question state", "sha256": "62e484bc1ee1c0211c2674f9cc6fdbb7963332143da8663a464c30e036acc4d6"},
+    {"file": "menu-reference-captures/trader-luthacus-chat-intro.png", "state": "Luthacus Chat intro", "sha256": "a16dcc988c3cc23ead9528eee7b428259a3fa2842b38031c6b91f7d01e2670c5"},
+    {"file": "menu-reference-captures/trader-luthacus-chat-choices.png", "state": "Luthacus Chat question state", "sha256": "d9e0e089d24258cc6908906d618438502f94a952addb71b342e45fd434868d12"},
+    {"file": "menu-reference-captures/trader-shlorio-chat-intro.png", "state": "Shlorio Chat intro", "sha256": "c222f8572c25beb085005005a45bc629bddec362876100ba0fb9cc032b796b99"},
+    {"file": "menu-reference-captures/trader-shlorio-chat-choices.png", "state": "Shlorio Chat question state", "sha256": "54604b0e3cac1ed0f4b6484d34cba3d46d56e629100b16750344fefc22cfc280"},
+    {"file": "menu-reference-captures/trader-shlorio-chat-prices.png", "state": "Shlorio scrolling price explanation", "sha256": "ccc881ca5a84994d55be04f64d94a90df5956bc595653024f6e0edf338510982"}
+  ]
+}

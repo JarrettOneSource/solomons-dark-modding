@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 5,
   "source": {
     "build": "retail 0.72.5",
     "executable": "SolomonDark.exe",
@@ -50,6 +50,46 @@
     "service_dispatch_function": "0x00514A20",
     "dialog_command_dispatch_function": "0x004FB890",
     "blocked_during_region_fade": true
+  },
+  "transaction_audio": {
+    "native_tick_ms": 10,
+    "assets": {
+      "click": {"registry_index": 0, "path": "sounds\\click", "sha256": "8aeebcfeb69625bee2ee78fe9c63939e6b40edcc89d5facf2c0d35e1b5920307"},
+      "backpack_close": {"registry_index": 4, "path": "sounds\\backpack_close", "sha256": "32fa4ca58d0fe1eb967bb50f20dffc0edb98b25ca74c719edc2b70b9e4312319"},
+      "badaction": {"registry_index": 6, "path": "sounds\\badaction", "sha256": "0ca71924473e6a45156f0dbd450ff7a158d39015179697c83c7b04824e3256d6"},
+      "dropcoins": {"registry_index": 25, "path": "sounds\\dropcoins", "sha256": "b72d44080d99fdae8e7dce83b5f1b6a553d503a753df2deacea7ee8829ba4376"},
+      "openpanel": {"registry_index": 64, "path": "sounds\\openpanel", "sha256": "637a76288c852d813921c7789b211f573f88c56d6036e2e1f3e1cf558f0ae743"},
+      "distortreality": {"registry_index": 23, "path": "sounds\\distortreality", "sha256": "3fa59accc564838ea1896f95539ee0acecd9345c3e2c1adceaadee0dd870194e"},
+      "pickskill": {"registry_index": 1, "path": "sounds\\pickskill", "sha256": "494d1b973bd3f319199199ec9cf851491caee10c3d72dbe61acda69d28daabe4"}
+    },
+    "ordinary_purchase": {
+      "success": {"call_site": "0x0056C10E", "sound": "dropcoins"},
+      "rejected": {"call_site": "0x0056C1A6", "sound": "badaction"},
+      "activation_click_before_callback": "0x0055F054"
+    },
+    "luthacus": {
+      "backpack_second_activation": "ordinary InventoryScreen use or equip; never a storage deposit",
+      "backpack_to_storage": "drag only",
+      "storage_to_backpack": ["second activation", "drag"],
+      "storage_second_activation": {"common_click": "0x0055F054", "accepted_sound": "backpack_close", "accepted_sound_call_site": "0x0056CE80"},
+      "storage_drag_start": {"sound": "click", "call_site": "0x0056CF1A"},
+      "accepted_drag_release": {"sound": "click", "call_site": "0x0056F55A", "pitch": 0.75, "gain": 1.0},
+      "invalid_drag_release": "restore source silently"
+    },
+    "dowsing_roll": {
+      "rng_order_prefix": ["Float(0.1,false) for distortion pitch", "Integer(2) for offer count"],
+      "echo": {"sound": "pickskill", "tick_offsets": [0, 25, 50, 75], "millisecond_offsets": [0, 250, 500, 750], "gains": [1.0, 0.25, 0.0625, 0.015625]},
+      "distortion": {"sound": "distortreality", "call_site": "0x0055FE17", "pitch": "0.8 + Float(0.1,false)", "gain": 1.0}
+    },
+    "dowsing_purchase": {
+      "rng_order_suffix": ["Integer(10) for next fee", "Float(0.1,false) for distortion pitch"],
+      "distortion": {"sound": "distortreality", "call_site": "0x0056D18B", "pitch": "1.0 + Float(0.1,false)", "gain": 1.0}
+    },
+    "teardown": {
+      "standalone_inventory_open": {"sound": null, "keyboard_call_site": "0x005CB3A3", "hud_call_site": "0x005D8165", "opener": "0x005C6F10", "constructor": "0x00560380"},
+      "shop_done": {"sound": "openpanel", "call_site": "0x0055EFA8"},
+      "standalone_inventory_close": {"sound": "openpanel", "call_site": "0x00555853"}
+    }
   },
   "animations": {
     "common_four_frame_gesture": {
@@ -116,8 +156,38 @@
     "dowsing_purchase": "0x0056D110",
     "inventory_screen_render": "0x00568B90",
     "inventory_screen_detail_render": "0x00556940",
+    "inventory_screen_pointer_press": "0x0056F760",
+    "inventory_screen_pointer_release": "0x0056FC90",
     "inventory_grid_render": "0x0055A070",
+    "inventory_dragger_constructor": "0x00550990",
+    "inventory_dragger_update": "0x0056E950",
+    "inventory_dragger_render": "0x005579A0",
+    "inventory_dragger_pointer_move": "0x0055E030",
+    "inventory_dragger_pointer_release": "0x0056EC30",
+    "item_info_constructor": "0x00553B80",
+    "item_info_render": "0x005C3A60",
+    "item_info_content": "0x0057C4B0",
+    "item_name": "0x00571980",
+    "potion_description": "0x00571C80",
+    "inventory_double_activate": "0x0056D920",
+    "inventory_use_dispatcher": "0x0056D1B0",
+    "potion_use_sound": "0x0056D246",
+    "ui_panel_render": "0x005C3F40",
+    "hagatha_perk_pane_primitive": "0x00550CC0",
+    "chat_constructor": "0x004F5D90",
+    "chat_initialize": "0x004FFEC0",
+    "chat_update": "0x004FFEE0",
+    "chat_render": "0x004F9380",
+    "chat_action": "0x004FFC40",
+    "chat_pointer": "0x004FFBC0",
+    "chat_advance": "0x004FFB00",
+    "chat_content_load": "0x004FD6A0",
+    "exact_text_render": "0x0043BCD0",
+    "exact_text_command_aware_wrap": "0x0043D230",
+    "chat_clear": "0x004FC2B0",
+    "chat_close": "0x004FCB40",
     "msgbox_constructor": "0x004A98E0",
+    "hoverbox_constructor": "0x005C38F0",
     "msgbox_update": "0x005AB710",
     "msgbox_render": "0x005C4530",
     "dialog_add_primary_button": "0x005AB7E0",
@@ -132,8 +202,7 @@
   },
   "ui": {
     "stage_pixels": [1600, 900],
-    "native_logical_size": [1280, 720],
-    "native_to_stage_scale": 1.25,
+    "coordinate_space": "direct 1600x900 stage pixels; no 1280x720 conversion",
     "inventory_screen": {
       "vtable": "0x00794F54",
       "inventory_grid_vtable": "0x00794C64",
@@ -141,8 +210,193 @@
       "backpack_rows": 4,
       "backpack_authored_cells": 88,
       "backpack_fill_order": "column-major: index / 4 selects x; index % 4 selects y",
+      "backpack_slot_center_origin": [60, 532],
+      "backpack_slot_visible_origin": [24, 496],
+      "backpack_slot_pitch": [75, 75],
+      "backpack_slot_extent": [72, 72],
+      "backpack_slot_rgba": [1.0, 1.0, 1.0, 0.4],
+      "stats_content_rect": [103, 89, 320, 320],
+      "equip_content_rect": [1177, 89, 320, 320],
+      "mode_geometry": {
+        "companion": {
+          "left_content_rect": [103, 89, 320, 320],
+          "right_content_rect": [1177, 89, 320, 320],
+          "player_preview": false
+        },
+        "standalone": {
+          "left_content_rect": [50, 89, 320, 320],
+          "right_content_rect": [1230, 89, 320, 320],
+          "player_preview": {
+            "center": [800, 249],
+            "heading_index": 9,
+            "heading_degrees": 135,
+            "scale": 1.25
+          }
+        }
+      },
+      "starter_loadout": {
+        "constructor": "0x005CFA80",
+        "recipe_uid": 0,
+        "equipment": {
+          "hat": {"name": "Hat", "native_type_id": 7005, "icon_records": [34, 38]},
+          "robe": {"name": "Robe", "native_type_id": 7006, "icon_records": [64, 67]},
+          "weapon": {"name": "Staff", "native_type_id": 7004, "icon_records": [72]}
+        },
+        "backpack": [
+          {"slot": 0, "name": "Health Potion", "native_type_id": 7001, "native_subtype": 0},
+          {"slot": 1, "name": "Mana Potion", "native_type_id": 7001, "native_subtype": 1}
+        ],
+        "visual_lane_aliases": {
+          "primary": "hat",
+          "secondary": "robe",
+          "attachment": "weapon",
+          "hand_boxes": ["weapon", "weapon"]
+        },
+        "equipment_color_source": "current wizard appearance primary color plus white secondary"
+      },
+      "item_icon_render_contract": {
+        "scale": "natural atlas logical size; no fit-to-cell scaling",
+        "ring": {"render": "0x005788B0", "translation": [0, 0], "rotation_degrees": 0},
+        "amulet": {
+          "render": "0x00578910",
+          "translation": [0, -5],
+          "rotation_degrees": 0,
+          "layer_order": ["shared record 30 or 31", "recipe-specific record 18 through 29"]
+        },
+        "staff": {
+          "render": "0x00578A90",
+          "translation": [-22.94306, 32.76608],
+          "rotation_degrees": 35,
+          "matrix": [0.81915, 0.57358, -0.57358, 0.81915, -22.94306, 32.76608]
+        },
+        "hat": {"render": "0x005779B0", "translation": [0, 0], "rotation_degrees": 0},
+        "robe": {"render": "0x00577B90", "translation": [0, 0], "rotation_degrees": 0},
+        "wand": {
+          "render": "0x00579720",
+          "translation": [0, 0],
+          "rotation_degrees": 45,
+          "matrix": [0.70711, 0.70711, -0.70711, 0.70711, 0, 0]
+        },
+        "recipe_color_source": ["effective_color1", "effective_color2"],
+        "recipe_color_consumers": ["hat", "robe"],
+        "untinted_classes": ["ring", "amulet", "staff", "wand"],
+        "recipe_color_catalog": "docs/reverse-engineering/native-item-catalog.json",
+        "null_recipe_color": "native white default"
+      },
+      "interaction_contract": {
+        "selection_owner": "InventoryGrid",
+        "pointer_press": "0x0056F760",
+        "pointer_release": "0x0056FC90",
+        "drag_threshold_pixels": 10,
+        "double_activation_window_native_ticks": 50,
+        "double_activation_window_ms_at_100_hz": 500,
+        "potion_use": {
+          "dispatcher": "0x0056D1B0",
+          "accepted_sound_call_site": "0x0056D246",
+          "accepted_sound_registry_index": 24,
+          "accepted_sound_registry_member_offset": "0x438",
+          "accepted_sound_path": "sounds\\drink",
+          "accepted_sound_sha256": "61fdcc02a31b1c1c43264cb6ed8d02717e9dba2c5123167ad6e309053e28f322",
+          "subtypes": {
+            "0": {"effect": "set current health to maximum"},
+            "1": {"effect": "set current mana to maximum"},
+            "2": {"effect": "quadruple all attack damage", "duration_native_ticks": 6000, "duration_seconds": 60},
+            "3": {"effect": "clear poison and grant poison immunity", "duration_native_ticks": 1000, "duration_seconds": 10},
+            "4": {"effect": "grant concentration of all skills at once", "duration_native_ticks": 6000, "duration_seconds": 60},
+            "5": {"effect": "set current health and mana to maximum"}
+          },
+          "accepted_stack_mutation": "decrement exactly one; remove and destroy the live item when the stack reaches zero"
+        },
+        "item_info": {
+          "owner": "ItemInfo",
+          "vtable": "0x007946A4",
+          "constructor": "0x00553B80",
+          "render": "0x005C3A60",
+          "content_builder": "0x0057C4B0",
+          "initial_delay_native_ticks": 20,
+          "background": "opaque black contextual rectangle placed beside the selected object and clamped to the 1600x900 client",
+          "equipment_without_recipe": "name only",
+          "potion_copy": {
+            "health-potion": "Restores your health to maximum",
+            "mana-potion": "Restores your mana to maximum",
+            "wizard-chug": "Quadruples the damage of all attacks for 60 seconds",
+            "antidote": "Cures poisoning and grants immunity to poison for 10 seconds",
+            "mind-chug": "Grants concentration of all skills (at once) for 60 seconds",
+            "rejuvenation-potion": "Restores your health and mana to maximum"
+          },
+          "potion_instruction": "Double-click to drink"
+        },
+        "dragger": {
+          "owner": "InventoryDragger",
+          "vtable": "0x00794294",
+          "constructor": "0x00550990",
+          "update": "0x0056E950",
+          "render": "0x005579A0",
+          "pointer_move": "0x0055E030",
+          "pointer_release": "0x0056EC30",
+          "held_render": "remove the source-grid object and draw its class-owned icon at the pointer using the native natural-scale transform, shadow pass, ordinary pass, and pulse pass",
+          "invalid_drop": "restore the same object to its source owner without mutation",
+          "valid_equipment_drop": "highlight every accepting sink green while held, then replace the sink occupant and reinsert that prior object into the backpack",
+          "valid_backpack_drop": "unequip removable equipment and insert it into the backpack"
+        },
+        "luthacus_inventory_shop": {
+          "callback": "0x0056CD00",
+          "backpack_second_activation": "ordinary InventoryScreen use or equip",
+          "backpack_to_storage": "drag only",
+          "storage_to_backpack": ["second activation", "drag"],
+          "valid_drop": "only the opposite owner",
+          "invalid_drop": "restore the same source object without mutation"
+        },
+        "required_clothing": {
+          "hat": {
+            "title": "A WIZARD WOULD NEVER REMOVE HIS HAT!",
+            "paragraphs": [
+              "A wizard might switch hats.  A wizard might even wear his hat at a jaunty angle.  But a wizard would never, under any circumstances, remove his hat altogether.",
+              "After all, if you're not wearing a wizard hat, how would people know to be awed by the presence of a wizard?"
+            ],
+            "primary_button": "OKAY"
+          },
+          "robe": {
+            "title": "A WIZARD WOULD NEVER REMOVE HIS ROBE!",
+            "paragraphs": [
+              "A long, intimidating flowing robe looks debonaire on both a gluttonously fat slob and a pathetically wasted weakling.",
+              "Strip away the robe and people might make comments about the kind of physique you get from years in wizarding school.  And then you'd have a completely avoidable disintegration on your conscience."
+            ],
+            "primary_button": "OKAY"
+          },
+          "direct_removal": "reject, restore the equipped object, and open MsgBox",
+          "replacement": "allowed only by dropping another hat or robe into the corresponding sink"
+        },
+        "prohibited_web_substitutes": [
+          "visible center-screen selected-name or rarity labels",
+          "procedural EQUIP buttons",
+          "clicking an equipped sink to unequip without a drag",
+          "leaving the source icon visible while held"
+        ]
+      },
+      "content_corner_record": "Inventory.8",
+      "backpack_outer_corner_rects": [
+        [-100, 477, 73, 73],
+        [1627, 477, 73, 73],
+        [-100, 739, 73, 73],
+        [1627, 739, 73, 73]
+      ],
+      "backpack_divider_rects": [
+        [-30.5, 465, 103, 32],
+        [1579.5, 465, 103, 32],
+        [-30.5, 793, 103, 32],
+        [1579.5, 793, 103, 32]
+      ],
       "regions": ["stats", "wizard_preview", "equip", "backpack", "gold", "belt", "exit"],
       "fade_step_per_native_tick": 0.025,
+      "live_draw_trace": {
+        "capture_date": "2026-08-16",
+        "client_pixels": [1600, 900],
+        "hooked_draw_functions": ["0x004142E0", "0x004143D0", "0x00414540"],
+        "settled_first_frame_draw_count": 481,
+        "active_service": "Fomentius Shop over companion InventoryScreen",
+        "method": "in-process detours recorded final transformed atlas quads and caller addresses"
+      },
       "fixture": "tests/fixtures/webgame/menu-reference-captures/inventory-screen.png",
       "fixture_sha256": "0d99c6bb3f1815aa061fd4ee49e7bfccbd0ee058ea69b0e8936155c7e5156d8b"
     },
@@ -151,19 +405,144 @@
       "perk_shop_vtable": "0x00790374",
       "inventory_shop_vtable": "0x0079044C",
       "dowsing_shop_vtable": "0x00790524",
-      "settled_logical_rect": [338, -20, 604, 400],
-      "slide_distance_logical": 100,
+      "constructor_layout_argument": [215, -20, 604, 400],
+      "settled_stage_rect": [498, -20, 604, 430],
+      "slide_distance_stage_pixels": 100,
+      "companion_inventory_screen": {
+        "constructor": "0x00560380",
+        "gameplay_field": "+0x15A0",
+        "relationship": "separately allocated and attached beneath every service overlay"
+      },
       "ordinary_retained_capacity": 28,
-      "ordinary_draw_bounds": [4, 2],
+      "ordinary_columns": 7,
+      "ordinary_rows": 4,
+      "ordinary_fill_order": "column-major: floor(index / 4), index % 4",
+      "grid_slot_center_origin": [575, 92.5],
+      "grid_slot_visible_origin": [539, 56.5],
+      "grid_slot_pitch": [75, 75],
+      "grid_slot_extent": [72, 72],
+      "grid_slot_rgba": [1.0, 1.0, 1.0, 0.6],
+      "frame_top_repeat_origins": [[498, -20], [627, -20], [756, -20], [885, -20], [1014, -20]],
+      "frame_side_repeat_y": [-20, 24, 68, 112, 156, 200, 244, 288, 332, 376],
+      "frame_corner_visible_rects": [
+        [1002.5, 294.5, 121, 121],
+        [475.5, 294.5, 121, 121],
+        [1002.5, -65.5, 121, 121],
+        [475.5, -65.5, 121, 121]
+      ],
+      "done_detail_visible_rects": {
+        "UI.72": [714.5, 358, 171, 58],
+        "UI.12": [732.5, 361.5, 135, 47],
+        "UI.86": [737, 366, 126, 38]
+      },
+      "title_glyph_visible_y": [14, 34],
+      "title_text_baseline_y": 32,
+      "done_text_visible_rect": [760, 374, 80, 20],
+      "done_text_baseline_y": 392,
+      "done_detail_color_pass": {
+        "UI.72_rgba": [1.0, 1.0, 1.0, 1.0],
+        "UI.12_rgba": [1.0, 1.0, 1.0, 0.85],
+        "UI.86_rgba": [0.75, 1.0, 0.75, 1.0],
+        "DONE_text_rgba": [1.0, 1.0, 1.0, 1.0],
+        "alpha_basis": "each alpha is multiplied by the service root alpha"
+      },
+      "background_tile_repeat": [4, 2],
+      "background_tile_extent": [264, 264],
+      "background_clip_rect": [498, -20, 604, 400],
+      "background_tile_helper": "0x00416020",
+      "background_tile_record": 49,
+      "background_composite_passes": [
+        "normal",
+        "additive"
+      ],
+      "background_blend_state_field": "RenderContext+0x3F1",
+      "background_blend_state_apply": "0x004208A0",
+      "background_color": {
+        "red": 0.85,
+        "green": 1.0,
+        "blue": 0.85
+      },
+      "price_font_logical_size": [26, 26],
+      "price_text_baseline_offset_from_slot_visible_top": 67,
+      "first_row_price_glyph_visible_y": [113, 124],
+      "first_column_price_glyph_right_edge_x": 605,
+      "affordable_price_rgba": [0.85, 0.73, 0.44, 1.0],
+      "unaffordable_price_rgba": [1.0, 0.5, 0.5, 1.0],
+      "shared_gold_hex": "#D9BA70",
       "scroll_decoration_atlas": "Skills",
       "scroll_decoration_records": [4],
-      "item_detail_ui_records": [12, 72]
+      "item_detail_ui_records": [12, 72],
+      "activation": "first activation selects; activating the same selected cell invokes the subclass callback",
+      "selected_affordable_ui_records": [84, 85],
+      "selected_unaffordable_ui_record": 46,
+      "selected_transfer_ui_records": [111, 112]
     },
-    "ordinary_shop_columns": 4,
+    "hagatha_perk_pane": {
+      "owner": "companion InventoryScreen left pane",
+      "outer_content_rect": [103, 89, 320, 320],
+      "title": "CHARMS/CURSES",
+      "title_glyph_visible_rect": [169, 139, 168, 15],
+      "title_text_baseline_y": 152.5,
+      "title_rgba": [0.85, 0.73, 0.44, 1.0],
+      "inner_panel_rect": [139, 129, 227, 238],
+      "inner_panel_fill_rgba": [0.1, 0.1, 0.09, 1.0],
+      "inner_panel_outline_rgba": [1.0, 1.0, 1.0, 1.0],
+      "inner_panel_outline_pixels": 1,
+      "inner_panel_background_atlas_record": null,
+      "slot_atlas_record": "Inventory.10",
+      "slot_visible_origin": [164.2, 169.2],
+      "slot_visible_extent": [57.6, 57.6],
+      "slot_pitch": [60, 60],
+      "slot_scale": 0.8,
+      "empty_slot_rgb": [0.5, 0.5, 0.5],
+      "occupied_slot_rgb": [1.0, 1.0, 1.0],
+      "owned_icon_atlas": "Skills",
+      "owned_icon_record": "127 + selector",
+      "columns": 3,
+      "rows": 3,
+      "bundle_atlas_record": "Inventory.5",
+      "bundle_visible_rect": [207, 263, 92, 50]
+    },
+    "ordinary_shop_columns": 7,
+    "ordinary_shop_rows": 4,
+    "ordinary_shop_fill_order": "column-major",
     "ordinary_shop_retained_capacity": 28,
     "dowsing_columns": 3,
     "dowsing_retained_capacity": 9,
     "dowsing_states": ["pre-roll", "result", "insufficient-funds-msgbox", "roll-flash"],
+    "dowsing_presentation": {
+      "pre_roll": {
+        "mirror_header_visible_rect": [693, 54.5, 214, 41],
+        "reference_drop_rect": [750, 101, 100, 149],
+        "button_visible_rect": [623.5, 265.5, 353, 69],
+        "button_side_visible_rects": [[669, 259.5, 70, 85], [861, 259.5, 70, 85]],
+        "button_records": [101, 54],
+        "button_art_rgba": [1.0, 1.0, 1.0, 1.0],
+        "label": "DOWSE",
+        "label_text_baseline_y": 302,
+        "fee_text_baseline_y": 322.5,
+        "label_and_fee_rgba": [0.85, 0.73, 0.44, 1.0]
+      },
+      "result": {
+        "slot_visible_origin": [689, 94],
+        "slot_visible_extent": [72, 72],
+        "slot_pitch": [75, 75],
+        "columns": 3,
+        "rows": 3,
+        "background_record": "UI.49",
+        "background_composite_passes": [
+          "normal",
+          "additive"
+        ],
+        "background_color": {
+          "red": 1.0,
+          "green_range": [0.6, 0.8],
+          "blue": 1.0,
+          "green_formula": "sin(nativeTick * 0.5 * pi / 180) * 0.1 + 0.7",
+          "period_native_ticks": 720
+        }
+      }
+    },
     "dowsing_flash": {
       "state_field": "DowsingShop+0x360",
       "set_to": 1.0,
@@ -179,11 +558,96 @@
       "primary_button": "OKAY"
     },
     "dialogue": {
-      "owner": "MsgBox plus dialogue controls",
+      "owner": "Chat",
+      "vtable": "0x0079061C",
+      "panel_ui_record": 11,
+      "panel_nine_slice_helper": "0x00417760",
+      "panel_edge_uv_fraction": 0.05,
+      "panel_center_uv_origin": [0.95, 0.95],
+      "stage_rect": [476.5, 26, 647, 420],
+      "content_rect": [561.5, 111, 477, 250],
+      "title_center": [800, 90],
+      "done_center_y": 396,
+      "corner_centers": [[521, 70.5], [1079, 70.5], [521, 401.5], [1079, 401.5]],
+      "corner_visible_rects": [[476.5, 26, 89, 89], [1034.5, 26, 89, 89], [476.5, 357, 89, 89], [1034.5, 357, 89, 89]],
+      "title_text_baseline_y": 90,
+      "primary_choice_text_baseline_y": 226,
+      "secondary_choice_text_baseline_y": 256,
+      "done_text_baseline_y": 396,
+      "default_text_rgba": [0.85, 0.73, 0.44, 1.0],
+      "primary_action_rgba": [0.55, 0.75, 0.55, 1.0],
+      "primary_action_scale": 1.25,
+      "fade_step_per_native_tick": 0.05,
+      "curtain_alpha": 0,
+      "normal_scroll_pixels_per_tick": 0.125,
+      "accelerated_scroll_pixels_per_tick": 0.8,
+      "intro_start_y": "contentHeight - 36",
+      "inline_emphasis": {
+        "source_delimiter": "*",
+        "chat_string_rewrite": "each paired * delimiter becomes the ExactText _i toggle, for example *less* becomes _iless_i",
+        "exact_text_command_marker": "_",
+        "command_marker_field": "ExactText+0x4D414",
+        "italic_command": "i",
+        "italic_factor_field": "ExactText+0x4D418",
+        "italic_factor": 0.125,
+        "font_line_height_field": "ExactText+0xD410",
+        "font_line_height": 24,
+        "glyph_quad_horizontal_delta_pixels": 3,
+        "quad_transform": "add 3 pixels to both top x coordinates and subtract 3 pixels from both bottom x coordinates",
+        "stock_witness": "Hagatha price copy renders LESS without literal asterisks and with the recovered right-leaning ExactText quad shear"
+      },
+      "states": ["scrolling-intro", "questions", "scrolling-price-explanation", "closed-or-service-replaced"],
+      "price_explanation_completion": "returns to questions",
+      "required_trader_branches": ["fomentius", "hagatha", "luthacus", "shlorio", "price-explanation"]
+    },
+    "msgbox": {
+      "owner": "MsgBox",
       "vtable": "0x00788E04",
       "fade_step_per_native_tick": 0.035,
-      "curtain_alpha": 0.75,
-      "required_trader_branches": ["fomentius", "hagatha", "luthacus", "shlorio", "price-explanation"]
+      "curtain_alpha_multiplier": 0.75,
+      "outer_corner_records": [107, 108, 109, 110],
+      "horizontal_edge_record": 10,
+      "vertical_edge_record": 79,
+      "background_enabled_field": "HoverBox+0xB8",
+      "background_enabled_default": true,
+      "background_enable_write": "0x005C3957",
+      "background_render_branch": "0x005C46E5..0x005C4818",
+      "ui_atlas_record_array_base_offset": "0x38",
+      "ui_atlas_record_stride": "0xC4",
+      "layout_rect_at_full_alpha": [560.5, 183, 479, 334],
+      "interior_background_record": 49,
+      "interior_background_object_offset": "UI atlas+0x25BC",
+      "interior_fill": "repeat UI 49 from the clip top-left and scissor surplus tiles to the clip rectangle",
+      "interior_clip_inflate_pixels": 25,
+      "interior_clip_rect": [535.5, 158, 529, 384],
+      "interior_visibility": "authored UI 49 obscures the companion InventoryScreen/service inside the clip; the companion remains visible outside it beneath the curtain",
+      "outer_corner_centers": [[564.5, 190], [1035.5, 190], [564.5, 510], [1035.5, 510]],
+      "outer_visible_rect": [522, 145.5, 556, 409],
+      "inner_nine_slice_record": 17,
+      "inner_nine_slice_object_offset": "UI atlas+0x0D3C",
+      "inner_nine_slice_helper": "0x00417760",
+      "inner_nine_slice_edge_uv_fraction": 0.05,
+      "inner_nine_slice_inflate_pixels": 20,
+      "inner_corner_centers": [[580.5, 204.5], [1019.5, 204.5], [580.5, 495.5], [1019.5, 495.5]],
+      "inner_visible_rect": [540.5, 163, 519, 374],
+      "skull_header_record": 18,
+      "skull_header_center": [800, 121],
+      "skull_header_rotation_degrees": 90,
+      "skull_header_visible_rect": [669, 97, 262, 67],
+      "arrow_record": 8,
+      "arrow_centers_and_scales": [[800, 592, 1], [725, 579, 0.75], [875, 579, 0.75]],
+      "primary_button_record": 101,
+      "primary_button_visible_rect": [623.5, 397.5, 353, 69],
+      "primary_button_side_record": 54,
+      "primary_button_art_rgba": [1.0, 1.0, 1.0, 1.0],
+      "primary_button_text_rgba": [0.85, 0.73, 0.44, 1.0],
+      "primary_button_side_visible_rects": [[696, 391.5, 70, 85], [834, 391.5, 70, 85]],
+      "copy_left": 609,
+      "title_text_baseline_y": 252,
+      "body_text_baseline_y": 287.5,
+      "body_text_max_width": 382,
+      "primary_button_text_baseline_y": 440,
+      "trader_use": "dowsing insufficient-gold feedback"
     },
     "browser_asset_policy": {
       "atlases": ["Fonts", "Inventory", "Skills", "UI"],
@@ -192,9 +656,60 @@
       "semantic_hit_targets": "transparent overlays aligned to native controls"
     },
     "shop_skills_records": [4],
+    "shop_ui_records": [46, 49, 84, 85, 111, 112],
     "dowsing_ui_records": [8, 12, 15, 72],
-    "inventory_records": [1],
-    "inventory_ui_records": [20, 21, 30, 31, 33, 49, 62, 75, 76, 77]
+    "inventory_records": [1, 8, 9, 10, 13, 16],
+    "inventory_ui_records": [4, 20, 21, 29, 30, 31, 32, 33, 47, 48, 49, 62, 71, 75, 76, 77, 82, 107, 108, 109, 110]
+  },
+  "runtime_dialogue": {
+    "authority": "data/dialogue/survival.txt aggregate loaded by the retail process",
+    "fomentius": {
+      "title": "FOMENTIUS",
+      "intro": [
+        "Hello Hello!",
+        "Can I interest you in a high quality and *very legal* herbal potion? Brewed with all the best natural magicks, minimal chance of causing intestinal combustion!"
+      ],
+      "service_label": "Buy"
+    },
+    "hagatha": {
+      "title": "HAGATHA",
+      "intro": [
+        "All right then wizard, what do you want?",
+        "I have a wide variety of charms, blessings, curses and talismans.  Good for the digestion, good for the soul."
+      ],
+      "service_label": "Buy Charms and Curses",
+      "price_label": "Charm Prices?",
+      "price_explanation": [
+        "Well, see here: Mixing up these things is a lot of work.",
+        "But it's a lot *less* work once I've opened the right bags and cleaned the right tools and measured out the right ingredients.",
+        "So, fair do's, my embellishments are a lot less expensive if I've mixed them up recently."
+      ]
+    },
+    "luthacus": {
+      "title": "LUTHACUS",
+      "intro": [
+        "Pleased to meet you, mate.  I'm the College's Official Unreal Crime Scene Investigator.",
+        "Basically, that means it's my humble jobbing duty to trudge out into the field and retrieve the remains-- and by remains, I mean little bits and pieces-- of wizards and witches who've gone and done themselves a magical mishap.  So they can get buried proper.",
+        "Now, between you and me, there's no point burying the dead with all their stuff, eh?  They don't need it.  Other people might.  Have a look here and see if there's anything you can use.  By order of the Archchancellor, o'course."
+      ],
+      "service_label": "Examine Items"
+    },
+    "shlorio": {
+      "title": "SHLORIO",
+      "intro": [
+        "Good morning.",
+        "Are you interested in what can be found within the luminiferous ether?",
+        "My magic mirror and I are eager to assist you.  "
+      ],
+      "service_label": "Dowse",
+      "price_label": "Dowsing Prices?",
+      "price_explanation": [
+        "I am sure you appreciate that dowsing is an inexact science.  The price varies.",
+        "Peering into the mirror is so mentally taxing that I must charge you even to take a look.  ",
+        "Drawing an item out causes actual physical pain, and is understandably expensive.  The price of retrieving an item will depend on how entangled it is, as well as how many vapor burns I expect to sustain.",
+        "Disturbing the ether changes the entire ethereal contour, so the price will fluctuate depending on the state of the infirmament as well."
+      ]
+    }
   },
   "fomentius_stock": [
     { "kind": "health-potion", "native_type_id": 7001, "subtype": 0, "price": 150, "roll_bound": 3, "quantity_offset": 2 },
@@ -211,9 +726,11 @@
   "equipment_catalog": "native-item-catalog.json",
   "dowsing": {
     "initial_fee_observed": 650,
+    "roll_rng_order_prefix": ["Float(0.1,false)", "Integer(2)"],
     "untargeted_offer_count": "Integer(2) + 3",
     "offer_price": "(Integer(15) + 100) * 50",
     "next_fee": "(Integer(10) + 10) * 50",
+    "purchase_rng_order_suffix": ["Integer(10)", "Float(0.1,false)"],
     "duplicate_retry_limit": 100,
     "targeted_branch": {
       "target_field": "DowsingShop+0x344",
