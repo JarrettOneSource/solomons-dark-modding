@@ -115,7 +115,7 @@ animation objects can add art not visible as a literal in the parent method.
 | `0x7EC` | `GuidedMissile` | `0x005E7E00` | `0x00600B40` | draw `0x00612960`; target/contact `0x005F42C0`, `0x005F3EE0` | BadGuys 110..112, 381..382 |
 | `0x7ED` | `Gravestone` | `0x005E5C30` | `0x00624AC0` | draw `0x0060F0F0`, `0x0060F260`; interaction `0x005F2EB0` | DeadHawg 97..113 |
 | `0x7EE` | `Fire_Goodguy` | `0x005E76C0` | `0x005FF050` | draw `0x00610F90`; area contact `0x005FF1D0` | DeadHawg 46..77 |
-| `0x7EF` | `PlaneOrb` | `0x005E2180` | `0x005FB460` | draw `0x005E8720`; special pass `0x00601910` | BadGuys 11 plus direct texture-page path |
+| `0x7EF` | `PlaneOrb` | `0x005E2180` | `0x005FB460` | draw `0x005E8720`; special pass `0x00601910` | BadGuys 75 core; child BadGuys 11 motes |
 | `0x7F0` | `StormCloud` | `0x005E22E0` | `0x006021A0` | full draw `0x005E8970`; weather/overlay pass `0x00602C30` | child bolt/cloud animations |
 | `0x7F1` | `Earthquake` | `0x005E8EA0` | `0x00613200` | draw `0x00613E10` | BadGuys 62, 2008..2010; DeadHawg 200..202 |
 | `0x7F2` | `Leviathan` | `0x005E8FB0` | `0x006145D0` | draw `0x006151D0`; sprite pass `0x005E90C0` | BadGuys 11, 39, 343..372 |
@@ -134,7 +134,7 @@ animation objects can add art not visible as a literal in the parent method.
 | `0x804` | `DarkFireball` | `0x005E3A10` | `0x00605C80` | draw `0x0061CB20`; trail `0x005ED940`; impact `0x005F76B0` | BadGuys 10..11, 251..266 |
 | `0x805` | `DireFire` | `0x005EDC90` | `0x00605D30` | draw `0x0061CD40`; area contact `0x005FF1D0` | BadGuys 10..11; DeadHawg 46..77 |
 | `0x806` | `PoisonPool` | `0x005E3B00` | `0x005F8030` | auxiliary draw `0x005EDFA0`; poison contact in tick | DeadHawg 0, submitted twice |
-| `0x807` | `EtherDrain` | `0x005F8360` | `0x0061CF20` | auxiliary draw `0x005EE120`; sprite pass `0x005EE780` | DeadHawg 177..179 |
+| `0x807` | `EtherDrain` | `0x005F8360` | `0x0061CF20` | draw `0x005EE120`; point light `0x005EE780` | direct BadGuys 38, 75; child BadGuys 10, 11, 36 and DeadHawg 177..179 |
 | `0x808` | `Silk` | `0x005F05D0` | `0x005F8B50` | full draw `0x00606A10`; inherited arrow draw `0x0060F590`; tether `0x005F92C0` | BadGuys 2, 27, 255..282; DeadHawg 14 |
 | `0x80B` | `EvilEmber` | `0x005E0CC0` | `0x0060D7E0` | draw `0x0060DDD0`; hostile contact `0x005F2980` | BadGuys 15, 251..254, 267..270 |
 | `0x80C` | `Comet` | `0x005F0C50` | `0x006220D0` | full draw `0x005E3CD0`; sprite pass `0x005F0DB0` | BadGuys 51; DeadHawg 5 |
@@ -608,13 +608,15 @@ behavior. There is no terrain segment or placement collision.
 
 Draw `0x005E8720` rotates the additive core by `global_tick % 360`. Special
 pass `0x00601910` builds the surrounding ring as seven segments, or fifteen
-with Enhanced Effects, between scale-proportional inner and outer radii and
-rotates it from the same global clock. Enhanced Effects also emits the
-perspective `BadGuys[11]` motes recovered in the actor tick. Creation owns the
-world flash plus `distortreality` and pitched `lightningstart` audio requests.
-The callsite proves that the second request changes pitch, but the bounded pass
-did not close the scalar; browser code must not label a guessed playback rate
-as native parity.
+with Enhanced Effects, between scale-proportional radii `25*scale` and
+`50*scale`, applies vertical scale `0.8`, and rotates it from the same global
+clock. The core is additive `BadGuys[75]`, scale
+`(-0.75*scale,0.6*scale)`. Enhanced Effects also emits one perspective
+`BadGuys[11]` mote every active tick. Creation owns the world flash plus
+`distortreality` and pitched `lightningstart` audio requests. The callsite
+proves that the second request changes pitch, but the bounded pass did not
+close the scalar; browser code must not label a guessed playback rate as
+native parity.
 
 ### Ether Blast and Ether Burn (`0x1B74`)
 
@@ -761,11 +763,13 @@ Golem die, then rock hit.
 
 `EtherDrain` has explicit 40-tick scale-in, 100-tick active, and 20-tick scale-out states in
 byte `+0x148`. Constructor `0x005F8360` initializes presentation scale `+0x140`
-and secondary intensity `+0x14C` to zero. Tick `0x0061CF20` grows scale by
-`0.025` to one, grows intensity by `0.005` during scale-in and `0.01` while
-active, then fades both by `0.05` after the active countdown expires. It owns
-two `Array<PuppetRef>` collections plus pointer lists for spatial cells and
-presentation children.
+and secondary intensity `+0x14C` to zero, seeds rotation from
+`RandomFloat(0,360)`, and clears the capture pulse at `+0x19C`. Tick
+`0x0061CF20` grows scale by `0.025` to one, grows intensity by `0.005` during
+scale-in and `0.01` while active, then fades both by `0.05` after the active
+countdown expires. At the end of each tick rotation advances by twice the
+post-update scale. It owns two `Array<PuppetRef>` collections plus pointer
+lists for spatial cells and presentation children.
 
 Candidate refresh `0x00606580` is throttled to once per 100 ticks. Its broad
 cell collection is the ellipse
@@ -789,12 +793,42 @@ The target arrays retain group/slot identities rather than raw actor pointers.
 Gameplay pressure/contact is gated to the active portion of the countdown
 (`+0x144 > 50`) and is disabled in scale-out. During that same interval the
 presentation path draws `Integer(5)` normally or `Integer(3)` with enhanced
-effects; only result one creates the common drain child before its additional
-presentation-only draws. The class uses DeadHawg records `177..179`; the stock
-binary also carries the dedicated `sounds\crunchdrain` registry key for this
-effect. That registry association is not a recovered creation or tick playback
-callsite: `PlaneCross__Loop` renewal is proven in `0x0061CF20`, while a
-`crunchdrain` birth one-shot remains an explicit bounded inference.
+effects; only result one creates `SuckCloud` before its additional child RNG.
+A separate `Integer(50)==1` branch creates `SuckDebris` using DeadHawg records
+`177..179`.
+
+Draw `0x005EE120` composes the parent from four additive `BadGuys[75]` galaxy
+layers. Given scale `s`, intensity `i`, and rotation `r`, they are:
+
+| Layer | Tint | Y | Scale | Rotation | Alpha |
+| ---: | ---: | ---: | --- | --- | --- |
+| 1 | `0xFF80FF` | `0` | `(-0.8*s, 0.64*s)` | `1.5*r` | `1` |
+| 2 | white | `-5` | `(-1.5, 1.2)` | `0.5*r` | `0.5*i` |
+| 3 | white | `-10` | `(-2.5, 2)` | `0.25*r` | `0.25*i` |
+| 4 | white | `-20` | `(-4.5, 3.6)` | `0.125*r` | `0.1*i` |
+
+Every draw also emits source-over `BadGuys[38]` tinted `0xFF4080` at scale
+`s*0.25*(0.980000019 + RandomFloat(0,0.06999993))`. A positive capture pulse
+at `+0x19C` adds a second source-over, white `BadGuys[38]` layer whose alpha is
+the pulse and whose scale is `pulse*s`. The pulse decrements by `0.1` per
+parent tick. Direct center capture writes `2` before the same-tick decrement,
+so the first visible value is `1.9`; child completion writes `2` after the
+parent tick. `SuckCloud` completes with callback parameter `0.5` and creates no
+flare. `SuckDebris` completes with parameter `1.5` and creates additive
+`BadGuys[36]` at `(parent.x,parent.y-42)`, scale and initial alpha `1.5`, then
+fades by `0.05` per tick for 30 ticks.
+
+Point-light callback `0x005EE780` places a radius-2 light at the actor root
+with intensity `min(s,1)*(0.5 + RandomFloat(0,0.5))`; the native
+`Game.MultipleShadows` flag controls its shadow branch. These two random draws
+are presentation cadence, not gameplay RNG. A deterministic web presentation
+frame may sample the same ranges without advancing authority RNG.
+
+The live parent renews `PlaneCross__Loop`. The stock binary also carries the
+dedicated `sounds\crunchdrain` registry key for this effect, but no recovered
+creation/tick callsite plays it. A `crunchdrain` birth one-shot therefore
+remains an explicit bounded inference and must not be emitted as confirmed
+parity audio.
 
 The deleting destructor `0x005FB980` delegates to `0x005F84F0`, which owns the
 array/list cleanup; presentation children remain registered with the world.
