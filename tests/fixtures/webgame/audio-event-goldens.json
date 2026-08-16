@@ -8,27 +8,27 @@
     ],
     "audio_disabled": true,
     "fixture_is_machine_recorded": true,
-    "source_commit_sha": "f58a1ecf0a2a490e04c947cc40ea80f924c062a1",
-    "source_tree_sha": "078258adce257e619cd0ae3cd486d758b6dbc0e5",
+    "source_commit_sha": "a2b5f29dad0368f3fb10a1a233a2ee66a1c4a285",
+    "source_tree_sha": "f42d33354eede4a6010e0390a1ad32c4015570ea",
     "worktree_dirty_at_capture_start": false,
-    "captured_utc": "2026-08-15T19:33:50Z",
-    "process_id": 26928,
-    "executable_path": "C:\\users\\user\\documents\\github\\sb modding\\solomon dark\\.codex-windows-validation\\loader-audio-20260815\\runtime\\audiore-live\\instances\\aud-g5\\stage\\SolomonDark.exe",
+    "captured_utc": "2026-08-16T20:00:06Z",
+    "process_id": 22612,
+    "executable_path": "C:\\users\\user\\documents\\github\\sb modding\\solomon dark\\.codex-windows-validation\\loader-audio-census-20260816\\runtime\\audiore-live\\instances\\aud-g5\\stage\\SolomonDark.exe",
     "loader_sha256": "d3d784615eac52ae9b770c92d568a550e6c9c686ffcdcf09bf4bf8a817dfd142",
     "build_loader_sha256": "d3d784615eac52ae9b770c92d568a550e6c9c686ffcdcf09bf4bf8a817dfd142",
     "game_binary_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
     "catalog_path": "docs/reverse-engineering/native-audio-catalog.json",
     "catalog_sha256": "1d10bbe00358e985d2a2e9082d69a26f841d41266fff9205881fd2d7c262b79e",
     "recorder_path": "tools/record_audio_event_goldens.py",
-    "recorder_sha256": "fcfdca6a6e8a66b4c7ce758aa1abc9bae0aa28fd3cf4d484ba053c002ae3a465",
+    "recorder_sha256": "5d2ca57ab12ff7008a517768bb52689de11d3eafd50b0088226d9345541aac71",
     "capture_method": "live stock dispatch-wrapper hooks plus explicit silent-phase checkpoints",
     "cleanup": [
       {
         "role": "aud-g5",
         "instance": "aud-g5",
-        "processId": 26928,
-        "expectedPath": "C:\\users\\user\\documents\\github\\sb modding\\solomon dark\\.codex-windows-validation\\loader-audio-20260815\\runtime\\audiore-live\\instances\\aud-g5\\stage\\SolomonDark.exe",
-        "actualPath": "C:\\users\\user\\documents\\github\\sb modding\\solomon dark\\.codex-windows-validation\\loader-audio-20260815\\runtime\\audiore-live\\instances\\aud-g5\\stage\\SolomonDark.exe",
+        "processId": 22612,
+        "expectedPath": "C:\\users\\user\\documents\\github\\sb modding\\solomon dark\\.codex-windows-validation\\loader-audio-census-20260816\\runtime\\audiore-live\\instances\\aud-g5\\stage\\SolomonDark.exe",
+        "actualPath": "C:\\users\\user\\documents\\github\\sb modding\\solomon dark\\.codex-windows-validation\\loader-audio-census-20260816\\runtime\\audiore-live\\instances\\aud-g5\\stage\\SolomonDark.exe",
         "alreadyExited": false,
         "pathMatched": true,
         "stopped": true
@@ -109,15 +109,20 @@
     "dig.throw_dirt",
     "shop.purchase",
     "shop.purchase_rejected",
-    "shop.storage_transfer",
+    "shop.storage_return_double",
+    "shop.storage_drag_start",
+    "shop.storage_drag_drop",
+    "shop.dowsing_roll",
+    "shop.dowsing_purchase",
     "ui.focus",
     "ui.confirm",
-    "ui.back",
+    "ui.shop_close",
+    "ui.inventory_close",
     "music.menu_transition"
   ],
   "timeline": [
     {
-      "tick": 1497,
+      "tick": 1486,
       "event_class": "cast.ether.release",
       "request_ordinal": 1,
       "trigger": "primary Magic Missile emission",
@@ -154,7 +159,7 @@
       "timeline_sequence": 1
     },
     {
-      "tick": 1501,
+      "tick": 1491,
       "event_class": "cast.fire.release",
       "request_ordinal": 1,
       "trigger": "primary Fire Missile emission",
@@ -191,7 +196,7 @@
       "timeline_sequence": 2
     },
     {
-      "tick": 1506,
+      "tick": 1495,
       "event_class": "cast.air.channel_start",
       "request_ordinal": 1,
       "trigger": "primary selector transition 0 -> Air (0x18)",
@@ -228,7 +233,7 @@
       "timeline_sequence": 3
     },
     {
-      "tick": 1511,
+      "tick": 1500,
       "event_class": "cast.air.channel_start",
       "request_ordinal": 2,
       "trigger": "primary selector transition 0 -> Air (0x18)",
@@ -265,7 +270,7 @@
       "timeline_sequence": 4
     },
     {
-      "tick": 1491,
+      "tick": 1480,
       "event_class": "cast.air.channel_hold",
       "trigger": "Air remains selected",
       "native_trigger_site": null,
@@ -279,7 +284,7 @@
       "timeline_sequence": 5
     },
     {
-      "tick": 1515,
+      "tick": 1505,
       "event_class": "cast.air.channel_stop",
       "request_ordinal": 1,
       "trigger": "primary selector transition Air (0x18) -> other/idle",
@@ -316,7 +321,7 @@
       "timeline_sequence": 6
     },
     {
-      "tick": 1520,
+      "tick": 1509,
       "event_class": "cast.water.channel_start",
       "request_ordinal": 1,
       "trigger": "primary selector transition 0 -> Water (0x20)",
@@ -353,7 +358,7 @@
       "timeline_sequence": 7
     },
     {
-      "tick": 1524,
+      "tick": 1514,
       "event_class": "cast.water.channel_start",
       "request_ordinal": 2,
       "trigger": "primary selector transition 0 -> Water (0x20)",
@@ -390,7 +395,7 @@
       "timeline_sequence": 8
     },
     {
-      "tick": 1491,
+      "tick": 1480,
       "event_class": "cast.water.channel_hold",
       "trigger": "Water remains selected",
       "native_trigger_site": null,
@@ -404,7 +409,7 @@
       "timeline_sequence": 9
     },
     {
-      "tick": 1529,
+      "tick": 1518,
       "event_class": "cast.water.channel_stop",
       "request_ordinal": 1,
       "trigger": "primary selector transition Water (0x20) -> other/idle",
@@ -441,7 +446,7 @@
       "timeline_sequence": 10
     },
     {
-      "tick": 1534,
+      "tick": 1523,
       "event_class": "cast.earth.charge_start",
       "request_ordinal": 1,
       "trigger": "primary selector transition 0 -> Earth (0x28)",
@@ -478,7 +483,7 @@
       "timeline_sequence": 11
     },
     {
-      "tick": 1538,
+      "tick": 1527,
       "event_class": "cast.earth.boulder_created",
       "request_ordinal": 1,
       "trigger": "Earth dispatcher allocates, registers, and stores the native Boulder actor",
@@ -515,7 +520,7 @@
       "timeline_sequence": 12
     },
     {
-      "tick": 1491,
+      "tick": 1480,
       "event_class": "cast.earth.charge_hold",
       "trigger": "Earth boulder remains held while charge grows",
       "native_trigger_site": null,
@@ -529,7 +534,7 @@
       "timeline_sequence": 13
     },
     {
-      "tick": 1543,
+      "tick": 1532,
       "event_class": "cast.earth.release",
       "request_ordinal": 1,
       "trigger": "bounded Earth release and native selector transition 0x28 -> 0",
@@ -566,7 +571,7 @@
       "timeline_sequence": 14
     },
     {
-      "tick": 1547,
+      "tick": 1537,
       "event_class": "projectile.ether.flight",
       "request_ordinal": 1,
       "trigger": "Magic Missile birth",
@@ -603,7 +608,7 @@
       "timeline_sequence": 15
     },
     {
-      "tick": 1552,
+      "tick": 1541,
       "event_class": "projectile.ether.impact",
       "request_ordinal": 1,
       "trigger": "Magic Missile contact handler",
@@ -640,7 +645,7 @@
       "timeline_sequence": 16
     },
     {
-      "tick": 1557,
+      "tick": 1546,
       "event_class": "projectile.fire.flight",
       "request_ordinal": 1,
       "trigger": "Fire Missile birth",
@@ -677,7 +682,7 @@
       "timeline_sequence": 17
     },
     {
-      "tick": 1561,
+      "tick": 1550,
       "event_class": "projectile.fire.impact",
       "request_ordinal": 1,
       "trigger": "Fire Missile contact handler",
@@ -714,7 +719,7 @@
       "timeline_sequence": 18
     },
     {
-      "tick": 1566,
+      "tick": 1555,
       "event_class": "projectile.air.flight",
       "request_ordinal": 1,
       "trigger": "Ball Lightning cast emission",
@@ -758,7 +763,7 @@
       "timeline_sequence": 19
     },
     {
-      "tick": 1570,
+      "tick": 1560,
       "event_class": "projectile.air.impact",
       "request_ordinal": 1,
       "trigger": "electric contact/shock spawn",
@@ -809,7 +814,7 @@
       "timeline_sequence": 20
     },
     {
-      "tick": 1575,
+      "tick": 1564,
       "event_class": "projectile.water.flight",
       "request_ordinal": 1,
       "trigger": "Frost Missile cast emission",
@@ -846,7 +851,7 @@
       "timeline_sequence": 21
     },
     {
-      "tick": 1580,
+      "tick": 1569,
       "event_class": "projectile.water.impact",
       "request_ordinal": 1,
       "trigger": "Frost Missile contact handler",
@@ -883,7 +888,7 @@
       "timeline_sequence": 22
     },
     {
-      "tick": 1584,
+      "tick": 1573,
       "event_class": "projectile.earth.flight",
       "request_ordinal": 1,
       "trigger": "Boulder flight requests global rollingstone ambience",
@@ -920,7 +925,7 @@
       "timeline_sequence": 23
     },
     {
-      "tick": 1589,
+      "tick": 1578,
       "event_class": "projectile.earth.flight_end",
       "request_ordinal": 1,
       "trigger": "Boulder stops renewing rollingstone ambience",
@@ -957,7 +962,7 @@
       "timeline_sequence": 24
     },
     {
-      "tick": 1594,
+      "tick": 1582,
       "event_class": "projectile.earth.impact",
       "request_ordinal": 1,
       "trigger": "Boulder terminal terrain/contact branch",
@@ -994,7 +999,7 @@
       "timeline_sequence": 25
     },
     {
-      "tick": 1598,
+      "tick": 1587,
       "event_class": "melee.player.swing",
       "request_ordinal": 1,
       "trigger": "player staff swing action",
@@ -1031,7 +1036,7 @@
       "timeline_sequence": 26
     },
     {
-      "tick": 1603,
+      "tick": 1592,
       "event_class": "melee.player.hit_world",
       "request_ordinal": 1,
       "trigger": "staff contact with wood/world",
@@ -1068,7 +1073,7 @@
       "timeline_sequence": 27
     },
     {
-      "tick": 1607,
+      "tick": 1596,
       "event_class": "melee.enemy.hit",
       "request_ordinal": 1,
       "trigger": "sword-family damage contact",
@@ -1112,7 +1117,7 @@
       "timeline_sequence": 28
     },
     {
-      "tick": 1612,
+      "tick": 1601,
       "event_class": "movement.footstep.wood",
       "request_ordinal": 1,
       "trigger": "player movement cadence on the wood-material branch",
@@ -1149,7 +1154,7 @@
       "timeline_sequence": 29
     },
     {
-      "tick": 1618,
+      "tick": 1605,
       "event_class": "movement.footstep.stone",
       "request_ordinal": 1,
       "trigger": "player movement cadence on the default ground branch",
@@ -1193,7 +1198,7 @@
       "timeline_sequence": 30
     },
     {
-      "tick": 1623,
+      "tick": 1614,
       "event_class": "movement.footstep.splash",
       "request_ordinal": 1,
       "trigger": "movement cadence on a water/splash material branch",
@@ -1251,7 +1256,7 @@
       "timeline_sequence": 31
     },
     {
-      "tick": 1629,
+      "tick": 1621,
       "event_class": "damage.player.taken",
       "request_ordinal": 1,
       "trigger": "nonlethal positive player HP loss after cooldown",
@@ -1302,7 +1307,7 @@
       "timeline_sequence": 32
     },
     {
-      "tick": 1635,
+      "tick": 1627,
       "event_class": "death.player",
       "request_ordinal": 1,
       "trigger": "native player death action",
@@ -1339,7 +1344,7 @@
       "timeline_sequence": 33
     },
     {
-      "tick": 1641,
+      "tick": 1635,
       "event_class": "death.skeleton",
       "request_ordinal": 1,
       "trigger": "skeleton terminal branch",
@@ -1376,7 +1381,7 @@
       "timeline_sequence": 34
     },
     {
-      "tick": 1647,
+      "tick": 1643,
       "event_class": "death.zombie",
       "request_ordinal": 1,
       "trigger": "zombie terminal branch",
@@ -1413,7 +1418,7 @@
       "timeline_sequence": 35
     },
     {
-      "tick": 1653,
+      "tick": 1650,
       "event_class": "death.banshee",
       "request_ordinal": 1,
       "trigger": "banshee/wraith terminal branch",
@@ -1450,7 +1455,7 @@
       "timeline_sequence": 36
     },
     {
-      "tick": 1659,
+      "tick": 1656,
       "event_class": "death.unholy",
       "request_ordinal": 1,
       "trigger": "Unholy/DemonSkull terminal branch",
@@ -1487,7 +1492,7 @@
       "timeline_sequence": 37
     },
     {
-      "tick": 1665,
+      "tick": 1662,
       "event_class": "death.demon",
       "request_ordinal": 1,
       "trigger": "demon terminal branch",
@@ -1524,7 +1529,7 @@
       "timeline_sequence": 38
     },
     {
-      "tick": 1671,
+      "tick": 1669,
       "event_class": "death.imp",
       "request_ordinal": 1,
       "trigger": "imp terminal fire branch",
@@ -1561,7 +1566,7 @@
       "timeline_sequence": 39
     },
     {
-      "tick": 1677,
+      "tick": 1676,
       "event_class": "death.spider",
       "request_ordinal": 1,
       "trigger": "spider terminal branch",
@@ -1598,7 +1603,7 @@
       "timeline_sequence": 40
     },
     {
-      "tick": 1684,
+      "tick": 1682,
       "event_class": "death.golem",
       "request_ordinal": 1,
       "trigger": "golem terminal branch",
@@ -1635,7 +1640,7 @@
       "timeline_sequence": 41
     },
     {
-      "tick": 1690,
+      "tick": 1688,
       "event_class": "death.faculty",
       "request_ordinal": 1,
       "trigger": "Faculty terminal branch",
@@ -1672,7 +1677,7 @@
       "timeline_sequence": 42
     },
     {
-      "tick": 1696,
+      "tick": 1694,
       "event_class": "death.heartmonger",
       "request_ordinal": 1,
       "trigger": "Heartmonger terminal branch",
@@ -1709,7 +1714,7 @@
       "timeline_sequence": 43
     },
     {
-      "tick": 1702,
+      "tick": 1700,
       "event_class": "death.portal",
       "request_ordinal": 1,
       "trigger": "portal terminal branch",
@@ -1746,7 +1751,7 @@
       "timeline_sequence": 44
     },
     {
-      "tick": 1708,
+      "tick": 1706,
       "event_class": "death.coffin",
       "request_ordinal": 1,
       "trigger": "coffin terminal branch",
@@ -1783,7 +1788,7 @@
       "timeline_sequence": 45
     },
     {
-      "tick": 1714,
+      "tick": 1712,
       "event_class": "death.crow",
       "request_ordinal": 1,
       "trigger": "crow terminal/retirement branch",
@@ -1827,7 +1832,7 @@
       "timeline_sequence": 46
     },
     {
-      "tick": 1720,
+      "tick": 1717,
       "event_class": "death.maggot",
       "request_ordinal": 1,
       "trigger": "maggot terminal branch",
@@ -1871,7 +1876,7 @@
       "timeline_sequence": 47
     },
     {
-      "tick": 1726,
+      "tick": 1723,
       "event_class": "pickup.coin",
       "request_ordinal": 1,
       "trigger": "coin pickup accepted",
@@ -1908,7 +1913,7 @@
       "timeline_sequence": 48
     },
     {
-      "tick": 1757,
+      "tick": 1755,
       "event_class": "pickup.bag",
       "request_ordinal": 1,
       "trigger": "loot bag pickup accepted",
@@ -1945,7 +1950,7 @@
       "timeline_sequence": 49
     },
     {
-      "tick": 1763,
+      "tick": 1761,
       "event_class": "pickup.orb",
       "request_ordinal": 1,
       "trigger": "orb pickup accepted",
@@ -1982,7 +1987,7 @@
       "timeline_sequence": 50
     },
     {
-      "tick": 1769,
+      "tick": 1767,
       "event_class": "pickup.potion",
       "request_ordinal": 1,
       "trigger": "potion loot enters the generic bag pickup path",
@@ -2019,7 +2024,7 @@
       "timeline_sequence": 51
     },
     {
-      "tick": 1775,
+      "tick": 1773,
       "event_class": "pickup.magic_book",
       "request_ordinal": 1,
       "trigger": "magic-book acquisition stream",
@@ -2093,7 +2098,7 @@
       "timeline_sequence": 53
     },
     {
-      "tick": 1782,
+      "tick": 1785,
       "event_class": "potion.invalid",
       "request_ordinal": 1,
       "trigger": "potion/action rejected",
@@ -2130,7 +2135,7 @@
       "timeline_sequence": 54
     },
     {
-      "tick": 1785,
+      "tick": 1791,
       "event_class": "level.up",
       "request_ordinal": 1,
       "trigger": "one local level-award invocation crosses at least one threshold",
@@ -2167,7 +2172,7 @@
       "timeline_sequence": 55
     },
     {
-      "tick": 1790,
+      "tick": 1797,
       "event_class": "skill.turn_undead.cast",
       "request_ordinal": 1,
       "trigger": "accepted Turn Undead cast enters the skill handler before its target query",
@@ -2204,7 +2209,7 @@
       "timeline_sequence": 56
     },
     {
-      "tick": 1796,
+      "tick": 1803,
       "event_class": "skill.turn_undead.cast",
       "request_ordinal": 2,
       "trigger": "accepted Turn Undead cast enters the skill handler before its target query",
@@ -2241,7 +2246,7 @@
       "timeline_sequence": 57
     },
     {
-      "tick": 1802,
+      "tick": 1809,
       "event_class": "skill.unlock",
       "request_ordinal": 1,
       "trigger": "skill purchase/unlock accepted",
@@ -2278,7 +2283,7 @@
       "timeline_sequence": 58
     },
     {
-      "tick": 1487,
+      "tick": 1476,
       "event_class": "wave.start",
       "trigger": "first arena wave enters combat music",
       "native_trigger_site": "0x00465D22",
@@ -2294,7 +2299,7 @@
       "timeline_sequence": 59
     },
     {
-      "tick": 1807,
+      "tick": 1815,
       "event_class": "wave.end",
       "trigger": "terminal arena completion",
       "native_trigger_site": "0x00467AA0",
@@ -2310,7 +2315,7 @@
       "timeline_sequence": 60
     },
     {
-      "tick": 1813,
+      "tick": 1822,
       "event_class": "dig.shovel",
       "request_ordinal": 1,
       "trigger": "accepted dig strike",
@@ -2354,7 +2359,7 @@
       "timeline_sequence": 61
     },
     {
-      "tick": 1819,
+      "tick": 1829,
       "event_class": "dig.throw_dirt",
       "request_ordinal": 1,
       "trigger": "dig debris emission",
@@ -2398,7 +2403,7 @@
       "timeline_sequence": 62
     },
     {
-      "tick": 1825,
+      "tick": 1835,
       "event_class": "shop.purchase",
       "request_ordinal": 1,
       "trigger": "purchase debit and transfer succeed",
@@ -2435,7 +2440,7 @@
       "timeline_sequence": 63
     },
     {
-      "tick": 1831,
+      "tick": 1841,
       "event_class": "shop.purchase_rejected",
       "request_ordinal": 1,
       "trigger": "purchase precondition fails",
@@ -2472,10 +2477,47 @@
       "timeline_sequence": 64
     },
     {
-      "tick": 1837,
-      "event_class": "shop.storage_transfer",
+      "tick": 1845,
+      "event_class": "shop.storage_return_double",
       "request_ordinal": 1,
-      "trigger": "storage transfer accepted",
+      "trigger": "selected storage item is second-activated into the backpack",
+      "native_trigger_site": "0x0055F054",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:0",
+      "requested_asset": {
+        "registry_index": 0,
+        "native_class": "Sound",
+        "asset_path": "sounds\\click",
+        "file_path": "sounds/click.wav",
+        "file_sha256": "8aeebcfeb69625bee2ee78fe9c63939e6b40edcc89d5facf2c0d35e1b5920307"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 0,
+          "native_class": "Sound",
+          "asset_path": "sounds\\click",
+          "file_path": "sounds/click.wav",
+          "file_sha256": "8aeebcfeb69625bee2ee78fe9c63939e6b40edcc89d5facf2c0d35e1b5920307"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "fixed gain=1, pitch=1"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 65
+    },
+    {
+      "tick": 1848,
+      "event_class": "shop.storage_return_double",
+      "request_ordinal": 2,
+      "trigger": "selected storage item is second-activated into the backpack",
       "native_trigger_site": "0x0056CE80",
       "observed_probe_caller": "0x00000000",
       "dispatch_operation": "play_gain",
@@ -2506,13 +2548,13 @@
       },
       "capture_kind": "live_stock_wrapper_probe",
       "engine_enabled": false,
-      "timeline_sequence": 65
+      "timeline_sequence": 66
     },
     {
-      "tick": 1842,
-      "event_class": "shop.storage_transfer",
-      "request_ordinal": 2,
-      "trigger": "storage transfer accepted",
+      "tick": 1854,
+      "event_class": "shop.storage_drag_start",
+      "request_ordinal": 1,
+      "trigger": "storage item crosses the drag threshold",
       "native_trigger_site": "0x0056CF1A",
       "observed_probe_caller": "0x00000000",
       "dispatch_operation": "play_gain",
@@ -2543,10 +2585,306 @@
       },
       "capture_kind": "live_stock_wrapper_probe",
       "engine_enabled": false,
-      "timeline_sequence": 66
+      "timeline_sequence": 67
     },
     {
-      "tick": 1491,
+      "tick": 1860,
+      "event_class": "shop.storage_drag_drop",
+      "request_ordinal": 1,
+      "trigger": "storage drag release is accepted",
+      "native_trigger_site": "0x0056F55A",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_pitch_gain",
+      "requested_asset_id": "registry:0",
+      "requested_asset": {
+        "registry_index": 0,
+        "native_class": "Sound",
+        "asset_path": "sounds\\click",
+        "file_path": "sounds/click.wav",
+        "file_sha256": "8aeebcfeb69625bee2ee78fe9c63939e6b40edcc89d5facf2c0d35e1b5920307"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 0,
+          "native_class": "Sound",
+          "asset_path": "sounds\\click",
+          "file_path": "sounds/click.wav",
+          "file_sha256": "8aeebcfeb69625bee2ee78fe9c63939e6b40edcc89d5facf2c0d35e1b5920307"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 0.75,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "fixed gain=1, pitch=1"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 68
+    },
+    {
+      "tick": 1866,
+      "event_class": "shop.dowsing_roll",
+      "request_ordinal": 1,
+      "trigger": "DOWSE fee is accepted and result generation begins",
+      "native_trigger_site": "0x00408550",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:1",
+      "requested_asset": {
+        "registry_index": 1,
+        "native_class": "Sound",
+        "asset_path": "sounds\\pickskill",
+        "file_path": "sounds/pickskill.wav",
+        "file_sha256": "494d1b973bd3f319199199ec9cf851491caee10c3d72dbe61acda69d28daabe4"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 1,
+          "native_class": "Sound",
+          "asset_path": "sounds\\pickskill",
+          "file_path": "sounds/pickskill.wav",
+          "file_sha256": "494d1b973bd3f319199199ec9cf851491caee10c3d72dbe61acda69d28daabe4"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "SoundEcho tick 0 gain 1"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 69
+    },
+    {
+      "tick": 1872,
+      "event_class": "shop.dowsing_roll",
+      "request_ordinal": 2,
+      "trigger": "DOWSE fee is accepted and result generation begins",
+      "native_trigger_site": "0x00408550",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:1",
+      "requested_asset": {
+        "registry_index": 1,
+        "native_class": "Sound",
+        "asset_path": "sounds\\pickskill",
+        "file_path": "sounds/pickskill.wav",
+        "file_sha256": "494d1b973bd3f319199199ec9cf851491caee10c3d72dbe61acda69d28daabe4"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 1,
+          "native_class": "Sound",
+          "asset_path": "sounds\\pickskill",
+          "file_path": "sounds/pickskill.wav",
+          "file_sha256": "494d1b973bd3f319199199ec9cf851491caee10c3d72dbe61acda69d28daabe4"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 0.25,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "SoundEcho tick 25 gain 0.25"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 70
+    },
+    {
+      "tick": 1878,
+      "event_class": "shop.dowsing_roll",
+      "request_ordinal": 3,
+      "trigger": "DOWSE fee is accepted and result generation begins",
+      "native_trigger_site": "0x00408550",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:1",
+      "requested_asset": {
+        "registry_index": 1,
+        "native_class": "Sound",
+        "asset_path": "sounds\\pickskill",
+        "file_path": "sounds/pickskill.wav",
+        "file_sha256": "494d1b973bd3f319199199ec9cf851491caee10c3d72dbe61acda69d28daabe4"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 1,
+          "native_class": "Sound",
+          "asset_path": "sounds\\pickskill",
+          "file_path": "sounds/pickskill.wav",
+          "file_sha256": "494d1b973bd3f319199199ec9cf851491caee10c3d72dbe61acda69d28daabe4"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 0.0625,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "SoundEcho tick 50 gain 0.0625"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 71
+    },
+    {
+      "tick": 1885,
+      "event_class": "shop.dowsing_roll",
+      "request_ordinal": 4,
+      "trigger": "DOWSE fee is accepted and result generation begins",
+      "native_trigger_site": "0x00408550",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:1",
+      "requested_asset": {
+        "registry_index": 1,
+        "native_class": "Sound",
+        "asset_path": "sounds\\pickskill",
+        "file_path": "sounds/pickskill.wav",
+        "file_sha256": "494d1b973bd3f319199199ec9cf851491caee10c3d72dbe61acda69d28daabe4"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 1,
+          "native_class": "Sound",
+          "asset_path": "sounds\\pickskill",
+          "file_path": "sounds/pickskill.wav",
+          "file_sha256": "494d1b973bd3f319199199ec9cf851491caee10c3d72dbe61acda69d28daabe4"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 0.015625,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "SoundEcho tick 75 gain 0.015625"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 72
+    },
+    {
+      "tick": 1891,
+      "event_class": "shop.dowsing_roll",
+      "request_ordinal": 5,
+      "trigger": "DOWSE fee is accepted and result generation begins",
+      "native_trigger_site": "0x0055FE17",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_pitch_gain",
+      "requested_asset_id": "registry:23",
+      "requested_asset": {
+        "registry_index": 23,
+        "native_class": "Sound",
+        "asset_path": "sounds\\distortreality",
+        "file_path": "sounds/distortreality.wav",
+        "file_sha256": "3fa59accc564838ea1896f95539ee0acecd9345c3e2c1adceaadee0dd870194e"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 23,
+          "native_class": "Sound",
+          "asset_path": "sounds\\distortreality",
+          "file_path": "sounds/distortreality.wav",
+          "file_sha256": "3fa59accc564838ea1896f95539ee0acecd9345c3e2c1adceaadee0dd870194e"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 0.800000012,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "pitch 0.8 + Float(0.1,false), after the SoundEcho start and before offer-count Integer(2)"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 73
+    },
+    {
+      "tick": 1897,
+      "event_class": "shop.dowsing_purchase",
+      "request_ordinal": 1,
+      "trigger": "Dowsing offer purchase succeeds",
+      "native_trigger_site": "0x0056C10E",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:25",
+      "requested_asset": {
+        "registry_index": 25,
+        "native_class": "Sound",
+        "asset_path": "sounds\\dropcoins",
+        "file_path": "sounds/dropcoins.wav",
+        "file_sha256": "b72d44080d99fdae8e7dce83b5f1b6a553d503a753df2deacea7ee8829ba4376"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 25,
+          "native_class": "Sound",
+          "asset_path": "sounds\\dropcoins",
+          "file_path": "sounds/dropcoins.wav",
+          "file_sha256": "b72d44080d99fdae8e7dce83b5f1b6a553d503a753df2deacea7ee8829ba4376"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "fixed gain=1, pitch=1"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 74
+    },
+    {
+      "tick": 1903,
+      "event_class": "shop.dowsing_purchase",
+      "request_ordinal": 2,
+      "trigger": "Dowsing offer purchase succeeds",
+      "native_trigger_site": "0x0056D18B",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_pitch_gain",
+      "requested_asset_id": "registry:23",
+      "requested_asset": {
+        "registry_index": 23,
+        "native_class": "Sound",
+        "asset_path": "sounds\\distortreality",
+        "file_path": "sounds/distortreality.wav",
+        "file_sha256": "3fa59accc564838ea1896f95539ee0acecd9345c3e2c1adceaadee0dd870194e"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 23,
+          "native_class": "Sound",
+          "asset_path": "sounds\\distortreality",
+          "file_path": "sounds/distortreality.wav",
+          "file_sha256": "3fa59accc564838ea1896f95539ee0acecd9345c3e2c1adceaadee0dd870194e"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "next-fee Integer(10), then pitch 1.0 + Float(0.1,false)"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 75
+    },
+    {
+      "tick": 1480,
       "event_class": "ui.focus",
       "trigger": "pointer hover/focus changes without activation",
       "native_trigger_site": null,
@@ -2557,10 +2895,10 @@
       "capture_kind": "live_silent_phase_checkpoint",
       "silent_reason": "stock pointer focus has no audio dispatch",
       "engine_enabled": false,
-      "timeline_sequence": 67
+      "timeline_sequence": 76
     },
     {
-      "tick": 1848,
+      "tick": 1911,
       "event_class": "ui.confirm",
       "request_ordinal": 1,
       "trigger": "Game Over continue/button activation",
@@ -2594,31 +2932,31 @@
       },
       "capture_kind": "live_stock_wrapper_probe",
       "engine_enabled": false,
-      "timeline_sequence": 68
+      "timeline_sequence": 77
     },
     {
-      "tick": 1854,
-      "event_class": "ui.back",
+      "tick": 1917,
+      "event_class": "ui.shop_close",
       "request_ordinal": 1,
-      "trigger": "storage/backpack close action",
-      "native_trigger_site": "0x0056CE80",
+      "trigger": "common Shop DONE closes the service",
+      "native_trigger_site": "0x0055EFA8",
       "observed_probe_caller": "0x00000000",
       "dispatch_operation": "play_gain",
-      "requested_asset_id": "registry:4",
+      "requested_asset_id": "registry:64",
       "requested_asset": {
-        "registry_index": 4,
+        "registry_index": 64,
         "native_class": "Sound",
-        "asset_path": "sounds\\backpack_close",
-        "file_path": "sounds/backpack_close.wav",
-        "file_sha256": "32fa4ca58d0fe1eb967bb50f20dffc0edb98b25ca74c719edc2b70b9e4312319"
+        "asset_path": "sounds\\openpanel",
+        "file_path": "sounds/openpanel.wav",
+        "file_sha256": "637a76288c852d813921c7789b211f573f88c56d6036e2e1f3e1cf558f0ae743"
       },
       "selection_pool": [
         {
-          "registry_index": 4,
+          "registry_index": 64,
           "native_class": "Sound",
-          "asset_path": "sounds\\backpack_close",
-          "file_path": "sounds/backpack_close.wav",
-          "file_sha256": "32fa4ca58d0fe1eb967bb50f20dffc0edb98b25ca74c719edc2b70b9e4312319"
+          "asset_path": "sounds\\openpanel",
+          "file_path": "sounds/openpanel.wav",
+          "file_sha256": "637a76288c852d813921c7789b211f573f88c56d6036e2e1f3e1cf558f0ae743"
         }
       ],
       "selection_logic": "fixed",
@@ -2631,10 +2969,47 @@
       },
       "capture_kind": "live_stock_wrapper_probe",
       "engine_enabled": false,
-      "timeline_sequence": 69
+      "timeline_sequence": 78
     },
     {
-      "tick": 4,
+      "tick": 1923,
+      "event_class": "ui.inventory_close",
+      "request_ordinal": 1,
+      "trigger": "standalone InventoryScreen closes",
+      "native_trigger_site": "0x00555853",
+      "observed_probe_caller": "0x00000000",
+      "dispatch_operation": "play_gain",
+      "requested_asset_id": "registry:64",
+      "requested_asset": {
+        "registry_index": 64,
+        "native_class": "Sound",
+        "asset_path": "sounds\\openpanel",
+        "file_path": "sounds/openpanel.wav",
+        "file_sha256": "637a76288c852d813921c7789b211f573f88c56d6036e2e1f3e1cf558f0ae743"
+      },
+      "selection_pool": [
+        {
+          "registry_index": 64,
+          "native_class": "Sound",
+          "asset_path": "sounds\\openpanel",
+          "file_path": "sounds/openpanel.wav",
+          "file_sha256": "637a76288c852d813921c7789b211f573f88c56d6036e2e1f3e1cf558f0ae743"
+        }
+      ],
+      "selection_logic": "fixed",
+      "rng_stream": "none",
+      "parameters": {
+        "observed_gain": 1.0,
+        "observed_pitch": 1.0,
+        "native_reference_count_after_dispatch": 0,
+        "native_parameter_logic": "fixed gain=1, pitch=1"
+      },
+      "capture_kind": "live_stock_wrapper_probe",
+      "engine_enabled": false,
+      "timeline_sequence": 79
+    },
+    {
+      "tick": 3,
       "event_class": "music.menu_transition",
       "trigger": "native menu/scene music selection",
       "native_trigger_site": "0x0058A033",
@@ -2647,15 +3022,15 @@
       },
       "capture_kind": "natural_stock_dispatch",
       "engine_enabled": false,
-      "timeline_sequence": 70
+      "timeline_sequence": 80
     }
   ],
   "natural_dispatch_witnesses": [
     {
       "event_sequence": 1,
-      "native_tick": 4,
-      "monotonic_ms": 248254140,
-      "object_address": "0x00A7BC28",
+      "native_tick": 3,
+      "monotonic_ms": 336230875,
+      "object_address": "0x00C7BC28",
       "caller_return_address": "0x0058A038",
       "registry_index": -1,
       "native_reference_count": 0,
@@ -2670,10 +3045,10 @@
       "requested_track": ""
     },
     {
-      "event_sequence": 141,
-      "native_tick": 1487,
-      "monotonic_ms": 248269781,
-      "object_address": "0x00A7BC28",
+      "event_sequence": 107,
+      "native_tick": 1476,
+      "monotonic_ms": 336246359,
+      "object_address": "0x00C7BC28",
       "caller_return_address": "0x00470EA2",
       "registry_index": -1,
       "native_reference_count": 0,

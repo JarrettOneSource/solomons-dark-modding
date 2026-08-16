@@ -238,7 +238,7 @@ directly, and neither that opener nor constructor `0x00560380` requests
 audio. Registry 5 `sounds\backpack_open` is not an InventoryScreen-open
 event; its filename must not be used to invent one.
 
-Asset 52 has one separate non-census consumer: `skill.turn_undead`, skill 77's
+Asset 52 has one distinct skill consumer: `skill.turn_undead.cast`, skill 77's
 undead-area effect. `0x00647F6B` and `0x00647FBE` inside `0x00647EF0` issue
 two point requests at pitch multipliers `2` then `3`. Those calls are not a
 level threshold transition and must not be folded back into `level.up`.

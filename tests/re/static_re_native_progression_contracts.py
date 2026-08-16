@@ -306,9 +306,11 @@ def test_native_level_up_presentation_and_picker_reveal_are_pinned() -> str:
     _require_tokens(
         audio,
         (
-            "| `level.up` | Local native level threshold loop completes | `0x00528A3E`",
-            "One request at scalar `1.0` per completed threshold loop",
-            "Asset 52 has one separate non-census consumer: `skill.turn_undead`",
+            "| `level.up` | One local level-award invocation crosses at least "
+            "one threshold | `0x0067C30B -> 0x005C88B0 -> 0x00528A3E`",
+            "Gain `1.0`, once after `0x0067C250` has looped every threshold "
+            "crossed by that award",
+            "Asset 52 has one distinct skill consumer: `skill.turn_undead.cast`",
             "`0x00647F6B` and `0x00647FBE` inside `0x00647EF0` issue\n"
             "two point requests at pitch multipliers `2` then `3`",
         ),

@@ -6766,6 +6766,39 @@ def test_native_menu_screen_census_and_live_layouts_are_pinned() -> str:
         "dark-cloud settings overlay visual reference",
     )
     claimed_references.add(overlay_reference)
+    trader_captures = _json(
+        "tests/fixtures/webgame/native-hub-trader-ui-captures.json"
+    )
+    captures = trader_captures.get("captures")
+    if (
+        trader_captures.get("schema_version") != 1
+        or not isinstance(captures, list)
+        or len(captures) != 18
+    ):
+        raise StaticReTestFailure(
+            "native Hub trader reference ownership is absent or incomplete"
+        )
+    for capture in captures:
+        reference = (fixture_root / str(capture.get("file", ""))).resolve()
+        assert_recorded_hash_matches_file(
+            str(capture.get("sha256", "")),
+            reference,
+            str(capture.get("state", "native Hub trader reference")),
+        )
+        claimed_references.add(reference)
+    trader_catalog = _json(
+        "docs/reverse-engineering/native-hub-trader-catalog.json"
+    )
+    inventory_screen = (
+        (trader_catalog.get("ui") or {}).get("inventory_screen") or {}
+    )
+    inventory_reference = (ROOT / str(inventory_screen.get("fixture", ""))).resolve()
+    assert_recorded_hash_matches_file(
+        str(inventory_screen.get("fixture_sha256", "")),
+        inventory_reference,
+        "native InventoryScreen reference",
+    )
+    claimed_references.add(inventory_reference)
     committed_references = {
         path.resolve()
         for path in (fixture_root / "menu-reference-captures").glob("*.png")
@@ -6845,7 +6878,8 @@ def test_native_menu_screen_census_and_live_layouts_are_pinned() -> str:
     )
     return (
         "30 settled layouts, one non-semantic overlay, one dialog composite, "
-        "32 exact reference captures, and the loader/loading geometry are pinned"
+        f"{len(claimed_references)} exact reference captures, and the loader/loading "
+        "geometry are pinned"
     )
 
 

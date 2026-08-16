@@ -210,8 +210,8 @@ Tick/build `0x0066F920` also establishes the settled side-control hit boxes.
 For `n` cards, `panelWidth = n * 200 + 60`; both rectangles are 255 by 100 at
 `y = 450 - 177.5 + 50 = 322.5`. SAVE SKILL begins at
 `x = 800 - panelWidth / 2 - 140`; ROLL AGAIN begins at
-`x = 800 + panelWidth / 2 + 40`. Render `0x0067DF80` draws authored UI record
-57 at the SAVE SKILL rectangle and record 56 at ROLL AGAIN. These are native
+`x = 800 + panelWidth / 2 + 40`. Render `0x0067DF80` draws authored UI
+record 57 at the SAVE SKILL rectangle and record 56 at ROLL AGAIN. These are native
 atlas members and interaction regions, not replacement HTML labels.
 
 The screen renderer draws a translucent curtain over the already rendered
