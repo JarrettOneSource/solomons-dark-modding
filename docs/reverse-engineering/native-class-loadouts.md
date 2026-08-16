@@ -212,7 +212,6 @@ would otherwise lose byte identity. All 15 captures agree on every fixed value.
 | element root row | `+0x82C i32` | element table value | selected definition, written by `0x005D0290` |
 | Discipline root row | `+0x830 i32` | Discipline table value | selected definition, written by `0x005D0290` |
 | serialized opaque slot | `+0x834 i32` | sample-dependent | `0x006594E0` assigns `FUN_00401170(1000000,0)`; serialized by `0x0065EE80`, but not class identity |
-| level-up screen active | `+0x838 u8` | `0` | screen constructor sets it; SAVE SKILL clears it before close |
 | current-offer Sorceror action available | `+0x839 u8` | `0` | granted from owned selector 17 at `+0x7DD`; card, reroll, or save consumes it |
 | special-choice argument | `+0x844 i32` | sample-dependent/opaque | not attributable to a class definition |
 | primary spell row | `+0x86C i32` | element table value | selected definition, written by `0x005D0290` |
@@ -221,6 +220,10 @@ would otherwise lose byte identity. All 15 captures agree on every fixed value.
 | meditation idle elapsed | `+0x888 i32` | `0` | `Skills_Wizard` initialization |
 | meditation recovery ramp | `+0x88C i32` | live runtime counter | sampled and enveloped, never treated as a fixed class value |
 | meditation recovery bonus | `+0x890 f32` | `-1`, bits `0xBF800000` | `Skills_Wizard` initialization |
+
+The screen-owned byte at `+0x838` is outside this starting-kit capture surface.
+The level-up screen constructor sets it, and SAVE SKILL clears it before close;
+the picker lifecycle documents that field independently.
 
 For `u8` fields, the fixture's adjacent `raw_u32` is provenance only; compare
 the typed byte value. A four-byte read at `+0x839` also includes neighboring

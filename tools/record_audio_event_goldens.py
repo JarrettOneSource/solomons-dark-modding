@@ -377,11 +377,40 @@ EVENT_SPECS: tuple[EventSpec, ...] = (
     EventSpec("shop.purchase", "purchase debit and transfer succeed", (request(25, "play_gain", "0x0056C10E"),)),
     EventSpec("shop.purchase_rejected", "purchase precondition fails", (request(6, "play_gain", "0x0056C1A6"),)),
     EventSpec(
-        "shop.storage_transfer",
-        "storage transfer accepted",
+        "shop.storage_return_double",
+        "selected storage item is second-activated into the backpack",
         (
+            request(0, "play_gain", "0x0055F054"),
             request(4, "play_gain", "0x0056CE80"),
-            request(0, "play_gain", "0x0056CF1A"),
+        ),
+    ),
+    EventSpec(
+        "shop.storage_drag_start",
+        "storage item crosses the drag threshold",
+        (request(0, "play_gain", "0x0056CF1A"),),
+    ),
+    EventSpec(
+        "shop.storage_drag_drop",
+        "storage drag release is accepted",
+        (request(0, "play_pitch_gain", "0x0056F55A", pitch=0.75),),
+    ),
+    EventSpec(
+        "shop.dowsing_roll",
+        "DOWSE fee is accepted and result generation begins",
+        (
+            request(1, "play_gain", "0x00408550", gain=1.0, parameter_logic="SoundEcho tick 0 gain 1"),
+            request(1, "play_gain", "0x00408550", gain=0.25, parameter_logic="SoundEcho tick 25 gain 0.25"),
+            request(1, "play_gain", "0x00408550", gain=0.0625, parameter_logic="SoundEcho tick 50 gain 0.0625"),
+            request(1, "play_gain", "0x00408550", gain=0.015625, parameter_logic="SoundEcho tick 75 gain 0.015625"),
+            request(23, "play_pitch_gain", "0x0055FE17", pitch=0.8, parameter_logic="pitch 0.8 + Float(0.1,false), after the SoundEcho start and before offer-count Integer(2)"),
+        ),
+    ),
+    EventSpec(
+        "shop.dowsing_purchase",
+        "Dowsing offer purchase succeeds",
+        (
+            request(25, "play_gain", "0x0056C10E"),
+            request(23, "play_pitch_gain", "0x0056D18B", pitch=1.0, parameter_logic="next-fee Integer(10), then pitch 1.0 + Float(0.1,false)"),
         ),
     ),
     EventSpec(
@@ -390,7 +419,8 @@ EVENT_SPECS: tuple[EventSpec, ...] = (
         silent_reason="stock pointer focus has no audio dispatch",
     ),
     EventSpec("ui.confirm", "Game Over continue/button activation", (request(0, "play_gain", "0x005CF7BA"),)),
-    EventSpec("ui.back", "storage/backpack close action", (request(4, "play_gain", "0x0056CE80"),)),
+    EventSpec("ui.shop_close", "common Shop DONE closes the service", (request(64, "play_gain", "0x0055EFA8"),)),
+    EventSpec("ui.inventory_close", "standalone InventoryScreen closes", (request(64, "play_gain", "0x00555853"),)),
     EventSpec(
         "music.menu_transition",
         "native menu/scene music selection",

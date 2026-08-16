@@ -100,10 +100,15 @@ EXPECTED_TRIGGER_ASSET_CELLS = {
     "dig.throw_dirt": r"uniform pool 222..223 `sounds\throwdirt\throwdirt1..2`",
     "shop.purchase": r"25 `sounds\dropcoins`",
     "shop.purchase_rejected": r"6 `sounds\badaction`",
-    "shop.storage_transfer": r"4 `backpack_close`, then 0 `click`",
+    "shop.storage_return_double": r"0 `click`, then 4 `backpack_close`",
+    "shop.storage_drag_start": r"0 `click`",
+    "shop.storage_drag_drop": r"0 `click`",
+    "shop.dowsing_roll": r"1 `pickskill` through `SoundEcho`, then 23 `distortreality`",
+    "shop.dowsing_purchase": r"25 `dropcoins`, then 23 `distortreality`",
     "ui.focus": "no request",
     "ui.confirm": r"0 `sounds\click`",
-    "ui.back": r"4 `sounds\backpack_close`",
+    "ui.shop_close": r"64 `sounds\openpanel`",
+    "ui.inventory_close": r"64 `sounds\openpanel`",
     "music.menu_transition": "`prelude`, `selection`, or `academy` through `Music::PlayCrossfade`",
 }
 
@@ -285,7 +290,7 @@ def test_native_audio_document_trigger_asset_rows_are_exact() -> str:
         f"{AUDIO_TRIGGER_DOCUMENT_CLAIM}: duplicate document trigger rows {duplicates} make asset selection ambiguous",
     )
     _require(
-        len(parsed_rows) == 66
+        len(parsed_rows) == 71
         and tuple(events) == EXPECTED_EVENT_CLASSES
         and {
             "cast.air.channel_start",
@@ -293,7 +298,7 @@ def test_native_audio_document_trigger_asset_rows_are_exact() -> str:
             "death.player",
             "music.menu_transition",
         }.issubset(events),
-        f"{AUDIO_TRIGGER_DOCUMENT_CLAIM}: document must enumerate the exact 66 trigger rows in reviewed order",
+        f"{AUDIO_TRIGGER_DOCUMENT_CLAIM}: document must enumerate the exact 71 trigger rows in reviewed order",
     )
     for row in parsed_rows:
         event = row["event"]
@@ -319,7 +324,7 @@ def test_native_audio_document_trigger_asset_rows_are_exact() -> str:
         and "point-derived gain" in turn_undead["selection"],
         "audio trigger document lost Turn Undead's ordered pitched registry-52 reuse",
     )
-    return "all 66 audio trigger rows structurally pin fixed assets, pool ranges, loop/stream ids, and music requests"
+    return "all 71 audio trigger rows structurally pin fixed assets, pool ranges, loop/stream ids, and music requests"
 
 
 def test_native_audio_event_census_and_dispatch_golden_are_pinned() -> str:
@@ -537,6 +542,13 @@ def test_native_audio_event_census_and_dispatch_golden_are_pinned() -> str:
         and timeline_counts["cast.water.channel_start"] == 2
         and timeline_counts["level.up"] == 1
         and timeline_counts["skill.turn_undead.cast"] == 2
+        and timeline_counts["shop.storage_return_double"] == 2
+        and timeline_counts["shop.storage_drag_start"] == 1
+        and timeline_counts["shop.storage_drag_drop"] == 1
+        and timeline_counts["shop.dowsing_roll"] == 5
+        and timeline_counts["shop.dowsing_purchase"] == 2
+        and timeline_counts["ui.shop_close"] == 1
+        and timeline_counts["ui.inventory_close"] == 1
         and timeline_counts["wave.start"] == 1
         and timeline_counts["wave.end"] == 1,
         "audio dispatch timeline lost multi-request cast phases or unique wave transitions",
@@ -626,7 +638,7 @@ def test_native_audio_event_census_and_dispatch_golden_are_pinned() -> str:
         "audio trigger catalog lookup can silently choose a duplicate or omit a registry slot",
     )
     _require(
-        len(EXPECTED_TRIGGER_ASSET_CELLS) == 66
+        len(EXPECTED_TRIGGER_ASSET_CELLS) == 71
         and EXPECTED_TRIGGER_ASSET_CELLS["movement.footstep.splash"].startswith(
             "uniform pool 216..219"
         )
@@ -760,7 +772,7 @@ def test_native_audio_event_census_and_dispatch_golden_are_pinned() -> str:
         "audio dispatch golden lost Turn Undead's ordered pitch-2/pitch-3 wrapper contract",
     )
     return (
-        "66 gameplay/UI event classes retain clean quiet provenance, exact "
+        "71 gameplay/UI event classes retain clean quiet provenance, exact "
         "dispatch sites, requested assets, parameters, and music witnesses"
     )
 
