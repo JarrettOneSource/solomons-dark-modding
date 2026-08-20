@@ -80,7 +80,7 @@ The staged source of truth for recovered addresses now lives in `config/binary-l
   - `0x005A5530` is also the `DarkCloud::vftable` `0x00797C44` owner/control action dispatcher at slot `+0x10`
 - SimpleMenu bridge:
   - title/profile follow-through menus currently resolve through the live `SimpleMenu` owner path
-  - gameplay pause also aliases through that bridge today, even though the true in-game pause owner is still a separate remaining gap
+  - gameplay pause also uses that bridge; the complete input, modal, region-suspension, nesting, and resume owner is now recovered in [`native-gameplay-pause.md`](reverse-engineering/native-gameplay-pause.md)
 - Pause menu:
   - `RESUME GAME[1]|GAME SETTINGS[0]|LEAVE GAME[2]`
 - Settings menu at `0x005D9A50`:
@@ -146,6 +146,5 @@ native atlas lookup, record layout, or compiled presentation consumers remain
 unmapped.
 
 - First-class gameplay surface promotion is still incomplete for `pause_menu`, `inventory`, `skills`, `spell_picker`, and `book_picker`.
-- The true in-game pause owner still needs to be separated from the current `SimpleMenu` bridge.
 - Browser rows and picker rows still need stable row-level semantics instead of box-only capture.
 - Title/profile/boneyard follow-through surfaces are still only partially mapped as first-class semantic owners.
