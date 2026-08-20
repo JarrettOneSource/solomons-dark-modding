@@ -40,7 +40,7 @@ game system, not unfinished work hidden inside this implementation.
 | `sd.state` get/default/set/delete/clear/snapshot/revision/authority | `web-adapted` | Native-shaped semantics use bounded session-authority state persistent for the VM lifetime. There are no client Lua states to checkpoint yet. |
 | `sd.events.on` and built-in notifications | `web-adapted` | Fixed-tick run, wave, enemy, gold, and level events dispatch on the authority; callback failures retire only that callback. Custom broadcast/filter and three unowned built-in siblings are deferred. |
 | `sd.timer` after/every/sequence/cancel/clear | `exact-ported` | Timers are quantized to the 100 Hz authority clock, sequence delays are relative, and every handle retires with the VM. |
-| `sd.rng` current/next run seed | `exact-ported` | The authority reads the active seed and owns one consumed next-Boneyard override. |
+| `sd.rng` selected/active run seed | `exact-ported` | The authority selects and immediately reads one bounded next-run seed, retains it through that run, and the scene view exposes the active web seed hex. |
 | `sd.scene`, `sd.gameplay`, `sd.hub` semantic reads | `exact-ported` | Address-free projections of the existing Hub/Boneyard/run state. |
 | `sd.player` list/state and current web resource mutations | `exact-ported` | The host may restore health/mana, set mana/gold, and grant XP through authoritative player components. |
 | `sd.world` state/scene/actor census | `exact-ported` | Read-only semantic projections of current player and Boneyard enemy actors. |
@@ -125,3 +125,22 @@ function timeout. These are WSL prototype numbers, not final Mac acceptance.
 - Performance: unchanged no-Lua host tick benchmark, bounded active callback
   p95/p99/max, one lazy VM initialization receipt, and no retained VM/process
   after teardown.
+
+## Website implementation receipt
+
+Website implementation `30be55ca77c6aff97ec44b07cffe5fc135e2ee15`
+(tree `7d3c48e00ad9fd4fb186def3bba7cd3ea7bea073`) closed this first-runtime
+boundary on top of the current loot, Golem, Dig-audio, and gameplay-pause
+owners. The combination uses game protocol 32. The Mac canonical gate passed
+24 backend contracts, 40 loot tests, 140 prerequisites, 1,002 broad
+game/frontend tests, and every remaining build/UI/desktop gate.
+
+Three Apple-M2 built-browser runs proved cold `lua: null`, the real Settings
+toggle and DevTools API, Lua 5.4/sandbox identity, state/timer/events, host
+resource commands, seed-42 run entry, stock enemy materialization and event,
+runaway interruption, immediate cheats-off removal, and zero-player VM
+teardown. Lazy initialization was `17.607..18.579 ms`; active callback p95 was
+`0.527..0.806 ms`, p99 `0.860..1.760 ms`, and max `1.184..2.123 ms`, with zero
+budget crossings or unexpected page/console/network errors. This does not
+change the explicit package/library and participant-presentation deferrals in
+the table above.
