@@ -2,6 +2,13 @@
 
 ## Scope and evidence
 
+The secondary-ability correction in
+[`native-secondary-parity-correction-2026-08-20.md`](native-secondary-parity-correction-2026-08-20.md)
+supersedes the earlier closure for StormCloud composite ownership, Golem
+articulation, Leviathan painter grouping, Ring-of-Fire Region/maximum-set
+effects, and FreezeWave target modifiers. The catalog and formulas below remain
+authoritative where that correction does not explicitly replace them.
+
 This document maps the retail executable's projectile, persistent spell,
 summon, hazard, and short-lived presentation objects. It covers the native
 object ABI behind the art: construction, update, rendering, target queries,

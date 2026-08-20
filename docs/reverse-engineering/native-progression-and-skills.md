@@ -1,5 +1,12 @@
 # Native progression and per-skill effects
 
+> **Secondary correction (2026-08-20):** Complete-equipment bits and the
+> reopened Storm, Golem, Leviathan, Ring of Fire, and FreezeWave owners are
+> specified in
+> [`native-secondary-parity-correction-2026-08-20.md`](native-secondary-parity-correction-2026-08-20.md).
+> Its feature-bit, target-modifier, composite-painter, and Region-feedback
+> findings supersede any broader secondary closure wording in this file.
+
 This is the implementation contract for browser-rebuild gap G6. It specifies
 experience, levels, level-up offer construction, and the runtime effect of all
 82 native skill IDs. An implementing agent should use this document together
