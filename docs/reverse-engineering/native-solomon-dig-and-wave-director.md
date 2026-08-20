@@ -187,6 +187,64 @@ when the larger gate
 `(dx/1.5)^2 + dy^2 < 28900` succeeds or the actor's armed field is positive;
 this is not the ordinary player walk-up path.
 
+### State-0 digging audio and cursor recurrence — 2026-08-20 correction
+
+The earlier encounter pass recovered the 29-entry program and summarized it
+as one frame every five ticks, but it did not follow the two armed audio bytes
+or the cursor perturbations in the same state body. That omission left the web
+actor silent and made the simple five-tick presentation clock an incomplete
+model. Fresh read-only Ghidra decompilation and instructions for constructor
+`0x00481C20` and state body `0x00481FC0` close the complete state-0 recurrence.
+
+The constructor records the current program count after the four leading
+zeroes at actor `+0x23C` (`4`, the shovel gate) and after records `3..13` at
+`+0x244` (`15`, the dirt gate). Bytes `+0x240` and `+0x248` begin armed. Each
+state-0 tick then executes in this order:
+
+1. add exact float32 `0.2` to the cursor at `+0x218`;
+2. when `cursor > 4` and `+0x240` is armed, draw `Integer(2)`, request registry
+   `209 + draw`, and disarm `+0x240`;
+3. when `cursor > 15` and `+0x248` is armed, draw `Integer(2)`, request registry
+   `222 + draw`, disarm `+0x248`, and construct one `Anim_Flydirt` child;
+4. while `4 < cursor < 10` or `cursor > 15`, subtract unsigned
+   `Float(0.09)` from the same active gameplay RNG;
+5. while `cursor > programLength - 5` (`24`), additionally subtract exact
+   float32 `0.05`;
+6. evaluate the late-cycle player-contact branch; and
+7. absent contact, when `cursor >= 29`, subtract `29`, draw `Integer(2)` and
+   replace the wrapped cursor with `4` when the result is one, rearm both audio
+   bytes, then consume `Float(5) + 5` for the next dirt child's motion scalar.
+
+The two sound calls are not pitch-and-gain calls. Instructions
+`0x00482061..0x0048207A` and `0x004820E5..0x004820FE` end at gain-only
+`Sound::Play 0x00407B70`; no float pitch draw exists. Both therefore play at
+fixed pitch `1.0`. The virtual call through the actor's Arena pointer at
+vtable slot `+0x104` resolves to Region hit-point gain `0x004622D0`, whose
+falloff uses inner radius `0.1 * viewportWorldWidth` and outer radius
+`0.5 * viewportWorldWidth`. The shovel request multiplies that result by exact
+`0.5`; throw-dirt uses it unchanged. In the middle falloff band only, native
+death/alternate presentation multiplies the gain by `0.1`; the strictly-inside
+full-gain and strictly-outside zero-gain early returns retain their values.
+Exact equality at the inner radius follows the interpolated branch and is
+therefore death-damped. Stock sends no stereo pan.
+
+The complete authored audio membership is four PCM WAV registry rows:
+
+| Registry | Native path | Bytes | SHA-256 |
+| ---: | --- | ---: | --- |
+| 209 | `sounds\shovel\shovel1.wav` | 28,340 | `be06d2e6eaacf2e0b35aaf14293e41420a0efd5ae364894cda193398838ebce6` |
+| 210 | `sounds\shovel\shovel2.wav` | 28,304 | `4697492d7f5e07a78613b60c44122c7e3193d17d898eccf8ffe62f229d4c0fdd` |
+| 222 | `sounds\throwdirt\throwdirt1.wav` | 65,868 | `de233771aae5e806e4bdba0553729d1744605f512243fd30733e2e0dbd00a1ef` |
+| 223 | `sounds\throwdirt\throwdirt2.wav` | 54,152 | `e527b1df105d2a2fabc65aa576d76fcf7379d3bf0d9f6a51fabb81011ffc947f` |
+
+All four are 44.1 kHz, stereo, 16-bit PCM. An executable-wide immediate-offset
+sweep finds the runtime play references only in `Solomon_Dig` state 0; the
+other `+0x22DC/+0x2308/+0x2518/+0x2544` references are registry construction,
+cleanup, or exception metadata. Every placement mode that constructs native
+type `5009` therefore shares this one audio owner. States 1..4 make no shovel
+or throw-dirt request. On contact, the armed recurrence ends immediately, but
+an already started `Sound` record is not stopped and finishes naturally.
+
 ### Facing, hello selection, and voice ownership
 
 State 1 recomputes the exact target heading as

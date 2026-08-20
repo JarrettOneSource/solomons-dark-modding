@@ -206,8 +206,8 @@ ordinary footstep gain `0.5`. Step1/Step2 use their gain-only wrapper.
 | `skill.unlock` | Next queued level-up offer is rebuilt after the prior picker close | `0x00670CD3` | 102 `sounds\unlockskill` | Fixed gain 1; not card hover, card activation, or the first threshold screen. |
 | `wave.start` | First arena wave enters combat state | `0x00465D22` (spawn-entry siblings `0x00469983`, `0x0046D506`, state site `0x00470E9D`) | Music transition to song `combat`, track `combat` | No RNG. Per-wave number increments have no one-shot stinger. |
 | `wave.end` | Terminal arena completion | `0x00467AA0` | Music crossfade to empty song | No RNG and no wave-complete one-shot; empty song fades/stops the active lane. |
-| `dig.shovel` | Accepted dig strike | `0x0048207A` | uniform pool 209..210 `sounds\shovel\shovel1..2` | `Integer(2)` on the active gameplay stream; point gain and float-RNG pitch. |
-| `dig.throw_dirt` | Dig debris emission | `0x004820FE` | uniform pool 222..223 `sounds\throwdirt\throwdirt1..2` | `Integer(2)` on the active gameplay stream; point gain and float-RNG pitch. |
+| `dig.shovel` | State-0 dig cursor first becomes strictly greater than constructor slot `4` while shovel byte `+0x240` is armed | `0x0048207A` | uniform pool 209..210 `sounds\shovel\shovel1..2` | `Integer(2)` on the active gameplay stream; gain-only `Sound::Play` at fixed pitch `1.0`, using one half of Region hit-point gain. |
+| `dig.throw_dirt` | State-0 dig cursor first becomes strictly greater than constructor slot `15` while dirt byte `+0x248` is armed | `0x004820FE` | uniform pool 222..223 `sounds\throwdirt\throwdirt1..2` | `Integer(2)` on the active gameplay stream; gain-only `Sound::Play` at fixed pitch `1.0`, using full Region hit-point gain. The request precedes `Anim_Flydirt` construction. |
 | `shop.purchase` | Debit and item transfer both succeed | `0x0056C10E` | 25 `sounds\dropcoins` | Fixed; dispatch follows the successful transaction. Registry 13 `buysell` is loaded but this retail path does not call it. |
 | `shop.purchase_rejected` | Purchase precondition fails | `0x0056C1A6` | 6 `sounds\badaction` | Fixed. |
 | `shop.storage_return_double` | Selected storage item is second-activated into backpack | common action `0x0055F054`, callback `0x0056CE80` | 0 `click`, then 4 `backpack_close` | The common action click precedes the accepted callback. Backpack second activation remains ordinary InventoryScreen use/equip behavior. |
@@ -274,7 +274,7 @@ linear_falloff(d, inner, outer) =
     0                              when d >= outer
 ```
 
-The point-gain method is `linear_falloff(d, 0.25W, 1.1W)`. When the local player at `*(Gameplay+0x1358)` has alternate/death animation byte `+0x160 != 0`, that result is multiplied by `0.1`. The hit-point method is `linear_falloff(d, 0.1W, 0.5W)`; its middle band alone is multiplied by `0.1` while that same byte is nonzero because the full-gain and zero-gain branches return before the byte check. This asymmetry is native behavior, not a simplification.
+The point-gain method is `linear_falloff(d, 0.25W, 1.1W)`. When the local player at `*(Gameplay+0x1358)` has alternate/death animation byte `+0x160 != 0`, that result is multiplied by `0.1`. The hit-point method is `linear_falloff(d, 0.1W, 0.5W)`; its interpolated branch alone is multiplied by `0.1` while that same byte is nonzero because the strictly-inside full-gain and strictly-outside zero-gain branches return before the byte check. Exact equality at `0.1W` enters interpolation and is therefore death-damped even though its undamped result is one. This asymmetry is native behavior, not a simplification.
 
 Event-specific envelopes such as the footstep scalar or low-life ouch factor multiply that spatial result. UI calls pass gain one. The wrapper then multiplies the caller scalar by the two per-sound scalars described above. No native stereo pan request was found at any gameplay call site.
 

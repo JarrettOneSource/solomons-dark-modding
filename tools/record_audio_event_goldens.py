@@ -366,13 +366,13 @@ EVENT_SPECS: tuple[EventSpec, ...] = (
     ),
     EventSpec(
         "dig.shovel",
-        "accepted dig strike",
-        (request(209, "play_pitch_gain", "0x0048207A", pool=(209, 210), selection="uniform Integer(2)", rng=GAMEPLAY_RNG, parameter_logic="world point gain plus gameplay-RNG pitch"),),
+        "state-0 cursor first crosses slot 4 while the shovel byte is armed",
+        (request(209, "play_gain", "0x0048207A", pool=(209, 210), selection="uniform Integer(2)", rng=GAMEPLAY_RNG, parameter_logic="fixed pitch 1; one half of Region hit-point gain"),),
     ),
     EventSpec(
         "dig.throw_dirt",
-        "dig debris emission",
-        (request(222, "play_pitch_gain", "0x004820FE", pool=(222, 223), selection="uniform Integer(2)", rng=GAMEPLAY_RNG, parameter_logic="world point gain plus gameplay-RNG pitch"),),
+        "state-0 cursor first crosses slot 15 while the dirt byte is armed",
+        (request(222, "play_gain", "0x004820FE", pool=(222, 223), selection="uniform Integer(2)", rng=GAMEPLAY_RNG, parameter_logic="fixed pitch 1; full Region hit-point gain before Anim_Flydirt"),),
     ),
     EventSpec("shop.purchase", "purchase debit and transfer succeed", (request(25, "play_gain", "0x0056C10E"),)),
     EventSpec("shop.purchase_rejected", "purchase precondition fails", (request(6, "play_gain", "0x0056C1A6"),)),

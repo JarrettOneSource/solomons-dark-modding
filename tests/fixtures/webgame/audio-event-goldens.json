@@ -20,7 +20,8 @@
     "catalog_path": "docs/reverse-engineering/native-audio-catalog.json",
     "catalog_sha256": "1d10bbe00358e985d2a2e9082d69a26f841d41266fff9205881fd2d7c262b79e",
     "recorder_path": "tools/record_audio_event_goldens.py",
-    "recorder_sha256": "5d2ca57ab12ff7008a517768bb52689de11d3eafd50b0088226d9345541aac71",
+    "recorder_sha256": "28ae814c2b1fb81a3a9eb60bbe189fc68801bd8b9981bd758b6dd45a4fbb325b",
+    "post_capture_static_correction": "2026-08-20 Ghidra instructions corrected both Dig rows from pitch-plus-gain labels to their observed gain-only fixed-pitch wrappers; captured assets, gain, pitch, tick, and engine state are unchanged",
     "capture_method": "live stock dispatch-wrapper hooks plus explicit silent-phase checkpoints",
     "cleanup": [
       {
@@ -2318,10 +2319,10 @@
       "tick": 1822,
       "event_class": "dig.shovel",
       "request_ordinal": 1,
-      "trigger": "accepted dig strike",
+      "trigger": "state-0 cursor first crosses slot 4 while the shovel byte is armed",
       "native_trigger_site": "0x0048207A",
       "observed_probe_caller": "0x00000000",
-      "dispatch_operation": "play_pitch_gain",
+      "dispatch_operation": "play_gain",
       "requested_asset_id": "registry:209",
       "requested_asset": {
         "registry_index": 209,
@@ -2352,7 +2353,7 @@
         "observed_gain": 1.0,
         "observed_pitch": 1.0,
         "native_reference_count_after_dispatch": 0,
-        "native_parameter_logic": "world point gain plus gameplay-RNG pitch"
+        "native_parameter_logic": "fixed pitch 1; one half of Region hit-point gain"
       },
       "capture_kind": "live_stock_wrapper_probe",
       "engine_enabled": false,
@@ -2362,10 +2363,10 @@
       "tick": 1829,
       "event_class": "dig.throw_dirt",
       "request_ordinal": 1,
-      "trigger": "dig debris emission",
+      "trigger": "state-0 cursor first crosses slot 15 while the dirt byte is armed",
       "native_trigger_site": "0x004820FE",
       "observed_probe_caller": "0x00000000",
-      "dispatch_operation": "play_pitch_gain",
+      "dispatch_operation": "play_gain",
       "requested_asset_id": "registry:222",
       "requested_asset": {
         "registry_index": 222,
@@ -2396,7 +2397,7 @@
         "observed_gain": 1.0,
         "observed_pitch": 1.0,
         "native_reference_count_after_dispatch": 0,
-        "native_parameter_logic": "world point gain plus gameplay-RNG pitch"
+        "native_parameter_logic": "fixed pitch 1; full Region hit-point gain before Anim_Flydirt"
       },
       "capture_kind": "live_stock_wrapper_probe",
       "engine_enabled": false,

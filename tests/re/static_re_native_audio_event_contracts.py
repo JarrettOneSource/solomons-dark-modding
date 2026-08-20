@@ -746,6 +746,8 @@ def test_native_audio_event_census_and_dispatch_golden_are_pinned() -> str:
     )
     level_rows = timeline_by_event["level.up"]
     turn_rows = timeline_by_event["skill.turn_undead.cast"]
+    shovel_rows = timeline_by_event["dig.shovel"]
+    dirt_rows = timeline_by_event["dig.throw_dirt"]
     _require(
         len(level_rows) == 1
         and level_rows[0]["dispatch_operation"] == "play_gain"
@@ -770,6 +772,21 @@ def test_native_audio_event_census_and_dispatch_golden_are_pinned() -> str:
             for row in turn_rows
         ),
         "audio dispatch golden lost Turn Undead's ordered pitch-2/pitch-3 wrapper contract",
+    )
+    _require(
+        len(shovel_rows) == 1
+        and shovel_rows[0]["dispatch_operation"] == "play_gain"
+        and shovel_rows[0]["native_trigger_site"] == "0x0048207A"
+        and shovel_rows[0]["parameters"]["observed_pitch"] == 1.0
+        and "one half of Region hit-point gain"
+        in shovel_rows[0]["parameters"]["native_parameter_logic"]
+        and len(dirt_rows) == 1
+        and dirt_rows[0]["dispatch_operation"] == "play_gain"
+        and dirt_rows[0]["native_trigger_site"] == "0x004820FE"
+        and dirt_rows[0]["parameters"]["observed_pitch"] == 1.0
+        and "full Region hit-point gain"
+        in dirt_rows[0]["parameters"]["native_parameter_logic"],
+        "audio dispatch golden restored random pitch or lost the two Dig gain envelopes",
     )
     return (
         "71 gameplay/UI event classes retain clean quiet provenance, exact "
