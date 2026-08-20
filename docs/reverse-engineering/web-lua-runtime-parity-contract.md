@@ -144,3 +144,14 @@ teardown. Lazy initialization was `17.607..18.579 ms`; active callback p95 was
 budget crossings or unexpected page/console/network errors. This does not
 change the explicit package/library and participant-presentation deferrals in
 the table above.
+
+The final concurrent-main cutoff also includes the independently published
+deployed-revision, Skeleton head-facing, and late-light systems. Their combined
+schema with pause and Lua is protocol 33. Website cutoff
+`b249af3ac293b85efbc405fd47f2a33197fa60ea` (tree
+`05245cf420c521e36f72d26cd3245a457a1c19b5`) passed the Mac gate with 143
+prerequisites and 1,009 broad tests, then repeated the complete built Lua
+Boneyard journey with `19.063 ms` lazy init and callback p95/p99/max
+`0.531/0.668/1.115 ms`. No budget crossing, unexpected error, retained player,
+VM, or task process remained. The later Website receipt commit changes only
+documentation.
