@@ -1,5 +1,5 @@
 {
-  "schema_version": 5,
+  "schema_version": 6,
   "source": {
     "build": "retail 0.72.5",
     "executable": "SolomonDark.exe",
@@ -156,6 +156,13 @@
     "dowsing_purchase": "0x0056D110",
     "inventory_screen_render": "0x00568B90",
     "inventory_screen_detail_render": "0x00556940",
+    "inventory_stats_render": "0x00562520",
+    "equipment_pane_render": "0x00561300",
+    "equipment_sink_rect": "0x005504D0",
+    "equipment_sink_render": "0x00575450",
+    "primitive_rect_render": "0x0041DD70",
+    "primitive_nine_slice_render": "0x004153B0",
+    "tall_sink_frame_render": "0x004A2FF0",
     "inventory_screen_pointer_press": "0x0056F760",
     "inventory_screen_pointer_release": "0x0056FC90",
     "inventory_grid_render": "0x0055A070",
@@ -283,6 +290,79 @@
         "recipe_color_catalog": "docs/reverse-engineering/native-item-catalog.json",
         "null_recipe_color": "native white default"
       },
+      "primary_spell_pane": {
+        "owner": "0x00562520",
+        "field_offsets": {
+          "name": "+0x4B0",
+          "damage": "+0x4D0",
+          "mana_cost": "+0x508",
+          "mana_heal": "+0x55C"
+        },
+        "format_strings": ["damage: %s", "mana cost: %s", "mana heal: %s"],
+        "heading_text_baseline_y": 226,
+        "heading_glyph_visible_y": [215, 226],
+        "content_text_baseline_y": [251, 273, 286, 299],
+        "content_glyph_visible_y": [[239, 253], [259, 274], [273, 287], [286, 300]],
+        "content_baseline_gaps": [22, 13, 13],
+        "heading_font_logical_size": [26, 26],
+        "content_font_logical_size": [32, 32],
+        "content_glyph_scale": 1.0,
+        "content_horizontal_advance_scale": 0.9,
+        "content_text_left": {"standalone": 95, "companion": 148},
+        "content_first_visible_x": {"standalone": 96, "companion": 149},
+        "settled_glyph_peak_rgb": [200, 243, 243],
+        "standalone_heading_rect": [86, 207, 227, 24],
+        "standalone_body_rect": [86, 230, 227, 79],
+        "companion_x_shift": 53,
+        "inline_unit_suffix": {
+          "builder": "0x00663B30",
+          "source_addresses": ["0x007A0190", "0x007A0214", "0x007A0294"],
+          "texts": [" / SEC", " / SECOND"],
+          "scale": 0.7,
+          "horizontal_advance_scale": 0.63,
+          "offset": [0, 1],
+          "italic": true
+        },
+        "panel_contract": "separate adjoining opaque heading and body rectangles; never one merged rectangle"
+      },
+      "equipment_sink_render_contract": {
+        "owner": "0x00561300",
+        "rect_builder": "0x005504D0",
+        "painter": "0x00575450",
+        "item_render_dispatch": "item vtable +0x0C",
+        "owner_offsets": {
+          "hat": "+0x18",
+          "robe": "+0x1C",
+          "ring0": "+0x20",
+          "ring1": "+0x24",
+          "ring2": "+0x28",
+          "amulet": "+0x2C",
+          "weapon": "+0x30"
+        },
+        "sink_sizes": {
+          "normal": [72, 72],
+          "small_flag_0x14": [46, 46],
+          "tall_flag_0x15": [72, 108]
+        },
+        "opaque_interior_rgba": [0.1, 0.1, 0.09, 1.0],
+        "opaque_interior_painter": "0x0041DD70",
+        "tall_frame": {"wrapper": "0x004A2FF0", "nine_slice": "0x004153B0", "outline_only": true},
+        "tall_item_clip_flag": "DAT_00819E5E = 1 around item vtable +0x0C",
+        "companion_sinks": {
+          "hat": {"center": [1337, 179], "rect": [1301, 143, 72, 72], "frame": "Inventory.10"},
+          "robe": {"center": [1337, 277], "rect": [1301, 223, 72, 108], "frame": "tall primitive"},
+          "weapon_left": {"center": [1257, 259], "rect": [1221, 223, 72, 72], "frame": "Inventory.10"},
+          "weapon_right": {"center": [1417, 259], "rect": [1381, 223, 72, 72], "frame": "Inventory.10"},
+          "amulet": {"center": [1270, 192], "rect": [1247, 169, 46, 46], "frame": "Inventory.9"},
+          "ring0": {"center": [1270, 326], "rect": [1247, 303, 46, 46], "frame": "Inventory.9"},
+          "ring1": {"center": [1404, 326], "rect": [1381, 303, 46, 46], "frame": "Inventory.9"},
+          "ring2_locked": {"center": [-9999, -9999], "rect": [-10022, -10022, 46, 46], "frame": "Inventory.9"}
+        },
+        "draw_order": ["opaque sink interior", "atlas or tall primitive frame", "clipped class-owned item painter", "selection or accepting overlay"],
+        "item_clip_owners": ["backpack", "storage", "StoreGrid", "dowsing result grid", "equipment sink"],
+        "unclipped_owner": "InventoryDragger",
+        "accepting_highlight": "compatible equipment sinks are green only while a backpack object is held"
+      },
       "interaction_contract": {
         "selection_owner": "InventoryGrid",
         "pointer_press": "0x0056F760",
@@ -346,6 +426,18 @@
           "storage_to_backpack": ["second activation", "drag"],
           "valid_drop": "only the opposite owner",
           "invalid_drop": "restore the same source object without mutation"
+        },
+        "service_companion_inventory": {
+          "dispatcher": "0x00514A20",
+          "services": ["Shop", "PerkShop", "InventoryShop", "DowsingShop pre-roll", "DowsingShop result"],
+          "relationship": "an independently allocated InventoryScreen remains attached beneath every service overlay",
+          "selection_owners": ["service Shop grid", "companion InventoryGrid", "InventoryShop storage grid"],
+          "post_purchase": {
+            "ordinary_0x0056BF70": "debit, remove Shop object, insert the same live object through 0x0055FF20, invoke InventoryScreen vtable +0xB4 rebuild",
+            "dowsing_0x0056D110": "use ordinary purchase before fee reroll and flash",
+            "perk_0x0056C340": "apply and remove perk offer, then rebuild the charm pane without backpack insertion"
+          },
+          "companion_actions_while_service_open": ["select", "ItemInfo after 20 ticks", "same-object second activation within 50 ticks", "drag", "equip", "unequip"]
         },
         "required_clothing": {
           "hat": {
