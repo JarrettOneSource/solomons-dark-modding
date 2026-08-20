@@ -222,6 +222,27 @@ outlived a 1,000-tick target movement hold. Extending that deterministic hold
 to 100,000 ticks made the actual Golem attack/damage receipt stable without
 changing runtime behavior.
 
-Publication closure still requires both focused repository commits to reach
-`main` and the deployed production revision and `/game` browser to be verified
-independently.
+## Publication and production receipt
+
+The runtime-bearing Website commit `a4cf0299987336a37e58419eaf532f5c7b03e361`
+and this repository's evidence commit
+`82a55b2d6bde2bc84a67ffaf145fad75dd43bb48` reached their respective `main`
+branches by fast-forward. GitHub's Website Validate run `32372421945` and Mod
+Loader Lua/static-contract run `32372421178` both passed.
+
+The isolated deploy worker independently validated Website `a4cf029`, built
+artifact
+`cc028104860a10a46c2f829c578ca430fbeecbc3478afd54fd6e5f5cab09b864`, and
+completed its guarded NFO cutover. Production reported the exact SHA, both
+services active with zero restarts, protocol 30, zero remaining sessions or
+lobbies, `ok` live/backup database integrity, and no warning-level cutover
+journal. The public `/game` document matched the validated build byte-for-byte.
+
+A separate Apple-M2 Chrome/WebGL2 production journey then took three real
+clients through Create, shared Hub, generated mode-2 Boneyard, gate crossing,
+Solomon dialogue/taunt, the opening ten-enemy wave, audio, lighting, and painter
+order with no page or console error. Receipt SHA-256:
+`50475af7297dd775218bfd2c9b278de8de963cb5115a4dcba49f9ba515a2eaba`.
+The only first-run failure was in the verifier asking production to serve a
+Vite-only source-module path; authored-template comparison now remains in the
+exact-checkout harness and does not alter shipped game behavior.
