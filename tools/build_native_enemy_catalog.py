@@ -43,6 +43,7 @@ ENEMY_SPECS: list[dict[str, Any]] = [
         "behavior": [
             "Selects unarmed, sword, mace, flail, axe, or pike combat behavior from the weapon field.",
             "Headgear and armor change both presentation and wave-modified durability; FLAMING owns a Fire child effect.",
+            "Skeleton tick rolls signed head-facing offset +0x224 in {-1,0,1} and the renderer applies it only to the skull/headgear bank while an action owner remains active.",
             "Death disassembles the articulated body, preserves equipment-specific pieces, grants rewards, and then runs the common drop selector.",
         ],
         "evidence_functions": {"tick": "0x00484B90", "render": "0x0048DEE0", "death_presentation": "0x0048D2A0"},
@@ -59,6 +60,8 @@ ENEMY_SPECS: list[dict[str, Any]] = [
         "behavior": [
             "Maintains range and optional strafe state before firing Arrow objects.",
             "Arrow type chooses normal, fire, or poison payload; accuracy, scatter/random-shot mode, and extra-arrow count are independent controls.",
+            "The renderer can consume inherited head-facing offset +0x224, but Archer tick has no writer and the stock constructor-zero value remains static.",
+            "Optional MonsterRecipe STRAFING byte +0x95 lets tick overwrite body-facing heading +0x26C independently; shipped survival wave rows leave that branch unauthored.",
         ],
         "evidence_functions": {"tick": "0x00485200", "fire_arrow": "0x00477B90", "render": "0x0048F450"},
         "spawned_types": [0x7DA],
@@ -74,6 +77,7 @@ ENEMY_SPECS: list[dict[str, Any]] = [
         "behavior": [
             "Element selection dispatches fire, guided/ether, frost, poison, or lightning-family casting behavior.",
             "Self-shield and ally-shield toggles have separate strength fields and share the configured recast interval.",
+            "Mage tick calls Skeleton tick first and therefore inherits the signed +0x224 head-facing roll/reset independently of its cast body selector.",
         ],
         "evidence_functions": {"tick": "0x00490860", "spell_dispatch": "0x0047FDE0", "render": "0x00491720"},
         "spawned_types": [0x7EB, 0x7EC, 0x7E3],

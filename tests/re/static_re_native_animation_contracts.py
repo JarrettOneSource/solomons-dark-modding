@@ -632,6 +632,78 @@ def test_native_animation_frame_programs_and_tick_anchor_are_pinned() -> str:
             raise StaticReTestFailure(
                 f"{name} golden no longer resolves one unambiguous native action id"
             )
+
+    _require_tokens(
+        doc,
+        (
+            "Skeleton-family independent head-facing lane correction",
+            "signed integer `actor+0x224`",
+            "`Integer(300)==1`",
+            "inclusive `Integer(-1,1)`",
+            "`positiveMod(baseFacing + signedHeadOffset, 18)`",
+            "Archer tick `0x00485200`",
+            "upper-body heading `+0x26C`",
+            "all 400 usable default-Archer golden frames",
+        ),
+        "Skeleton-family animation contract no longer records the independent head-facing owner and static Archer sibling",
+    )
+
+    def sprite_in_range(frame: dict[str, Any], first: int, last: int) -> int | None:
+        for sprite in frame.get("sprites", []):
+            entry = sprite.get("sprite_index")
+            if isinstance(entry, int) and first <= entry <= last:
+                return entry
+        return None
+
+    stock_skeleton_frames = {
+        int(frame["tick"]): frame for frame in skeleton["skeleton"]["frames"]
+    }
+    base_head = stock_skeleton_frames.get(19943)
+    turned_head = stock_skeleton_frames.get(19948)
+    if base_head is None or turned_head is None:
+        raise StaticReTestFailure(
+            "Skeleton golden no longer contains the exact tick-19943/19948 head-turn edge"
+        )
+    if (
+        base_head["presentation_fields"].get("pose_0x224_f32") != 0.0
+        or not math.isnan(
+            float(turned_head["presentation_fields"].get("pose_0x224_f32"))
+        )
+        or sprite_in_range(base_head, 1477, 1494) != 1485
+        or sprite_in_range(turned_head, 1477, 1494) != 1484
+    ):
+        raise StaticReTestFailure(
+            "Skeleton golden no longer proves raw +0x224 dword -1 changing only default-head record 1485 to 1484"
+        )
+    _require_tokens(
+        _read(RECORDER),
+        (
+            '"head_facing_offset_0x224_i32": raw_field(actor, 0x224, "i32")',
+            '"pose_0x224_f32": raw_field(actor, 0x224, "f32")',
+        ),
+        "animation recorder no longer emits the corrected signed head-facing field beside the sealed v1 compatibility key",
+    )
+
+    archer_facing_mismatches: list[tuple[int, int, int]] = []
+    for frame in skeleton["skeleton_archer"]["frames"]:
+        limb = sprite_in_range(frame, 1585, 1728)
+        body = sprite_in_range(frame, 451, 612)
+        head = sprite_in_range(frame, 1477, 1494)
+        if limb is None or body is None or head is None:
+            continue
+        base_facing = int((float(frame["heading"]) + 10.0) / 20.0) % 18
+        observed = (
+            (limb - 1585) % 18,
+            (body - 451) % 18,
+            (head - 1477) % 18,
+        )
+        if observed != (base_facing, base_facing, base_facing):
+            archer_facing_mismatches.append((int(frame["tick"]), base_facing, body))
+    if archer_facing_mismatches:
+        raise StaticReTestFailure(
+            "default retail SkeletonArcher golden unexpectedly diverges its body/head facing: "
+            f"{archer_facing_mismatches[:3]}"
+        )
     return "fixed-tick wizard and Skeleton-family frame programs and transitions are pinned"
 
 

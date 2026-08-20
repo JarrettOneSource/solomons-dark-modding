@@ -988,6 +988,8 @@ def distill_enemy_frames(
                     "pose_0x214_f32": raw_field(actor, 0x214, "f32"),
                     "pose_0x218_f32": raw_field(actor, 0x218, "f32"),
                     "pose_0x220_u32": raw_field(actor, 0x220, "u32"),
+                    "head_facing_offset_0x224_i32": raw_field(actor, 0x224, "i32"),
+                    # Retained for compatibility with the sealed v1 fixture.
                     "pose_0x224_f32": raw_field(actor, 0x224, "f32"),
                     "pose_0x228_f32": raw_field(actor, 0x228, "f32"),
                     "pose_0x230_u8": raw_field(actor, 0x230, "u8"),

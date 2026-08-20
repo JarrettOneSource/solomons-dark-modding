@@ -255,7 +255,11 @@ Armor and headgear likewise affect the built config before actor creation.
 
 `Skeleton_Tick (0x00484B90)` selects movement/attack state. The articulated
 renderer `0x0048DEE0` composes body/equipment ranges rather than selecting one
-monolithic sprite. `0x0048D2A0` runs equipment-aware death presentation;
+monolithic sprite. Its third independent selector is signed dword `+0x224`:
+eligible fixed ticks roll `Integer(300)==1`, then inclusive `Integer(-1,1)`,
+and the renderer applies the surviving value only to the skull/headgear
+facing. No active action at `+0xE4` resets it to zero. `0x0048D2A0` runs
+equipment-aware death presentation;
 `0x00477020` is the shared special-death path. Flaming Skeletons own a
 `Fire 0x7E3` effect whose lifecycle must be cleaned up with the actor. The
 bone/gear disassembly details and fragment semantics are cross-checked in
@@ -267,7 +271,14 @@ bone/gear disassembly details and fragment semantics are cross-checked in
 `Arrow 0x7DA`, transfers team/source/damage, selects normal/fire/poison arrow
 payload, and applies accuracy mode plus extra-arrow count. `LEADING`,
 `SCATTERSHOT`, and `RANDOMSHOT` are distinct mode values; extra arrows are a
-separate count, so they must not be collapsed into one “multishot” flag.
+separate count, so they must not be collapsed into one “multishot” flag. Its
+renderer can consume inherited head offset `+0x224`, but Archer tick calls the
+common Badguy tick rather than Skeleton tick; the constructor-zero offset is
+therefore static in the stock class path. Archer's separate torso aim is
+`+0x26C`: tick copies movement heading there, optional MonsterRecipe STRAFING
+byte `+0x95` permits a target/lead overwrite, and the renderer uses it only for
+the body bank. Retail `wave.txt` contains no STRAFING-authored row, matching
+the preserved default-Archer golden's equal body/limb/head facings.
 
 ### Skeleton Mage
 
@@ -276,6 +287,9 @@ selected element. Proven spawned objects include `Firebolt 0x7EB` and
 `GuidedMissile 0x7EC`; other element branches use direct/projectile and status
 paths documented in the projectile catalog. Self shield and ally shield have
 separate toggles and strengths but share the configured interval. Dispatch
+begins by calling Skeleton tick at `0x00490894`, so Mage inherits the same
+signed `+0x224` head-facing roll/reset while its body/cast selector remains
+independent. Dispatch
 `0x0047FDE0` applies action `0x13` to self; action `0x14` requires a same-team
 ally whose exact runtime type is Skeleton `0x3E9`, SkeletonArcher `0x3EA`, or
 Zombie `0x3EE` before calling shield helper `0x00477140`. It does not shield an

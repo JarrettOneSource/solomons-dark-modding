@@ -308,6 +308,67 @@ movement updates `+0x144` without copying it into `+0x150`. A network port
 must consequently retain body pose as actor state, interpolate only the
 authoritative action progress, and never infer torso pose from locomotion.
 
+### Skeleton-family independent head-facing lane correction — 2026-08-20
+
+The selector-axis correction above stopped one articulated layer too early.
+Fresh read-only instruction and existing live-golden review proves a third
+independent selector: signed integer `actor+0x224` offsets only the
+skull/headgear facing. It is neither locomotion `+0x144`, torso/action
+`+0x150`, nor the float field implied by the old recorder label.
+
+`Skeleton_Tick 0x00484B90` owns the writer. At
+`0x00484BE9..0x00484C0E`, after the linked-target/flag/flee gates, it performs
+`Integer(300)==1`; the winning tick performs inclusive `Integer(-1,1)` and
+writes that signed dword to `+0x224`. At `0x00484DA7..0x00484DBA`, absence of
+the active action owner at `+0xE4` resets it to zero. Constructor
+`0x004771B0` initializes it to zero at `0x004772E6`.
+
+All three Skeleton-family renderers consume the field:
+
+- Skeleton `0x0048DEE0` reads it at `0x0048DF06` and uses wrapped
+  `baseFacing + offset` for the headgear vector at owner `BadGuys+0x4BA8`
+  near `0x0048F190`;
+- Archer `0x0048F450` reads it at `0x0048F4A9` and uses the result near
+  `0x00490001`;
+- Mage `0x00491720` reads it at `0x00491760` and uses the result in its
+  headgear draw paths beginning at `0x00491CD4` and the final common head draw
+  near `0x00492AF2`.
+
+In every case the mapping is
+`positiveMod(baseFacing + signedHeadOffset, 18)`. Limbs, body/action, weapon,
+cloak, and auxiliary effects keep their existing selectors. Mage tick
+`0x00490860` calls Skeleton tick at `0x00490894`, so Mage shares the writer and
+reset. Archer tick `0x00485200` calls `Badguy_CommonChaseTick 0x004835F0`
+instead and has no class writer; its inherited constructor zero therefore
+remains the stock value despite renderer support for the field.
+
+Archer owns one different upper-component lane that must not be conflated with
+the head offset. Tick `0x00485200` copies common movement heading `+0x6C` into
+upper-body heading `+0x26C` at `0x0048537A`. When optional MonsterRecipe
+STRAFING byte `+0x95` has materialized as actor byte `+0x268`, its target/lead
+calculation may overwrite `+0x26C` at `0x0048560A`; renderer `0x0048F450`
+quantizes that heading at `0x0048F496` for the Archer body while limbs and
+head keep their common facing. The complete retail `data/wave.txt` authors no
+STRAFING row, and all 400 usable default-Archer golden frames have identical
+body/limb/head facings. This is an optional custom-MonsterRecipe branch, not a
+missing shipped-survival animation.
+
+The preserved runtime golden closes the visible effect. Skeleton render tick
+`19943` has zero `+0x224` and submits default-head record `1485`; tick `19948`
+has raw dword `0xffffffff` (`-1`) and submits record `1484` while its limbs and
+torso continue their independent action selectors. The recorder called this
+field `pose_0x224_f32`, so the raw `-1` appeared as JSON `NaN`; that label is a
+capture-schema defect, not a native float or an unknown pose.
+The recorder now emits `head_facing_offset_0x224_i32` beside the legacy key so
+future captures retain the correct type without rewriting the sealed v1
+evidence.
+
+The complete survival-family audit finds no analogous missing state elsewhere:
+Imp's upper phase/alpha, Zombie's articulated head/arms/body, and Demon's joint
+lanes have distinct recovered owners; Wraith is facing-only; Coffin and Maggot
+are not upper-articulated. No head turn may be invented for Archer merely
+because the shared renderer can consume one.
+
 ## Facing
 
 The enemy renderers below add the half-step, divide, then call `0x00747360`.
