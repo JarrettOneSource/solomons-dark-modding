@@ -95,3 +95,31 @@ native draw at 50 percent, and captured pixels must contain the matching filled
 and empty segments. The verifier separately parses the stock-HUD row geometry
 and fails if a row name begins over its bar or extends beyond its reserved
 label slot.
+
+## Website port handoff (2026-08-20)
+
+The Website must keep the two native presentation lanes separate:
+
+- the fixed ally-row consumer remains the existing `GameHud`/`AllyHud` surface;
+- the world lane is a post-world, screen-space overlay driven by the presented
+  actor position and the authoritative participant vitals.
+
+The world lane's complete portable contract is:
+
+- enumerate every nonlocal player in `HubWorldScene`,
+  `HubPrivateRoomScene`, and the Boneyard/Arena scene;
+- project the actor point `(world_x, world_y - 45)` through the active camera;
+- draw the exact group-6 bitmap name at half scale in white;
+- draw a 7-pixel bar at `name_y + 17`, with the native border/empty/fill/highlight
+  colors, spanning the estimated name width with a 64-pixel minimum, and fill
+  ratio `clamp(current_hp / max_hp, 0, 1)`;
+- resolve identity and health from the current authoritative snapshot, while
+  allowing the presentation timeline to interpolate only the actor transform;
+- draw no local-player label, no Golem world label, no generic text fallback,
+  and no overlay when the name or maximum HP is invalid.
+
+The native zero-health branch is intentional: the world actor lane may retain a
+remote name and an empty bar during the actor's death presentation. The fixed
+ally-row lane remains alive-only. Browser screen-space composition is an
+implementation detail; it must not scale the 64-pixel bar with camera zoom or
+merge it into the fixed HUD.
