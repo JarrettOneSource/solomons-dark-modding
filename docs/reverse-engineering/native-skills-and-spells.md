@@ -939,6 +939,30 @@ float32 0.98, and consumes `Float(360)`, `Float(1)`, then the sign word for its
 initial rotation and signed `1+magnitude` angular velocity. Low-mana Water's
 mask is `0x2`, so it never tumbles projectiles.
 
+Flash row 53 is a defensive response inside Player vslot `+0x4C`
+(`0x0052F540`), not a castable dispatcher case. At
+`0x00530768..0x00530807`, a positive configured chance performs
+`d=Integer(100)` and succeeds only for `d>0 && d<=round(mChance)`. The branch
+passes the defender position, group, and `mDuration` to `0x00649890` before
+the later Deflect/Stoneskin/damage paths. A successful response:
+
+- consumes `Float(.2)` for `flashspell` playback rate `1+draw`, then one
+  100001-way random-unit-vector word and eight `Float(1)` scale words;
+- writes a white point-attenuated Region flash with loss `.05` and a random
+  magnitude-three displacement; Region tick `0x0063EFC0` multiplies that
+  vector by float32 `.75` and clears it at squared length `<=.25`;
+- registers eight BadGuys-16 `Anim_FadeGrowAdditive_Perspective` children at
+  the defender root, scale `2-Float(1)`, growth `1.05`, alpha one/loss `.05`;
+- registers four BadGuys-15 `Anim_FadeAdditive` children at `y-25`, scale six,
+  alpha one/loss `.05`;
+- queries group/mask `2` through `0x00642280` with dimension 200, whose helper
+  halves the dimension to an exact radius 100, then attaches `Mod_Dazzle
+  (0x1B6E)` to every returned hostile for `round(mDuration*100)` ticks.
+
+The response is therefore an area aura, not an attacker-only modifier, and it
+owns 10 RNG words after the successful chance word. Registry offset `0x61C`
+is `sounds\\flashspell`.
+
 ### Status ownership details
 
 `Mod_Planewalker` is native factory type `0x1B75`. Its apply callback

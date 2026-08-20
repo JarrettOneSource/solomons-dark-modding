@@ -811,6 +811,19 @@ and damage zero. That wave retains the standard ten-tick distinct-target
 Dazzle/query and tracked radial push behavior while its `0x005E7AA0` callback
 submits the expanding no-shadow Region light; it owns no main-pass sprite.
 
+### Flash defensive response (skill 53)
+
+`0x00649890` is a complete world/presentation/effect helper. It is called only
+after Player vslot `+0x4C` wins Flash's nonzero percentile. It creates eight
+BadGuys-16 `Anim_FadeGrowAdditive_Perspective` children and four BadGuys-15
+`Anim_FadeAdditive` children; both families are registered world actors and
+outlive the contact frame. The first family grows by `1.05` from independent
+`2-Float(1)` scales with `.05` alpha loss. The second is fixed scale six at
+defender Y minus 25 with the same loss. The helper also owns the white Region
+flash, magnitude-three decaying displacement, randomized-pitch `flashspell`,
+and radius-100 group-2 Dazzle query described in
+[native-skills-and-spells.md](native-skills-and-spells.md).
+
 ### Magic Storm / Storm Cloud (`0x7F0`)
 
 `StormCloud` begins with a 1,000-tick active lifetime and a 50-tick first-strike
