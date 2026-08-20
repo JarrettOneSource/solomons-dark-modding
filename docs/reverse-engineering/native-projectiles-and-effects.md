@@ -507,6 +507,14 @@ than drawable missile sprites:
   FrostBurn duration is `round(FreezeWave+0x14C * 200)`, its per-tick damage is
   exactly `1/200`, and tick `0x006278B0` dispatches flags `0x18` while owning a
   separate randomized icy additive-particle branch.
+- Ring factory `0x00644460` also owns presentation independently of the
+  invisible gameplay wave: three `Anim_Iceblast` objects borrow DeadHawg
+  record 114, one ring borrows DeadHawg 121, and the normal/enhanced branches
+  construct 100/200 `Anim_WhirlSnow` children. WhirlSnow constructor
+  `0x004588E0` installs vtable `0x007853A8`; the atlas destination at
+  application field `+0x3758` pins it to BadGuys record 72. Each child owns the
+  recovered eight-float radial/height/rotation/life schedule and remains a
+  registered animation after the list-backed FreezeWave retires.
 - Knockback owns the affected-actor list from the start. Each tick it applies
   outward impulse while temporarily changing the target collision radius. On
   expiry it dispatches `Dazzle (0x1B6E)` once to each still-live actor and
@@ -1020,6 +1028,12 @@ that rain alpha, and uniform scale `4.5`; it is not a red quarter-scale sprite.
 After activity, ground alpha takes 100 ticks to fade and remaining rain alpha
 takes 2,000, yielding the 3,600-tick maximum ownership window. Light callback
 `0x005EB5C0` submits radius `2`, intensity `0.5*alpha`, and no shadow.
+
+Draw-registration callback `0x005E3600` passes scalar 350 and the actor to
+`0x0064E910`, which allocates a `PuppetPointer`, copies the actor root,
+offsets its scene-submission Y extent by 350, and inserts it into the world
+list. This is painter/culling ownership, not a second radius-350 light; the
+separate provider remains on the ordinary Region-light lane.
 
 ### Earthquake (`0x7F1`)
 
@@ -1573,6 +1587,11 @@ and life loses `0.015` on each non-skipped airborne update and every settled
 update. These debris actors and impact fades are
 world-owned after the Comet retires; DeadHawg-6 can persist for 1,000 ticks.
 The deleting destructor uses ordinary `Puppet` teardown.
+
+Dispatcher `0x0054CC50` passes Permafrost-scaled `mFreeze` first and
+`mDamage` second; factory `0x0063FD00` writes them to `+0x13C/+0x140`.
+Impact gives the shared FreezeWave `+0x13C*200` ticks before dispatching the
+`+0x140` damage lane.
 
 ## Enemy-owned projectile presentation closure
 

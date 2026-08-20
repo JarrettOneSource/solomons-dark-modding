@@ -925,6 +925,20 @@ Gargantuan, and Iron Golem are consumed by their primary or summon handlers;
 body/mind entries are passive progression modifiers. They do not each own a
 separate castable projectile factory case.
 
+Chill Wind is nevertheless a complete mixed actor/projectile consumer inside
+the Water primary handler `0x00543860`. The ordinary query mask is `0x1082`.
+Arrow constructor `0x005E1000` writes actor flag `0x80`; Firebolt and
+GuidedMissile write `0x100` and do not enter this branch. For every returned
+`0x80/0x1000` target, the handler calls virtual `+0x64` with float32
+`mPushback*0.3199999928474426` and the cast-heading unit vector. Arrow vslot
+`0x005E5EC0` accumulates that scalar at `+0x178`; every learned rank begins at
+`mPushback=10`, so the first eligible contact crosses one, retires the Arrow,
+and registers a record-2 `Anim_SpinAway` (`0x0079D530`). The child starts with
+life 6 and loss 0.1, moves by the supplied unit vector while damping it by
+float32 0.98, and consumes `Float(360)`, `Float(1)`, then the sign word for its
+initial rotation and signed `1+magnitude` angular velocity. Low-mana Water's
+mask is `0x2`, so it never tumbles projectiles.
+
 ### Status ownership details
 
 `Mod_Planewalker` is native factory type `0x1B75`. Its apply callback
