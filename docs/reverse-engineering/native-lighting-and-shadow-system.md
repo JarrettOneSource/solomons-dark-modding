@@ -719,9 +719,10 @@ one complete presentation epoch:
 3. `0x0057D5E0` restores the main target;
 4. the direct world bands paint, `0x0046FAFF` multiplies the Region target,
    and the shared main queue flushes at `0x0046FDAF`; and
-5. environment modes 1 and 2 execute the already recovered player-owned
-   record-18/direct plus record-9/target darkness composition before screen
-   feedback and HUD.
+5. environment modes 1 and 2 execute the player-owned record-18 direct light
+   plus, only when either target-mask grid has members, the local record-9
+   target light additively before screen feedback and HUD. Neither pass covers
+   the full backbuffer.
 
 That sequence applies to the first visible Arena frame, every ordinary frame,
 and the first frame after a new Arena is constructed. The provider and
@@ -736,9 +737,9 @@ The complete first-frame membership is therefore:
 
 | Member | Native disposition at the first visible Arena frame |
 | --- | --- |
-| environment mode 0 | Region raster, analytic tint, and directional shadows; no later environment-darkness overlay |
-| environment modes 1 and 2 | same Region products, then both player darkness passes in the same render epoch |
-| every visible player | current provider submission plus, in modes 1/2, both current darkness passes |
+| environment mode 0 | Region raster, analytic tint, and directional shadows; no later player environment-light pass |
+| environment modes 1 and 2 | same Region products, then direct player light and any grid-backed local target in the same render epoch |
+| every visible player | current provider submission plus the direct pass and an optional target-grid pass in modes 1/2 |
 | persistent actor and transient providers | current manager order only; no previous-run carry-over |
 | MiscLight producers | current fixed-tick tail only; the list was cleared by Region tick |
 | Complex Lighting off | recovered late raster branch and white analytic tint; still one complete render epoch |
@@ -748,7 +749,87 @@ The complete first-frame membership is therefore:
 This closes a port-side lifecycle ambiguity without changing any recovered
 formula or setting default. A browser readiness barrier may resolve only after
 the first complete Region plus environment composition. Publishing a scene
-between WebGL world creation and its first environment overlay, or using a
-second lazily decoded image owner for that overlay after resident assets were
-declared ready, has no native equivalent and can expose a black or unmasked
-startup frame under scheduler or decode delay.
+between WebGL world creation and its first environment light pass, or using a
+second lazily decoded image owner for that pass after resident assets were
+declared ready, has no native equivalent and can expose an incomplete startup
+frame under scheduler or decode delay.
+
+## Corrected environment-mode player-light composition
+
+The 2026-08-20 report that a fresh web Boneyard could retain the player light
+while later spell, Lantern, enemy, and effect lights appeared absent reopened
+the interaction between the Region field and `Arena` environment mode. Fresh
+raw-instruction review proves the earlier browser interpretation was inverted:
+environment modes 1 and 2 do not add a fullscreen black layer with player
+holes. They add two bounded player-owned light products after the completed
+Region field. The Region field remains the only engine-wide darkness/light
+product, so a later Lantern or spell source remains visible outside every
+player target.
+
+### Exact instruction chain
+
+- `Arena::Render 0x0046EC80` still resets/submits/restores the Region manager,
+  then uses blend mode 2 (`ZERO, SRCCOLOR`) for the Region target at
+  `0x0046FAFF` before the shared queue.
+- In `0x00470EE0`, each occupied player slot in environment mode 1 or 2 sets
+  renderer byte `+0x221 = 1` at `0x0047128F`, applies alpha
+  `0.25 * (0.95 + U(0.05))`, and draws DeadHawg record 18 at
+  `0x004713FF`. Blend state 1 is `SRCALPHA, ONE`, so this is additive.
+- The same player queries two spatial presentation grids over the exact
+  `512 x 512` rectangle centered on the player (`Arena +0x8F84` and
+  `+0x8F24`, calls `0x004714C8/0x004714EF`). If both are empty, the local
+  target branch is skipped. Registered target-mask sprites include the
+  environment/compact effect lane; for example `0x00461740` registers its
+  born record-26..28 sprite into both grids.
+- With at least one target-mask member, `0x004715C1..0x004715F3` binds the
+  `256 x 256` player target and clears it to transparent white `(1,1,1,0)`.
+  The two query results draw into that local target. At
+  `0x00472577..0x004725B5`, blend mode 2 multiplies DeadHawg record 9 into
+  the target at scale `2.009999990463257` around `(128,128)`.
+- `0x004725DE` restores the main backbuffer. Only then does
+  `0x004726B8..0x00472817` select blend mode 1, sample
+  `0.95 + U(0.05)`, and draw that one local target at the player with scale
+  `2.0250000953674316`. The target therefore spans about `518.4` world
+  units. `0x00472828` restores ordinary blending.
+- No instruction in either player branch draws a fullscreen quad, clears the
+  main backbuffer to black, or inverts the player masks. Pixels outside each
+  local target are not touched by `0x00470EE0`.
+
+Constants were re-read from the pinned retail image: `0x00785D18` is
+`2.0250000953674316f`, `0x00785D1C` is `128.0f`, `0x00785D20` is
+`2.009999990463257f`, the qword at `0x00785D28` is `256.0`,
+`0x00785D30` is `512.0f`, `0x00785D34` is `0.050000011920928955f`, and
+the qword at `0x00784E20` is `0.949999988079071`.
+
+### Port consequence and complete active membership
+
+| Member | Native disposition for the current Website model |
+| --- | --- |
+| Region player, Lantern, enemy, projectile, spell, modifier, and secondary sources | remain the engine-wide accepted-source field; never clipped by a fullscreen environment mask |
+| environment mode 0 | no extra player environment-light pass |
+| environment modes 1 and 2 | always-valid record-18 direct light for each visible player; the current web model has no target-grid actor lane and therefore must not synthesize record 9 |
+| multiple visible players | independent additive direct draws in slot order; native local-target contributions also add when their grids are populated |
+| local target-mask grids `+0x8F24/+0x8F84` | class-owned compact/environment presentation masks within the 512-square query; `out-of-system` for the current web actor model, so the optional target branch is absent rather than approximated |
+| HUD and screen feedback | remain after both world-light systems |
+
+The Website's former transparent Canvas accumulated the two player masks and
+then used `source-out` to fill the entire viewport with black at alpha `0.96`.
+That operation has no native owner. It double-darkened the already completed
+Region field and reduced every source outside the player aperture—including
+sources born later—to an almost invisible calibration floor. Because generated
+environment mode varies, this deterministic mode error looked like an
+intermittent source-enrollment failure. The web correction keeps the direct
+record-18 canvas transparent outside its bounded additive draws and leaves the
+optional record-9 branch absent until its target-grid actors exist. It must not
+feed Lanterns or spells into the player-only pass to hide the compositing bug.
+
+The Website correction replaces the inverted fullscreen surface with one
+transparent `plus-lighter` record-18 pass and keeps its existing first-frame
+readiness barrier. Focused tests pin the direct `.2375..25` alpha domain and
+forbid `source-out`, a viewport fill, or an unconditional record-9 radial.
+Rebased Website validation passed, and an Apple-M2 mode-2 run reported player
+center alpha `61`, white RGB `765`, and exact far alpha/RGB zero while holding
+60 FPS. A separate mode-2 Air run retained seven provider candidates, native
+Lantern flicker, visible endpoint illumination, and no browser errors. The
+Loader portable suite passed 87/87 modules and 795 tests against this corrected
+ledger.
