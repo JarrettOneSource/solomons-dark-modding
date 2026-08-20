@@ -368,6 +368,76 @@ The constructors/ticks are `0x0044AE50/0x0044B580` for
 `1..4` by `1.2`; concentrated Enchant Staff independently multiplies the
 action timing scalar at `+0x34` by `1.75`.
 
+The automatic admission and contact geometry are now instruction-closed.
+`PlayerActorTick 0x00548B00` scans the existing contact list in stored order
+and starts only when the first target has strict absolute heading delta below
+50 degrees. The StaffMelee constructor always consumes `Float(.05)` after the
+proc selection, stores progress `0.1+draw`, then consumes `Integer(8)` and
+multiplies by `1.35` only on result two. Its marker is progress three and its
+strict end is progress above eight. The two pose programs are
+`0,4,5,6,6,6,6,6,6` and `0,1,2,3,3,3,3,3,3`; the player alternates those
+banks after every melee construction. StaffSpin consumes one
+`RandomSign(1)` word, turns exactly 20 degrees per tick, holds pose three, and
+contacts after 18 ticks when its 360 countdown reaches zero. Concentrated
+Enchant Staff multiplies StaffMelee progress by 1.75 and does not accelerate
+StaffSpin.
+
+`PlayerWizard_StaffContact 0x0053B9F0` owns three exact target shapes, rotated
+by the wizard heading and translated to its root:
+
+| Selector | Damage target footprint and selection |
+| ---: | --- |
+| 0 normal, 1 Knockback, 2 Disable | trapezoid `(-40,-70),(40,-70),(30,0),(-30,0)`; if effective Enchant Staff rank is zero, consume `Integer(candidateCount)` and retain one candidate, otherwise retain the full ordered list |
+| 3 Critical | larger trapezoid `(-60,-105),(60,-105),(45,0),(-45,0)` and retain every flag-2 actor whose center is inside |
+| 4 Whirl | strict circle radius 100 through `0x00642090`, whose exact test is `distanceSquared < 100^2 + targetRadius^2` |
+
+The trapezoids are constructed once in `PlayerWizard_Ctor 0x0052B4C0` from
+the float constants at `0x00785900/0x00793F6C/...` and transformed through
+`0x00402CC0/0x00403120/0x00404850`; they are not approximated cones or
+touching circles. Contact damage is
+`max(1, Skills_Wizard_DamageResolver(row65,mDamage))`. Critical multiplies
+that by three; any concentrated non-normal proc multiplies by 1.2. Every
+non-Whirl target receives `min(total,2*total/count)` and Whirl receives the
+full total per target.
+
+Selectors 1, 3, and 4 also create `Knockback 0x7E9` with distinct native
+queries: Knockback uses an 80-degree radius-100 arc and 150 units of retained
+push, Critical a 60-degree radius-100 arc and 50 units, and Whirl the full
+radius-100 circle and 50 units. `Knockback_Tick 0x00600220` applies
+collision-aware `min(remaining,10)` displacement to its construction-time
+target list. On terminal update it attaches 200-tick Dazzle and consumes one
+signed `Float(45)` heading perturbation per surviving target.
+
+The marker always plays registry 86 `sounds\\staffswoosh` at
+`1+(actionRate-0.10000000149011612)`. This is the same exact double stored at
+`0x007849E8` and added before the constructor rounds its base action rate to
+float32; the separate `0x007849F0` value `.05000000074505806` is only the
+random jitter bound. Raw `.rdata` bytes also pin the rare acceleration double
+at `0x007849E0` to `1.350000023841858`. Proc feedback is additional and
+point-attenuated:
+selector 1 plays registry 50 `Knockback` at `1+signed Float(.1)`; selector 2
+plays registry 21 `DisableEnemy` at pitch one; selector 3 plays registry 18
+`CriticalHit` at `1+signed Float(.1)`; selector 4 plays registry 83
+`spinattack` simultaneously at pitches `1`, `.9`, and `1.1`.
+
+The complete contact VFX membership has no world-light writer:
+
+- Knockback and Critical each construct an `Anim_SmokePuff` using BadGuys 15
+  25 units along the wizard heading, alpha one, alpha loss `.05`, and scale
+  eight. Its constructor still consumes the overwritten `Float(.05)` loss and
+  a `Float(2)` angular-rate draw before the handler sets the final loss.
+- Disable constructs exactly 50 additive BadGuys-45 MoveFades. One
+  `Float(360)` seeds the angle; each child then consumes `Integer(5)+20` for
+  the next angle, `Float(3)+3` speed, and `Float(.75)+.25` scale. It begins at
+  the mean damaged-target position plus three velocity steps, uses alpha 1.5,
+  loss `.05`, velocity factor `.92`, and the wizard element tint.
+- Critical additionally constructs one additive BadGuys-40 MoveFade at
+  `(player.x,player.y-15)`, velocity five along heading, scale four, alpha two,
+  loss `.25`, and the element tint.
+- Whirl constructs one additive perspective BadGuys-88 fade at the player,
+  with `Float(360)` rotation, scale three, alpha 1.25, loss `.1`, and the
+  element tint.
+
 ## Raise Golem and Iron Golem
 
 Raise Golem is skill-ID case `45` in `0x0054CC50`. It creates factory type
