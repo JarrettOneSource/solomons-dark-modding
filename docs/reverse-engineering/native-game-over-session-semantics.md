@@ -71,9 +71,9 @@ the complete fixed-tick envelope:
 | `+0x78` | `1.0` | `max(0, value - 0.025)` | entry black overlay; transparent after 40 ticks |
 | `+0x7C` | `-1.5` | `min(1, value + 0.005)` | normal-mode GAME/OVER alpha |
 | `+0x80` | `-2.0` | `min(1, value + 0.005)` | normal-mode continue-prompt alpha |
-| `+0xA4` | `0.0` | input-path dependent | exit black overlay |
+| `+0xA4` | `0.0` | accepted-state dependent | exit black overlay |
 | `+0xA8` | `0` | renderer sets only after exit alpha is exactly `1.0` | transition-ready gate |
-| `+0xAC` | `0` | increment by one | input/timeout clock |
+| `+0xAC` | `0` | increment by one | acceptance clock |
 
 Normal mode draws GameOver atlas record 0 at viewport center X and center
 Y minus 175, record 1 at center X and center Y plus 125, and the continue
@@ -82,26 +82,30 @@ and `306 x 120`. Boneyard mode suppresses all three semantic glyphs, but it
 retains both black overlays and therefore reveals the resident Arena beneath
 the entry fade after 40 ticks.
 
-The tick-1000 Boneyard edge synthesizes an accepted input; it does not jump
-immediately to the next surface. Accepted Boneyard input raises exit alpha by
-exactly `0.0025` per tick, taking 400 ticks to reach black. The ordinary mouse
-branch uses `0.05` (20 ticks), while its alternate/controller branch uses
-`0.004` (250 ticks). Render observes exact opacity, sets `+0xA8`, and only a
-later tick follows the completion lineage. A web Boneyard port must therefore
-freeze its terminal Arena image, run the 40-tick black-to-clear entry, hold it
-clear through the input gate, and remain on Game Over for the complete
-400-tick clear-to-black exit. Treating `gameOverTicks / 150` as a single
-increasing alpha reverses the native entry fade and hides the authored hold.
+The tick-1000 Boneyard edge synthesizes acceptance inside `GameOver::Tick`;
+it does not open an input gate and it does not require a mouse, keyboard, or
+controller message. On the tick where `+0xAC` becomes exactly 1000, the
+Boneyard branch writes the accepted byte at `+0xA0` and the accepted-state
+branch raises `+0xA4` by `0.0025`. Exit alpha is therefore already `0.0025`
+on tick 1000 and reaches exactly `1.0` after 400 accepted ticks. The ordinary
+mouse branch uses `0.05` (20 ticks), while its alternate/controller branch
+uses `0.004` (250 ticks); neither branch owns Boneyard acceptance. Render
+observes exact opacity, sets `+0xA8`, and only a later tick follows the
+completion lineage. A web Boneyard port must therefore retain its terminal
+Arena image, run the 40-tick black-to-clear entry, hold it clear until the
+automatic tick-1000 edge, and remain on Game Over for the complete 400-tick
+clear-to-black exit. Treating `gameOverTicks / 150` as a single increasing
+alpha reverses the native entry fade and hides the authored hold.
 
 The completion path is also mode-specific:
 
 - the normal story branch archives the completed run, creates scene type
   `0xFA2` (`Mortuary`), and switches gameplay regions;
-- the Boneyard branch reaches its stock input-acceptance threshold at GameOver
-  tick 1000. It does not close merely because the counter reaches that value.
-  Once stock input is accepted, completion clears `DAT_0081A434`, runs the
-  stock completed-run cleanup, and calls `FUN_005A7F60` (`0x005A7F60`) to
-  select and install the stock front-end surface.
+- the Boneyard branch automatically enters its accepted state at GameOver tick
+  1000. It does not close immediately: the accepted state first owns the full
+  400-tick exit fade. Completion then clears `DAT_0081A434`, runs the stock
+  completed-run cleanup, and calls `FUN_005A7F60` (`0x005A7F60`) to select and
+  install the stock front-end surface.
 
 Read-only live evidence on 2026-07-25 found the Boneyard GameOver object in
 the application's `+0x44` CPU manager with vtable `0x0079B0CC`. Across a
@@ -346,12 +350,11 @@ Static and live gates must prove both sides of the boundary:
 
 The live story post-flow gate sends stock mouse input only to each
 executable-path-validated process ID and verifies Mortuary, Hall of Fame, and
-main-menu states. Boneyard coverage waits for the native tick-1000 input
-threshold, sends mouse messages only to the exact owned process window, and
-then verifies the `FUN_005A7F60` front-end branch before the launcher flow
-follows the validated `HallOfFame` controller into stock Create. It asserts
-the retained selections there and performs one explicit semantic stock
-confirmation per participant before accepting the intact lobby hub. It
-neither activates a foreground window nor mutates global mouse state. Lua
-gameplay-click injection is not evidence for the Game Over surface because the
-native Game Over object owns its own input tick.
+main-menu states. Boneyard coverage must send no input while Game Over owns the
+surface: it waits passively for tick 1000, the 400-tick exit, and the
+`FUN_005A7F60` front-end branch to reach stock Create. It then asserts the
+retained selections and performs one explicit semantic Create confirmation per
+participant before accepting the intact lobby hub. It neither activates a
+foreground window nor mutates global mouse state. Mouse or Lua gameplay input
+before Create would mask the automatic Boneyard contract and is not admissible
+evidence for this branch.

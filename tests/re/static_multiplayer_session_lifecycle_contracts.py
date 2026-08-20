@@ -72,6 +72,15 @@ def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
     native_note = _read(
         "docs/reverse-engineering/native-game-over-session-semantics.md"
     )
+    native_web_combat_note = _read(
+        "docs/reverse-engineering/native-web-combat-lifecycle.md"
+    )
+    native_menu_note = _read(
+        "docs/reverse-engineering/native-menus-and-boot.md"
+    )
+    native_session_note = _read(
+        "docs/reverse-engineering/native-session-flow.md"
+    )
     binary_layout = _read("config/binary-layout.ini")
     verifier = _read(
         "tools/verify_game_over_session_semantics.py"
@@ -266,6 +275,8 @@ def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
             "Boneyard/survival presentation branch",
             "`DAT_0081A434`",
             "`FUN_005A7F60`",
+            "synthesizes acceptance inside `GameOver::Tick`",
+            "must send no input while Game Over owns the",
             "Stock post-Boneyard front-end lineage",
             "`0x00799334`",
             "must never issue a raw region switch",
@@ -273,6 +284,36 @@ def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
             "without recreating or rejoining the lobby",
         ),
         "native Game Over session documentation",
+    )
+    _require_tokens(
+        native_web_combat_note,
+        (
+            "`GameOver::Tick` synthesizes acceptance",
+            "no mouse, keyboard, controller, or",
+            "multiplayer input owns that edge",
+            "automatic Game Over completion",
+        ),
+        "native web combat lifecycle documentation",
+    )
+    _require_tokens(
+        native_menu_note,
+        (
+            "synthesizes acceptance internally",
+            "it does not arm or await user",
+            "input. Subsequent Mortuary",
+            "Boneyard mode has the",
+            "internal tick-1000 edge",
+        ),
+        "native menu lifecycle documentation",
+    )
+    _require_tokens(
+        native_session_note,
+        (
+            "automatically accepts at tick 1000",
+            "Current acceptance therefore waits without input",
+            "Waiting indefinitely at or beyond that edge is a failure",
+        ),
+        "native session-flow documentation",
     )
     _require_tokens(
         binary_layout,
@@ -309,9 +350,13 @@ def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
             '"second_run_loading_release"',
             "NATIVE_GAME_OVER_PROBE",
             "native_boneyard_game_over_state_matches",
+            'emit("local_native_death_drive"',
+            'emit("local_native_death_tick"',
             "allow_boneyard_mode=True",
             "advance_stock_boneyard_game_over(",
-            '"exact-pid-window-input-then-stock-create-confirmation"',
+            '"game_over_input_count": 0',
+            '"passive-game-over-then-stock-create-confirmation"',
+            'result["last_player_death_clock"]',
             "_assert_retained_create_selection(",
             "_confirm_retained_create_selection(",
             '"semantic_confirmation_clicks": 1',

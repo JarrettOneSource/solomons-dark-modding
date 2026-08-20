@@ -160,6 +160,37 @@ At death timer tick 159, `FUN_00533520` updates corpse render state and creates
 the stock additive burst. At tick 200 it evaluates a local-player perk path. At
 tick 300 it invokes `FUN_005BC400` for the local player.
 
+### Last-player clock beneath Boneyard Game Over
+
+A fresh read-only isolated run on 2026-08-16 closed the surface-lifecycle
+question left open by static render recovery. The validation checkout was the
+exact `a816dba38a9219a44fe479e1259e8c9900d8fa55` source, built Release on an
+NTFS validation root. It launched the exact retail executable identified
+above with one run participant and zero transport peers. A stock magic hit
+drove life below the lethal threshold and installed the native Boneyard
+GameOver object immediately.
+
+Thirty-three read-only Lua samples taken while that object owned the surface
+observed PlayerWizard `+0x160 == 1` throughout and `+0x1BC` advancing
+monotonically through
+`3, 9, 15, 21, 28, ... 188, 195, 201`. A later GameOver-object sample found
+its own counter at 637, Boneyard mode still one, entry alpha zero, title/click
+timers saturated, and exit alpha zero. The captured backbuffer classified as
+the fade-only Boneyard branch. The same owned process then completed the
+native post-run transition and was stopped by exact executable identity.
+
+The installed GameOver surface therefore does not freeze the terminal
+PlayerWizard presentation clock. Native ownership is split: Arena gameplay
+dynamics stop being the active interaction surface, but the resident terminal
+image continues to receive the player's corpse program. Frame 0 remains until
+tick 153, the two three-tick intermediate frames still run, and tick 159 still
+owns the terminal corpse shadow, sort change, grid removal, and additive burst
+behind the now-clear Game Over overlay. A web port may freeze enemies,
+projectiles, movement, damage, waves, and input at the all-dead edge, but it
+must continue each already-dying player's death clock and its presentation
+children through the terminal frame. Freezing the whole simulation snapshot
+at death tick zero is not native behavior.
+
 Multiplayer captures `+0x160` as `anim_drive_state` and sends it in participant
 presentation state. On an observer, `ApplyNativeRemoteParticipantVitalState`
 first writes replicated HP. `HookPlayerActorTick` then classifies HP-zero actors

@@ -228,6 +228,13 @@ local loading = multiplayer.run_loading_barrier or {}
 local player = sd.player.get_state()
 local scene = sd.world.get_scene()
 local ui = sd.ui and sd.ui.get_snapshot and sd.ui.get_snapshot() or nil
+local player_actor = player and tonumber(player.actor_address) or 0
+local native_death_drive = player_actor ~= 0 and
+  (sd.debug.read_u8(player_actor +
+    sd.debug.layout_offset("actor_animation_drive_state_byte")) or 0) or 0
+local native_death_tick = player_actor ~= 0 and
+  (sd.debug.read_u32(player_actor +
+    sd.debug.layout_offset("actor_animation_move_duration_ticks")) or 0) or 0
 local local_row = nil
 local create_owner = 0
 local create_action_ids = {}
@@ -303,6 +310,8 @@ emit("local_life_current", player and player.hp or
   (local_row and local_row.life_current or 0))
 emit("local_life_max", player and player.max_hp or
   (local_row and local_row.life_max or 0))
+emit("local_native_death_drive", native_death_drive)
+emit("local_native_death_tick", native_death_tick)
 emit("spectator_active", spectator.active)
 emit("spectator_phase", spectator.phase)
 emit("spectator_target_participant_id", spectator.target_participant_id)
@@ -1737,11 +1746,8 @@ def advance_stock_boneyard_game_over(
         )
     create: dict[str, object] = {}
     for pipe_name, process_id in process_ids_by_pipe.items():
-        transition = _drive_stock_click_until(
+        state = _wait_for_state(
             pipe_name,
-            process_id,
-            0.5,
-            0.5,
             lambda values: (
                 values.get("surface") == "create"
                 and _integer(values, "create_owner") > 0
@@ -1751,6 +1757,11 @@ def advance_stock_boneyard_game_over(
             timeout=60.0,
             description="next-generation stock Create after Boneyard Game Over",
         )
+        transition = {
+            "process_id": process_id,
+            "game_over_input_count": 0,
+            "state": state,
+        }
         element, discipline = retained_loadouts_by_pipe[pipe_name]
         _assert_retained_create_selection(
             pipe_name,
@@ -1768,7 +1779,7 @@ def advance_stock_boneyard_game_over(
         for pipe_name in process_ids_by_pipe
     }
     return {
-        "progression": "exact-pid-window-input-then-stock-create-confirmation",
+        "progression": "passive-game-over-then-stock-create-confirmation",
         "owned_process_ids": dict(process_ids_by_pipe),
         "create": create,
         "confirmations": confirmations,
@@ -2021,6 +2032,29 @@ def run_solo_verification(
                 )
             time.sleep(0.05)
         result["post_death_samples"] = samples
+        native_death_ticks = [
+            _integer(sample, "local_native_death_tick")
+            for sample in samples
+        ]
+        if (
+            len(native_death_ticks) < 2
+            or native_death_ticks[-1] <= native_death_ticks[0]
+            or max(native_death_ticks) < 159
+            or any(
+                _integer(sample, "local_native_death_drive") != 1
+                for sample in samples
+            )
+        ):
+            raise VerifyFailure(
+                "native last-player corpse clock did not advance through the "
+                f"terminal frame beneath Game Over: {samples}"
+            )
+        result["last_player_death_clock"] = {
+            "first_tick": native_death_ticks[0],
+            "last_tick": native_death_ticks[-1],
+            "maximum_tick": max(native_death_ticks),
+            "sample_count": len(native_death_ticks),
+        }
 
         screenshot = artifact_directory / "game-over.png"
         result["game_over"] = capture_native_game_over(

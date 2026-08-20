@@ -21,6 +21,60 @@ import verify_game_over_session_semantics as verifier  # noqa: E402
 
 
 class GameOverSessionSemanticsVerifierTests(unittest.TestCase):
+    def test_boneyard_game_over_waits_passively_before_create_confirmation(
+        self,
+    ) -> None:
+        create_state = {
+            "create_owner": 0x1234,
+            "local_loadout_generation": 2,
+            "local_loadout_state": "picking",
+            "surface": "create",
+        }
+        confirmation = {"semantic_confirmation_clicks": 1}
+        with (
+            mock.patch.object(
+                verifier,
+                "_wait_for_state",
+                return_value=create_state,
+            ) as wait_for_state,
+            mock.patch.object(
+                verifier,
+                "_drive_stock_click_until",
+                side_effect=AssertionError("Game Over must not receive input"),
+            ) as drive_click,
+            mock.patch.object(
+                verifier,
+                "_assert_retained_create_selection",
+            ) as assert_selection,
+            mock.patch.object(
+                verifier,
+                "_confirm_retained_create_selection",
+                return_value=confirmation,
+            ) as confirm_selection,
+        ):
+            result = verifier.advance_stock_boneyard_game_over(
+                {"solo": 4321},
+                {"solo": ("fire", "mind")},
+            )
+
+        drive_click.assert_not_called()
+        wait_for_state.assert_called_once()
+        predicate = wait_for_state.call_args.args[1]
+        self.assertTrue(predicate(create_state))
+        assert_selection.assert_called_once_with(
+            "solo",
+            create_state,
+            "fire",
+            "mind",
+        )
+        confirm_selection.assert_called_once_with("solo", "fire", "mind")
+        self.assertEqual(
+            result["progression"],
+            "passive-game-over-then-stock-create-confirmation",
+        )
+        self.assertEqual(result["create"]["solo"]["game_over_input_count"], 0)
+        self.assertEqual(result["confirmations"]["solo"], confirmation)
+
     def test_generated_instance_prefix_stays_below_native_path_limit(self) -> None:
         prefix = verifier._default_instance_prefix()
         self.assertLessEqual(len(prefix), 18)
@@ -312,7 +366,7 @@ class GameOverSessionSemanticsVerifierTests(unittest.TestCase):
         values["game_over_dispatch_count"] = "2"
         self.assertFalse(verifier.terminal_game_over_state_matches(values))
 
-    def test_boneyard_game_over_requires_stock_object_at_full_input_alpha(
+    def test_boneyard_game_over_requires_stock_object_before_automatic_exit(
         self,
     ) -> None:
         values = {

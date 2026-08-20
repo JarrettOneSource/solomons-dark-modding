@@ -389,20 +389,22 @@ produces one host-authored, replay-safe terminal event for that run nonce.
 Retail Arena terminal `0x004633D0` performs audio actions then calls
 `Game_OnGameOver 0x005CB570`. Boneyard mode is fade-only. Its entry black
 starts at one, loses `0.025` per tick, and becomes clear at tick 40 while the
-terminal Arena remains resident and frozen. Tick 1000 is the input-acceptance
-threshold, not automatic close. Accepted Boneyard input starts a separate
-exit-black lane at zero and adds `0.0025` per tick; exact black is reached at
-exit tick 400, the renderer arms the close gate there, and a later tick follows
-stock cleanup through MainMenu/Hall of Fame and then Create. The preceding
-element/discipline are preselected, but explicit confirmation is required.
-Game Over retires a run; it does not tear down the loader lobby or transport.
+terminal Arena remains resident. `GameOver::Tick` synthesizes acceptance when
+its Boneyard counter becomes exactly 1000; no mouse, keyboard, controller, or
+multiplayer input owns that edge. The accepted-state branch runs on that same
+tick, so the separate exit-black lane begins at `0.0025`, not zero, and adds
+`0.0025` per tick. Exact black is reached at exit tick 400, the renderer arms
+the close gate there, and a later tick follows stock cleanup through
+MainMenu/Hall of Fame and then Create. The preceding element/discipline are
+preselected, but explicit confirmation is required on Create. Game Over
+retires a run; it does not tear down the loader lobby or transport.
 
 The Website product request intentionally shortens the visible post-run path:
-after its Game Over acknowledgement it returns directly to the retained-choice
+after automatic Game Over completion it returns directly to the retained-choice
 Create/loadout screen in the same authenticated session. This is a deliberate
 product deviation from the native Hall-of-Fame/MainMenu lineage. It must still
-preserve the native Boneyard fade/input gate, retained preselection, explicit
-loadout confirmation, and a fresh run nonce.
+preserve the native Boneyard entry/hold/automatic-exit recurrence, retained
+preselection, explicit loadout confirmation, and a fresh run nonce.
 
 The Website also retains the player's learned progression/stat books when that
 same-session loadout is confirmed. A native fresh Create generation after the

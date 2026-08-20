@@ -407,8 +407,10 @@ The full value boundary and cancel path are in
 
 Game Over uses vtable `0x0079B0CC`, renderer `0x005C9030`, and tick
 `0x005CF4F0`. Story mode renders the full `GameOver.0/.1` screen; Boneyard mode
-may intentionally render only the fade. Boneyard input does not arm until tick
-1000. Subsequent Mortuary/Memoratorium, Hall of Fame, and main-menu ownership
+may intentionally render only the fade. In Boneyard mode the tick method
+synthesizes acceptance internally when its counter becomes exactly 1000 and
+begins the 400-tick exit fade on that same tick; it does not arm or await user
+input. Subsequent Mortuary/Memoratorium, Hall of Fame, and main-menu ownership
 is specified in
 [`native-game-over-session-semantics.md`](native-game-over-session-semantics.md).
 Game Over completion must not be simplified into a direct hub transition.
@@ -636,9 +638,11 @@ Presentation rules recovered to a trustworthy level are:
   `0x00589CD0` integrates `progress += rate * dt` and installs MainMenu after
   progress exceeds `1.0`, giving a linear one-second close from accepted
   input; and
-- Game Over owns its own title/click alpha, input-arm threshold, fade, and
-  close dispatch. The browser must preserve the state sequence from the Game
-  Over semantics document rather than replacing it with a generic menu fade.
+- Game Over owns its own title/click alpha, mode-specific acceptance, fade, and
+  close dispatch. Normal story mode has armed input; Boneyard mode has the
+  internal tick-1000 edge. The browser must preserve the state sequence from
+  the Game Over semantics document rather than replacing it with a generic
+  menu fade.
 
 ## Focus — designed controller navigation
 

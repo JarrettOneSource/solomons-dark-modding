@@ -142,7 +142,7 @@ that changes a G13 state.
 | `gameplay.arena` | `terminal_death` | solo terminal callback or authority all-dead command | `overlay.game_over` |
 | `gameplay.arena` | `authority_leave_run` | host stock Leave Game followed by authenticated client stock follow | `frontend.shell` |
 | `overlay.game_over` | `story_completion` | normal Game Over accepts armed input and closes | `gameplay.mortuary` |
-| `overlay.game_over` | `boneyard_completion` | Boneyard Game Over accepts input at/after tick 1000 | `post_run.mortuary_frontend` |
+| `overlay.game_over` | `boneyard_completion` | Boneyard Game Over automatically accepts at tick 1000, finishes its exit fade, then cleans up | `post_run.mortuary_frontend` |
 | `gameplay.arena` | `scripted_terminal_reset` | `WIN LEVEL` or `LOSE LEVEL` finish fade | `gameplay.courtyard` |
 | `post_run.mortuary_frontend` | `open_hall_of_fame` | stock Menu action exposes the Hall of Fame controller | `frontend.hall_of_fame` |
 | `frontend.hall_of_fame` | `continue_to_frontend` | accepted continue; linear close progress exceeds `1.0` | `frontend.shell` |
@@ -152,6 +152,15 @@ The normal onboarding observed in the full-session golden is the composite path
 `start_run -> arena_materialized`; and the recorded Boneyard death return is
 `boneyard_completion -> open_hall_of_fame -> continue_to_frontend -> startup_hub`.
 The fixture records those paths rather than pretending each is one retail call.
+
+The G13 graph and timeline fixture retains its original 2026-08-05 semantic
+labels (`tick-1000 input acceptance` and `exact-PID stock window input`) as
+immutable capture provenance. Those labels do not establish causal ownership:
+the later `GameOver::Tick` re-decompile and a passive isolated live run prove
+that Boneyard acceptance is internal and automatic. Exact-PID input remains
+part of that historical campaign, but only the input sent after stock Create
+is semantically required. Current acceptance therefore waits without input
+until Create appears.
 
 ### Illegal requests and non-edges
 
@@ -552,8 +561,9 @@ entering it.
 - Hall-of-Fame input during its entry fade is a native no-op. The stock flow
   validates the exact vtable/ABI and retries until the surface actually
   advances; call return is not completion evidence.
-- Boneyard Game Over at tick 1000 without input is waiting, not broken. It can
-  wait indefinitely for the stock continuation edge.
+- Boneyard Game Over accepts itself when its counter becomes exactly 1000,
+  begins its exit fade on the same tick, and reaches stock continuation without
+  input. Waiting indefinitely at or beyond that edge is a failure.
 
 ### Not Yet Reversed
 
