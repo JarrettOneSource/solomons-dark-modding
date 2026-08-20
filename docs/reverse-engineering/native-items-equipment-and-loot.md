@@ -376,7 +376,7 @@ multiplies it by `1 + magnitude/100`.
 | 33 `FX_MAXETHERCHARGE` | Sets `0x0080`. |
 | 34 `FX_MAXHARDEN` | Sets `0x0100`. |
 | 35 `FX_MAXROCKSURGE` | Sets `0x0200`. |
-| 36 `FX_MINDBLAST` | Sets `0x0400`; level-up path `0x005C88B0 -> 0x0052A220 -> 0x00645B50` emits a 495-unit blast (`9*55`) for `playerLevel/2` damage, the common blast presentation/light children, and a zero-damage expanding Shockwave. |
+| 36 `FX_MINDBLAST` | Sets `0x0400`; level-up path `0x005C88B0 -> 0x0052A220 -> 0x00645B50` emits the full common blast presentation and zero-damage expanding Shockwave for every element. Direct radius-495 `playerLevel/2` damage is gated by first element parameter zero and therefore occurs only for Ether. |
 | 37 `FX_MAXWELD` | Sets `0x0800`; native display name is `Energize Weld Components`. |
 | 38 `FX_WELDEFFECT` | Updates scalar `+0x8E0`: flat adds magnitude, `*` multiplies, percent adds `magnitude/100` to the scalar. |
 | 39 `FX_WELDCALLING` | Sets `0x1000`; native display name is `+Bias Skills for Welding`. |
@@ -427,6 +427,25 @@ the light owner: radius starts at 75 and gains 8 per tick, life starts at
 `0.35` and loses `0.01`, fade begins below `0.0375`, and its provider
 `0x005E7AA0` publishes intensity from the push scalar and radius divided by
 140. It also retains the ordinary one-contact Dazzle and radial-push behavior.
+
+The direct-damage branch at `0x00646345` first requires `param_2 == 0` and
+positive level damage. The authoritative element catalog is Ether 0, Fire 1,
+Air 2, Water 3, Earth 4, so the prior all-element damage reading was false.
+Ether queries flag-2 targets through common circle helper `0x00642090` with
+radius `9*55 = 495`; its exact admission is
+`distanceSquared < 495^2 + targetRadius^2`, and each result receives
+`level*.5`. Other elements skip only this direct contact branch.
+
+Shockwave `0x7E7` starts radius 75, radius growth 8, alpha 1, life `.35`, life
+loss `.01`, and fade threshold `.0375`. `0x005FF8C0` grows the radius before
+work, admits each flag-2 target once on post-birth `age%10==0`, and attaches
+400-tick Dazzle even though damage is zero. On even ages it pushes the retained
+target set collision-aware along the normalized center-to-target direction by
+`currentAlpha*8`. Provider `0x005E7AA0` submits intensity alpha and radius
+`waveRadius/140` without a directional shadow. The burst constructors consume
+exactly 502 active RNG words: two sprite-array rotations plus five words for
+each of 100 FuzzySpears. Ongoing signed spear jitter remains part of the
+process-global presentation stream and is not part of that constructor count.
 
 ## Potions, miscellaneous items, sacks, and perks
 

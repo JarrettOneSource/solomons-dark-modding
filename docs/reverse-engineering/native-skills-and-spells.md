@@ -400,6 +400,37 @@ that by three; any concentrated non-normal proc multiplies by 1.2. Every
 non-Whirl target receives `min(total,2*total/count)` and Whirl receives the
 full total per target.
 
+The callback then runs a second, ordered pass over physically contacting
+targets that still satisfy strict heading delta below 50 degrees. Its RNG is
+after the optional rank-zero damage-candidate selector. Per target it consumes
+`Float(1)` and writes `target+0x22C = -(1+draw)`, then signed `Float(.1)` and
+plays registry offset `0xEB4`, `sounds\\staffhitwood`, at pitch `1+draw` with
+point gain. The recovered `+0x22C` gameplay consumer is Imp vertical velocity.
+Ether (`player+0x5C == 0`) alone then consumes `Float(200)` and succeeds when
+the draw is nonzero and `<= progression+0xC8`, the secondary Staff-damage
+accumulator. Success attaches `Mod_Knockback 0x1B6D`: normalized direction
+away from the player, displacement six, duration five, and no damage.
+
+For a contacted Skeleton whose live weapon selector `+0x231` is five, the
+same successful Ether branch calls `0x00484EA0`. That helper plays registry
+offset `0x13E4`, `sounds\\pikebreak__stream`; writes selector zero and calls
+`0x00484B30` to rebuild an unarmed action program; creates one additive
+perspective BadGuys 15 fade 75 units along Skeleton heading at scale three,
+alpha one, loss `.025`; and writes the Region to the Skeleton color (white),
+alpha one, loss `.1`. The Region write is full-screen feedback, not a light.
+
+The helper also creates exactly seven world-owned BadGuys 55 `Anim_Bouncer`
+children. Construction consumes one `Float(360)` angle seed and, per child,
+the four base-constructor draws `Float(3), Float(20), Float(360), Float(10)`,
+then radial `Float(10)` and signed `Float(10)` for the next angle: 50 words in
+total. Initial velocity is the heading unit scaled `(1.5,1)`; position uses
+radial `15+draw` plus an X-only two-velocity lead. Opacity starts at
+`2*.75 = 1.5` and loses `.015` per tick. Each child is linked and receives one
+immediate `Anim_Bouncer_Tick 0x00458D80`; later contacts consume `Float(10)`,
+`Integer(3)`, optional `Float(.2)+Integer(4)`, then `Integer(2)`, with `.65`
+bounce/damping. Draw `0x004540B0` emits one BadGuys 55 sprite at height with
+alpha clamped to one; there is no shadow, tint, scale override, or light.
+
 Selectors 1, 3, and 4 also create `Knockback 0x7E9` with distinct native
 queries: Knockback uses an 80-degree radius-100 arc and 150 units of retained
 push, Critical a 60-degree radius-100 arc and 50 units, and Whirl the full
