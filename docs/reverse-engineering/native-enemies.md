@@ -667,3 +667,68 @@ collision geometry, timing, RNG call order, or record-count changes are parity
 state and cannot be treated as a cosmetic-only download.
 
 No website/mod-download code was changed during this pass.
+
+## 2026-08-20 attack auxiliary and ambient-renderer closure
+
+The eight retail survival renderers have auxiliary presentation branches in
+addition to their primary body/action selectors. These are part of the native
+enemy ABI: omitting them while drawing the correct attack body is still an
+incomplete renderer.
+
+| Owner | Native consumer and exact auxiliary membership |
+| --- | --- |
+| Skeleton | `0x0048DEE0`; Mace and Flail use BadGuys record `46`, Flail also joins the weapon overlay's two authored points with a chain line, and Pike uses record `54` or target/action form `56` as a long oriented shaft/head |
+| SkeletonArcher | `0x0048F450`; while action selector `+0x150` is nonzero, Fire attaches `255..266` at `age/5 % 12` and Poison attaches `271..282` at `age/6 % 12` to body authored point zero; normal has no held overlay |
+| SkeletonMage | `0x00491720`; positive `+0x24C` charge with nonpositive cooldown `+0x278` attaches Fire `255..266`, Lightning `1836..1839`, Frost `381`, or Poison `382` at both authored casting points; charge is squared before presentation; recipe byte `+0x81` selects cloak body `1459..1476` instead of ordinary `1729..1818` |
+| Zombie | `0x00493390`; flyblown branch draws tinted BadGuys record `65` twice as a rotating anisotropic cloud, then `5..20` independently placed record-`26` flies using a private renderer seed `floor(age/10)` |
+| Wraith | tick `0x00486C30`; burning timer/action emits additive BadGuys record `21` wisps while the live body stays opaque |
+| Lesser Demon | constructor `0x00479150`; five DeadHawg `46..77` flames advance `.25` frames/tick, attach to controller points 2/3/4 and midpoints 0-1/1-2, use scales `.5/1.1/.5/.8/.8`, and split behind/in front of the body by point-5 y; dead tick `0x00487300` retains Demon `55..61`, emits Fire at clocks `0/20/40/60/80`, and creates `Anim_FireBurst` at 95 |
+| Coffin | tick `0x004A2760`; body state remains `175..187` plus `383..392`; the auxiliary owner is its live Maggot-count-weighted ambient request |
+| Imp | main `285..332` and upper `333..342` are the complete body renderer; tick `0x00485DC0` separately creates shared `Anim_FireBurst` art `251..254` at successful contact |
+
+Zombie cloud details are literal: tint floats are `(0.05,0.1,0.05,0.5)`,
+rotation is actor age times `.25` degrees, the first record-65 transform scales
+`(1.5,1.2)` and shifts y `-15`, and the mirrored second copy shifts another
+five pixels up. Each record-26 fly gets alpha `RandomFloat(.5)+.25`, radius
+`RandomFloat(20)+1` doubled when `RandomInt(5)==3`, a random 360-degree angle,
+y radius multiplied by `.8`, and an extra y offset `-(RandomFloat(10)+15)`.
+
+The Demon process-global constructor RNG cannot be reconstructed from actor
+identity alone. A deterministic multiplayer renderer may serialize the five
+phase/offset pairs or derive a documented stable cosmetic seed from immutable
+actor identity. The latter is not a claim of matching the stock global RNG
+sequence; it preserves the exact record membership, phase rate, geometry,
+scale, and painter split without creating gameplay authority in the client.
+
+Common burning is family-owned rather than a universal centered sprite.
+Skeleton, Archer, and Mage redraw their body/equipment membership through
+their fire attachment passes. Wraith owns record-21 transient wisps. Classes
+without a native burning consumer must not receive a generic DeadHawg overlay.
+The common 20-tick damage presenter redraws body/equipment red but does not
+re-tint separately blended ambient decoration.
+
+BadGuys `251..254` is shared child art, not exclusively Portal art. Imp tick
+`0x00485DC0` allocates `Anim_FireBurst` through constructor `0x00453470` after
+its staged contact succeeds, places it forward of the actor, and inserts it
+into the Region child list. The burst's own 16-tick presentation also includes
+record `110`; `251..254` advances once per four ticks. An Imp renderer with the
+correct body and upper glow but no marker-owned burst is incomplete.
+
+Two low-frequency child-animation branches are also direct survival-class
+members:
+
+- Rotten Zombie tick `0x004863A0` rolls `RandomInt(75)==3`, constructs
+  `Anim_FadeSin_Move`, chooses BadGuys record `10` or `11`, places it around
+  the actor with a random circular offset, assigns random motion/scale/alpha,
+  and inserts it into the actor's region child list. This is independent of
+  renderer-local records `26/65`.
+- SkeletonMage tick `0x00490860`, while cast timer `+0x278` is positive, runs
+  two independent `RandomInt(5)==1` gates. Each constructs additive fade art,
+  chooses record `10` or `11`, attaches to authored point zero or one of the
+  current `1729..1818` pose, then applies its own random displacement, alpha,
+  motion, and scale. Neither lane is a projectile substitute.
+
+The DeadHawg `46..77` source sheet is consumed additively. Normal source-over
+composition exposes its opaque black source rectangle and is observably wrong
+for Skeleton-family burning, Lesser Demon flames, Demon Bomb ground fire, and
+the two Demon-fire handoff actors.

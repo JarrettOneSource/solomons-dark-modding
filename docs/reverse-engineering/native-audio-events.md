@@ -386,3 +386,24 @@ restart either gathering or rolling loops.
 ## Not Yet Reversed
 
 - Exact sub-frame device latency, BASS resampler interpolation, and OS/driver mixing are below the permanently disabled campaign boundary. They do not alter trigger order, asset identity, loop ownership, or native-tick timing and are not required by the deterministic browser simulation.
+
+## 2026-08-20 enemy ambient loop ownership
+
+Three survival-enemy ticks feed the stock `AmbientSound` one-frame request
+accumulator. Every producer submits a point-attenuated gain during the current
+tick. The accumulator retains the maximum, starts its one global loop on a
+zero-to-positive edge, updates that loop's gain without restarting it, and
+stops it on the positive-to-zero edge. Enemy replication therefore carries
+producer state; a snapshot arrival is not itself an audio edge.
+
+| Owner | Tick consumer | Registry wrapper/request | Gain recipe | Untouched PCM |
+| --- | --- | --- | --- | --- |
+| Rotten Zombie (`+0x24E`) | `0x004863A0` | `0x0081CB8C` / `0x0081CB90`, entry 158 `sounds\\flyblown__loop` | native point attenuation | 11025 Hz, mono, 8-bit, 39976 frames, SHA-256 `e4dd23bbe5a2d36762ec54587dacb7cd5465dba64268b0b4b1db198b953422d6` |
+| Wraith | `0x00486C30` | `0x0081CB9C` / `0x0081CBA0`, entry 170 `sounds\\Soul__Loop` | native point attenuation | 44100 Hz, stereo, 16-bit, 420589 frames, SHA-256 `661515f9ac51cfb7be5aaa08d7d87667f5b06b6a1e7a530e1a8863b1c46450b4` |
+| Coffin | `0x004A2760` | `0x0081CBFC` / `0x0081CC00`, entry 164 `sounds\\maggots__loop` | point attenuation times `min(actor +0x2E0 / 200, 1) * 0.5`; `+0x2E0` is the live owned-Maggot count | 44100 Hz, stereo, 16-bit, 290305 frames, full-file `smpl`, SHA-256 `725332465d0f7d85bd84043ae4a691f0827b227c3ee2aa9fd3226d72bece40db` |
+
+These loops are not attack one-shots and do not belong to individual DOM or
+sprite instances. The browser equivalence is one stable audio owner per cue,
+one max-gain reduction across the authoritative world snapshot per render
+update, and balanced start/update/stop edges as producers enter, move, spawn
+Maggots, die, or leave the scene.
