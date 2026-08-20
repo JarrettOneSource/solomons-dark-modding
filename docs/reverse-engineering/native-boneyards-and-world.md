@@ -1086,20 +1086,39 @@ When active, tick `0x0061F4C0` advances an exact staged sequence:
 
 | Timer | Native action |
 | ---: | --- |
-| 100 | spawn the break flash and twenty particle children; set phase 1 |
-| 200 | set phase 2 and play the next break sound |
+| 100 | play `breaklock__stream`; spawn one BadGuys-52 bouncer, one scaled BadGuys-15 fade, and twenty BadGuys 377..380 bouncers; set phase 1 |
+| 200 | set phase 2 and play `opencrypt__stream` |
 | 250 | clear active state, construct an `Item_Sack`, select its reward, and materialize or discard it |
 
 The visible DeadHawg selector is `phase + 2 * subtype` into the three-record
 array at DeadHawg `+0x1A00`. Before timer 100 an alternating BadGuys indicator
 is also drawn while the Goodie is active.
 
+Activation is owned by the Goodie's automatic Region-collider contact, not a
+keyboard action, tick, or painter. Registration `0x00607290` uses contact code
+`0x65`; Region callback `0x00646D00` samples 25 units ahead, performs the
+strict nearest/source-ordered radius-50 mask-`0x2000` query,
+requires an inactive phase-zero Goodie, removes one recursively owned
+Item_Misc subtype-one Wizard Key, and calls `0x005F0E50`. That vslot plays
+`unlock__stream`, sets active, resets the timer, and decrements the locked count.
+
 Reward selection uses the stored seed modulo 18. Selectors 0..3 each create
-five subtype-0 potions; selectors 4..7 each create six subtype-1 potions;
-selectors 8..9 create a small set of level-relative generated items; selector
-10 creates one category-4 generated item; selectors 11..12 create three
-miscellaneous items using subtype selectors 2..4; selectors 13..16 directly
-award a randomized 500/800/1100/1400 currency value; and selector 17 creates
+five subtype-0 potions; selectors 4..7 each create six subtype-1 potions.
+Selectors 8..9 use a stock loop whose continuation test consumes a fresh
+`Integer(2)` every iteration: it always creates two items, creates a third only
+when the test at index two returns one, then consumes one final continuation
+draw after that third item. Every item calls random-equipment factory
+`0x004645B0` with `playerLevel + Integer(5)`, retaining the factory's class,
+image, color, generated-FX, item-level, name, and RNG schedule. Selector 10
+calls definition selector `0x0046BDE0` with mode four. That mode admits only
+rarity-byte-one (Rare) definitions in the arena's default level interval
+0..100, excludes recipe UIDs already owned anywhere in the recursive inventory
+or seven equipment sinks, preserves definition-list order, consumes one
+`Integer(candidateCount)`, and clones the selected recipe including colors and
+FX. Selectors 11..12 create three
+miscellaneous items using subtype selectors 2..3; selectors 13..16 draw a
+500/800/1100 requested Gold total and route it through the Gold Bonus/chunk
+spawner `0x0046AA90`; and selector 17 creates
 the special multi-potion bundle below.
 
 Selector 17 is statically exact, including a stock allocation bug. Its first

@@ -240,8 +240,8 @@ onto the wizard:
 
 | Type | Attachment renderer | Clothes records/state |
 | --- | ---: | --- |
-| Hat | `0x005758F0` | Dynamic primary/secondary selector tables at `DAT_00B2E9A4` and `DAT_00B2E9B4`; both colors apply. |
-| Robe | `0x00577DA0` | 5..10, 220..315, and 1588..3243 across pose/selector tables; both colors apply. |
+| Hat | `0x005758F0` | Selector `s=0..3`: primary Clothes `316+24s .. 339+24s`, secondary `412+24s .. 435+24s`; both colors apply. |
+| Robe | `0x00577DA0` | Selector `s=0..2`: five-pose primary Clothes `868+120s .. 987+120s`, secondary `1228+120s .. 1347+120s`; fixed primary banks 1612..2019/2428..2835 and secondary 2020..2427/2836..3243 retain the same two colors. |
 | Staff | `0x00578D20` | Body selector 5..10; optional glow layers 11..12; pose banks 3244..3483 and 3484..3723; generated hand/glow geometry. |
 | Wand | `0x00579820` | Clothes 15 plus dynamically built line/beam geometry around the hand attachment. |
 
@@ -254,6 +254,15 @@ helper `0x00579680` return frame-specific attachment points from their native
 tables. The renderer therefore requires the Clothes selector and pose tables,
 the actor's current animation frame, and live item/color state; an icon
 replacement alone cannot define new wearable geometry or glow composition.
+
+The local-player compositor `0x00538B80` makes the branches mutually
+exclusive. A live Hat replaces the default heading-only head pair; a live Robe
+selects its two five-pose style banks and tints all four fixed banks with the
+same item colors. A Staff selects shaft material `5+image` and keeps the two
+240-frame hand banks. A Wand uses record 15 for its endpoint quad and does not
+reuse the Staff shaft selector. An empty weapon sink draws none of these
+weapon attachments; the element orb belongs to the Staff branch rather than a
+free-floating player effect.
 
 ## Equipment ownership and set completion
 
@@ -358,16 +367,16 @@ multiplies it by `1 + magnitude/100`.
 | 24 `FX_MAXMANA` | All three operators act directly on `+0x80`. |
 | 25 `FX_ONESPELLDAMAGE` | multiplier `+0x140[skill]`, flat `+0x288[skill]`. |
 | 26 `FX_MAXLEVIATHAN` | Sets feature bit `0x0001` at `+0x878`. |
-| 27 `FX_MAXMAGICSTORM` | Sets `0x0002`. |
-| 28 `FX_MAXRINGOFFIRE` | Sets `0x0004`. |
+| 27 `FX_MAXMAGICSTORM` | Sets `0x0002`; the ID-27 dispatcher doubles the new StormCloud's active counter `+0x13C` after all normal duration setup. |
+| 28 `FX_MAXRINGOFFIRE` | Sets `0x0004`; the ID-21 factory copies it to Shockwave flag `+0x170 & 4`. Each newly admitted wave target then receives the normal contact plus a scale-`1.5` common explosion (165-unit query dimension, `mDamage/2` area damage) and three outward Ember actors carrying `mDamage/3` each. |
 | 29 `FX_MAXGOLEM` | Sets `0x0008`. |
-| 30 `FX_MAXRINGOFICE` | Sets `0x0010`. |
+| 30 `FX_MAXRINGOFICE` | Sets `0x0010`; the ID-35 factory copies it to FreezeWave flag `+0x174 & 0x10`, causing every admitted wave target to receive `Mod_FrostBurn (0x1B78)` in addition to Frozen/ColdSlow. |
 | 31 `FX_MAXEMBERSTOIMPS` | Sets `0x0020`. |
 | 32 `FX_MAXDISINTEGRATION` | Sets `0x0040`. |
 | 33 `FX_MAXETHERCHARGE` | Sets `0x0080`. |
 | 34 `FX_MAXHARDEN` | Sets `0x0100`. |
 | 35 `FX_MAXROCKSURGE` | Sets `0x0200`. |
-| 36 `FX_MINDBLAST` | Sets `0x0400`; emits the level-up mindblast behavior. |
+| 36 `FX_MINDBLAST` | Sets `0x0400`; level-up path `0x005C88B0 -> 0x0052A220 -> 0x00645B50` emits a 495-unit blast (`9*55`) for `playerLevel/2` damage, the common blast presentation/light children, and a zero-damage expanding Shockwave. |
 | 37 `FX_MAXWELD` | Sets `0x0800`; native display name is `Energize Weld Components`. |
 | 38 `FX_WELDEFFECT` | Updates scalar `+0x8E0`: flat adds magnitude, `*` multiplies, percent adds `magnitude/100` to the scalar. |
 | 39 `FX_WELDCALLING` | Sets `0x1000`; native display name is `+Bias Skills for Welding`. |
@@ -376,6 +385,48 @@ The percent implementation for Weld Effect is deliberately unusual: it adds
 the fractional value to the scalar rather than multiplying by `1 + N/100`.
 The distinction between bits `0x800` and `0x1000` also corrects the earlier
 provisional welding label; see [spell-welding.md](spell-welding.md).
+
+The max-effect consumers are event/factory branches, not refresh-time scalar
+bonuses. `0x0054CC50` tests feature bits `2/4/8/16` only while creating Magic
+Storm, Ring of Fire, Golem, and Ring of Ice. Max Ring of Fire's common helper
+`0x00642BF0` also consumes one active `Integer(1,000,001)` seed, then runs the
+three-Ember fan from a private native RNG while each Ember constructor retains
+its normal active-RNG draws and ten immediate pre-ticks. Max Ring of Ice's
+`FrostBurn` stores duration `round(freezeSeconds*200)`, damage `1/200` per
+modifier tick, source group at `+0x20`, and merges by the existing modifier
+identity/maximum-duration path. Its tick `0x006278B0` dispatches flags `0x18`
+and independently owns the icy additive particle branch; it is neither the
+ordinary Fire `Burn` row nor a visual-only marker.
+
+FrostBurn's particle branch is exact as well. Every live modifier tick consumes
+`Integer(2)`; result one creates one additive `Anim_MoveFadeAdditive` and the
+miss consumes nothing further. Success then consumes `Integer(2)` to choose
+BadGuys record 10 (result one) or 11, `Float(360)` rotation,
+`Float(.5)+.5` scale, `Float(10)` plus one 100001-way unit-vector word for the
+birth offset, `Float(35)` upward offset, `Float(1)+.5` plus a second unit-vector
+word for velocity, and `Float(.5)` for starting alpha `1-draw`. Tint is
+`(.25,.5,.5,1)`, alpha loss is `.05`, and velocity multiplies by `.96` after
+each move. The child is additive/self-colored and publishes no light.
+
+Mindblast's full event is closed at `0x0052A220/0x00645B50`. It plays
+`magicshieldexplode` once at default pitch, then `bigfire` once at default
+pitch and once at pitch `0.8`, all through the point-gain path. Its retained
+presentation consists of one normal BadGuys-15 fade at `(x,y-25)`, scale
+`9*6=54`, alpha loss `0.025`; three cyan Clothes-2 `Anim_FadeScale` rings at
+`(x,y-35)`, initial scale `4.5`, initial alpha `1.5`, alpha loss `0.025`, and
+scale multipliers `1.1/1.05/1.025`; two additive BadGuys-158..167 sprite-array
+actors at the origin with scale `10`, random rotation, and frame steps
+`0.075/0.1125`; and exactly 100 cyan `Anim_FuzzySpear` actors. Every spear
+draws a heading `Float(360)`, speed `Float(2)+3`, doubles speed when
+`Integer(5)==2`, starts 75 units along that heading, uses velocity multiplier
+`0.95`, alpha `Float(1)+1`, alpha loss `0.00875`, and scale
+`Float(1.5)+2`. The procedural spear draw owns a separate per-frame signed
+presentation jitter. None of those additive/self-colored children samples
+Region light or publishes a world light. The final zero-damage Shockwave is
+the light owner: radius starts at 75 and gains 8 per tick, life starts at
+`0.35` and loses `0.01`, fade begins below `0.0375`, and its provider
+`0x005E7AA0` publishes intensity from the push scalar and radius divided by
+140. It also retains the ordinary one-contact Dazzle and radial-push behavior.
 
 ## Potions, miscellaneous items, sacks, and perks
 
@@ -450,7 +501,12 @@ stock resource write is gated to slot 0: health calls `0x0052AC80`, mana calls
 `native-loot-selector.md`.
 
 Art is BadGuys 434/435 for the two rendered orb kinds, with BadGuys 15 and
-related transient effect records used during animation/collection.
+related transient effect records used during animation/collection. Collection
+constructs one normal BadGuys-15 fade at the Orb position with scale `1.5` and
+alpha loss `.05`, wraps it in `ZAnim`, and registers it in the late same-row
+ZAnim queue. `ZAnim` ticks the child, copies its position, and retires when the
+child does; it does not home toward the player. The child consumes no RNG and
+emits no light.
 
 ### Gold
 
@@ -461,6 +517,50 @@ slot 0, deletes the actor, shows `%d GOLD`, and credits the process-global gold
 scalar through `0x005A7C60(amount, false)`. Gold has no stock despawn timer;
 `+0x144` is not lifetime.
 
+The amount string is **not** part of painter `0x0060FFE0`; that painter's
+misleadingly labelled `Text_Draw` call is the BadGuys-73 additive glint.
+Pickup constructs `%d GOLD` and submits it to the process-global notification
+manager at `0x00808878` through `0x005CA7C0`. That manager also owns Sack item
+help text and Bonus result text. It uses Fonts wrapper group 3 at
+`Fonts+0xE7D98` (records 216..307, header `[24,6,28]`) with a black two-pixel
+shadow and the supplied foreground color.
+
+Each notification starts with life 1.5 and scale-distance lane -18. Native tick
+subtracts `.005` from life, so the maximum lifetime is 300 ticks. While the
+newest lane is below zero, every tick moves all rows by one and reduces older
+rows by `.025`, floored at `1-rowCount*.4`; insertion performs the same distance shift
+in four-unit/`.1` chunks until the old newest row is no longer negative.
+Consecutive current strings ending in `GOLD` merge while current life is above
+one, sum their integer prefixes, and reset life to 1.5. Render alpha is life
+clamped to `[0,1]`; the scale directive is `1-max(distance,0)/250`. The lane
+does not move text vertically; every row remains screen-centered at the shared
+notification origin and older rows separate through scale/alpha.
+
+Gold text is `.85,.73,.44,1`. Bonus kind 0 is red/pink `(1,.5,.5,1)`, kind 1
+is blue `(.5,.5,1,1)`, and kind 2 uses the Gold color. Sack pickup calls the
+item help-text vslot and `0x00573110`: ordinary items are white, Rare starts
+from `(1,1,.5,1)`, Epic from `(1,.75,.5,1)`, and an item belonging to a set
+starts from `(.5,1,.5,1)`; all three colored cases use saturation lerp `.5`.
+An Item_Sack help row is `Contains 1 item`, `Contains %d items`, or
+`Currently empty`, not the generic word `Sack`.
+
+Gold pickup separately creates two world-owned additive fades at
+`(gold.x,gold.y-10)` from BadGuys record 83 (`BadGuys+0x3FC4`). Both use scale
+one. The gold-tinted child has alpha loss `.05`; the white child has alpha loss
+`.1`. They consume no RNG, retire after 20 and 10 actor ticks, emit no light,
+and are not part of the notification manager.
+
+After delay `+0x144` expires, the proximity radius is
+`30 * progressionPickupScalar`. When that scalar exceeds float32
+`1.25999999`, every in-range tick must pass `Integer(15)==1`. The recovered
+integer helper treats 15 as an exclusive bound (`0..14`), so this is exactly a
+1/15 gate, not 1/16. Constructor `0x005E12C0` stores `Integer(100000)` at
+`+0x150`, `Float(360)` at `+0x154`, and signed `Float(20)` at `+0x158`.
+Settled tick `0x005E66B0` adds the double `2.0` at `0x007DE838` to float32
+`+0x154`; painter `0x0060FFE0` passes `+0x158`, not `+0x154`, as the settled
+sprite rotation. The `+0x154` lane feeds a separate renderer-side auxiliary
+effect/light branch whose full child contract remains to be closed.
+
 The renderer selects BadGuys 188..197 and 198..201 by tier/state; record 73 is
 also used by the render path and accepted pickup creates two additive record-83
 fades. `0x0046AA90` splits a reward into chunks no larger than 25, performs each
@@ -468,6 +568,45 @@ collision-aware placement, applies cumulative 1..5-tick delay increments after
 chunk six, consumes one dummy stack-Gold constructor, stable-sorts by world Y,
 assigns remaining zero delays from `trunc(100*Float(.25))`, and registers every
 actor. None of those shared draws is optional presentation entropy.
+
+The transient/scatter branch is instruction-closed. While byte `+0x148` is
+set, float32 progress `+0x14C` increases by `.5`; after it exceeds eight the
+flag clears and `dropcoins` plays at `f32(1+signed Float(.1))`. Painter
+`0x0060FFE0` draws its main BadGuys 188..197 frame at vertical offset
+`(9-progress)*-4`, then draws `0/1/2/4` extra coins for tiers `0/1/2/3`.
+Each extra advances private
+seed `+0x150` through `0x004FFFF0` (xor shifts 21/11/4, multiply
+`0x0A67CFCF`, absolute signed result), reduces it modulo 360, converts that
+heading to a unit vector, and offsets by eight. This is actor-private cosmetic
+state and consumes no shared RNG. Settled Gold draws `198+tier`; positive
+`sin(+0x154 degrees)` additionally submits its native additive overlay at
+`(x-5,y-5)`, rotation `+0x154`, scale `sin*1.25`. It is not a point/region
+light.
+
+Spawner `0x0046AA90` first multiplies the requested total by progression Gold
+Bonus `+0xC0` and rounds it. It drains that total into chunks starting at
+`min(remaining,25)`. When the original request exceeds 25, each chunk consumes
+`Integer(2)` and, on value one, becomes
+`Integer(floor(provisional/2))+1`. Each birth independently runs the Gold
+constructor, draws `Float(3)+1` for collision-aware placement, sets scatter
+active, and stores the supplied lifetime. After the sixth chunk, each later
+birth increments the subsequent lifetime by
+`round(timingScale*(Float(.04)+.01))`. Only after all chunks exist does the
+registration loop give every zero-lifetime actor
+`round(timingScale*Float(.25))`. Thus the constructor, chunking, placement,
+delay-jitter, and zero-delay fills are one ordered shared-RNG program; only the
+later painter offsets use private seed `+0x150`.
+
+Placement helper `0x00645910` first returns the requested point if the
+`Float(3)+1` placement circle clears Region collision and the earlier loose
+Gold list. A blocked point enters randomized elliptical rings. Each ring uses
+`trunc(pi*(ringRadius+actorRadius)/ringRadius)` samples, angular step
+`360/count`, and a shared `Float(360)` starting angle; its X/Y axes are
+`ringRadius` and `ringRadius*0.800000011920929`. After exhausting a ring it
+updates `ringRadius += growth*actorRadius` and
+`growth *= 1+Float(1)`. Earlier Gold actors use radius 15 and the same Y scale.
+The helper preserves candidate and loose-actor order and contains no lattice
+search.
 
 ### Sack item carrier
 
@@ -517,6 +656,51 @@ first record-7 support pass is kind-colored at alpha `actor_alpha*.5`, scale
 2.5, and glyph rotation; the second is white at alpha `actor_alpha*.25`, scale
 2.25, and rotation `-glyph_rotation*.5`. Kind colors are pink `(1,.75,.75)`,
 cyan `(.75,1,1)`, and gold `(.85,.73,.44)` for 0/1/2 respectively.
+
+Birth plays `magicbook__stream`; pickup plays
+`magicbookget__stream`, sets the full-screen scalar to `.35`, and arms a black
+`.05` fade. Neither the actor nor its additive halos emit a world light.
+
+### Goodie activation and staged presentation
+
+Goodie use is automatic Region collision handling, not a keyboard action.
+Registration `0x00607290` adds the authored Goodie collider through
+`0x00526B40` with contact code `0x65`. Region `MyCollider` callback
+`0x00646D00` projects 25 units along player heading and performs the
+mask-`0x2000` front query. Helper `0x00641340` keeps candidate/source order,
+uses a strict radius-50 footprint, and changes the winner only on a strictly
+smaller squared distance. It accepts only a phase-zero inactive Goodie. It
+recursively finds and removes one Item_Misc subtype-one Wizard Key from scene
+inventory. Goodie vslot
+`0x005F0E50` then plays `unlock__stream`, sets `+0x143`, clears timer `+0x144`,
+and decrements the world locked-Goodie count. Without a Key, the handler plays
+`voices/SAY_INEEDAKEY.wav` only when the current global tick is strictly more
+than 200 after the stored warning tick, then updates that tick. The exact voice
+SHA-256 is
+`a2ccd30dd03eaccc7a81ea8ccbb98e506043735a59f74e882419889887aef39e`.
+The same branch sends `SAY_INEEDAKEY` to narration manager `0x004FCEC0`. The
+manager resolves fallback copy `I need a key!` from
+`data/dialogue/narration.txt`, but the shipped WAV succeeds and owns the live
+branch. No write then arms text countdown `+0x24`; renderer `0x004F6070` draws
+text only while that countdown is positive. Retail therefore plays voice only
+for this key, with no subtitle and no pickup notification. If the voice asset
+were absent, the fallback duration would be `3*textLength+200` ticks. A
+screen-space overlap is not authorization.
+
+At tick 100, `0x0061F4C0` plays `breaklock__stream`, creates one BadGuys-52
+bouncer, one normal BadGuys-15 fade at `(x,y-20)` with scale four and fade
+multiplier `.75`, then exactly twenty bouncers selected from BadGuys 377..380.
+Every Bouncer base first consumes `Float(3)`, `Float(20)`, `Float(360)`, and
+`Float(10)`. The large child then consumes signed `Float(45)` and
+`Float(1)+1`; each random child consumes `Integer(4)`, signed `Float(10)`,
+`Integer(4)` (quadrant), and `Float(.5)` before manager insertion and the
+immediate first tick. Later Bouncer ground contacts consume `Float(10)`,
+`Integer(3)`, optional signed `Float(.2)` plus `Integer(4)` Hail-cue selection,
+then `Integer(2)` damping. They use `.4` gravity ramp, `.65` restitution, stop
+below `.75` rebound speed, and persist as debris until world teardown. Tick
+200 changes phase and plays `opencrypt__stream`. The Goodie painter
+draws the pre-100 BadGuys-33 indicator at `(x,y-40)`, not `(x+1,y-40)`, and
+neither the shell nor its children own world lighting.
 
 ### Enemy drop selection
 

@@ -263,18 +263,26 @@ The refresh switch at `0x00661FD0` and the individual action paths implement:
 | Enchant Staff `65` | Staff-action scalar `action + 0x34` is multiplied by the executable constant `1.75`. The CFG says “2x Attack Speed”; the shipped constant is not 2.0. |
 | Telekinesis `66` | Doubles `+0xCC`. |
 | Rush `67` | `+0x90 *= 1 + mConcentration/100`. |
-| Deflect `68` | The refresh switch reads missing property `mConcentration` and adds the resulting zero to `+0xA8`, but this is not the complete effect owner. `PlayerActorMagicDamage 0x00548150` separately checks concentration slots `16/20` or Mind Chug after a successful Deflect and reflects exactly `incoming*5` to a nearby non-null physical source through `0x0063E7D0`. |
+| Deflect `68` | The refresh switch still performs its harmless missing-`mConcentration` read, but the actual advertised effect is event-owned in `PlayerActorMagicDamage 0x00548150`: after a successful Deflect, concentration slot 16 or 20 containing ID 68 (or active Mind Chug) reflects five times the positive physical damage to a nearby non-null source. |
 | Resist Poison `69` | `+0xA8 += mConcentration/100`. |
 | Faster Caster `70` | `+0x94 += mConcentration/100`. |
 | Fortunate Flailing `71` | Multiplies damage for any non-normal proc by `1.2`. |
 
-`0x0065D540` does return zero for the absent Deflect CFG property, so the
-refresh-time poison-accumulator write is inert. The older conclusion that the
-whole concentrated skill was inert is superseded by the event-time branch at
-`0x005481A6..0x005483A8`: it rolls the actor-private chance, faces the source,
-requests `swipe.wav` at pitch `1+RandomFloat(1,signed)`, cancels the incoming
-event, and applies the advertised five-times physical reflection when the
-source/range/concentration gates pass.
+The refresh-side `0x0065D540` read does return zero for the property absent
+from the CFG, but it is not the reflection owner. Raw retail instructions in
+`PlayerActorMagicDamage 0x00548150` close the separate contact-time branch:
+`0x005481A6` draws `RandomInt(100)`, `0x005481AF` loads the refreshed Deflect
+chance at progression `+0xB8`, and `0x005481BC` misses when the draw is at
+least the truncated chance. A success turns/faces the wizard and requests the
+swipe feedback at `0x005481C4`; `0x00548274..0x005482D7` then checks both
+concentration slots for ID 68 or the timed Mind Chug override. With a non-null
+nearby source and positive physical damage, `0x0054837B` multiplies by the
+double constant `5.0` at `0x007DE8D8`, rewrites source/target context, and
+calls the damage endpoint `0x0063E7D0` on the original source at
+`0x005483A3`. The old “inert Deflect” conclusion came from stopping at the
+refresh switch and is superseded by this event-time consumer.
+
+The swipe request uses the exact pitch `1+RandomFloat(1,signed)`.
 
 ### Creativity Insight eligibility
 

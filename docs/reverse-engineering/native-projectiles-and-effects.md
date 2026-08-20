@@ -502,7 +502,11 @@ than drawable missile sprites:
   separate main-pass Shockwave missile sprite.
 - FreezeWave uses the same expanding/list pattern and selects `ColdSlow
   (0x1B69)` or `Frozen (0x1B6F)` according to target flags. Object flag
-  `+0x174 & 0x10` adds `FrostBurn (0x1B78)` before contact dispatch.
+  `+0x174 & 0x10` adds `FrostBurn (0x1B78)` before contact dispatch. The Ring
+  of Ice item feature is the ordinary player-factory writer of that bit.
+  FrostBurn duration is `round(FreezeWave+0x14C * 200)`, its per-tick damage is
+  exactly `1/200`, and tick `0x006278B0` dispatches flags `0x18` while owning a
+  separate randomized icy additive-particle branch.
 - Knockback owns the affected-actor list from the start. Each tick it applies
   outward impulse while temporarily changing the target collision radius. On
   expiry it dispatches `Dazzle (0x1B6E)` once to each still-live actor and
