@@ -700,9 +700,79 @@ These boundaries are deliberately opaque rather than speculative:
 - Live failure matrices for corrupt/truncated gamestate, Hall of Fame,
   nonempty polymorphic inventory, and region files. Only `darkdata.cfg` was
   mutated live; inventing recovery for the others would be unsafe.
-- The deployed website save service and final P6 database/concurrency policy.
-  The launcher client's expected HTTP seam is documented, but no website
-  feature was built or published here.
+- Production deployment of the browser P6 save service. The 2026-08-20
+  integration trace below records the local normalized-schema and concurrency
+  policy; no production publication is claimed by this native report.
 - A nonempty permanent skill-book save specimen. G6 now supplies the runtime
   field semantics and serializer boundary cited above; G10's byte offsets and
   round-trip preservation do not need to be re-derived.
+
+## 2026-08-20 web-port integration trace
+
+The first browser-save implementation pass re-ran the save/load and terminal
+cleanup call graph against the same read-only analyzed retail executable named
+at the top of this report. This does not change the G10 byte-format findings;
+it closes the caller membership needed to place browser checkpoints and the
+single-slot Game Over deletion boundary.
+
+### Complete direct-reference census
+
+`0x005BE0B0` has exactly eleven direct code references in the analyzed image:
+
+| Caller | Recovered persistence edge |
+| --- | --- |
+| `0x004FA290` | `LACE!` selector/unlock mutation sets profile flag `0x0081A435`. |
+| `0x00562520` | inventory/stat presentation consumes a one-shot profile milestone and saves it. |
+| `0x005684C0` | dirty `InventoryScreen` close/destruction. |
+| `0x0056C230` | dirty `PerkShop` close/destruction. |
+| `0x0056C340` | accepted Hagatha/perk purchase records its first-mix flag. |
+| `0x0056CCA0` | `InventoryShop` close/destruction. |
+| `0x005BE320` | completed-run item/profile archival. |
+| `0x005C3DB0` | legacy `PlayAccount` destruction. |
+| `0x005CDDD0` | every requested gameplay region switch, before the same-region no-op test. |
+| `0x005CD3A0` | full `Game` destruction, immediately before the resumable gameplay writer. |
+| `0x005CF4F0` | Boneyard Game Over completion, immediately before completed-run archival. |
+
+The resumable gameplay writer `0x005CBE10` has exactly two direct callers:
+MapPicker/run entry `0x0050E5E0` and `Game` destruction `0x005CD3A0`.
+The resumable gameplay loader `0x005CC210` has exactly one direct caller,
+front-end resume constructor `0x005AAA30`.
+
+Recursive cache cleanup `0x00423120` has seven direct references in six
+functions: its own recursion plus full reset `0x005CF920`, Mortuary teardown
+`0x00509200`, retry/new-game handling `0x0058F500`, both normal and Boneyard
+completion branches in `GameOver::Tick` `0x005CF4F0`, and Survival new-run
+entry `0x0058E8C0`. The helper selects only the `._cache` suffix; it does not
+physically delete `gamestate.sav`.
+
+### Terminal resume consequence
+
+At the completion edge, `GameOver::Tick` closes its surface, runs completed-run
+profile archival, replaces the active run string with the empty string, builds
+the run cleanup path, recursively removes the region caches, and then enters
+the stock front-end lineage. Therefore the old run is no longer an active
+`Last Game` candidate even though an orphaned `gamestate.sav` byte stream may
+remain on disk. Retail's observable contract is invalidation of the resume
+namespace, not secure erasure of every byte.
+
+The browser port owns one transactional normalized document instead of the
+retail profile/run/cache file split. Deleting that one document on the first
+authoritative Game Over edge is the direct observable equivalent requested for
+the web product. It intentionally does not reproduce retail's orphan-file
+artifact or its retained cross-run profile archival.
+
+### Browser checkpoint mapping
+
+The web host remains the only producer of save contents. It emits a versioned
+owner-only document at construction, accepted economy/progression mutations,
+Hub/Boneyard transitions, pause boundaries, and a bounded periodic
+active-run checkpoint. The browser is only a storage adapter: authenticated
+owners transact account slot zero; anonymous owners transact IndexedDB slot
+zero. `Last Game` returns the opaque document to a fresh host, which validates
+and revives the authoritative simulation before admitting the player.
+
+This normalized document is a web schema, not native `SyncBuffer`, and does
+not claim native export compatibility. The existing launcher ZIP and eight
+launcher slots remain a separate lossless-native attachment system. A future
+mod-list field and native import/export projection are outside this first-slot
+pass.
