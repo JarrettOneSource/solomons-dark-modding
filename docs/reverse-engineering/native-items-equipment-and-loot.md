@@ -179,6 +179,29 @@ Hat/Robe colors where needed, and calls `0x0057A000` to synthesize level-scaled
 FX. Random gear therefore does not require a matching `items.cfg` recipe, and
 its recipe/set identity differs from the named-definition path.
 
+The initial class selector is native `Integer(6)`: Hat and Robe results 0/1
+each have two preimages out of the primitive's eight-value mask, while Staff,
+Wand, Ring, and Amulet each have one. Hat/Robe color construction uses the
+exact nine-row red/orange/yellow/pale-green/cyan/blue/magenta/.4-gray/.8-gray
+palette, optional signed `.1` RGB jitter, optional `*1.85`, channel clamping,
+then an 80-percent luminance blend with weights
+`.3086000085/.6093999743/.0820000023`; the second layer is independently white.
+
+`0x0057A000` owns 25 synthesized FX selectors and one/two-effect naming. Two
+effects are possible only above requested level 18, through the short-circuited
+`Integer(2)==1`, `Integer(5)==3`, `Integer(10)==3` chain; success immediately
+writes generated item level 8. Skill
+targets are not “learned skills”: selector 6 uses compiled row flag `+0x28`,
+selector 8 uses `+0x28 || category==3`, and selector 9 uses every enabled row
+8..79, with advanced 72..79 gated by their eight unlock bytes. Selector 9 uses
+the native skill display name. Item level `+0x5A` begins zero, is 8 for a
+two-effect result, and selector 8 raises it to at least the target skill's
+compiled minimum level at row `+0x2C`.
+Hat/Robe exclude selectors `2,3,8,9,12,13,17,21,22`; only the switch branches
+that actually compile the half-and-tie-to-even block halve wearable magnitude.
+The complete selector/magnitude/name program and draw order are recorded in
+[`native-loot-selector.md`](native-loot-selector.md).
+
 ## Exact item art binding
 
 ### Inventory icons
@@ -439,9 +462,12 @@ scalar through `0x005A7C60(amount, false)`. Gold has no stock despawn timer;
 `+0x144` is not lifetime.
 
 The renderer selects BadGuys 188..197 and 198..201 by tier/state; record 73 is
-also used by the render path and record 83 by the tick effect. `0x0046AA90`
-splits a gold reward into chunks no larger than 25, perturbs later chunk
-lifetimes/positions, and registers every actor in the world.
+also used by the render path and accepted pickup creates two additive record-83
+fades. `0x0046AA90` splits a reward into chunks no larger than 25, performs each
+collision-aware placement, applies cumulative 1..5-tick delay increments after
+chunk six, consumes one dummy stack-Gold constructor, stable-sorts by world Y,
+assigns remaining zero delays from `trunc(100*Float(.25))`, and registers every
+actor. None of those shared draws is optional presentation entropy.
 
 ### Sack item carrier
 
@@ -455,6 +481,11 @@ owns the held item as a smart pointer. On local-slot-0 proximity, the tick:
    `Inventory_InsertOrStackItem`;
 4. sets scene dirty byte `+0x7C`;
 5. nulls `+0x148`, transferring ownership away from the carrier.
+
+`Inventory_InsertOrStackItem (0x0055FF20)` stacks a matching Potion first. With
+forced insertion it otherwise replaces the first Item_None type-7000 slot. If
+all 88 visible cells hold real items, it still appends to the backing list;
+pickup retires the carrier and the new item remains as native hidden overflow.
 
 If transfer never occurs, the carrier destructor destroys the held item. Art
 uses BadGuys 436..441 for bounds/effects, 442..445 for the carrier rendering,
@@ -470,7 +501,9 @@ recipe definitions and materialized a type-2012 Gold actor with amount 7. See
 ### Bonus powerup
 
 Bonus `+0x13C` has exact kind weights `1/4, 1/8, 5/8` for kinds 0, 1, and 2;
-`+0x150` is animation phase and `+0x154` starts at 1200. Pickup checks
+`+0x150` is animation phase and `+0x154` starts at 1200. The countdown is
+followed by 101 float32 `.01` fade updates, retiring the untouched actor on
+update 1300. Pickup checks
 only local slot 0, fades/deletes the actor, and calls `0x005D5910(kind)`:
 
 | Kind | Native result |
@@ -479,7 +512,11 @@ only local slot 0, fades/deletes the actor, and calls `0x005D5910(kind)`:
 | 1 | Builds eligible learned skills below their cap and applies the random-skill increase. |
 | 2 | Shows `DAMAGE x4`, arms progression `+0x824`, and refreshes. |
 
-Presentation uses BadGuys 122..139 and 140..157, plus records 7 and 61.
+Presentation uses BadGuys 122..139 and 140..157, plus records 7 and 61. The
+first record-7 support pass is kind-colored at alpha `actor_alpha*.5`, scale
+2.5, and glyph rotation; the second is white at alpha `actor_alpha*.25`, scale
+2.25, and rotation `-glyph_rotation*.5`. Kind colors are pink `(1,.75,.75)`,
+cyan `(.75,1,1)`, and gold `(.85,.73,.44)` for 0/1/2 respectively.
 
 ### Enemy drop selection
 

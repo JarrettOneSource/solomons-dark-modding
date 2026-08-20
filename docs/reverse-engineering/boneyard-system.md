@@ -210,8 +210,14 @@ The main Arena load routine is `0x0046DC60`.
    chunks. Timeline entries are also ordered by their stored coordinates.
 7. RegionLayout read completion restores owner pointers for world objects,
    roads, and terrain and rebuilds their native registrations.
-8. Trigger/TimeLine startup is dispatched, the Arena is marked loaded, and
-   `0x004685E0` counts active Goodies (type `2061`) into Arena `+0x9060`.
+8. Trigger/TimeLine startup is dispatched and the Arena is marked loaded. After
+   loaded Goodie constructors have already spent their reward-seed words,
+   active-shared `Integer(8)+5` initializes the next key-eligible Arena level at
+   `+0x905C`.
+9. `0x004685E0` counts unopened Goodies (type `2061`) into Arena `+0x9060`.
+   Those two fields are consumed by the complete key/Goodie reward lifecycle in
+   [`native-loot-selector.md`](native-loot-selector.md); `+0x905C` is not a
+   carrier delay.
 
 `Arena_Create` at `0x0046EA90` initializes the `DeadHawg` atlas, selects
 `play.boneyard` or `testrun.boneyard`, resolves the path, calls the same Arena

@@ -943,6 +943,9 @@ def test_native_loot_amounts_and_non_enemy_sources_are_pinned() -> str:
             "`Arena_SelectAndDropItem (0x0046A360)`",
             "appends exactly 110 placeholder entries",
             "random-equipment factory `0x004645B0`",
+            "requested level is greater than 18",
+            "`Integer(2)==1`",
+            "generated item level `+0x5A = 8`",
             "Goodie's definition-backed bucket instead calls `0x0046BDE0` with mode 4",
             "invincibility subtype 6 is an additive `HookEnemyDeath` path",
             "not inserted into this stock 0/1 selector",
@@ -1087,7 +1090,13 @@ def test_native_loot_physics_lifetimes_and_multiplayer_credit_are_pinned() -> st
         "Orb 2011": ("`60 * pickup_factor * orb_pull_multiplier`", "`20 * pickup_factor`", "exactly 1.5 units", "starts 900", "float32 0.002", "1024..1250 actor ticks"),
         "Gold 2012": ("No magnet", "`30 * pickup_factor`", "`Integer(15) == 1`", "No despawn timer"),
         "Sack 2013": ("No magnet", "`30 * pickup_factor`", "multiplies velocity by 1.5", "No despawn timer"),
-        "Bonus 2038": ("No magnet", "`20 * pickup_factor`", "starts 1200", "exactly 1200 actor ticks"),
+        "Bonus 2038": (
+            "No magnet",
+            "`20 * pickup_factor`",
+            "starts 1200",
+            "101 fade updates",
+            "update 1300",
+        ),
     }
     rows_by_family = {row[0]: row for row in physics_rows}
     if len(rows_by_family) != 4:

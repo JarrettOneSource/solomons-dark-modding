@@ -5,9 +5,10 @@
 This is the stock loot contract for the retail `SolomonDark.exe` whose
 SHA-256 is
 `03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`.
-It is sufficient to rebuild the decision, amount, ground motion, lifetime, and
-crediting behavior without opening the executable. Presentation is deliberately
-separate: potion icons and consumable VFX remain G4/G9 territory.
+It is sufficient to rebuild the decision, materialization, collision placement,
+amount, ground motion, lifetime, presentation, notification, and crediting
+behavior without opening the executable. Post-pickup Potion consumption remains
+the downstream item-system boundary.
 
 There are two random domains, and treating them as one is a determinism bug:
 
@@ -147,8 +148,9 @@ when no potion was created:
 - active `Badguy` count at `0x0081984C` must be greater than 79;
 - recursive player inventory must contain no health potion;
 - the world must contain no Sack whose held item is a subtype-0 health potion;
-- a 500-unit, mask-2 query around the dying actor must return more than 49
-  entries;
+- a mask-2 query with 500-unit **diameter** around the dying actor must return
+  more than 49 entries. Query `0x00642280` halves the supplied width, so this is
+  strict center radius 250, and its exclusion argument removes the dying actor;
 - then Arena vtable `+0x148` is called with potion subtype 0.
 
 The two rolls and all checks are shared-stream behavior. They do not advance
@@ -297,7 +299,9 @@ At stock level 0 with multiplier 1, the exact total distribution is:
 
 For an explicit amount, including crate gold and policy-5 amount 1000, the
 same progression `+0xC0` multiplier and truncation apply, but the level draw is
-skipped.
+skipped. If that post-multiplier total is zero or negative, the chunk loop
+emits no actors. The later unused sorter-probe Gold is still constructed, so
+its four RNG words remain spent even for an empty explicit result.
 
 The total is emitted as Gold actors until no remainder is left. Nominal chunk
 size is `min(remaining, 25)`. Only when the original explicit amount is greater
@@ -305,9 +309,35 @@ than 25, each chunk first rolls shared `Integer(2) == 1`; on a hit its size is
 replaced by `shared.Integer(floor(nominal / 2)) + 1`. The chosen chunk is
 subtracted from the remainder, so chunk randomization changes actor count and
 per-actor amounts but never the total. Amount `<3`, `<5`, `<8`, or otherwise
-maps to visual tier 0, 1, 2, or 3. Each Gold constructor and scatter step also
-advances shared presentation RNG; after six chunks a signed
-`FloatScaled(0.04)` perturbs later activation delays/positions.
+maps to visual tier 0, 1, 2, or 3. Each Gold constructor consumes shared
+`Integer(100000)`, `Float(360)`, and signed `Float(20)`, then placement consumes
+`Float(3)+1` before any blocked-ring draws. After constructing chunk six and
+every later chunk, shared `Float(0.04)` is stored after adding double
+`0.009999999776482582`, multiplied by timing scalar 100, truncated, and added
+to the delay used by the next actor: an increment of 1..5 ticks.
+
+After the chunk loop, `0x0046AA90` constructs one otherwise-unused stack Gold
+solely so generic sorter `0x00428A60` can recover field offset `+0x1C`; its four
+constructor words remain spent. The actor list is stable-sorted by world Y.
+During registration, each actor whose accumulated delay is still zero consumes
+shared `Float(0.25)`, multiplies by 100, and truncates to 0..25 ticks. These are
+authoritative delays and RNG edges, not client presentation jitter.
+
+### Collision-aware ground placement
+
+`0x00645910` first tests the supplied point. Potion and Item use one radius-15,
+mask-4 pass; Key uses two consecutive radius-15, mask-4 passes. Gold draws its
+radius as `Float(3)+1` and passes mask `0x404`, adding `0x00645820`'s dynamic
+actor-overlap ellipse. That ellipse scales both candidate and resident radii in
+Y by exact double `0.800000011920929`.
+
+When the origin is blocked, search radius begins at the supplied radius. Each
+ring consumes shared `Float(360)` for its start angle, uses
+`trunc(pi*(search_radius+base_radius)/search_radius)` samples, and scales its Y
+radius by `0.800000011920929`. A failed ring adds `growth*base_radius`; shared
+`Float(1)+1` then multiplies `growth` for the following ring. Leaving drops at
+the source point and spending none of these conditional words is correct only
+when the native collision tests accept that point.
 
 ### Potion selection, including invincibility
 
@@ -353,6 +383,37 @@ weigh `1/8`; subsequent selector, color, and synthesized-FX rolls are also
 shared. A successful carrier writes its exact recipe/type/selector/colors and
 updates `Arena+0x9064` to the current arena level.
 
+`RandomEquipment_AddFX (0x0057A000)` chooses one or two unique selectors from
+0..24 and owns three distinct skill target pools through `0x00579E90`. A
+second selector is possible only when the requested level is greater than 18:
+it tests `Integer(2)==1`, then on a miss `Integer(5)==3`, then on a second miss
+`Integer(10)==3`. Levels 18 and below never enter any of those three draws.
+Choosing two immediately writes generated item level `+0x5A = 8` before any
+selector-specific adjustment.
+
+The skill pools are:
+
+- selector 6 uses mode 0: compiled row byte `+0x28` is nonzero;
+- selector 8 uses mode 1: `+0x28` is nonzero or category `+0x26 == 3`;
+- selector 9 uses mode 2: every enabled row 8..79.
+
+Rows 72..79 first require their corresponding compiled advanced-unlock byte.
+The generated item's level byte `+0x5A` starts at zero, becomes 8 for a
+two-effect item, and selector 8 raises it to at least the selected row's
+compiled minimum level at `+0x2C`. Selector 9 formats the
+native skill name and `of %s`, never a numeric placeholder. Hat/Robe selector
+exclusions are `2,3,8,9,12,13,17,21,22`. Magnitude halving and tie-to-even
+rounding occur only in switch branches
+`0..6,10..13,17..24`; allowed wearable families 7,14,15,16 remain unhalved.
+
+Hat/Robe color factory `0x004630E0` uses this exact nine-row palette:
+`(1,0,0)`, `(1,.5,0)`, `(1,1,0)`, `(.25,1,.25)`, `(.25,1,1)`,
+`(.25,.25,1)`, `(1,.25,1)`, `(.4,.4,.4)`, `(.8,.8,.8)`. A 50-percent branch
+adds three independent signed `Float(.1)` values. A one-in-four branch multiplies
+RGB by `1.85`; both steps clamp. `0x0040FC60` then blends 80 percent toward
+luminance weights `.3086000085/.6093999743/.0820000023`. The second wearable
+layer is separately constructed white and remains white.
+
 Goodie's definition-backed bucket instead calls `0x0046BDE0` with mode 4. It
 uses the same global recipe stores, ownership/level filtering, active-shared
 rarity gates, active-shared candidate choice, and recipe clone, but has no 110
@@ -373,10 +434,14 @@ Final weights are:
 ### Key
 
 The key materializer produces one Sack containing `Item_Misc 7012/0x1B64`,
-subtype 1 (`Wizard Key`). Its additional active-shared integer only selects
-scatter/activation delay: while `Arena+0x905C < 13`, `Integer(11)+15`; while it
-is below 26, fixed 30; through 40, `Integer(21)+50`; above 40, the incoming
-delay is unchanged. It does not randomize key quantity.
+subtype 1 (`Wizard Key`). `Arena+0x905C` is the next arena level eligible for a
+key, not a carrier delay. Arena load `0x0046DC60` seeds it with active-shared
+`Integer(8)+5` (5..12). On a key drop `0x00468440` advances the threshold:
+while it is below 13, `Integer(11)+15` (15..25); while below 26,
+`Integer(11)+30` (30..40); through 40, `Integer(21)+50` (50..70); above 40 it
+remains unchanged. The function applies two collision-aware radius-15 placement
+passes, then creates exactly one key; it does not randomize quantity or write a
+Sack activation delay.
 
 <!-- LOOT_AMOUNT_TABLES_END -->
 
@@ -429,7 +494,14 @@ category materializer on the active shared stream. `LIMIT DROPS` 1018 and
 `ENABLE/DISABLE DROPS` 1087 alter Arena policy/mask state consumed by later
 enemy decisions. The action grammar and recipe/UIDGroup stores are already
 fixed in [`boneyard-scripting.md`](boneyard-scripting.md); they are data inputs,
-not a third loot RNG.
+not a third loot RNG. Their exact helpers are `0x00469FE0`, `0x00466D20`,
+`0x00466D90`, `0x00466DF0`, `0x00462690`, `0x00466B50`, `0x0046A0F0`, and
+`0x00463520`. Random Gold selects inclusive `[min,max]` with one shared
+`Integer(max-min+1)` when endpoints differ. `LIMIT DROPS` writes Arena mode and
+either `[-9999,9999]`, one repeated item level, or an explicit min/max pair.
+Enable operand zero clears the supplied disable-mask bits; nonzero sets them.
+Direct Key does not advance the enemy key threshold. Direct/random Item updates
+the last-item level as described by its helper.
 
 ### Solomon Dig
 
@@ -466,7 +538,7 @@ the captured stock value is 1.25. `orb_pull_multiplier` is progression
 | Orb 2011 | Scans participant slots 0,1,2,3 in ascending order. Pull radius = `60 * pickup_factor * orb_pull_multiplier`; capture radius = `20 * pickup_factor`. Between them, normalize the current delta and move exactly 1.5 units toward that slot per actor tick. There is no velocity state, acceleration, easing, or overshoot clamp. Multiple in-range slots can each move it during one tick. | `+0x144` starts 900 and decrements every actor tick. When the post-decrement timer is below 1, remaining `+0x140` loses float32 0.002 each tick and deletes at `<=0`. Attraction runs only while remaining is strictly greater than 0.01. With raw values `[0.25,0.70]`, untouched lifetime is exactly 1024..1250 actor ticks, endpoint dependent. |
 | Gold 2012 | No magnet. Slot 0 only; capture radius = `30 * pickup_factor`. If `pickup_factor > 1.25999999`, an in-range tick additionally needs shared `Integer(15) == 1`, exactly `1/16`; stock 1.25 bypasses this gate. | No despawn timer. `+0x144` is an activation/scatter delay that decrements through zero, not lifetime. Persists until pickup, scene teardown, or failed ownership. |
 | Sack 2013 | No magnet. Slot 0 only; capture radius = `30 * pickup_factor`. Initial bounce is height `+0x140 = -25`, velocity `+0x144 = 0.1`; after delay `+0x14C`, each tick adds velocity to height and multiplies velocity by 1.5, clamping both to zero once height becomes positive. | No despawn timer. Persists like Gold. This covers potion, item, key, and Goodie carriers. |
-| Bonus 2038 | No magnet. Slot 0 only; capture radius = `20 * pickup_factor`. | `+0x154` starts 1200. On tick 1200 it reaches zero, alpha `+0x15C` falls from 1 by 2, and the actor deletes: exactly 1200 actor ticks if untouched. |
+| Bonus 2038 | No magnet. Slot 0 only; capture radius = `20 * pickup_factor`. | `+0x154` starts 1200. Once its post-decrement value is below one, alpha `+0x15C` loses float32 `0.009999999776482582`. Float residue needs 101 fade updates, so untouched retirement is update 1300. |
 
 Orb capture always deletes the actor, but the health/mana write is guarded by
 `slot_index == 0`. Thus a nonzero slot can consume an orb for no credit. The
@@ -522,6 +594,131 @@ nearest-player arbitration.
 
 <!-- LOOT_MULTIPLAYER_RULE_END -->
 
+## Complete ground-loot presentation and modifier ownership
+
+The 2026-08-16 closure pass rechecked the retail image and the existing G7
+capture against the preserved 4,723,200-byte executable (SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`).
+Headless Ghidra project `Decompiled Game/ghidra_project/SolomonDark` was opened
+read-only as program `SolomonDark.exe`; the renderer, pickup, Goodie, and
+progression-finalizer functions below were decompiled from that same image.
+This closes the presentation and purchased-drop-modifier rows that the original
+selector report deliberately left to G4/G9.
+
+### System boundary and membership
+
+Native system: the reward system begins with an enemy/private selector, an
+explicit Boneyard drop action, or an active Goodie, owns the materialized
+ground actor through render/tick/pickup/destruction, and ends after currency,
+resource, inventory, or Bonus credit is applied.
+
+| Member | Native owner | Recovered disposition |
+| --- | --- | --- |
+| Enemy selector and emergency health-potion lane | `0x0047C070` | complete: all six policy bytes, masks, private/shared draws, candidate weights, slot gates, and special suppression |
+| Gold | ctor `0x005E12C0`, tier `0x005E13C0`, tick `0x005E66B0`, draw `0x0060FFE0` | complete: amount/chunks, four tiers, scatter, persistence, pickup, feedback, art, and audio |
+| Health and mana Orb | ctor `0x005E1150`, overwrite `0x005E1220`, tick `0x005E62E0`, draw `0x0060FC10` | complete: private kind/value/phase, pull/capture, decay, credit, art, and audio |
+| Potion carrier | materializer `0x0046AE20`, Sack ctor/tick `0x005E1460`/`0x005E6B50` | complete: subtypes 0/1, bounce, potion glyph, transfer/stack, and drop/pickup audio |
+| Equipment/item carrier | selector `0x0046A360`, definition clone `0x004699B0`, random equipment `0x004645B0`, Sack actor | complete at the ground-loot boundary: definition/placeholder selection, exact live item identity, carrier art, ownership transfer, and audio; equipped FX consumers remain the item system documented in `native-items-equipment-and-loot.md` |
+| Key carrier | `0x00468440`, Item_Misc subtype 1, Sack actor | complete: candidate gate, delay bands, carrier art, one-item credit, and shared Sack audio |
+| Bonus kinds 0/1/2 | ctor `0x005E2D90`, tick `0x006039C0`, apply `0x005D5910`, draw `0x0061A260` | complete: biased kind weights, 1200-tick full-alpha countdown plus 101-update float32 fade, pickup, three effects, art, and feedback |
+| Goodie unlock and selectors 0..17 | Region `MyCollider` callback `0x00646D00`, activation `0x005F0E50`, ctor/setup `0x005E3D60`/`0x005E3E40`, tick `0x0061F4C0`, draw `0x0061F070` | complete: local-player class 101, facing probe, recursive Wizard Key check/removal, nearest unopened Goodie, timers 100/200/250, all eighteen rows, materialization, art, and teardown |
+| Boneyard actions 1008/1015/1016/1017/1059/1086 and policy actions 1018/1087 | `boneyard-scripting.md` action grammar | complete materializer/policy semantics; arbitrary authored predicates remain owned by the Boneyard script interpreter rather than a hidden loot probability |
+| Solomon Dig and implicit wave-end reward | G7/G8 live census plus Bonus xrefs | excluded as producers: Dig has zero direct reward and there is no implicit wave-end drop |
+| Multiplayer claim arbitration | loader `LootSnapshot`/claim retirement | complete loader extension: one host roll and first accepted retirement; retail itself has no network rule |
+
+### Purchased drop modifiers
+
+`Skills_FinalizePass (0x0067C360)` is the writer for the progression fields
+read by `0x0047C070`. The selector bytes are the purchased `Item_Perk` flags at
+`progression+0x7CC+selector`; these are multiplicative bound changes, so a
+smaller value improves the chance.
+
+| Perk selector | Native write | Exact consequence |
+| ---: | --- | --- |
+| 3 Item Charm | `+0x80C *= 0.75` at `0x0067C64E` | item candidate bound is three quarters of the unmodified bound |
+| 4 Gold Charm | `+0xC0 *= 1.25` and `+0x808 *= 0.75` at `0x0067C421`/`0x0067C65A` | gold quantity gains 25 percent before truncation and the candidate bound falls to three quarters |
+| 9 Scatter Curse | byte `+0x814 = 1`, `+0x804 *= 0.5` at `0x0067C669..0x0067C675` | Orb bound is halved and final raw Orb value is multiplied by 1.25 |
+| 23 Arcane Attractor Charm | `+0x810 *= 0.800000011920929` at `0x0067C6A6` | Bonus candidate bound is multiplied by the exact float32 constant |
+
+The ordinary finalized values remain Orb/Gold/Item/Bonus bound multipliers
+`1,1,1,1`, gold amount multiplier `1`, Orb bonus byte `0`, Orb-pull multiplier
+`1`, and pickup factor `1.25`.
+
+### Ground actor art, clocks, and audio
+
+All atlas records below are registered static data, not inferred alpha hulls or
+replacement icons.
+
+| Family | Exact draw program | Exact sound program |
+| --- | --- | --- |
+| Orb | `0x0060FC10` indexes BadGuys `434 + kind`; remaining value times alpha owns scale, phase owns the native jitter, and the full-alpha branch submits the normal plus white additive passes. | accepted pickup requests registry 2 `sounds\\gotorb` at `0x005E659F` |
+| Gold | Scatter state starts at zero, advances by 0.5, remains active through 8.0, and clears at 8.5 on update 17. `0x0060FFE0` draws BadGuys `188 + trunc(scatter)` for the base trail plus one/two/four additional `188 + tier` phase-offset copies at tiers 1/2/3. Settled Gold uses BadGuys `198 + tier` with constructor signed rotation `Float(20)`. Pickup feedback uses BadGuys 73 and the `%d GOLD` text path. | settlement requests registry 25 `sounds\\dropcoins` at `0x005E67BD`; accepted pickup requests registry 69 `sounds\\pickupcoin` at `0x005E6A1B` |
+| Potion Sack | after the strict delay, `0x006105F0` draws BadGuys `436 + subtype` for potion subtypes 0..5 | bounce settlement requests registry 26 `sounds\\droppotion`; accepted pickup uses registry 68 `sounds\\pickupbag` |
+| Misc Sack | Item_Misc draws fixed BadGuys 33 | ordinary Sack drop consumes shared `Integer(2)` and selects pool 185..186 (`dropbag1`/`dropbag2`); accepted pickup uses registry 68 |
+| Equipment or nested Item_Sack carrier | main pass `0x006104F0` draws BadGuys `442 + shell selector`; supporting pass uses BadGuys 67 | same two-entry drop-bag pool and pickup-bag cue |
+| Bonus kind 0 | BadGuys `140 + frame` (18 frames) | pickup effect opens `BONUS SKILL POINT` and the new-skill picker |
+| Bonus kind 1 | BadGuys `122 + frame` (18 frames) | pickup chooses one learned below-cap skill and increments it |
+| Bonus kind 2 | fixed BadGuys 61 | pickup shows `DAMAGE x4`, writes the shared damage-x4 duration state, and refreshes progression |
+| Goodie | DeadHawg `145 + phase` for phase 0/1/2; while active before timer 100 it alternates the BadGuys 33 indicator. Timer 100 creates the flash plus twenty children sampled from BadGuys 377..380. | timer 250 hands the resulting Gold/Sack actors to their normal family sound owners; there is no separate pickup bypass |
+
+Bonus orbit phase advances by float32 `2.5` degrees, frame phase by
+`0.20000000298023224`, and independent glyph rotation by `1` degree per actor
+tick. Frame phase resets only when it is strictly greater than the 18-record
+count. Alpha remains one until the 1200 countdown crosses below one; it then
+subtracts float32 `0.009999999776482582` each update. Float32 residue makes the
+fade 101 updates, so an untouched Bonus retires on actor update 1300. Sack
+bounce starts at height `-25`, velocity
+`0.10000000149011612`, and multiplies velocity by `1.5` after each move until
+height becomes positive, where both fields clamp to zero. Gold's `+0x144`
+remains an activation delay, never a despawn clock. Goodie timer 100 constructs
+one BadGuys-52 flash and twenty `Anim_Bouncer` children selected from BadGuys
+377..380; their constructor/customization draws advance the active shared RNG
+and therefore are part of later loot outcomes, not client-only decoration.
+
+Accepted Gold pickup creates two additive BadGuys-83 `Anim_Fade` objects at
+Y-10: gold RGB `(.85,.73,.44)` loses `.05`, and white loses `.1`. Accepted Orb
+pickup creates normal BadGuys-15 at scale 1.5 with `.05` loss. Orb registry-2
+`gotorb` playback rate is fixed 1 and spends no pitch word. Gold and Sack
+pickup alone consume signed `Float(.1)+1` pitch.
+
+Notification manager insertion/update/draw is
+`0x005CA7C0/0x005D7EF0/0x005CF000`. A message begins with lifetime 1.5 and
+offset -18, rises one per update, and loses float32 `.005` per update: 300
+updates absent earlier list pressure. A new message immediately moves an
+unfinished active row in four-unit steps; active `%d GOLD` rows above lifetime
+one merge and reset to 1.5. The draw is centered at screen Y 67, uses the stock
+body bitmap font, black +2 shadow, `1-max(0,offset)/250` scale, and caller color.
+The `+0x20` offset enters only that clamped scale expression in `0x005CF000`;
+ordered font-row layout owns vertical placement, so it is not an additional
+screen-Y translation.
+Bonus messages are pink `(1,.5,.5)`, cyan `(.5,1,1)`, and gold
+`(.85,.73,.44)` for kinds 0, 1, and 2.
+
+`Inventory_InsertOrStackItem (0x0055FF20)` is forced by Sack pickup. It stacks
+a matching Potion; otherwise it replaces the first type-7000 Item_None slot.
+If no placeholder remains, the underlying list append still runs, so the item
+is retained beyond the 88 visible cells and the carrier retires. Rejecting or
+discarding a ground item merely because the visible grid is full is not stock.
+
+### Goodie unlock owner
+
+A fresh read-only caller/xref pass on 2026-08-20 closes the formerly unnamed
+writer of Goodie `+0x143`. `Region` installs `MyCollider` vtable `0x0079F078`;
+its sole callback `0x00646D00` handles local-player collider class 101. It forms
+the native facing unit vector, samples a point exactly 25 world units ahead of
+the player, and calls nearest-object query `0x00641340` with strict radius 50
+and mask `0x2000`. An unopened Goodie (`+0x142 < 1`, `+0x143 == 0`) is eligible.
+
+The callback then recursively searches the scene inventory for `Item_Misc`
+type 7012/subtype 1 with `0x00552A10`. If absent, the throttled
+`SAY_INEEDAKEY` lane runs and the Goodie stays closed. If present,
+`0x005601B0` removes exactly one key, including from nested `Item_Sack` roots,
+before `0x005F0E50` sets active byte `+0x143`, resets timer `+0x144`, and
+decrements the arena's unopened-Goodie counter at `+0x9060`. There is no
+keyboard-interact action and no arbitrary authored predicate in this stock
+path. Once active, `0x0061F4C0` remains the sole staged reward owner. The stored
+constructor-time `shared.Integer(1000)` seed is never rerolled at break time.
+
 ## Live golden and replay contract
 
 [`loot-goldens.json`](../../tests/fixtures/webgame/loot-goldens.json) was
@@ -547,14 +744,15 @@ estimate for all levels/configs. Item, potion, powerup, key, and forced-policy
 paths are pinned statically because the ordinary level-0 sample did not happen
 to select them.
 
-## Not Yet Reversed
+## Adjacent ownership boundaries
 
-- G4/G9 presentation details—potion inventory art, consumable VFX duration,
-  and reward sprites—are intentionally outside this selector/physics contract.
-- Custom Boneyard scripts can place drop actions behind arbitrary predicates.
-  Their authored predicate/operand data must be imported from the Boneyard;
-  there is no additional universal probability to infer here.
-- The stock retail executable has no rule for resolving simultaneous network
-  claims. The loader's observable first-retirement rule is pinned above; a
-  browser server must choose a deterministic event order for truly
-  simultaneous inputs.
+- Potion inventory art and post-consumption VFX are downstream item-use
+  consumers. Ground potion glyphs, drop/pickup audio, transfer, and stacking
+  are closed here; use-after-pickup remains documented by
+  `native-items-equipment-and-loot.md`.
+- Custom Boneyard predicates belong to the script interpreter. Every universal
+  loot action and policy mutation is enumerated above; there is no additional
+  probability to guess.
+- Retail has no simultaneous network-claim rule. The loader extension's
+  first-retirement rule is the explicit multiplayer contract, and a browser
+  host must preserve one deterministic participant/event order.
