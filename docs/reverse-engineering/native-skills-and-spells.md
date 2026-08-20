@@ -438,6 +438,23 @@ The complete contact VFX membership has no world-light writer:
   with `Float(360)` rotation, scale three, alpha 1.25, loss `.1`, and the
   element tint.
 
+## Telekinesis downstream consumer closure
+
+The complete non-stack read census of refreshed progression `+0xCC` contains
+only Orb `0x005E62E0`, Gold `0x005E66B0`, Sack `0x005E6B50`, and Bonus
+`0x006039C0`. Row 66 stores float32 `mValue*1.25`; rank-zero/rank-one authored
+values one/five therefore produce `1.25/6.25`, and concentration doubles the
+stored result. Equipment FX_ORBPULL writes the independent `+0xBC` multiplier.
+
+Orb pull radius is strict `60 * +0xCC * +0xBC`, capture radius is strict
+`20 * +0xCC`, and each qualifying slot advances the same actor another 1.5
+units in slot order. Gold/Sack use strict `30 * +0xCC`; Bonus uses strict
+`20 * +0xCC`. Gold alone, when `+0xCC > 1.25999999`, consumes
+`Integer(15)` and captures only on result one. Telekinesis itself creates no
+actor, VFX, light, or audio request; only the existing reward actor's movement,
+pickup child, cue, and retirement edge become reachable at a larger distance.
+Goodie and Ether Drain do not consume `+0xCC`.
+
 ## Raise Golem and Iron Golem
 
 Raise Golem is skill-ID case `45` in `0x0054CC50`. It creates factory type
