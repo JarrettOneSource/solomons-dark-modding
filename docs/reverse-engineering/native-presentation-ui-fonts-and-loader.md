@@ -270,6 +270,35 @@ All 24 records except record 8 therefore have a compiled consumer. The binary
 proves the grouping and selection sites; it does not expose trustworthy names
 for each visual option, so the groups remain numeric here.
 
+### Create wizard-name lane
+
+The Create renderer `0x0059AD40` has one additional text lane outside the
+element and discipline record arrays. At `0x0059BF90..0x0059C0A9` it assigns
+the label `"wizard name"` through Fonts group 1 at
+`0x008199A0 + 0x04D530` (records `93..184`, header `[16,4,28]`, 105 kerning
+pairs, 92 printable glyphs). The static renderer range also follows that
+caption with group-1 caret art. The extracted Create text contract renders the
+uppercase name value through Fonts group 4 (records `308..349`, header
+`[40,10,28]`, 132 kerning pairs, 42 glyphs), which is why the stock value
+`SOLONSOLUS` is substantially larger than its caption.
+
+At `0x0059C0D4..0x0059C180` the same renderer submits the profile-name glyph
+lane through the Create-owned text descriptor at `0x008199E4 + 0x2060`, after
+which it restores the render state. The paired native Create reference capture
+uses the saved profile name `SOLONSOLUS`; its top-centre field has the UI.80
+ornamental ends, a centred 384-pixel value lane, and a fixed caret lane at the
+right.
+The font wrappers, not baked Create atlas records, are therefore the complete
+dynamic source of this lane.
+
+Create's five element and three discipline controls remain independent of the
+name lane. `0x0058A820` advances their recovered selection state and invokes
+the player-start path after a choice; it does not turn Fonts group 1 into a
+new control branch. Any browser port must keep its editable draft local until
+the first player configuration is emitted and must display the authoritative
+existing name readonly when returning to a connected retained loadout, because
+the game protocol contains no player-rename message.
+
 ## `Loader`: owned atlas and live startup renderer
 
 The startup path at `0x005BAB60` allocates a `0x484`-byte `MyLoader` object and
