@@ -987,7 +987,7 @@ class RealFlowE2ETests(unittest.TestCase):
             self.assertTrue(config.bot_play_for_me)
             self.assertEqual(
                 config.windows_staging_root,
-                root / "bply-contract-stage",
+                (root / "bply-contract-stage").resolve(),
             )
             self.assertEqual(config.host.local_port, 51411)
             self.assertEqual(config.client.local_port, 51412)
