@@ -335,6 +335,46 @@ green recolor of hostile Imp. It targets hostile actors, expires on a
 temporary ally lifetime, produces final Fire presentation, and does not run
 hostile rewards/drops.
 
+The full GoodImp/Imp runtime is now closed from retail code. `GoodImp::Tick
+0x0052C1A0` refreshes a target through `0x0052A050` only when its retained
+target pointer is null, calls shared `Imp::Tick 0x00485DC0`, decrements its
+`+0x23C` lifetime once and a second time while targetless, then removes itself
+and creates `Fire 0x7E3`. The Imp tick runs before lifetime retirement.
+
+Construction follows `0x006287D0 -> 0x00473390 -> 0x00473E30 ->
+0x00529FE0`. Fourteen generic-Badguy RNG words precede five Imp words:
+`Float(2.5)` for collision radius `2.5-draw`, `Float(10)` for upper phase,
+`Integer(4)` for the four body banks, and signed `Float(45)` (two words) for
+body rotation. The retained body scale is the earlier generic value
+`f32(0.9800000190734863 + Float(0.05,true))`; total constructor consumption is
+19 words. Initial horizontal speed is `4.5`.
+
+Shared flight state advances each active tick: upper phase adds
+`abs(speed)*0.25` modulo ten, vertical offset adds vertical velocity, vertical
+velocity adds `0.4`, and upper alpha subtracts `0.05` to zero. A positive
+vertical offset triggers the landing edge: speed becomes
+`4.5*(1+Float(1.5))`, vertical velocity becomes `-(3+Float(3))`,
+`Integer(4)` selects the body bank, signed `Float(60)` selects rotation,
+upper alpha becomes one, and `Integer(20)==3` multiplies the lift by `1.5`.
+The same edge selects one of eight `sounds\\imp\\imp1..8` rows.
+
+The landing contact threshold is
+`distance <= (target radius + 45) * 1.25`. Success selects one of three
+`sounds\\Bite\\bite1..3` rows, creates the independent
+`BadGuys[251..254]` contact child at a 15-unit heading offset and `y-15` with
+scale `0.5+Float(0.1)`, turns by `180+Float(45)`, and invokes inherited
+presentation vslot `+0xA0` (`0x00478A20`). There is no separate 6/11/18-tick
+Imp melee action clock. Renderer `0x00492E10` draws the body opaque from
+`BadGuys[285..332]` using retained scale/rotation, then applies `+0x228` alpha
+only to upper `333..342` at `y-10`. The eight Imp rows play at
+`1+Float(0.1)` pitch; the three Bite rows play at `1+Float(0.25)`.
+
+Shared Imp light provider `0x00478CC0` is also live for GoodImp. Glow field
+`+0x230` rises by `0.01` to one, then the provider submits current position,
+intensity `glow*(0.75+Float(0.25))`, radius
+`0.25+Float(0.1,true)`, and Multiple Shadows off. This is outbound light;
+the actor draw still consumes Region light separately on its inbound tint path.
+
 `GreenImp 0x7FC` shares the chase logic but renders from Unholy records. It is
 created by `UnholySpit_Impact (0x005EA6F0)` only when the projectile's
 `SPIT IMPS` payload byte is set and the sampled placement test accepts that
