@@ -320,6 +320,10 @@ records, including records in the range `1..208`. The generic actor
 `anim_drive_state` is not a sufficient presentation contract. A correct
 replication seam must either publish Golem's semantic assembly/gait/attack
 state or publish a compact, class-specific articulated pose derived from it.
+The complete twelve-record visible-position, independent-sort-key, rotation,
+and connector formulas are recorded in
+`native-secondary-parity-correction-2026-08-20.md`; that second visual reopen
+supersedes any interpretation that treats the record sort key as its draw Y.
 
 ## Damage dealt by Golem
 

@@ -88,6 +88,63 @@ The Fete of Clay complete set (`+0x878 bit 0x8`) owns the one-versus-two summon
 cap and lower-HP eviction. Iron Golem skill 75 separately owns reflection,
 cost, and the iron byte. Those conditions must not be aliased.
 
+#### Second visual reopen: exact articulated draw-record ABI
+
+The first correction recovered the state fields and record membership but did
+not drain the per-record draw-position/sort-position ABI. That omission caused
+the Website to pass native sort Y as visible sprite Y for records 4..11.
+Single-Golem browser captures disprove Fete overlap as the root cause, while
+retained native-renderer captures show the stock compact upright silhouette.
+
+For `Golem::Draw 0x00617820`, let `D=(sin(h),-cos(h))`,
+`P=(D.y,-D.x)`, `C=(leftFoot+rightFoot)/2`, assembly elevation `E` be
+`0/-20/-40`, facing be `f`, and opposite facing be `o`:
+
+| Row | Atlas record | Visible offset from `C` | Internal sort Y | Rotation / scale |
+| ---: | --- | --- | --- | --- |
+| 0 | `113+f` | `D*15+(0,E)`, or `D*10+(0,E-5)` for limb mode 3 | draw Y | `0 / 1` |
+| 1 | `129+f` | `D*-5+(0,E)` | draw Y | `0 / 1` |
+| 2 | `145+f` | `D*-5+P*-30+(0,E+5)` | draw Y | `0 / 1`; Iron `177+f` overlay |
+| 3 | `161+f` | `D*-5+P*30+(0,E+5)` | draw Y | `0 / 1`; Iron `193+f` overlay |
+| 4 | two inline `BadGuys[15]` glows | `(0,E+10)`, second `+5Y` | first draw Y `-50` | `[2,2.25)` and `[1.5,1.75)` |
+| 5 | `(mode>1?17:1)+f` | `D*-5+P*-38+(0,E+5)` | draw Y `-50` | field `+0x220`, forced `45` in mode 1 |
+| 6 | `(mode>1?49:33)+f` | `D*-5+P*38+(0,E+5)` | draw Y `-50` | field `+0x224`, forced `-45` in mode 1 |
+| 7 | `65+f` | `D*-20+P*12+(0,E+5)` | draw Y `-50` | `0 / 1` |
+| 8 | `65+f` | `D*-20+P*-12+(0,E+8)` | draw Y `-50` | `10 / 1` |
+| 9 | `65+f` | `D*-15+(0,E+15)` | draw Y `-70` | `0 / .8` |
+| 10 | `65+o` | `D*1+P*12+(0,E+15)` | draw Y `-50` | `0 / 1` |
+| 11 | `65+o` | `D*1+P*-12+(0,E+12)` | draw Y `-50` | `0 / 1` |
+
+Atlas draw scale is `1.1109999418258667`; the half scale is
+`0.5554999709129333`. The connector prepass is also exact state, not a line
+between raw feet. With per-side offsets `OL/OR`, endpoints are `L+OL` and
+`R+OR`. Joints are
+`OL + .5*(L+C+P*-10) + (0,-15)` and
+`OR + .5*(R+C+P*10) + (0,-15)`. Each glow is
+`(endpoint+3*joint)/4`; bank-65 caps are at the joints. Endpoint bank
+`97+f` is not rotated. Fields `+0x220/+0x224` rotate limb records 5/6 instead.
+Endpoints, glows, and caps precede the internally sorted body.
+
+This closes every row and branch consumed by the articulated draw owner:
+assembly stages, 16 headings/opposite bank, idle/gait rotations, left/right
+attack modes, provoke offsets, Iron overlays, one/two independent Fete actors,
+and both Hub/Boneyard consumers. Golem death remains the separate
+`0x00619730` presenter and is unaffected.
+
+The corrected Website plan now preserves separate visible and sort coordinates,
+routes `+0x220/+0x224` to limb rotations, and reconstructs the connector
+endpoint/joint/glow formulas above. Its regression first failed on the former
+`-50` visible-Y error, then passed with all sixteen headings and every draw
+member. Single-Golem Hub captures across ages `2/50/100/200/400` and a live
+Boneyard attack show the compact connected native silhouette; the canonical
+Website gate, after native-loot integration, passes 140 focused prerequisite
+tests, 40 loot tests, and 972 broad game tests. The
+same implementation passed the complete Apple-M2 Mac gate and hardware
+Chrome/WebGL2 Hub/Boneyard journeys with empty page/console errors. Receipt
+SHA-256 values are
+`dece65a04a315930a9dd0c647ca79dc983b3cfef5b5572e346b640ec12a3e19f` and
+`3b84688d33001c2d4da42a51cb1400514b5cbc8648f4ba93eaf1874342d36858`.
+
 ### Call Leviathan (`11`)
 
 The recovered combat contract remains radius 300, a strict 50-degree lane,
