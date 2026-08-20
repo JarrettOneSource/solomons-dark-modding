@@ -253,7 +253,7 @@ The create-wizard screen object uses vtable `0x00797B7C`. Its key slots are:
 - construction/build: `0x00593C30`;
 - update: `0x0058A820`;
 - presentation render: `0x0059AD40`;
-- pause-menu-compatible action/render slot: `0x0058EA50`.
+- registered-control callback: `0x0058EA50`.
 
 The atlas destinations are:
 
@@ -277,7 +277,7 @@ element and discipline record arrays. At `0x0059BF90..0x0059C0A9` it assigns
 the label `"wizard name"` through Fonts group 1 at
 `0x008199A0 + 0x04D530` (records `93..184`, header `[16,4,28]`, 105 kerning
 pairs, 92 printable glyphs). The static renderer range also follows that
-caption with group-1 caret art. The extracted Create text contract renders the
+caption with group-1 clear-X art. The extracted Create text contract renders the
 uppercase name value through Fonts group 4 (records `308..349`, header
 `[40,10,28]`, 132 kerning pairs, 42 glyphs), which is why the stock value
 `SOLONSOLUS` is substantially larger than its caption.
@@ -286,7 +286,7 @@ At `0x0059C0D4..0x0059C180` the same renderer submits the profile-name glyph
 lane through the Create-owned text descriptor at `0x008199E4 + 0x2060`, after
 which it restores the render state. The paired native Create reference capture
 uses the saved profile name `SOLONSOLUS`; its top-centre field has the UI.80
-ornamental ends, a centred 384-pixel value lane, and a fixed caret lane at the
+ornamental ends, a centred 384-pixel value lane, and a fixed clear lane at the
 right.
 The font wrappers, not baked Create atlas records, are therefore the complete
 dynamic source of this lane.
@@ -298,6 +298,41 @@ new control branch. Any browser port must keep its editable draft local until
 the first player configuration is emitted and must display the authoritative
 existing name readonly when returning to a connected retained loadout, because
 the game protocol contains no player-rename message.
+
+### Create text-input and edge-control ownership
+
+The Create constructor and shared widget vtables close the input side of the
+name lane:
+
+- `0x0058A500` constructs a native `TextBox` (`vtable 0x007DD24C`) at Create
+  object `+0x027C`, then two native `Button` objects (`vtable 0x007DCE9C`) at
+  `+0x049C` and `+0x0550`;
+- `0x00593C30` assigns Fonts group 4 to the `TextBox`, sets its measured-width
+  limit at `TextBox +0x158` from `0x00799030` (`372.0f`), loads the complete
+  `data\\magenames.txt` array, chooses one entry, logs
+  `Random name[%d] = %s`, and assigns that entry to the text value;
+- `TextBox` character input at `0x004337E0` accepts a character only when the
+  active font has its glyph and the resulting measured text stays within the
+  configured width. Backspace removes the preceding character. The Create
+  instance does not replace the 372-pixel limit with a character-count limit;
+- the `TextBox`-owned clear button dispatches through `0x004322B0`, which
+  replaces the value with the empty string and reports the text change to its
+  owner. The rendered group-1 `x` is therefore a clear control, not a caret;
+- Create record 6 is rendered at `(1518,3)..(1598,57)` and belongs to the
+  standalone Button at Create `+0x049C`. `0x0058EA50` handles that Button by
+  playing the confirm cue and clearing the two Create phase bytes at
+  `+0x00BD/+0x00BE`, entering the whole-wizard finalization shortcut. It does
+  not choose or assign another name;
+- the Button at Create `+0x0550` dispatches the pause/back skull path through
+  the same callback and opens the `RESUME GAME[1]|GAME SETTINGS[0]|LEAVE
+  GAME[2]` modal.
+
+Consequently, stock has exactly one random-name draw per Create construction.
+It has no native name-only reroll control. A browser name-reroll convenience
+must remain distinct from the stock top-right dice Button and must not describe
+that dice as native random-name behavior. Re-entering Create constructs a new
+`TextBox` and repeats the one initial draw; editing does not mutate a live
+connected player.
 
 ## `Loader`: owned atlas and live startup renderer
 
