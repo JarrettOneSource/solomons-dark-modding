@@ -1,0 +1,127 @@
+# Native Lua framework to rebuilt-web runtime contract
+
+Status: implementation boundary recovered for the Website `/game` port,
+2026-08-20.
+
+## Scope and evidence
+
+This report separates the loader's Lua authoring contract from implementation
+details that exist only because the native product is an injected x86/D3D9
+process. The reusable source contract is Lua API `0.2.0`, the module inventory
+in `docs/lua-seam-roadmap.md`, the root-reachable binding registry, runtime
+bootstrap and per-mod state lifecycle, and the multiplayer authority taxonomy.
+The stock executable has no Lua engine; the native evidence here is the current
+Mod Loader source rather than a retail-binary claim.
+
+The native implementation census at `190a1573631e75109ab2b22b2d2c1a05e7636dbb`
+contains 144 Lua-named loader files and 45,279 lines. Its public boundary has
+three ownership classes:
+
+- simulation functions run on the simulation owner and replicate outcomes;
+- presentation functions run locally on every peer and never author shared
+  state;
+- runtime/meta functions are local unless they name an explicit replicated
+  channel.
+
+The rebuilt web product instead has one portable Node authority for every
+session and presentation-only browser clients. The web port must retain the
+semantic classes, exact mod identity, bounds, and teardown rules without
+recreating peer-owned native actors, memory pointers, D3D9, BASS, or Win32.
+
+## Complete namespace disposition for the first web runtime
+
+`exact-ported` means the first web runtime supplies the namespace member whose
+underlying `/game` system already exists. `out-of-system` names a missing web
+game system, not unfinished work hidden inside this implementation.
+
+| Namespace/member family | First web disposition | Ownership consequence |
+| --- | --- | --- |
+| `sd.runtime` mod/frame/multiplayer/capabilities | `exact-ported` | One persistent `web.dev-console` VM reads the current authoritative frame and capability set. |
+| `sd.state` get/default/set/delete/clear/snapshot/revision/authority | `web-adapted` | Native-shaped semantics use bounded session-authority state persistent for the VM lifetime. There are no client Lua states to checkpoint yet. |
+| `sd.events.on` and built-in notifications | `web-adapted` | Fixed-tick run, wave, enemy, gold, and level events dispatch on the authority; callback failures retire only that callback. Custom broadcast/filter and three unowned built-in siblings are deferred. |
+| `sd.timer` after/every/sequence/cancel/clear | `exact-ported` | Timers are quantized to the 100 Hz authority clock, sequence delays are relative, and every handle retires with the VM. |
+| `sd.rng` current/next run seed | `exact-ported` | The authority reads the active seed and owns one consumed next-Boneyard override. |
+| `sd.scene`, `sd.gameplay`, `sd.hub` semantic reads | `exact-ported` | Address-free projections of the existing Hub/Boneyard/run state. |
+| `sd.player` list/state and current web resource mutations | `exact-ported` | The host may restore health/mana, set mana/gold, and grant XP through authoritative player components. |
+| `sd.world` state/scene/actor census | `exact-ported` | Read-only semantic projections of current player and Boneyard enemy actors. |
+| `sd.waves.get_state` | `exact-ported` | Reads the already implemented web wave director; custom schedule composition is separate. |
+| stock `sd.enemies.get/list/spawn` subset | `web-adapted` | Eight web-owned stock descriptors use the native options shape; host-only spawn intents enter the existing enemy materializer and collision/light ownership on a fixed tick. |
+| `sd.storage` | `out-of-system` | `/game` has no durable per-mod profile store yet. |
+| `sd.settings` manifest settings | `out-of-system` | Library/package resolution is explicitly outside this slice; `Enable Cheats` is a browser product setting, not a mod manifest. |
+| `sd.bus`, custom `sd.events.broadcast/filter` | `out-of-system` | Only the console VM is loaded; there is no multi-mod or participant-VM graph yet. |
+| `sd.net` | `out-of-system` | Web Lua runs only on the authority; there are no participant-local Lua VMs. |
+| `sd.time` | `out-of-system` | The rebuilt simulation has no shared time-scale/pause/frame-step owner. |
+| `sd.nav` | `out-of-system` | Collision exists, but no stable cross-world semantic navigation API has been defined. |
+| `sd.spells` registration and callbacks | `out-of-system` | The web has stock spells but no dynamic content registry. `spell.cast` also waits for one stable complete semantic payload. |
+| `sd.items` registration/grants | `out-of-system` | The web has stock inventory/economy but no dynamic recipe catalog. |
+| dynamic `sd.enemies.register` | `out-of-system` | The stock subset works; mod content identities and per-definition overrides wait for package resolution. |
+| `drop.spawned` and `item.consumed` notifications | `out-of-system` | Adjacent web systems exist, but their complete stable Lua payload owners are not yet published. |
+| `sd.ai` registered brains | `out-of-system` | Web enemies use fixed family brains; dynamic authority blackboards are absent. |
+| `sd.draw` / `sd.hud` | `out-of-system` | Host Lua cannot paint a participant-local Pixi renderer; a bounded replicated/declarative client lane is required later. |
+| `sd.audio` | `out-of-system` | Playback is browser-local Web Audio, not host-local BASS. |
+| `sd.camera` | `out-of-system` | Cameras are client presentation state. |
+| `sd.sprites` and world rendering | `out-of-system` | The browser asset registry does not yet ingest mod-root atlases. |
+| `sd.ui` authored surfaces | `out-of-system` | The current React/Pixi UI lacks a mod-authored declarative protocol. |
+| `sd.bots` | `out-of-system` | `/game` has no synthetic participant brain runtime. |
+| `sd.input` | `out-of-system` | Browser input is a client intent producer and cannot be driven from host Lua. |
+| low-level `sd.gameplay` test controls | `out-of-system` | Native manual-spawner/debug fields are not product APIs. |
+| native `sd.player` inventory/equipment writers | `out-of-system` | Only mutations with an existing authoritative web owner are exposed. |
+| native `sd.world` rewards/loot/effect internals | `out-of-system` | Dynamic web content/loot registration is absent. |
+| `sd.debug` memory/call/trace/watch/backbuffer APIs | `blocked-by-platform` | The clean web rebuild has no retail address space, thiscall bridge, or D3D9 backbuffer. The browser console replaces only semantic code execution. |
+
+## Recovered runtime and safety contract
+
+- Lua is an author language, never a second game simulation. TypeScript remains
+  authoritative and Lua queues semantic commands into existing fixed-tick
+  owners.
+- One Lua 5.4 VM is created lazily on the first accepted console request. A
+  session that never enables/uses cheats pays no VM initialization, memory, or
+  tick-dispatch cost.
+- Console execution is host/solo-only at the server protocol boundary. A local
+  browser setting is discoverability, not authorization; a guest-crafted packet
+  must still be rejected.
+- Code, request queue, prints, return values, state, callbacks, and timers are
+  independently bounded. Every execution and callback is interrupted by the
+  Lua instruction hook and the VM allocator has an explicit ceiling.
+- `io`, `os`, `package`, `require`, `load`, `loadfile`, `dofile`, `debug`,
+  `collectgarbage`, and coroutines are absent. Lua receives copied semantic
+  tables and blessed functions, never Node, DOM, filesystem, network, or raw
+  JavaScript objects.
+- Console globals, event handlers, timers, queued commands, state, print
+  capture, and the VM all retire on host teardown. Run transitions retain the
+  console VM but events carry the new run identity.
+- Console/timer/event commands apply at a fixed-tick boundary. Event callbacks
+  generated after a simulation step may author only the following tick.
+
+## Portable VM evidence
+
+A disposable Node `22.17.0` prototype pinned `wasmoon 1.16.0` and its official
+Lua 5.4 WASM. The standalone WASM is 266 KiB; bundling the JavaScript bridge
+into an ESM Node host produced a 193 KiB bridge and ran from a different
+directory when the WASM was kept beside it. The native addon count is zero.
+
+The same prototype measured approximately 36 ms lazy initialization, 5.31 MiB
+resident Lua allocation after sandbox/API bootstrap, and 0.103 ms per trivial
+fresh console chunk across 1,000 executions. An infinite loop failed through
+the instruction timeout, and an oversized table failed through the allocator
+ceiling. Lua callbacks registered through JavaScript also inherited the
+function timeout. These are WSL prototype numbers, not final Mac acceptance.
+
+## Validation contract
+
+- VM tests: Lua 5.4 identity, sandbox absences, persistent globals, prints,
+  structured values, syntax/runtime errors, infinite-loop interruption, memory
+  ceiling, callback retirement, timers, state bounds, and clean close.
+- API tests: every exact-ported namespace member, authority checks, command
+  validation, fixed-tick ordering, run/wave/enemy event membership, and every
+  out-of-system namespace absence.
+- Protocol/host/client tests: strict bounded request/results, guest rejection,
+  host migration, queue bounds, disconnect cleanup, and no VM creation while
+  unused.
+- Browser proof: settings off exposes no console API; settings on exposes the
+  documented DevTools API; host Lua reads and mutates real game state, registers
+  a fixed-tick callback, prints/returns structured values, rejects runaway
+  code, and disappears immediately when cheats are disabled.
+- Performance: unchanged no-Lua host tick benchmark, bounded active callback
+  p95/p99/max, one lazy VM initialization receipt, and no retained VM/process
+  after teardown.
