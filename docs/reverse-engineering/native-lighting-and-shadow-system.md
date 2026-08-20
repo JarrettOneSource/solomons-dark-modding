@@ -704,3 +704,51 @@ whole native RNG interleaving is reproduced. Exact D3D9 texel-center behavior
 at every LightQuality and the class-specific fallback painters used when
 Complex Shadows is off remain outside the current WebGL parity target; neither
 justifies changing the on/default path documented above.
+
+## First-frame and run-reset presentation lifecycle
+
+The Arena exposes no intermediate "world ready, lighting pending" frame.
+`Arena::Create 0x00470A90 -> 0x0057DF20` owns the quality-scaled light target
+before the Arena can render. Every later `Arena::Render 0x0046EC80` call forms
+one complete presentation epoch:
+
+1. `0x0057D4E0` binds and clears the Region light target and resets accepted
+   sources;
+2. persistent providers and the complete MiscLight tail submit their current
+   records;
+3. `0x0057D5E0` restores the main target;
+4. the direct world bands paint, `0x0046FAFF` multiplies the Region target,
+   and the shared main queue flushes at `0x0046FDAF`; and
+5. environment modes 1 and 2 execute the already recovered player-owned
+   record-18/direct plus record-9/target darkness composition before screen
+   feedback and HUD.
+
+That sequence applies to the first visible Arena frame, every ordinary frame,
+and the first frame after a new Arena is constructed. The provider and
+MiscLight arrays are rebuilt rather than inherited from a prior run. The
+quality target is retained only within its owning Arena and is destroyed with
+that Arena; it is never a process-global lighting result that a replacement
+Arena may briefly reuse. A resize or target recreation likewise cannot be
+presented between the clear and the complete current-frame source/composite
+sequence.
+
+The complete first-frame membership is therefore:
+
+| Member | Native disposition at the first visible Arena frame |
+| --- | --- |
+| environment mode 0 | Region raster, analytic tint, and directional shadows; no later environment-darkness overlay |
+| environment modes 1 and 2 | same Region products, then both player darkness passes in the same render epoch |
+| every visible player | current provider submission plus, in modes 1/2, both current darkness passes |
+| persistent actor and transient providers | current manager order only; no previous-run carry-over |
+| MiscLight producers | current fixed-tick tail only; the list was cleared by Region tick |
+| Complex Lighting off | recovered late raster branch and white analytic tint; still one complete render epoch |
+| Complex Shadows off | directional geometry suppressed while source collection/raster behavior remains current |
+| Arena teardown and replacement | old target, records, and object-local shadow arrays retire before the replacement becomes visible |
+
+This closes a port-side lifecycle ambiguity without changing any recovered
+formula or setting default. A browser readiness barrier may resolve only after
+the first complete Region plus environment composition. Publishing a scene
+between WebGL world creation and its first environment overlay, or using a
+second lazily decoded image owner for that overlay after resident assets were
+declared ready, has no native equivalent and can expose a black or unmasked
+startup frame under scheduler or decode delay.
