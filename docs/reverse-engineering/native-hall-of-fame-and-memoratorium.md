@@ -347,6 +347,17 @@ transition members are not optional.
 
 ## Validation receipt
 
+- The 2026-08-21 authority reopening replaced browser-authored global rows with
+  account-bound host HMAC receipts and made anonymous, resumed, initial-cheat,
+  live-cheat, and accepted-console branches local-only. Rebased Website focused
+  matrices passed protocol `24/24`, host authority/resume `4/4`, supervisor
+  `8/8`, and Hall `17/17`; the signed API integration passed raw-body,
+  signature-tamper, account-mismatch, idempotency, and all four sort branches.
+- The Mac mini ran the exact Website canonical matrix successfully and passed
+  Loader static CI `491/491`. A Windows-native clone passed the same Website
+  matrix after closing two checkout-line-ending test defects; native Chrome
+  displayed the signed global row on all four boards with zero page/console
+  errors while raw and tampered submissions failed closed.
 - Static/native tooling: the focused binary-layout identity contract passed
   against the root and staged Solomon Dark Beta `0.72.5` layouts after the Hall
   address additions, and `run_static_re_tests.py --ci` passed `489/489` after
