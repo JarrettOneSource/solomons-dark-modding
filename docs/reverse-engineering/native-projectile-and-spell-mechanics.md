@@ -2062,17 +2062,19 @@ The projectile constructor `0x005E4990` stores heading at `+0x13C`, target
 handle at `+0x140/+0x142`, speed `3` at `+0x144`, turn input `2` at `+0x148`,
 turn accumulator `0.01` at `+0x14C`, target-loss policy at `+0x150`, phase at
 `+0x154`, scale at `+0x15C`, and pierce state at `+0x161/+0x164`. Tick
-`0x005FD270` advances using the current heading first. It then computes the
-normalized signed angular delta to the live target and applies:
+`0x005FD270` advances using the current heading first. It then asks shared
+turn-direction helper `0x00410D60` for only `-1`, `0`, or `+1` and applies:
 
 ```text
-heading += 2 * turnAccumulator * movementScalar * signedAngularDelta
+heading += 2 * turnAccumulator * movementScalar * turnDirection
 turnAccumulator += turnAccumulator > 1 ? 0.00200000009 : 0.0500000007
 turnAccumulator = min(turnAccumulator, 10)
 ```
 
-The stored float32 heading controls the following tick. Losing a target clears
-the handle for rank 1 because the constructor's retarget policy is false.
+`turnDirection` follows the shortest cyclic path and is zero when the
+normalized absolute gap is at most `1` degree or at least `359` degrees. The
+stored float32 heading controls the following tick. Losing a target clears the
+handle for rank 1 because the constructor's retarget policy is false.
 Terrain lookahead runs every fifth age tick over five ticks of velocity before
 movement; proximity contact runs every tick at radius `6`. There is no native
 fixed flight lifetime. After age 199 or target loss, the proximity mask widens
@@ -2781,3 +2783,99 @@ supersedes the Website's former linear `base*charge` contact approximation.
 The shell, opening glimmer, called rocks, orientation matrix, rolling loop, and
 impact recipe consume the resulting ordinary Boulder state; no generic weak
 alpha belongs on them.
+
+## 2026-08-20 Ether Magic Missile tracking correction
+
+### Reopened finding and method
+
+The 2026-08-14 targeting pass stopped at the decompiler's untyped return from
+`0x00410D60` and incorrectly promoted it to a normalized signed angular delta.
+That made the Website multiply the turn rate by the full angular error. Fresh
+read-only Ghidra 12.0.3 decompilation, raw instructions, constants, and xrefs
+against the preserved retail `SolomonDark.exe` (4,723,200 bytes, SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`)
+show that the helper is a three-valued direction gate instead.
+
+The exact instruction thread is:
+
+- `0x005FD2B5..0x005FD3C7` converts the current float32 heading to a unit
+  vector, performs the movement step, stores the new position, and publishes
+  it before homing;
+- `0x005FD43D` resolves the stable group/slot handle through `0x0045ADE0`;
+- `0x005FD44C..0x005FD474` subtracts the new missile position from the live
+  target root and converts that delta to a normalized degree heading through
+  `0x0042D280`;
+- `0x005FD478..0x005FD491` passes current heading first and desired heading
+  second to `0x00410D60`;
+- `0x005FD49A..0x005FD4B6` multiplies the returned sign by turn input
+  `+0x148`, accumulator `+0x14C`, and movement scalar `+0x120`, then adds only
+  that step to heading `+0x13C`; and
+- `0x005FD4BC..0x005FD502` advances the accumulator by the extracted double
+  `0.05000000074505806` while it is at most one, otherwise
+  `0.0020000000949949026`, and caps the stored float32 result at `10`.
+
+Helper `0x00410CF0` normalizes each input into `[0,360)`. Raw branches in
+`0x00410D60` establish the complete direction table:
+
+```text
+gap = abs(current - desired)
+if gap <= 1 or gap >= 359: return 0
+if desired <= current:
+    return -1 if current - desired <= 180 else +1
+return -1 if desired - current > 180 else +1
+```
+
+The asymmetry at exactly `180` degrees is deterministic: `current=0,
+desired=180` returns `+1`, while `current=180, desired=0` returns `-1`.
+This is not a proportional controller and it never snaps to the target
+heading. For a neutral northbound missile whose post-move target heading is
+about `88.28` degrees, the first native correction is exactly `+0.02` degrees
+(`2 * 0.01 * 1`), not about `+1.77` degrees.
+
+### Target lifetime and branch ordering
+
+A resolved handle always supplies one steering sample before liveness is
+tested. `0x005FD502` reads target byte `+0xF9`; zero clears the handle only
+after that tick's heading and accumulator update, while nonzero retains it.
+A retained handle does not rerun acquisition's actor-flag-bit test.
+A handle that no longer resolves takes no steering sample and does not advance
+the accumulator. The rank-one policy byte `+0x150 = 0` then clears the handle
+without reacquisition. These orders matter when a target enters its dying
+state: keeping only live actors in the Website query erases the native final
+sample.
+
+The low-mana branch changes speed from `3` to `2.4` and effective turn input
+from `2` to `1.2`; it uses the same sign gate, deadband, accumulator, target
+root, and loss ordering. Learned quantity/fan construction, per-child
+`0.75^i` turn-input decay, and the non-rank-one retarget policy are upstream
+writers of these same fields, not alternate steering formulas.
+
+### Membership sweep
+
+- `MagicMissile 0x7D3` owns the affected vtable tick at `0x005FD270`; its
+  direct vtable reference is `0x0079C54C` and its constructor, handler,
+  acquisition, resolver, contact, continuation, and destructor remain
+  `0x005E4990`, `0x0053CFE0`, `0x00641160`, `0x0045ADE0`, `0x005F1F00`,
+  `0x005E4B80`, and `0x005E4F80`.
+- `FireMissile 0x7DE`, `BallLightning 0x7DF`, and `FrostMissile 0x7E0` call
+  the base tick from `0x005FD550`, `0x005FD720`, and `0x005FD7A0`. They are
+  class-owned non-primary-Ether systems; this correction does not change
+  their constructors, payloads, painters, or contacts.
+- `0x00410D60` has 26 callsites in 21 functions. The Magic Missile call is
+  `0x005FD491`. The complete non-Magic set is `0x00449299`, `0x00449A47`,
+  `0x0044A7FC`, `0x0045042C`, `0x004505AC`, `0x004768A4`, `0x0047694D`,
+  `0x00476E31`, `0x00476E77`, `0x00479025`, `0x0047D1A7`, `0x0047EDCA`,
+  `0x00485D00`, `0x00488651`, `0x00489C8A`, `0x0048B4C8`, `0x0050AAF2`,
+  `0x005136DF`, `0x0052CCA0`, `0x0052D2DC`, `0x00600D1F`, `0x00608218`,
+  `0x0061721E`, `0x00617280`, and `0x006214DB`. They belong to enemy actions,
+  enemy/NPC facing, the player control brain, GuidedMissile, Golem, and
+  EBoulder; none calls the Magic Missile web kernel.
+- `0x00641160` has 11 callsites in nine functions. Only handler call
+  `0x0053DB0C` and continuation calls `0x005E4BAD/0x005E4BFE` belong to this
+  Magic Missile boundary; the other eight callsites are separate target-query
+  consumers.
+
+There is no authored steering table, asset, audio, rendering setting, or
+platform-degraded branch in this subsystem. All consumed constants and every
+shared-function xref are dispositioned above. Confidence is high from complete
+instruction streams and static xrefs; no native tracking unknown remains.
