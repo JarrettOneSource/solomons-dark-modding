@@ -384,6 +384,11 @@ instances and exact rectangles remain ordered in the corresponding fixture.
 Done/Back according to the stock control. The browser must preserve these
 domains:
 
+The complete owner, construction/destruction path, root/Controls/Performance
+membership, shipped defaults, persistence split, and context branches are
+closed in [`native-settings-system.md`](native-settings-system.md). This
+section remains the menu-shell summary.
+
 | Control | Widget / domain | Action and persistence |
 | --- | --- | --- |
 | Sound Vol | continuous slider, clamped `0..1` | Sets live sound gain; persists `Audio.SoundVolume`. |
