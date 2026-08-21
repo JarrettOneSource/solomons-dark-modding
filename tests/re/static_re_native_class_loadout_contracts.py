@@ -226,6 +226,15 @@ EXPECTED_VARIABLE_STATS = {
     "meditation_recovery_ramp_ticks": ("0x88C", "i32"),
 }
 
+# These initialized fields were recovered after the committed class-loadout
+# capture envelope was frozen. Keep their document contract explicit without
+# pretending the older raw fixture sampled bytes outside its owned ranges.
+EXPECTED_DOCUMENT_ONLY_FIXED_STATS = {
+    "pending_skill_choices": ("0x44", "i32", 0, "0x00000000"),
+    "deferred_skill_choices": ("0x48", "i32", 0, "0x00000000"),
+    "unforge_attempt_count": ("0x874", "i32", 0, "0x00000000"),
+}
+
 EXPECTED_EQUIPMENT = {
     "amulet": 0,
     "attachment": 7004,
@@ -695,6 +704,7 @@ def test_native_class_loadout_documented_starting_kit_stats_are_exact() -> str:
     )
     expected_names = (
         set(EXPECTED_FIXED_STATS)
+        | set(EXPECTED_DOCUMENT_ONLY_FIXED_STATS)
         | set(EXPECTED_SELECTED_STATS)
         | set(EXPECTED_VARIABLE_STATS)
     )
@@ -730,6 +740,9 @@ def test_native_class_loadout_documented_starting_kit_stats_are_exact() -> str:
         for offset, storage, *_ in EXPECTED_FIXED_STATS.values()
     } | {
         (offset, storage)
+        for offset, storage, *_ in EXPECTED_DOCUMENT_ONLY_FIXED_STATS.values()
+    } | {
+        (offset, storage)
         for offset, storage, *_ in EXPECTED_SELECTED_STATS.values()
     } | set(EXPECTED_VARIABLE_STATS.values())
     _require(
@@ -738,6 +751,18 @@ def test_native_class_loadout_documented_starting_kit_stats_are_exact() -> str:
     )
 
     for stat_name, (offset, storage, value, raw) in EXPECTED_FIXED_STATS.items():
+        initial = _unique_documented_stat_initial(
+            table_rows, stat_name, offset, storage
+        )
+        _assert_documented_fixed_stat(
+            stat_name, storage, value, raw, initial
+        )
+    for stat_name, (
+        offset,
+        storage,
+        value,
+        raw,
+    ) in EXPECTED_DOCUMENT_ONLY_FIXED_STATS.items():
         initial = _unique_documented_stat_initial(
             table_rows, stat_name, offset, storage
         )

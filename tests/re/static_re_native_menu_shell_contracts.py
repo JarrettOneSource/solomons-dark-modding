@@ -6819,6 +6819,26 @@ def test_native_menu_screen_census_and_live_layouts_are_pinned() -> str:
             str(capture.get("state", "native SkillScreen reference")),
         )
         claimed_references.add(reference)
+    unforge_captures = _json(
+        "tests/fixtures/webgame/native-inventory-unforge-captures.json"
+    )
+    unforge_entries = unforge_captures.get("captures")
+    if (
+        unforge_captures.get("schema_version") != 1
+        or not isinstance(unforge_entries, list)
+        or len(unforge_entries) != 2
+    ):
+        raise StaticReTestFailure(
+            "native Inventory unforge reference ownership is absent or incomplete"
+        )
+    for capture in unforge_entries:
+        reference = (fixture_root / str(capture.get("file", ""))).resolve()
+        assert_recorded_hash_matches_file(
+            str(capture.get("sha256", "")),
+            reference,
+            str(capture.get("state", "native Inventory unforge reference")),
+        )
+        claimed_references.add(reference)
     committed_references = {
         path.resolve()
         for path in (fixture_root / "menu-reference-captures").glob("*.png")
