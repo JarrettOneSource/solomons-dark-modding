@@ -1237,7 +1237,14 @@ primary/weld dispatch, secondary/advanced switch, staff proc table, spawned
 factory types, modifier IDs, art selection, and principal object lifecycles
 are mapped. Ether Blast is explicitly closed across charge state, held-weapon
 cue, 108-particle pulse, current-HP contact, Region feedback, EtherBurn target
-VFX, and target-owned MiscLight. Generic child-animation art and ownership are closed in
+VFX, and target-owned MiscLight. Hurricane is explicitly closed across its
+refresh latch, Region source registry, target cadence/cooldown, tangential
+force, charge-cubed damage, low-charge contact-sound flag, eight-lane painter,
+shared steady-wind wrapper, and negative light census. A second numeric-property
+census found no other orphan: the remaining apparently duplicate Water values
+are intermediates whose derived fields or player-runtime caches have proven
+consumers, and `mBonus` is display text rather than gameplay data. Generic
+child-animation art and ownership are closed in
 [native-projectiles-and-effects.md](native-projectiles-and-effects.md#animation-wrapper-art-and-ownership-abi):
 the caller chooses a fixed atlas destination and the wrapper borrows it, so
 there is no hidden per-animation asset registry left to recover.
