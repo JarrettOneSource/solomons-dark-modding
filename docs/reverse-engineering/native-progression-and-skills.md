@@ -957,7 +957,8 @@ groups `1..92`, `93..184`, `216..307`, and uppercase `350..375`. The complete
 membership is extractable from `native-asset-object-map.json`; no CSS leather,
 generic rectangle, OS font, or screen capture is a runtime substitute.
 
-The root draws the stock leather fill, top and bottom chains, four masonry
+The root draws the stock leather fill and its shared `UI.10/79` chain rails,
+four masonry
 corner/edge assemblies, the top-centred `SKILLS` label, two exact help lines,
 and the persistent eight-slot bottom quickbar. At 1600 by 900 the quickbar
 logical slot origins are `468,528,588,648,898,958,1018,1078` at `y=832.5`,
