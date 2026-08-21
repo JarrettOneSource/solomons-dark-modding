@@ -249,10 +249,23 @@ the even global-update lane, then consumes `Integer(7)`: value one selects
 `Anim_SteamJetEffect_Over` unless the cast is weak, otherwise it selects the
 normal class. The shared constructor consumes `Float(.05)`, `Float(.1)`,
 `Float(.75)`, `Float(1)`, `Float(.1)`, and `Integer(10)`; handler placement then
-consumes `Float(10)` and signed `Float(45)`. Tick `0x0045B940` owns life/loss,
-position/velocity, `.15` phase gain (`.075` Over), `.25` blue loss, `.125`
-tint loss, `.95` stretch shrink, `.01` scale growth, and `.96/.88` velocity
-decay. Only one normal-or-Over record-76 actor is born per eligible tick.
+consumes `Float(10)` and signed `Float(4.5)`. Tick `0x0045B940` owns life/loss,
+position/velocity, `.15` phase gain (`.075` Over), `.25` tint loss, `.125`
+secondary-color loss, `.95` stretch shrink, `.01` scale growth, and `.96/.88`
+velocity decay. Birth starts 15 units behind the Staff emitter. Life loss is
+`(Float(.1)+.01)*.5`. Speed is `5.4*(1+widen*.02)` Normal or
+`6*(1+widen*.02)` Over; weak forces neutral widen and quarter alpha. A
+birth-time caster-to-predicted-end terrain probe stores terminal point and
+remaining distance, and tick snaps there when the accumulated velocity length
+crosses that distance. Only one normal-or-Over record-76 actor is born per
+eligible tick.
+
+Normal non-weak particles alone retain the `Integer(10)` contact clock and the
+full Steamed payload. Above life `.5`, clock expiry resets to ten and queries a
+scale-derived area before installing `Mod_Steamed`; Over and weak particles do
+not own this target-effect lane. The normal draw duplicates record 76 in the
+additive pass while tint fade is positive; once it reaches zero one ordinary
+pass remains. Over always draws one ordinary quarter-alpha pass.
 
 ## Enemy/world effects and status ownership
 
@@ -283,8 +296,8 @@ The direct atlas and procedural presentation membership is:
 | FrostMissile | BadGuys 271..282 at `(age/4)%12`, scale `1.7`; additive Frost helper layers; two shrinking/refreshing internal lanes; optional push/turn overlays; `Anim_FadeFrost` impact |
 | BallLightning | procedural calls `0x00536380`, `0x00414EA0`, and `0x00535A30`; inherited phase plus per-render global samples; `Anim_FadeLightning` impact |
 | GroundSpark | actor draw `0x005E1B00` renders its tick-owned animation list; each tick creates record 71 fade state and the optional BadGuys 1836..1839 fork branch |
-| Flame Lash | two-tick textured vertex mesh from `0x004583E0`, using BadGuys record 44; this is not the ordinary Lightning renderer |
-| Blizzard Beam | two-tick `0x005308D0` beam path from `0x00458470`; this is not the ordinary Frost Jet particle class |
+| Flame Lash | two-tick textured vertex mesh from `0x004583E0`, using BadGuys record 44; constructor `0x0045B810` calls the same exact `0x0052E020` three-point QuickSpline/ribbon builder as Lightning. Normal width/alpha are `1/1`; weak width is `.75` and color alpha `.5`; phase is `-3*managerTick`. The shared Enhanced branch can append independently selected BadGuys 375/376 geometry and texture. Handler `0x005408F0` also registers endpoint/contact `Anim_FadeFlameLash` roots; draw `0x00457370` uses BadGuys 35 additively. |
+| Blizzard Beam | two-tick `0x005308D0` beam path from `0x00458470`; this is not the ordinary Frost Jet particle class. Weld caller `0x00541870` passes source-glow flag one and endpoint/enhanced flag zero, so records 6/31 are unreachable here. The owned extras are exactly two one-frame source `Anim_SpellGlow` variant-24 actors. |
 | Steam Jet | one even-lane-selected normal/Over moving actor using BadGuys record 76 through draws `0x00458550/0x00458750`; its constructor/tick state outlives the cast emission that created it |
 | EBoulder | BadGuys 86 center/opening plus oriented, depth-sorted rocks 168..171; split children use 2008..2010, and each accepted shared-flight contact creates one independently retained 2008..2010 `Anim_BoulderBit` through `0x0060BC10` |
 | Meteor | fall draw `0x005E16C0`, impact/debris draw `0x005E6DE0`, and impact constructor `0x00610880`; the channel also emits `Anim_Iceblast` at the aimed point |
@@ -318,6 +331,30 @@ registry 44 `icestart` at pitch `1.5`; BallLightning contact plays registry 224
 pitch one. Hail also writes Region camera magnitude `.1`.
 
 ## Retained presentation and release details
+
+- Every `Anim_FadeFlameLash` constructor `0x005292D0` deliberately consumes
+  two `Float(360)` words into the same retained rotation field. Tick
+  `0x00476230` runs the ordinary Fade clock and adds one degree. Draw
+  `0x00457370` uses BadGuys 35, additive blend, current alpha, and per-render
+  scale multiplier `2+Float(.25)`. With shipped Enhanced Effects, alpha loss is
+  `.2` (`.4` when Off). The primary endpoint child then consumes
+  `Float(.5)` for color `(1,1-draw,0,1)`, `Float(10)` for its coupled
+  angle/radial offset, `Float(.5)` for scale `.5..1`, and `Float(.75)` for its
+  wrapper. Per-contact chain children use fixed color `(1,.75,0,1)`, multiply
+  base scale by `.1`, and otherwise consume the same offset/scale/wrapper
+  sequence. Each child is an independently registered, Region-lit painter
+  root and has no outbound light.
+- Blizzard factory `0x005328D0` computes beam width as
+  `widen == 0 ? .75 : widen*3+1`; weak state halves it. Draw `0x005308D0`
+  builds a record-43 source cap and record-44 strip from two explicit quads.
+  Longitudinal half-length is `width*30`; perpendicular half-width is
+  `width*25*.908955`. A private xorshift/multiply projection seeded by
+  round-to-even `-3*managerTick` applies one coupled `[0,5)` radial/angle
+  translation to both quads. Normal local tint is
+  `(0.5435550212860107,1,1,1)`; weak is `(.5,.75,1,1)`. Each of the two source
+  SpellGlows consumes `Float(.5)` scale and `Float(360)` rotation, dispatches
+  procedural variant 24 once, and removes itself from draw. They are direct,
+  self-lit roots with no outbound Region source.
 
 - Weak EBoulder tests the pre-growth scale. When its retained quantity exceeds
   one it creates `round(max(scale*30,8))` independent `Anim_BoulderBit`
