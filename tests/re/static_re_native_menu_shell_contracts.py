@@ -6799,6 +6799,26 @@ def test_native_menu_screen_census_and_live_layouts_are_pinned() -> str:
         "native InventoryScreen reference",
     )
     claimed_references.add(inventory_reference)
+    skill_screen_captures = _json(
+        "tests/fixtures/webgame/native-skill-screen-captures.json"
+    )
+    skill_captures = skill_screen_captures.get("captures")
+    if (
+        skill_screen_captures.get("schema_version") != 1
+        or not isinstance(skill_captures, list)
+        or len(skill_captures) != 2
+    ):
+        raise StaticReTestFailure(
+            "native SkillScreen reference ownership is absent or incomplete"
+        )
+    for capture in skill_captures:
+        reference = (fixture_root / str(capture.get("file", ""))).resolve()
+        assert_recorded_hash_matches_file(
+            str(capture.get("sha256", "")),
+            reference,
+            str(capture.get("state", "native SkillScreen reference")),
+        )
+        claimed_references.add(reference)
     committed_references = {
         path.resolve()
         for path in (fixture_root / "menu-reference-captures").glob("*.png")

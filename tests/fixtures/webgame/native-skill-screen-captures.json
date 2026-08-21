@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "captures": [
+    {
+      "file": "menu-reference-captures/skill-screen.png",
+      "state": "settled fresh Ether Mind SkillScreen in Hub and Boneyard",
+      "sha256": "5b2423d5daf56e6bb5d154dd2ce0abc80d947286f087c8f81134b01686bb1c87"
+    },
+    {
+      "file": "menu-reference-captures/skill-screen-duplicate-belt.png",
+      "state": "Call Leviathan retained simultaneously in quickbar slots zero and one",
+      "sha256": "e934a18512ef5ed92753be150f5a37e5182751c8ed25644f5030a5d63b87f05d"
+    }
+  ]
+}
