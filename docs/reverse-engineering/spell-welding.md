@@ -522,6 +522,12 @@ application at `0x00576AA0` proves that this bit belongs to `FX_MAXWELD`, whose
 native display name is **Energize Weld Components**. The earlier provisional
 association with `FX_WELDCALLING` was incorrect.
 
+The ten hard-coded recipe tables close the eligible non-primary membership to
+`9,10,17,18,25,26,33,34,42,43`: the two component rows paired with each of the
+five elemental primaries. Energizing changes only the effective rank when its
+permanent/equipment-resolved rank is zero; it does not learn the row
+permanently, alter the active build, or populate the secondary belt.
+
 `FX_WELDCALLING` sets the separate `+0x878` bit `0x1000`. During ordinary
 level-up candidate construction, `0x0067CB70` normally chooses from the general
 eligible pool. With this bit set, one branch instead builds candidates related

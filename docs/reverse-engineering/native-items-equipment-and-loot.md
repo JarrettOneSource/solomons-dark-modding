@@ -381,6 +381,26 @@ multiplies it by `1 + magnitude/100`.
 | 38 `FX_WELDEFFECT` | Updates scalar `+0x8E0`: flat adds magnitude, `*` multiplies, percent adds `magnitude/100` to the scalar. |
 | 39 `FX_WELDCALLING` | Sets `0x1000`; native display name is `+Bias Skills for Welding`. |
 
+### 2026-08-21 feature-consumer xref closure
+
+An executable-wide instruction scan of progression feature field `+0x878`
+closes every downstream reader. The only gameplay reads are secondary-set bits
+`0x1/0x2/0x4/0x8/0x10` in `0x0054CC50`, Mindblast `0x400` in
+`0x005C88B0`, Energize Weld Components `0x800` in `0x00666020`, and Welding
+offer bias `0x1000` in `0x0067CB70`. Bits `0x20`, `0x40`, `0x80`, `0x100`,
+and `0x200` are written by `FX_MAXEMBERSTOIMPS`,
+`FX_MAXDISINTEGRATION`, `FX_MAXETHERCHARGE`, `FX_MAXHARDEN`, and
+`FX_MAXROCKSURGE`, but have no executable reader. Their named item/set effects
+are shipped inert and must not synthesize extra projectiles, damage, armor, or
+proc behavior.
+
+The live consumers for the non-bit scalars remain direct. `FX_GOLDBONUS`
+multiplies progression `+0xC0`, and Gold spawner `0x0046AA90` multiplies and
+rounds every requested Gold total by that field before chunking. `FX_HPRECOVERY`
+feeds the ordinary `+0x9C/(tickRate*10)` recovery lane independently of the
+active Regenerate `1.5/tickRate` add. `FX_WELDEFFECT` changes the welded vector
+materializer scalar; it is not a later generic outgoing-damage multiplier.
+
 The percent implementation for Weld Effect is deliberately unusual: it adds
 the fractional value to the scalar rather than multiplying by `1 + N/100`.
 The distinction between bits `0x800` and `0x1000` also corrects the earlier
