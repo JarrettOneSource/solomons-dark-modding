@@ -903,6 +903,118 @@ as previously recovered.
   Focus rank-one two-per-update recharge, the common/Phasing/Teleport presenter
   branches, and the three actionless toggle/state branches.
 
+## SkillScreen, InventoryScreen coexistence, and live loadout editing
+
+This closes the reusable native interaction contract for the optional player
+books in both the College and an active Boneyard. Evidence uses the unmodified
+retail Beta 0.72.5 executable, SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`,
+launched directly from an isolated copy with no loader. The settled clean-stock
+frames are
+`tests/fixtures/webgame/menu-reference-captures/skill-screen.png` (SHA-256
+`5b2423d5daf56e6bb5d154dd2ce0abc80d947286f087c8f81134b01686bb1c87`)
+and `skill-screen-duplicate-belt.png` (SHA-256
+`e934a18512ef5ed92753be150f5a37e5182751c8ed25644f5030a5d63b87f05d`).
+The same fresh Ether/Mind actor was observed in the Hub and Boneyard; the
+settled SkillScreen pixels and interaction geometry were identical.
+
+### Ownership, entry, and lifetime
+
+- DirectInput preset construction at `0x005A8790` binds Inventory to scan code
+  `0x17` (`I`) and Skills to `0x14` (`T`) in both control presets. The HUD
+  callbacks are parallel mouse/touch entry points.
+- Action dispatcher `0x00689750` maps action `0x405` to Inventory opener
+  `0x005C6F10` when gameplay `+0x15A0` is empty and action `0x406` to
+  SkillScreen opener `0x005CA640` when gameplay `+0x1664` is empty. The
+  dispatcher does not repeatedly toggle a screen while its pointer is live.
+- `0x005CA640` first closes the live InventoryScreen, closes an existing
+  SkillScreen when called directly, otherwise constructs the 0x168-byte
+  `SkillScreen` through `0x006576C0`, writes gameplay `+0x1664`, and attaches
+  it to the UI tree. `SkillScreen` destruction `0x0066B200` clears suspension,
+  refreshes the actor-owned derived book when necessary, destroys every page,
+  and releases the actor reference. Inventory has the symmetric exclusion
+  contract recovered in `native-hub-and-economy.md`.
+- Open `0x0067CAC0` increments the UI nesting/suspension depth through
+  `0x005CBD40(1)`, assigns the page region `(0,50,screenWidth,screenHeight-140)`,
+  opens the child, installs the actor's quickbar state, and builds all pages.
+  `SkillScreen::Tick 0x006567E0` adds exactly `0.025` to opacity each 10 ms
+  fixed tick and clamps at one. Close `0x006568E0` marks the screen closing;
+  the same tick subtracts `0.025` until zero and destroys the screen. The
+  auxiliary pulse at `+0x9C` multiplies by `0.9` and clamps below `0.01`.
+  The open and close envelopes are therefore 40 fixed ticks each.
+- Neither `0x005CA640`, constructor `0x006576C0`, open `0x0067CAC0`, close
+  `0x006568E0`, nor the tick path requests an audio-registry member. Skills
+  open/close is silent. Inventory open is also silent; standalone Inventory
+  close owns registry 64 `openpanel` as documented separately.
+
+### Fixed chrome and complete asset membership
+
+`SkillScreen::RenderRoot 0x0065B550` paints an opaque stock screen rather than
+dimming the live world. Its direct UI membership is records `3`, `30`, `31`,
+`32`, and `49`; its page and quickbar members are Skills `5`, `6`, `12`, `14`,
+the full authored icon span `27..122`, and glows `164..165`. Text uses Fonts
+groups `1..92`, `93..184`, `216..307`, and uppercase `350..375`. The complete
+membership is extractable from `native-asset-object-map.json`; no CSS leather,
+generic rectangle, OS font, or screen capture is a runtime substitute.
+
+The root draws the stock leather fill, top and bottom chains, four masonry
+corner/edge assemblies, the top-centred `SKILLS` label, two exact help lines,
+and the persistent eight-slot bottom quickbar. At 1600 by 900 the quickbar
+logical slot origins are `468,528,588,648,898,958,1018,1078` at `y=832.5`,
+with 53-square slots and the stock centre gap. The same HUD inventory/XP/cast
+strip remains at the bottom; it is part of the screen composition, not the
+hidden world.
+
+### Pages, selection state, and interactions
+
+- Builder `0x0066B380` performs two actor-owned learned-vector passes in stored
+  order. Every learned row with no dependency creates one `SkillPage`; every
+  learned transitive dependent is appended to each reachable root through
+  recursive predicate `0x0065E670`. Shared `any` dependencies intentionally
+  repeat because no consumed set exists. Runtime-only 80, reserved 81, and
+  allocated reserve 82 are never public page rows.
+- A page is 200 by 300; each appended dependent adds 160 width. Pages wrap at
+  screen width minus 10, rows advance by 300, all rows share the widest-row
+  centred X origin, and the one-row case is vertically centred in the
+  `(0,50,screenHeight-140)` region. `SkillPage::Open 0x00673EE0` creates one
+  exact icon hit target per row from the atlas record's logical dimensions.
+- `SkillPage::Render 0x006720F0` uses Skills `5` for the ordinary card, `6` for
+  dependency arrows, `14` for Spell Welding, icons from `27..122`, and
+  `164..165` for root/selection light. It always renders row name, element,
+  quick description, and category footer. The selected primary carries the
+  green `CASTING` label/border; selectable category-2 rows carry the gold belt
+  border; concentrated category-3 rows carry their native selected treatment.
+- `Skills_Quickbar` constructor `0x00657A70`, render `0x0066F330`, and pointer
+  handler `0x00659AD0` expose all eight participant-owned intent slots.
+  Slot zero is right mouse; slots one through seven are keyboard actions
+  `1..7`. Dragging an enabled learned category-2 card replaces the addressed
+  slot. Clean stock placed Call Leviathan in slots zero and one simultaneously:
+  duplicate skill IDs are legal and each slot remains independently bound.
+  A port that removes the old occurrence or rejects duplicate belt IDs is not
+  native behavior.
+- Learned-category selector `0x0066F0B0` and settings action
+  `0x005D8120` own `Select Primary Attack` and `Select Concentration` modal
+  choices. Primary accepts learned category-1 primary identities.
+  Concentration accepts exactly `57..63` and `65..71`, fills A, conditionally
+  fills B with Split Mind, alternates replacement when full, rejects
+  duplicates, and rejects changes while Mind Chug owns the timed override.
+- Both screens suspend the local actor input before the first presented frame.
+  Accepted inventory use/equip and book/loadout commands mutate only the
+  addressed actor/profile. Hub and Boneyard are consumers of the same screen
+  objects and actor books; neither scene owns a parallel inventory or skill
+  book.
+
+### Regression contract
+
+An implementation must cover `I`, `T`, both HUD buttons, Hub, Boneyard,
+Inventory-to-Skills replacement, close during each 40-tick envelope, all 72
+public authored skill rows `8..79`, every dependency root/branch, all eight
+belt slots including duplicate IDs, primary selection, concentration A/B and
+Mind Chug rejection, inventory selection/details, six potion subtypes, seven
+equipment sinks, and owner isolation. A real browser journey must prove local
+movement/cast suppression while either screen is live and authoritative state
+survival after close in both scenes.
+
 ## Not Yet Reversed
 
 - **Row 81 has no recovered consumer (LOW).** It occupies native selector space
