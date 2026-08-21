@@ -180,6 +180,15 @@ used by the settings control; category-`3` cards are not gold/green Skill
 Screen drag members. The gameplay quickbar model should consequently expose
 category `1` and `2`, while concentration remains its own selected skill.
 
+The SettingsControl concentration branches at `0x005D8120` build a horizontal
+`Skills_Quickbar` through `0x0066F0B0` with category filter `3` and title
+`Select Concentration`. `0x005D5600` returns without mutation when the selected
+row already occupies concentration action `0x10` or `0x14`. Without Split Mind,
+the new row replaces action `0x10`; with Split Mind, it fills the empty action
+first and otherwise alternates replacement between `0x10` and `0x14`. This
+selector is a separate settings surface and must not make category-3 Skill
+Screen cards draggable.
+
 ## Port consequences
 
 The Website model named `secondaryBelt` is incomplete if it rejects primary
