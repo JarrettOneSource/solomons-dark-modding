@@ -204,7 +204,7 @@ The exact `sd.content.v1` potion identity is the lossless decimal
 `tostring`/`%s`, retaining compatibility with native Lua integers and the web
 decimal-string representation.
 
-Website functional cutoff `84049999013c8b9665c4f78e92f97a092394bb4b`
+Website validated cutoff `7c2d766b843114eadc25af66dd2f23a52db795be`
 passed the full native Windows and Mac mini Website matrices. Both platforms
 then extracted the same hash-checked archive and ran the production-built
 two-browser journey: registered pickup and Inventory art, guest consumption,
