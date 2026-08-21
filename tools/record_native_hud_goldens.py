@@ -2033,7 +2033,7 @@ def build_element_census(scenarios: dict[str, Any]) -> dict[str, Any]:
         "two_participant_ally_bar",
     )
     add(
-        "concentration.binding.12.emblem",
+        "skill.binding.12.primary",
         list(draw_at(full, 34)["resolved_screen_rect"]),
         "Skills.67",
         [34],
@@ -2300,32 +2300,34 @@ def build_behavior_contract(scenarios: dict[str, Any]) -> dict[str, Any]:
     active_rep = scenario_representative(scenarios, "active_cooldown")
     return {
         "health_fill": {
-            "function": "visible_width_px = 100 * clamp(current / maximum, 0, 1)^2",
-            "maximum_width_px": 100.0,
+            "function": "visible_width_px = dynamic_core_width * clamp(current / maximum, 0, 1)^2",
+            "baseline_core_width_px": 100.0,
             "anchor": "left",
             "update": "samples native HP during every HUD render; no second display/smoothing accumulator",
             "native_fields": {
-                "maximum": "progression+0x6C",
+                "base": "progression+0x6C",
                 "current": "progression+0x70",
+                "maximum": "progression+0x74",
             },
             "near_death_flash_or_pulse": "none observed; tint remains RGBA (1,1,1,1) and only squared clipping changes",
             "normal_atlas_id": "UI.26",
             "magic_shield_atlas_id": "UI.26 (a second clipped strip)",
             "magic_shield": {
-                "function": "second left-anchored width = 100 * clamp(shield_current / shield_maximum, 0, 1)",
+                "function": "second left-anchored width = dynamic_core_width * clamp(shield_current / shield_maximum, 0, 1)",
                 "composition": "white life and cyan shield are sorted shorter-first, longer-last before drawing; the later layer can cover the earlier overlap",
                 "observed_compositions": shield_compositions,
             },
             "observed_samples": health_samples,
         },
         "mana_fill": {
-            "function": "visible_width_px = 100 * clamp(current / maximum, 0, 1)",
-            "maximum_width_px": 100.0,
+            "function": "visible_width_px = dynamic_core_width * clamp(current / maximum, 0, 1)",
+            "baseline_core_width_px": 100.0,
             "anchor": "left",
             "update": "samples native MP during every HUD render",
             "native_fields": {
-                "maximum": "progression+0x78",
+                "base": "progression+0x78",
                 "current": "progression+0x7C",
+                "maximum": "progression+0x80",
                 "reserve": "progression+0x740",
             },
             "native_fixed_tick_hz": 100,

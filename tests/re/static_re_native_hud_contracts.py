@@ -49,15 +49,15 @@ EXPECTED_ELEMENT_ROWS = (
     '| 13 | `belt.slot.4.count` | glyph `[920,888,930,897]`; backing glyph strip spans `[917.5,885,930.5,900]` | right/bottom badge on slot 4 | `UI.22` backing (Native) plus `Fonts.535-626@0x2B20` | same group/header/9 px line; observed `4` is 10 px wide | `14..17` | `0x005D3E10`, `0x004A57C0`, `0x00415230` |',
     '| 14 | `progression.xp.fill` | maximum `[798,833,802,881]`; live 45/90 clip `[798,857,802,881]` | center-bottom; 4 x 48 maximum, bottom-fixed at `y=881`, grows upward | `UI.81` (Native `images/UI.bundle`, record 81; UI object `+0x3E3C`) | none | `18` | `0x005D2B0C`, `0x00414D00` |',
     '| 15 | `progression.xp.track` | `[794.5,829,806.5,885]` | center-bottom; 12 x 56 frame centered at `x=800`, bottom inset 15 | `UI.82` (Manifest) | none | `19` | `0x005D2B0C`, `0x004142E0` |',
-    '| 16 | `mana.track` | `[850,14.5,960,34.5]` | center-top; 110 x 20, left edge `center+50` | `UI.70` (Native `images/UI.bundle`, record 70) | none | `20..22` | `0x005D2520`, `0x00415230`, `0x00420EC0` |',
-    '| 17 | `mana.fill` | maximum `[855,19.5,955,29.5]` | center-top; 100 x 10, left-clipped | `UI.40` (Native `images/UI.bundle`, record 40) | none | `23..25` | `0x005D2520`, `0x00415230`, `0x00420EC0` |',
-    '| 18 | `health.track` | `[640,14.5,750,34.5]` | center-top; 110 x 20, right edge `center-50` | `UI.70` (Native record 70) | none | `26..28` | `0x005D2520`, `0x00415230`, `0x00420EC0` |',
-    '| 19 | `health.fill` | maximum `[645,19.5,745,29.5]` | center-top; 100 x 10, left-clipped | `UI.26` (Native `images/UI.bundle`, record 26) | none | `29..31` | `0x005D2520`, `0x00415230`, `0x00420EC0` |',
+    '| 16 | `mana.track` | baseline `[850,14.5,960,34.5]`; dynamic width | center-top; left edge fixed at `center+50`, grows right | `UI.70` (Native `images/UI.bundle`, record 70) | none | `20..22` | `0x005D2520`, `0x00415230`, `0x00420EC0` |',
+    '| 17 | `mana.fill` | baseline maximum `[855,19.5,955,29.5]`; dynamic width | center-top; left edge fixed at `center+55`, left-clipped | `UI.40` (Native `images/UI.bundle`, record 40) | none | `23..25` | `0x005D2520`, `0x00415230`, `0x00420EC0` |',
+    '| 18 | `health.track` | baseline `[640,14.5,750,34.5]`; dynamic width | center-top; right edge fixed at `center-50`, grows left | `UI.70` (Native record 70) | none | `26..28` | `0x005D2520`, `0x00415230`, `0x00420EC0` |',
+    '| 19 | `health.fill` | baseline maximum `[645,19.5,745,29.5]`; dynamic width | center-top; right edge fixed at `center-55`; content remains left-clipped | `UI.26` (Native `images/UI.bundle`, record 26) | none | `29..31` | `0x005D2520`, `0x00415230`, `0x00420EC0` |',
     '| 20 | `mana.reserve.overlay` | observed 50/100 `[906.5,19.5,954.5,29.5]` | center-top; right-side reserved-capacity segment, right edge approximately `x=955` | `UI.41` (Native `images/UI.bundle`, record 41) | none | conditional `26..32`, before health; later baseline orders shift by 7 | `0x005D2BDD`, `0x00415230` |',
     '| 21 | `health.magic_shield.overlay` | maximum `[645,19.5,745,29.5]` | center-top; independently left-clipped, then width-sorted against life | `UI.26` (Native record 26), cyan tint `(0.5,1,1,1)` | none | conditional three-call strip; shorter of life/shield first, longer last | `0x005D2BDD`, `0x00415230`, `0x00420EC0` |',
     '| 22 | `ally.row.0.identity` | reserved `[612,39,740,46]` | center-top; reservation begins `center-188`; name origin `x=612`, baseline `y=46` in multiplayer | stock `UI.0` (Manifest) or `Fonts.376-442` exact-name replacement | stock `ALLY` art is 26 x 7; multiplayer uses Fonts group 6 at quarter scale with 67 glyph metrics and 1,043 kerning pairs | `32` baseline | `0x005D3408`, `0x005CF480`, `0x004142E0`, loader `0x0043BCD0` |',
     '| 23 | `ally.row.0.health` | maximum `[560,39.5,610,44.5]` | center-top; 50 x 5, left `center-240`; subsequent rows use 10 px pitch | Primitive untextured quad | none | `33` baseline | `0x005D3408`, `0x005CF480`, `0x004142E0` |',
-    '| 24 | `concentration.binding.12.emblem` | `[783.875,9.75,816.125,41.25]` | center-top; 32.25 x 31.5 centered at `(800,25.5)` | `Skills.67` (Native `images/Skills.bundle`, record 67) | none | `34` baseline | `0x005D367A`, `0x0046B140`, `0x00414EA0` |',
+    '| 24 | `skill.binding.12.primary` | baseline Earth `[783.875,9.75,816.125,41.25]`; cluster-dependent center | selected-primary emblem at 0.75 scale/alpha; conditional A/B are child variants of this selected-skill cluster | selected row\'s authored Skills record; Earth is `Skills.67` | none | `34` baseline | `0x005D367A`, `0x0046B140`, `0x00414EA0` |',
     '| 25 | `aim.cursor` | observed `[9.5,8.5,40.5,41.5]` | pointer; 31 x 33 centered on the native mouse point and viewport-clipped | `UI.42` (Manifest) | none | `35`, always in the tail | `0x005D3D48`, `0x004F6070` |',
     '| 26 | `notification.gold` | base `[741,49,860,69]`, shadow `[741,51,860,71]`, union `[741,49,860,71]` | center-top transient stack; shadow offset `(0,+2)` | `Fonts.376-442` (Native bitmap-font group 6) | header `[24,5,28]`; exact string `_s(1)25 GOLD`; measured 119 x 20 per line | transient notification pass, after the main HUD body and before cursor tail | `0x005CA7C0`, `0x005CF000`, `0x004F5620` |',
 )
@@ -531,17 +531,20 @@ def test_native_hud_fill_cooldown_charge_and_notification_behavior_are_pinned() 
         )
 
     health = behavior["health_fill"]
-    if health.get("function") != "visible_width_px = 100 * clamp(current / maximum, 0, 1)^2":
+    if health.get("function") != (
+        "visible_width_px = dynamic_core_width * clamp(current / maximum, 0, 1)^2"
+    ):
         raise StaticReTestFailure(
             "health fill would cease to use the retail squared current/max clip"
         )
-    if health.get("maximum_width_px") != 100.0 or health.get("anchor") != "left":
+    if health.get("baseline_core_width_px") != 100.0 or health.get("anchor") != "left":
         raise StaticReTestFailure(
             "health fill would lose its 100-pixel left-anchored envelope"
         )
     if health.get("native_fields") != {
-        "maximum": "progression+0x6C",
+        "base": "progression+0x6C",
         "current": "progression+0x70",
+        "maximum": "progression+0x74",
     }:
         raise StaticReTestFailure(
             "health fill would read a display surrogate instead of the native current/maximum pair"
@@ -558,7 +561,9 @@ def test_native_hud_fill_cooldown_charge_and_notification_behavior_are_pinned() 
     for sample in samples:
         current = float(sample["current"])
         maximum = float(sample["maximum"])
-        expected_width = 100.0 * max(0.0, min(current / maximum, 1.0)) ** 2
+        expected_width = float(health["baseline_core_width_px"]) * max(
+            0.0, min(current / maximum, 1.0)
+        ) ** 2
         if not math.isclose(
             float(sample["visible_width_px"]), expected_width, abs_tol=0.001
         ):
@@ -568,7 +573,8 @@ def test_native_hud_fill_cooldown_charge_and_notification_behavior_are_pinned() 
 
     shield = health.get("magic_shield")
     if not isinstance(shield, dict) or shield.get("function") != (
-        "second left-anchored width = 100 * clamp(shield_current / shield_maximum, 0, 1)"
+        "second left-anchored width = dynamic_core_width * "
+        "clamp(shield_current / shield_maximum, 0, 1)"
     ):
         raise StaticReTestFailure(
             "magic shield would lose its independent linear UI.26 clip"
@@ -604,7 +610,9 @@ def test_native_hud_fill_cooldown_charge_and_notification_behavior_are_pinned() 
         )
 
     mana = behavior.get("mana_fill", {})
-    if mana.get("function") != "visible_width_px = 100 * clamp(current / maximum, 0, 1)":
+    if mana.get("function") != (
+        "visible_width_px = dynamic_core_width * clamp(current / maximum, 0, 1)"
+    ):
         raise StaticReTestFailure(
             "mana fill would cease to use the retail linear current/max clip"
         )
@@ -615,8 +623,9 @@ def test_native_hud_fill_cooldown_charge_and_notification_behavior_are_pinned() 
             "mana presentation would conflate the 100 Hz native pool with the 250 ms loader reserve service"
         )
     if mana.get("native_fields") != {
-        "maximum": "progression+0x78",
+        "base": "progression+0x78",
         "current": "progression+0x7C",
+        "maximum": "progression+0x80",
         "reserve": "progression+0x740",
     }:
         raise StaticReTestFailure(
@@ -698,9 +707,13 @@ def test_native_hud_fill_cooldown_charge_and_notification_behavior_are_pinned() 
 
     _require_regex(
         doc,
-        r"^life_width_px = 100 \* r \* r\n"
-        r"^life_rect = \[645, 19\.5, 645 \+ life_width_px, 29\.5\]$",
-        "binary-free HUD prose would no longer specify the adjacent squared-life formula and rect",
+        r"^health_core_width =\n"
+        r"^    2 \* \(base_health \+ 0\.25 \* "
+        r"\(maximum_health - base_health\)\)\n"
+        r"^health_track_width = health_core_width \+ 10\n"
+        r"^health_ratio = clamp\(current_health / maximum_health, 0, 1\)\n"
+        r"^health_visible_width = health_core_width \* health_ratio \* health_ratio$",
+        "binary-free HUD prose would no longer specify dynamic squared-life geometry",
     )
     _require_regex(
         doc,

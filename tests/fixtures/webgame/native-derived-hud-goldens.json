@@ -1,0 +1,163 @@
+{
+  "schema": "solomon-dark-native-derived-hud-goldens-v1",
+  "source": {
+    "commit": "9ba0feb1453eaf4d98437c118f48c13dc4f4982c",
+    "binary_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+    "loader_sha256": "7ca4c7655a84a554a9b15e6842375e2ef2027cb7e71fee4df561e395a89736ce",
+    "vital_capture_root": "D:\\codex-evidence\\uire-derived-stats-20260821\\live\\20260821T155745Z",
+    "skill_capture_roots": [
+      "D:\\codex-evidence\\uire-derived-skill-hud-20260821\\live\\20260821T161333Z",
+      "D:\\codex-evidence\\uire-derived-skill-hud-20260821\\live\\20260821T161933Z",
+      "D:\\codex-evidence\\uire-derived-skill-hud-20260821\\live\\20260821T162025Z"
+    ]
+  },
+  "constants": {
+    "base_health": 50,
+    "base_mana": 100,
+    "maximum_delta_scale": 0.25,
+    "track_padding": 10,
+    "health_core_scale": 2,
+    "health_track_right": 750,
+    "health_core_right": 745,
+    "mana_track_left": 850,
+    "mana_core_left": 855
+  },
+  "meter_cases": [
+    {
+      "id": "default",
+      "maximum_health": 50,
+      "health_core_width": 100,
+      "health_track_width": 110,
+      "maximum_mana": 100,
+      "mana_core_width": 100,
+      "mana_track_width": 110
+    },
+    {
+      "id": "health-up-rank-one",
+      "maximum_health": 100,
+      "health_core_width": 125,
+      "health_track_width": 135,
+      "health_core_rect": [620, 19.5, 745, 29.5],
+      "health_track_rect": [615, 14.5, 750, 34.5],
+      "maximum_mana": 100,
+      "mana_core_width": 100,
+      "mana_track_width": 110
+    },
+    {
+      "id": "mana-up-rank-one",
+      "maximum_health": 50,
+      "health_core_width": 100,
+      "health_track_width": 110,
+      "maximum_mana": 200,
+      "mana_core_width": 125,
+      "mana_track_width": 135,
+      "mana_core_rect": [855, 19.5, 980, 29.5],
+      "mana_track_rect": [850, 14.5, 985, 34.5]
+    },
+    {
+      "id": "both-rank-one-half-current",
+      "current_health": 50.0149918,
+      "maximum_health": 100,
+      "health_core_width": 125,
+      "health_track_width": 135,
+      "health_visible_width": 31.268738,
+      "current_mana": 101.499977,
+      "maximum_mana": 200,
+      "mana_core_width": 125,
+      "mana_track_width": 135,
+      "mana_visible_width": 63.4375
+    },
+    {
+      "id": "mana-up-reserve-50",
+      "maximum_health": 50,
+      "health_core_width": 100,
+      "health_track_width": 110,
+      "maximum_mana": 200,
+      "mana_core_width": 125,
+      "mana_track_width": 135,
+      "reserve_logical_width": 31.25,
+      "reserve_visible_rect": [950.25, 19.5, 979.5, 29.5]
+    },
+    {
+      "id": "health-up-shield-25-of-50",
+      "maximum_health": 100,
+      "health_core_width": 125,
+      "health_track_width": 135,
+      "shield_width": 62.5,
+      "maximum_mana": 100,
+      "mana_core_width": 100,
+      "mana_track_width": 110
+    },
+    {
+      "id": "authored-skill-maxima",
+      "maximum_health": 700,
+      "health_core_width": 425,
+      "health_track_width": 435,
+      "health_core_rect": [320, 19.5, 745, 29.5],
+      "maximum_mana": 1350,
+      "mana_core_width": 412.5,
+      "mana_track_width": 422.5,
+      "mana_core_rect": [855, 19.5, 1267.5, 29.5]
+    }
+  ],
+  "skill_bindings": {
+    "reachable_concentration_icon_records": {
+      "57": 84,
+      "58": 85,
+      "59": 86,
+      "60": 87,
+      "61": 88,
+      "62": 89,
+      "63": 90,
+      "65": 92,
+      "66": 93,
+      "67": 94,
+      "68": 95,
+      "69": 96,
+      "70": 97,
+      "71": 98
+    },
+    "primary_only": [
+      {
+        "binding": 12,
+        "center": [800, 25.5],
+        "scale": 0.75,
+        "alpha": 0.75
+      }
+    ],
+    "primary_and_a": [
+      {
+        "binding": 12,
+        "center": [780, 25.5],
+        "scale": 0.75,
+        "alpha": 0.75
+      },
+      {
+        "binding": 16,
+        "center": [820, 25.5],
+        "scale": 0.75,
+        "alpha": 0.75
+      }
+    ],
+    "primary_a_b_draw_order": [
+      {
+        "binding": 12,
+        "center": [760, 25.5],
+        "scale": 0.75,
+        "alpha": 0.75
+      },
+      {
+        "binding": 16,
+        "center": [840, 25.5],
+        "scale": 0.75,
+        "alpha": 0.75
+      },
+      {
+        "binding": 20,
+        "center": [800, 25.5],
+        "scale": 0.75,
+        "alpha": 0.75
+      }
+    ]
+  }
+}

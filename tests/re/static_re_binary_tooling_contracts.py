@@ -1778,6 +1778,8 @@ RECORDED_CAPTURE_SHAS: dict[str, tuple[str, int]] = {
     # G9 retail HUD golden: one clean recorder commit/tree pair.
     "2686eaf9fb55b8c8d5aa3e5d95cba88c3045a91d": ("commit", 1),
     "6b58f4db1ba8ce5c5018d6278940efb6f9a6dff3": ("tree", 1),
+    # G9 derived-vital and selected-skill HUD correction.
+    "9ba0feb1453eaf4d98437c118f48c13dc4f4982c": ("commit", 1),
     # loadre class/loadout golden: one clean base in the fixture header.
     "c36f0a81721fa5d3dc2edda65f3347354974b2f0": ("commit", 1),
     # G10 save-format and G6 progression goldens share one clean base commit.

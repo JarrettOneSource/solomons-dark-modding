@@ -1,10 +1,23 @@
 # Native retail in-run HUD (G9)
 
-This is the implementation contract for Solomon's Dark's retail gameplay HUD. It closes browser-rebuild gap G9 for the retail executable and is intended to be sufficient for an implementing agent to rebuild the HUD without opening the binary. The checked-in live recording is [`hud-goldens.json`](../../tests/fixtures/webgame/hud-goldens.json); every rectangle and state value below comes from that recording or an addressable native layout path, never from eyeballing a screenshot.
+This is the implementation contract for Solomon's Dark's retail gameplay HUD.
+It closes browser-rebuild gap G9 for the retail executable and is intended to
+be sufficient for an implementing agent to rebuild the HUD without opening the
+binary. The checked-in baseline recording is
+[`hud-goldens.json`](../../tests/fixtures/webgame/hud-goldens.json). The
+2026-08-21
+[`derived-stat recapture`](../../tests/fixtures/webgame/native-derived-hud-goldens.json)
+reopens and corrects that baseline's former fixed-width inference: every
+rectangle and state value below now comes from the baseline recording, the
+derived-stat recording, or an addressable native layout path, never from
+eyeballing a screenshot.
 
 ## Scope and ownership
 
-This document owns only presentation drawn during play: cast cards and belt slots, XP, local health/mana and their conditional layers, top-center ally rows, concentration emblems, the aim cursor, transient pickup text, and their visibility and scaling rules.
+This document owns only presentation drawn during play: cast cards and belt
+slots, XP, local health/mana and their conditional layers, top-center ally
+rows, the selected-primary and concentration emblems, the aim cursor,
+transient pickup text, and their visibility and scaling rules.
 
 - G11 owns every pre-gameplay or overlay **screen**, including title, settings, pause, the level-up picker, and Game Over. Those surfaces are already specified in [`native-menus-and-boot.md`](native-menus-and-boot.md) and are not re-derived here.
 - G12 owns frame composition. Its five-pass contract places this HUD in `screen-overlay`, after `scene-overdraw`, in screen coordinates that do not move with the Region camera. See [`native-scene-composition.md`](native-scene-composition.md#layers-backmost-to-frontmost). G9 specifies what the HUD draws and its order inside that pass.
@@ -41,15 +54,15 @@ The census unit is one semantic visual element. Shadow/base pairs and the three 
 | 13 | `belt.slot.4.count` | glyph `[920,888,930,897]`; backing glyph strip spans `[917.5,885,930.5,900]` | right/bottom badge on slot 4 | `UI.22` backing (Native) plus `Fonts.535-626@0x2B20` | same group/header/9 px line; observed `4` is 10 px wide | `14..17` | `0x005D3E10`, `0x004A57C0`, `0x00415230` |
 | 14 | `progression.xp.fill` | maximum `[798,833,802,881]`; live 45/90 clip `[798,857,802,881]` | center-bottom; 4 x 48 maximum, bottom-fixed at `y=881`, grows upward | `UI.81` (Native `images/UI.bundle`, record 81; UI object `+0x3E3C`) | none | `18` | `0x005D2B0C`, `0x00414D00` |
 | 15 | `progression.xp.track` | `[794.5,829,806.5,885]` | center-bottom; 12 x 56 frame centered at `x=800`, bottom inset 15 | `UI.82` (Manifest) | none | `19` | `0x005D2B0C`, `0x004142E0` |
-| 16 | `mana.track` | `[850,14.5,960,34.5]` | center-top; 110 x 20, left edge `center+50` | `UI.70` (Native `images/UI.bundle`, record 70) | none | `20..22` | `0x005D2520`, `0x00415230`, `0x00420EC0` |
-| 17 | `mana.fill` | maximum `[855,19.5,955,29.5]` | center-top; 100 x 10, left-clipped | `UI.40` (Native `images/UI.bundle`, record 40) | none | `23..25` | `0x005D2520`, `0x00415230`, `0x00420EC0` |
-| 18 | `health.track` | `[640,14.5,750,34.5]` | center-top; 110 x 20, right edge `center-50` | `UI.70` (Native record 70) | none | `26..28` | `0x005D2520`, `0x00415230`, `0x00420EC0` |
-| 19 | `health.fill` | maximum `[645,19.5,745,29.5]` | center-top; 100 x 10, left-clipped | `UI.26` (Native `images/UI.bundle`, record 26) | none | `29..31` | `0x005D2520`, `0x00415230`, `0x00420EC0` |
+| 16 | `mana.track` | baseline `[850,14.5,960,34.5]`; dynamic width | center-top; left edge fixed at `center+50`, grows right | `UI.70` (Native `images/UI.bundle`, record 70) | none | `20..22` | `0x005D2520`, `0x00415230`, `0x00420EC0` |
+| 17 | `mana.fill` | baseline maximum `[855,19.5,955,29.5]`; dynamic width | center-top; left edge fixed at `center+55`, left-clipped | `UI.40` (Native `images/UI.bundle`, record 40) | none | `23..25` | `0x005D2520`, `0x00415230`, `0x00420EC0` |
+| 18 | `health.track` | baseline `[640,14.5,750,34.5]`; dynamic width | center-top; right edge fixed at `center-50`, grows left | `UI.70` (Native record 70) | none | `26..28` | `0x005D2520`, `0x00415230`, `0x00420EC0` |
+| 19 | `health.fill` | baseline maximum `[645,19.5,745,29.5]`; dynamic width | center-top; right edge fixed at `center-55`; content remains left-clipped | `UI.26` (Native `images/UI.bundle`, record 26) | none | `29..31` | `0x005D2520`, `0x00415230`, `0x00420EC0` |
 | 20 | `mana.reserve.overlay` | observed 50/100 `[906.5,19.5,954.5,29.5]` | center-top; right-side reserved-capacity segment, right edge approximately `x=955` | `UI.41` (Native `images/UI.bundle`, record 41) | none | conditional `26..32`, before health; later baseline orders shift by 7 | `0x005D2BDD`, `0x00415230` |
 | 21 | `health.magic_shield.overlay` | maximum `[645,19.5,745,29.5]` | center-top; independently left-clipped, then width-sorted against life | `UI.26` (Native record 26), cyan tint `(0.5,1,1,1)` | none | conditional three-call strip; shorter of life/shield first, longer last | `0x005D2BDD`, `0x00415230`, `0x00420EC0` |
 | 22 | `ally.row.0.identity` | reserved `[612,39,740,46]` | center-top; reservation begins `center-188`; name origin `x=612`, baseline `y=46` in multiplayer | stock `UI.0` (Manifest) or `Fonts.376-442` exact-name replacement | stock `ALLY` art is 26 x 7; multiplayer uses Fonts group 6 at quarter scale with 67 glyph metrics and 1,043 kerning pairs | `32` baseline | `0x005D3408`, `0x005CF480`, `0x004142E0`, loader `0x0043BCD0` |
 | 23 | `ally.row.0.health` | maximum `[560,39.5,610,44.5]` | center-top; 50 x 5, left `center-240`; subsequent rows use 10 px pitch | Primitive untextured quad | none | `33` baseline | `0x005D3408`, `0x005CF480`, `0x004142E0` |
-| 24 | `concentration.binding.12.emblem` | `[783.875,9.75,816.125,41.25]` | center-top; 32.25 x 31.5 centered at `(800,25.5)` | `Skills.67` (Native `images/Skills.bundle`, record 67) | none | `34` baseline | `0x005D367A`, `0x0046B140`, `0x00414EA0` |
+| 24 | `skill.binding.12.primary` | baseline Earth `[783.875,9.75,816.125,41.25]`; cluster-dependent center | selected-primary emblem at 0.75 scale/alpha; conditional A/B are child variants of this selected-skill cluster | selected row's authored Skills record; Earth is `Skills.67` | none | `34` baseline | `0x005D367A`, `0x0046B140`, `0x00414EA0` |
 | 25 | `aim.cursor` | observed `[9.5,8.5,40.5,41.5]` | pointer; 31 x 33 centered on the native mouse point and viewport-clipped | `UI.42` (Manifest) | none | `35`, always in the tail | `0x005D3D48`, `0x004F6070` |
 | 26 | `notification.gold` | base `[741,49,860,69]`, shadow `[741,51,860,71]`, union `[741,49,860,71]` | center-top transient stack; shadow offset `(0,+2)` | `Fonts.376-442` (Native bitmap-font group 6) | header `[24,5,28]`; exact string `_s(1)25 GOLD`; measured 119 x 20 per line | transient notification pass, after the main HUD body and before cursor tail | `0x005CA7C0`, `0x005CF000`, `0x004F5620` |
 
@@ -57,51 +70,173 @@ The `Fonts` wrapper inventory and ABI are already pinned in [`native-presentatio
 
 ### Baseline and conditional order
 
-The baseline order is: cast-card shadow/base pairs (`0..3`), the eight belt positions and their populated art/counts (`4..17`), XP fill then track (`18..19`), mana track then fill (`20..25`), health track then fill (`26..31`), each ally identity then its bar (`32..33` for one row), concentration binding emblems (`34` for binding 12), and cursor (`35`).
+The baseline order is: cast-card shadow/base pairs (`0..3`), the eight belt
+positions and their populated art/counts (`4..17`), XP fill then track
+(`18..19`), mana track then fill (`20..25`), health track then fill
+(`26..31`), each ally identity then its bar (`32..33` for one row), selected
+skill emblems (`34` for the selected primary in the baseline), and cursor
+(`35`).
 
 Conditional insertion does not change the semantic order:
 
 1. A nonzero mana reserve inserts `UI.41` after mana fill and before health track. The observed 50/100 state uses seven strip calls and shifts later draw indices by seven.
 2. A positive magic shield adds a second `UI.26` strip in the health section. Life and shield are sorted by visible width, shorter first and longer last; their call indices therefore swap when the widths cross.
 3. Each additional ally appends identity then bar, with 10 px row pitch, before concentration emblems. Fresh instruction-level confirmation and the player/Golem producer census are in [`native-ally-roster-hud-2026-08-14.md`](native-ally-roster-hud-2026-08-14.md).
-4. Binding indices 12, 16, and 20 are tested in that order. The captured loadout populates only 12; do not infer art or rects for unobserved bindings 16/20.
+4. Binding indices 12, 16, and 20 are tested and drawn in that order. They are
+   selected primary, concentration A, and concentration B. With A only, their
+   centers are primary `780`, A `820`; with Split Mind A+B they are primary
+   `760`, B `800`, A `840` even though A draws before B. Every emblem is
+   centered at `y=25.5`, scaled to `0.75`, and drawn at white alpha `0.75`.
 5. Notifications are transient and cannot be part of a structurally settled membership snapshot. Their exact-text transitions and screenshot are retained separately in the live trace.
 
 ## Behavior contract
 
 ### Health fill, damage, and magic shield
 
-Local life uses the current and maximum progression fields (`progression+0x70` and `progression+0x6C`). Let `r = clamp(current / maximum, 0, 1)`. The visible width is:
+The old baseline capture had base HP equal to maximum HP and therefore
+misidentified `progression+0x6C` as maximum. The actual fields are base
+`+0x6C`, current `+0x70`, and maximum `+0x74`. Instructions
+`0x005D2FDD..0x005D30C5` derive the repeated-strip length from base and
+maximum before applying the squared current ratio:
 
 ```text
-life_width_px = 100 * r * r
-life_rect = [645, 19.5, 645 + life_width_px, 29.5]
+health_core_width =
+    2 * (base_health + 0.25 * (maximum_health - base_health))
+health_track_width = health_core_width + 10
+health_ratio = clamp(current_health / maximum_health, 0, 1)
+health_visible_width = health_core_width * health_ratio * health_ratio
+
+health_track = [750 - health_track_width, 14.5, 750, 34.5]
+health_core = [745 - health_core_width, 19.5, 745, 29.5]
+health_visible = [
+    745 - health_core_width,
+    19.5,
+    745 - health_core_width + health_visible_width,
+    29.5
+]
 ```
 
-This is a squared fill, not a linear bar: live states recorded 50/50 -> 100 px, approximately 30.035/50 -> 36.084 px, and approximately 5.035/50 -> 1.014 px. The renderer samples current HP on every HUD render. An organic native-damage trace changed `progression+0x70` while `+0x6C` stayed at the 50 maximum and the visible clip followed immediately; there is no trailing display accumulator, easing, delayed drain layer, or low-health pulse. Full, damaged, and near-death tint remained white RGBA `(1,1,1,1)`.
+At stock base 50, default maximum 50 produces a 100-pixel core and
+110-pixel track. Health Up rank one raises maximum to 100 and produces a
+125-pixel core at `[620,19.5,745,29.5]` and 135-pixel track at
+`[615,14.5,750,34.5]`: both right edges remain fixed and the meter grows
+left. Authored Health Up maximum 700 produces a 425-pixel core and 435-pixel
+track. There is no cap at an authored skill maximum.
+
+The fill remains squared, not linear. The renderer samples current HP on every
+HUD render; there is no trailing display accumulator, easing, delayed drain
+layer, or low-health pulse. Full, damaged, and near-death tint remained white
+RGBA `(1,1,1,1)`.
 
 Magic shield is actor-local (`actor+0x1C4` current, `actor+0x1C8` maximum) and linear:
 
 ```text
-shield_width_px = 100 * clamp(shield_current / shield_maximum, 0, 1)
-shield_rect = [645, 19.5, 645 + shield_width_px, 29.5]
+shield_width_px =
+    health_core_width * clamp(shield_current / shield_maximum, 0, 1)
+shield_rect = [
+    745 - health_core_width,
+    19.5,
+    745 - health_core_width + shield_width_px,
+    29.5
+]
 shield_tint = (0.5, 1, 1, 1)
 ```
 
-Both layers reuse `UI.26`. The native branch compares shield ratio with squared life ratio and draws the shorter layer first, longer layer last. At roughly 30/50 life (about 36 px), 25/50 shield draws white life first at orders `29..31`, then 50 px cyan shield at `32..34`; 10/50 shield reverses the order, drawing 20 px cyan first and roughly 36 px white life second. Reproduce the order, not just two unordered bars.
+Both layers reuse `UI.26`. The native branch compares shield ratio with
+squared life ratio and draws the shorter layer first, longer layer last. The
+2026-08-21 maximum-100 capture proved that both layers share the expanded
+125-pixel core and begin at `x=620`: approximately 30/100 life exposed
+11.262756 pixels and 25/50 shield exposed 62.5 pixels. Reproduce the dynamic
+shared core and order, not just two unordered default-width bars.
 
 ### Mana fill and reserved capacity
 
-Local mana uses `progression+0x7C` current and `progression+0x78` maximum. Its screen fill is linear and left-anchored:
+The actual fields are base `progression+0x78`, current `+0x7C`, and maximum
+`+0x80`. Instructions `0x005D2C02..0x005D2DF6` derive a dynamic strip
+length before applying the linear current ratio:
 
 ```text
-mana_width_px = 100 * clamp(current / maximum, 0, 1)
-mana_rect = [855, 19.5, 855 + mana_width_px, 29.5]
+mana_core_width = base_mana + 0.25 * (maximum_mana - base_mana)
+mana_track_width = mana_core_width + 10
+mana_ratio = clamp(current_mana / maximum_mana, 0, 1)
+mana_visible_width = mana_core_width * mana_ratio
+
+mana_track = [850, 14.5, 850 + mana_track_width, 34.5]
+mana_core = [855, 19.5, 855 + mana_core_width, 29.5]
+mana_visible = [855, 19.5, 855 + mana_visible_width, 29.5]
 ```
 
-The HUD samples the field every render; the native simulation is 100 Hz. The live refill trace observes the fill change with the native pool. G1 specifically establishes that the previously reported **250 ms mana cadence is the loader's bot-mana reserve recovery service**, layered over 25 native ticks, not a retail HUD interpolation timer; see [`native-movement-and-tick.md`](native-movement-and-tick.md#gameplay-cadence-census). When that service owns a bot's source value, its value changes at 250 ms steps, but the screen renderer itself remains per-frame.
+At stock base 100, default maximum 100 produces a 100-pixel core and
+110-pixel track. Mana Up rank one raises maximum to 200 and produces a
+125-pixel core at `[855,19.5,980,29.5]` and 135-pixel track at
+`[850,14.5,985,34.5]`: both left edges remain fixed and the meter grows
+right. Authored Mana Up maximum 1350 produces a 412.5-pixel core and
+422.5-pixel track. There is no authored-rank cap in the renderer.
 
-When `progression+0x740` reserve is nonzero, stock caps usable mana at `maximum - reserve` and draws `UI.41` over the right-hand reserved capacity. The live 50 reserve / 100 maximum case exposes a 48 px art rect `[906.5,19.5,954.5,29.5]` and seven segmented calls. Preserve that observed art geometry; do not reinterpret it as a second left-growing mana fill.
+The HUD samples the field every render; the native simulation is 100 Hz. The
+live refill trace observes the fill change with the native pool. G1
+specifically establishes that the previously reported **250 ms mana cadence is
+the loader's bot-mana reserve recovery service**, layered over 25 native ticks,
+not a retail HUD interpolation timer; see
+[`native-movement-and-tick.md`](native-movement-and-tick.md#gameplay-cadence-census).
+When that service owns a bot's source value, its value changes at 250 ms steps,
+but the screen renderer itself remains per-frame.
+
+When `progression+0x740` reserve is nonzero, stock caps usable mana at
+`maximum - reserve` and draws `UI.41` over the right-hand reserved capacity.
+Its logical segment is
+`mana_core_width * clamp(reserve / maximum_mana, 0, 1)`, anchored to the
+dynamic core's right edge. The maximum-200/reserve-50 capture retained the
+125-pixel core and exposed `UI.41` at
+`[950.25,19.5,979.5,29.5]`; the 29.25 visible art pixels sit inside the
+31.25-pixel logical quarter. Preserve this dynamic right-edge ownership; do
+not reinterpret the overlay as a second left-growing mana fill.
+
+### Maximum-vital producers and refresh ownership
+
+The renderer does not know why maximum HP or MP changed. Every producer that
+ultimately writes `+0x74` or `+0x80` receives the same dynamic geometry:
+
+| Producer | Native consequence | HUD consequence |
+| --- | --- | --- |
+| Health Up 64 / Mana Up 56 | adds authored `mValue` to the respective base | grows the core by one quarter of the maximum delta (health then doubles for the two-pixel-per-base-HP scale) |
+| equipment `FX_MAXHP` 23 / `FX_MAXMP` 24 | ordered native scalar transform | grows or shrinks from the resulting authoritative maximum, including fractional widths |
+| Hagatha Life Charm 0 / Mana Charm 1 | multiplies the resulting maximum by 1.25 | same resulting-maximum geometry; no separate charm badge |
+| skill/equipment/perk refresh | preserves the current HP/MP ratio while replacing maxima | geometry and visible fill change in the same refresh |
+| level/new-run reset | installs refreshed maxima and full current pools | full dynamic core |
+| damage, healing, mana cost/recovery, potion/orb, poison, Magic Circle, Regenerate | changes current only | ratio/fill only; track/core geometry is unchanged |
+
+Remote ally rows and world-projected nameplates are separate fixed-width ratio
+systems. A remote participant with a larger maximum changes its ratio
+denominator, not the authored 50-pixel ally width or nameplate width policy.
+
+### Selected-primary and concentration emblems
+
+The three conditional bindings are not three interchangeable concentration
+slots:
+
+| Binding | Semantic value | Icon resolution |
+| ---: | --- | --- |
+| 12 | active selected primary | read the selected skill row, then its authored icon selector at row `+0x30`; Weld uses its active build selector and Planewalker forces Plane Orb 80 |
+| 16 | concentration A | selected category-3 row; reachable IDs 57..63 and 65..71 resolve to `Skills.84..90` and `Skills.92..98` |
+| 20 | concentration B | same mapping; valid only with Split Mind |
+
+The full live renderer sweep proves the direct icon rule, while the category
+predicate limits reachable concentrations to
+`57->84, ..., 63->90, 65->92, ..., 71->98`. Health Up 64 is passive
+category 0; its `Skills.91` art is not a reachable concentration emblem. With
+only Channel Mana selected, Earth
+primary `Skills.67` is centered at `x=780` and `Skills.84` at `x=820`.
+With Meditation A and Battle Mage B, the draw order is primary, A, B, while
+the visual centers are `760,840,800`: Earth `Skills.67` rect
+`[743.875,9.75,776.125,41.25]`, A `Skills.85` rect
+`[822.375,8.625,857.625,42.375]`, and B `Skills.86` rect
+`[787.25,7.125,812.75,43.875]`.
+
+Mind Chug does not allocate a fourth emblem or a buff row. It makes every
+concentratable consumer active and locks selection while leaving the selected
+A/B presentation owner intact. DamageX4 and the other potion/status timers
+likewise add no screen-HUD badge.
 
 ### Cast cards, belt slots, cooldown, and charges
 
@@ -196,10 +331,10 @@ At `1280 x 800`, center `x` moves by `-160`, bottom `y` moves by `-100`, top `y`
 
 | Element | Exact anchored rect at 1280 x 800 |
 | --- | --- |
-| health track | `[480,14.5,590,34.5]` |
-| mana track | `[690,14.5,800,34.5]` |
+| baseline health track (50 maximum) | `[480,14.5,590,34.5]` |
+| baseline mana track (100 maximum) | `[690,14.5,800,34.5]` |
 | ally row 0 health | `[400,39.5,450,44.5]` |
-| concentration binding 12 | `[623.875,9.75,656.125,41.25]` |
+| selected-primary binding 12, no concentrations | `[623.875,9.75,656.125,41.25]` |
 | gold notification union | `[581,49,700,71]` |
 | XP track | `[634.5,729,646.5,785]` |
 | primary card union | `[570.5,725,633.5,792]` |
@@ -208,7 +343,12 @@ At `1280 x 800`, center `x` moves by `-160`, bottom `y` moves by `-100`, top `y`
 | belt slot 7 logical | `[918,732.5,971,785.5]` |
 | input hint | authored `[323.5,777,345.5,808]`, viewport-clipped at `y=800` |
 
-This exact anchored layout is the conformance reference. It preserves the retail bottom clipping and is what pixel-diff tests should compare before accessibility/readability policy is applied.
+This exact anchored layout is the default-vital conformance reference. Apply
+the derived-stat formulas before the center-top translation: Health Up and
+other maximum-HP producers retain the translated health right edge, while Mana
+Up and other maximum-MP producers retain the translated mana left edge. The
+layout preserves retail bottom clipping and is what pixel-diff tests should
+compare before accessibility/readability policy is applied.
 
 ### Designed-not-observed readability policy
 
@@ -232,7 +372,25 @@ Apply policy after native anchoring: translate each top or bottom cluster inward
 
 [`hud-goldens.json`](../../tests/fixtures/webgame/hud-goldens.json) is recorder-derived. Its header derives the base commit, dirty state, executable hash, loader hash, process/instance, ports, native resolution, settle policy, raw-capture root, and crop root; the recorder accepts no provenance override. Each asynchronous HUD state requires two independent captures and at least 40 consecutive structurally identical samples spanning at least two seconds. Only rect/unclipped-rect motion may classify an element as animated, and animated membership must reproduce and remain at or below 30 percent.
 
-The scripted session covers full/damaged/near-death health, two shield/life crossover states, mana drain/refill, mana reserve, active cooldown, Earth hold, native XP and level-up transitions, gold pickup, a live `DamageX4` absence case, wave-state absence, and a two-participant ally row via the bot seam. Every sample carries a native simulation tick. `reference_crops` contains at least one PNG crop per census element plus state crops, each with source/crop hashes and exact crop boxes for visual diffing.
+The original scripted session covers full/damaged/near-death health, two
+shield/life crossover states, mana drain/refill, mana reserve, active cooldown,
+Earth hold, native XP and level-up transitions, gold pickup, a live `DamageX4`
+absence case, wave-state absence, and a two-participant ally row via the bot
+seam. Every sample carries a native simulation tick. `reference_crops` contains
+at least one PNG crop per census element plus state crops, each with source/crop
+hashes and exact crop boxes for visual diffing.
+
+The 2026-08-21 correction used the same capture owner on clean source commit
+`9ba0feb1453eaf4d98437c118f48c13dc4f4982c`. The retail image SHA-256 is
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3` and
+the evidence loader SHA-256 is
+`7ca4c7655a84a554a9b15e6842375e2ef2027cb7e71fee4df561e395a89736ce`.
+The vital run is
+`D:\codex-evidence\uire-derived-stats-20260821\live\20260821T155745Z`.
+Selected-concentration member runs are
+`D:\codex-evidence\uire-derived-skill-hud-20260821\live\20260821T161333Z`,
+`...\20260821T161933Z`, and `...\20260821T162025Z`. Every run used an
+owned process and records a path-matched stopped-process cleanup receipt.
 
 ## Not Yet Reversed
 
@@ -241,7 +399,3 @@ The scripted session covers full/damaged/near-death health, two shield/life cros
 `0x005D257E..0x005D2AEF` is a reachable native prefix guarded by `gameplay+0x1C2C`, a live actor, and its durable `EnemyConfig` at `actor+0x1D0`. It executes before the ordinary HUD and contains sprite/text work consistent with a featured-enemy presentation. The sanctioned exact-spawn seam deliberately retires the featured pointer when a spawned actor has no durable native `EnemyConfig`; a live Heartmonger attempt therefore returned “featured-enemy actor has no durable native config.” Fabricating that object would cross the observation-only boundary.
 
 No panel rect, label count, font, or sprite is asserted. An implementing agent must leave this branch absent or explicitly incomplete until a naturally configured featured enemy is reachable and settle-gated. Do not infer a boss bar from screenshots or reuse the ordinary ally/health rect.
-
-### Binding 16/20 concentration emblems
-
-The renderer tests binding indices 12, 16, and 20, but only 12 is populated in the recorded loadout. The later bindings' conditional offsets are known; their actual art/rect combinations are not live-confirmed. Preserve the ordered conditional slots and record them when a real loadout populates them rather than copying `Skills.67` by assumption.

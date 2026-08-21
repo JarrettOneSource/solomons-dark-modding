@@ -81,10 +81,10 @@
     },
     "health_fill": {
       "anchor": "left",
-      "function": "visible_width_px = 100 * clamp(current / maximum, 0, 1)^2",
+      "function": "visible_width_px = dynamic_core_width * clamp(current / maximum, 0, 1)^2",
       "magic_shield": {
         "composition": "white life and cyan shield are sorted shorter-first, longer-last before drawing; the later layer can cover the earlier overlap",
-        "function": "second left-anchored width = 100 * clamp(shield_current / shield_maximum, 0, 1)",
+        "function": "second left-anchored width = dynamic_core_width * clamp(shield_current / shield_maximum, 0, 1)",
         "observed_compositions": [
           {
             "life_first_draw_order": 29,
@@ -115,10 +115,11 @@
         ]
       },
       "magic_shield_atlas_id": "UI.26 (a second clipped strip)",
-      "maximum_width_px": 100.0,
+      "baseline_core_width_px": 100.0,
       "native_fields": {
+        "base": "progression+0x6C",
         "current": "progression+0x70",
-        "maximum": "progression+0x6C"
+        "maximum": "progression+0x74"
       },
       "near_death_flash_or_pulse": "none observed; tint remains RGBA (1,1,1,1) and only squared clipping changes",
       "normal_atlas_id": "UI.26",
@@ -285,7 +286,7 @@
           "vitals_and_slots": true
         }
       },
-      "function": "visible_width_px = 100 * clamp(current / maximum, 0, 1)",
+      "function": "visible_width_px = dynamic_core_width * clamp(current / maximum, 0, 1)",
       "g1_250ms_distinction": "250 ms is the loader bot-reserve recovery service cadence, not a retail screen-fill smoothing timer",
       "last_sample": {
         "ally_health_ratios": [
@@ -420,10 +421,11 @@
           "vitals_and_slots": true
         }
       },
-      "maximum_width_px": 100.0,
+      "baseline_core_width_px": 100.0,
       "native_fields": {
+        "base": "progression+0x78",
         "current": "progression+0x7C",
-        "maximum": "progression+0x78",
+        "maximum": "progression+0x80",
         "reserve": "progression+0x740"
       },
       "native_fixed_tick_hz": 100,
@@ -1410,7 +1412,7 @@
           34
         ],
         "font": null,
-        "id": "concentration.binding.12.emblem",
+        "id": "skill.binding.12.primary",
         "logical_rect": null,
         "native_addresses": [
           "0x005D367A",
@@ -1991,7 +1993,7 @@
         823,
         48
       ],
-      "id": "concentration.binding.12.emblem",
+      "id": "skill.binding.12.primary",
       "kind": "element",
       "path": "/mnt/d/codex-evidence/uire-20260806/hud-crops/20260806T115705Z/elements/concentration-binding-12-emblem.png",
       "scenario": "full_health",
