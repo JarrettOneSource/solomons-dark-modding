@@ -174,7 +174,7 @@ builds are dispatched every active player tick through `0x00548A00`.
 | 1005 | `0x00542D20` | `Anim_SteamJetEffect` and `_Over`; target-owned `Mod_Steamed 0x1B6C` | ctor `0x00453CE0` / `0x00453E80`; tick `0x0045B940`; draw `0x00458550` / `0x00458750` |
 | 1006 | `0x00545360` | retained `EBoulder 0x7E1`, vtable `0x0079E08C`, plus recursive EBoulder children | ctor `0x005FA670`; tick `0x00609D30`; draw `0x0060C540`; contact/split `0x00620B60`, `0x0060BED0`, `0x005FA6D0`; light `0x005E5670` |
 | 1007 | `0x0052BB60` | channel-owned field plus periodic `Meteor 0x7E2`, vtable `0x0079C9F4` | ctor `0x005E1540`; tick `0x00621590`; impact `0x00610880`; draws `0x005E16C0` / `0x005E6DE0`; provider `0x005E7040` |
-| 1008 | `0x00545C20` | retained `Hailstones 0x7E4`, vtable `0x0079E104`, and owned rock records | ctor `0x005FAC20`; tick `0x005FF5D0`; draw `0x00611160`; contact/release `0x00620B60`, `0x005F3090`, `0x005FAC70`; light `0x005E5670` |
+| 1008 | `0x00545C20` | retained `Hailstones 0x7E4`, vtable `0x0079E104`, and owned rock records | ctor `0x005FAC20`; tick `0x005FF5D0`; released flight/contact `0x005FBDE0`; draw `0x00611160`; rebuild/release `0x005F3090`, `0x005FAC70`; light `0x005E5670` |
 | 1009 | `0x00545FC0` | one center and normally two side `GroundSpark 0x7E5`, vtable `0x0079D84C` | ctor `0x005E76F0`; init `0x005E1A80`; tick `0x00611EB0`; draw dispatch `0x005E1B00`; contact `0x005F34E0`; light `0x005E7800` |
 
 The persistent Earth-derived builds use the caster's group/slot handle at
@@ -266,7 +266,7 @@ decay. Only one normal-or-Over record-76 actor is born per eligible tick.
 | 1005 | Widened cone and normalized push. | `Anim_SteamJetEffect::Tick 0x0045B940` installs target-owned `Mod_Steamed`; its ten-tick payload repeatedly dispatches fire damage and can run the stored Fire detonation/Ember branch. |
 | 1006 | Held EBoulder grows, follows the emitter, and on release creates up to four independently registered rocks with their own residual damage pools. | Contact consumes pool according to toughness without scaling outgoing target damage; recursive split children and BoulderBit/debris presentation are actor-owned. |
 | 1007 | Periodic Meteors fall, impact, retain for the native impact clock, and pulse every ten ticks. Direct impact uses the native 45-unit point query and half damage. | The impact transition creates its own debris/fade program and Fire helper payload. Subsequent radial ticks use the impact-created scalar at object `+0x15C`, not the welded vector's toughness slot. |
-| 1008 | Held Hailstones rebuilds its rock list at growth buckets; release moves one carrier and keeps each rock's local/release state. | Each rock owns its damage pool, collision point, Frost impact, and push. Rock retirement does not retire surviving siblings. |
+| 1008 | Held Hailstones rebuilds its rock list at growth buckets; release moves one carrier and keeps distinct local, draw-decay, and collision offsets for every rock. Clear flight advances three ordered ten-unit substeps per tick. Positive widen expands the carrier query radius and every rock's local/collision XY once per substep. | Every accepted rock contact installs 250-tick `.5` `Mod_ColdSlow` before damage. Positive push requests `Mod_Knockback` with the cast unit direction for round-to-even `push * 20` one-unit, collision-aware ticks; the native modifier rejects a second Knockback while one is resident. Each rock owns its residual damage pool. Pool exhaustion retires only that rock and creates one 14-tick `Anim_Line` plus a ten-tick BadGuys-15 fade; surviving siblings remain. |
 | 1009 | Each spark performs a 15-unit point query and can survive exactly `retainedContacts+1` accepted contacts. | Every accepted contact installs the GroundSpark form of ElectricBurn (50 ticks) before direct damage and creates FadeLightning presentation. |
 
 Target queries preserve the native world/broadphase registration order. Ties in
@@ -286,9 +286,9 @@ The direct atlas and procedural presentation membership is:
 | Flame Lash | two-tick textured vertex mesh from `0x004583E0`, using BadGuys record 44; this is not the ordinary Lightning renderer |
 | Blizzard Beam | two-tick `0x005308D0` beam path from `0x00458470`; this is not the ordinary Frost Jet particle class |
 | Steam Jet | one even-lane-selected normal/Over moving actor using BadGuys record 76 through draws `0x00458550/0x00458750`; its constructor/tick state outlives the cast emission that created it |
-| EBoulder | BadGuys 86 center/opening plus oriented, depth-sorted rocks 168..171; split/contact children use 2008..2010 |
+| EBoulder | BadGuys 86 center/opening plus oriented, depth-sorted rocks 168..171; split children use 2008..2010, and each accepted shared-flight contact creates one independently retained 2008..2010 `Anim_BoulderBit` through `0x0060BC10` |
 | Meteor | fall draw `0x005E16C0`, impact/debris draw `0x005E6DE0`, and impact constructor `0x00610880`; the channel also emits `Anim_Iceblast` at the aimed point |
-| Hailstones | held Frost helper plus owned rocks 168..171; Enhanced rock creation emits independent record-18 fades, and release emits independent `Anim_FadeFrost`; held and released rock transforms are distinct |
+| Hailstones | held Frost helper plus owned rocks 168..171; Enhanced rock creation emits independent record-18 fades, and release emits independent `Anim_FadeFrost`; held and released rock transforms are distinct. A depleted target-contact rock creates `Anim_Line` plus BadGuys 15. Static-line termination creates, per remaining rock, fifteen additive moving BadGuys-45 children and one BadGuys-32 bouncer. The visibility-residency exit instead creates one `Anim_Line` per remaining rock before carrier retirement. |
 
 Native audio ownership is exact:
 
@@ -327,18 +327,41 @@ pitch one. Hail also writes Region camera magnitude `.1`.
   evaluates its randomized scale argument a second time when the first probe
   is at least `.45`; this conditional extra word is observable and required.
 - Hail rock count is tie-to-even rounding of
-  `max(1,scale^2*(push*3+20))`. Each Enhanced new rock adds a `Float(20)`
+  `max(1,scale^2*(widen*3+20))`. Each Enhanced new rock adds a `Float(20)`
   record-18 birth fade that lives 400 `.01` alpha-loss ticks independently.
   Release moves the carrier backward 20 along both direction axes, consumes
   `Float(.75)` for wrapper scale `.75..1.5`, and creates a 20-tick FadeFrost at
   `(carrier.x,carrier.y-20)`. Released rock Y is
   `localY + ((50-localZ*.8)-localY)*decay`; decay multiplies by `.95` per tick.
+  That decaying Y is a draw field: collision retains the release-time offset
+  and only adds widen displacement. `0x005FBDE0` first tests the complete
+  30-unit static line, then performs three ten-unit movement/contact substeps.
+  Candidate targets preserve the native query order; targets are the outer
+  loop and the mutable rock list is the inner loop. The strict per-rock test is
+  `distanceSquared < (targetRadius*1.5)^2`. A target that dies stops receiving
+  later rocks in that substep. Damage is `min(targetHealth,rockPool)` while
+  pool consumption alone divides by toughness unless the pool is smaller than
+  health. No Hail branch calls shared Boulder contact child `0x0060BC10`.
+  Static-line termination creates fifteen additive moving BadGuys-45 children
+  and one BadGuys-32 bouncer per remaining rock. Each rock consumes 83 RNG
+  words: five for each of the fifteen moving children and eight across the
+  Bouncer constructor, scale/lead/speed, and next-sector angle. The moving
+  children own `.125` alpha loss and `.92` velocity damping. The Bouncer owns
+  the global-modulo-three pause, `.4` gravity, `.65` bounce/damping, rerolled
+  spin, `-.75` settle threshold, and `.015` alpha loss.
 - Meteor Swarm emits record-51 `Anim_Iceblast` before its gameplay draw every
   held tick. Cadence is selected-primary age modulo
   `max(5,trunc((weak?35:25)/round(castFactor)))`. Spawn consumes seven words
   normal and six weak. Impact consumes camera unit vector, rotation/radius,
   angle seed, five 13-word BoulderBit programs, then a two-word signed sound
-  pitch. Direct radius is 45; recurrence uses impact field `+0x15C*45`.
+  pitch. Object `+0x13C` is the falling-height scalar initialized in
+  `[5,6.25)`, decremented by the stored fall step, and multiplied by `-768` for
+  both BadGuys 15 and 50 fall glyphs. Object `+0x74` is the separate body scale
+  in `[.75,1)`; it remains constant through fall, controls body geometry, and
+  seeds impact radius `[bodyScale,bodyScale+.5)`. Direct radius is 45;
+  recurrence uses impact field `+0x15C*45`. Impact constructor `0x00610880`
+  separately registers an orange BadGuys-15 `Anim_FadeAdditive` at scale six,
+  alpha two, and `.1` loss; it is not nested under the Meteor draw owner.
 
 The Region light-provider set is also closed:
 
@@ -347,7 +370,7 @@ The Region light-provider set is also closed:
 | FireMissile, FrostMissile, BallLightning | actor | intensity `.75`; radius `.75 + Float(.1)`; actor position; `Multiple Shadows` controls directional casting (`0x005E4AF0`) |
 | GroundSpark | actor | intensity `.5 + Float(.5)`; radius `.4`; no directional shadow (`0x005E7800`) |
 | EBoulder, Hailstones | actor | intensity `.5`; radius `max(.5, actorScale * .75)`; `Multiple Shadows` controls directional casting (`0x005E5670`) |
-| Meteor | actor registration | `0x005E7040` submits only when object `+0x13C <= 1`; build 1007 initializes that size to `5..6.25`, so ordinary welded Meteors intentionally submit no light while retaining provider order |
+| Meteor | actor registration | `0x005E7040` submits only when falling height `+0x13C <= 1`. Intensity is `min(1, visibility * (1-fallHeight))`, with impact visibility `min(impactTicksRemaining,50)/50`; radius is impact scalar `+0x15C * .6`, and directional shadow is false. `+0x15C` begins at one and becomes `bodyScale+Float(.5)` on impact. The provider is silent during high fall, then contributes during final descent/impact; registration order is retained throughout. |
 | Flame Lash, Blizzard Beam, Steam Jet and their short-lived wrappers | none found in their concrete vtables/draws | no standalone Region source; any contacted target or spawned child keeps its own independently documented light behavior |
 
 Process-global per-render flicker cannot be sample-identical in a distributed
