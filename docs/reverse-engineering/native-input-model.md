@@ -331,6 +331,15 @@ The binding globals are movement at `0x00B3BCB4..0x00B3BCC0`, inventory
 | Earth charge | Level-driven update every fixed tick; release on falling level/stock transition |
 | Keyboard binding edge query | `0x00429950`; separate from the level query at `0x00429930` |
 
+### Player-chat absence and the `T` ownership boundary
+
+Retail has no player-to-player text-chat action, transport, recipient policy,
+or presentation owner. The chat-named native classes are trader/book dialogue
+surfaces, while `T` / DirectInput `0x14` belongs to SkillScreen through global
+`0x00B3BCC8`. The complete negative census and its implications for the
+Website's designed party/global chat extension are recorded in
+[`native-player-chat-boundary.md`](native-player-chat-boundary.md).
+
 ## Intent
 
 The normative machine form is
