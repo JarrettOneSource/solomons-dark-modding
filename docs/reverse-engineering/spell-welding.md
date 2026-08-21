@@ -135,10 +135,177 @@ through one active-stat interface. Global balance constants are applied during
 normalization, so the live vector is derived state, not a byte-for-byte copy of
 CFG values.
 
-The exact meaning and ordering of every float in that output vector is being
-closed alongside the primary spell dispatcher. The important confirmed
-contract is that component levels/config values are authoritative and the
-vector is regenerated when the build or relevant skills change.
+The vector ABI is now closed. The fields consumed by the ten mixed handlers
+are:
+
+| Build | Exact vector order |
+| ---: | --- |
+| 1000 | damage minimum, damage maximum, mana, quantity, speed factor, explosion damage, explosion radius, Ember damage, Ember fragments |
+| 1001 | damage minimum, damage maximum, mana, quantity, speed factor, push scalar, widen scalar |
+| 1002 | damage minimum, damage maximum, mana, quantity, speed factor, arc count, movement factor after Stun |
+| 1003 | damage, mana, arc count, movement factor after Stun, explosion damage, explosion radius, Ember damage, Ember fragments |
+| 1004 | damage, mana, arc count, movement factor after Stun, reserved zero, push scalar, widen scalar |
+| 1005 | damage, mana, widen scalar, push scalar, explosion damage, explosion radius, Ember damage, Ember fragments |
+| 1006 | damage, mana, quantity, speed/lifetime factor, toughness, growth factor |
+| 1007 | damage minimum, damage maximum, mana, growth factor, toughness, explosion damage, explosion radius, Ember damage, Ember fragments |
+| 1008 | damage, mana, growth factor, toughness, push scalar, widen scalar |
+| 1009 | damage, mana, arc count, movement factor after Stun, retained-contact count, rebuilt speed-up value |
+
+The final 1009 value is reconstructed but not read by the compiled
+`0x00545FC0` GroundSpark handler. GroundSpark motion is class-owned; it is not
+scaled by that vector row. Component levels/config values remain authoritative
+and the whole vector is regenerated when the selected build, effective skill
+ranks, or Weld Effect scalar changes.
+
+## Cast-time ownership and object membership
+
+The synthetic build is consumed by the same player cast state machine as the
+five ordinary primaries. One-shot builds are created from the Staff Cast
+marker through `PlayerWizard_OneShotPrimary 0x0054CAF0`; channel and retained
+builds are dispatched every active player tick through `0x00548A00`.
+
+| Build | Handler | Native owner(s) | Principal lifecycle entry points |
+| ---: | ---: | --- | --- |
+| 1000 | `0x0053E6A0` | `FireMissile 0x7DE`, vtable `0x0079D5F4` | ctor `0x005E4C50`; tick `0x005FD550`; draw `0x00608F80`; contact `0x005E4CA0`; light `0x005E4AF0` |
+| 1001 | `0x0053F3C0` | `FrostMissile 0x7E0`, vtable `0x0079D6E4` | ctor `0x005E4FB0`; tick `0x005FD7A0`; draw `0x006093B0`; contact `0x005F25B0`; light `0x005E4AF0` |
+| 1002 | `0x0053EDB0` | `BallLightning 0x7DF`, vtable `0x0079D66C` | ctor `0x005E4F30`; tick `0x005FD720`; draw `0x005E0670`; contact `0x005F2360`; light `0x005E4AF0` |
+| 1003 | `0x005408F0` | `Anim_FlameLash`, `Anim_FadeFlameLash`, chained lightning fades | ctors `0x0045B810` / `0x005292D0`; ticks `0x00453BD0` / `0x00476230`; draws `0x004583E0` / `0x00457370` |
+| 1004 | `0x00541870` | `Anim_BlizzardBeam` plus Frost/Lightning chain children | ctor `0x00453BF0`; tick `0x00453CC0`; draw `0x00458470` |
+| 1005 | `0x00542D20` | `Anim_SteamJetEffect` and `_Over`; target-owned `Mod_Steamed 0x1B6C` | ctor `0x00453CE0` / `0x00453E80`; tick `0x0045B940`; draw `0x00458550` / `0x00458750` |
+| 1006 | `0x00545360` | retained `EBoulder 0x7E1`, vtable `0x0079E08C`, plus recursive EBoulder children | ctor `0x005FA670`; tick `0x00609D30`; draw `0x0060C540`; contact/split `0x00620B60`, `0x0060BED0`, `0x005FA6D0`; light `0x005E5670` |
+| 1007 | `0x0052BB60` | channel-owned field plus periodic `Meteor 0x7E2`, vtable `0x0079C9F4` | ctor `0x005E1540`; tick `0x00621590`; impact `0x00610880`; draws `0x005E16C0` / `0x005E6DE0`; provider `0x005E7040` |
+| 1008 | `0x00545C20` | retained `Hailstones 0x7E4`, vtable `0x0079E104`, and owned rock records | ctor `0x005FAC20`; tick `0x005FF5D0`; draw `0x00611160`; contact/release `0x00620B60`, `0x005F3090`, `0x005FAC70`; light `0x005E5670` |
+| 1009 | `0x00545FC0` | one center and normally two side `GroundSpark 0x7E5`, vtable `0x0079D84C` | ctor `0x005E76F0`; init `0x005E1A80`; tick `0x00611EB0`; draw dispatch `0x005E1B00`; contact `0x005F34E0`; light `0x005E7800` |
+
+The persistent Earth-derived builds use the caster's group/slot handle at
+`+0x27C/+0x27E`. Cast release resolves that identity and invokes the concrete
+release/split method; cancellation, death, scene removal, and replacement use
+the common cleanup chain. A browser port therefore needs separately replicated
+projectile, short-lived presentation, retained actor, released child, target
+modifier, and light-provider identities. A single cast timer or element-colored
+sprite cannot represent this membership.
+
+## Exact one-shot construction, low-mana, and RNG order
+
+Raw instructions around every `RandomFloat`, `RandomInt`, factory call, and
+`Sound::Play(pitch,gain) 0x00407CD0` establish this order. The first floating
+argument to `0x00407CD0` is pitch; the second is gain. Earlier notes that called
+the low-mana `.75` value attenuation were incorrect.
+
+| Build | Construction and audio RNG before/inside actor creation |
+| ---: | --- |
+| 1000 | One damage draw for the whole fan when endpoints differ. Per actor: inherited `MagicMissile` `Float(360)` phase, then `Integer(100000)` private fire seed. Both `magicmissile` and `throwfire` play at pitch one/gain one. |
+| 1001 | One shared damage draw; `Float(.1)` produces cast pitch `1+draw`; per actor: inherited `Float(360)`, Frost lane rotation `Float(360)`, then lane aspect `.5+Float(.25)`. Registry 38 `frostmissile` plays once. |
+| 1002 | One shared damage draw; `Float(.25)` produces both pitch and the fan's initial turn multiplier; `Integer(2)` selects `throwlightning` 1/2; each actor then consumes inherited `Float(360)`. Stored base speed is `3 * vectorSpeed * .8500000238418579`; temporary acceleration starts at two, caps movement speed at six, and multiplies by `.8999999761581421` per tick. |
+| 1009 | One shared damage draw; signed `Float(.05)` produces pitch `1+draw`; `Integer(3)` selects Shock 1/2/3. Each actor consumes constructor `Integer(1000000)` for its private motion stream, then initializer `Integer(360)` for native age/visual phase. Center speed begins at four; side speeds begin at three. |
+
+All three Ether-derived missile families spawn at the current Staff emitter plus
+local `(0,+10)`. GroundSpark spawns at `(0,+15)`. Fire/Frost/Ball quantity and
+heading follow the alternating native fan; GroundSpark uses center and
+`-30/+30` headings. Damage is rolled once and copied to every member.
+
+The insufficient-mana path still consumes the normal pre-gate pitch draws and
+creates an actor, but changes the payload:
+
+| Build | Native low-mana actor |
+| ---: | --- |
+| 1000 | one missile; half damage; speed factor `.8`; all explosion/Ember fields zero; cast pitch `.75` |
+| 1001 | one missile; half damage; speed factor `.8`; push/widen zero; cast pitch `.75` |
+| 1002 | one missile; half damage; speed factor `.8`; arc count zero; movement factor one; turn multiplier `.75`; cast pitch `.75` |
+| 1009 | center actor only; half damage; arc count and extra contacts zero; movement factor one; sampled pitch multiplied by `.800000011920929` |
+
+The low-mana `fizzle` is a separate gain-one request before the cast sample.
+The created missile's weak byte halves the native body treatment where its draw
+tests that byte; it does not suppress the missile light provider.
+
+GroundSpark's movement is private-state driven. On its first tick after moving,
+and then whenever its 20-tick counter expires, the stored word runs three
+successive `x ^= x<<21; x ^= x>>11; x = (x ^ x<<4) * 0x0A67CFCF`
+steps with native signed absolute-value normalization. Word one selects a
+`17..37` degree magnitude relative to the original cast heading, word two
+selects its sign, and word three selects speed `1..4`. This is not the
+process-global render RNG and must survive snapshots.
+
+FrostMissile additionally owns two shrinking compositor lanes. Their scales
+subtract `.01`; a lane below `.1` refreshes aspect `.5+Float(.25)`, scale
+`.5+Float(.75)`, and rotation `Float(45)`. Its turn-presentation field decays by
+`.949999988079071`, adds the current homing heading delta, and clamps to
+`[-35,+35]`. Retail obtains later refreshes from the process-global RNG; a
+networked renderer may replace only that unreplicated global cursor with an
+explicit stable semantic stream, while retaining the distributions, recurrence,
+and actor-local state.
+
+## Enemy/world effects and status ownership
+
+| Build | Direct/world result | Target-owned or child result |
+| ---: | --- | --- |
+| 1000 | Missile contact dispatches direct damage and retires; configured fire area helper runs at impact. | Explosion/Ember fields can create the same Fire-family burst, persistent Fire, and Ember children as their native helpers. |
+| 1001 | Direct contact installs `Mod_ColdSlow 0x1B69`, then damages. Helper `0x00643920` performs the area pass. | Radius begins at float32 `pushScalar * 120`, then receives fifteen float32 multiplies by `1.024999976158142`; each still-live root in the area receives damage `projectileDamage / 20` and the same 150-tick `.5` ColdSlow. The directly hit root participates again if it survived. |
+| 1002 | Direct damage plus `Mod_ElectricBurn 0x1B6B`; missile retires through `Anim_FadeLightning`. | ElectricBurn ticks the source and up to the configured nearest distinct roots inside 200, applies its per-tick damage, and installs 25-tick Stun at the stored movement factor. Stronger merged payload owns arc/stun/source fields; duration and damage retain their maxima. |
+| 1003 | Lightning target retention/chaining and direct tick damage with Fire payload globals. | Each admitted root can receive Stun; explosion/Ember branches remain Fire-owned. Chain presentation is separately owned. |
+| 1004 | Widened Frost cone plus Lightning chain selection and tick damage. | ColdSlow is installed before Stun; chain members and the cone are not renderer-inferred targets. |
+| 1005 | Widened cone and normalized push. | `Anim_SteamJetEffect::Tick 0x0045B940` installs target-owned `Mod_Steamed`; its ten-tick payload repeatedly dispatches fire damage and can run the stored Fire detonation/Ember branch. |
+| 1006 | Held EBoulder grows, follows the emitter, and on release creates up to four independently registered rocks with their own residual damage pools. | Contact consumes pool according to toughness without scaling outgoing target damage; recursive split children and BoulderBit/debris presentation are actor-owned. |
+| 1007 | Periodic Meteors fall, impact, retain for the native impact clock, and pulse every ten ticks. Direct impact uses the native 45-unit point query and half damage. | The impact transition creates its own debris/fade program and Fire helper payload. Subsequent radial ticks use the impact-created scalar at object `+0x15C`, not the welded vector's toughness slot. |
+| 1008 | Held Hailstones rebuilds its rock list at growth buckets; release moves one carrier and keeps each rock's local/release state. | Each rock owns its damage pool, collision point, Frost impact, and push. Rock retirement does not retire surviving siblings. |
+| 1009 | Each spark performs a 15-unit point query and can survive exactly `retainedContacts+1` accepted contacts. | Every accepted contact installs the GroundSpark form of ElectricBurn (50 ticks) before direct damage and creates FadeLightning presentation. |
+
+Target queries preserve the native world/broadphase registration order. Ties in
+ElectricBurn's nearest-root sort preserve returned registration order rather
+than sorting by web IDs.
+
+## VFX, painter, audio, and lighting inventory
+
+The direct atlas and procedural presentation membership is:
+
+| Owner | Native visual program |
+| --- | --- |
+| FireMissile | record 110 core; BadGuys 255..266 body at `(age/3)%12`, normal plus additive passes; per-tick moving fade/ZAnim trail; impact BadGuys 251..254 |
+| FrostMissile | BadGuys 271..282 at `(age/4)%12`, scale `1.7`; additive Frost helper layers; two shrinking/refreshing internal lanes; optional push/turn overlays; `Anim_FadeFrost` impact |
+| BallLightning | procedural calls `0x00536380`, `0x00414EA0`, and `0x00535A30`; inherited phase plus per-render global samples; `Anim_FadeLightning` impact |
+| GroundSpark | actor draw `0x005E1B00` renders its tick-owned animation list; each tick creates record 71 fade state and the optional BadGuys 1836..1839 fork branch |
+| Flame Lash | two-tick textured vertex mesh from `0x004583E0`, using BadGuys record 44; this is not the ordinary Lightning renderer |
+| Blizzard Beam | two-tick `0x005308D0` beam path from `0x00458470`; this is not the ordinary Frost Jet particle class |
+| Steam Jet | two complementary two-tick effects using BadGuys record 76 through draws `0x00458550/0x00458750` |
+| EBoulder | BadGuys 86 center/opening plus oriented, depth-sorted rocks 168..171; split/contact children use 2008..2010 |
+| Meteor | fall draw `0x005E16C0`, impact/debris draw `0x005E6DE0`, and impact constructor `0x00610880`; the channel also emits `Anim_Iceblast` at the aimed point |
+| Hailstones | carrier/contact shell BadGuys 18 plus owned rocks 168..171; held and released transforms are distinct |
+
+Native audio ownership is exact:
+
+| Build | One-shot(s) | Loop owner(s) |
+| ---: | --- | --- |
+| 1000 | registry 57 `magicmissile`, 97 `throwfire` | none |
+| 1001 | 38 `frostmissile` | none |
+| 1002 | 224/225 `throwlightning` variant | none |
+| 1003 | 33 `flamelashstart` | 157 `fire__loop` |
+| 1004 | 44 `icestart` | 160 `icebeam__loop` |
+| 1005 | none | 172 `steam__loop`, then 157 `fire__loop` |
+| 1006 | 87 `startboulder` | 159 `gatherrocksloop__loop` |
+| 1007 | none | 165 `meteor__loop` |
+| 1008 | 87 `startboulder` | 160 `icebeam__loop`, then 159 `gatherrocksloop__loop` |
+| 1009 | 203/204/205 Shock variant | none |
+
+Every loop is player/cast-owned and must balance on release, cancellation,
+death, player removal, scene replacement, and audio teardown. One-shot variant
+and pitch are cast-authoritative; surviving projectiles are not a reliable
+audio event source.
+
+The Region light-provider set is also closed:
+
+| Owner | Lane | Submitted light |
+| --- | --- | --- |
+| FireMissile, FrostMissile, BallLightning | actor | intensity `.75`; radius `.75 + Float(.1)`; actor position; `Multiple Shadows` controls directional casting (`0x005E4AF0`) |
+| GroundSpark | actor | intensity `.5 + Float(.5)`; radius `.4`; no directional shadow (`0x005E7800`) |
+| EBoulder, Hailstones | actor | intensity `.5`; radius `max(.5, actorScale * .75)`; `Multiple Shadows` controls directional casting (`0x005E5670`) |
+| Meteor | actor registration | `0x005E7040` submits only when object `+0x13C <= 1`; build 1007 initializes that size to `5..6.25`, so ordinary welded Meteors intentionally submit no light while retaining provider order |
+| Flame Lash, Blizzard Beam, Steam Jet and their short-lived wrappers | none found in their concrete vtables/draws | no standalone Region source; any contacted target or spawned child keeps its own independently documented light behavior |
+
+Process-global per-render flicker cannot be sample-identical in a distributed
+browser because the retail cursor and all intervening consumers do not exist.
+The permitted translation is stable actor/frame sampling with the exact native
+domain, formula, submission lane, ordering, and lifecycle. It is not permission
+to add gradients, CSS glows, or unregistered lights.
 
 ## Welding item effects
 
