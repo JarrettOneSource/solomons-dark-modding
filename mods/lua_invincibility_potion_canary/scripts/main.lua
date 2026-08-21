@@ -27,8 +27,8 @@ potion = sd.items.register({
       error("failed to restore mana: " .. tostring(result))
     end
     print(string.format(
-      "invincibility potion consumed locally use_id=%d mana=%.2f",
-      event.use_id,
+      "invincibility potion consumed locally use_id=%s mana=%.2f",
+      tostring(event.use_id),
       result))
   end,
 })
@@ -67,16 +67,16 @@ sd.events.on("item.consumed", function(event)
     if active_effects[participant_id] == effect then
       active_effects[participant_id] = nil
       print(string.format(
-        "invincibility potion expired participant_id=%d use_id=%d",
-        participant_id,
-        effect.use_id))
+        "invincibility potion expired participant_id=%s use_id=%s",
+        tostring(participant_id),
+        tostring(effect.use_id)))
     end
   end)
 
   print(string.format(
-    "invincibility potion activated participant_id=%d use_id=%d duration_ms=%d",
-    participant_id,
-    event.use_id,
+    "invincibility potion activated participant_id=%s use_id=%s duration_ms=%d",
+    tostring(participant_id),
+    tostring(event.use_id),
     event.duration_ms))
 end)
 
@@ -98,5 +98,5 @@ sd.events.filter("mana.changing", function(event)
 end)
 
 print(string.format(
-  "Invincibility Potion loaded content_id=%d normal_drop=50%% boss_drop=100%%",
-  potion.id))
+  "Invincibility Potion loaded content_id=%s normal_drop=50%% boss_drop=100%%",
+  tostring(potion.id)))

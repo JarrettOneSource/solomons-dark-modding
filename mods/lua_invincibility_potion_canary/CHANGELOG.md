@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0
+
+- Migrated the package to the rebuilt web authority without changing its
+  native Mod Loader behavior.
+- Made replicated content, participant, and use identities format safely in
+  both Lua integer and web string representations.
+- Added browser-host acceptance for custom loot, inventory art, guest
+  consumption, damage and mana filters, and the full-duration green world VFX.
+
 ## 0.2.0
 
 - Renamed the mod and rewrote its description for players.

@@ -161,3 +161,33 @@ Boneyard journey with `19.063 ms` lazy init and callback p95/p99/max
 `0.531/0.668/1.115 ms`. No budget crossing, unexpected error, retained player,
 VM, or task process remained. The later Website receipt commit changes only
 documentation.
+
+## 2026-08-21 reopened boundary: Invincibility Potion web migration
+
+The production Website failure exposed that the first-runtime disposition was
+still authoritative after package loading had been added: the control plane
+continued to accept only the web API-`0.1.0` manifest subset, while the retained
+published package uses the native API-`0.2.0` contract. The Website cutover now
+owns the exact Invincibility Potion call graph rather than merely accepting its
+manifest.
+
+Reusable native-source membership for that migration is:
+
+| Member | Native owner and exact contract | Website consequence |
+| --- | --- | --- |
+| content identity | `lua_content_registry.cpp`; FNV-1a-64 over `sd.content.v1`, length-prefixed UTF-8 mod/key, low 62 bits plus bit 62 | Preserve the exact 63-bit value losslessly; JSON/JavaScript use its decimal text rather than an unsafe double. |
+| sprites | `lua_sprite_runtime.*`; 32 per mod / 128 global, 4,096 frames per atlas, 4,096-pixel PNG dimensions, 45-byte unrotated frame prefix | Validate the immutable package sandbox and publish only bounded PNG bytes plus validated geometry to browser renderers. |
+| custom potion | `lua_engine_bindings_consumables.cpp`, `lua_item_runtime.*`; subtype reservations start at 6, 256 global, duration 0..86,400,000 ms | Register during entrypoint only and carry stable content identity through loot, inventory, saves, consumption, and presentation. |
+| additive loot | `lua_engine_bindings_loot.cpp`, `RollLuaLootPool`; one independent roll per entry and hostile death | Keep a mod-only deterministic RNG domain so native/stock Website loot draws are not perturbed. Demon is the only currently web-owned member of the native Demon Skull/Demon/Dire Faculty/Heartmonger boss set. |
+| item consumption | `DispatchConsumableUseToLuaMods`; all mods receive `item.consumed`, then the owning `on_consume` runs only for the local owner | The single web authority dispatches once to every VM, sets the consuming participant as callback authority, then runs the owner callback once. |
+| damage filter | `ApplyLuaDamageFilters`; mod order then registration order, transactional lanes, monotonic cancel, fail-open errors | The retained script's `damage.taken` maps the scalar web player-damage lane before direct and poison health mutation. `damage.dealing` is not used by this package. |
+| mana filter | `ApplyLuaManaChangeFilters`; current/max/delta/result/source, bounded transactional rewrite, fail-open errors | Route gameplay debits, overload, recovery, orbs, and stock potions through the same ordered seam; owner restore and lifecycle reset stay beneath it to prevent re-entry. |
+| activation flash | `Anim_SpellGlow` `0x00454AD0`, painter `0x00536380`, `BadGuys[110]`, layer 75 | One attached one-frame four-quad activation; no duration polling of a one-frame actor. |
+| persistent VFX | `lua_world_renderer.cpp`; generated 128-pixel ring, radius `42 + 3*sin(elapsed/1200ms*2pi)`, opacity 0.8, authored RGBA, actor-attached Y-sort | Recreate the same procedural texture and fixed-tick duration in the Pixi world queue on every client; never replace it with a HUD badge or overlay orbit. |
+| lifecycle | entrypoint lock, per-mod unload, run events, timer cancellation, registry reset | A failed entrypoint rolls back the whole party scope; expiry, run boundary, party mutation, disconnect, and host close retire owned state. |
+
+The Website implementation remains a clean authority rebuild. Retail actor and
+progression addresses stay absent, and the three native boss families not yet
+implemented by the web Boneyard remain explicit `out-of-system` members. The
+portable contract is otherwise the package's authored behavior, including
+guest consumption, all-peer presentation, and host-enforced protection.

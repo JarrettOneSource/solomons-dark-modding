@@ -17,14 +17,14 @@
         "summary": "A green potion that grants three minutes of invincibility and unlimited mana.",
         "description": "Adds a bright-green potion with its own bottle art in the world and in your inventory. Ordinary enemies have a 50 percent chance to drop one, while bosses always do. Drink it to refill your mana and glow green while damage and mana costs are blocked for three minutes. In multiplayer, everyone sees the drinker's glow and the host enforces the protection until it expires. Requires v0.1.0-beta.29 or newer.",
         "tags": "gameplay,items,lua,multiplayer",
-        "version": "0.2.0"
+        "version": "0.3.0"
       },
       "files": {
-        "file": "/mnt/d/codex-evidence/modpipe-20260801/phase-a/packages/invincibility-potion-0.2.0.zip",
-        "packageSha256": "ac16df4ac239f1e6c9e02bc0b2bebaed08ce49bba164a5d081920de59673c889",
-        "contentSha256": "c7f4e792d67d0a04694182166892ebcf1075a90c2f71df9db00d9bbdb5fa601f"
+        "file": "dist/invincibility-potion-0.3.0.zip",
+        "packageSha256": "5d294cc374403745c12ee1b441f1822bbadce126a4d78c2ea7f1125638eb1c54",
+        "contentSha256": "df9eae2b56b32bbb3a15c765ecf0f8e2427d10d75f87ba8fc3793b379021c0ee"
       }
     }
   },
-  "changelog": "Promoted the earlier test release into the player-facing Invincibility Potion mod, with a new name and description. The custom green pickup art, shared activation glow, and three-minute invincibility and unlimited-mana effect are unchanged. Requires beta.29 for downloaded-mod multiplayer verification."
+  "changelog": "Migrated the same custom green pickup, shared world glow, three-minute invincibility, and unlimited-mana behavior to the rebuilt Website game while retaining native Mod Loader support. Replicated identities now format safely on both runtimes. Requires beta.29 for native downloaded-mod multiplayer verification."
 }

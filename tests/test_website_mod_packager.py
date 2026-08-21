@@ -215,7 +215,7 @@ class WebsiteModPackagerTests(unittest.TestCase):
             details = json.loads(result.stdout)
             self.assertEqual(details["id"], "canary.lua.invincibility_potion")
             self.assertEqual(details["name"], "Invincibility Potion")
-            self.assertEqual(details["version"], "0.2.0")
+            self.assertEqual(details["version"], "0.3.0")
             self.assertEqual(
                 details["minimumLoaderVersion"],
                 "0.1.0-beta.29",

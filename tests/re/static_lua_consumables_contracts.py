@@ -344,7 +344,7 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
         (
             '"id": "canary.lua.invincibility_potion"',
             '"name": "Invincibility Potion"',
-            '"version": "0.2.0"',
+            '"version": "0.3.0"',
             '"minimumLoaderVersion": "0.1.0-beta.29"',
             '"items.consumables.register"',
             '"loot.register"',
