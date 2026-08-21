@@ -344,6 +344,110 @@ current mana, and shows “Overloaded Mana!” for the local player.
 display/cache value at skill-row `+0x60` for the explicit cast IDs and weld
 builds, then aggregates component costs for upgraded and welded spells.
 
+## Ether Blast charge, pulse, contact, and status presentation
+
+Ether Blast `14` is a passive extension of Magic Missile `8`, not a separate
+quickbar action. Its complete ownership chain is split between
+`PlayerActorTick 0x00548B00`, the Magic Missile handler `0x0053CFE0`, radial
+presentation helper `0x0052D360`, common enemy contact, and
+`Mod_EtherBurn (0x1B74)`.
+
+### Charge and held-weapon cue
+
+The actor-owned charge is the float at PlayerWizard `+0x2E4`; rebuilt skill
+cache `+0x8C8` is the rounded `mCharges` capacity. An alive wizard whose
+selected primary is exactly `8` charges only while current MP is at least the
+cached full Magic Missile cost at progression `+0x8CC` and the capacity is
+positive. Insufficient MP resets the charge to zero. Each tick adds float32
+`0.00700000022`, caps to the integer capacity, and tests whether the interval
+crossed `trunc(previousCharge) + 1`. Every crossed integer:
+
+- plays registry `+0xA68`, `sounds/magicshieldup.wav`, at pitch `2` and volume
+  `1`;
+- writes `0.25` to PlayerWizard `+0x268`.
+
+`+0x268` is shared held-weapon presentation state, not an Ether-only light. It
+decays by double `0.899999976` every actor tick. The held-item painter scales
+the selected weapon by `actorScale * (1 + 10 * +0x268)`, so a charge crossing
+begins at `3.5x` and contracts geometrically. The Plane/Planewalker flag
+`actor +0x138 & 0x10` resets `+0x2E4` after the charge branch. Death/alternate
+animation byte `+0x160` suppresses charging without inventing a second charge
+owner.
+
+### Magic Missile release and radial presentation
+
+At the start of `0x0053CFE0`, any positive charge is rounded to the nearest
+integer. A positive rounded value releases the pulse; the float charge is
+then reset even when the positive fractional value rounded to zero. Release
+plays:
+
+- `sounds/lightningstart.wav` (`+0x960`) at pitch `2`, volume `1`;
+- `sounds/gotorb.wav` (`+0x70`) twice at pitches `0.75` and `0.5`, volume `1`.
+
+The pulse center is 100 units forward from the wizard. Helper `0x0052D360`
+receives dimension `200`, with both optional branches false. It walks headings
+`0,20,...,700` (36 iterations, two complete revolutions) and creates exactly
+108 `Anim_FadeMoveAdditive_Perspective` children:
+
+| Per heading | Native particle contract |
+| --- | --- |
+| one BadGuys record `11` | Position is the center plus `Float(200)` along heading plus signed `Float(10)` jitter; scale is `1 + Float(4)`; tint is `(1,0.5,1,1)`; velocity is `Float(5)` along the unjittered heading; velocity damping is `0.95`; alpha starts at one and loses `0.1 * (0.1 + Float(0.05))` per tick. |
+| two BadGuys record `45` | The same randomized position; scale is `(1 + Float(4)) * (dimension / 200)`, therefore `1 + Float(4)` here; tint is `(1,0.5 + Float(0.8),1,1)`; velocity is `5 + Float(5)` along the heading; damping is `0.95`; alpha loses `0.1 * (0.25 + Float(0.25))` per tick. |
+
+The helper consumes six native RNG words for each record-11 child and seven
+for each record-45 child: `36 * (6 + 2*7) = 720` words. Its only sinks are the
+animation allocations, vector/color helpers, and world animation queue. It
+does not register a LightManager provider or a Region `MiscLight`.
+
+Release separately writes Region camera magnitude `charges * 0.1`, which
+decays by `0.939999998` per tick to the `0.001` cutoff. The Region overlay is a
+point-attenuated `(1,0.25,1)` flash whose alpha loses `0.025` per tick. This is
+screen/camera feedback, not world illumination.
+
+### Enemy query and the misleading tooltip
+
+Only the authoritative local-player path performs contact. It calls the
+circle gather `0x00642280` with dimension `350`, which the helper halves to a
+strict radius of `175`, group mask `2`, centered at the same point 100 units
+forward. For every returned target it seeds the secondary/ether damage channel
+`0x0081C6EC` with:
+
+```text
+max(0.001, min(round(charge) * 0.150000006, 0.949999988) * target.currentHP)
+```
+
+The multiply at `0x0053D23D` reads target `+0x174`. `Badguy_Contact
+0x0048A290` proves `+0x170` is maximum HP and `+0x174` is current HP, then
+subtracts `0x0081C6EC` from `+0x174`. The shipped description says the pulse
+“reduces the maximum health of enemies,” but the executable neither reads nor
+writes the maximum-HP field on this path. It deals a percentage of current HP,
+cannot remove the final five percent in one pulse, and attaches a status
+presentation through the same contact.
+
+### `Mod_EtherBurn` lifecycle, VFX, and lighting
+
+Factory type `0x1B74` constructs `Mod_EtherBurn` at `0x00623960`, vtable
+`0x0079E534`. The pulse sets its duration to `round(tickRate * 3)`, which is
+300 ticks at the retail 100 Hz actor clock. Merge callback `0x00627690` retains
+the greater remaining duration for another EtherBurn on the same actor. Its
+apply callback `0x00623950` clears the common Puppet byte `+0xD6`, as ordinary
+Burn does; it does not mutate either HP field.
+
+Every active modifier tick `0x00629CD0` creates one target-following
+`Anim_FadeAdditive`:
+
+- frame `BadGuys[246 + (worldTick / 6) % 5]`;
+- position `(target.x, target.y - 15)`;
+- scale `target.scale * (1 + signed Float(0.25))`;
+- alpha `0.125 * min(remainingTicks / 50, 1)` and alpha loss `0.01`.
+
+The same tick consumes one unsigned `Float(0.1)` after the signed scale draw
+and appends one target-owned Region `MiscLight`: target position, radius
+`0.1 + Float(0.1)`, intensity `min(remainingTicks / 50, 1)`, no directional
+shadow. Thus each live EtherBurn consumes exactly three RNG words per tick and
+owns both a fading violet target sprite and world illumination. Expiry removes
+the modifier; no periodic-damage branch or hidden maximum-HP restoration runs.
+
 ## Staff melee, Enchant Staff, and Fortunate Flailing
 
 `0x00537AA0` is entered only with equipped staff type `0x1B5C`. It reads
@@ -998,7 +1102,9 @@ non-native.
 The 82-ID catalog, rank/refresh ABI, passive and concentration formulas,
 primary/weld dispatch, secondary/advanced switch, staff proc table, spawned
 factory types, modifier IDs, art selection, and principal object lifecycles
-are mapped. Generic child-animation art and ownership are closed in
+are mapped. Ether Blast is explicitly closed across charge state, held-weapon
+cue, 108-particle pulse, current-HP contact, Region feedback, EtherBurn target
+VFX, and target-owned MiscLight. Generic child-animation art and ownership are closed in
 [native-projectiles-and-effects.md](native-projectiles-and-effects.md#animation-wrapper-art-and-ownership-abi):
 the caller chooses a fixed atlas destination and the wrapper borrows it, so
 there is no hidden per-animation asset registry left to recover.

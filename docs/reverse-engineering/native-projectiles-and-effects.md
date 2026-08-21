@@ -463,6 +463,20 @@ are not interchangeable. A projectile can create another world actor, a
 status modifier, or a summon using the same entry point; the caller determines
 how the returned object is registered or wrapped.
 
+### Ether Blast and `Mod_EtherBurn (0x1B74)`
+
+Magic Missile handler `0x0053CFE0` creates `Mod_EtherBurn` while dispatching
+an immediate secondary-channel hit based on the target's current HP. The
+modifier is a three-second presentation owner, not periodic damage and not a
+maximum-HP transform. Its tick `0x00629CD0` emits one additive BadGuys
+`246..250` child at the target per tick and appends one Region `MiscLight`
+using that target's actor-manager registration. The sprite fades over the final
+50 ticks; its light has radius `0.1 + Float(0.1)`, the same remaining-duration
+fade as intensity, and does not cast a directional shadow. Exact charge,
+108-particle release, contact formula, RNG census, audio, screen feedback, and
+modifier merge behavior are in
+[`native-skills-and-spells.md`](native-skills-and-spells.md#ether-blast-charge-pulse-contact-and-status-presentation).
+
 ### Spider Silk, Webbed modifier, and Cocoon
 
 Spider's attack helper `0x00475AC0` creates `Silk 0x808`, not Cocoon. It
