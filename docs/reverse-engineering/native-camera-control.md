@@ -64,7 +64,11 @@ magnitude by `0.94`, and zeros it below `0.001`. Arena render
 `0x0046F100..0x0046F276` applies a uniform XY scale of `1 + magnitude` around
 the local Player's projected point. It is therefore a local-player-anchored
 world pulse, despite the historical shake name, and has no random offset.
-Coffin death independently requests intensity `0.2`.
+Coffin death independently requests intensity `0.2`. The full death-member
+closure matters beyond presentation because Hall Awesomeness reads this same
+accumulator: Skeleton/Archer/Mage and Zombie request `0.1`; accepted Imp split
+requests `0.05` while terminal Imp requests `0.1`; Wraith requests `0.1`
+twice; and Demon, Coffin, Dire Faculty, and Heartmonger request `0.2`.
 
 ## Reproduction
 

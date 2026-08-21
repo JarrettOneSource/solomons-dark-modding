@@ -249,6 +249,33 @@ boot the same 28-member dialog is drawn over the five-member
 measured `dialog.primary` control. It is a typed state and is not another
 layout fixture.
 
+The populated Hall row contract was closed separately on 2026-08-20. Rows are
+sorted by descending `AWESOMENESS`, with a later-loaded equal score inserted
+before equal rows already traversed, capped at 100, and toggle between a
+collapsed rank/wizard/name/level/discipline/Awesomeness summary and expanded
+survival details: time, wave, three highest skills, monsters killed, awesomest
+kill, and the 3-by-3 perks-used grid. The retail distribution's populated
+sample rendered `VOLUSIUS`, level 1 Seer, 91 Awesomeness, time `0:05:39`, wave
+1, 17 kills, and Skeleton as the awesomest kill. See
+[`native-hall-of-fame-and-memoratorium.md`](native-hall-of-fame-and-memoratorium.md)
+for addresses, collection behavior, and the separate dormant Social
+leaderboard loader.
+
+The rendered class title is the complete lookup at `0x00658B40`, not the raw
+discipline label: Ether is Sage/Seer/Occultist, Fire is
+Warlock/Pyromancer/Fire Mage, Air is Stormcaller/Astrologer/Storm Mage, Water
+is Icebinder/Thaumaturge/Frost Mage, and Earth is
+Ritualist/Channeler/Earth Mage for Body/Mind/Arcane respectively.
+
+Awesomeness is its own `Game+0x1C38` counter, not an experience delta. Enemy
+retirement awards a pulse-gated base point plus a new-maximum-health bonus,
+then applies the exact low-health and level-scaled kill-streak multipliers.
+Potion use resets the streak. The full writer, Region-pulse membership, enemy
+name formatter, and story-only 1.1 archive adjustment are recorded in the
+same report. Time starts with the Game-wide Hub clock and serializes on Player
+death tick 300. That writer also consumes the exact signed heading and scale
+draws used by the archived wizard composite.
+
 The following bounds are the larger measured settle latency from each
 layout's primary/confirmation pair. They are evidence-derived recorder times,
 not animation durations or fixed waits:

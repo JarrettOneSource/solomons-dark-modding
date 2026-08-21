@@ -234,6 +234,18 @@ submitter `FUN_00415020` and uses blend source `5`, destination `2`, operation
 `1`. These sprites are live presentation effects, not pixels that may be baked
 into a background.
 
+The 2026-08-20 reopened Memoratorium pass closed one omitted ordinary member.
+After actors, room effects, and the 50 record-1 flames,
+`Mortuary::Present (0x0050EAC0)` loads the Memoratorium singleton record-5
+field at `+0x40C` three times and submits it at `0x0050F4D3`, `0x0050F55C`,
+and `0x0050F5E5`. Record 5 is a registered `71 x 54` white memorial glow. All
+three submissions use the normal room center with the compiled five-unit
+vertical adjustment, producing world root `(512,507)`, and occur after the
+world actor/effect lists. The former Website room pass mentioned record 5 as
+effect-owned but implemented only the record-1 flame family. The full Hall and
+memorial ownership thread is in
+[`native-hall-of-fame-and-memoratorium.md`](native-hall-of-fame-and-memoratorium.md).
+
 ### Exact fixed-region art composition
 
 The following bindings are executable record selections, not visual guesses:

@@ -310,9 +310,14 @@ local Player, calls the matrix scale builder `0x004030A0` with
 `(1 + magnitude, 1 + magnitude, 1)`, and translates back. The result is a
 uniform world-scale pulse anchored on the local Player; it does not move actor
 authority, change aim, choose a random direction, or alter the semantic camera
-rectangle. Skeleton, Archer, and Mage presenters request intensity `0.1`.
-Coffin requests `0.2`. Multiple deaths in one period overwrite magnitude using
-the then-current accumulator and continue raising that accumulator, matching
+rectangle. The exhaustive `0x0063EEB0` callsite set is broader than those two
+initial witnesses. Skeleton, Archer, Mage, and Zombie request `0.1`. An Imp
+requests `0.05` on its accepted two-child split and `0.1` on the terminal
+no-split branch. Wraith's shared dissolve and family presenter each request
+`0.1`, in that order. Demon, Coffin, Dire Faculty, and Heartmonger request
+`0.2`. Absorbed deaths take the shared dissolve's single `0.1` request instead
+of the ordinary family payload. Multiple deaths in one period overwrite
+magnitude using the then-current accumulator and continue raising it, matching
 the native buildup rather than summing independent CSS shakes.
 
 ## Deterministic multiplayer contract
