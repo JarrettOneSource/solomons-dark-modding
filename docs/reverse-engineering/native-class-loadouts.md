@@ -171,6 +171,8 @@ would otherwise lose byte identity. All 15 captures agree on every fixed value.
 | previous experience threshold | `+0x38 f32` | `0` | `0x006594E0` |
 | next experience threshold | `+0x3C f32` | `90`, bits `0x42B40000` | global `0x008096FC`, read by `0x006594E0` |
 | nonlocal-mode flag | `+0x40 u8` | local `0`; remote bot `1` | actor ownership mode, not class data |
+| pending skill choices | `+0x44 i32` | `0` | level-up producer; SkillScreen consumes one per accepted choice |
+| deferred skill choices | `+0x48 i32` | `0` | SAVE SKILL moves pending choices here; unforge Mind Dredge `0x005D71EA` increments it |
 | unknown scalar | `+0x68 f32` | `150`, bits `0x43160000` | global `0x0078489C`; semantic name not reversed |
 | base HP | `+0x6C f32` | `50`, bits `0x42480000` | global `0x00784CF8` |
 | current HP | `+0x70 f32` | `50`, bits `0x42480000` | copied from base HP |
@@ -179,8 +181,8 @@ would otherwise lose byte identity. All 15 captures agree on every fixed value.
 | current MP | `+0x7C f32` | `100`, bits `0x42C80000` | copied from base MP |
 | maximum MP | `+0x80 f32` | `100`, bits `0x42C80000` | copied from base MP |
 | spell-damage base additive | `+0x84 f32` | `0` | `0x006594E0` |
-| unknown scalar | `+0x88 f32` | `0` | `0x006594E0`; semantic name not reversed |
-| unknown scalar | `+0x8C f32` | `0` | `0x006594E0`; semantic name not reversed |
+| all-spell flat mana-cost reduction | `+0x88 f32` | `0` | initialized by `0x006594E0`; unforge case 2 writes it at `0x005D7172` |
+| experience gain bonus fraction | `+0x8C f32` | `0` | initialized by `0x006594E0`; unforge case 6 adds `amount * 0.01` at `0x005D747C` |
 | movement speed | `+0x90 f32` | `0.949999988079071`, bits `0x3F733333` | global `0x007DE96C` |
 | cast-speed multiplier | `+0x94 f32` | `1`, bits `0x3F800000` | literal in `0x006594E0` |
 | mana-recovery multiplier | `+0x98 f32` | `10`, bits `0x41200000` | global `0x007DE984` |
@@ -216,6 +218,7 @@ would otherwise lose byte identity. All 15 captures agree on every fixed value.
 | special-choice argument | `+0x844 i32` | sample-dependent/opaque | not attributable to a class definition |
 | primary spell row | `+0x86C i32` | element table value | selected definition, written by `0x005D0290` |
 | secondary spell row | `+0x870 i32` | element table value | selected definition, written by `0x005D0290` |
+| unforge attempt count | `+0x874 i32` | `0` | `0x005D6F12` increments once per selector pass and `0x005D6F30` expands the later failure bound |
 | meditation idle ticks | `+0x884 i32` | `-1` | `Skills_Wizard` initialization |
 | meditation idle elapsed | `+0x888 i32` | `0` | `Skills_Wizard` initialization |
 | meditation recovery ramp | `+0x88C i32` | live runtime counter | sampled and enveloped, never treated as a fixed class value |
@@ -462,8 +465,8 @@ were absent before launch and absent again after cleanup.
 
 ## Not Yet Reversed
 
-- The semantic meanings of scalar offsets `+0x68`, `+0x88`, `+0x8C`, `+0xA0`,
-  `+0xAC`, `+0xB0`, `+0xB4`, `+0xBC`, and `+0xC0` are unknown. Their offsets,
+- The semantic meanings of scalar offsets `+0x68`, `+0xA0`, `+0xAC`, `+0xB0`,
+  `+0xB4`, `+0xBC`, and `+0xC0` are unknown. Their offsets,
   widths, initial values, and raw bits are known and must be preserved.
 - The gameplay meaning of the serialized constructor-random slot `+0x834` is
   unknown. It is proven not to encode the selected class.

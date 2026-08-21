@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "provenance": {
+    "captured_utc_date": "2026-08-21",
+    "machine": "Windows local interactive desktop",
+    "runtime": "direct unmodified retail process; no loader, injected module, debugger, or constructor helper",
+    "executable_path": "isolated stock copy/SolomonDark.exe",
+    "executable_bytes": 4723200,
+    "executable_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+    "source_save_fixture": "tests/fixtures/savegames/fieldbreak25_existing_wizard/solomondark/darkdata.cfg",
+    "source_save_sha256": "0a9dd9c222b61df4930495aea50a65ebe2e057811092080451fee94a6594ea06",
+    "client_pixels": [1600, 900],
+    "capture_kind": "clean retail client-area render",
+    "input_disclosure": "Windows mouse input created a fresh Ether/Arcane wizard, moved the recipe-less starter Staff into the backpack, and released it at stage point (1550,850); capture did not alter process memory"
+  },
+  "captures": [
+    {
+      "file": "menu-reference-captures/inventory-unforge-confirm.png",
+      "state": "recipe-less Staff unforge confirmation",
+      "sha256": "eea3d09bf56a38b352d2c4eb53b47f29e45ff9eb8d941ef9ef0b3f857c4cca7a"
+    },
+    {
+      "file": "menu-reference-captures/inventory-unforge-result-recipeless-staff.png",
+      "state": "recipe-less Staff transmuted to four gold coins",
+      "sha256": "5da6181a98edb94bd5c0e9fa70e17aa37f311020781ea2e1514e82d4a8dfd4f4"
+    }
+  ]
+}

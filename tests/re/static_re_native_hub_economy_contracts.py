@@ -31,6 +31,9 @@ INVENTORY_CAPTURE_PATH = (
 TRADER_CAPTURE_MANIFEST_PATH = (
     ROOT / "tests/fixtures/webgame/native-hub-trader-ui-captures.json"
 )
+UNFORGE_CAPTURE_MANIFEST_PATH = (
+    ROOT / "tests/fixtures/webgame/native-inventory-unforge-captures.json"
+)
 INTENT_SCHEMA_PATH = ROOT / "webgame-contracts/intent-schema.json"
 RNG_DOC_PATH = ROOT / "docs/reverse-engineering/native-movement-and-tick.md"
 DIG_DOC_PATH = ROOT / "docs/design/dig-npc-movement-lock-2026-07-28.md"
@@ -57,6 +60,12 @@ EXPECTED_FIXTURE_SHA256 = (
 EXPECTED_INVENTORY_CAPTURE_SHA256 = (
     "0d99c6bb3f1815aa061fd4ee49e7bfccbd0ee058ea69b0e8936155c7e5156d8b"
 )
+EXPECTED_UNFORGE_CAPTURE_HASHES = {
+    "menu-reference-captures/inventory-unforge-confirm.png":
+        "eea3d09bf56a38b352d2c4eb53b47f29e45ff9eb8d941ef9ef0b3f857c4cca7a",
+    "menu-reference-captures/inventory-unforge-result-recipeless-staff.png":
+        "5da6181a98edb94bd5c0e9fa70e17aa37f311020781ea2e1514e82d4a8dfd4f4",
+}
 
 EXPECTED_REGIONS = {
     0: {
@@ -255,7 +264,7 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
         raise StaticReTestFailure(
             f"the native hub/trader catalog is not reviewable JSON: {exc}"
         ) from exc
-    if catalog.get("schema_version") != 6:
+    if catalog.get("schema_version") != 7:
         raise StaticReTestFailure("hub/trader consumers lost the complete UI-family schema")
     if catalog.get("source", {}).get("sha256") != EXPECTED_RETAIL_SHA256:
         raise StaticReTestFailure("hub/trader UI provenance no longer names retail 0.72.5")
@@ -283,6 +292,17 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
         "pickskill": (1, "494d1b973bd3f319199199ec9cf851491caee10c3d72dbe61acda69d28daabe4"),
     }:
         raise StaticReTestFailure("exact hub/trader sound registry assets drifted")
+    if {
+        name: (assets.get(name, {}).get("registry_index"), assets.get(name, {}).get("sha256"))
+        for name in ("fizzle", "unforge")
+    } != {
+        "fizzle": (32, "938420950d859ebc00a9b1a37e548c7c2183a8504689b32aab3de3c683899e76"),
+        "unforge": (100, "173db629737f50f3a958358dc9f88fb3b25528ee93298f2f95416517747fa9e2"),
+    } or transaction_audio.get("unforge") != {
+        "success": {"sound": "unforge", "function": "0x005D6DF0", "member_offset": "0x1148"},
+        "failure": {"sound": "fizzle", "function": "0x005D6DF0", "member_offset": "0x598"},
+    }:
+        raise StaticReTestFailure("unforge success/failure audio ownership drifted")
     if transaction_audio.get("ordinary_purchase") != {
         "success": {"call_site": "0x0056C10E", "sound": "dropcoins"},
         "rejected": {"call_site": "0x0056C1A6", "sound": "badaction"},
@@ -567,6 +587,70 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
         "pointer_release": "0x0056EC30",
     }:
         raise StaticReTestFailure("InventoryDragger lifecycle ownership drifted")
+    unforge = interaction.get("unforge")
+    if not isinstance(unforge, dict) or (
+        unforge.get("owner") != "InventoryDragger backpack-source lower-boundary release"
+        or unforge.get("type_gate") != "0x00550450"
+        or unforge.get("transaction") != "0x005D6DF0"
+        or unforge.get("target_rect") != [1500, 800, 100, 100]
+        or unforge.get("target_record")
+        != {"atlas": "UI", "record": 75, "center": [1562, 868]}
+        or unforge.get("target_red_multiplier")
+        != "sin(native_tick * pi / 180) * 0.2 + 0.6"
+        or unforge.get("click_action") is not None
+        or unforge.get("eligible_native_type_ids")
+        != [7002, 7003, 7004, 7005, 7006, 7008, 7011]
+        or unforge.get("ineligible_native_type_ids")
+        != [7000, 7001, 7009, 7010, 7012]
+        or unforge.get("nonempty_sack") != "restore without mutation"
+        or unforge.get("empty_sack")
+        != "skip confirmation and transmute to Integer(4)+2 gold"
+        or unforge.get("recipe_less_equipment")
+        != "confirm, then transmute to Integer(4)+2 gold"
+    ):
+        raise StaticReTestFailure("Inventory unforge target, type gate, or source ownership drifted")
+    if unforge.get("confirmation") != {
+        "title": "REALLY UNFORGE THIS?",
+        "body": "Unforging grants you a permanent small bonus to your stats, but utterly destroys the item.",
+        "primary_button": "unforge",
+        "secondary_button": "cancel",
+    } or unforge.get("message_box_layout") != {
+        "line_builder": "0x005BCCB0",
+        "widest_line_field": "+0x80",
+        "finalizer": "MsgBox vtable +0xB4 -> 0x005AB2C0",
+        "center_x": 801.5,
+        "inner_width": "max(rendered line widths) + 141",
+        "confirmation_reference_rect": [544.5, 387.5, 514, 326],
+        "staff_result_reference_rect": [606.5, 396.5, 390, 308],
+        "result_rule": "measure title in menu font and summary/outcome in medium font; keep every result line unwrapped",
+    } or unforge.get("recipe_selector") != {
+        "attempt_count_field": "+0x874",
+        "bound": "count < 5 ? 7 : count + 3",
+        "overflow": "selected > 7 and Integer(6) == 3 redirects to gold; other values fizzle",
+        "retry_rows": [
+            "full rejuvenation while already full through count 5",
+            "Mind Dredge unless Integer(100) == 25",
+        ],
+    }:
+        raise StaticReTestFailure("Inventory unforge confirmation or selector loop drifted")
+    expected_unforge_outcomes = [
+        {"selector": 0, "kind": "full_rejuvenation", "text": "Full rejuvenation", "mutation": "restore HP/MP and zero global plus category-2 cooldowns"},
+        {"selector": 1, "kind": "offensive_damage", "text": "+%d damage for all offensive spells", "field": "+0x84", "early_values": [1, 2], "late_values": [1]},
+        {"selector": 2, "kind": "mana_cost", "text": "-%d mana cost for all spells", "field": "+0x88", "early_values": [1, 2], "late_values": [1]},
+        {"selector": 3, "kind": "mind_dredge", "text": "Transmuted to Mind Dredge (+1 skill points at next level)", "field": "+0x48", "chance": "Integer(100) == 25"},
+        {"selector": 4, "kind": "maximum_health", "text": "+%d to maximum health", "field": "+0x6C", "early_values": [10], "late_values": [5, 10]},
+        {"selector": 5, "kind": "maximum_mana", "text": "+%d to maximum mana", "field": "+0x78", "early_values": [20], "late_values": [10, 20]},
+        {"selector": 6, "kind": "experience", "text": "+%d%% faster experience gain", "field": "+0x8C", "early_values": [5, 10], "late_values": [1, 2]},
+        {"selector": 7, "kind": "gold", "text": "Transmuted to %d gold coins", "values": [10, 20, 30, 40, 50, 60]},
+    ]
+    if unforge.get("outcomes") != expected_unforge_outcomes or unforge.get(
+        "destructive_failure"
+    ) != {
+        "title": "FAILED UNFORGING!",
+        "body": ["Spellbreaking fizzles!", "No bonus"],
+        "item_destroyed": True,
+    }:
+        raise StaticReTestFailure("Inventory unforge authored outcome table drifted")
     if interaction.get("luthacus_inventory_shop") != {
         "callback": "0x0056CD00",
         "backpack_second_activation": "ordinary InventoryScreen use or equip",
@@ -862,6 +946,8 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
         "perk_purchase": "0x0056C340",
         "inventory_transfer": "0x0056CD00",
         "dowsing_purchase": "0x0056D110",
+        "inventory_unforge_type_gate": "0x00550450",
+        "inventory_unforge_transaction": "0x005D6DF0",
     }
     if not isinstance(functions, dict) or any(
         functions.get(name) != address for name, address in required_functions.items()
@@ -939,6 +1025,53 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
         ):
             raise StaticReTestFailure(f"stock trader/Chat capture lost 1600 by 900 dimensions: {relative_path}")
 
+    raw_unforge_manifest = _read(
+        UNFORGE_CAPTURE_MANIFEST_PATH,
+        "the clean-stock Inventory unforge capture manifest is absent",
+    )
+    try:
+        unforge_manifest = json.loads(raw_unforge_manifest)
+    except json.JSONDecodeError as exc:
+        raise StaticReTestFailure(
+            f"the Inventory unforge capture manifest is not reviewable JSON: {exc}"
+        ) from exc
+    unforge_captures = unforge_manifest.get("captures")
+    unforge_provenance = unforge_manifest.get("provenance")
+    if (
+        unforge_manifest.get("schema_version") != 1
+        or not isinstance(unforge_captures, list)
+        or len(unforge_captures) != 2
+        or not isinstance(unforge_provenance, dict)
+        or unforge_provenance.get("executable_sha256") != EXPECTED_RETAIL_SHA256
+        or unforge_provenance.get("executable_bytes") != 4_723_200
+        or unforge_provenance.get("client_pixels") != [1600, 900]
+        or "no loader" not in unforge_provenance.get("runtime", "")
+    ):
+        raise StaticReTestFailure("clean-stock Inventory unforge provenance drifted")
+    actual_unforge_hashes = {
+        capture.get("file"): capture.get("sha256")
+        for capture in unforge_captures
+        if isinstance(capture, dict)
+    }
+    if actual_unforge_hashes != EXPECTED_UNFORGE_CAPTURE_HASHES:
+        raise StaticReTestFailure("clean-stock Inventory unforge capture membership drifted")
+    for relative_path, expected_hash in EXPECTED_UNFORGE_CAPTURE_HASHES.items():
+        capture_path = UNFORGE_CAPTURE_MANIFEST_PATH.parent / relative_path
+        if (
+            not capture_path.is_file()
+            or hashlib.sha256(capture_path.read_bytes()).hexdigest() != expected_hash
+        ):
+            raise StaticReTestFailure(f"clean-stock Inventory unforge capture drifted: {relative_path}")
+        capture_png = capture_path.read_bytes()[:24]
+        if (
+            capture_png[:8] != b"\x89PNG\r\n\x1a\n"
+            or int.from_bytes(capture_png[16:20], "big") != 1600
+            or int.from_bytes(capture_png[20:24], "big") != 900
+        ):
+            raise StaticReTestFailure(
+                f"clean-stock Inventory unforge capture lost 1600 by 900 dimensions: {relative_path}"
+            )
+
     _require_tokens(
         doc,
         (
@@ -974,6 +1107,10 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
             "`Double-click to drink`",
             "`A WIZARD WOULD NEVER REMOVE HIS HAT!`",
             "`A WIZARD WOULD NEVER REMOVE HIS ROBE!`",
+            "the anvil is an unforge sink, not an exit control",
+            "`0x005D6DF0`",
+            "`+0x874`",
+            "`sounds\\\\unforge`",
         ),
         "native hub/trader UI documentation lost a sibling class or recovered grid member",
     )

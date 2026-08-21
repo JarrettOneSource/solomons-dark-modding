@@ -1,5 +1,5 @@
 {
-  "schema_version": 6,
+  "schema_version": 7,
   "source": {
     "build": "retail 0.72.5",
     "executable": "SolomonDark.exe",
@@ -60,7 +60,9 @@
       "dropcoins": {"registry_index": 25, "path": "sounds\\dropcoins", "sha256": "b72d44080d99fdae8e7dce83b5f1b6a553d503a753df2deacea7ee8829ba4376"},
       "openpanel": {"registry_index": 64, "path": "sounds\\openpanel", "sha256": "637a76288c852d813921c7789b211f573f88c56d6036e2e1f3e1cf558f0ae743"},
       "distortreality": {"registry_index": 23, "path": "sounds\\distortreality", "sha256": "3fa59accc564838ea1896f95539ee0acecd9345c3e2c1adceaadee0dd870194e"},
-      "pickskill": {"registry_index": 1, "path": "sounds\\pickskill", "sha256": "494d1b973bd3f319199199ec9cf851491caee10c3d72dbe61acda69d28daabe4"}
+      "pickskill": {"registry_index": 1, "path": "sounds\\pickskill", "sha256": "494d1b973bd3f319199199ec9cf851491caee10c3d72dbe61acda69d28daabe4"},
+      "fizzle": {"registry_index": 32, "path": "sounds\\fizzle", "sha256": "938420950d859ebc00a9b1a37e548c7c2183a8504689b32aab3de3c683899e76"},
+      "unforge": {"registry_index": 100, "path": "sounds\\unforge", "sha256": "173db629737f50f3a958358dc9f88fb3b25528ee93298f2f95416517747fa9e2"}
     },
     "ordinary_purchase": {
       "success": {"call_site": "0x0056C10E", "sound": "dropcoins"},
@@ -84,6 +86,10 @@
     "dowsing_purchase": {
       "rng_order_suffix": ["Integer(10) for next fee", "Float(0.1,false) for distortion pitch"],
       "distortion": {"sound": "distortreality", "call_site": "0x0056D18B", "pitch": "1.0 + Float(0.1,false)", "gain": 1.0}
+    },
+    "unforge": {
+      "success": {"sound": "unforge", "function": "0x005D6DF0", "member_offset": "0x1148"},
+      "failure": {"sound": "fizzle", "function": "0x005D6DF0", "member_offset": "0x598"}
     },
     "teardown": {
       "standalone_inventory_open": {"sound": null, "keyboard_call_site": "0x005CB3A3", "hud_call_site": "0x005D8165", "opener": "0x005C6F10", "constructor": "0x00560380"},
@@ -171,6 +177,8 @@
     "inventory_dragger_render": "0x005579A0",
     "inventory_dragger_pointer_move": "0x0055E030",
     "inventory_dragger_pointer_release": "0x0056EC30",
+    "inventory_unforge_type_gate": "0x00550450",
+    "inventory_unforge_transaction": "0x005D6DF0",
     "item_info_constructor": "0x00553B80",
     "item_info_render": "0x005C3A60",
     "item_info_content": "0x0057C4B0",
@@ -416,10 +424,60 @@
           "pointer_release": "0x0056EC30",
           "held_render": "remove the source-grid object and draw its class-owned icon at the pointer using the native natural-scale transform, shadow pass, ordinary pass, and pulse pass",
           "invalid_drop": "restore the same object to its source owner without mutation",
-          "valid_equipment_drop": "highlight every accepting sink green while held, then replace the sink occupant and reinsert that prior object into the backpack",
-          "valid_backpack_drop": "unequip removable equipment and insert it into the backpack"
+        "valid_equipment_drop": "highlight every accepting sink green while held, then replace the sink occupant and reinsert that prior object into the backpack",
+        "valid_backpack_drop": "unequip removable equipment and insert it into the backpack"
+      },
+      "unforge": {
+        "owner": "InventoryDragger backpack-source lower-boundary release",
+        "type_gate": "0x00550450",
+        "transaction": "0x005D6DF0",
+        "target_rect": [1500, 800, 100, 100],
+        "target_record": {"atlas": "UI", "record": 75, "center": [1562, 868]},
+        "target_red_multiplier": "sin(native_tick * pi / 180) * 0.2 + 0.6",
+        "target_other_multipliers": {"green": 1.0, "blue": 1.0, "alpha": "InventoryScreen reveal alpha"},
+        "click_action": null,
+        "eligible_native_type_ids": [7002, 7003, 7004, 7005, 7006, 7008, 7011],
+        "ineligible_native_type_ids": [7000, 7001, 7009, 7010, 7012],
+        "nonempty_sack": "restore without mutation",
+        "empty_sack": "skip confirmation and transmute to Integer(4)+2 gold",
+        "recipe_less_equipment": "confirm, then transmute to Integer(4)+2 gold",
+        "confirmation": {
+          "title": "REALLY UNFORGE THIS?",
+          "body": "Unforging grants you a permanent small bonus to your stats, but utterly destroys the item.",
+          "primary_button": "unforge",
+          "secondary_button": "cancel"
         },
-        "luthacus_inventory_shop": {
+        "message_box_layout": {
+          "line_builder": "0x005BCCB0",
+          "widest_line_field": "+0x80",
+          "finalizer": "MsgBox vtable +0xB4 -> 0x005AB2C0",
+          "center_x": 801.5,
+          "inner_width": "max(rendered line widths) + 141",
+          "confirmation_reference_rect": [544.5, 387.5, 514, 326],
+          "staff_result_reference_rect": [606.5, 396.5, 390, 308],
+          "result_rule": "measure title in menu font and summary/outcome in medium font; keep every result line unwrapped"
+        },
+        "recipe_selector": {
+          "attempt_count_field": "+0x874",
+          "bound": "count < 5 ? 7 : count + 3",
+          "overflow": "selected > 7 and Integer(6) == 3 redirects to gold; other values fizzle",
+          "retry_rows": ["full rejuvenation while already full through count 5", "Mind Dredge unless Integer(100) == 25"]
+        },
+        "outcomes": [
+          {"selector": 0, "kind": "full_rejuvenation", "text": "Full rejuvenation", "mutation": "restore HP/MP and zero global plus category-2 cooldowns"},
+          {"selector": 1, "kind": "offensive_damage", "text": "+%d damage for all offensive spells", "field": "+0x84", "early_values": [1, 2], "late_values": [1]},
+          {"selector": 2, "kind": "mana_cost", "text": "-%d mana cost for all spells", "field": "+0x88", "early_values": [1, 2], "late_values": [1]},
+          {"selector": 3, "kind": "mind_dredge", "text": "Transmuted to Mind Dredge (+1 skill points at next level)", "field": "+0x48", "chance": "Integer(100) == 25"},
+          {"selector": 4, "kind": "maximum_health", "text": "+%d to maximum health", "field": "+0x6C", "early_values": [10], "late_values": [5, 10]},
+          {"selector": 5, "kind": "maximum_mana", "text": "+%d to maximum mana", "field": "+0x78", "early_values": [20], "late_values": [10, 20]},
+          {"selector": 6, "kind": "experience", "text": "+%d%% faster experience gain", "field": "+0x8C", "early_values": [5, 10], "late_values": [1, 2]},
+          {"selector": 7, "kind": "gold", "text": "Transmuted to %d gold coins", "values": [10, 20, 30, 40, 50, 60]}
+        ],
+        "destructive_failure": {"title": "FAILED UNFORGING!", "body": ["Spellbreaking fizzles!", "No bonus"], "item_destroyed": true},
+        "success_result": {"title": "%s UNFORGED", "body_prefix": "Unforging bonus:", "primary_button": "OKAY"},
+        "clean_capture_manifest": "tests/fixtures/webgame/native-inventory-unforge-captures.json"
+      },
+      "luthacus_inventory_shop": {
           "callback": "0x0056CD00",
           "backpack_second_activation": "ordinary InventoryScreen use or equip",
           "backpack_to_storage": "drag only",
@@ -479,7 +537,7 @@
         [-30.5, 793, 103, 32],
         [1579.5, 793, 103, 32]
       ],
-      "regions": ["stats", "wizard_preview", "equip", "backpack", "gold", "belt", "exit"],
+      "regions": ["stats", "wizard_preview", "equip", "backpack", "gold", "belt", "unforge"],
       "fade_step_per_native_tick": 0.025,
       "live_draw_trace": {
         "capture_date": "2026-08-16",

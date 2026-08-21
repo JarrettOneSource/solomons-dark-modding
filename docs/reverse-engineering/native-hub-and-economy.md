@@ -1436,6 +1436,160 @@ the service. Standalone InventoryScreen close calls that same member at
 transition; substituting `click` or `backpack_close` changes the retail event
 contract.
 
+### 2026-08-21 correction: the anvil is an unforge sink, not an exit control
+
+The earlier InventoryScreen closure misclassified UI record 75 as the
+bottom-right exit control. That visible classification never followed the
+record through `InventoryDragger::PointerRelease`, so it omitted an entire
+participant-owned transaction and left two of its progression fields marked
+unknown. Clean stock and the complete static thread now correct that failure.
+
+The exact evidence target remains retail Beta 0.72.5 `SolomonDark.exe`,
+4,723,200 bytes, SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`,
+preferred image base `0x00400000`. A direct unmodified PID 8312, with no
+loader, injected module, debugger, or constructor helper, created a fresh
+Ether/Arcane wizard and exercised the complete recipe-less Staff path. The
+committed 1600x900 client-area captures are:
+
+- `tests/fixtures/webgame/menu-reference-captures/inventory-unforge-confirm.png`,
+  SHA-256
+  `eea3d09bf56a38b352d2c4eb53b47f29e45ff9eb8d941ef9ef0b3f857c4cca7a`;
+- `tests/fixtures/webgame/menu-reference-captures/inventory-unforge-result-recipeless-staff.png`,
+  SHA-256
+  `5da6181a98edb94bd5c0e9fa70e17aa37f311020781ea2e1514e82d4a8dfd4f4`.
+
+Their clean provenance is machine-readable in
+`tests/fixtures/webgame/native-inventory-unforge-captures.json`. The observed
+transaction moved the starter Staff into backpack slot 2, rejected releases at
+right-only `(1550,450)` and bottom-only `(1000,850)`, accepted `(1550,850)`,
+displayed the exact two-button confirmation, destroyed the Staff, selected
+four gold, and changed the ledger `698 -> 702`. Directly dragging the equipped
+Hat to the same point retained `A WIZARD WOULD NEVER REMOVE HIS HAT!`.
+
+#### Target ownership and presentation
+
+`InventoryScreen` root render `0x00568B90` draws UI record 75 from UI object
+field `+0x39A4` at settled centre `(1562,868)`. The record is the anvil and
+left-pointing arrow; it has no click callback. Its native color multiplier is
+
+```text
+red   = sin(native_tick * pi / 180) * 0.2 + 0.6
+green = 1
+blue  = 1
+alpha = InventoryScreen reveal alpha
+```
+
+so the source's yellow pixels pulse green-gold over 360 native ticks. A static
+white/yellow draw is visibly wrong.
+
+The drop target is not the 68x57 art bounds. `InventoryDragger` update
+`0x0056E950` turns on state `+0x99` after an ordinary backpack drag crosses the
+lower InventoryScreen boundary, provided source-owner flag `+0x9A` is clear.
+Release `0x0056EC30` additionally compares the other coordinate with client
+extent minus the exact double 100. Clean boundary probes reconcile those
+branches as the bottom-right stage rectangle `(1500,800,100,100)` at
+1600x900. An equipped source retains its equipment-removal path; the corner
+does not bypass mandatory Hat/Robe ownership.
+
+The first service-companion Inventory may also render
+`DROP ITEMS HERE\nTO UNFORGE THEM`. `0x00556940` requires service pointer
+`InventoryScreen+0x160`, service byte `+0x289 == 0`, profile tutorial flag
+`DAT_0081A3D0`, and `native_tick % 120 < 100`. InventoryScreen destruction
+`0x005684C0` clears the flag and calls the profile saver. This is a one-shot
+tutorial owner, not an eligibility gate.
+
+#### Complete item and confirmation membership
+
+The exhaustive predicate at `0x00550450` accepts exactly seven live types:
+
+| Class | Type |
+| --- | ---: |
+| Ring | 7002 / `0x1B5A` |
+| Amulet | 7003 / `0x1B5B` |
+| Staff | 7004 / `0x1B5C` |
+| Hat | 7005 / `0x1B5D` |
+| Robe | 7006 / `0x1B5E` |
+| Item_Sack | 7008 / `0x1B60` |
+| Wand | 7011 / `0x1B63` |
+
+Item 7000, Potion 7001, Perk 7009, Map 7010, and Misc 7012 fall through and
+restore normally. A nonempty Item_Sack is rejected after `0x00570C10` and
+`0x00552170` inspect its child inventory. An empty Item_Sack skips
+confirmation. Every other eligible backpack item constructs MsgBox
+`0x004A98E0` with exact lines `REALLY UNFORGE THIS?` and `Unforging grants you
+a permanent small bonus to your stats, but utterly destroys the item.`, primary
+button `unforge`, and secondary button `cancel`. `Dialog_Finalize 0x005AB5C0`
+uses the shared content-sized HoverBox layout; cancel performs no transaction
+and consumes no RNG.
+
+That layout is not a fixed result rectangle. `Dialog_AddLine 0x005BCCB0`
+measures every authored line, retains the widest value in MsgBox `+0x80`, and
+the MsgBox vtable `+0xB4` finalizer at `0x005AB2C0` sizes and centers the
+HoverBox from that content. The two clean captures reconcile the exact
+1600x900 horizontal rule: the inner panel is the widest rendered line plus
+141 pixels, centered at x `801.5`. The confirmation's widest wrapped medium
+line is 373 pixels and produces width 514; `STAFF UNFORGED` is 249 pixels and
+produces width 390. Result titles and outcomes remain single lines, so longer
+generated equipment names widen the panel instead of overflowing it. The
+one-button result height is 308 pixels; the three-line confirmation height is
+326 pixels.
+
+#### Complete transaction and authored outcome table
+
+Confirmed release calls `0x005D6DF0`. Item_Sack or an eligible item whose
+recipe pointer at `+0x74` is null consumes `Integer(4)`, grants `value+2` gold,
+and returns `Transmuted to %d gold coins`. It does not increment the unforge
+attempt count or enter the bonus selector. The recipe-backed branch repeats:
+
+1. increment progression `+0x874`;
+2. draw `Integer(7)` for counts 1..4, `Integer(8)` for count 5, otherwise
+   `Integer(count+3)`;
+3. values 0..7 enter the table below; a value above 7 consumes `Integer(6)`
+   and only value 3 redirects to row 7, while the other five values destructively
+   fizzle;
+4. row 0 with already-full health and mana through count 5, or row 3 without
+   its one-in-100 edge, emits no result and repeats from step 1.
+
+| Selector | Result string | Exact mutation |
+| ---: | --- | --- |
+| 0 | `Full rejuvenation` | copy maximum HP/MP into current HP/MP; zero global cooldown `+0x64`; zero row `+0x64` for every category-2 skill |
+| 1 | `+%d damage for all offensive spells` | add 2 to progression `+0x84` only when count `<5` and `Integer(3)==1`, otherwise add 1 |
+| 2 | `-%d mana cost for all spells` | add 2 to progression `+0x88` only when count `<5` and `Integer(3)==1`, otherwise add 1 |
+| 3 | `Transmuted to Mind Dredge (+1 skill points at next level)` | require `Integer(100)==25`, then increment deferred skill choices `+0x48` |
+| 4 | `+%d to maximum health` | add 10 before count 5; from count 5 add 10 only when `Integer(4)==1`, otherwise 5, to base HP `+0x6C` |
+| 5 | `+%d to maximum mana` | add 20 before count 5; from count 5 add 20 only when `Integer(4)==1`, otherwise 10, to base MP `+0x78` |
+| 6 | `+%d%% faster experience gain` | through count 4 add 5 or 10 percent with `Integer(2)`; later add 1 or 2 percent; store the fraction in `+0x8C` |
+| 7 | `Transmuted to %d gold coins` | grant `(Integer(6)+1)*10`, all values 10..60 |
+
+The result string gates completion; retry rows increment the counter again and
+consume their complete later selector sequence. Explicit failure writes
+`Unforging fizzles!`. Both success and failure then refresh the progression
+owner through `0x0065F9A0`. The caller always destroys the confirmed live item,
+rebuilds the InventoryScreen, marks gameplay dirty, and constructs one of two
+result families:
+
+- success: `%s UNFORGED`, `Unforging bonus:`, exact result, `OKAY`;
+- failure: `FAILED UNFORGING!`, `Spellbreaking fizzles!`, `No bonus`, `OKAY`.
+
+Both result families use the widest-line rule above across title, summary, and
+outcome. They are not allowed to reuse the starter Staff's 390-pixel exemplar
+as a fixed width.
+
+Registry member 100 at `+0x1148` is `sounds\\unforge`, 134,722 bytes,
+SHA-256
+`173db629737f50f3a958358dc9f88fb3b25528ee93298f2f95416517747fa9e2`.
+It plays for every completed non-fizzle result, including recipe-less
+transmutation. Registry member 32 at `+0x598` is `sounds\\fizzle`, 9,072 bytes,
+SHA-256
+`938420950d859ebc00a9b1a37e548c7c2183a8504689b32aab3de3c683899e76`;
+it plays on the destructive failure branch.
+
+These instructions also close two prior class-layout unknowns: progression
+`+0x88` is the all-spell flat mana-cost reduction and `+0x8C` is the experience
+gain bonus fraction. `+0x874` is the unforge attempt count used by this odds
+curve. Those facts are also corrected in `native-class-loadouts.md`.
+
 ### Reachable-system membership disposition
 
 This table is the exhaustive retail membership boundary used by the Website
@@ -1454,6 +1608,7 @@ names pre-existing Website behavior independently covered before this pass.
 | Shlorio fee, untargeted roll, offer buy, clear, close | `0x0055faf0`, `0x0056d110` | exact-ported | seeded lifecycle tests and two-participant owner-isolation browser receipt |
 | All 47 dowsing recipes, seven sets, six equipment classes | `native-item-catalog.json` | exact-ported | complete catalog identity/icon tests |
 | Seven equipment sinks and equip/unequip transitions | `0x00570cd0`, `0x00575850`, `0x00570d80`, `0x0066f020` | exact-ported | per-sink and gated-third-ring tests |
+| Inventory unforge target, seven eligible types, complete roll table, permanent bonuses, MsgBoxes, and audio | `0x0056E950`, `0x0056EC30`, `0x005D6DF0`; UI 75; audio 32/100 | exact-ported; corrective closure 2026-08-21 | per-type/per-outcome tests, clean-stock captures, Windows browser transaction |
 | Common Shop/PerkShop/InventoryShop, both Dowsing states, InventoryScreen, trader Chat, and trader MsgBox views | vtables and renderer family in the correction above | exact-ported; second-pass closure 2026-08-20 | owner-level render/input tests, per-service post-purchase activation, zero-offset deterministic pixel receipt, and full Mac browser acceptance |
 | Four exact survival dialogue introductions, reachable commands, and price-return branches | runtime aggregate `data/dialogue/survival.txt`; Chat vtable `0x0079061C`; builder `0x0050b720`; dispatcher `0x004fb890` | exact-ported | dialogue state/copy tests and stock witnesses |
 | Fomentius actor/balloon animation | `0x0050b110`, `0x0051c1a0`; College 54..58, 160..164 | verified-already-at-parity | existing hub presentation and render tests |
