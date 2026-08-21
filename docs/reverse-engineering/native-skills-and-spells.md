@@ -394,6 +394,10 @@ receives dimension `200`, with both optional branches false. It walks headings
 | one BadGuys record `11` | Position is the center plus `Float(200)` along heading plus signed `Float(10)` jitter; scale is `1 + Float(4)`; tint is `(1,0.5,1,1)`; velocity is `Float(5)` along the unjittered heading; velocity damping is `0.95`; alpha starts at one and loses `0.1 * (0.1 + Float(0.05))` per tick. |
 | two BadGuys record `45` | The same randomized position; scale is `(1 + Float(4)) * (dimension / 200)`, therefore `1 + Float(4)` here; tint is `(1,0.5 + Float(0.8),1,1)`; velocity is `5 + Float(5)` along the heading; damping is `0.95`; alpha loses `0.1 * (0.25 + Float(0.25))` per tick. |
 
+The Perspective renderer `0x004561E0` applies the stored scale on X and
+`scale * 0.800000012` on Y. Each child remains an independently registered,
+world-depth-sorted ZAnim; the 108 sprites are not one flat compositor batch.
+
 The helper consumes six native RNG words for each record-11 child and seven
 for each record-45 child: `36 * (6 + 2*7) = 720` words. Its only sinks are the
 animation allocations, vector/color helpers, and world animation queue. It
