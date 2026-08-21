@@ -228,12 +228,31 @@ process-global render RNG and must survive snapshots.
 
 FrostMissile additionally owns two shrinking compositor lanes. Their scales
 subtract `.01`; a lane below `.1` refreshes aspect `.5+Float(.25)`, scale
-`.5+Float(.75)`, and rotation `Float(45)`. Its turn-presentation field decays by
+`.5+Float(.75)`, and rotation `Float(45)` in lane order. These refreshes occur
+in actor tick `0x005FD7A0`, not in draw, so a network port must retain the two
+lanes and advance the authoritative RNG. Its turn-presentation field decays by
 `.949999988079071`, adds the current homing heading delta, and clamps to
-`[-35,+35]`. Retail obtains later refreshes from the process-global RNG; a
-networked renderer may replace only that unreplicated global cursor with an
-explicit stable semantic stream, while retaining the distributions, recurrence,
-and actor-local state.
+`[-35,+35]`. Only per-render samples without actor-state consequences may use
+a stable semantic renderer stream.
+
+GroundSpark's actor draw `0x005E1B00` only dispatches its tick-owned animation
+list. Every `0x00611EB0` update constructs record 71 at
+`y - abs(sin(nativeAge*12deg))*15`, consumes `Float(360)` rotation and signed
+`Float(.1)` scale around `.35`, and starts alpha/loss `.75/.1`. Weak state
+halves both. A second child is created when the sine magnitude is below `.1`
+or `Integer(6)==1`; `Integer(4)` selects 1836..1839, followed by
+`Float(360)` and `Float(.25)`. Weak state halves this child's alpha but not its
+loss. These animation objects survive projectile retirement.
+
+Steam is not a two-tick beam. Handler `0x00542D20` reaches particle creation on
+the even global-update lane, then consumes `Integer(7)`: value one selects
+`Anim_SteamJetEffect_Over` unless the cast is weak, otherwise it selects the
+normal class. The shared constructor consumes `Float(.05)`, `Float(.1)`,
+`Float(.75)`, `Float(1)`, `Float(.1)`, and `Integer(10)`; handler placement then
+consumes `Float(10)` and signed `Float(45)`. Tick `0x0045B940` owns life/loss,
+position/velocity, `.15` phase gain (`.075` Over), `.25` blue loss, `.125`
+tint loss, `.95` stretch shrink, `.01` scale growth, and `.96/.88` velocity
+decay. Only one normal-or-Over record-76 actor is born per eligible tick.
 
 ## Enemy/world effects and status ownership
 
@@ -266,10 +285,10 @@ The direct atlas and procedural presentation membership is:
 | GroundSpark | actor draw `0x005E1B00` renders its tick-owned animation list; each tick creates record 71 fade state and the optional BadGuys 1836..1839 fork branch |
 | Flame Lash | two-tick textured vertex mesh from `0x004583E0`, using BadGuys record 44; this is not the ordinary Lightning renderer |
 | Blizzard Beam | two-tick `0x005308D0` beam path from `0x00458470`; this is not the ordinary Frost Jet particle class |
-| Steam Jet | two complementary two-tick effects using BadGuys record 76 through draws `0x00458550/0x00458750` |
+| Steam Jet | one even-lane-selected normal/Over moving actor using BadGuys record 76 through draws `0x00458550/0x00458750`; its constructor/tick state outlives the cast emission that created it |
 | EBoulder | BadGuys 86 center/opening plus oriented, depth-sorted rocks 168..171; split/contact children use 2008..2010 |
 | Meteor | fall draw `0x005E16C0`, impact/debris draw `0x005E6DE0`, and impact constructor `0x00610880`; the channel also emits `Anim_Iceblast` at the aimed point |
-| Hailstones | carrier/contact shell BadGuys 18 plus owned rocks 168..171; held and released transforms are distinct |
+| Hailstones | held Frost helper plus owned rocks 168..171; Enhanced rock creation emits independent record-18 fades, and release emits independent `Anim_FadeFrost`; held and released rock transforms are distinct |
 
 Native audio ownership is exact:
 
@@ -290,6 +309,36 @@ Every loop is player/cast-owned and must balance on release, cancellation,
 death, player removal, scene replacement, and audio teardown. One-shot variant
 and pitch are cast-authoritative; surviving projectiles are not a reliable
 audio event source.
+
+Contact/release one-shots add to that cast table. FrostMissile contact plays
+registry 44 `icestart` at pitch `1.5`; BallLightning contact plays registry 224
+`throwlightning1` at `1.5`; GroundSpark contact consumes `Float(.1)` for pitch
+`1+draw`, then `Integer(3)` for Shock 1/2/3. Hail release plays registry 44
+`icestart` and registry 77 `rockhit` at `1.5`, then registry 40 `hailshot` at
+pitch one. Hail also writes Region camera magnitude `.1`.
+
+## Retained presentation and release details
+
+- Weak EBoulder tests the pre-growth scale. When its retained quantity exceeds
+  one it creates `round(max(scale*30,8))` independent `Anim_BoulderBit`
+  children before quantity collapses to one. Their construction uses the
+  shared five-word Bouncer constructor plus record/vertical/height/distance,
+  scale, motion, and signed angular-jitter draws. The retail `MAX` macro
+  evaluates its randomized scale argument a second time when the first probe
+  is at least `.45`; this conditional extra word is observable and required.
+- Hail rock count is tie-to-even rounding of
+  `max(1,scale^2*(push*3+20))`. Each Enhanced new rock adds a `Float(20)`
+  record-18 birth fade that lives 400 `.01` alpha-loss ticks independently.
+  Release moves the carrier backward 20 along both direction axes, consumes
+  `Float(.75)` for wrapper scale `.75..1.5`, and creates a 20-tick FadeFrost at
+  `(carrier.x,carrier.y-20)`. Released rock Y is
+  `localY + ((50-localZ*.8)-localY)*decay`; decay multiplies by `.95` per tick.
+- Meteor Swarm emits record-51 `Anim_Iceblast` before its gameplay draw every
+  held tick. Cadence is selected-primary age modulo
+  `max(5,trunc((weak?35:25)/round(castFactor)))`. Spawn consumes seven words
+  normal and six weak. Impact consumes camera unit vector, rotation/radius,
+  angle seed, five 13-word BoulderBit programs, then a two-word signed sound
+  pitch. Direct radius is 45; recurrence uses impact field `+0x15C*45`.
 
 The Region light-provider set is also closed:
 
