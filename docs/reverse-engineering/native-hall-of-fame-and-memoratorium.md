@@ -303,8 +303,20 @@ transition members are not optional.
 - Preserve all collapsed and expanded survival fields. Website-global views
   may additionally sort those same records by wave, kills, or survival time,
   but those are explicit web views rather than invented retail behavior.
-- Treat authenticated global submission and public query as Website ownership;
-  guests remain local-only.
+- Treat global submission and public query as Website ownership. Account
+  authentication alone is not score provenance: the backend must bind the
+  account id into the consumed server admission, the authoritative host must
+  seal the completed row, and the API must verify that signed receipt against
+  the caller. Guests and cheat-tainted runs remain local-only.
+- Track initial and live `Enable Cheats` state at the host. Enabling it during
+  an authoritative connection permanently revokes that connection's global
+  eligibility; disabling it later does not restore eligibility. An accepted
+  authoritative Lua execution independently revokes it. Any ineligible party
+  participant taints the shared run.
+- Treat the current client-held save document as untrusted provenance. Its
+  schema validates shape but carries no server attestation, so a resumed
+  lineage remains local-only rather than turning a forged save into a signed
+  global score.
 - Use the serialized wizard's element and heading for its row portrait instead
   of substituting an unrelated account avatar.
 - Render Memoratorium record 5 as the exact extracted registered asset, three
@@ -321,9 +333,11 @@ transition members are not optional.
   new-maximum RNG bonus, exact variant names, and bonus-before-base ordering.
 - Archive tests cover the Game-wide clock, death tick 300, signed heading draw,
   scale draw, RNG advancement, and one-time immutable pose.
-- API tests cover authenticated submission, guest rejection, strict enums and
-  bounds, idempotency, public reads, and independent Awesomeness/wave/kills/time
-  ordering.
+- API tests cover signed server provenance, authenticated account binding,
+  guest/body/signature/account tamper rejection, strict enums and bounds,
+  idempotency, public reads, and independent Awesomeness/wave/kills/time
+  ordering. Host tests cover clean receipt issuance plus anonymous, resumed,
+  initial-cheat, live-cheat, and accepted-console withholding.
 - Browser tests enter Hall from the stock main-menu control, exercise local and
   global boards, expand a row, scroll, and return through the Main Menu control
   without page or console errors.

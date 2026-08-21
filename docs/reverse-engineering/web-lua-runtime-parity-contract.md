@@ -80,6 +80,12 @@ game system, not unfinished work hidden inside this implementation.
 - Console execution is host/solo-only at the server protocol boundary. A local
   browser setting is discoverability, not authorization; a guest-crafted packet
   must still be rejected.
+- Global Hall eligibility is a separate server-owned policy. Initial and live
+  cheat-mode state is carried to the host; enabling it permanently revokes the
+  connection's global eligibility, and any accepted authoritative console
+  request does the same even if a crafted client hid its local setting. Any
+  affected party run remains eligible for local Hall history but receives no
+  signed global score receipt.
 - Code, request queue, prints, return values, state, callbacks, and timers are
   independently bounded. Every execution and callback is interrupted by the
   Lua instruction hook and the VM allocator has an explicit ceiling.
