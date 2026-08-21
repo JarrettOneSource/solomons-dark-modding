@@ -191,3 +191,29 @@ progression addresses stay absent, and the three native boss families not yet
 implemented by the web Boneyard remain explicit `out-of-system` members. The
 portable contract is otherwise the package's authored behavior, including
 guest consumption, all-peer presentation, and host-enforced protection.
+
+## Invincibility Potion migration receipt
+
+The retained package is now version `0.3.0` on API `0.2.0`. Its deterministic
+archive is 6,642 bytes with package SHA-256
+`5d294cc374403745c12ee1b441f1822bbadce126a4d78c2ea7f1125638eb1c54`
+and content SHA-256
+`df9eae2b56b32bbb3a15c765ecf0f8e2427d10d75f87ba8fc3793b379021c0ee`.
+The exact `sd.content.v1` potion identity is the lossless decimal
+`8068156596081641415`. The script's replicated identity logging uses
+`tostring`/`%s`, retaining compatibility with native Lua integers and the web
+decimal-string representation.
+
+Website functional cutoff `84049999013c8b9665c4f78e92f97a092394bb4b`
+passed the full native Windows and Mac mini Website matrices. Both platforms
+then extracted the same hash-checked archive and ran the production-built
+two-browser journey: registered pickup and Inventory art, guest consumption,
+owner-local mana refill, held Air casting without mana loss, poison without
+health loss, one guest-owned effect in both WebGL2 renderers, and no unexpected
+browser, network, or host errors. Both derived session manifest SHA-256
+`28151cb4867ab55416a73f5fd65b6c7d3210286076d554e0c29fb19ec4bdcf00`.
+
+Mod Loader cutoff `470758e2776eb06a3108bb10cecece021f3cf31e`
+passes all 88 portable modules (801 tests) and all 491 CI-safe static RE
+contracts in WSL and on the Mac mini. Production package publication and data
+cutover are recorded separately because database state is not source parity.
