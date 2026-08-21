@@ -293,14 +293,14 @@ The direct atlas and procedural presentation membership is:
 | Owner | Native visual program |
 | --- | --- |
 | FireMissile | record 110 core; BadGuys 255..266 body at `(age/3)%12`, normal plus additive passes; per-tick moving fade/ZAnim trail; impact BadGuys 251..254 |
-| FrostMissile | BadGuys 271..282 at `(age/4)%12`, scale `1.7`; additive Frost helper layers; two shrinking/refreshing internal lanes; optional push/turn overlays; `Anim_FadeFrost` impact |
-| BallLightning | draw `0x005E0670` applies weak parent alpha, calls `0x00536380` for four BadGuys-110 circles plus two BadGuys-1836..1839 forks, then draws a direct BadGuys-70 sibling at `(x,y-10)`, scale `1.25+Float(.1)` and `Float(1)` alpha; conditional `0x00535A30` owns the turn overlay; `Anim_FadeLightning` owns impact |
+| FrostMissile | BadGuys 271..282 at `(age/4)%12`, scale `1.7`; additive BadGuys 5 and 110 helpers; two shrinking/refreshing BadGuys-16 lanes; a positive `+0x16C` adds two affine BadGuys-87 overlays; `Anim_FadeFrost` impact |
+| BallLightning | draw `0x005E0670` applies weak parent alpha, calls `0x00536380` for four BadGuys-110 circles plus two BadGuys-1836..1839 forks, then draws a direct BadGuys-70 sibling at `(x,y-10)`, scale `1.25+Float(.1)` and `Float(1)` alpha; the welded handler leaves constructor byte `+0x168` zero, so the final `0x00535A30` Ether compositor is always present at `1+Float(.5)` scale, phase `+0x154`, and graphics-alpha multiplier `.1`; `Anim_FadeLightning` owns impact |
 | GroundSpark | actor draw `0x005E1B00` renders its tick-owned animation list; each tick creates record 71 fade state and the optional BadGuys 1836..1839 fork branch |
 | Flame Lash | two-tick textured vertex mesh from `0x004583E0`, using BadGuys record 44; constructor `0x0045B810` calls the same exact `0x0052E020` three-point QuickSpline/ribbon builder as Lightning. Normal width/alpha are `1/1`; weak width is `.75` and color alpha `.5`; phase is `-3*managerTick`. The shared Enhanced branch can append independently selected BadGuys 375/376 geometry and texture. Handler `0x005408F0` also registers endpoint/contact `Anim_FadeFlameLash` roots; draw `0x00457370` uses BadGuys 35 additively. |
 | Blizzard Beam | two-tick `0x005308D0` beam path from `0x00458470`; this is not the ordinary Frost Jet particle class. Weld caller `0x00541870` passes source-glow flag one and endpoint/enhanced flag zero, so records 6/31 are unreachable here. The owned extras are exactly two one-frame source `Anim_SpellGlow` variant-24 actors. |
 | Steam Jet | one even-lane-selected normal/Over moving actor using BadGuys record 76 through draws `0x00458550/0x00458750`; its constructor/tick state outlives the cast emission that created it |
 | EBoulder | BadGuys 86 center/opening plus oriented, depth-sorted rocks 168..171; split children use 2008..2010, and each accepted shared-flight contact creates one independently retained 2008..2010 `Anim_BoulderBit` through `0x0060BC10` |
-| Meteor | fall draw `0x005E16C0`, impact/debris draw `0x005E6DE0`, and impact constructor `0x00610880`; the channel also emits `Anim_Iceblast` at the aimed point |
+| Meteor | fall draw `0x005E16C0`; auxiliary `0x005E6DE0` draws DeadHawg 19 during final descent and BadGuys 67 during impact; impact constructor `0x00610880` owns the independent flash/debris; the channel also emits `Anim_Iceblast` at the aimed point |
 | Hailstones | held Frost helper plus owned rocks 168..171; Enhanced rock creation emits independent record-18 fades, and release emits independent `Anim_FadeFrost`; held and released rock transforms are distinct. A depleted target-contact rock creates `Anim_Line` plus BadGuys 15. Static-line termination creates, per remaining rock, fifteen additive moving BadGuys-45 children and one BadGuys-32 bouncer. The visibility-residency exit instead creates one `Anim_Line` per remaining rock before carrier retirement. |
 
 Native audio ownership is exact:
@@ -356,6 +356,75 @@ pitch one. Hail also writes Region camera magnitude `.1`.
   procedural variant 24 once, and removes itself from draw. They are direct,
   self-lit roots with no outbound Region source.
 
+- Ball Lightning draw `0x005E0670` has three consecutive painter owners. The
+  first is the six-member Air corona at global render phase and random scale
+  `.75+Float(.5)`; weak state supplies its `.5` graphics-color multiplier. The
+  second is direct BadGuys 70 at local Y `-10`, uniform scale
+  `1.25+Float(.1)`, and `Float(1)` alpha under the same weak multiplier. The
+  third is not a turn-only branch: byte `+0x168` is initialized to zero by
+  `0x005E4F30` and never written by welded handler `0x0053EDB0`, so the complete
+  two-pass Ether painter `0x00535A30` always runs. It uses mutable inherited
+  phase `+0x154`, scale `1+Float(.5)`, and replaces the graphics alpha
+  multiplier with `Graphics+0x3E8*.1` (`Graphics+0x3E8` initializes to one).
+  That compositor owns two differently sized BadGuys-110 cores, its
+  deterministic BadGuys-111 spark, `2..11` additional BadGuys-111 particles,
+  and one BadGuys-112 ray per pass.
+- Frost Missile draw `0x006093B0` first renders the ordinary BadGuys 271..282
+  body at `(age/4)%12`, age-degree rotation, scale `1.7`, and
+  `.75+Float(.25)` alpha. In additive mode it then draws BadGuys 5 at random
+  rotation with tint `(.5,.75,1)` and alpha `.2+Float(.25)`, followed by
+  BadGuys 110 at scale `abs(sin(age*15deg))*2`, tint `(1,.5,1)`, and the same
+  alpha domain. Its two mutable compositor lanes are BadGuys 16, not record
+  110: each uses scale `(laneScale,laneScale*laneAspect)`, its retained
+  rotation, tint `(.5,1,1)`, and alpha one. Weak state multiplies this complete
+  stack by `.5`.
+- A positive Frost field `+0x16C` adds two BadGuys-87 affine draws under tint
+  `(.75,1,1)` and alpha `.15`. Their matrices are respectively
+  `R(turn)*S(1.4,1.12)*R(age*8deg)` with X offset
+  `abs(sin(age deg))*3`, and
+  `R(turn)*S(1.75,1.4)*R(age*-12deg)`. Handler `0x0053F3C0` writes `+0x16C`
+  from the sixth welded vector lane and clears it when underpowered, so this
+  is a learned-effect visual branch rather than generic missile decoration.
+- `Anim_FadeFrost` draw `0x00457230` calls the complete Water compositor
+  `0x005370D0`; `Anim_FadeLightning` draw `0x004572C0` calls the complete Air
+  compositor `0x00536380` with its retained/incrementing phase. Frost and Ball
+  contacts and the Hail release must reuse those painter families, wrapper
+  scale, alpha clock, and independent world ownership rather than a generic
+  three-sprite glow.
+- Held Hail draw `0x00611160` does not call the Frost-Missile helper. Before
+  its rock loop it draws ordinary BadGuys 15 at local zero, tint `(1,1,.9)`,
+  alpha `.35+Float(.25)`, and scale `heldScale*4.099999904632568`; it then
+  calls the complete Water compositor `0x005370D0` at fixed scale `1.75` and
+  global render phase. Released Hail skips both held-only owners.
+  Hail's inherited auxiliary vslot `0x005E5530` remains separate: held adds
+  BadGuys 15 at actor XY, tint `(.85,1,.85)`, signed alpha
+  `.5+Float(.25)`, scale `heldScale*2.5`; flight uses ordinary BadGuys 67 at
+  actor XY and `flightScale*2.5`.
+  Each retained rock then has two siblings. The record-168..170 body is opaque,
+  uses `max(.45,storedScale)*.85` while held or `*.75` in flight, and the held
+  opening color `(1-mix,1-mix,1-mix,1)`. A separate BadGuys-32 copy follows at
+  the same projected XY, heading rotation, unit scale, white tint, and alpha
+  `rockPhase*.8` held or `rockPhase` in flight. Rock phase does not replace the
+  body alpha.
+- EBoulder draw `0x0060C540` shares Boulder geometry but not its center or
+  colors. Its main visual-root aura is BadGuys 15 at tint `(1,.9,1)`, alpha
+  `.35+Float(.25)`, and scale `charge*4.099999904632568`. Opening BadGuys 86
+  retains the ordinary additive `mix`, `2.5*mix`, and global six-degree phase.
+  The remaining body color is `(1-mix,.75*(1-mix),1,1)`. Each transformed
+  zero-XY center is replaced by the complete Ether compositor at scale
+  `(1+Float(.1))*2*charge`; shell rocks use records 168..170 at
+  `max(.25,storedScale*.75)`. Held quantity `1..4` repeats that center/shell
+  body at the same depth-sorted `0`, perpendicular `+/-30`, forward `+30`, and
+  rear `-15` templates used by release, sorted by projected Y; flight paints
+  one body at the released actor root.
+- EBoulder's auxiliary vslot `+0x28`, `0x005E5530`, is a separate sibling
+  pass. Held state adds BadGuys 15 at actor XY, tint `(.85,1,.85)`, signed
+  alpha `.5+Float(.25)`, and scale `charge*2.5`; flight replaces it with
+  ordinary BadGuys 67 at actor XY and the same `charge*2.5` scale. Release
+  `0x005FA6D0` multiplies angular field `+0x70` by `.75`; it does not shrink
+  the body art. Its `.95/.9` per-child factors write gameplay field `+0x224`,
+  not a renderer scale.
+
 - Weak EBoulder tests the pre-growth scale. When its retained quantity exceeds
   one it creates `round(max(scale*30,8))` independent `Anim_BoulderBit`
   children before quantity collapses to one. Their construction uses the
@@ -373,10 +442,15 @@ pitch one. Hail also writes Region camera magnitude `.1`.
   float32 order. Meteor's five impact BoulderBits and weak/contact EBoulder
   children share this recurrence and each retains its own painter root,
   Region-light sample, sort bias `-15`, and retirement.
-  Draw `0x00457E40` submits the enhanced airborne shadow through the shared
-  Bouncer primitive helper before the lit sprite; that helper remains distinct
-  from the fragment's atlas draw and must not be represented as another rock
-  sprite in final browser parity.
+  Draw `0x00457E40` submits the enhanced airborne shadow through helper
+  `0x00415020` before the lit sprite. Raw instructions show that helper receives
+  the same fragment descriptor from actor `+0x24`: the shadow is the same atlas
+  record, black, alpha `min(1,actorAlpha)`, at local Y `+2`, with the same
+  rotation and scale `(fragmentScale,fragmentScale*.75)`. The main colored
+  copy is at the dynamic height with uniform fragment scale. Ordinary
+  BadGuys-32 Hail bouncers use the same inherited shadow geometry; their main
+  copy remains normal-blended. `Anim_AdditiveBouncer` is a separate subclass
+  and is not inferred here.
 - Hail rock count is tie-to-even rounding of
   `max(1,scale^2*(widen*3+20))`. Each Enhanced new rock adds a `Float(20)`
   record-18 birth fade that lives 400 `.01` alpha-loss ticks independently.
@@ -413,6 +487,15 @@ pitch one. Hail also writes Region camera magnitude `.1`.
   recurrence uses impact field `+0x15C*45`. Impact constructor `0x00610880`
   separately registers an orange BadGuys-15 `Anim_FadeAdditive` at scale six,
   alpha two, and `.1` loss; it is not nested under the Meteor draw owner.
+  Main fall draw `0x005E16C0` uses orange BadGuys 15 at
+  `3+Float(.5)` scale, then BadGuys 50 with per-render signed X scale
+  `+/-bodyScale`, Y scale `bodyScale*2`, and rotation
+  `fallHeading*.5+180`. Auxiliary slot `+0x28`, `0x005E6DE0`, independently
+  draws normal-blended DeadHawg 19 at the ground root with scale `(2,1.6)` and
+  alpha `max(0,1-fallHeight)*.5`. After impact it instead draws additive
+  BadGuys 67 at scale `(impactRadius,impactRadius*.8)`, retained impact
+  rotation, and alpha `min(impactTicksRemaining,100)/100`. BadGuys 50 is not
+  the impact disc.
 
 The Region light-provider set is also closed:
 
