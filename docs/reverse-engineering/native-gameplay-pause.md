@@ -95,6 +95,68 @@ gold frame, and three rows. At 1600 by 900, the exact action rectangles are:
 | Game Settings | `[623.5, 415.5, 976.5, 484.5]` |
 | Leave Game | `[623.5, 491.5, 976.5, 560.5]` |
 
+## Reopened SimpleMenu presentation trace
+
+The first Website pause pass stopped after recovering the settled rectangles
+and visible art ids. That was not a complete renderer trace. It permitted a
+CSS border and translucent panel that stock never submits, an operating-system
+font in place of the native font wrapper, a focus/hover highlight stock does
+not render, a disabled Settings row, and no pressed or chrome-motion branch.
+The reported bad-looking ESC menu reopened this entry. The complete shared
+`SimpleMenu` presentation path is now instruction-derived from the same retail
+binary and reconciled with the checked-in pause frame.
+
+`SimpleMenu::Render` at `0x005C5A00` has this exact painter sequence:
+
+1. Multiply `SimpleMenu+0x78` by `0.85` and draw the fullscreen black dim;
+   restore white, then set the menu draw alpha to `SimpleMenu+0x78`.
+2. For every parsed row, draw common-button array entry
+   `Button+0x78`. The array at `UI owner +0x40D8/+0x40DC` has exactly two
+   entries, loaded consecutively by `0x004F3590`: settled `UI.101` and pressed
+   `UI.102`. Both are `353 x 69`.
+3. Draw the row surround with `UI.54` through the horizontal strip compositor
+   `0x00417E30`: full left and mirrored-right `70 x 85` ends plus a stretched
+   quad sampling the record's rightmost five percent. This is not a CSS line
+   or an omitted gap.
+4. Set RGBA to `(0.85, 0.73, 0.44, 1)` and draw the label through Fonts group
+   3 at `Fonts owner +0x0E7D98` (bundle records `216..307`, wrapper header
+   `[24,6,28]`, 210 kerning pairs). The normal label origin is the button
+   center plus `(0,9)`. While pressed, both label coordinates add exactly
+   `6`; hover/focus does not change art or text.
+5. Compute `spread = (1 - reveal) * 25 + 40`. Starting from the union of the
+   three button rectangles (`x=623.5`, `y=339.5`, `w=353`, `h=221`), build
+   the chrome rectangle `x-spread, y-spread, w+2*spread, h+2*spread`.
+   Settled chrome is `[583.5,299.5,1016.5,600.5]`; closed chrome is
+   `[558.5,274.5,1041.5,625.5]`.
+6. Draw the chrome with `UI.17` through four-corner/edge compositor
+   `0x00417760`, with its center-fill flag false. The helper draws four full
+   `80 x 83` corners, stretches the rightmost five-percent strip across the
+   top/bottom gaps, and stretches the bottom five-percent strip across the
+   left/right gaps. No separate rectangle, fill, border, or shadow exists.
+7. Draw `UI.18` at horizontal center and `chromeTop - 42`, rotated 90 degrees;
+   draw `UI.8` at `(centerX, chromeBottom + 55)` and at
+   `(centerX +/- 75, chromeBottom + 42)` with the side pair scaled to `0.75`.
+   These eight outer members move 25 pixels outward as reveal approaches zero;
+   the three button rows stay fixed.
+8. Restore white alpha. `SimpleMenu::Tick` `0x005A8950` advances the reveal in
+   fixed `0.035` steps and the close in fixed `0.05` steps.
+
+The pressed-state evidence is independent of visual guesswork. Button
+constructor `0x00430430` initializes bytes `+0x78/+0x79` to zero; Button input
+methods `0x00430890`, `0x00430A40`, `0x00430AC0`, and `0x00430AE0` distinguish
+pressed from hover. `0x005C5A00` reads only `+0x78`, uses it as the two-entry
+common-button index, and multiplies it by the exact six-pixel label offset.
+The full extracted `UI.bundle` catalog independently identifies the adjacent
+records as `UI.101` and `UI.102`; the settled live capture identifies index
+zero as `UI.101`.
+
+The settled pause-specific art membership is therefore exactly
+`UI.101 x3`, `UI.54 x6`, `UI.17 x4`, `UI.18 x1`, and `UI.8 x3`, plus the three
+Fonts-group-3 strings. Each of the three mutually exclusive pressed variants
+replaces only its row's `UI.101` with `UI.102` and offsets that label. The
+captured Hub HUD members below the modal are retained-world presentation, not
+pause-menu members.
+
 ## Membership sweep
 
 The complete `0x005CBD40` xref sweep found sixteen call sites in twelve
@@ -107,6 +169,19 @@ functions. They divide into these owner families:
 | Inventory | open `0x00555810`, close/destruction `0x005684C0` | independently triggered gameplay surface using the same region suspension depth |
 | quick panel/settings | `0x005D8DC0`, `0x005D8F30` | independently triggered nested settings surface |
 | skill/spell/book selection | `0x006588C0`, `0x0066B200`, `0x0066F0B0`, `0x0066F920`, `0x0067CAC0` | independently triggered mandatory or settings pickers using the same suspension depth |
+
+The constructor/modal xref sweep also found every consumer of the shared
+`SimpleMenu` renderer. Their disposition relative to the ESC system is:
+
+| Consumer | Native entry | ESC-system disposition |
+| --- | --- | --- |
+| gameplay Pause Menu | `0x0058EA50` | in-system; exact authored three-row instance above |
+| Hub-owner menu action | `0x004BB3F0` | out-of-system; independently triggered Hub/profile action |
+| title/profile UI owner | `0x005A5530` | out-of-system; separate front-end/profile flow |
+| settings/control handler | `0x005D8120` | out-of-system; separate settings owner which can open its own SimpleMenu |
+
+They share the renderer facts above. None provides a second pause-menu style,
+font, hover rule, or fallback path.
 
 The xref sweep establishes that `Gameplay+0x80` is deliberately nestable. A
 pause-menu implementation must not let a child settings surface release the

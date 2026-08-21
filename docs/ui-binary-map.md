@@ -80,7 +80,8 @@ The staged source of truth for recovered addresses now lives in `config/binary-l
   - `0x005A5530` is also the `DarkCloud::vftable` `0x00797C44` owner/control action dispatcher at slot `+0x10`
 - SimpleMenu bridge:
   - title/profile follow-through menus currently resolve through the live `SimpleMenu` owner path
-  - gameplay pause also uses that bridge; the complete input, modal, region-suspension, nesting, and resume owner is now recovered in [`native-gameplay-pause.md`](reverse-engineering/native-gameplay-pause.md)
+  - gameplay pause also uses that bridge; the complete input, modal, region-suspension, nesting, resume, exact strip-composited frame/row chrome, bitmap-font, press, and reveal-motion owner is now recovered in [`native-gameplay-pause.md`](reverse-engineering/native-gameplay-pause.md)
+  - `0x005C5A00` renders idle `UI.101` / pressed `UI.102`, `UI.54` row ends, `UI.17` frame corners and edge strips, `UI.18` header, `UI.8` arrows, and Fonts group 3 (`216..307`) in fixed `(0.85,0.73,0.44,1)` RGBA; press moves text by six pixels and hover has no visual branch
 - Pause menu:
   - `RESUME GAME[1]|GAME SETTINGS[0]|LEAVE GAME[2]`
 - Settings menu at `0x005D9A50`:
