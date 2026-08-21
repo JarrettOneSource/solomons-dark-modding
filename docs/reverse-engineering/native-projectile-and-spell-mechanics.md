@@ -2879,3 +2879,51 @@ There is no authored steering table, asset, audio, rendering setting, or
 platform-degraded branch in this subsystem. All consumed constants and every
 shared-function xref are dispositioned above. Confidence is high from complete
 instruction streams and static xrefs; no native tracking unknown remains.
+## 2026-08-20 Fireball scenery and terrain-mask closure
+
+The remaining Fire bit-four scenery boundary was reopened because the Website
+used the player movement collision world for Fireball lookahead and exposed
+only hostile actors to its per-tick point query. Fresh constructor and query
+traces against the pinned retail image prove that these are two distinct
+contact lanes.
+
+### Per-tick actor/scenery contact
+
+`Fireball::Tick 0x005FDD90` passes actor mask `6` to `0x00641220`. That query
+accepts hostile flag `0x2` and scenery flag `0x4` members in the Fireball's
+current spatial cell, then applies the strict normalized-circle test using
+query radius 20 plus actor radius `+0x30`. A flag-`0x4` contact removes the
+Fireball and runs the ordinary impact/audio presentation, but
+`Fireball_Contact 0x005E5160` dispatches damage only when target flag `0x2` is
+also present.
+
+The complete Boneyard flag-`0x4` membership and constructor radii are:
+
+| Type | Constructor | Actor radius | Fireball consequence |
+| ---: | ---: | ---: | --- |
+| Tree `2001` | `0x005E46D0` | `8` | contact at strict root distance below `28` |
+| Monument `2009` | `0x005E0DB0` | `1` | contact below `21` |
+| Gravestone `2029` | `0x005E5C30` | `0.01` | contact below `20.01` |
+| Building `2040` | `0x005F2C30` | `1` | contact below `21` |
+| Goodie `2061` | `0x005E3D60` | `20` | contact below `40`; Goodie's flags are `0x2004` |
+
+Therefore a stock Fireball **does collide with a gravestone**, but only through
+the grave actor's almost-point-sized root circle. It does not collide with the
+grave's large promoted movement polygon. Fence posts and derived Fence
+members retain actor flag zero and are not candidates under mask 6.
+
+### Five-tick terrain lookahead
+
+Every fifth Fireball update, line walker `0x00524D70` receives exclusion mask
+`0x700` and ignores a line record whenever `(record.mask & 0x700) != 0`.
+Recovered scenery construction assigns promoted Gravestone polygons mask
+`0x600` and intact/broken/gate/rail Fence polygons mask `0x100`; all are
+ignored by Fireball lookahead. Monument, Building, and Wall blocking shapes
+use mask zero and stop the projectile. Tree, Goodie, and Fencepost are actor
+or synthetic player-body colliders rather than Fireball terrain lines.
+
+The implementation contract is consequently two-lane: mask-6 actor-root
+contact runs after movement on every tick, while mask-`0x700` terrain
+lookahead runs only on the established five-tick cadence. Reusing the full
+player navigation polygon set would make graves, fences, trees, goodies, and
+posts block at the wrong geometry and often on the wrong tick.

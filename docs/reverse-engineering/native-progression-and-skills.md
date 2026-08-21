@@ -436,10 +436,12 @@ weights, not set insertion.
    not erase the earlier RNG consumption.
 8. **Merge and fill.** Append the entire root-priority list to the general
    list. Draw uniformly **with replacement** until `desired` entries exist.
-   A category-4 candidate is retried while the result already contains a
-   category-4 row and fewer than 50 such collisions have occurred; after 50 it
-   is allowed. Stock performs no ID-equality rejection and never removes a
-   chosen candidate, so duplicate non-category-4 IDs are possible. On attempt
+   A category-4 candidate is always retried while the result already contains
+   a category-4 row. Separately, a category-1 candidate is retried while the
+   result already contains a category-1 row and fewer than 50 such collisions
+   have occurred; after 50, another category-1 row is allowed.
+   Stock performs no ID-equality rejection and never removes a chosen
+   candidate, so duplicate non-category-4 IDs are possible. On attempt
    100, append every ID `8..81` except 52 that passes the first global-disable
    byte plus `0x0065EBA0/0x0065ED00`; do not clear the old list, so repeated
    pointers add weight. On attempt 200, stop and return an undersized pool.
@@ -812,6 +814,94 @@ using this order:
 4. apply the selected permanent rank, refresh effective ranks and all cached
    formulas, then restore HP/MP ratios; and
 5. publish owner state and resulting effects, never a shared mutable skill book.
+
+## 2026-08-20 shared secondary cooldown and action gate closure
+
+Fresh read-only decompilation of the retail image rejoined the belt input,
+wizard dispatcher, action object, cooldown arming, and progression recurrence.
+This closes the stock behavior around the already-recovered Phasing and
+Teleport row capacities; those two row-local timers are not standalone delays.
+
+### Input and action ownership
+
+`Game` belt activation `0x005D5600` rejects an input before dispatch when the
+game is paused, `PlayerWizard +0x1EC` has its no-interrupt latch set, the
+progression-wide timer at `+0x64` is positive, or the selected row's current
+cooldown at row `+0x64` is positive. The no-interrupt and progression-wide
+branches are silent. The row-cooldown branch requests its stock unavailable
+sound, then returns without calling the category-2 dispatcher.
+
+An accepted input calls `PlayerWizard` vtable `+0x6C = 0x0054CC50`. Successful
+ordinary category-2 branches call `0x005297D0`, which installs equipped-item
+cast action mode 4 for a staff. `Action_PlayerWizard_StaffCast2` constructor /
+tick `0x0044B7E0` / `0x0044B770` advances float32 progress by
+`0.1 * progression(+0x94)` and releases only after the strict `progress > 5`
+boundary. At neutral Faster Caster this occupies exactly 51 fixed updates,
+holds `PlayerWizard +0x1EC`, and selects attachment pose 9. Faster Caster row
+70 supplies `1+mValue/100` through `+0x94`, so the action interval shortens by
+the native float32 recurrence rather than by an unrelated cooldown scalar.
+
+The dispatcher does not install that common StaffCast2 action for Firewalker
+toggle-off, Mindstar, or Regenerate. Their state changes and refresh/audio
+owners remain the rows documented below. Dampen additionally replaces the
+ordinary presentation action with its specialized mode-21 CastSpin contract.
+All other accepted members of the 23-row category-2 dispatcher use the common
+no-interrupt occupancy in addition to any row-local cooldown.
+
+### Arming and recharge
+
+After a successful dispatcher return, the belt calls `Skills_Wizard` vtable
+`+0x80 = 0x00661F40`. Without concentrated Focus it calls `0x0065EDE0`, which
+copies the selected row's authored cooldown capacity into that row's current
+counter, clears every active row current strictly below the common capacity,
+and copies progression `+0x68` into the progression-wide current timer at
+`+0x64`. Constructor `0x006594E0` initializes `+0x68` from retail float
+`0x0078489C = 150.0` fixed ticks. The common timer is therefore a fixed
+1.5-second gate, not the maximum row cooldown: a Teleport keeps its 6,000-tick
+private row while other skills become available after the 150-tick common
+gate. Phasing's 100-tick row is cleared because the common timer outlasts it.
+With Focus selected in a
+concentration lane (or the timed concentration override), `RandomInt(100)`
+values `75..99` bypass that copy: the skill is immediately ready in exactly
+25 of 100 outcomes. This roll is part of the active gameplay RNG stream.
+
+Progression recurrence `0x00656E70` walks every skill row and subtracts
+`max(progression +0xD0, progression +0xD4 + 4*row.category)` from its current
+float cooldown, clamping at zero. It separately subtracts `+0xD0` from the
+progression-wide timer and clamps that value at zero; it does not recompute the
+maximum on each update. `+0xD0` is the Focus-derived global recharge
+factor and defaults to one. `+0xD4[...]` is the equipment-owned per-category
+recharge factor used by `FX_RECHARGECLASS`; it also defaults to one. Therefore
+rank-1 Focus makes ordinary secondary timers drain two native ticks per fixed
+update, while an equipped category bonus may win the maximum independently.
+The Website currently models no concentration selection or
+`FX_RECHARGECLASS` producer; those two branches must be added only with their
+own complete owners, never synthesized as a random cooldown shortcut.
+
+`BeltButton::Present 0x005D3E10` enters cooldown drawing only when the selected
+row's authored capacity is positive. It compares row current with common
+current and draws the larger. When row current is positive it divides by the
+row capacity; otherwise it divides common current by common capacity 150.
+Consequently Phasing displays the 150-tick common fan, Teleport displays its
+longer 6,000-tick row fan, and zero-`mCooldown` abilities can be silently common-
+gated without drawing a fan. The dark-red square geometry and icon alpha remain
+as previously recovered.
+
+### Implementer and regression contract
+
+- Preserve the shared action lock independently from row timers. A zero-
+  cooldown ability still cannot be recast during its accepted StaffCast2.
+- Store and decrement row capacities in native fixed-tick units: Phasing rank
+  one is authored as 100 but is subsumed by the common 150; Teleport rank one
+  is 6,000 and remains row-local after the common gate expires.
+- Arm the progression-wide timer to exactly 150 after each dispatcher success,
+  clear every shorter row current, and gate every secondary slot on it.
+- Apply the Focus scalar to every cooling row, not only the selected belt slot.
+- Keep cooldown rejection, action rejection, mana rejection, and a helper-level
+  post-payment failure (for example fully blocked Phasing) as distinct edges.
+- Regress neutral 51-update occupancy, Faster Caster float32 shortening,
+  Focus rank-one two-per-update recharge, the common/Phasing/Teleport presenter
+  branches, and the three actionless toggle/state branches.
 
 ## Not Yet Reversed
 

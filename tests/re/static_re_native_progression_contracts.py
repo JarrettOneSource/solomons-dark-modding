@@ -671,7 +671,8 @@ def test_native_progression_offer_pool_selection_and_rng_are_pinned() -> str:
             "overwrite it with `Integer(10)!=2`",
             "Draw uniformly **with replacement**",
             "Stock performs no ID-equality rejection",
-            "fewer than 50 such collisions have occurred",
+            "A category-4 candidate is always retried",
+            "category-1 row and fewer than 50 such collisions",
             "append every ID `8..81` except 52 that passes",
             "On attempt 200, stop and return an undersized pool",
             "This second shuffle is also not Fisher-Yates.",
@@ -695,6 +696,26 @@ def test_native_progression_offer_pool_selection_and_rng_are_pinned() -> str:
             "native offer phase order changed, so private-RNG consumption and display order are no longer pinned"
         )
     return "all 82 eligibility rows and three actor-private ordered offers are exact"
+
+
+def test_native_secondary_cooldown_and_action_gate_is_pinned() -> str:
+    doc = read_text(DOC)
+    _require_tokens(
+        doc,
+        (
+            "## 2026-08-20 shared secondary cooldown and action gate closure",
+            "`PlayerWizard +0x1EC` has its no-interrupt latch set",
+            "At neutral Faster Caster this occupies exactly 51 fixed updates",
+            "`0x0078489C = 150.0` fixed ticks",
+            "clears every active row current strictly below the common capacity",
+            "`max(progression +0xD0, progression +0xD4 + 4*row.category)`",
+            "values `75..99` bypass that copy",
+            "Phasing displays the 150-tick common fan",
+            "Teleport displays its\nlonger 6,000-tick row fan",
+        ),
+        "native secondary cooldown/action contract lost a gate, timer, or recharge rule",
+    )
+    return "secondary no-interrupt, global/row cooldown, Focus, and Faster Caster are pinned"
 
 
 def test_native_spell_welding_picker_art_contract_is_pinned() -> str:

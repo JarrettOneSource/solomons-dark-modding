@@ -138,6 +138,7 @@ from static_re_native_progression_contracts import (
     test_native_progression_golden_and_recorder_provenance_are_pinned,
     test_native_progression_level_curve_and_xp_awards_are_pinned,
     test_native_progression_offer_pool_selection_and_rng_are_pinned,
+    test_native_secondary_cooldown_and_action_gate_is_pinned,
     test_native_skill_picker_text_and_palette_abi_is_pinned,
     test_native_spell_welding_picker_art_contract_is_pinned,
 )
@@ -599,6 +600,7 @@ from static_re_projectile_spell_mechanics_contracts import (
     test_earth_boulder_second_pass_visual_ownership_is_pinned,
     test_ether_flight_compositor_and_contact_ownership_are_pinned,
     test_fireball_contact_range_and_recast_closure_is_pinned,
+    test_fireball_scenery_and_terrain_masks_are_pinned,
     test_frost_jet_operand_widths_and_rank_one_update_ownership_are_pinned,
     test_materialized_projectile_trajectories_pin_native_motion,
     test_low_mana_primary_branch_and_all_consumers_are_pinned,
@@ -1207,6 +1209,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native progression offer pool, selection, and RNG are pinned",
         test_native_progression_offer_pool_selection_and_rng_are_pinned,
+    ),
+    (
+        "Native secondary cooldown and action gate are pinned",
+        test_native_secondary_cooldown_and_action_gate_is_pinned,
     ),
     (
         "Native progression five live effect formulas are pinned",
@@ -2323,6 +2329,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Fireball contact, range, and recast closure is pinned",
         test_fireball_contact_range_and_recast_closure_is_pinned,
+    ),
+    (
+        "Fireball scenery and terrain masks are pinned",
+        test_fireball_scenery_and_terrain_masks_are_pinned,
     ),
     (
         "Ether flight compositor and contact ownership are pinned",

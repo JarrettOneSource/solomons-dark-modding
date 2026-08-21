@@ -153,6 +153,28 @@ def test_projectile_spell_native_dispatch_contract_is_complete() -> str:
     return "All five primary handlers, factories, and the shared emitter are pinned"
 
 
+def test_fireball_scenery_and_terrain_masks_are_pinned() -> str:
+    doc = _document()
+    _require_tokens(
+        doc,
+        (
+            "## 2026-08-20 Fireball scenery and terrain-mask closure",
+            "passes actor mask `6` to `0x00641220`",
+            "| Tree `2001` | `0x005E46D0` | `8`",
+            "| Monument `2009` | `0x005E0DB0` | `1`",
+            "| Gravestone `2029` | `0x005E5C30` | `0.01`",
+            "| Building `2040` | `0x005F2C30` | `1`",
+            "| Goodie `2061` | `0x005E3D60` | `20`",
+            "Fireball **does collide with a gravestone**",
+            "promoted Gravestone polygons mask\n`0x600`",
+            "intact/broken/gate/rail Fence polygons mask `0x100`",
+            "Monument, Building, and Wall blocking shapes\nuse mask zero",
+        ),
+        "Fireball scenery/terrain contact contract",
+    )
+    return "Fireball mask-6 scenery roots and mask-0x700 terrain exclusions are pinned"
+
+
 def test_low_mana_primary_branch_and_all_consumers_are_pinned() -> str:
     mechanics = _document()
     skills = SKILLS_DOC_PATH.read_text(encoding="utf-8")
