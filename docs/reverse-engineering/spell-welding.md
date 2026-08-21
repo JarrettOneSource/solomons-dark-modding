@@ -294,7 +294,7 @@ The direct atlas and procedural presentation membership is:
 | --- | --- |
 | FireMissile | record 110 core; BadGuys 255..266 body at `(age/3)%12`, normal plus additive passes; per-tick moving fade/ZAnim trail; impact BadGuys 251..254 |
 | FrostMissile | BadGuys 271..282 at `(age/4)%12`, scale `1.7`; additive Frost helper layers; two shrinking/refreshing internal lanes; optional push/turn overlays; `Anim_FadeFrost` impact |
-| BallLightning | procedural calls `0x00536380`, `0x00414EA0`, and `0x00535A30`; inherited phase plus per-render global samples; `Anim_FadeLightning` impact |
+| BallLightning | draw `0x005E0670` applies weak parent alpha, calls `0x00536380` for four BadGuys-110 circles plus two BadGuys-1836..1839 forks, then draws a direct BadGuys-70 sibling at `(x,y-10)`, scale `1.25+Float(.1)` and `Float(1)` alpha; conditional `0x00535A30` owns the turn overlay; `Anim_FadeLightning` owns impact |
 | GroundSpark | actor draw `0x005E1B00` renders its tick-owned animation list; each tick creates record 71 fade state and the optional BadGuys 1836..1839 fork branch |
 | Flame Lash | two-tick textured vertex mesh from `0x004583E0`, using BadGuys record 44; constructor `0x0045B810` calls the same exact `0x0052E020` three-point QuickSpline/ribbon builder as Lightning. Normal width/alpha are `1/1`; weak width is `.75` and color alpha `.5`; phase is `-3*managerTick`. The shared Enhanced branch can append independently selected BadGuys 375/376 geometry and texture. Handler `0x005408F0` also registers endpoint/contact `Anim_FadeFlameLash` roots; draw `0x00457370` uses BadGuys 35 additively. |
 | Blizzard Beam | two-tick `0x005308D0` beam path from `0x00458470`; this is not the ordinary Frost Jet particle class. Weld caller `0x00541870` passes source-glow flag one and endpoint/enhanced flag zero, so records 6/31 are unreachable here. The owned extras are exactly two one-frame source `Anim_SpellGlow` variant-24 actors. |
@@ -363,6 +363,20 @@ pitch one. Hail also writes Region camera magnitude `.1`.
   scale, motion, and signed angular-jitter draws. The retail `MAX` macro
   evaluates its randomized scale argument a second time when the first probe
   is at least `.45`; this conditional extra word is observable and required.
+  Every emitted BoulderBit is a separate registered actor. Base Bouncer tick
+  skips motion, gravity, rotation, and `.015` base fade on global ticks
+  divisible by three while height is nonzero; subclass `.025` fade still runs.
+  Other active ticks integrate planar/vertical motion, add `.4` gravity, then
+  on ground crossing consume `Float(10)` spin and `Integer(2)` damping,
+  multiply bounce velocity by `.3`, optionally multiply planar velocity by
+  `.65`, and settle above `-.75`. Settled ticks lose `.015` then `.025` in
+  float32 order. Meteor's five impact BoulderBits and weak/contact EBoulder
+  children share this recurrence and each retains its own painter root,
+  Region-light sample, sort bias `-15`, and retirement.
+  Draw `0x00457E40` submits the enhanced airborne shadow through the shared
+  Bouncer primitive helper before the lit sprite; that helper remains distinct
+  from the fragment's atlas draw and must not be represented as another rock
+  sprite in final browser parity.
 - Hail rock count is tie-to-even rounding of
   `max(1,scale^2*(widen*3+20))`. Each Enhanced new rock adds a `Float(20)`
   record-18 birth fade that lives 400 `.01` alpha-loss ticks independently.
