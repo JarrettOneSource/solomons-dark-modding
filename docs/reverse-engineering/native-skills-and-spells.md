@@ -452,6 +452,135 @@ shadow. Thus each live EtherBurn consumes exactly three RNG words per tick and
 owns both a fading violet target sprite and world illumination. Expiry removes
 the modifier; no periodic-damage branch or hidden maximum-HP restoration runs.
 
+## Hurricane charge, orbit field, contact, painter, and wind loop
+
+Hurricane `29` is a learned extension of Lightning `24`, not a standalone cast.
+Its complete stock ownership chain is distributed across the Lightning handler
+`0x0053F9C0`, `PlayerWizard` tick `0x00548B00`, visual initializer
+`0x00528DA0`, visual step `0x00528E30`, player painter `0x0052C2A0`, and the
+target-owned movement/contact helper `0x0047CB20`. The latter is called from the
+shared `Badguy` movement path `0x004835F0` and the Maggot path `0x004881A0`.
+The progression values cached at `+0x8D4/+0x8D8` are therefore live minimum and
+maximum contact damage; they are not dead display-only values.
+
+### Refreshed charge and Region registration
+
+PlayerWizard `+0x30C` is the Hurricane charge and byte `+0x310` is the
+previous-frame Lightning refresh latch. When the latch is clear, the early
+player tick subtracts double `0.0299999993`, clamps at zero, and removes the
+player from the Region Hurricane registry when the charge crosses to zero.
+When charge remains nonzero, the player is inserted into the unique Region
+registry rooted at `+0x8E30` (`count +0x8E38`, pointer storage `+0x8E44`). The
+early tick then clears `+0x310`.
+
+Later in the same player tick, a normal-authority Lightning handler with a
+positive cached Hurricane minimum sets `+0x310 = 1`. If charge was zero it first
+calls `0x00528DA0`, then adds double `0.00150000001` and caps at `1`. This order
+has two observable edges:
+
+- the first Lightning update initializes and draws a `0.0015` Hurricane but
+  does not place it in the contact registry until the following player tick;
+- the first update after Lightning is released still sees the preceding refresh
+  latch and retains full charge. Decay begins on the next update.
+
+The underpowered/alternate Lightning path never enters this branch. Charge
+persists through release decay, and reaching zero owns both Region-list removal
+and the next activation's fresh visual randomization.
+
+### Eight-lane visual program and exact painter
+
+`0x00528DA0` consumes exactly 16 RNG words on each zero-charge activation. For
+lane `i = 0..7`, in ascending order, it stores:
+
+- `+0x318 + 4*i`: `Float(360)` initial angle;
+- `+0x338 + 4*i`: angular velocity `10 * 0.75^i`;
+- `+0x358 + 4*i`: radius `1.5 * 1.2^i`; and
+- `+0x378 + 4*i`: `Float(15)` vertical offset.
+
+While the early player tick sees nonzero charge, `+0x314` advances by
+`FloatRange(2,3) * charge`, consuming one RNG word, and every lane angle advances
+by `angularVelocity * charge * 0.75`. Angles are not wrapped.
+
+`PlayerWizard::Draw 0x0052C2A0` first paints the ordinary player, then paints the
+Hurricane as an owner overlay:
+
+| Pass | Asset | Blend | Color / alpha | Transform |
+| --- | --- | --- | --- | --- |
+| core | DeadHawg record `15` (`singleton +0x0BB4`) | source-over | RGB `(0.95,1,1)`, alpha `0.75*charge` | player `(x,y-15)`, rotation `1.5*(+0x314)` degrees, scale `(5,4)` |
+| lanes | BadGuys record `84` (`singleton +0x4088`) | additive | RGB `(0.8,1,1)`, alpha `0.4*charge` | player `(x,y-(15+verticalOffset[i]))`, rotation `angle[i]`, scale `(radius[i],0.8*radius[i])` |
+| enhanced lane copy | BadGuys record `84` | additive | same | same position/scale, rotation `0.75*angle[i]` |
+
+The enhanced-effects branch paints all eight lanes and their eight secondary
+copies. The low-effects branch paints only lanes `0,2,4,6`, once each. Painter
+ordering is core first and lane index order second. No painter pass creates a
+`LightManager`, `Region::MiscLight`, shadow-casting light, or Region-light
+registration. The positional Region virtual call in the player tick is audio
+attenuation, not lighting.
+
+### Ambient audio ownership
+
+Every early tick with nonzero charge renews global ambient wrapper
+`0x0081CC0C` by taking the maximum of its current request and
+`charge * RegionAttenuation(playerPosition)`. That wrapper targets compiled
+registry entry `171`, `sounds\\steadywind__loop`, and is cleared after every
+`AmbientSound_Tick`. Hurricane has no one-shot sound of its own. Multiple wind
+producers therefore share a maximum-gain loop request rather than starting
+independent native loop objects.
+
+### Target families, orbit force, and contact
+
+`0x0047CB20` runs inside target movement ownership. It visits active Region
+Hurricane sources in registration order for ordinary `Badguy` subclasses and
+the Maggot-specific movement path. The same shared base path gives a live
+GoodImp the orbit force, but GoodImp's friendly contact override ignores the
+damage event. For each source it computes `dx = source.x-target.x` and
+`dy = source.y-target.y`; strict squared distance `< 78,400` is required.
+
+The force is tangential, not radial. The normalized direction is `(dy,-dx)`.
+Stock recovers distance with its single-iteration `0x5F3759DF` inverse-square-
+root approximation, then applies:
+
+```text
+falloff = 1 - clamp((distance - 100) / 180, 0, 1)
+delta += normalize(dy,-dx) * falloff * targetMovementStep * charge * 1.5
+```
+
+The authored curve is full through radius `100` and falls linearly to zero at
+radius `280`; the one-iteration fast-distance approximation governs the exact
+sampled value around those nominal thresholds. The force rotates targets
+clockwise. `targetMovementStep` is the target's signed
+short `+0x154`: the ordinary active lane uses `10`; culled/effects branches use
+`2` or `5`; and the special slow branch uses `15`. Movement runs only when
+`objectSerial % targetMovementStep == globalTick % targetMovementStep`, so the
+multiplier batches the same per-tick force over that target's movement cadence.
+
+Target short `+0x1DA` owns the Hurricane contact cooldown. `Badguy` construction
+initializes it with `Integer(100)`, the common tick subtracts
+`targetMovementStep` with a zero clamp, and accepted Hurricane contact writes
+`100`. On an ordinary target this permits one contact on each ten-tick movement
+update after its randomized first-contact stagger.
+
+When cooldown is below one, the source group byte is zero, and the source is
+inside the strict radius, the helper consumes one ordered
+`FloatRange(cache+0x8D4, cache+0x8D8)` draw and stores float32 damage:
+
+```text
+damage = charge * charge * charge * randomDamage
+```
+
+It dispatches through common target contact with flag `0x8`, source identity set
+to the Hurricane player, and contact intensity set to charge. Charge below
+`0.5` also adds flag `0x10`; the Skeleton/Zombie/Portal contact overrides use
+that bit to suppress their ordinary hit sound while retaining damage and death
+handling. Hurricane does not inherit Lightning's chain, Stun, or Disintegrate
+branches. Common shields, target damage modifiers, death, rewards, and loot
+remain downstream target ownership.
+
+Stock's `source +0x5C == 0` condition is its local-authority damage gate; the
+orbit force is outside that gate. A multiplayer host port must replace the
+local-slot condition with authoritative ownership for every player while
+preserving source order and the single target-owned cooldown.
+
 ## Staff melee, Enchant Staff, and Fortunate Flailing
 
 `0x00537AA0` is entered only with equipped staff type `0x1B5C`. It reads
