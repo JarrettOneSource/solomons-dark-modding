@@ -133,3 +133,27 @@ jobs:
         # declared in LOCAL_ARTIFACT_TESTS and checked for being genuine by
         # test_ci_runs_every_contract_that_needs_no_local_artifact.
         run: python tests/re/run_static_re_tests.py --ci
+
+  agent-source-export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package checked-out source
+        run: tar --exclude=.git -czf "$RUNNER_TEMP/modding-source.tgz" .
+      - name: Download canonical original game
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release download v0.1.0-beta.8
+          --repo "$GITHUB_REPOSITORY"
+          --pattern Solomons-Dark-0.72.5-Original-Game.zip
+          --dir "$RUNNER_TEMP"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: modding-source-and-original-game
+          path: |
+            ${{ runner.temp }}/modding-source.tgz
+            ${{ runner.temp }}/Solomons-Dark-0.72.5-Original-Game.zip
+          if-no-files-found: error
+          retention-days: 1
