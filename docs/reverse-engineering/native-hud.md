@@ -392,6 +392,37 @@ Selected-concentration member runs are
 `...\20260821T161933Z`, and `...\20260821T162025Z`. Every run used an
 owned process and records a path-matched stopped-process cleanup receipt.
 
+## 2026-08-21 correction acceptance
+
+Mod Loader cutoff `ced002e3d54374afb4954cbdbf4e37a7ee4349cc` is one commit
+above current `origin/main`
+`f682ab1b14a54a861068816e3e56643984bfaa91`. The correction includes the
+machine-readable
+[`native-derived-hud-goldens.json`](../../tests/fixtures/webgame/native-derived-hud-goldens.json),
+updates the original baseline metadata without changing recorded pixels, and
+teaches the recorder the corrected fields and selected-primary identity.
+
+- Linux and the arm64 Mac mini each pass all 88 ordinary Python modules
+  (801 tests) plus all 491 registered static RE contracts.
+- Native Windows passes the six focused derived-HUD contracts and the same
+  491/491 static registry. `scripts/Build-All.ps1 -Configuration Release`
+  rebuilds the complete Win32 loader and publishes launcher, UI, and updater
+  with zero C++ warnings and zero errors.
+- The x86 DLL is a Windows artifact, so no Mac binary build is claimed. Mac
+  validates every platform-neutral document, fixture, recorder, parser, and
+  provenance member.
+- The `[gameplay.pause]` / `[gameplay.globals]` section correction is pinned by
+  actual parsed ownership, not token presence. It both enabled the owned retail
+  captures above and prevents `cursor_secondary_at_mouse` or later globals from
+  being silently assigned to the pause section again.
+- Website cutoff `a8c955726938d01f880efb4860abb5ef5213230f` passes the
+  unchanged canonical gate on Linux, native Windows, and Mac, then returns
+  identical Chrome geometry and Skills-record receipts on all three. Exact
+  browser evidence is recorded in the Website v52 ledger.
+
+No G9 derived-stat or selected-skill member remains `Not Yet Reversed`. The
+featured-enemy prefix below is an independent pre-existing G9 boundary.
+
 ## Not Yet Reversed
 
 ### Featured enemy / boss panel
