@@ -264,7 +264,7 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
         raise StaticReTestFailure(
             f"the native hub/trader catalog is not reviewable JSON: {exc}"
         ) from exc
-    if catalog.get("schema_version") != 7:
+    if catalog.get("schema_version") != 8:
         raise StaticReTestFailure("hub/trader consumers lost the complete UI-family schema")
     if catalog.get("source", {}).get("sha256") != EXPECTED_RETAIL_SHA256:
         raise StaticReTestFailure("hub/trader UI provenance no longer names retail 0.72.5")
@@ -561,7 +561,11 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
         or item_info.get("render") != "0x005C3A60"
         or item_info.get("content_builder") != "0x0057C4B0"
         or item_info.get("initial_delay_native_ticks") != 20
+        or item_info.get("content_wrap_width") != 300
+        or item_info.get("content_margin") != 25
         or item_info.get("equipment_without_recipe") != "name only"
+        or item_info.get("equipment_catalog_membership")
+        != {"recipes": 47, "sets": 7, "item_and_set_fx": 86}
         or item_info.get("potion_instruction") != "Double-click to drink"
         or item_info.get("potion_copy") != {
             "health-potion": "Restores your health to maximum",
@@ -573,6 +577,68 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
         }
     ):
         raise StaticReTestFailure("ItemInfo ownership, delay, or complete potion copy drifted")
+    store_hover = interaction.get("store_grid_hover")
+    if not isinstance(store_hover, dict) or (
+        store_hover.get("owner") != "StoreGrid"
+        or store_hover.get("constructor") != "0x0055C740"
+        or store_hover.get("vtable") != "0x00794B8C"
+        or store_hover.get("hover_slot") != "+0xCC"
+        or store_hover.get("hover_handler") != "0x0055E2C0"
+        or store_hover.get("hover_box_field") != "StoreGrid+0x110"
+        or store_hover.get("hover_box_constructor") != "0x005C38F0"
+        or store_hover.get("hover_box_vtable") != "0x0079AE14"
+        or store_hover.get("hover_box_render") != "0x005C3A60"
+        or store_hover.get("hover_box_destructor") != "0x005C39B0"
+        or store_hover.get("horizontal_layout") != "0x005AADE0"
+        or store_hover.get("vertical_layout") != "0x005AB060"
+        or store_hover.get("initial_delay_native_ticks") != 0
+        or store_hover.get("audio") is not None
+        or store_hover.get("content_builder") != "item vtable +0x2C"
+        or store_hover.get("content_wrap_width") != 300
+        or store_hover.get("content_margin") != 25
+        or store_hover.get("source_gap") != 35
+        or store_hover.get("source_exclusion_size") != 70
+        or store_hover.get("selected_special_item")
+        != "no HoverBox; diagnostic literal Hover over special item!"
+        or store_hover.get("price_branch") != {
+            "owner_flag": "Shop+0x289",
+            "enabled_for": ["Shop", "PerkShop", "DowsingShop"],
+            "disabled_for": ["InventoryShop"],
+            "format": "    Price: %d",
+        }
+        or store_hover.get("perk_shop_suffix") != {
+            "vtable_slot": "Shop+0xC0",
+            "builder": "0x00554690",
+            "bundle": "    Bulk discount: 50%",
+            "first_mix": "    High price due to first mixing.",
+        }
+    ):
+        raise StaticReTestFailure("StoreGrid HoverBox ownership, copy, or geometry drifted")
+    owned_perk_hover = interaction.get("hagatha_owned_perk_hover")
+    if not isinstance(owned_perk_hover, dict) or (
+        owned_perk_hover.get("owner") != "InventoryScreen pointer handler"
+        or owned_perk_hover.get("handler") != "0x0056FC90"
+        or owned_perk_hover.get("current_index_field") != "InventoryScreen+0x5CC"
+        or owned_perk_hover.get("source")
+        != "progression selector list/count +0x7C0/+0x7C4"
+        or owned_perk_hover.get("grid") != {
+            "columns": 3,
+            "rows": 3,
+            "cell_size": 60,
+            "order": "row-major occupied entries only",
+        }
+        or owned_perk_hover.get("temporary_item_constructor") != "0x00550490"
+        or owned_perk_hover.get("content_builder") != "0x00573E90"
+        or owned_perk_hover.get("initial_delay_native_ticks") != 0
+        or owned_perk_hover.get("audio") is not None
+        or owned_perk_hover.get("content_margin") != 25
+        or owned_perk_hover.get("source_gap") != 25
+        or owned_perk_hover.get("source_exclusion_size") != 60
+        or owned_perk_hover.get("empty_cells") != "no hit target and no HoverBox"
+        or owned_perk_hover.get("bundle_art")
+        != "decorative; no owned-pane HoverBox"
+    ):
+        raise StaticReTestFailure("Hagatha owned-perk HoverBox ownership or geometry drifted")
     dragger = interaction.get("dragger")
     if not isinstance(dragger, dict) or {
         key: dragger.get(key)

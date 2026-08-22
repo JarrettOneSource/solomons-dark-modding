@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "binary_layout_id": 1,
   "native_functions": {
     "name": "0x00571DD0",
@@ -20,12 +20,41 @@
     "serendipity_active": "0x73C",
     "reverie_active": "0x73D"
   },
+  "tooltip_contract": {
+    "content_builder": "0x00573E90",
+    "hover_box_constructor": "0x005C38F0",
+    "hover_box_renderer": "0x005C3A60",
+    "owned_grid_pointer_owner": "0x0056FC90",
+    "owned_grid_current_index_offset": "InventoryScreen+0x5CC",
+    "owned_grid_shape": [3, 3],
+    "owned_grid_cell_size": 60,
+    "initial_delay_native_ticks": 0,
+    "audio": null,
+    "cheat_death_dynamic_lines": {
+      "enabled_with_charges": "   Cheats remaining: %d",
+      "enabled_without_charges": "   Used up!",
+      "disabled": null
+    },
+    "perk_shop_suffix": {
+      "builder": "0x00554690",
+      "bundle": "    Bulk discount: 50%",
+      "first_mix": "    High price due to first mixing."
+    }
+  },
+  "bundle": {
+    "selector": -1,
+    "name": "BARGAIN BUNDLE",
+    "native_tooltip_intro": "Get everything the last wizard got.",
+    "member_line_format": "        %s",
+    "member_source": "DAT_0081A390/DAT_0081A394"
+  },
   "perks": [
     {
       "selector": 0,
       "name": "LIFE CHARM",
       "price": 200,
       "description": "Increases maximum life by 25 percent.",
+      "native_tooltip_lines": ["Maximum life is always increased by 25%."],
       "behavior_family": "derived_stat",
       "network_scope": "participant_native_progression"
     },
@@ -34,6 +63,7 @@
       "name": "MANA CHARM",
       "price": 200,
       "description": "Increases maximum mana by 25 percent.",
+      "native_tooltip_lines": ["Maximum mana is always increased by 25%."],
       "behavior_family": "derived_stat",
       "network_scope": "participant_native_progression"
     },
@@ -42,6 +72,7 @@
       "name": "SPEED CHARM",
       "price": 250,
       "description": "Increases movement and casting speed by 10 percent.",
+      "native_tooltip_lines": ["Walking and casting speed is increased by 10%."],
       "behavior_family": "derived_stat",
       "network_scope": "participant_native_progression"
     },
@@ -50,6 +81,7 @@
       "name": "ITEM CHARM",
       "price": 1000,
       "description": "Improves the chance that useful items drop.",
+      "native_tooltip_lines": ["Odds of finding useful items to equip is increased."],
       "behavior_family": "drop_modifier",
       "network_scope": "host_authoritative_drops"
     },
@@ -58,6 +90,10 @@
       "name": "GOLD CHARM",
       "price": 500,
       "description": "Improves gold drop chance and quantity.",
+      "native_tooltip_lines": [
+        "Odds of finding gold is increased.",
+        "Quantity of gold found is increased."
+      ],
       "behavior_family": "drop_modifier",
       "network_scope": "host_authoritative_drops"
     },
@@ -66,6 +102,7 @@
       "name": "SEEKER'S CHARM",
       "price": 200,
       "description": "Reveals directions to gold, items, and upgrades.",
+      "native_tooltip_lines": ["Lines of force indicate the locations of gold, items, and magic upgrades."],
       "behavior_family": "owner_visual",
       "network_scope": "participant_local_presentation"
     },
@@ -74,6 +111,7 @@
       "name": "REVELATION CHARM",
       "price": 800,
       "description": "Newly learned skills start at level two.",
+      "native_tooltip_lines": ["New skills automatically become level 2 when you learn them."],
       "behavior_family": "skill_progression",
       "network_scope": "participant_native_progression"
     },
@@ -82,6 +120,7 @@
       "name": "CHEAT DEATH CHARM",
       "price": 5000,
       "description": "Survives one killing blow and restores half of maximum life.",
+      "native_tooltip_lines": ["Survive one killing blow by recovering half of your health."],
       "behavior_family": "one_shot_combat",
       "network_scope": "host_authoritative_combat"
     },
@@ -90,6 +129,7 @@
       "name": "PERKY CHARM",
       "price": 1500,
       "description": "Adds level-up choices and lowers item and skill requirements by two.",
+      "native_tooltip_lines": ["Offers more skill choices when you level up, and decreases level requirements of all skills and items by two."],
       "behavior_family": "level_up_choice",
       "network_scope": "host_authoritative_level_up"
     },
@@ -98,6 +138,7 @@
       "name": "SCATTER CURSE",
       "price": 150,
       "description": "Killed monsters scatter more and larger orbs.",
+      "native_tooltip_lines": ["Killed monsters scatter more and larger orbs"],
       "behavior_family": "drop_modifier",
       "network_scope": "host_authoritative_drops"
     },
@@ -106,6 +147,7 @@
       "name": "WAR CHARM",
       "price": 800,
       "description": "Reduces offensive spell mana costs by 25 percent.",
+      "native_tooltip_lines": ["All offensive spells cost 25% less to cast."],
       "behavior_family": "derived_stat",
       "network_scope": "participant_native_progression"
     },
@@ -114,6 +156,7 @@
       "name": "CURING CHARM",
       "price": 250,
       "description": "Reduces poison damage by 50 percent.",
+      "native_tooltip_lines": ["Poison damage reduced by 50%."],
       "behavior_family": "damage_modifier",
       "network_scope": "host_authoritative_combat"
     },
@@ -122,6 +165,7 @@
       "name": "THE LAST WORD CHARM",
       "price": 500,
       "description": "Explodes on death for large area damage and changes final drops.",
+      "native_tooltip_lines": ["Explode on death, dealing massive damage to everything near and far.  Luthacus will scavenge any treasures dropped during the final conflagration."],
       "behavior_family": "death_effect",
       "network_scope": "host_authoritative_combat_and_drops"
     },
@@ -130,6 +174,7 @@
       "name": "SPELLWELDER'S CHARM",
       "price": 2000,
       "description": "Recombines welded spells when one component improves.",
+      "native_tooltip_lines": ["Welded spells recombine any time the compenent spells are improved."],
       "behavior_family": "skill_progression",
       "network_scope": "participant_native_progression"
     },
@@ -138,6 +183,7 @@
       "name": "WEIRD CASTER CHARM",
       "price": 2500,
       "description": "Grants a new secondary spell and favors secondary choices.",
+      "native_tooltip_lines": ["Grants a new secondary attack and biases skill choices toward secondary skills."],
       "behavior_family": "skill_progression",
       "network_scope": "participant_native_progression"
     },
@@ -146,6 +192,7 @@
       "name": "DRINKER'S CHARM",
       "price": 1000,
       "description": "Automatically drinks owned potions when needed.",
+      "native_tooltip_lines": ["Drink potions automatically when needed."],
       "behavior_family": "inventory_consumption",
       "network_scope": "participant_native_inventory"
     },
@@ -154,6 +201,7 @@
       "name": "GLASS CANNON CURSE",
       "price": 1000,
       "description": "Doubles damage dealt and damage taken.",
+      "native_tooltip_lines": ["Do double damage.  Take double damage."],
       "behavior_family": "damage_modifier",
       "network_scope": "host_authoritative_combat"
     },
@@ -162,6 +210,7 @@
       "name": "SORCEROR'S CHARM",
       "price": 3000,
       "description": "Allows one level-up reroll or preserves the reroll for later.",
+      "native_tooltip_lines": ["Allows the wizard to re-roll skills once at level-up, or save the skill point to spend on the next level."],
       "behavior_family": "level_up_choice",
       "network_scope": "host_authoritative_level_up"
     },
@@ -170,6 +219,7 @@
       "name": "FOCUS CHARM",
       "price": 1000,
       "description": "Reduces spell cooldowns by 25 percent.",
+      "native_tooltip_lines": ["All spell cooldowns reduced by 25%."],
       "behavior_family": "derived_stat",
       "network_scope": "participant_native_progression"
     },
@@ -178,6 +228,7 @@
       "name": "DISFIGURING CURSE",
       "price": 3000,
       "description": "Enables all three ring slots.",
+      "native_tooltip_lines": ["Tweaks your aura so that you can effectively use three rings."],
       "behavior_family": "equipment_capacity",
       "network_scope": "participant_native_inventory"
     },
@@ -186,6 +237,7 @@
       "name": "BARE HANDS CHARM",
       "price": 500,
       "description": "Without a weapon, increases damage by 15 percent and reduces mana cost by 15 percent.",
+      "native_tooltip_lines": ["Improve damage and lower mana cost by 15% when casting bare-handed."],
       "behavior_family": "conditional_derived_stat",
       "network_scope": "participant_native_progression_and_equipment"
     },
@@ -194,6 +246,7 @@
       "name": "SPLIT MIND CHARM",
       "price": 4000,
       "description": "Concentrates progression on two selected skills.",
+      "native_tooltip_lines": ["Concentrate on two skills at once."],
       "behavior_family": "skill_progression",
       "network_scope": "participant_native_progression"
     },
@@ -202,6 +255,7 @@
       "name": "CURSE BOSSES",
       "price": 2000,
       "description": "Makes bosses take triple damage.",
+      "native_tooltip_lines": ["Bosses take triple damage."],
       "behavior_family": "damage_modifier",
       "network_scope": "host_authoritative_combat"
     },
@@ -210,6 +264,7 @@
       "name": "ARCANE ATTRACTOR CHARM",
       "price": 2000,
       "description": "Greatly improves the chance of magical upgrades.",
+      "native_tooltip_lines": ["Odds of finding magical upgrades is greatly increased."],
       "behavior_family": "drop_modifier",
       "network_scope": "host_authoritative_drops"
     },
@@ -218,6 +273,7 @@
       "name": "SERENDIPITY CHARM",
       "price": 1000,
       "description": "Triples spell damage until the owner is hurt.",
+      "native_tooltip_lines": ["Until you are hurt, all spells do three times as much damage."],
       "behavior_family": "until_hurt_combat",
       "network_scope": "host_authoritative_combat"
     },
@@ -226,6 +282,7 @@
       "name": "REVERIE CHARM",
       "price": 1000,
       "description": "Removes offensive spell mana costs until the owner is hurt.",
+      "native_tooltip_lines": ["Until you are hurt, all spells cost no mana."],
       "behavior_family": "until_hurt_combat",
       "network_scope": "host_authoritative_combat"
     },
@@ -234,6 +291,10 @@
       "name": "BRUTE'S CHARM",
       "price": 3000,
       "description": "Increases melee damage by 200 percent and pushing by 100 percent.",
+      "native_tooltip_lines": [
+        "Increases wizard's physical strength.",
+        "Melee damage increased 200%, pushing power increased 100%."
+      ],
       "behavior_family": "derived_stat",
       "network_scope": "participant_native_progression"
     },
@@ -242,6 +303,7 @@
       "name": "TONIC",
       "price": 1000,
       "description": "Increases charm and curse capacity; at most two tonics apply.",
+      "native_tooltip_lines": ["Loosens your mind enough to hold more charms or curses.  Limit two per customer."],
       "behavior_family": "perk_capacity",
       "network_scope": "participant_native_progression"
     }

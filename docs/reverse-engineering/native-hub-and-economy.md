@@ -1436,6 +1436,83 @@ the service. Standalone InventoryScreen close calls that same member at
 transition; substituting `click` or `backpack_close` changes the retail event
 contract.
 
+### 2026-08-22 correction: StoreGrid and owned perks create HoverBox details
+
+The earlier presentation closure recovered delayed InventoryScreen `ItemInfo`
+but did not follow the sibling StoreGrid hover slot or the final Hagatha branch
+inside the InventoryScreen pointer owner. Calling the Shop family exact without
+those branches was wrong. The actual contextual-inspection ownership is:
+
+| Owner | Construction/content path | Input and lifetime |
+| --- | --- | --- |
+| `HoverBox` | ctor `0x005C38F0`, vtable `0x0079AE14`, render `0x005C3A60`, horizontal/vertical layout `0x005AADE0`/`0x005AB060`, destructor `0x005C39B0` | immediate contextual box; the active object is replaced/destroyed as the current target changes |
+| Shop `StoreGrid` | ctor `0x0055C740`, vtable `0x00794B8C`; hover slot `+0xCC -> 0x0055E2C0`; embedded at `Shop+0x9C`, HoverBox at `StoreGrid+0x110` | ordinary current StoreItem builds a box immediately; selected/special StoreItem kind one builds none |
+| InventoryScreen `ItemInfo` | ctor `0x00553B80`, vtable `0x007946A4`; common item builder `0x0057C4B0` | selected InventoryGrid object waits 20 native ticks; drag/selection loss destroys it |
+| Hagatha owned-perk grid | tail of `0x0056FC90`; current index `InventoryScreen+0x5CC`; temporary Item_Perk ctor `0x00550490`; content `0x00573E90` | only occupied cells in the row-major 3 by 3 progression list; immediate and silent; empty cells/bundle decoration produce nothing |
+
+`0x0055E2C0` destroys the previous `StoreGrid+0x110` box first. For an
+ordinary StoreItem it resolves the live item, calls item vtable `+0x2C`, then
+tests Shop byte `+0x289`. Ordinary Shop, PerkShop, and DowsingShop leave this
+byte set and append a blank plus exact `    Price: %d`; InventoryShop ctor
+`0x004F59A0` clears it, so Luthacus item details contain no price. The function
+then calls Shop vtable `+0xC0`. PerkShop maps that slot to `0x00554690`, which
+adds `    Bulk discount: 50%` for selector `-1`, or
+`    High price due to first mixing.` when the selector's
+`DAT_0081A39C+selector` flag is clear. A selected StoreItem changes to kind one;
+the only branch is the diagnostic literal `Hover over special item!`, not a
+tooltip. Shop selection and hover are therefore separate native states.
+
+The common item builder `0x0057C4B0` is broader than the prior Website port:
+it emits the case-preserving item name with rarity/set tint, wraps optional
+description at 300 pixels, reports an unmet effective player-level requirement,
+formats every live item FX through `0x00575C20`, and for a recipe set member
+adds `Item Set:`, the set name, every member name, `Complete Set Bonus:`, and
+the set FX rows. The format helper's operator prefixes are exact: flat
+`+%.1F`/`-%.1F`, multiplier `x%.1F`, and percent
+`+%.1F%%`/negative `-%.0F%%`. It covers kinds 1..39; the complete 47 recipe,
+seven-set, and 86-FX authored membership remains in
+`native-item-catalog.json`. Recipe-less starter Hat/Robe/Staff legitimately
+stop after the name; recipe-backed and generated gear do not.
+
+`0x00573E90` owns the complete perk/bundle copy. It first adds the Item_Perk
+name, then dispatches all selectors `0..27` and `-1`. Selector 4 and selector
+26 add two description lines. Selector 7 adds the base Cheat Death line and,
+when its enabled byte is set, either `   Cheats remaining: %d` or
+`   Used up!`. Bundle `-1` adds `Get everything the last wizard got.` and
+enumerates every selector in `DAT_0081A390/94`. The exact per-selector lines
+and dynamic branches are machine-readable in
+`native-hagatha-perk-catalog.json`; paraphrased behavior summaries are not UI
+copy.
+
+Both HoverBox and ItemInfo paint above their owning surface. `0x005C3A60`
+uses an opaque black contextual fill, the native edge pass, and each retained
+ExactText DataLine. Layout uses a 25-pixel content/client margin and flips when
+the preferred side would overflow the 1600 by 900 client. StoreGrid passes a
+35-pixel source gap and retains a 70-square source exclusion; the owned-perk
+branch passes 25 and a 60-square exclusion. There is no hover delay and no
+audio request. Pointer exit/current-cell change, purchase rebuild, drag,
+notice replacement, service close, range exit, region transition, and fade
+teardown must not retain the contextual object.
+
+Complete contextual membership is now dispositioned as follows:
+
+| Member | Disposition | Evidence |
+| --- | --- | --- |
+| Fomentius six Potion subtypes, Misc dye/key, and Sack | `exact-ported` | StoreGrid common slot plus class vtable content |
+| Hagatha selectors 0..27 and bundle -1 | `exact-ported`; selector 8 Shop offer remains `out-of-system` because the retail builder excludes it | complete selector switch and catalog |
+| Hagatha occupied owned-perk cells | `exact-ported` | `0x0056FC90` 3 by 3 loop |
+| Luthacus arbitrary storage items/no-price branch | `exact-ported` | InventoryShop `+0x289 = 0` |
+| Shlorio all 47 recipe result offers | `exact-ported` | Dowsing StoreGrid plus complete item catalog |
+| All seven item sets and 86 item/set FX rows | `exact-ported` through shared content builder | `0x0057C4B0`, `0x00575C20`, native item catalog |
+| InventoryScreen Potion/Misc/Sack/equipment ItemInfo | `exact-ported` | 20-tick ItemInfo path and every class vtable |
+| selected Shop special cell, empty owned-perk cells, decorative bundle art | `exact-ported` no-tooltip states | explicit kind-one/empty-loop branches |
+| Item base placeholder 7000 and Item_Map 7010 | `out-of-system` (no ordinary descriptive shop/inventory producer) | factory/vtable sweep |
+| Item_Misc book subtypes 2/3 | `out-of-system` for the current Website shop producer; exact help strings retained | `0x00570ED0` |
+
+This finding corrects the older table label “detail `0x00565E00`”:
+`0x00565E00` participates in Shop control/chrome rendering, while
+`0x0055E2C0` plus item vtable `+0x2C` owns contextual content.
+
 ### 2026-08-21 correction: the anvil is an unforge sink, not an exit control
 
 The earlier InventoryScreen closure misclassified UI record 75 as the

@@ -75,6 +75,37 @@ EXPECTED_PRICES = (
     1000,
 )
 
+EXPECTED_TOOLTIP_LINES = (
+    ("Maximum life is always increased by 25%.",),
+    ("Maximum mana is always increased by 25%.",),
+    ("Walking and casting speed is increased by 10%.",),
+    ("Odds of finding useful items to equip is increased.",),
+    ("Odds of finding gold is increased.", "Quantity of gold found is increased."),
+    ("Lines of force indicate the locations of gold, items, and magic upgrades.",),
+    ("New skills automatically become level 2 when you learn them.",),
+    ("Survive one killing blow by recovering half of your health.",),
+    ("Offers more skill choices when you level up, and decreases level requirements of all skills and items by two.",),
+    ("Killed monsters scatter more and larger orbs",),
+    ("All offensive spells cost 25% less to cast.",),
+    ("Poison damage reduced by 50%.",),
+    ("Explode on death, dealing massive damage to everything near and far.  Luthacus will scavenge any treasures dropped during the final conflagration.",),
+    ("Welded spells recombine any time the compenent spells are improved.",),
+    ("Grants a new secondary attack and biases skill choices toward secondary skills.",),
+    ("Drink potions automatically when needed.",),
+    ("Do double damage.  Take double damage.",),
+    ("Allows the wizard to re-roll skills once at level-up, or save the skill point to spend on the next level.",),
+    ("All spell cooldowns reduced by 25%.",),
+    ("Tweaks your aura so that you can effectively use three rings.",),
+    ("Improve damage and lower mana cost by 15% when casting bare-handed.",),
+    ("Concentrate on two skills at once.",),
+    ("Bosses take triple damage.",),
+    ("Odds of finding magical upgrades is greatly increased.",),
+    ("Until you are hurt, all spells do three times as much damage.",),
+    ("Until you are hurt, all spells cost no mana.",),
+    ("Increases wizard's physical strength.", "Melee damage increased 200%, pushing power increased 100%."),
+    ("Loosens your mind enough to hold more charms or curses.  Limit two per customer.",),
+)
+
 
 def _require(label: str, text: str, tokens: tuple[str, ...], failures: list[str]) -> None:
     for token in tokens:
@@ -91,8 +122,8 @@ def test_native_hagatha_perk_catalog_is_complete() -> str:
 
     catalog = json.loads(read_text(path))
     failures: list[str] = []
-    if catalog.get("schema_version") != 1:
-        failures.append("catalog schema_version is not 1")
+    if catalog.get("schema_version") != 2:
+        failures.append("catalog schema_version is not 2")
     if catalog.get("native_functions") != {
         "name": "0x00571DD0",
         "price_table": "0x005A7CA0",
@@ -114,6 +145,37 @@ def test_native_hagatha_perk_catalog_is_complete() -> str:
         "reverie_active": "0x73D",
     }:
         failures.append("catalog native field evidence is incomplete")
+    tooltip = catalog.get("tooltip_contract")
+    if not isinstance(tooltip, dict) or (
+        tooltip.get("content_builder") != "0x00573E90"
+        or tooltip.get("hover_box_constructor") != "0x005C38F0"
+        or tooltip.get("hover_box_renderer") != "0x005C3A60"
+        or tooltip.get("owned_grid_pointer_owner") != "0x0056FC90"
+        or tooltip.get("owned_grid_current_index_offset") != "InventoryScreen+0x5CC"
+        or tooltip.get("owned_grid_shape") != [3, 3]
+        or tooltip.get("owned_grid_cell_size") != 60
+        or tooltip.get("initial_delay_native_ticks") != 0
+        or tooltip.get("audio") is not None
+        or tooltip.get("cheat_death_dynamic_lines") != {
+            "enabled_with_charges": "   Cheats remaining: %d",
+            "enabled_without_charges": "   Used up!",
+            "disabled": None,
+        }
+        or tooltip.get("perk_shop_suffix") != {
+            "builder": "0x00554690",
+            "bundle": "    Bulk discount: 50%",
+            "first_mix": "    High price due to first mixing.",
+        }
+    ):
+        failures.append("catalog native HoverBox contract is incomplete")
+    if catalog.get("bundle") != {
+        "selector": -1,
+        "name": "BARGAIN BUNDLE",
+        "native_tooltip_intro": "Get everything the last wizard got.",
+        "member_line_format": "        %s",
+        "member_source": "DAT_0081A390/DAT_0081A394",
+    }:
+        failures.append("catalog native bargain-bundle tooltip is incomplete")
 
     perks = catalog.get("perks")
     if not isinstance(perks, list) or len(perks) != len(EXPECTED_NAMES):
@@ -128,6 +190,8 @@ def test_native_hagatha_perk_catalog_is_complete() -> str:
                 failures.append(f"perk row {selector} has the wrong stock price")
             if not isinstance(row.get("description"), str) or not row["description"].strip():
                 failures.append(f"perk row {selector} has no recovered behavior description")
+            if tuple(row.get("native_tooltip_lines", ())) != EXPECTED_TOOLTIP_LINES[selector]:
+                failures.append(f"perk row {selector} has the wrong native tooltip copy")
             if not isinstance(row.get("behavior_family"), str) or not row["behavior_family"]:
                 failures.append(f"perk row {selector} has no behavior family")
             if not isinstance(row.get("network_scope"), str) or not row["network_scope"]:
@@ -135,7 +199,7 @@ def test_native_hagatha_perk_catalog_is_complete() -> str:
 
     if failures:
         raise StaticReTestFailure("; ".join(failures))
-    return "all 28 stock Hagatha outcomes have exact names, prices, behavior, and native evidence"
+    return "all 28 stock Hagatha outcomes and the bundle have exact names, prices, tooltip copy, behavior, and native evidence"
 
 
 def test_hagatha_perks_replicate_as_participant_owned_native_state() -> str:

@@ -1,5 +1,5 @@
 {
-  "schema_version": 7,
+  "schema_version": 8,
   "source": {
     "build": "retail 0.72.5",
     "executable": "SolomonDark.exe",
@@ -402,8 +402,12 @@
           "render": "0x005C3A60",
           "content_builder": "0x0057C4B0",
           "initial_delay_native_ticks": 20,
-          "background": "opaque black contextual rectangle placed beside the selected object and clamped to the 1600x900 client",
+          "background": "opaque black contextual rectangle plus native edge pass, placed beside the selected object and clamped to the 1600x900 client",
+          "content_wrap_width": 300,
+          "content_margin": 25,
           "equipment_without_recipe": "name only",
+          "equipment_with_recipe": "name with rarity/set tint, optional description, unmet effective level requirement, every item FX line, Item Set block with all members, and Complete Set Bonus FX",
+          "equipment_catalog_membership": {"recipes": 47, "sets": 7, "item_and_set_fx": 86},
           "potion_copy": {
             "health-potion": "Restores your health to maximum",
             "mana-potion": "Restores your mana to maximum",
@@ -413,6 +417,57 @@
             "rejuvenation-potion": "Restores your health and mana to maximum"
           },
           "potion_instruction": "Double-click to drink"
+        },
+        "store_grid_hover": {
+          "owner": "StoreGrid",
+          "constructor": "0x0055C740",
+          "vtable": "0x00794B8C",
+          "hover_slot": "+0xCC",
+          "hover_handler": "0x0055E2C0",
+          "hover_box_field": "StoreGrid+0x110",
+          "hover_box_constructor": "0x005C38F0",
+          "hover_box_vtable": "0x0079AE14",
+          "hover_box_render": "0x005C3A60",
+          "hover_box_destructor": "0x005C39B0",
+          "horizontal_layout": "0x005AADE0",
+          "vertical_layout": "0x005AB060",
+          "initial_delay_native_ticks": 0,
+          "audio": null,
+          "content_builder": "item vtable +0x2C",
+          "content_wrap_width": 300,
+          "content_margin": 25,
+          "source_gap": 35,
+          "source_exclusion_size": 70,
+          "selected_special_item": "no HoverBox; diagnostic literal Hover over special item!",
+          "price_branch": {
+            "owner_flag": "Shop+0x289",
+            "enabled_for": ["Shop", "PerkShop", "DowsingShop"],
+            "disabled_for": ["InventoryShop"],
+            "format": "    Price: %d"
+          },
+          "perk_shop_suffix": {
+            "vtable_slot": "Shop+0xC0",
+            "builder": "0x00554690",
+            "bundle": "    Bulk discount: 50%",
+            "first_mix": "    High price due to first mixing."
+          },
+          "teardown": ["current-cell change", "pointer exit", "selection special-state", "purchase rebuild", "service close"]
+        },
+        "hagatha_owned_perk_hover": {
+          "owner": "InventoryScreen pointer handler",
+          "handler": "0x0056FC90",
+          "current_index_field": "InventoryScreen+0x5CC",
+          "source": "progression selector list/count +0x7C0/+0x7C4",
+          "grid": {"columns": 3, "rows": 3, "cell_size": 60, "order": "row-major occupied entries only"},
+          "temporary_item_constructor": "0x00550490",
+          "content_builder": "0x00573E90",
+          "initial_delay_native_ticks": 0,
+          "audio": null,
+          "content_margin": 25,
+          "source_gap": 25,
+          "source_exclusion_size": 60,
+          "empty_cells": "no hit target and no HoverBox",
+          "bundle_art": "decorative; no owned-pane HoverBox"
         },
         "dragger": {
           "owner": "InventoryDragger",
