@@ -303,6 +303,30 @@ The direct atlas and procedural presentation membership is:
 | Meteor | fall draw `0x005E16C0`; auxiliary `0x005E6DE0` draws DeadHawg 19 during final descent and BadGuys 67 during impact; impact constructor `0x00610880` owns the independent flash/debris; the channel also emits `Anim_Iceblast` at the aimed point |
 | Hailstones | held Frost helper plus owned rocks 168..171; Enhanced rock creation emits independent record-18 fades, and release emits independent `Anim_FadeFrost`; held and released rock transforms are distinct. A depleted target-contact rock creates `Anim_Line` plus BadGuys 15. Static-line termination creates, per remaining rock, fifteen additive moving BadGuys-45 children and one BadGuys-32 bouncer. The visibility-residency exit instead creates one `Anim_Line` per remaining rock before carrier retirement. |
 
+The 2026-08-21 shared-contact reopening closes the retained `EBoulder` result
+rather than treating its contact BoulderBit as presentation-only. Override
+`0x00621450` calls common Boulder flight/contact `0x00620B60`. For every new
+target, that method spends the actor-local pool with the ordinary toughness
+rule, writes
+`scale = releaseScale * (1 - (1 - remaining/baseDamage) * 0.35)`, emits one
+`0x0060BC10` BoulderBit at the reduced scale, and rescales every retained shell
+vector through `0x004029A0`. Pool `<= 0.001` stops only the current candidate
+walk; only pool `<= 0` invokes EBoulder's terminal vslot `0x0060BED0`.
+
+Release `0x005FA6D0 -> 0x005E5450` writes each split child's actual release
+scale to `+0x1FC`, so the shrink ceiling is per child rather than the held
+carrier's earlier maximum. Terminal `0x0060BED0` restores the saved pre-contact
+scale, emits its Ether fade plus the full independently registered
+`BadGuys[2008..2010]` BoulderBit breakup, balances the actor-owned loop, and
+removes only that released child. Other split children retain independent
+target lists, pools, scales, lights, audio ownership, and lifetimes.
+
+`Hailstones` remains a neighboring but separate reachable contact system: its
+released carrier executes `0x005FBDE0` and retires individual rock rows through
+the documented Hail line/fade path. The inherited `0x00620B60` vtable pointer
+does not authorize applying EBoulder whole-carrier shrink or terminal breakup
+to Hail's per-rock state.
+
 Native audio ownership is exact:
 
 | Build | One-shot(s) | Loop owner(s) |
@@ -442,6 +466,12 @@ pitch one. Hail also writes Region camera magnitude `.1`.
   float32 order. Meteor's five impact BoulderBits and weak/contact EBoulder
   children share this recurrence and each retains its own painter root,
   Region-light sample, sort bias `-15`, and retirement.
+  The Enhanced Effects branch sets the actor alpha field to `10` after the
+  base constructor's `2`; it is not merely a shadow Boolean. Non-enhanced
+  children have an 80-update upper bound, while enhanced children are
+  state-driven with a strict 400-update upper bound. The former Website
+  fixed-80 retirement clipped every reachable enhanced BoulderBit and is
+  superseded by the 2026-08-21 contact-family correction.
   Draw `0x00457E40` submits the enhanced airborne shadow through helper
   `0x00415020` before the lit sprite. Raw instructions show that helper receives
   the same fragment descriptor from actor `+0x24`: the shadow is the same atlas

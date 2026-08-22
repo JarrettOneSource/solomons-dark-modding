@@ -1030,6 +1030,87 @@ Boulder can continue and contact a different target. That is residual
 multi-target behavior, not same-target periodic damage. There is no recovered
 fixed flight expiration.
 
+### Exact actor-contact retention, shrink, and fragment program
+
+The 2026-08-21 contact-lifecycle reopening corrects an incomplete earlier
+closure. The prior pass recovered the target list and pool arithmetic but
+stopped before the downstream instructions at `0x006212E5..0x00621365` and
+therefore did not carry the surviving actor's shrink, retained-shell rewrite,
+or one-fragment contact child into the Website. Fresh read-only Ghidra 12.0.3
+decompilation and raw instructions against the same retail image establish the
+complete sequence.
+
+Release finalizer `0x005E5450` leaves the release-base damage `B` at `+0x1F8`,
+writes the quadratic released pool `P` at `+0x1F4`, and replaces `+0x1FC` with
+the actual released charge ceiling `C_release`. At the start of every flight
+tick, `0x00609D30` copies the pre-contact charge to `+0x1F0`. The query then
+uses the pre-contact radius `75*C`, mask `0x6`, and native candidate order.
+For each eligible handle absent from the `+0x200` list:
+
+```text
+payload = min(target_current_hp, P)
+spent   = payload                       when P < target_current_hp
+        = payload / (2 * toughness)     otherwise
+P'      = max(0, float32(P - spent))
+C'      = float32(min(C_release,
+                      C_release * (1 - (1 - P' / B) * 0.35)))
+```
+
+The division and `0.35` expression remain in x87 precision until the final
+float32 store to `+0x74`. A zero release base with a positive residual produces
+positive infinity and the following minimum retains `C_release`. A zero release
+base whose contact also reaches zero pool instead produces x87 NaN; the
+unordered compare takes the candidate branch and stores that NaN before the
+terminal path restores the saved finite charge. Target insertion through the
+`+0x200` list vslot occurs after contact dispatch. `0x0060BC10` then creates
+exactly one independent `Anim_BoulderBit` from `BadGuys[2008..2010]` using
+`C'`; this happens for every accepted actor contact, including the contact
+which later exhausts the pool. A strict JSON replication layer cannot carry
+the pathological NaN child's transforms; a web port can preserve the exact RNG
+budget and finite full breakup while explicitly omitting that unrenderable
+registered child, but must not label a finite clamp as native.
+
+The double `0.001` at `0x0079E260` is only the same-tick traversal stop:
+`P' <= 0.001` skips later candidates. It is not the retirement threshold.
+Post-contact helper `0x005FA4B0` removes the actor only when `P' <= 0` and the
+actor is not already pending removal. A positive sub-threshold pool therefore
+survives and can meet another target on a later tick.
+
+For a survivor, `0x005FA4B0` visits every retained Rock and calls vector-length
+helper `0x004029A0` with `30*C'`. The existing rock count, record variants, and
+stored scales remain unchanged, while every noncentral local XYZ vector is
+renormalized to the smaller radius. The helper then writes body bounds
+`500*C'` and collision radius `75*C'`. The aura, visual-root offset, painter
+bias, outbound light range, next-tick roll divisor, and next-tick query radius
+all consume the same reduced charge.
+
+If the pool reaches zero, the virtual `+0x6C` terminal path restores the saved
+pre-contact charge from `+0x1F0` before creating the full breakup. Ordinary
+`Boulder` uses `0x0060B700`; `EBoulder` overrides it with `0x0060BED0`, which
+adds its Ether fade and independently registered BoulderBit family before
+removal. Thus a contact can visibly shed one rock and continue, or emit that
+one contact rock followed by the full terminal breakup; actor contact is not
+an unconditional pierce count or an unconditional first-hit explosion.
+
+The complete shared-function membership is:
+
+- ordinary `Boulder 0x7D5`: direct vtable data reference at `0x0079E078`;
+- `EBoulder 0x7E1`: override `0x00621450` calls `0x00620B60`, then owns its
+  target steering/countdown and terminal `0x0060BED0`;
+- `Hailstones 0x7E4`: the inherited vtable contains the second direct data
+  reference at `0x0079E168`, but released Hail dispatches its independently
+  recovered per-rock substep/contact owner `0x005FBDE0`; it does not consume
+  this whole-carrier residual-pool result in the reachable released path.
+
+No authored contact table or setting-dependent gameplay branch exists here.
+Enhanced Effects gates the airborne BoulderBit shadow draw, not pool damage,
+target memory, shrink, or retirement. Contact emits no new one-shot audio;
+the moving actor retains its rolling-loop owner until terminal removal. Both
+ordinary `0x0060B700` and EBoulder `0x0060BED0` then play registry 77
+`sounds\\rockhit` (`+0xD54`) at pitch `1 + 0.05/charge` with positional gain
+multiplied by charge, followed by registry 89 `sounds\\stonebreak` (`+0xF64`)
+at pitch `1 - 0.5*charge` with ordinary positional gain.
+
 ### Construction, called rocks, draw order, and breakup
 
 The 2026-08-14 second two-pass presentation audit corrects one remaining

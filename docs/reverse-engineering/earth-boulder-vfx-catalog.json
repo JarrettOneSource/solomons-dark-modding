@@ -1,7 +1,7 @@
 {
-  "schema_version": 1,
-  "captured_at": "2026-08-14",
-  "subject": "rank-1 Earth primary Boulder construction, draw, release, and breakup",
+  "schema_version": 2,
+  "captured_at": "2026-08-21",
+  "subject": "Earth Boulder construction, draw, release, residual actor contact, shrink, and breakup",
   "binary": {
     "path": "SolomonDarkAbandonware/SolomonDark.exe",
     "size_bytes": 4723200,
@@ -15,7 +15,8 @@
       "owner/constructor/tick/release/contact/draw/destructor",
       "rock-list builder/Fibonacci sphere/called-rock/fragment/asset adjacency",
       "held and released orientation writers/matrix multiplication/draw composition",
-      "called-rock Enhanced Effects auxiliary draw"
+      "called-rock Enhanced Effects auxiliary draw",
+      "shared Boulder/EBoulder contact xrefs, pool/charge recurrence, per-contact BoulderBit, shell-vector rewrite, and terminal overrides"
     ]
   },
   "actor": {
@@ -32,8 +33,10 @@
       "visual_height_factor": "0x1D4",
       "visual_height_offset": "0x1E0",
       "opening_flash_mix": "0x1EC",
-      "saved_charge": "0x1F0",
-      "max_charge": "0x1FC",
+      "saved_pre_contact_charge": "0x1F0",
+      "remaining_damage_pool": "0x1F4",
+      "release_base_damage": "0x1F8",
+      "charge_ceiling_held_then_actual_release_charge": "0x1FC",
       "contact_target_list": "0x200",
       "contact_target_list_backing": "0x214",
       "held_flag": "0x1DC",
@@ -63,8 +66,12 @@
     { "address": "0x0045E440", "role": "Anim_CalledRock lit-rock draw", "vtable_slot": "0x0C" },
     { "address": "0x005E5450", "role": "same-identity held-to-flight finalizer" },
     { "address": "0x00620B60", "role": "per-flight-tick world/actor contact" },
+    { "address": "0x00621450", "role": "EBoulder contact override calling the shared flight/contact method" },
+    { "address": "0x0060BC10", "role": "one independently registered Anim_BoulderBit after each accepted actor contact" },
     { "address": "0x005FA4B0", "role": "post-contact rock/bounds update and breakup dispatch" },
+    { "address": "0x004029A0", "role": "renormalize every retained Rock local XYZ vector to the reduced shell radius" },
     { "address": "0x0060B700", "role": "Boulder breakup and actor removal", "vtable_slot": "0x6C" },
+    { "address": "0x0060BED0", "role": "EBoulder terminal Ether fade, full BoulderBit breakup, audio balance, and removal", "vtable_slot": "0x6C" },
     { "address": "0x00473290", "role": "Anim_BoulderBit constructor" },
     { "address": "0x00453060", "role": "Anim_Bouncer base constructor" },
     { "address": "0x00456720", "role": "Anim_Bouncer gated motion, gravity, bounce, rotation, and base fade tick" },
@@ -98,6 +105,13 @@
     "held_collision_radius": 15.0,
     "immediate_release_collision_radius_charge_factor": 45.0,
     "normal_flight_collision_radius_charge_factor": 75.0,
+    "contact_pool_same_tick_stop_threshold": 0.001,
+    "contact_charge_pool_loss_weight": 0.35,
+    "contact_charge_expression": "float32(min(release_charge, release_charge * (1 - (1 - remaining_pool / release_base_damage) * 0.35)))",
+    "zero_base_zero_pool_contact_charge": "x87 NaN; unordered compare stores the candidate before terminal restores saved charge",
+    "contact_fragment_count_per_accepted_target": 1,
+    "contact_fragment_constructor": "0x0060BC10",
+    "terminal_retirement_pool_threshold": 0.0,
     "assembly_rebuild_bucket_factor": 30.0,
     "visual_jitter_radius_range": [0.0, 3.0],
     "visual_local_y_base": -20.0,
@@ -156,6 +170,8 @@
     "breakup_fragment_stop_velocity_threshold": -0.75,
     "breakup_fragment_base_alpha_initial": 2.0,
     "breakup_fragment_enhanced_alpha_initial": 10.0,
+    "breakup_fragment_non_enhanced_max_updates": 80,
+    "breakup_fragment_enhanced_max_updates": 400,
     "breakup_fragment_subclass_alpha_step_float32": -0.02500000037252903,
     "breakup_fragment_base_alpha_step_float32": -0.014999999664723873,
     "breakup_fragment_wrapper_sort_offset": -15.0
@@ -169,8 +185,8 @@
   ],
   "render_contract": {
     "shell_point_count": "ceil(30 * assembly_charge), plus one central variant-3 rock",
-    "shell_point_distribution": "Fibonacci sphere: y = 2*i/n - 1 + 1/n, theta = i*pi*(3-sqrt(5)); normalized to radius 30*assembly_charge",
-    "assembly_lifecycle": "build once at constructor charge 0.18; replace only when floor(30*old_charge) differs from floor(30*new_charge); preserve the final collection on release",
+    "shell_point_distribution": "Fibonacci sphere: y = 2*i/n - 1 + 1/n, theta = i*pi*(3-sqrt(5)); count, variants, and stored scales use assembly_charge, while post-contact 0x004029A0 renormalizes retained local XYZ vectors to radius 30*current_charge",
+    "assembly_lifecycle": "build once at constructor charge 0.18; replace only when floor(30*old_charge) differs from floor(30*new_charge); preserve count/variants/stored scales on release and actor contact, but rewrite every retained noncentral vector length after contact",
     "visual_root": "actor XY plus shared-random radius [0,3] displacement and local Y -20-32.5*charge; Region light still samples actor XY",
     "persistent_aura": "record 15; RGB (0.9,1,0.9), alpha random(0,0.25)+0.35, scale 4.1*charge; persists in hold and flight",
     "crossfade": "record 86 additive alpha is m, scale is 2.5*m, rotation is global_render_tick*6 degrees; body alpha is 1-m; m starts at 1 and loses 0.035 per tick until zero",
@@ -182,32 +198,37 @@
     "lighting": {
       "boulder": "vslot +0x0C is Puppet_RenderDispatch and samples inbound Region light at Boulder world XY; independent vslot +0x30 provider 0x005E5670 submits the actor root with radius max(1,2*charge), intensity 0.5, and the retail Multiple-Shadows flag",
       "called_rock": "direct world-animation vslot +0x0C bypasses Puppet_RenderDispatch and ZAnimLitObject; no inbound Region sample and no outbound light",
+      "contact_fragment": "one independent Anim_BoulderBit in a ZAnimLitObject wrapper per accepted actor; inbound Region sample and sort offset -15; no outbound light",
       "breakup_fragment": "independent ZAnimLitObject wrapper copies fragment XY, uses Puppet_RenderDispatch for inbound Region light, and has no outbound-light intensity/range fields",
       "shadow": "no direct BadGuys[67] shadow reference exists in Boulder draw"
     }
   },
   "randomness": {
     "native_owner": "shared game RNG",
-    "authoritative_gameplay_state": false,
+    "authoritative_gameplay_state": true,
     "visual_samples": [
       "main shell variant and scale",
       "called-rock emission, spawn radius/direction/variant/rotation",
       "adjacent dust/fade and loose fragment emission",
       "breakup fragment variant, direction, placement, scale, and lifetime"
     ],
-    "web_consequence": "seed visual choices from stable spell/particle identity; never consume authoritative gameplay RNG"
+    "contact_boulder_bit": "construction and bounce draws occur in the authoritative fixed-tick owner because the registered child outlives the contact and advances the shared native stream",
+    "web_consequence": "keep render-only body jitter/aura samples isolated by stable identity; contact BoulderBit state and its later bounce draws are host-authored and replicated"
   },
   "lifecycle": {
     "hold": "one cached actor follows the live staff emitter and aim while charge grows",
-    "release": "0x005E5450 flips +0x1DC/+0x1DD from held to flight without replacing identity",
+    "release": "0x005E5450 flips +0x1DC/+0x1DD from held to flight without replacing identity, leaves release-base damage at +0x1F8, writes the released pool at +0x1F4, and writes actual release charge to +0x1FC",
     "flight": "straight motion and 0x00620B60 contact query every native tick; direction is the final held world-aim sample and does not home or retarget after release; the actor position is float32-advanced and the authoritative matrix rolls by stored-delta/charge before the query, so terminal breakup registers at that advanced and rotated sample; no native fixed timeout or range recovered",
+    "actor_contact": "each new hostile handle consumes the residual pool, rewrites charge from the 0.35 pool-loss expression, emits one 0x0060BC10 BoulderBit, and after traversal renormalizes every retained shell vector plus bounds/radius; pool <=0.001 stops only that tick, pool <=0 invokes terminal breakup",
     "impact": "0x0060B700 restores saved charge, emits independently rooted Anim_BoulderBit children inside ZAnimLitObject wrappers, registers the wrappers, then removes the Boulder; the semantic event must retain native global birth tick for modulo-three motion",
     "interruption": "dispatcher/player primary transition and world actor teardown stop gather ownership; destructor clears both lists; web owner removal, death, scene replacement, and disconnect must remove the semantic actor/effects and balance loops"
   },
   "audio": {
     "create_once": { "registry": 87, "path": "sounds/startboulder.wav" },
     "gather_owner": { "registry": 159, "path": "sounds/gatherrocksloop__loop.wav" },
-    "flight_owner": { "registry": 168, "path": "sounds/rollingstoneloop__loop.wav" }
+    "flight_owner": { "registry": 168, "path": "sounds/rollingstoneloop__loop.wav" },
+    "terminal_rock_hit": { "registry": 77, "path": "sounds/rockhit.wav", "pitch": "1 + 0.05 / saved_charge", "gain": "positional_gain * saved_charge" },
+    "terminal_stone_break": { "registry": 89, "path": "sounds/stonebreak.wav", "pitch": "1 - 0.5 * saved_charge", "gain": "positional_gain" }
   },
   "historical_capture": {
     "classification": "instrumented stock multiplayer observer evidence; not a clean-stock rerun",
@@ -218,7 +239,7 @@
   "bounded_unknowns": [
     "A clean-stock 2026-08-14 hold/release/terrain-impact capture was unavailable because unrelated isolated stock processes owned the desktop.",
     "The exact shared-RNG seed/order and its interleaving with unrelated actors are unrecovered and intentionally not promoted into browser gameplay state.",
-    "The current web combat model has no native target damage/contact continuation lane; terrain contact and visual breakup can be authoritative without claiming the unreconstructed residual-damage rules.",
     "No direct Boulder shadow sprite call was recovered; generic world lighting/tint remains a sibling renderer responsibility."
-  ]
+  ],
+  "web_platform_constraint": "Strict JSON cannot encode the native zero-base/zero-pool NaN contact-child scale. Consume its constructor RNG budget, omit that unrenderable one-child state, and retain the finite terminal breakup."
 }

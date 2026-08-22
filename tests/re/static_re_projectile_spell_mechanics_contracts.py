@@ -51,10 +51,15 @@ def test_earth_boulder_second_pass_visual_ownership_is_pinned() -> str:
         "Earth VFX binary identity drifted",
     )
     _require(
-        {"0x00544C60", "0x00609D30", "0x005FE430", "0x0060AC40", "0x005E5450"}
+        {
+            "0x004029A0", "0x00544C60", "0x005FA4B0", "0x005FE430",
+            "0x005E5450", "0x00609D30", "0x0060AC40", "0x0060B700",
+            "0x0060BC10", "0x0060BED0", "0x00620B60", "0x00621450",
+        }
         <= functions,
-        "Earth owner/tick/builder/draw/release join is incomplete",
+        "Earth owner/tick/builder/draw/release/contact join is incomplete",
     )
+    _require(catalog["schema_version"] == 2, "Earth contact catalog schema drifted")
     _require(constants["persistent_aura_record"] == 15, "persistent aura record drifted")
     _require(
         constants["persistent_aura_alpha_range"] == [0.35, 0.6]
@@ -89,7 +94,31 @@ def test_earth_boulder_second_pass_visual_ownership_is_pinned() -> str:
         in catalog["render_contract"]["orientation"],
         "released-shell orientation ownership drifted",
     )
-    return "Earth aura/flash, assembly, root transform, released orientation, and range are pinned"
+    _require(
+        constants["contact_pool_same_tick_stop_threshold"] == 0.001
+        and constants["contact_charge_pool_loss_weight"] == 0.35
+        and constants["contact_fragment_count_per_accepted_target"] == 1
+        and constants["breakup_fragment_non_enhanced_max_updates"] == 80
+        and constants["breakup_fragment_enhanced_max_updates"] == 400
+        and constants["terminal_retirement_pool_threshold"] == 0.0,
+        "Earth residual-contact constants drifted",
+    )
+    _require(
+        "renormalizes retained local XYZ vectors"
+        in catalog["render_contract"]["shell_point_distribution"]
+        and "0x0060BC10 BoulderBit" in catalog["lifecycle"]["actor_contact"],
+        "Earth surviving-shell/contact-child lifecycle drifted",
+    )
+    _require(
+        catalog["audio"]["terminal_rock_hit"]["registry"] == 77
+        and catalog["audio"]["terminal_stone_break"]["registry"] == 89,
+        "Earth terminal audio ownership drifted",
+    )
+    _require(
+        "Strict JSON cannot encode" in catalog["web_platform_constraint"],
+        "Earth zero-base NaN platform constraint is not explicit",
+    )
+    return "Earth aura, shell, residual contact, child, terminal, audio, and range are pinned"
 
 
 def _samples(table: dict[str, Any]) -> list[dict[str, Any]]:
