@@ -984,6 +984,11 @@ def distill_enemy_frames(
                 "presentation_fields": {
                     "phase_0x134_u32": raw_field(actor, 0x134, "u32"),
                     "phase_0x140_f32": raw_field(actor, 0x140, "f32"),
+                    "gait_phase_0x144_f32": raw_field(actor, 0x144, "f32"),
+                    "body_gait_phase_0x148_f32": raw_field(actor, 0x148, "f32"),
+                    "body_gait_divisor_0x14c_f32": raw_field(actor, 0x14C, "f32"),
+                    "body_selector_0x150_f32": raw_field(actor, 0x150, "f32"),
+                    "body_gait_mirror_0x158_f32": raw_field(actor, 0x158, "f32"),
                     "pose_0x210_f32": raw_field(actor, 0x210, "f32"),
                     "pose_0x214_f32": raw_field(actor, 0x214, "f32"),
                     "pose_0x218_f32": raw_field(actor, 0x218, "f32"),

@@ -249,7 +249,7 @@ and transformed.
 | Skeleton pike `0x10` | `[1, 2 x11, 1]` at indices `0..12`, written to `+0x150` | `p += 0.125 * attack_speed * marker_multiplier`; callback `2`, strict end `12` |
 | Archer shot `0x11` | `[3,4,5,6,7,6,7,6,7,6,7,6,7,8,8,8,8]` at indices `0..16`, written to `+0x150` | `p += 0.0843750015 * attack_speed`; callback `13`, strict end `16` |
 | Mage cast `0x12` | short branch `[2 x24,3,4 x13,3,0 x3]`; long branch `[2 x30,3,4 x13,3,0 x3]`, written to `+0x150` | `p += 0.253125012 * (1 + roll) * attack_speed`; callback `25`/`31`, strict paired end `41`/`47` |
-| Skeleton family locomotion/action composition | shared limbs always select `facing + 18*trunc(+0x144)` from `1585..1728`; the independently selected body and any weapon overlay use `facing + 18*trunc(+0x150)`. Skeleton body banks contain 12 unarmored-claw, 9 armored-claw, 4 ordinary-weapon, or 3 pike poses; Archer body `451..612` contains 9; Mage body `1729..1818` contains 5 and its constructor seeds pose 0 or 1. | renderers `0x0048DEE0`, `0x0048F450`, and `0x00491720` truncate both fields separately; action ticks write only `+0x150`, while movement advances `+0x144`. Neither selector advances during render. |
+| Skeleton family locomotion/action composition | shared limbs select `facing + 18*trunc(+0x144)` from `1585..1728`; body and any weapon overlay select `facing + 18*trunc(+0x150)`. Common movement builder `0x004763E0` advances both `+0x144` and private body phase `+0x148`, then writes `+0x150` through the complete float table `[0,1,2,1,0.5]` at `0x00804F2C`. Skeleton wrapper `0x004773E0` retains that walk body only when weapon `+0x231` and armor `+0x233` are both zero; Archer wrapper `0x00477B40` retains it; Mage wrapper `0x00478380` replaces it with constructor rest pose `+0x270`. | each represented native movement tick advances gait by `S/25` modulo eight and body phase by `S/35` modulo four, with strict-greater wraps and float32 stores; `S=+0x1A4*+0x70*+0x120`. Actions replace only `+0x150`; render advances neither lane. |
 | Imp family | `facing + 12*constructorVariant(+0x220)` over four complete directional body banks; body rotation is `+0x224`; `333 + trunc(+0x214)` is the ten-record upper effect with alpha `+0x228` | constructor `0x00473E30` seeds phase `+0x214` in `[0,10)`, height/velocity `+0x218/+0x21C` at zero, variant `RandomInt(4)`, signed body angle `RandomFloat(45,true)`, and effect alpha zero. While horizontal velocity is non-zero, tick `0x00485DC0` advances phase by `abs(velocity)*0.25` modulo 10, integrates height/velocity with gravity `+0.4`, and drains effect alpha by `0.05`. A ground crossing re-launches with vertical velocity `-(3+RandomFloat(3))`, rerolls the variant and signed `60`-degree angle, and resets effect alpha to `1`; contact does not select another body strip. |
 | Zombie beat `0x17` | the selected arm uses pose `0` for `p<50`, pose `1` for `50<=p<100`, and pose `2` for `p>=100`; `+0x238` alternates which arm receives that pose while the other remains at rest | `Action_Zombie_Beat` constructor `0x0044A490` clears `p` at `+0x234`, toggles `+0x238`, and stores `(0.9 + RandomFloat(0.25)) * attack_speed`; tick `0x00449300` fires the contact callback on crossing `100` and completes at `p>=125`; locomotion phase continues through `p<80` |
 | Zombie locomotion/body | 18-way articulated selectors over `2088..2202`, `2203..2256`, `2275..2292`, `2293..2346`, and `2365..2508`; the renderer transforms the two arm banks and head from authored body-record points | constructor `0x004740C0` seeds `+0x210/+0x214` in `[0,360)`, signed head angle `+0x218` in `[-65,65)`, arm angles `+0x228/+0x22C` in `[0,20)`, and a random initial attack side. Idle tick `0x004863A0` advances those phases by `RandomFloat(1)` and `RandomFloat(0.75)`. Renderer `0x00493390` quantizes body rotation to `round(sinDeg(+0x210)*45/10)*10`, head rotation to `round(sinDeg(+0x214*0.5)*20/5)*5 + +0x218`, and draws rear/front arm rotations as `-+0x228` / `+0x22C`. During beat, `+0x23C` adds a side-selected arm swing `round(+0x23C/10)` and body lean `+/- +0x23C/3`; threshold crossings 50 and 100 launch vertical actor offset `+0x240` with velocities in `[-3.5,-3)` and `[-1.5,-1)`, followed by gravity `+0.4` and clamp at ground. |
@@ -300,13 +300,71 @@ with the zeroed Sprite constructor `0x004138A0`, so the shipped final armored
 claw pose has no authored torso pixels. It must not be clamped to pose 8 or
 aliased to the adjacent record-775 weapon vector.
 
-Constructor and action lifetime evidence also separates idle from gait.
-Badguy constructor `0x00473390` initializes `+0x150=0`; Mage constructor
-`0x0048ABB0` replaces it with `RandomInt(2)`. Action ticks update `+0x150` and
-leave their final written selector on cancellation/completion; ordinary
-movement updates `+0x144` without copying it into `+0x150`. A network port
-must consequently retain body pose as actor state, interpolate only the
-authoritative action progress, and never infer torso pose from locomotion.
+Constructor and action lifetime evidence separates action selection from the
+two locomotion phases. Badguy constructor `0x00473390` independently seeds
+`+0x144` and `+0x148` with `Float(4,false)`, initializes `+0x14C=35` and
+`+0x150=0`, and actions later replace only `+0x150`. Mage constructor
+`0x0048ABB0` additionally stores one `Integer(2)` at both rest selector
+`+0x270` and current body selector `+0x150`. Action ticks leave their final
+written selector on cancellation/completion; the next eligible movement call
+reasserts the applicable walk/rest selector. A network port must retain both
+locomotion phases and current body pose as authoritative actor state, advance
+them from the native requested movement scalar rather than resolved distance,
+interpolate only authoritative continuous phases, and never advance either
+lane from render cadence.
+
+### User-corrected Skeleton-family walking articulation — 2026-08-22
+
+The user correctly rejected the earlier claim that stock Skeleton movement
+leaves the torso static. That claim came from tracing action writers and
+renderer consumers without following the movement vtable wrappers back through
+their shared builder. It is superseded everywhere in this document.
+
+Clean stock instance `anm-g4` makes the visible contradiction explicit. During
+ticks `24272..24308`, one unarmed/unarmored Skeleton walks continuously while
+its facing remains zero. Its submitted BadGuys records are:
+
+```text
+tick       24272 24277 24281 24286 24292 24298 24303 24308
+limbs      1711  1711  1585  1585  1603  1621  1639  1639
+body       1135  1117  1117  1117  1135  1153  1153  1153
+limb pose  7     7     0     0     1     2     3     3
+body pose  1     0     0     0     1     2     2     2
+```
+
+The pinned retail instructions close the writer and its full sibling set:
+
+- `Badguy` movement builder `0x004763E0` computes float32
+  `S = actor+0x1A4 * actor+0x70 * actor+0x120`. For each represented movement
+  tick it stores `+0x144 = f32(+0x144 + S/25)` and subtracts eight only when
+  the result is strictly greater than eight.
+- With positive divisor `+0x14C` (constructor value `35`), it stores
+  `+0x148 = f32(+0x148 + S/+0x14C)` and subtracts four only when the result is
+  strictly greater than four. Helper `0x00747360` converts the nonnegative
+  phase by truncation toward zero. The complete consumed table at
+  `0x00804F2C` is float `[0,1,2,1,0.5]`; the selected float is written to
+  `+0x150`, and `+0x158` receives the retained body phase.
+- Normal two-tick hostile movement reaches the single-tick builder twice, so
+  one web update representing two native ticks must advance each phase twice.
+  Animation advances from requested scalar `S` even when downstream
+  `MoveStep 0x00525800` resolves no displacement.
+- Skeleton vtable slot `+0x6C` is wrapper `0x004773E0`. It keeps the table
+  result only for unarmed/unarmored Skeletons; any weapon byte `+0x231` or
+  armor byte `+0x233` resets the body selector to zero after the common
+  builder. Their arms still move through the independent limb record.
+- Archer slot `+0x6C` is `0x00477B40` and retains the common walk-body table.
+  Mage slot `+0x6C` is `0x00478380` and overwrites the common result with the
+  constructor-owned integer rest selector at `+0x270` after every movement.
+- All three wrappers return zero before the common builder while the inherited
+  Actor hit field `+0x80` is nonzero, so neither locomotion phase advances
+  during the hit interval.
+- Claw, weapon, Pike, shot, and cast actions still own the exact `+0x150`
+  tables above while active. The locomotion writer does not run during those
+  stationary action branches; the next movement call resumes its class rule.
+
+The recorder now names `+0x144`, `+0x148`, `+0x14C`, `+0x150`, and `+0x158`
+directly in future captures. The sealed v1 golden remains immutable; its
+submitted record sequence above is the clean-stock witness for this correction.
 
 ### Skeleton-family independent head-facing lane correction — 2026-08-20
 

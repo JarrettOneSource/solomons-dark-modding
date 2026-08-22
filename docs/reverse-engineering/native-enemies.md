@@ -296,6 +296,24 @@ Zombie `0x3EE` before calling shield helper `0x00477140`. It does not shield an
 arbitrary nearest enemy. Headgear, cloak, range, element, shielding, and
 flaming are all independent config axes.
 
+### Shared walking articulation correction
+
+Skeleton-family movement wrappers consume the common Badguy locomotion builder
+`0x004763E0`, which advances both limb phase `+0x144` and a separate body phase
+`+0x148`. The body phase advances by requested movement scalar `S/35`, wraps
+strictly above four, and selects float table `[0,1,2,1,0.5]` at `0x00804F2C`
+through truncation toward zero before writing `+0x150`. This is visible stock
+arm/upper-body walking animation, not an action-only selector.
+
+The class wrappers are deliberately different: Skeleton `0x004773E0` retains
+the walking body only when unarmed and unarmored, Archer `0x00477B40` retains
+it during ordinary movement, and Mage `0x00478380` replaces it with constructor
+rest selector `+0x270`. All three still animate the shared limb bank from
+`+0x144`. Actions temporarily replace `+0x150` with their exact action tables;
+downstream collision does not decide whether either locomotion phase advances.
+The wrappers pause both locomotion lanes while inherited Actor hit field
+`+0x80` is nonzero.
+
 ## Imp variants
 
 `Imp 0x3EC` uses `0x00485DC0` for its flying chase and `0x00492E10` for

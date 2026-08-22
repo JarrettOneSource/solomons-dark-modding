@@ -43,6 +43,7 @@ ENEMY_SPECS: list[dict[str, Any]] = [
         "behavior": [
             "Selects unarmed, sword, mace, flail, axe, or pike combat behavior from the weapon field.",
             "Headgear and armor change both presentation and wave-modified durability; FLAMING owns a Fire child effect.",
+            "Movement wrapper 0x004773E0 retains shared 0x004763E0 body-gait table [0,1,2,1,0.5] only while weapon +0x231 and armor +0x233 are both zero; all variants retain the independent limb gait.",
             "Skeleton tick rolls signed head-facing offset +0x224 in {-1,0,1} and the renderer applies it only to the skull/headgear bank while an action owner remains active.",
             "Death disassembles the articulated body, preserves equipment-specific pieces, grants rewards, and then runs the common drop selector.",
         ],
@@ -60,6 +61,7 @@ ENEMY_SPECS: list[dict[str, Any]] = [
         "behavior": [
             "Maintains range and optional strafe state before firing Arrow objects.",
             "Arrow type chooses normal, fire, or poison payload; accuracy, scatter/random-shot mode, and extra-arrow count are independent controls.",
+            "Movement wrapper 0x00477B40 retains shared 0x004763E0 limb and body gait, with body selector drawn from float table [0,1,2,1,0.5] at 0x00804F2C.",
             "The renderer can consume inherited head-facing offset +0x224, but Archer tick has no writer and the stock constructor-zero value remains static.",
             "Optional MonsterRecipe STRAFING byte +0x95 lets tick overwrite body-facing heading +0x26C independently; shipped survival wave rows leave that branch unauthored.",
         ],
@@ -77,6 +79,7 @@ ENEMY_SPECS: list[dict[str, Any]] = [
         "behavior": [
             "Element selection dispatches fire, guided/ether, frost, poison, or lightning-family casting behavior.",
             "Self-shield and ally-shield toggles have separate strength fields and share the configured recast interval.",
+            "Movement wrapper 0x00478380 retains shared limb gait but replaces the common body-gait result with constructor rest selector +0x270 after every ordinary movement.",
             "Mage tick calls Skeleton tick first and therefore inherits the signed +0x224 head-facing roll/reset independently of its cast body selector.",
         ],
         "evidence_functions": {"tick": "0x00490860", "spell_dispatch": "0x0047FDE0", "render": "0x00491720"},

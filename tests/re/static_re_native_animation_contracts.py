@@ -633,6 +633,59 @@ def test_native_animation_frame_programs_and_tick_anchor_are_pinned() -> str:
                 f"{name} golden no longer resolves one unambiguous native action id"
             )
 
+    def sprite_in_range(frame: dict[str, Any], first: int, last: int) -> int | None:
+        for sprite in frame.get("sprites", []):
+            entry = sprite.get("sprite_index")
+            if isinstance(entry, int) and first <= entry <= last:
+                return entry
+        return None
+
+    _require_tokens(
+        doc,
+        (
+            "User-corrected Skeleton-family walking articulation",
+            "`0x004763E0`",
+            "`+0x144 = f32(+0x144 + S/25)`",
+            "`+0x148 = f32(+0x148 + S/+0x14C)`",
+            "`0x00804F2C` is float `[0,1,2,1,0.5]`",
+            "Skeleton vtable slot `+0x6C` is wrapper `0x004773E0`",
+            "Archer slot `+0x6C` is `0x00477B40`",
+            "Mage slot `+0x6C` is `0x00478380`",
+            "Actor hit field `+0x80` is nonzero",
+            "requested scalar `S` even when downstream",
+        ),
+        "Skeleton-family walking articulation no longer pins both locomotion phases and class wrappers",
+    )
+
+    walking_frames = [
+        frame
+        for frame in skeleton["skeleton"]["frames"]
+        if int(frame.get("tick", 0)) in {24272, 24277, 24281, 24286, 24292, 24298, 24303, 24308}
+    ]
+    if [int(frame["tick"]) for frame in walking_frames] != [
+        24272,
+        24277,
+        24281,
+        24286,
+        24292,
+        24298,
+        24303,
+        24308,
+    ]:
+        raise StaticReTestFailure(
+            "Skeleton golden no longer contains the exact eight-frame walking-articulation witness"
+        )
+    walking_limbs = [sprite_in_range(frame, 1585, 1728) for frame in walking_frames]
+    walking_bodies = [sprite_in_range(frame, 1117, 1332) for frame in walking_frames]
+    if walking_limbs != [1711, 1711, 1585, 1585, 1603, 1621, 1639, 1639]:
+        raise StaticReTestFailure(
+            "Skeleton walking golden no longer pins the independent eight-pose limb lane"
+        )
+    if walking_bodies != [1135, 1117, 1117, 1117, 1135, 1153, 1153, 1153]:
+        raise StaticReTestFailure(
+            "Skeleton walking golden no longer proves stock upper-body locomotion"
+        )
+
     _require_tokens(
         doc,
         (
@@ -647,13 +700,6 @@ def test_native_animation_frame_programs_and_tick_anchor_are_pinned() -> str:
         ),
         "Skeleton-family animation contract no longer records the independent head-facing owner and static Archer sibling",
     )
-
-    def sprite_in_range(frame: dict[str, Any], first: int, last: int) -> int | None:
-        for sprite in frame.get("sprites", []):
-            entry = sprite.get("sprite_index")
-            if isinstance(entry, int) and first <= entry <= last:
-                return entry
-        return None
 
     stock_skeleton_frames = {
         int(frame["tick"]): frame for frame in skeleton["skeleton"]["frames"]
@@ -678,6 +724,11 @@ def test_native_animation_frame_programs_and_tick_anchor_are_pinned() -> str:
     _require_tokens(
         _read(RECORDER),
         (
+            '"gait_phase_0x144_f32": raw_field(actor, 0x144, "f32")',
+            '"body_gait_phase_0x148_f32": raw_field(actor, 0x148, "f32")',
+            '"body_gait_divisor_0x14c_f32": raw_field(actor, 0x14C, "f32")',
+            '"body_selector_0x150_f32": raw_field(actor, 0x150, "f32")',
+            '"body_gait_mirror_0x158_f32": raw_field(actor, 0x158, "f32")',
             '"head_facing_offset_0x224_i32": raw_field(actor, 0x224, "i32")',
             '"pose_0x224_f32": raw_field(actor, 0x224, "f32")',
         ),
