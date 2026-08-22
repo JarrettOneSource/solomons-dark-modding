@@ -212,7 +212,12 @@ advances by one step. Horizontal speed is
 `(1.5 + U[0,0.5])*0.75`, spawn position is impact plus ten times that velocity,
 height is `-6`, and vertical velocity is `-(2 + U[0,3])`. Every child carries
 the snapshotted Ember and retirement payload and is ticked exactly ten times
-immediately after registration.
+immediately after registration. Registration occurs before those ten calls, so
+every cadence crossing executes the ordinary contact slot during the pre-age
+loop. A browser implementation must publish all of those ordered queries,
+consume the child on its first accepted contact, and suppress later pre-age
+queries for that same child; retaining only the final cadence field loses real
+stock damage and Burn ownership.
 
 `Ember::Tick 0x0060D7E0` advances airborne motion by
 `min(abs(vertical_velocity),1)`, adds gravity `0.15`, bounces with multiplier
@@ -226,12 +231,81 @@ fragments, and fixed target damage `spent_damage*0.5`. Mode 2 creates GoodImp
 with both attack endpoints `spent_damage*0.5`, lifetime `300`, and a sibling
 `Fire 0x7E3` patch. Mode zero remains until life reaches zero.
 
+Constructor `+0x15C` is a contact cadence counter, not a presentation variant.
+It starts from `Integer(10)`. Every Ember tick increments it; values strictly
+above three reset to zero and call contact slot `+0x64` (`0x005E5700`). After
+the first randomized delay, contact therefore recurs every four fixed ticks.
+
 Ember presentation is not a Fireball trail alias. Its draw path
 `0x0060DDD0` uses BadGuys records `267..270` at actor position plus height,
 BadGuys 15 for the orange glow, and `251..254` for contact. The main sprite is
 source-alpha plus an additive phase layer; alpha is `min(life,1)`, while the
 glow uses `min(life*0.2,1)` and `min(life,1)` scale. Its optional enhanced
 airborne geometry is presentation-only.
+
+### Shared Fire explosion and Ember presentation closure (2026-08-22)
+
+A fresh read-only pass reopened the shared helper because the earlier browser
+ledger called Explode presentation closed without preserving its child classes,
+records, clocks, audio, light, or complete xref membership. The helper is
+`0x00642BF0`; its six direct callers are scripted `DO EXPLOSION AT`
+`0x00466BC0`, special enemy-death mode `0x00477020`, FireMissile contact
+`0x005E4CA0`, Fireball contact `0x005E5160`, maximum-set Shockwave contact
+`0x005FF8C0`, and naturally spent Immolate Ember `0x0060D7E0`. There is no
+direct call from this helper or any of those Fireball/Ember owners to
+`Region::ApplyCameraShake 0x0063EEB0`.
+
+The shared explosion creates three independent presentation children in this
+order:
+
+| Child | Native class and records | Exact fixed-tick program |
+| --- | --- | --- |
+| orange core | `Anim_Fade 0x00452E20`, BadGuys 15 | root `(x,y-25)`; normal blend; scale `6*visualScale`; alpha starts `1`, loses float32 `0.1` per tick, and is visible at ages `0..9` |
+| normal/additive array | `Anim_SpriteArray 0x00453410`, BadGuys `401..419` | root `(x,y)`; additive; scale `2*visualScale`; phase starts `0`, step starts float32 `0.75`, step multiplies by float32 `0.98` after every tick; positive truncation selects the record; it retires after tick 35 and is visible at ages `0..34` |
+| rising lit array | `Anim_SpriteArray` wrapped by `ZAnimLit 0x005E03D0`, BadGuys `420..433` | additive; phase step starts float32 `0.625` and multiplies by float32 `0.97`; initial offset `(0,-15*visualScale)`, then Y loses `1.15*visualScale` per tick; it retires after tick 37 and is visible at ages `0..36` |
+
+The lit array's local scale and light radius are twice the Region point gain
+sampled at creation. `ZAnimLit` begins intensity `2`, loses float32 `0.02` per
+tick, and submits `min(intensity,1)`; it therefore supplies intensity one for
+the array's complete 37-tick life. Its directional-shadow flag is the native
+Multiple Shadows setting. The helper also requests `fireballhit` at
+`1+S[0,0.1]` and `throwfire` at exact pitch `0.8`, both at twice Region point
+gain. Fireball contact has already requested its separate ordinary
+`fireballhit`, so an Explode contact owns all three requests in order:
+ordinary hit, shared-explosion hit, shared-explosion throw.
+
+The same pass closes the Ember renderer rather than treating records
+`267..270` as a conventional three-sprite stack. `Ember::Draw 0x0060DDD0`
+first draws the selected record source-over at scale `0.5`. It then enables
+additive blending and draws one copy with scale `0.75-U[0,0.5]` and rotation
+`U[0,0.1]` degrees; Enhanced Effects draws a second independently sampled
+copy. The final additive BadGuys-15 glow is tinted `(1,0.5,0)`, uses alpha
+`min(life*0.2,1)`, scale `min(life,1)`, and Y offset `0.8*height`. The optional
+airborne pass `0x005E5A20` exists only with Enhanced Effects and negative
+height; it is separate from collision and lifetime. It is not another Ember
+atlas copy. It draws the shared untextured quad at the actor's ground root.
+Live stock memory pins that quad's four registered corners to
+`(-19,-18.5)`, `(19,-18.5)`, `(-19,18.5)`, `(19,18.5)`. The pass scales them
+by `(0.75, 0.6000000238)`, producing a `28.5 x 22.2000009` footprint, tints it
+`(1,0.5,0.25)`, and stores alpha
+`float32((1-height/-50*0.5)*0.25)`. Reusing record `267..270` here creates the
+large duplicate sprite that made web Embers appear visually glitchy.
+
+`Ember::Light 0x005E5960` supplies an actor-lane point light at the Ember root:
+radius is `1-U[0,0.25]`, intensity is `min(life,1)*0.25`, and the directional
+shadow flag is false. Normal mode-zero Embers remain alive through the whole
+grounded fade interval `0 < life < 1`; modes one and two retire on the first
+crossing below one to create the Immolate explosion or GoodImp/Fire pair.
+Consequently a wire contract that rejects live mode-zero life below one is not
+a native invariant.
+
+The explosion and Ember visual draws consume presentation RNG in stock. A
+deterministic multiplayer renderer may project those draws from stable effect
+identity and display frame, but it must preserve the exact ranges, draw count,
+order, blends, and clocks without advancing gameplay authority RNG. The
+authoritative constructor stream still owns Ember phase, the deliberately
+discarded initial vertical draw, contact cadence, private fan seed, and
+all gameplay motion/contact state.
 
 The new contact golden observed one `4.0` HP transition at a projectile-to-
 target-center distance of `30.5124151`. The target took no additional HP

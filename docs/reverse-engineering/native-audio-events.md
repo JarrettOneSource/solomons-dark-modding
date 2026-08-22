@@ -73,6 +73,15 @@ The five selectable player elements are Ether, Fire, Air, Water/Frost, and Earth
 | `projectile.earth.flight_end` | Boulder stops renewing the wrapper | wrapper stop `0x0040B189` | stop 168 | No RNG; occurs on previous gain `positive -> 0`. |
 | `projectile.earth.impact` | Boulder contact accumulator crosses its threshold | `0x0062141B` | 77 `sounds\rockhit` | Fixed; world point gain. |
 
+The shared Fire-area helper `0x00642BF0` is a sibling reuse beneath the sealed
+trigger census, not a new top-level event class. Explode, Immolate,
+FireMissile-area, scripted explosion, special-death, and maximum Ring contact
+request registry 30 `sounds\fireballhit` at `0x00642CE9`, then registry 97
+`sounds\throwfire` at `0x00642D4F`. Both use twice Region point gain; the first
+pitch is `1 + S(0.1)` and the second is exactly `0.8`. An Explode Fireball has
+already requested the separate ordinary `projectile.fire.impact` row, so it
+owns three total requests.
+
 ### Secondary and advanced right-click events
 
 The complete per-member file hashes, registry indices, and wrapper classes are
@@ -86,7 +95,7 @@ event.
 | Call Leviathan `11` | Activation requests `LeviathanRoar__Stream`; the live actor renews `PlaneCross__Loop` until its scale-out teardown. |
 | Planewalker `12` | Enable requests `planewalker__Stream`; removal/expiry at `0x0052F470` requests `PlanewalkerOff__Stream`; active plane state renews `PlaneCross__Loop`. Each forced Plane Orb birth requests `distortreality` at Region point gain, then `lightningstart` at exact pitch `2.0` with the same gain (`0x0052D9B1..0x0052DA1F`). |
 | Phasing `15` | Accepted collision-tested relocation requests `phase`. |
-| Ring of Fire `21` | Helper `0x0063F920` requests `bigfire`, then `nuke`, while creating the 30 fire segments and Shockwave. |
+| Ring of Fire `21` | Helper `0x0063F920` requests `bigfire`, then `nuke`, while creating the 30 fire segments and Shockwave. Each Burning Man first-contact explosion separately requests shared-helper `fireballhit`, then `throwfire`; overlapping contacts own independent pairs. |
 | Firewalker `23` | Toggle-on activation requests the `ignite` gain/pitch sequence; toggle-off is silent. Live `Fire_Goodguy` patches renew `lowfire__loop` until the last independently retained patch retires. |
 | Magic Storm `27` | Cast requests `magicstorm`; strikes request `lightningstart` and `thunder__Stream`; the cloud renews `rainfall__loop` and `steadywind__loop`. |
 | Prismatic Shock `30` | Helper `0x00645540` requests `prismaticspray__stream` at Region point gain, then `lightningstart` at exact pitch `0.8` and the same gain. |

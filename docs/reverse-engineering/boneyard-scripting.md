@@ -829,3 +829,17 @@ raw-point admission and retry placement to the replicated combat rectangle
 while leaving custom Boneyards outside the generated lifecycle. Because its
 authority does not own the native light raster, it does not claim exact
 dark-versus-light candidate identity or the 350-unit dark fallback rerun.
+
+Fresh disassembly on 2026-08-22 pins the retry count formula that the earlier
+"comes from circumference" summary left implicit. For current ring radius
+`r` and actor collision radius `s`, instructions `0x00463E3D..0x00463E71`
+produce the existing integer contract `trunc(pi*(r+s)/r)`, then use
+`360/count` spacing.
+The result is six samples at `r=s`, four at `r=2s`, and trends toward three on
+large rings. Retail `0x00463D30` has no maximum-radius failure: it keeps
+adding `s`, with the named dark-policy transition after radius 350. The
+Website's finite search and combat-rectangle confinement are therefore one
+combined safety adaptation. An exterior raw point must first be projected
+into the radius-inset active rectangle before the finite native-topology ring
+search; otherwise the sparse asymptotic three-ray set can miss the entire
+rectangle and turn a legal wave spawn into a host-fatal exception.

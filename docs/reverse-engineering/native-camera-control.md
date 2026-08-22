@@ -70,6 +70,16 @@ accumulator: Skeleton/Archer/Mage and Zombie request `0.1`; accepted Imp split
 requests `0.05` while terminal Imp requests `0.1`; Wraith requests `0.1`
 twice; and Demon, Coffin, Dire Faculty, and Heartmonger request `0.2`.
 
+A complete fresh xref census on 2026-08-22 found ten calls in nine functions,
+all belonging to the death/secondary families above. Shared Fire explosion
+helper `0x00642BF0`, Fireball contact `0x005E5160`, Ember tick `0x0060D7E0`,
+and their Explode/Immolate presentation children are absent. Explode therefore
+has no direct stock camera pulse. A Fireball/Explode hit can still coincide
+with the stock pulse when its damage causes an enemy terminal output; that
+pulse is owned by the killed enemy family, not by Explode. Ring of Fire's
+separate cast helper writes `0.25` before its Shockwave exists, but its later
+Burning Man contact explosions do not write this lane again.
+
 ## Reproduction
 
 The analysis was run through the repository's replica-pool wrapper so the
