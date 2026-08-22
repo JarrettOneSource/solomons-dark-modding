@@ -86,9 +86,12 @@ layer. They straddle the Region light compositor:
 ```
 
 `Anim_FadeScale::Draw 0x00455DF0` installs its authored RGB and life-clamped
-alpha, transforms `DeadHawg:24`, and draws it without an analytic Region-light
-query. With `Game.ComplexLighting` enabled (`0x00B3BCA8 != 0`), the splash is
-darkened because it is already in the framebuffer when compositor
+alpha, selects renderer blend state `1`, transforms `DeadHawg:24`, and draws it
+without an analytic Region-light query. Renderer dispatcher `0x004208A0` maps
+state `1` to Direct3D `SRCBLEND=SRCALPHA` (`5`) and `DESTBLEND=ONE` (`2`), so
+this splash is additive, not source-over. With `Game.ComplexLighting` enabled
+(`0x00B3BCA8 != 0`), the additive result is darkened because it is already in
+the framebuffer when compositor
 `0x0057D670` runs at `0x0046FAFF`. The later streak cannot use that earlier
 raster pass, so `Anim_WeatherRaindrop::Draw 0x00459B60` caches the analytic
 scalar and writes it into both gradient endpoint RGB values; the endpoint
@@ -104,6 +107,28 @@ This is an observable ownership boundary. A browser port must use separate
 render roots for the pre-composite splash lane and post-composite streak lane;
 putting both under one late parent preserves their relative order but loses the
 intervening native operation.
+
+## Shared `Anim_FadeScale` painter census
+
+The additive state above belongs to the concrete `Anim_FadeScale` vtable
+`0x00785A84`, not only to Arena weather. The class catalog and exact constructor
+reads close every vtable-install reference:
+
+| Constructor/producer | Exact `Anim_FadeScale` member | Painter consequence |
+| ---: | --- | --- |
+| `0x00468E50` | Arena weather `DeadHawg[24]` splash | additive before the Region composite |
+| `0x0047F8D0` | Wraith dissolve `BadGuys[20]` core | additive |
+| `0x0050B390` | Courtyard fountain `College[38]` transient | additive |
+| `0x005F7010` | Tragic Circle player pulse `BadGuys[7]` | additive |
+| `0x005FB020` | Magic Circle player pulse `BadGuys[7]` | additive |
+| `0x00644A00` | Teleport source/destination `BadGuys[90]` | additive |
+| `0x00645B50` | three Mindblast `Clothes[2]` rings | additive |
+| `0x00648790` | Explosive Shield `DeadHawg[2]` ring | additive; the separate `BadGuys[15]` `Anim_Fade` remains source-over |
+
+`Anim_FadeScale_Perspective`, `Anim_FadeScaleAdditive_Perspective`, and
+`Anim_FadeScale_Clipped` have different vtables and are outside this exact
+class census. A renderer that relies on its framework's inherited/default
+sprite blend for any row above is not mirroring the shared native painter.
 
 ## Audio and lifecycle
 

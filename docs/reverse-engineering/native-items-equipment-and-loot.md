@@ -432,7 +432,7 @@ Mindblast's full event is closed at `0x0052A220/0x00645B50`. It plays
 `magicshieldexplode` once at default pitch, then `bigfire` once at default
 pitch and once at pitch `0.8`, all through the point-gain path. Its retained
 presentation consists of one normal BadGuys-15 fade at `(x,y-25)`, scale
-`9*6=54`, alpha loss `0.025`; three cyan Clothes-2 `Anim_FadeScale` rings at
+`9*6=54`, alpha loss `0.025`; three additive cyan Clothes-2 `Anim_FadeScale` rings at
 `(x,y-35)`, initial scale `4.5`, initial alpha `1.5`, alpha loss `0.025`, and
 scale multipliers `1.1/1.05/1.025`; two additive BadGuys-158..167 sprite-array
 actors at the origin with scale `10`, random rotation, and frame steps

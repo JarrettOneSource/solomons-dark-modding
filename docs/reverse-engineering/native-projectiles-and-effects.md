@@ -792,7 +792,7 @@ order:
 
 - one normal `BadGuys[15]` `Anim_Fade` at `(x,y-25)`, scale `2*6=12`, alpha
   `1`, loss `0.1`;
-- one normal `DeadHawg[2]` `Anim_FadeScale` at `(x,y-35)`, scale `2.5`, scale
+- one additive `DeadHawg[2]` `Anim_FadeScale` at `(x,y-35)`, scale `2.5`, scale
   factor `1.01`, alpha `1.5`, loss `0.05`;
 - two additive `Anim_SpriteArray` children over `BadGuys[158..167]` at
   `(x,y-35)`, scale `6`, independently consuming `Float(360)` rotation. Their
