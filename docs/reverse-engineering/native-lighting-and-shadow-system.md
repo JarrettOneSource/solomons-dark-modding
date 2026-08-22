@@ -205,6 +205,13 @@ is armed to 180 by a true level transition through
 Neither field can be reconstructed exactly from visible pose, current level,
 or render age after a join/resync.
 
+A 2026-08-22 full offset-access recheck also closes the phase's adjacent visual
+consumer. Equipped attachment compositor `0x00538B80` receives ordinary actor
+scale and does not read `+0x268`. Element helper `0x0053B1D0` alone applies
+`actorScale * (1 + 10*overlayPhase)` to the equipped element effect at reads
+`0x0053B2DB`, `0x0053B3CD`, and `0x0053B62F`. The phase therefore enlarges the
+element effect and analytic light, never the staff or wand raster.
+
 ## Raster product and scene boundary
 
 The raster product binds DeadHawg record 18, the registered 336x305 crop of a

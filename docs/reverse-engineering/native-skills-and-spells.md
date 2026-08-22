@@ -352,7 +352,7 @@ quickbar action. Its complete ownership chain is split between
 presentation helper `0x0052D360`, common enemy contact, and
 `Mod_EtherBurn (0x1B74)`.
 
-### Charge and held-weapon cue
+### Charge and equipped-effect cue
 
 The actor-owned charge is the float at PlayerWizard `+0x2E4`; rebuilt skill
 cache `+0x8C8` is the rounded `mCharges` capacity. An alive wizard whose
@@ -366,13 +366,32 @@ crossed `trunc(previousCharge) + 1`. Every crossed integer:
   `1`;
 - writes `0.25` to PlayerWizard `+0x268`.
 
-`+0x268` is shared held-weapon presentation state, not an Ether-only light. It
-decays by double `0.899999976` every actor tick. The held-item painter scales
-the selected weapon by `actorScale * (1 + 10 * +0x268)`, so a charge crossing
-begins at `3.5x` and contracts geometrically. The Plane/Planewalker flag
-`actor +0x138 & 0x10` resets `+0x2E4` after the charge branch. Death/alternate
-animation byte `+0x160` suppresses charging without inventing a second charge
-owner.
+`+0x268` is the shared equipped-element effect/light phase, not weapon geometry
+and not an Ether-only light. It decays by double `0.899999976` every actor
+tick. A fresh exhaustive offset-access pass on 2026-08-22 corrected the earlier
+held-weapon interpretation:
+
+- `PlayerWizard` action callback `0x00550180` writes the ordinary StaffCast and
+  StaffConstant family values already catalogued by the lighting report;
+- the only Ether Blast-specific nonzero writer is the charge-crossing store of
+  `0.25` at `0x0054B9C8`;
+- `Wizard_Render 0x0054BA80` calls equipped-attachment compositor `0x00538B80`
+  at ordinary actor scale. The complete PlayerWizard `+0x268` read census has
+  no attachment-compositor scale read before those calls;
+- the subsequent equipped-element helper `0x0053B1D0` reads `+0x268` at
+  `0x0053B2DB`, `0x0053B3CD`, and `0x0053B62F`. Each applicable element branch
+  computes `actorScale * (1 + 10 * +0x268)` before entering its element painter;
+  and
+- player light provider `0x005299A0` independently consumes the same phase as
+  analytic radius `(1 + +0x268) * 2.5999999046325684`, plus the separately
+  owned level-up sine.
+
+Thus a charge crossing begins with a `3.5x` **element-effect** scale and a
+larger analytic player light, while the staff/wand/hand attachment stays at
+ordinary actor scale. Scaling the staff raster itself is non-native. The
+Plane/Planewalker flag `actor +0x138 & 0x10` resets `+0x2E4` after the charge
+branch. Death/alternate animation byte `+0x160` suppresses charging without
+inventing a second charge owner.
 
 ### Magic Missile release and radial presentation
 
@@ -1271,8 +1290,8 @@ non-native.
 The 82-ID catalog, rank/refresh ABI, passive and concentration formulas,
 primary/weld dispatch, secondary/advanced switch, staff proc table, spawned
 factory types, modifier IDs, art selection, and principal object lifecycles
-are mapped. Ether Blast is explicitly closed across charge state, held-weapon
-cue, 108-particle pulse, current-HP contact, Region feedback, EtherBurn target
+are mapped. Ether Blast is explicitly closed across charge state, equipped-
+effect/light cue, 108-particle pulse, current-HP contact, Region feedback, EtherBurn target
 VFX, and target-owned MiscLight. Hurricane is explicitly closed across its
 refresh latch, Region source registry, target cadence/cooldown, tangential
 force, charge-cubed damage, low-charge contact-sound flag, eight-lane painter,
