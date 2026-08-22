@@ -800,51 +800,71 @@ snapshot boundaries.
 No website download or automatic mod enablement was implemented during this
 native decompilation pass.
 
-## 2026-08-22 equipped Staff element-effect painter depth correction
+## 2026-08-22 equipped Staff element-effect submission program
 
-Fresh instruction recovery of `PlayerWizard::Render 0x0054BA80` corrects the
-older claim that the Staff orb is one draw assigned wholly to the Staff
-attachment's back or front pass. The generated shaft and its two Clothes hand
-banks still are one pose-dependent attachment composite, but the equipped
-element effect has additional PlayerWizard-owned submissions through
-`0x0053B1D0`.
+Fresh instruction recovery of `PlayerWizard::Render 0x0054BA80` establishes
+that the generated Staff shaft/hands and the element effect have different
+submission owners. A same-day follow-up corrected two material call-gate
+mistakes in the first interpretation: the early back-angle helper call is
+null-equipment-only, and the pose-9 helper call is mutually exclusive with the
+ordinary front-angle call.
 
-For the ordinary `renderPhase != 9` branch, the complete element-effect depth
-program is:
+All direct xrefs to element helper `0x0053B1D0` are now drained. Five are in
+main `PlayerWizard::Render`:
 
-- the base back-angle call at `0x0054BDE4` occurs before the robe for integer
-  heading `<= 90` or `> 270` degrees;
-- the matching base front-angle call at `0x0054C842` occurs after the robe for
-  headings in the inclusive `90..270` range when render-drive overlay alpha
-  `+0x248` is zero (its constructor value at `0x0052B4C0`);
-- for the back-angle half-plane, `0x0054C09E` also submits the complete element
-  painter in the front transform while equipped-effect phase `+0x268 <= 0.1`;
-  and
-- `0x0054C8AE` submits that front-transform copy when `+0x268 > 0.1`.
+| Call | Exact gate | Equipped-Staff disposition |
+| --- | --- | --- |
+| `0x0054BDE4` | equipment lookup at `0x0054BDC4` returns null; heading `<=90` or `>270` | never a Staff copy |
+| `0x0054C09E` | ordinary pose, phase `<=0.1`, heading `<=90` or `>270` | front-preservation copy |
+| `0x0054C7FE` | pose 9, phase `<=0.1` | one pose-owned front copy at every heading |
+| `0x0054C842` | ordinary pose, heading in inclusive `90..270` | ordinary front base copy |
+| `0x0054C8AE` | phase `>0.1` | front pulse copy at every heading |
 
-The two `+0x268` comparisons use the executable double `0.10000000149011612`
-at `0x007849E8`. They partition the finite phase domain, so every ordinary
-heading has a front-of-clothes element-effect submission. At back headings the
-stock renderer may also retain the earlier behind-robe base copy; during a
-pulse, front headings may receive the separate base and enlarged front copy.
-At the exact 90-degree boundary the inclusive branch tests intentionally
-overlap. `+0x248` instead feeds the distinct colored sprite program at
-`0x0053B680`; it is not the Staff orb or the `+0x268` scale field.
+The remaining three xrefs, `0x00546E44`, `0x0054734E`, and `0x00547DE0`, are
+mutually exclusive branches of the alternate PlayerWizard vslot-`0x20`
+renderer `0x005468C0`; each branch submits the helper once. They are not extra
+main-world copies.
+
+For an equipped Staff in the main renderer, the exact copy counts are:
+
+- ordinary pose, phase `<=0.1`: one copy at every heading except exact 90
+  degrees, where the inclusive back/front tests submit two;
+- ordinary pose, phase `>0.1`: one copy at back headings and two at front
+  headings (`90..270` inclusive);
+- pose 9: exactly one copy at every heading, below/equal or above the phase
+  threshold.
+
+There is no equipped-Staff back-base copy. `0x0054BDCE` is `TEST EAX,EAX` and
+`0x0054BDD0` is `JNZ 0x0054BDE9`, so every present Staff skips
+`0x0054BDE4`. Similarly, pose 9 reaches `0x0054C7FE`, while ordinary
+`0x0054C842` is in the opposing branch. A port that derives either call from
+heading alone over-submits complete element painters and visibly enlarges or
+saturates the orb.
+
+The exact threshold remains the double `0.10000000149011612` at
+`0x007849E8`. `+0x248` feeds distinct colored-sprite helper `0x0053B680` and
+does not authorize another element-effect copy.
 
 `0x0053B1D0` dispatches Ether, Fire, Air, Water, and Earth through their five
-already-catalogued element painters. It uses the active Staff record's point-1
-socket and applies `actorScale * (1 + 10 * +0x268)` to the phase-owned copy.
-Staff selectors `0..5` share the same code; Wand and empty-weapon branches are
-separate and do not authorize a Staff orb. Death/alternate drive byte `+0x160`
-suppresses the helper. The browser consequence is that Staff attachment depth
-cannot be reused as the sole orb z-order: a front element-effect copy must
-remain above every robe/fixed-clothes layer for every heading and Staff action
-pose.
+already-catalogued element painters. Its Staff-type branch
+`0x0053B261..0x0053B318` uses the Staff record's virtual point-1 socket and,
+at `0x0053B2DB..0x0053B2F0`, passes exact scale
+`actorScale * (1 + 10 * +0x268)`. The doubles are `10` at `0x007DE810` and
+`1` at `0x007DE820`. That scale is not the regression and must not be reduced
+to compensate for an invalid extra copy.
+
+The adjacent helper branches are distinct, but they are not silent. A present
+non-Staff item follows `0x0053B321..0x0053B412` and applies an additional
+`0.6000000238418579` scalar from `0x0078C6F0`; the null-item path is
+`0x0053B431..0x0053B66B` and owns separate hand/randomized placement. Neither
+branch authorizes the null-equipment `0x0054BDE4` call for a Staff. Staff
+selectors `0..5` share the same Staff call graph. Death/alternate drive byte
+`+0x160` suppresses the helper.
 
 Evidence is the pinned 4,723,200-byte retail `SolomonDark.exe` (SHA-256
 `03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`,
-preferred base `0x00400000`), fresh Ghidra 12.0.3 read-only instructions at
-`0x0054BDCF..0x0054BDE9`, `0x0054C076..0x0054C0AF`, and
-`0x0054C7E6..0x0054C8BF`, plus decompilation of `0x0053B1D0`, `0x0053B680`,
-and constructor `0x0052B4C0`. Confidence is high; no painter-depth unknown
-remains for the equipped Staff family.
+preferred base `0x00400000`), re-hashed 2026-08-22, and fresh Ghidra 12.0.3
+read-only decompilation/instructions for `0x0053B1D0`, `0x005468C0`, and
+`0x0054BA80`, including every xref and the ranges above. Confidence is high;
+no main-world equipped-Staff call, branch, element, selector, pose, phase, or
+teardown member remains unknown.
