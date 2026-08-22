@@ -358,3 +358,120 @@ participant before accepting the intact lobby hub. It neither activates a
 foreground window nor mutates global mouse state. Mouse or Lua gameplay input
 before Create would mask the automatic Boneyard contract and is not admissible
 evidence for this branch.
+
+## 2026-08-22 normal-screen and `Solomon_Riff` ownership correction
+
+The earlier Website parity pass treated the normal `GAME` / `OVER` glyphs as
+the whole sibling presentation and treated `Solomon_Riff` as an unrelated
+factory member. A fresh read-only xref pass disproves that boundary. The only
+direct constructor call to `Solomon_Riff` outside the type-5019 factory is at
+`0x005CAFEF`, inside `GameOver` construction. The Game Over system therefore
+includes the full normal-screen actor, its twelve-row authored bank, its delayed
+stream, and both normal continuation paths.
+
+### Constructor-owned presentation and audio
+
+`GameOver` constructor `0x005CAD40` performs this ordered work after freezing
+ordinary gameplay input:
+
+1. set the two `Game` control seals at `Game+0x1ABD/+0x1ABE`, reset their
+   embedded movement/aim owners, and replace ordinary HUD/control presentation
+   with the application-level Game Over surface;
+2. stop both music lanes at `0x005CAE3D`;
+3. enqueue `SAY_SOLOMON_LAUGHBIG1` at `0x005CAE79` in both modes;
+4. in Boneyard mode only, enqueue `SAY_SOLOMON_ANOTHERCORPSE` at
+   `0x005CAEC8` after the huge laugh;
+5. initialize entry alpha `1`, title alpha `-1.5`, prompt alpha `-2`, and exit
+   alpha `0`;
+6. build the three-record `GameOver` bundle and start song `death` immediately
+   at `0x005CAFB9`; and
+7. in normal mode only, allocate type `5019`, call `Solomon_Riff` constructor
+   `0x004756C0`, and register that actor in the still-resident world.
+
+The two narration calls use the shared narration owner at `0x004FCEC0`; the
+second Boneyard line is queued behind an already active first line rather than
+played as an unrelated simultaneous sound. `DeathGuitar__Stream` is not a
+player-death-start cue. Its only recovered Game Over call is the normal-mode
+`Solomon_Riff` tick at `0x004757DD`.
+
+### Normal Game Over visual and continuation clocks
+
+Renderer `0x005C9030` paints in this order: entry-black layer, normal-mode
+glyphs, normal-mode prompt, exit-black layer. `GameOver.0` is `307 x 119` at
+viewport center plus `(0,-175)`; `GameOver.1` is `306 x 120` at center plus
+`(0,125)`. Both use title alpha. The prompt is `CLICK TO CONTINUE...`, centered
+at `(width / 2, height - 50)` with Fonts group 3 and native RGBA
+`(0.85,0.73,0.44,1)`. `GameOver.2` has no compiled consumer.
+
+At the 100 Hz native clock:
+
+| Member | Initial value | Recurrence / threshold |
+| --- | ---: | --- |
+| entry black | `1` | subtract `0.025`; clear at tick 40 |
+| title alpha | `-1.5` | add `0.005`; first visible after 300, exact one at 500 |
+| prompt alpha | `-2` | add `0.005`; first visible after 400, exact one at 600 |
+| input virtual | n/a | `0x005C7910` accepts normal-mode activation only once title alpha is exactly one |
+| clicked exit | `0` | add `0.05`; exact black after 20 accepted ticks |
+| unattended exit | `0` | `Solomon_Riff` completion sets accepted and slow bytes together; add `0.004`, exact black after 250 accepted ticks |
+
+The normal branch is therefore both interactive and bounded. A click can
+continue from tick 500. If no input arrives, `GameOver::Tick` observes the Riff
+actor only after its internal counter is greater than `9.5 * tick_rate` and its
+frame cursor is greater than ten; on the stock 100 Hz clock the first eligible
+state is tick 951. This sets the adjacent slow-exit byte and progresses without
+input. Boneyard's separate tick-1000 / 400-tick automatic branch remains as
+documented above.
+
+### Complete `Solomon_Riff` authored program
+
+Type `5019` has vtable `0x00786364`, constructor `0x004756C0`, initializer
+`0x0047F480`, tick `0x004756F0`, and renderer `0x004A15E0`. The constructor
+xref census has exactly two members: the generic type factory `0x005B7080`
+and the Game Over constructor. `SolomonRiff.bundle` contains thirteen records:
+record 0 is the dormant three-pixel placeholder; records 1 through 12 are the
+complete extracted array at bundle object `+0x100`. Every array record uses a
+`200 x 200` logical registration cell and is selected by truncating the
+nonnegative frame cursor toward zero.
+
+The actor starts hidden. When its counter first exceeds `2 * tick_rate` (tick
+201), it copies the local player's render anchor, subtracts 375 from X, and
+initializes the visible pose. Its initializer supplies vertical offset `-5`,
+vertical velocity `-4`, frame zero, and phase zero. During the hop, each tick
+adds `4.4` to X, adds velocity to the vertical offset, then adds `0.125` to
+velocity; the offset clamps to zero on landing. This consumes 67 motion ticks
+and lands at X offset `-80.2` from the copied player anchor.
+
+On the ground, phase zero advances frames below three by net `0.10` per tick,
+then advances by `0.13` and wraps at five back to three. The clamp happens
+before rendering, so cursor value five / bundle record 6 is never selected.
+Counter tick 550 plays
+fixed stream 118 / registry offset `0x1364`,
+`sounds\\DeathGuitar__Stream`. After counter 820, phase one alternates frames
+0 and 1 every eight ticks. After counter 920, phase two starts at frame 6,
+adds `0.2` per tick, and clamps at frame 11 (bundle record 12). The renderer
+adds the live vertical offset and selects records 1..5 and 7..12; record 6 is
+an authored but program-dormant sibling.
+
+### Branch inventory and Website consequence
+
+| Member | Native branch | Website disposition for the requested post-death flow |
+| --- | --- | --- |
+| entry/exit black layers and retained Arena | both | exact-ported |
+| ordinary HUD, quickbar, loot notices, spectator text, chat, and touch controls | superseded by application surface | exact-ported: absent for the complete Game Over lifetime |
+| `GAME`, `OVER`, and bitmap prompt | normal/story | exact-ported by explicit product request on the survival route |
+| `Solomon_Riff` records 1..5 and 7..12 plus complete tick program | normal/story | exact-ported by explicit product request |
+| `SolomonRiff.0`, program-skipped `SolomonRiff.6`, and `GameOver.2` | neither | out-of-system: no reachable Game Over selection |
+| huge-laugh narration and immediate `death` song | both / constructor | exact-ported |
+| `ANOTHERCORPSE` queued narration | Boneyard only | out-of-system: the requested visible branch follows normal Game Over presentation/audio ownership |
+| Riff tick-550 death-guitar stream | normal/story | exact-ported; removed from individual player-death ownership |
+| normal click at tick 500 and Riff-completion fallback | normal/story | exact-ported with server validation of run and event identity |
+| Boneyard tick-1000 automatic acceptance and 400-tick fade | Boneyard only | out-of-system for the explicitly requested full normal Game Over screen; retained here as recovered sibling truth |
+| normal Mortuary/Hall/MainMenu destination | normal/story | out-of-system: the Website's explicit post-run route remains direct Create/loadout |
+| Create element and discipline selection | both post-run lineages | exact-ported: every surviving party participant chooses and confirms a fresh pair before shared-Hub return |
+
+The Website result is intentionally a documented composition of stock owners:
+normal Game Over presentation/input followed by the already requested direct
+post-run Create route. It is not evidence that retail Boneyard mode itself
+draws the normal glyphs or Riff actor. Authority must still reject stale
+run/event continuation, and multiplayer return must not let one participant's
+loadout silently overwrite or skip another participant's choice.

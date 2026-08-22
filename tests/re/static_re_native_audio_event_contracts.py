@@ -69,7 +69,7 @@ EXPECTED_TRIGGER_ASSET_CELLS = {
     "movement.footstep.stone": r"uniform pool 214..215 `sounds\Step\step1..2`",
     "movement.footstep.splash": r"uniform pool 216..219 `sounds\stepsplash\step1..4`",
     "damage.player.taken": r"uniform pool 228..230 `sounds\Wizard_Ouch\SAY_OUCH1..3`",
-    "death.player": r"stream 118 `sounds\DeathGuitar__Stream`; immediate song `death`",
+    "death.player": r"stream 118 `sounds\DeathGuitar__Stream`; `SAY_SOLOMON_LAUGHBIG1`; Boneyard-only queued `SAY_SOLOMON_ANOTHERCORPSE`; immediate song `death`",
     "death.skeleton": r"entry 79 / object `+0xDAC`, `sounds\skeleton_die`",
     "death.zombie": r"105 `zombiedie`; 108 `zombiepoisonsplat` three times when rotten; 110 `zombie_die_groan`",
     "death.banshee": r"8 `sounds\bansheedie` three times; preceding terminal flash uses 34 at `0x004960DF`",
