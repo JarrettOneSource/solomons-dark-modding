@@ -776,3 +776,48 @@ not claim native export compatibility. The existing launcher ZIP and eight
 launcher slots remain a separate lossless-native attachment system. A future
 mod-list field and native import/export projection are outside this first-slot
 pass.
+
+## 2026-08-22 clean-leave and autosave lifecycle recheck
+
+The browser leave/autosave reopening revalidated the save owner against the
+same read-only Ghidra project and retail executable identified above. The
+executable was re-hashed as
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`;
+all addresses below remain preferred-image virtual addresses.
+
+### Clean leave is a save-before-teardown edge
+
+- `Game` destruction at `0x005CD3A0` first installs the `Game` vtable, retires
+  any live modal, clears the profile gate, calls profile writer `0x005BE0B0`,
+  then calls resumable-run writer `0x005CBE10`. Object/world teardown follows
+  those two writes.
+- The deleting wrapper `0x005CFA60` has the destructor as its sole direct call.
+  The stock gameplay `MAIN MENU` action leaves the gameplay owner through this
+  ordinary destruction lineage; it is not a save-less socket-style exit.
+- `0x005CBE10` still has exactly two direct callers: run entry
+  `0x0050E5E0` and clean `Game` destruction `0x005CD3A0`. The sole loader
+  `0x005CC210` still has exactly one caller, front-end Last Game constructor
+  `0x005AAA30`.
+- Region request `0x005CDDD0` still calls profile writer `0x005BE0B0` before
+  testing whether the target is the current region. This confirms semantic
+  boundary writes independently of clean destruction.
+- Game Over `0x005CF4F0` retains its separate archive/profile/invalidation and
+  cache-cleanup lineage. It must not be changed into a resumable leave save.
+
+### No native periodic whole-run writer
+
+The complete direct-reference census above remains unchanged. No fixed-tick,
+wall-clock, frame, or idle caller of `0x005CBE10` exists. Retail therefore has
+no periodic whole-run autosave interval to copy. Its protection comes from
+semantic profile writes, region cache transitions, run-entry serialization,
+and the synchronous final writer in `Game` destruction. Its direct overwrite
+format remains non-crash-safe.
+
+For the browser port, periodic active-run persistence is consequently a named
+platform adaptation, not a recovered retail constant. It bounds loss when a
+tab/process disappears before JavaScript can complete IndexedDB or an
+authenticated HTTP write. The exact stock-equivalent browser path is the
+explicit in-game leave action: request a final host-authored owner projection,
+commit it to the selected storage adapter, and only then destroy the client
+session. A browser process killed before that acknowledgement remains
+fundamentally weaker than retail's synchronous destructor.
