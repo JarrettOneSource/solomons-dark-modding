@@ -34,7 +34,7 @@ The class catalog identifies `Anim_WeatherRaindrop` at vtable `0x00785180`:
 | --- | ---: | --- |
 | constructor | `0x00454B60` | initializes height to `-App+0x1E0`, stores the current native float, and chooses streak length `20 + RandomFloat(10)` |
 | tick | `0x00454C00` | adds the streak length to height and retires through vtable slot `+0x18` after height crosses zero |
-| draw | `0x00459B60` | refreshes color/alpha through parent Arena slot `+0xF4`, then submits a procedural gradient streak from `y + height - length` to `y + height` through `0x00455840` |
+| draw | `0x00459B60` | on its sentinel value, converts the world point through parent Arena slot `+0xF4`, caches the Region analytic scalar from `Arena+0x8C44 -> 0x0057E490`, then submits a procedural gradient streak from `y + height - length` to `y + height` through `0x00455840` |
 
 The live object fields used by this class are:
 
@@ -72,6 +72,39 @@ The same spawn then allocates an `Anim_FadeScale` through `0x00452E20`, assigns
 The native constructor writes the initial scale/alpha, random scale and
 rotation values, and the small scale recurrence used by the splash.
 
+## Render boundary and Complex Lighting branches
+
+The splash and streak are not merely ordered siblings in one late weather
+layer. They straddle the Region light compositor:
+
+```text
+0x0046F6C0  draw Arena+0x2C4 Anim_FadeScale splash manager
+0x0046FAFF  Complex Lighting on: multiply the painted underlay by the light map
+0x0046FDAF  flush the shared world queue
+0x0046FFB7  draw Arena+0x1E0 Anim_WeatherRaindrop streak manager
+0x00470107  Complex Lighting off: multiply the completed shared/late lanes
+```
+
+`Anim_FadeScale::Draw 0x00455DF0` installs its authored RGB and life-clamped
+alpha, transforms `DeadHawg:24`, and draws it without an analytic Region-light
+query. With `Game.ComplexLighting` enabled (`0x00B3BCA8 != 0`), the splash is
+darkened because it is already in the framebuffer when compositor
+`0x0057D670` runs at `0x0046FAFF`. The later streak cannot use that earlier
+raster pass, so `Anim_WeatherRaindrop::Draw 0x00459B60` caches the analytic
+scalar and writes it into both gradient endpoint RGB values; the endpoint
+alphas remain `0` and `0.5`.
+
+With Complex Lighting disabled, common analytic tint is forced to white. The
+same raster compositor moves to `0x00470107`, after the streak manager, so both
+the splash and the white streak are multiplied by the completed light map.
+There is no stock branch in which either weather family stays globally bright
+over zero-light pixels.
+
+This is an observable ownership boundary. A browser port must use separate
+render roots for the pre-composite splash lane and post-composite streak lane;
+putting both under one late parent preserves their relative order but loses the
+intervening native operation.
+
 ## Audio and lifecycle
 
 The source registry entry is `sounds\\rainfall__loop` at requested-gain field
@@ -88,9 +121,10 @@ both local animation-manager families.
 ## Web-port handoff
 
 The Website already carries `scene.environmentMode` and renders the authored
-mode-specific compact scenery rows. The missing owner is a Boneyard renderer
-weather layer that consumes the existing scene byte/bounds, uses a private
-presentation RNG, renders the procedural streaks and exact `DeadHawg:24`
-splashes in the post-main world lane, and synchronizes the existing
-`rainfall-loop` asset with a distinct Boneyard owner key. It must not touch the
-authoritative simulation RNG or the secondary-ability rain actors.
+mode-specific compact scenery rows. The Boneyard renderer weather owner must
+consume the existing scene byte/bounds, use private presentation RNG, place
+the exact `DeadHawg:24` splash root before the applicable Region light
+composite, place the procedural streak root in its native late lane, and move
+the Complex-Lighting-off composite after both. It must synchronize the
+existing `rainfall-loop` asset with a distinct Boneyard owner key and must not
+touch authoritative simulation RNG or the secondary-ability rain actors.
