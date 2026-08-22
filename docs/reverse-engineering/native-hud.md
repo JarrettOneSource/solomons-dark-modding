@@ -420,6 +420,48 @@ teaches the recorder the corrected fields and selected-primary identity.
   identical Chrome geometry and Skills-record receipts on all three. Exact
   browser evidence is recorded in the Website v52 ledger.
 
+## 2026-08-21 local HP depletion-direction audit
+
+A fresh read-only headless Ghidra pass against the same retail image (SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`)
+rechecked the local HP meter after a Website direction concern. The decisive
+instruction range is `0x005D2FDD..0x005D3403` inside HUD renderer
+`0x005D2520`; clip setter `0x00420EC0` takes `(x, y, width, height)`, and the
+repeated strip renderer remains `0x00415230`.
+
+The meter has two different anchors that must not be conflated:
+
+- maximum-HP layout keeps the track/core **right** edges at `750/745` and grows
+  the complete meter left;
+- current-HP clipping keeps the visible `UI.26` strip's **left** edge at
+  `745 - health_core_width` and changes only its right edge.
+
+Therefore damage depletes the local red meter **right-to-left**. At half HP the
+squared fill retains the leftmost quarter of the core; it does not retain the
+quarter nearest the central skill cluster. The clean-stock damaged and
+near-death crops at
+`/mnt/d/codex-evidence/uire-20260806/hud-crops/20260806T115705Z/`
+visibly corroborate the instructions: red remains at the far-left end while
+the empty track opens from the center-facing right end. Magic Shield uses the
+same left origin with a linear ratio and only changes draw order at the
+life/shield width crossover.
+
+The owning membership is local health in Hub and run scenes; default and every
+dynamic maximum; every current-health writer; the shield layer; and the
+alive/death/respawn visibility branches. Fixed ally rows, world-projected
+remote bars, mana/XP, and the featured-enemy prefix have independent owners.
+No timing accumulator, interpolation, delayed-drain layer, tint transition,
+audio, or randomness participates.
+
+The membership sweep also narrows the independent featured-enemy prefix without
+folding it into this local-meter contract. `0x005D2671..0x005D273A` reads enemy
+current/max HP at `+0x174/+0x170`, clips a separately drawn strip to a
+current/max-scaled width from its own left origin, and restores clipping before
+the outlined name pass. This proves that prefix contains its own left-origin
+health fill, but it does not make it a local-player meter consumer and does not
+settle the panel's remaining art, exact rect, identity font, or natural
+eligibility membership.
+
 No G9 derived-stat or selected-skill member remains `Not Yet Reversed`. The
 featured-enemy prefix below is an independent pre-existing G9 boundary.
 
@@ -429,4 +471,9 @@ featured-enemy prefix below is an independent pre-existing G9 boundary.
 
 `0x005D257E..0x005D2AEF` is a reachable native prefix guarded by `gameplay+0x1C2C`, a live actor, and its durable `EnemyConfig` at `actor+0x1D0`. It executes before the ordinary HUD and contains sprite/text work consistent with a featured-enemy presentation. The sanctioned exact-spawn seam deliberately retires the featured pointer when a spawned actor has no durable native `EnemyConfig`; a live Heartmonger attempt therefore returned “featured-enemy actor has no durable native config.” Fabricating that object would cross the observation-only boundary.
 
-No panel rect, label count, font, or sprite is asserted. An implementing agent must leave this branch absent or explicitly incomplete until a naturally configured featured enemy is reachable and settle-gated. Do not infer a boss bar from screenshots or reuse the ordinary ally/health rect.
+The 2026-08-21 local-meter direction audit proves only the prefix's independent
+enemy current/max ratio and left-origin health-fill clipping described above.
+No complete panel rect, label count, font, sprite identity, or natural featured
+membership is asserted. An implementing agent must leave this branch absent or
+explicitly incomplete until a naturally configured featured enemy is reachable
+and settle-gated. Do not reuse the ordinary local or ally-health rect.
