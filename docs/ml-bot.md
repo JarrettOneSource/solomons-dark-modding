@@ -22,7 +22,11 @@ is dropped. `docs/ml-bot-policy-web-port.md` amends the v3 contract for that
 runtime (schema v5): it re-sources hostile hazards from the web simulation
 and adds first-class blocks for the bot's own projectiles and persistent
 areas (Block R) and for own and allied minions (Block S), none of which
-v3/v4 observe. The sections below describe the native v4 runtime as shipped.
+v3/v4 observe; its same-day follow-ups re-source Blocks A-Q from the web
+simulation (§6.2) and rule that the bot joins a session as a server-hosted
+client through the ordinary `client-hello`/`client-input` path (W10), so
+other clients see it as any other player. The sections below describe the
+native v4 runtime as shipped.
 
 ## Policy v3 contract
 

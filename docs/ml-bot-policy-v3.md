@@ -276,10 +276,12 @@ native seam.
 
 Owner direction: the learned bot ships in the Web Port; all native-game bot
 planning is dropped. `ml-bot-policy-web-port.md` carries the amendment. Its
-rulings W1-W9: own effects first-class (Block R); own and allied minions
+rulings W1-W10: own effects first-class (Block R); own and allied minions
 first-class (Block S); enemy slots link to the minion's target; per-slot
 `effect_active` flags; masks stay legality-only; reward frozen with web
 `sourcePlayerId` attribution; hostile hazards re-sourced from the closed web
 registry; enemy phase and strike timing exact (Block K re-sourced); no
-native seam and no Lua. Width becomes 1,765. Sections A-E and
+native seam and no Lua; the bot joins as a server-hosted client (W10);
+Blocks A-Q re-sourced from the web simulation. Width becomes 1,784.
+Sections A-E and
 the 2026-07-30 adjudications remain the frozen v3/v4 native record.

@@ -5,7 +5,9 @@ runs in the Web Port, and all native-game bot planning is dropped. This
 document amends the v3 charter (`ml-bot-policy-v3.md`) for the Web Port
 runtime and answers one question precisely: does the policy see projectiles
 — its own and the enemy's — and the minions it summons? A same-day follow-up adds a second: does it
-see which phase of an attack each enemy is in (W9, §6.1)?
+see which phase of an attack each enemy is in (W9, §6.1)? Same-day owner
+decisions then fix how the bot joins a session (W10, §2.1) and re-source
+every remaining v4 block for the web (§6.2-6.3).
 
 It is a contract document in the v3 sense. Every field has a named source in
 the web simulation (`Website/frontend/src/game/`), every scale is a named
@@ -66,6 +68,41 @@ to the own-effects block below.
   statuses joined from the secondary target-effect table. Raw animation
   poses are never observed; they are derived from the same clock (§6.1).
 
+- **W10. The bot is a server-hosted client.** Owner decision 2026-08-22.
+  The policy runs in the host process, but the bot joins, plays, and
+  leaves through the same path as a remote player: its own `PlayerId`,
+  `client-hello` admission, `addPlayerCharacter`, a `HostClient` row with
+  `activeInput`/`queuedInputs`, per-tick `client-input` semantics, and the
+  ordinary per-player snapshot. Nothing in the protocol or the snapshot
+  names a bot; other clients see it as any other player (§2.1).
+
+### 2.1 W10 — the server-hosted client path
+
+The host has exactly one way to become a player, and the bot uses it
+unchanged (`host/game-host.ts`):
+
+| Step | Human client | Bot (same function, in-process) |
+| --- | --- | --- |
+| Admission | `client-hello` carries a credential; shared mode accepts the shared credential, ticket mode calls `authentication.claim` and requires a valid `leaderboardUserId` (`:2725-2741`; tickets minted by `POST /admin/hub/tickets`, `game-session-supervisor.ts:281`, claimed at `:118-124`) | the supervisor mints a bot ticket (or hands over the shared credential) and the host's bot controller submits the same `ClientHelloMessage` (`protocol/game-protocol.ts:420`) with a `PlayerCharacterConfig` and a social profile |
+| Join | `:585-717`: `playerId` allocated (`player-<n>`, random in shared worlds), `addPlayerCharacter(state, playerId, character)` (`:593`), `HostClient` row (`:224`) with `activeInput = createIdlePlayerCharacterInput()` (`:651`), `server-welcome` (`:683`) | identical; the `HostClient` row has no socket (its send is a sink) and carries `controller: 'bot'`, the only bot-specific state on the host (Block I `is_human` reads it) |
+| Input | `client-input` (`:798-843`): dedupe by `sequence`, idle while paused / `levelUpBarrier` / `pendingOffer`, reject `targetTick > tick + 2 × GAME_TICK_RATE`, queue by `targetTick`; `applyQueuedInput` (`:2767-2782`) promotes the newest eligible queued input to `activeInput`; the tick loop writes `inputs[playerId] = activeInput` (`:1431-1457`, `:1548-1553`) | the bot controller enqueues a `ClientInputMessage` (`:432`) with `targetTick = nextTick` and a monotonic `sequence` through the same handler; the simulation never sees a bot-specific input path |
+| Hub actions | `client-hub-action` (`:967-1001`) → `applyGameSimulationHubAction` (`game-simulation.ts:680-760`), then `activeInput` reset to idle and the queue cleared (`:996-997`) | same handler (potion drinking, §6.3); the idle reset costs the bot that tick's movement and cast, which the `hub-action-idle-tick` fixture asserts |
+| Skill offers | `client-select-skill` (`:439`), `client-level-up-action` (`:462`) | a scripted chooser (the v3 deterministic skill chooser) answers `pendingOffer` through the same message; the policy does not choose skills |
+| Match lifecycle | `client-start-match` (`:1251-1288`) and `client-confirm-loadout` (`:1289`) are authority-only | the bot never sends them; the authority starts matches, and the host confirms the bot's loadout and binds its quickbar (`client-skill-quickbar-bind`, `:446`) at admission |
+| Replication | every client receives `server-snapshot` (`:593`) through `broadcastSnapshot` / `stateForPlayer` (`:1766`, `:1802`) | the bot's player is in every other client's frame through the same per-player snapshot; no protocol field distinguishes it |
+| Leave | socket close → `removePlayerCharacter` (`game-simulation.ts:442`) | controller shutdown → the same removal |
+
+The observation is built host-side from the authoritative
+`GameSimulationState` keyed by the bot's `PlayerId`; the forward pass runs
+in the host process (or a worker thread) once per decision tick; the chosen
+action becomes the next `ClientInputMessage`. The public snapshot protocol
+is not extended: if the policy ever moves out of process, the host ships
+the observation vector over a privileged channel, never through the
+snapshot. Bots do not resume (`resumeToken` unused) and count as members in
+the party directory like anyone else (`public-party-directory.ts:9`); a
+badge for humans is a lobby decision outside this contract.
+`protocolVersion` is unchanged.
+
 ## 3. Web simulation sources
 
 | Source | Type / field | File |
@@ -82,6 +119,21 @@ to the own-effects block below.
 | Enemy brains and action clocks | `BoneyardEnemyActor.brain` — per-family `phase`, `actionProgress`, `markerEmitted`, `contactTargetPlayerId`, `actionTick`, `cooldownTicks`, `phaseTicksRemaining`, `impactStateTicksRemaining`, `castProgram`, `castRoll`, `actionRate`; actor `targetPlayerId`, `lifeState`, `headingDeg`, `maximumHealth`, `shieldHealth`, `shieldMaximumHealth`, `config.attackSpeed`, `config.family.armor`, `staffActionFactor` | `core-server/boneyard-enemy-store.ts:225-372`; programs `:91-120`; clock steps `:2215-2250, 2264-2300, 3368-3394`; `staffAttackSpeed` `:3498`; zombie `NATIVE_ZOMBIE_BEAT_ACTION_PROGRAM` (`core-kernels/boneyard-zombie-beat.ts`) |
 | Enemy statuses | `NativeSecondaryTargetEffectState` by `targetId` — `coldSlowTicks`, `coldSlowFactor`, `frozenTicks`, `stunTicks`, `stunFactor`, `fleeTicks`, `dazzleTicks`, `disruptedTicks`, `prismaticTicks`, `electricBurn`, `frostBurnTicks`, `steamed`, `weakenFactor`, `timeScale`; burn carrier actors `fire-burn` / `ether-burn` / `electric-burn` with `targetId` | `core-kernels/native-secondary-abilities.ts:232-256, 4553-4638` |
 | Enemy animation (presentation, never observed) | `BoneyardEnemySnapshot.animation` — `state`, `action`, `actionProgress`, poses, limb rotations | `protocol/game-state.ts:521-580` |
+| Session join and input path (W10) | `client-hello` handler, `HostClient` (`activeInput`, `queuedInputs`, `acknowledgedSequence`), `client-input`, `applyQueuedInput`, tick-loop input map, `client-hub-action`, `client-start-match`, `client-confirm-loadout`, authentication | `host/game-host.ts:224, 585-717, 798-843, 967-1001, 1251-1289, 1431-1457, 1548-1553, 2725-2741, 2767-2782`; tickets `host/game-session-supervisor.ts:118-124, 281` |
+| Client and server messages | `ClientHelloMessage`, `ClientInputMessage`, `ClientSelectSkillMessage`, `ClientSkillQuickbarBindMessage`, `ClientSelectPrimarySkillMessage`, `ClientSelectConcentrationMessage`, `ClientLevelUpActionMessage`, `ClientHubActionMessage`, `ServerWelcomeMessage`, `ServerSnapshotMessage` | `protocol/game-protocol.ts:420, 432, 439, 446, 452, 457, 462, 468, 564, 593` |
+| Player input and locomotion | `PlayerCharacterInput` (`aim`, `cast.primary`, `cast.quickbar` = belt slot index, `movement`), `createIdlePlayerCharacterInput`, `PlayerCharacterState` (`position`, `velocity`, `headingIndex`, `primaryCast`), `PLAYER_CHARACTER_RADIUS 25`, `PLAYER_CHARACTER_STEADY_SPEED 100`, `playerPrimaryCastOwnsFacing` | `core-kernels/player-character.ts:16-79, 139`; slot resolution `core-server/player-combat-input.ts:8-13` |
+| Player combat and progression | `PlayerCombatComponent` (`currentHealth`, `maximumHealth`, `currentMana`, `maximumMana`, `lifeState`, `poisonTicksRemaining`, `coldSlowTicksRemaining`, `dazzleTicksRemaining`, `lastDamageTick`), `playerMovementScale`, `playerCanAcceptInput`, `playerCanCast`; `PlayerProgressionComponent` (`level`, `damageX4TicksRemaining`, `mindChugTicksRemaining`, `poisonImmunityTicksRemaining`, `pendingOffer`), `PlayerSkillOffer`, `PlayerLevelUpBarrierState`, `applyPlayerPotionEffect` | `core-kernels/player-combat.ts:19-28, 105, 312-320`; `core-kernels/player-progression.ts:114-147, 166-174, 525-564` |
+| Skill book, quickbar, welds | `PlayerSkillBookComponent` (`primarySkillId`, `weldBuildId`, `skillQuickbar` 8-tuple, `effectiveRanks`), `NativeSkillQuickbarId`, `NATIVE_WELD_BUILDS` (ids 1000-1009, `primarySkillIds`), `SPELL_WELDING_SKILL_ID 52`, `MAX_PLAYER_LEVEL 75` | `core-kernels/player-progression.ts:82-112, 149-158, 233-242` |
+| Secondary contracts and player secondary state | `NATIVE_SECONDARY_ABILITY_IDS` (23), `NativeSecondaryAbilityContract.rank.manaCost[]`; `NativeSecondaryPlayerState` (`cooldownTicksBySkill`, `cooldownMaximumTicksBySkill`, `globalCooldownTicks`, `heldSlot`, `planeOrbHeld`, `magicShieldAbsorb`/`magicShieldMaximum`, `stoneskinTicksRemaining`, `reservedMana`, `staffCastTicksRemaining`, `castSpinTicksRemaining`), `NATIVE_SECONDARY_GLOBAL_COOLDOWN_TICKS 150`, `nativeSecondaryAvailableMana` | `core-kernels/native-secondary-ability-contract.ts:23-39, 111`; `core-kernels/native-secondary-abilities.ts:120, 189-210, 870` |
+| Primary profiles | `nativePrimarySkillProfile` (`manaCost`, damage bounds, air/water `reach`), `PRIMARY_SPELL_AIR_REACH 205`, `PRIMARY_SPELL_WATER_REACH 205`, `PlayerPrimaryCastState.underpowered` | `core-kernels/native-primary-skill-profile.ts:20-108`; `core-kernels/primary-spells.ts`; `core-kernels/player-character.ts:25` |
+| Derived stats | `PlayerSkillDerivedStats` (`movementFactor`, `offensiveDamageFactor`, `offensiveManaCostFactor`, `castProgressFactor`, `secondaryRechargeFactor`, `pickupRangeScalar`, `orbPullMultiplier`) | `core-kernels/player-skill-runtime.ts:75`; `playerSkillDerivedStatsAt` `core-server/player-entity-store.ts:319` |
+| Enemy bodies | `BoneyardEnemyActor` (`position`, `headingDeg`, `currentHealth`, `lifeState`, `targetPlayerId`, `config.collisionRadius`, `config.maximumHealth`), `BoneyardMaggotActor` (`position`, `headingDeg`, `currentHealth`, `maximumHealth`, `collisionRadius`, `damage`, `poisonDamage`, `movementPhase`, `nextAttackTick`, `lastAttackTick`, `targetPlayerId`, `lifeState`), `BoneyardEnemyStore.actors` / `.maggots` | `core-server/boneyard-enemy-store.ts:336-371, 457-492, 660`; `core-kernels/boneyard-enemy-config.ts:97-117` |
+| Arena, collision, gates | `BoneyardBounds`, `BoneyardScene`, `BoneyardCollisionWorld` (`circles`, `segments`, `polygons`, each with `sourceId`), `createBoneyardCollisionWorld`, `withBoneyardGateCollision`, `canPlaceBoneyardBody`, `resolveBoneyardMovement`, `scenerySpellTargets` | `core-kernels/boneyard.ts:6, 83`; `core-server/boneyard-collision.ts:18-39, 103-165, 182-209, 353`; `core-server/boneyard-world.ts:126-149, 215` |
+| Solomon encounter and wave director | `BoneyardSolomonEncounterState` (`phase`, `targetPlayerId`), `isSolomonPlayerLocked`; `BoneyardWaveDirectorState` (`phase` over the 8 `BONEYARD_WAVE_DIRECTOR_PHASES`, `waveOrdinal`) | `core-kernels/boneyard-encounter.ts:10, 65, 180`; `core-kernels/boneyard-wave-director.ts:27, 53` |
+| Loot | `BoneyardLootActor` (`kind` gold / orb / bonus / sack, `orbKind`, `bonusKind`, `item: NativeLootItem`, `amount`, `position`); pickup radius `(bonus ? 20 : 30) × pickupFactor`; orb pull `60 × pickupFactor × orbPull` | `core-server/boneyard-loot-store.ts:64, 128, 514, 569-571` |
+| Economy and inventory | `HubItemKind` (11), `EquipmentSlot` (7), `HubInventoryItem` (`kind`, `nativeTypeId`, `nativeSubtype`, `quantity`, `rarity`, `recipeIndex`, `generatedLevel`, `nativeEffects`, `modContent`), `HubEquipmentState`, `backpack`, `ownedPerkSelectors`, set predicates, stock potion subtypes, `consumeInventoryItem`, `economyHasWizardKey`; hub action dispatch and potion effect | `core-kernels/hub-economy.ts:19, 40, 66-83, 122-127, 164-170, 214-225, 264-282, 315-323, 616-634, 921`; `core-server/game-simulation.ts:680-760`; `core-server/player-entity-store.ts:521` |
+| Equipment effects | `NATIVE_EQUIPMENT_FEATURE`, `NativeEquipmentModifiers`, `resolveEquippedNativeEffects`, `nativeEquipmentHasFeature` | `core-kernels/native-equipment-effects.ts:14-28, 35-66, 151, 259` |
+| Run lifecycle | `GameRunLifecycleState.phase` over `GAME_RUN_PHASES` (hub, active, game-over, loadout), `eligiblePlayerIds` | `core-kernels/game-run.ts:5-23` |
 
 Everything is owner-keyed by `PlayerId` (string). "Own" means
 `ownerId === self`; "allied" means any other participant in the run.
@@ -434,9 +486,368 @@ recovery or cooldown, and knowing which enemy is after the bot are all
 learnable from these fields and were unlearnable in v4 for the regular
 roster.
 
+### 6.2 Blocks A-Q — web re-source
+
+Owner decision 2026-08-22 ("update it to be web port now"): every
+remaining v4 block is re-sourced field by field. Each row is **keep** (same
+meaning, web source), **change** (same name, different rule), **drop** (no
+web source, or constant on the web — a constant is not an observation), or
+**add** (a web-only signal). Timers count ticks at `tick_rate` (100,
+`GAME_TICK_RATE`) and are converted to seconds before scaling. Self state
+is read through the entity-store accessors (`getPlayerCharacter`,
+`getPlayerProgression`, `getPlayerSkillBook`, `getPlayerEconomy`,
+`game-simulation.ts:652-916`; `playerSkillRuntimeAt`,
+`playerSkillDerivedStatsAt`, `player-entity-store.ts:243-443`) plus the
+self row of `NativeSecondaryPlayerState`. "Builder memory" means state the
+observation builder keeps between decisions for its own player (previous
+action, previous positions, previous counts) — it runs every tick on the
+host, so per-tick deltas are exact.
+
+#### A. Self — 15 → 32
+
+| Field | v5 rule | Source | |
+| --- | --- | --- | --- |
+| `self_hp_ratio` | `currentHealth / maximumHealth`, clamped to [0, 1] | `PlayerProgressionComponent` (`player-combat.ts:28`) | keep |
+| `self_mana_ratio` | `currentMana / maximumMana` | progression | keep |
+| `self_level_scaled` | `level / level_scale`; `level_scale` becomes `MAX_PLAYER_LEVEL` (75) | progression; `player-progression.ts` | change |
+| `wave_scaled` | `waves.waveOrdinal / wave_scale` | `BoneyardWaveDirectorState` (`boneyard-wave-director.ts:53`) | keep |
+| `self_move_speed_scaled` | `PLAYER_CHARACTER_STEADY_SPEED × derived.movementFactor × playerMovementScale(progression) / velocity_scale` | `player-character.ts`; `player-skill-runtime.ts:75`; `player-combat.ts:105` | keep |
+| `self_moving` | `velocity.x ≠ 0 ∨ velocity.y ≠ 0` | `PlayerCharacterState.velocity` (`player-character.ts:44`) | keep |
+| `self_cast_active` | `playerPrimaryCastOwnsFacing(primaryCast)` (action tick running or channel active) `∨ staffCastTicksRemaining > 0 ∨ castSpinTicksRemaining > 0` | `player-character.ts:139`; secondary self state (`native-secondary-abilities.ts:189-210`) | keep |
+| `self_cast_ready` | `playerCanCast(progression) ∧ ¬self_cast_active ∧ globalCooldownTicks = 0` | `player-combat.ts:316`; secondary self state | keep |
+| `self_poisoned` | `poisonTicksRemaining > 0` | progression | keep |
+| `self_webbed` | — | no web source (Spider is not ported) | drop |
+| `self_damage_x4` | `damageX4TicksRemaining > 0` | progression (`player-progression.ts:129`) | keep |
+| `self_status_active` | — | opaque native flag mask; replaced by the explicit flags below | drop |
+| `self_mana_current_scaled` | `currentMana / mana_scale` | progression | keep |
+| `self_mana_max_scaled` | `maximumMana / mana_scale` | progression | keep |
+| `self_hp_max_scaled` | `maximumHealth / hp_scale` | progression | keep |
+| `self_cold_slowed` | `coldSlowTicksRemaining > 0` | progression | add |
+| `self_dazzled` | `dazzleTicksRemaining > 0` | progression | add |
+| `self_movement_scale` | `playerMovementScale(progression)` (1 when unaffected) | `player-combat.ts:105` | add |
+| `self_mind_chug` | `mindChugTicksRemaining > 0` | progression (`:135`) | add |
+| `self_held_slot_active` | `heldSlot ≠ null` | secondary self state | add (§12 item 3) |
+| `self_plane_orb_held` | `planeOrbHeld` | secondary self state | add (§12 item 3) |
+| `self_magic_shield_ratio` | `magicShieldMaximum > 0 ? magicShieldAbsorb / magicShieldMaximum : 0` | secondary self state | add (§12 item 3) |
+| `self_stoneskin_remaining_scaled` | `stoneskinTicksRemaining / tick_rate / status_duration_scale_seconds` | secondary self state | add (§12 item 3) |
+| `self_global_cooldown_scaled` | `globalCooldownTicks / global_cooldown_ticks` | `native-secondary-abilities.ts:120` | add |
+| `self_solomon_locked` | `encounter ≠ null ∧ isSolomonPlayerLocked(encounter, self)` | `boneyard-encounter.ts:180` | add |
+| `self_level_up_pending` | `pendingOffer ≠ null ∨ levelUpBarrier ≠ null` | `player-progression.ts:140, 166`; `GameSimulationState.levelUpBarrier` | add |
+| `wave_phase_{dormant, opening, opening_threshold, spawning, wave_threshold, wave_lull_delay, wave_lull, interwave}` | one-hot over the closed `BONEYARD_WAVE_DIRECTOR_PHASES` (8) | `boneyard-wave-director.ts:27` | add (8) |
+
+#### B. Active primary — 12 → 11
+
+Source: `skillBook.primarySkillId ∈ {8, 16, 24, 32, 40, 52}` and
+`skillBook.weldBuildId`; `profile = nativePrimarySkillProfile(primarySkillId,
+effectiveRanks[primarySkillId], weldBuildId)`.
+
+| Field | v5 rule | Source | |
+| --- | --- | --- | --- |
+| `primary_element_{fire,water,earth,air,ether}` | base id → its band (8 ether, 16 fire, 24 air, 32 water, 40 earth); 52 → both components of `NATIVE_WELD_BUILDS[weldBuildId].primarySkillIds` | `player-progression.ts:233-242` | keep |
+| `primary_welded` | `primarySkillId = 52 ∧ weldBuildId ≠ null` | skill book | keep |
+| `primary_build_index_scaled` | welded: `(weldBuildId − 1000) / 10`; else band identity (ether 0.0, fire 0.2, air 0.4, water 0.6, earth 0.8) — the v4 formula; the web weld ids 1000-1009 pair the same primaries as native `WELD_PAIRS` | skill book | keep |
+| `primary_mana_cost_scaled` | `profile.manaCost / mana_scale` | `native-primary-skill-profile.ts:108` | keep |
+| `primary_range_min_scaled` | — | constant 0 on the web (no primary has a minimum range) | drop |
+| `primary_range_max_scaled` | air/water: `PRIMARY_SPELL_AIR_REACH` / `PRIMARY_SPELL_WATER_REACH` (205) `/ range_scale`; projectile families (ether, fire, earth, weld): 1.0 — the kernel bounds them by lifetime and contact, not reach | `primary-spells.ts` | change |
+| `primary_affordable` | `nativeSecondaryAvailableMana(self) ≥ profile.manaCost` (`currentMana − reservedMana`); the kernel's own `underpowered` outcome is the oracle (`primary-affordable-exact`) | `native-secondary-abilities.ts:870`; `player-character.ts:25` | keep |
+| `primary_effect_active` | W4, unchanged | §4 | keep |
+
+#### C. Secondary slots — 8 × 14 → 8 × 15
+
+Slot `i` (0-7) is `skillBook.skillQuickbar[i]`; ability action
+`secondary_<i+1>` sends `cast.quickbar = i` (`player-combat-input.ts:8-13`
+resolves the slot). A slot may hold a primary id (`NativeSkillQuickbarId`);
+such a slot reads `is_primary_binding = 1` and `occupied = 0` — switching
+the active primary is not a v5 action (§12 item 7).
+
+| Field | v5 rule | Source | |
+| --- | --- | --- | --- |
+| `occupied` | `skillQuickbar[i] ∈ NATIVE_SECONDARY_ABILITY_IDS` | `native-secondary-ability-contract.ts:111` | keep |
+| `element_{fire,water,earth,air,ether}` | band of the skill id (ether 8-15, fire 16-23, air 24-31, water 32-39, earth 40-47); ids 48-79 have no element | v4 bands; ids identical on the web | keep |
+| `band_index_scaled` | `(id − band.first) / 8`; 0 outside the bands | same | keep |
+| `mana_cost_scaled` | `NATIVE_SECONDARY_ABILITY_CONTRACTS[id].rank.manaCost` at `effectiveRanks[id]` (the contract's index convention) `/ mana_scale` | `native-secondary-ability-contract.ts:23-39` | keep |
+| `range_scaled` | — | no per-skill reach table on the web yet (§12 item 8) | drop |
+| `cooldown_scaled` | `cooldownMaximumTicksBySkill[id] / tick_rate / cooldown_scale` | `native-secondary-abilities.ts:189-210` | keep |
+| `cooldown_remaining_scaled` | `cooldownTicksBySkill[id] / tick_rate / cooldown_scale` | same | add |
+| `ready` | `cooldownTicksBySkill[id] = 0 ∧ globalCooldownTicks = 0 ∧ playerCanCast(progression)` | same; `player-combat.ts:316` | keep |
+| `affordable` | `occupied ∧ nativeSecondaryAvailableMana(self) ≥ mana cost` | `:870` | keep |
+| `in_range_of_target` | — | dropped with `range_scaled` | drop |
+| `effect_active` | W4, unchanged | §4 | keep |
+| `held` | `heldSlot = i` | secondary self state | add |
+| `is_primary_binding` | `skillQuickbar[i] ∈ {8, 16, 24, 32, 40, 52}` | `player-progression.ts:82-83` | add |
+
+#### D. Enemy slots — 8 × 11, re-sourced
+
+Pool: `enemies.actors` with `lifeState = 'alive'` plus `enemies.maggots`
+with `lifeState = 'alive'` — maggots bite, poison, and die, so they are
+enemies (§12 item 6). Sorted by distance, then id.
+
+| Field | v5 rule | Source | |
+| --- | --- | --- | --- |
+| `present` | slot filled | store | keep |
+| `dx`, `dy` | `(position − self.position) / range_scale` | actor | keep |
+| `distance_scaled` | centre distance `/ range_scale` | actor | keep |
+| `hp_ratio` | `currentHealth / config.maximumHealth` (maggot: `maximumHealth`) | `boneyard-enemy-config.ts:97-117`; `boneyard-enemy-store.ts:457-492` | keep |
+| `radius_scaled` | `config.collisionRadius / radius_scale` (maggot: `collisionRadius`) | same | keep |
+| `velocity_dx`, `velocity_dy` | `(position − position one tick earlier) × tick_rate / velocity_scale` from the builder's per-actor previous-position map; 0 on first sighting. The store has no velocity field; the builder runs every tick, so the delta is exact | actor | keep |
+| `in_primary_range` | contact distance (`distance − radius`) `≤ primary_range_max` (B) | — | keep |
+| `is_current_target` | builder target memory (target head) | — | keep |
+| `targeted_by_own_minion` | W3 | §5 | keep |
+
+#### E. Selected target — 10 → 9
+
+`target_present`, `target_dx`, `target_dy`, `target_distance_scaled`,
+`target_contact_distance_scaled` (centre distance minus the enemy radius),
+`target_hp_ratio`, `target_radius_scaled`, `target_in_primary_range`, and
+`primary_max_range_scaled` are kept with the D and B rules;
+`primary_min_range_scaled` is dropped (constant 0 on the web).
+
+#### L. Persisted-target motion and facing — 4
+
+`target_velocity_dx/dy` as in D; `target_facing_dx/dy` is the unit vector
+of the actor's `headingDeg` in the store's own convention (the one its
+movement step uses). Maggots carry `headingDeg` too.
+
+#### F. Exact patch and rays — 56
+
+The probe is the movement kernel's own predicate:
+`canPlaceBoneyardBody(point, world.bounds,
+withBoneyardGateCollision(world.collision, gateLeaves),
+PLAYER_CHARACTER_RADIUS)` (`boneyard-collision.ts:182`, `:148`). Rays run
+in movement-action order (east, southeast, south, southwest, west,
+northwest, north, northeast), sampled at multiples of `ray_step` up to
+`ray_range`; the value is the first blocked sample's distance
+`/ ray_range`, 1.0 when clear. The patch is 7 × 7 at `patch_spacing`
+without the centre, 1.0 where the probe passes. A closing gate leaf
+changes the affected ray on the next tick. Bodies (players, enemies,
+minions) are not in the probe; they are Blocks D, I, and S (§12 item 9).
+The `rays-exact` fixture pins every sample to the predicate.
+
+#### M. Exact nearest obstacles — 8 × 14 → 8 × 13
+
+Rows are the primitives of the gate-aware collision world (`circles`,
+`segments` including gate leaves, `polygons`), sorted by clearance then by
+primitive index (circles, segments, polygons). Per row: `present`;
+`nearest_dx`, `nearest_dy` (nearest point on the primitive minus self,
+`/ range_scale`); `clearance_scaled` (distance to that point minus
+`PLAYER_CHARACTER_RADIUS` minus the primitive radius, `/ range_scale`);
+`normal_dx`, `normal_dy` (unit vector from the nearest point to self);
+`radius_scaled` (circle radius, segment radius 0 or 10, polygon 0);
+`extent_x_scaled`, `extent_y_scaled` (half-extents of the primitive's
+axis-aligned bounds `/ range_scale`); `kind_circle`, `kind_segment`,
+`kind_polygon`; `is_destructible` (the primitive's `sourceId` names a scene
+object in `scenerySpellTargets`, `boneyard-world.ts:215`).
+`is_participant` is dropped: bodies are not obstacle rows on the web
+(§12 item 9).
+
+#### G. Pickups — 4 × 21 + 1
+
+Pool: `loot.actors` sorted by distance, then id. `type_gold` is `kind =
+'gold'`; `type_health_orb` / `type_mana_orb` are `kind = 'orb'` with
+`orbKind`; `type_item_carrier` is `kind = 'sack'` (carries `item`);
+`type_powerup` is `kind = 'bonus'`. `item_identity_known` is `1` for every
+sack (the `HubItemKind` union is closed). `item_stock_{health, mana,
+wizard_chug, antidote, mind_chug, rejuvenation}` map `item.kind` =
+health-potion / mana-potion / wizard-chug / antidote / mind-chug /
+rejuvenation-potion; `item_custom` = mod-potion; `item_is_equipment` =
+equipment; `item_is_wizard_key` = key; dye and sack kinds read
+`item_identity_known = 1` with every type flag 0 (mapping rows exist; the
+`item-kind-closed` fixture). `item_stack_count_scaled` is the v4
+log-saturated `count_scaled(item.quantity)` and `item_amount_scaled` is
+`count_scaled(actor.amount)`; `pickup_count_scaled = min(count,
+pickup_count_scale) / pickup_count_scale`. Pickup reach is not a field but
+pins the expert and fixtures: `(bonus ? 20 : 30) × pickupFactor`, orbs
+pulled within `60 × pickupFactor × orbPull` (`boneyard-loot-store.ts:514,
+569-571`) — the same multipliers as v4's `PICKUP_RANGE_MULTIPLIERS`.
+
+#### H. Aggregates and history — 45 → 43
+
+| Field | v5 rule | |
+| --- | --- | --- |
+| `enemy_count_scaled` | alive pool size (D) `/ enemy_count_scale` | keep |
+| `threat_count_scaled` | pool members within `threat_radius_world` `/ threat_count_scale` | keep |
+| `nearest_enemy_dx/dy/distance_scaled` | nearest pool member | keep |
+| `nearest_threat_dx/dy/distance_scaled` | nearest within `threat_radius_world`; 0 when none | keep |
+| `escape_dx/dy` | `−unit(nearest threat offset)`; 0 when none | keep |
+| `suggested_move_dx/dy` | native nav-frame steering hint; no web source | drop |
+| `arena_center_dx/dy/distance_scaled` | bounds centre `(x + w/2, y + h/2)` minus self, `/ range_scale` (`BoneyardBounds`, `boneyard.ts:6`) | keep |
+| `arena_x_normalized`, `arena_y_normalized` | `(self − bounds.x) / bounds.w`, `(self − bounds.y) / bounds.h` | keep |
+| `edge_pressure` | `1 − min(d_edge, edge_pressure_range) / edge_pressure_range`, `d_edge` = distance to the nearest bounds edge | change |
+| `element_{fire,water,earth,air,ether}`, `discipline_{mind,body,arcane}` | one-hot of `PlayerCharacterConfig.element` / `.discipline` (`WIZARD_ELEMENTS`, `WIZARD_DISCIPLINES`) | keep |
+| `hp_delta`, `mana_delta`, `target_hp_delta`, `enemy_count_delta` | versus the previous decision (builder memory) | keep |
+| `previous_move_dx/dy`, `previous_cast_primary`, `previous_cast_secondary`, `previous_target_action_scaled`, `previous_target_switched` | the builder's own last emitted action | keep |
+| `time_since_damage_scaled` | `(tick − lastDamageTick) / tick_rate / history_time_scale_seconds`, 1 when `lastDamageTick = null` | keep |
+| `time_since_cast_scaled`, `time_since_move_scaled` | builder memory | keep |
+| `has_spell_welding_skill` | `effectiveRanks[52] > 0` | keep |
+| `weld_offer_pending` | `pendingOffer ≠ null ∧ ∃ option with weldBuildId` (`player-progression.ts:114-125`) | keep |
+| `offensive_damage_multiplier_scaled`, `offensive_mana_multiplier_scaled`, `cast_speed_multiplier_scaled`, `secondary_recharge_multiplier_scaled` | `derived.offensiveDamageFactor`, `.offensiveManaCostFactor`, `.castProgressFactor`, `.secondaryRechargeFactor`, each `/ multiplier_scale` | keep |
+
+#### I. Allies — 4 × 10 + 1
+
+Pool: `run.eligiblePlayerIds` minus self, present in `playerEntities`,
+sorted by distance then `PlayerId`. `present`, `dx`, `dy`,
+`distance_scaled`; `hp_ratio`, `mana_ratio` from that player's
+progression; `alive = lifeState = 'alive'`; `is_human` reads the host's
+`HostClient.controller = 'human'` — the contract's only non-simulation
+read (W10, §12 item 10); `intent_dx/dy` is that client's
+`activeInput.movement` on the host, the exact input the simulation applies
+this tick; `ally_count_scaled = min(count, ally_count_scale) /
+ally_count_scale`.
+
+#### J. Self potion timers — 3
+
+`self_damage_x4_remaining_scaled`, `self_poison_immunity_remaining_scaled`,
+`self_all_concentration_remaining_scaled` are `damageX4TicksRemaining`,
+`poisonImmunityTicksRemaining`, `mindChugTicksRemaining` (Mind Chug is the
+all-concentration potion, subtype 4), each `/ tick_rate /
+status_duration_scale_seconds`.
+
+#### O. Potion descriptors — 12 × 19 + 2
+
+Rows are `economy.backpack` items with `nativeTypeId = 7001` (the six stock
+kinds and `mod-potion`), sorted by `quantity` descending, then kind, then
+`id`, twelve rows (`potion_slot_count`). Per row: `present`;
+`count_scaled(quantity)`; `stock_{health, mana, wizard_chug, antidote,
+mind_chug, rejuvenation}` from `kind`; `custom` = mod-potion;
+`restores_hp_fraction` = 1 for health-potion and rejuvenation-potion
+(subtypes 0 and 5 restore fully, `applyPlayerPotionEffect`,
+`player-progression.ts:525-564`), else 0; `restores_mana_fraction` = 1 for
+mana-potion and rejuvenation-potion; `damage_multiplier_scaled = 4 /
+multiplier_scale` for wizard-chug (subtype 2 sets `damageX4TicksRemaining =
+NATIVE_DAMAGE_X4_POTION_TICKS`), else 0; `cures_poison` = antidote;
+`poison_immunity_duration_scaled` = antidote's
+`NATIVE_ANTIDOTE_IMMUNITY_TICKS / tick_rate / status_duration_scale_seconds`;
+`concentrates_all` = mind-chug; `effect_duration_scaled` = wizard-chug and
+mind-chug `6_000 / tick_rate / 60` (= 1), antidote `1_000 / tick_rate / 60`,
+mod-potion `modContent.durationMs / 1000 / 60`; `custom_effect_known = 0`
+for mod potions (the effect is applied by the mod's Lua, opaque to the
+simulation); `identity_hash_a/b` are the v4 rolling hashes over the
+identity key — the kind for stock potions, `modId:contentId` for mod
+potions. `potion_type_count_scaled` and `potion_total_count_scaled` as v4.
+
+`potion_legal` (the mask input; replaces native `potion_can_change`):
+`playerCanAcceptInput(progression) ∧ levelUpBarrier = null ∧` the
+`consumeInventoryItem` preconditions (`hub-economy.ts:616-634`: type 7001,
+`nativeSubtype ≠ null`, mod-potion requires `modContent`) `∧`
+state-changing: subtype 0 `hp < max`; 1 `mana < max`; 2
+`damageX4TicksRemaining < NATIVE_DAMAGE_X4_POTION_TICKS`; 3
+`poisonTicksRemaining > 0 ∨ poisonImmunityTicksRemaining <
+NATIVE_ANTIDOTE_IMMUNITY_TICKS`; 4 `mindChugTicksRemaining <
+NATIVE_MIND_CHUG_TICKS`; 5 `hp < max ∨ mana < max`; mod-potion: accepted by
+the simulation's own consume path. Native V3-2's permanent rejection of
+subtypes 2/3/4 is lifted: the web has a participant-scoped route
+(`applyPlayerEntityPotionEffect`, `player-entity-store.ts:521`) and no
+world-kind guard (`game-simulation.ts:750`), so potions are drinkable in the
+Boneyard.
+
+#### P. Equipped items — 7 × 15
+
+Slots hat, robe, weapon, ring_1-3, amulet read `equipment.hat`, `.robe`,
+`.weapon`, `.rings[0..2]`, `.amulet` (`HubEquipmentState`,
+`hub-economy.ts:164-170`). Per slot: `present`; `catalog_known =
+recipeIndex ≠ null`; `identity_hash_a/b` over `nativeTypeId:recipeIndex`
+(`nativeTypeId:name` when `recipeIndex` is null); `rarity_scaled` = Epic 2,
+Rare 1, null 0, `/ equipment_rarity_scale`; `level_scaled = (generatedLevel
+?? 0) / level_scale`; `set_complete` = the item's set predicate
+(`hub-economy.ts:264-282`) evaluated on the wearer's equipment;
+`offense_effect_scaled`, `resource_effect_scaled`,
+`mobility_effect_scaled`, `defense_effect_scaled` fold the item's
+`nativeEffects` alone through `resolveEquippedNativeEffects`
+(`native-equipment-effects.ts:151`) and sum each family's deviation from
+identity (multipliers minus 1, offsets and flats as-is), `/
+equipment_effect_scale`, clamped to ±1. The families partition
+`NativeEquipmentModifiers` (`:35-66`) and are closed: offense =
+`globalDamageFlat`, `globalDamageMultiplier`, `classDamageFlat`,
+`classDamageMultiplier`, `skillDamageFlat`, `skillDamageMultiplier`,
+`meleeDamageFlat`, `meleeDamageMultiplier`, `weldEffect`; resource =
+`maximumMana`, `manaRecovery`, `healthRecovery`, `globalManaCostFlat`,
+`globalManaCostMultiplier`, `classManaCostFlat`,
+`classManaCostMultiplier`, `recharge`, `classRecharge`; mobility =
+`walkSpeed`, `castSpeedFlat`, `castSpeedMultiplier`, `classCastSpeedFlat`,
+`classCastSpeedMultiplier`, `orbPullMultiplier`, `goldMultiplier`; defense
+= `maximumHealth`, `damageResistance`, `magicResistance`,
+`poisonResistance`; `featureBits` is `special_feature_present`
+(`nativeEquipmentHasFeature`, `:259`). A modifier field without a family
+row fails the contract test (`equipment-family-closed`).
+`targeted_effect_present` = any effect with `target ≠ 0`;
+`target_kind_scaled` = that effect's `target / equipment_target_kind_scale`;
+`target_magnitude_scaled` = its `magnitude / equipment_effect_scale`.
+
+#### Q. Inventory summary — 11 → 9
+
+From `economy.backpack`, all log-saturated with `count_scaled`:
+`inventory_item_total_count_scaled` (sum of `quantity`),
+`inventory_potion_count_scaled` (type 7001 kinds),
+`inventory_equipment_count_scaled` (kind equipment),
+`inventory_sack_count_scaled` (kind sack), `inventory_misc_count_scaled`
+(kind dye), `inventory_perk_count_scaled` (`ownedPerkSelectors.length`,
+`hub-economy.ts:225`), `inventory_registered_custom_count_scaled`
+(mod-potion rows with `modContent`), `inventory_wizard_key_count_scaled`
+(kind key), and `inventory_has_wizard_key = economyHasWizardKey(economy)`
+(`:921`). Dropped: `inventory_map_count_scaled` (no map items in the web
+hub) and `inventory_unknown_count_scaled` (closed union, always 0).
+
+#### K addendum — maggots
+
+`species_maggot` is appended after `species_coffin` (43 → 44 per slot, 8 ×
+44 = 352). The phase row for `BoneyardMaggotActor` is proposed here and
+pinned by the `maggot-enemy` fixture against the store's maggot attack
+step: `movementPhase = 'emerging'` → approach (in flight from the coffin,
+clocks saturate); `'crawl'` → approach while no bite is scheduled, cooldown
+from a bite (`lastAttackTick`) until `nextAttackTick`; `time_to_strike =
+nextAttackTick − tick` when a target is in reach; `targeting_self =
+targetPlayerId = self`; `contact_targeting_self = 0`; `max_hp_scaled` from
+`maximumHealth`; `shield_ratio = 0`; `armored = 0`; statuses join on the
+maggot id like any enemy.
+
+#### Closed unions the spec module tests exhaustively
+
+`enemyToken` (8) plus the maggot row; every brain `phase` union (§6.1);
+`BONEYARD_WAVE_DIRECTOR_PHASES` (8); `BONEYARD_SOLOMON_PHASES` (7, only
+the lock predicate is observed); `HubItemKind` (11); `EquipmentSlot` (7);
+`NATIVE_SECONDARY_ABILITY_IDS` (23); `NativePlayerPrimarySkillId` (6);
+the fields of `NativeEquipmentModifiers`; `PLAYER_LIFE_STATES` (4);
+`GAME_RUN_PHASES` (4); `NATIVE_SECONDARY_ACTOR_KINDS` (60, Block R); the
+five enemy projectile kinds (Block N). Adding a member without a mapping
+row fails the contract test.
+
+### 6.3 Action heads and masks on the web
+
+The four heads and the choice head are unchanged in shape (9 movement, 9
+target, 22 ability, 9 aim). Emission and legality:
+
+- **Movement.** `none` → `movement = (0, 0)`; a direction → its unit
+  vector (the input kernel applies `MOVEMENT_LANE_CAP`). A direction is
+  legal when its first ray sample (`ray_step`) passes the F probe.
+- **Target.** Builder-side, as v4: slot 0 keeps the current target; slot
+  `k` is legal when Block D slot `k` is present.
+- **Ability.** `primary` → `cast.primary = true` with `aim`; legal when
+  `self_cast_ready ∧ primary_affordable ∧ (aim_is_free ∨ target in
+  primary range)`. `secondary_k` → `cast.quickbar = k − 1`; legal when the
+  slot reads `occupied ∧ ready ∧ affordable`. `drink_potion_j` → a
+  `client-hub-action {type: 'consume', itemId}` for Block O row `j`, a host
+  message rather than a tick input; legal when `potion_legal`. The host
+  idles the bot's input after a hub action (`game-host.ts:996-997`), so
+  the movement and cast chosen on the same decision are dropped for that
+  tick — an outcome the policy learns, asserted by `hub-action-idle-tick`.
+- **Aim.** `center` → the target position, or the facing direction times
+  `aim_offset_world` without a target; the eight offsets are legal only
+  when `aim_is_free`, `aim = target + dir × aim_offset_world`. The free-aim
+  set carries over from v4 as a closed TypeScript map (ids identical):
+  builds {16, 40, 1006, 1007, 1008, 1009} and secondary entries {11, 15,
+  16, 27, 45, 48, 49, 50, 72, 73, 74, 76, 77}.
+- **Global gate.** While `self_level_up_pending ∨ self_solomon_locked ∨
+  ¬playerCanAcceptInput(progression)`, every head is null-only: the host
+  idles inputs during the barrier anyway (`game-host.ts:798-843`), and the
+  Solomon lock and death are simulation facts.
+- **Not actions.** Skill offers (`client-select-skill`, answered by the
+  scripted v3 chooser), quickbar binding (`client-skill-quickbar-bind` at
+  admission), primary switching, `client-level-up-action`,
+  `client-start-match`, `client-confirm-loadout` (W10).
+
 ## 7. Scales
 
-Reused from `policy_spec.lua` without change: `range_scale 1000`,
+Reused from `policy_spec.lua`: `range_scale 1000`,
 `velocity_scale 1000`, `radius_scale 100`, `hp_scale 1000`,
 `skill_damage_scale 500`, `multiplier_scale 4`, hazard contact 10 s,
 `hazard_lifetime_scale_seconds 60`, `status_duration_scale_seconds 60`.
@@ -449,10 +860,25 @@ own_effect_count_scale = 16
 minion_count_scale = 4
 enemy_action_scale_seconds = 2
 enemy_phase_scale_seconds = 5
+tick_rate = 100                      (GAME_TICK_RATE)
+level_scale = 75                     (MAX_PLAYER_LEVEL; v4 used 20)
+threat_radius_world = 340            (native bot-brain default, main.lua:127)
+edge_pressure_range = 480            (= ray_range)
+global_cooldown_ticks = 150          (NATIVE_SECONDARY_GLOBAL_COOLDOWN_TICKS)
 ```
 
 Counts are `min(count, scale) / scale`, the Block I convention. None of
 these is a fitted statistic.
+
+The other v4 scales are reused unchanged for Blocks A-Q: `mana_scale
+2000`, `cooldown_scale 60`, `wave_scale 20`, `enemy_count_scale 16`,
+`threat_count_scale 8`, `history_time_scale_seconds 5`, `ray_range 480`,
+`ray_step 60`, `patch_spacing 60`, `patch_radius 3`, `pickup_count_scale
+8`, `ally_count_scale 50`, `inventory_count_saturation 99`,
+`aim_offset_world 60`, `equipment_rarity_scale 2`,
+`equipment_target_kind_scale 8`, `equipment_effect_scale 4`,
+`target_action_scale 8`, `potion_slot_count 12`. Tick timers divide by
+`tick_rate` before any seconds-based scale.
 
 ## 8. Reward attribution
 
@@ -497,6 +923,20 @@ flag inverted must fail the fixture).
 | dying-excluded | kill an enemy | absent from Blocks D/K/E/L on the next decision and the target mask drops it |
 | targeting-self | two participants, enemy chases the bot | bot reads `targeting_self = 1`, ally reads 0; `contact_targeting_self` flips only when the swing starts |
 | status-join | freeze an enemy through the secondary kernel | `status_frozen = 1`, `status_frozen_remaining_scaled` strictly decreasing, 0 at expiry |
+| bot-join-replicated | a bot joins a session with one human client | the human's next `server-snapshot` frame lists the bot's player with the same fields as a second human would have; `ServerWelcomeMessage` and `protocolVersion` unchanged; mutation: admitting the bot by calling `addPlayerCharacter` directly (bypassing `client-hello`) leaves no `HostClient` row and fails |
+| bot-input-path | the bot emits a movement for tick `t` | `inputs[botId]` at tick `t` equals the emitted input and was set only by `applyQueuedInput`; mutation: writing `activeInput` directly is caught by the fixture's spy on the handler |
+| hub-action-idle-tick | the bot drinks a potion while moving | `activeInput` is idle for that tick (`game-host.ts:996-997`) and movement resumes on the next tick from the bot's next input |
+| potion-legality-exact | one of each of the seven potion kinds in the backpack, across hp/mana/timer states | `potion_legal` ⇔ `applyGameSimulationHubAction` accepts the consume and the player state changes; native subtypes 2/3/4 are legal on the web |
+| quickbar-cooldown-exact | cast belt slot `k` | `cooldown_remaining_scaled × cooldown_scale × tick_rate` equals `cooldownTicksBySkill[id]` every tick; `ready` flips exactly when it reaches 0 with `globalCooldownTicks = 0` |
+| primary-affordable-exact | mana swept across the primary's cost | `primary_affordable` ⇔ the cast attempt on the same tick does not set `primaryCast.underpowered` |
+| rays-exact | bot near fences, posts, and a gate | every ray sample and patch cell equals `canPlaceBoneyardBody` at that point; closing the gate changes the affected ray on the next tick |
+| ally-intent-exact | a second human sends a movement input | `intent_dx/dy` equals that input on the tick the host applies it |
+| wave-phase-exact | run a wave from dormant to interwave | `wave_phase_*` follows `BoneyardWaveDirectorState.phase` tick-exactly; adding a phase to the union fails the exhaustiveness test |
+| solomon-lock-mask | Solomon turns to and speaks to the bot | while `isSolomonPlayerLocked` holds, every head's mask is null-only and `self_solomon_locked = 1`; inputs sent anyway do not move the player |
+| level-up-mask | the bot levels up | `self_level_up_pending = 1` and masks are null-only until the scripted chooser answers through `client-select-skill`; the barrier clears and masks reopen |
+| maggot-enemy | a coffin releases maggots | each alive maggot occupies a D/K slot with `species_maggot`, `hp_ratio` from `maximumHealth`, and `time_to_strike` predicts the bite tick; dying maggots are absent |
+| equipment-family-closed | add a field to `NativeEquipmentModifiers` in a test build without a family row | the contract test fails |
+| item-kind-closed | add a `HubItemKind` in a test build without Block G/O/Q mapping rows | the contract test fails |
 
 Behavior probes to add to the §3.9 scorecard of `ml-bot-diagnostics.md`:
 
@@ -523,33 +963,32 @@ a live own golem while a target is engaged.
 
 Hard cut, no shim: observation, model, main trajectory, and choice
 trajectory are all version 5; loaders reject 1-4; the seed is a fresh
-bootstrap. Block order preserves v4 relative order, extends B, C, and D in
-place (new suffixes appended at the end of each slot), re-sources K and N
-in place, and appends R and S
-after Q.
+bootstrap. Block order preserves v4 relative order: A-Q are re-sourced in place
+with their v5 widths (§6.2; new suffixes appended at the end of each
+slot), K and N are re-sourced in place, and R and S are appended after Q.
 
 | Block | Shape | Count |
 | --- | ---: | ---: |
-| A. Self | fixed | 15 |
-| B. Active primary (+1) | fixed | 12 |
-| C. Secondary slots (+1 each) | 8 x 14 | 112 |
+| A. Self (re-sourced, +statuses, +wave phase) | fixed | 32 |
+| B. Active primary (+1, −1) | fixed | 11 |
+| C. Secondary slots (re-sourced, +3 −2 each) | 8 x 15 | 120 |
 | D. Enemy slots (+1 each) | 8 x 11 | 88 |
-| E. Selected target | fixed | 10 |
+| E. Selected target (−1) | fixed | 9 |
 | F. Exact patch/rays | 8 + 48 | 56 |
-| G. Replicated pickups + item identity | 4 x 21 + 1 | 85 |
+| G. Pickups + item identity | 4 x 21 + 1 | 85 |
 | I. Allies | 4 x 10 + 1 | 41 |
-| H. Aggregates/history | fixed | 45 |
+| H. Aggregates/history (−2) | fixed | 43 |
 | J. Self potion timers | 3 | 3 |
-| K. Enemy phase/clock/targeting/status (re-sourced) | 8 x 43 | 344 |
+| K. Enemy phase/clock/targeting/status (re-sourced, +maggot) | 8 x 44 | 352 |
 | L. Persisted-target motion/facing | 4 | 4 |
-| M. Exact nearest obstacles | 8 x 14 | 112 |
+| M. Exact nearest obstacles (−1 each) | 8 x 13 | 104 |
 | N. Hostile hazards (web registry) | 12 x 24 + 1 | 289 |
 | O. Potion descriptors | 12 x 19 + 2 | 230 |
 | P. Equipped items | 7 x 15 | 105 |
-| Q. Inventory summary | 11 | 11 |
+| Q. Inventory summary (−2) | 9 | 9 |
 | R. Own active effects | 6 x 23 + 3 | 141 |
 | S. Friendly minions | 4 x 15 + 2 | 62 |
-| **Total** |  | **1,765** |
+| **Total** |  | **1,784** |
 
 Exact positions are derived from this table by one TypeScript spec module
 that also emits the ordered-name JSON the trainer validates. The Lua/Python
@@ -575,12 +1014,68 @@ promotion rule.
    other values with rationale.
 2. Allied minions share Block S with `owner_is_self` (recommended) versus a
    separate block.
-3. Self-state gap, out of this amendment's scope but adjacent: `heldSlot`,
-   `planeOrbHeld`, `magicShieldAbsorb`, `stoneskinTicksRemaining` from
-   `NativeSecondaryPlayerState` are not in Block A. Recommended as a small
-   v5 delta to Block A so shields and toggles are visible.
+3. Self-state delta — **applied** 2026-08-22 in §6.2 Block A (owner:
+   "update it to be web port now"): `heldSlot`, `planeOrbHeld`, magic
+   shield ratio, Stoneskin timer, plus cold-slow, dazzle, movement scale,
+   Mind Chug, global cooldown, the Solomon lock, and the level-up gate.
+   Revert by dropping the eleven added A fields.
 4. Expert rules in §9 for the bootstrap, or a narrower variant.
 5. Wave flags (`BoneyardEnemyFlag`: FLAG_PIKE, FLAG_SPLITMANY, FLAG_ROTTEN,
    FLAG_IGNITE, FLAG_IMMORTALIZE, ...) as a per-slot one-hot. Recommended
    no: the program-changing flags are already absorbed by the clock fields;
    revisit only if a flag changes whether an enemy can be killed.
+6. Maggots are enemies — **applied**: they enter the D/K pool with
+   `species_maggot` (K 43 → 44 per slot). Alternative: exclude them and
+   return K to 43; then a biting maggot is invisible to the policy.
+7. Primary switching is not an action — **applied**: a belt slot bound to
+   a primary reads `is_primary_binding = 1`, `occupied = 0`. Alternative:
+   `secondary_k` on such a slot sends `client-select-primary-skill`.
+8. Secondary reach — `range_scaled` and `in_range_of_target` are dropped
+   from Block C until a per-skill reach table (23 rows, pinned from the
+   secondary kernel's constants) exists; restoring them is +2 per slot.
+9. Bodies are not obstacles — **applied**: other players, enemies, and
+   minions are absent from the F probe and the M rows, and M's
+   `is_participant` is dropped. `rays-exact` is the arbiter: if the
+   movement kernel blocks on players, add them back as circle rows and
+   restore `is_participant`.
+10. `is_human` reads host metadata (`HostClient.controller`), the only
+    non-simulation read in the contract (W10). Alternative: drop it.
+11. `level_scale` 20 → 75 (`MAX_PLAYER_LEVEL`) — **applied**.
+12. Goodie chests (wizard-key objects) are not observed and "open goodie"
+    is not an action; Block Q carries `inventory_has_wizard_key` only.
+13. Wave-director phase one-hot in Block A — **applied** (8 fields).
+    Distinct from item 5 (per-enemy wave flags, still recommended no).
+
+## 13. Training-side carry-overs
+
+Owner-approved 2026-08-22. These ride with the web port's first training
+run and are not blocked on any observation decision:
+
+- **PyTorch trainer.** The hand-rolled NumPy PPO/SMDP trainer is retired
+  with the native runtime. Same objective (clipped PPO on the four masked
+  heads plus the SMDP choice head, value head, entropy), same frozen eval
+  seed sets and promotion rule; deterministic seeding; observation and
+  action contracts validated from the spec module's ordered-name JSON
+  before the first gradient step.
+- **Return normalization.** Running standard deviation of discounted
+  returns normalizes the value target and advantage scale; the reward
+  formula itself stays frozen (§8). Clipping ±4 remains on the raw reward.
+- **Gamma sweep past 0.99.** At a 100 Hz tick and multi-tick decisions the
+  effective horizon of 0.99 is short; sweep 0.99 / 0.995 / 0.997 / 0.999
+  with the SMDP discount `gamma^ticks` per decision, promote by the frozen
+  eval seeds only.
+- **SMDP loss watchlist.** The choice-head loss stays on the per-run
+  watchlist from v3: log it per update, alarm when it dominates the policy
+  loss or collapses to a constant choice, and treat either as a
+  two-surface question (integration first) before touching the algorithm.
+- **Throughput.** The headless environment (§14) is the training surface;
+  the native 5-8 env steps/s ceiling is gone, and the worker pool sets the
+  new one. Measure it before sizing the sweep.
+
+## 14. Dispatch — `BoneyardHeadlessEnvironment` (owner fires)
+
+One-paragraph Codex dispatch, approved 2026-08-22 ("sure whatever on this
+is fine"); the owner fires it in the Website repo, and the verification
+stays with Claude:
+
+> In the Website repo, add `frontend/src/game/headless/boneyard-headless-environment.ts` mirroring `hub-headless-environment.ts` exactly in shape (`reset`, `step`, `stepPacked`, `observe`, `stateHash` via `deterministicStateHash(authoritativeHashState(sim))`, `state`, a `createBoneyardHeadlessActionBuffer(worldCount)` helper, the same uint32 seed and 1..100000 tick validators, and the same worker-pool packed API) but driving a full Boneyard run: `createGameSimulation` → `addPlayerCharacter` for the agent (and optional scripted allies) → `confirmGameSimulationLoadout` → `enterBoneyardWorld` on a seeded boneyard choice → wave start, all through the same simulation functions `host/game-host.ts` calls, with no network and no host process. Actions are four masked heads with a fixed stride (movement 9, target 9, ability 22, aim 9) translated into `PlayerCharacterInput` per tick, potion actions into the `consume` hub action, and skill offers answered by a deterministic chooser; the observation is the schema v5 vector of `docs/ml-bot-policy-web-port.md` (width 1,784, emitted by one spec module that also writes the ordered-name JSON) with the legality masks returned alongside it. Ship a contract test that asserts the width and name order, runs the closed-union exhaustiveness checks listed in that document (§6.2), and includes a mutation check (zeroing any block or flipping any mask must fail), plus a determinism test (same seed and actions → same `stateHash` across runs and across the worker pool). `npm run validate` green; no changes to the host, protocol, or snapshot; report the measured env steps/s for 1, 4, and 8 workers.

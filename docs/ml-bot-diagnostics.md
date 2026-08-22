@@ -204,8 +204,12 @@ own-projectile-visible, own-held-visible, own-area-visible,
 effect-active-flags, own-golem-visible, ally-golem-visible,
 minion-target-link, hazard-ttc-exact, already-hit-me, golem-kill-credit,
 strike-tick-exact, claw-loop, ranged-strike-exact, phase-closed,
-dying-excluded, targeting-self, and status-join, as specified in
-`ml-bot-policy-web-port.md` §9. Each
+dying-excluded, targeting-self, status-join, bot-join-replicated,
+bot-input-path, hub-action-idle-tick, potion-legality-exact,
+quickbar-cooldown-exact, primary-affordable-exact, rays-exact,
+ally-intent-exact, wave-phase-exact, solomon-lock-mask, level-up-mask,
+maggot-enemy, equipment-family-closed, and item-kind-closed, as specified
+in `ml-bot-policy-web-port.md` §9. Each
 fixture ships with its mutation (block zeroed or flag inverted must fail),
 and the observation audit (§3.4) must show non-constant Blocks R and S on
 every composition that includes Raise Golem or an area skill.
