@@ -145,6 +145,65 @@ gameplay-slot actors are targetable, a targetless hostile can acquire a lone
 bot on the maintenance edge, and a hostile with a still-valid human target
 switches only when the nearest-selection edge runs.
 
+### Common steering, flanking, and stalled-motion recovery
+
+The shared path is not an A* or waypoint solver, but it is also not a normalized
+straight-line chase. Fresh instruction review and an isolated live generated
+Arena on 2026-08-22 close the state omitted by that simplification:
+
+- `MonsterRecipe::MonsterRecipe 0x006400C0` writes the packed default word
+  `0x0101` at recipe `+0xB8`: ordinary default monsters therefore start with
+  `flanking=1` and `pathfindingMode=1`. Serialized custom recipes may replace
+  either byte.
+- `Badguy::Badguy 0x00473390` initializes the target-repath base at
+  `actor+0x1E0=100`, the flanking timer at `+0x194=0`, speed and turn factors
+  `+0x1A4/+0x1A8=1`, a signed flank angle in `[-90,90]` at `+0x18C`, a flank
+  radius in `[0,100]` at `+0x190`, and an independent random steering heading
+  at `+0x198`.
+- `MonsterPathfinding_RefreshTarget 0x00483480` transforms the 100-tick base
+  to 1,000 for mode 0, 300 for mode 1 or a null definition, leaves mode 2 at
+  100, and writes 10 for mode 3. It stores the phase-locked remainder at
+  `+0x1DC`; these are the live actor values, not the earlier shorthand
+  `10/3/3/10` multipliers.
+- `Badguy_BuildChaseVector 0x004763E0` turns the actor toward its selected
+  steering point before producing movement. Each direction build changes
+  heading by at most `baseTurn * turnFactor * statusFactor`, where base turn is
+  constructor range `[0.5,1]`. During a flank it steers toward the target plus
+  the stored angle/radius offset and decrements `+0x194`; otherwise it uses the
+  ordinary target/wander branch. Movement remains
+  `normalize(heading) * 0.25 * localSpeed * baseSpeed * statusFactor` per
+  represented tick.
+- `Badguy_SelectFlank 0x00473750` always replaces `+0x198` with
+  `RandomFloat(360)`. When `+0x1F8 < 1` and the definition is null or enables
+  flanking, it sets `+0x194 = 200 + RandomInt(201)`, `+0x1A4 = 1.5`, and
+  `+0x1A8 = float32(1.4)`. Once the timer is inactive, both factors decay by
+  exact double `0.995` toward a floor of one.
+- `Badguy_CommonChaseTick 0x004835F0` calls the flank selector on its global
+  20-tick / `RandomInt(150)==23` lane. Failed displacement increments
+  `+0x1A0`; at 25 stalled eligible updates, fourteen of fifteen draws reroll
+  the flank and clear the counter, while draw 3 invokes the class state-0D
+  virtual. The winning branch does not clear `+0x1A0`. The shared virtual at
+  `0x004737F0` queues action `0x0D`; its constructor `0x00448A20` consumes
+  `RandomInt(50)`, stores a status-scaled 50..99-tick duration, and its tick
+  `0x00449200` faces the live target while ordinary locomotion is suspended.
+  Successful movement decrements the stalled counter instead.
+- The normal movement cadence is two native ticks. The common tick builds and
+  sums two direction vectors, adds the target-owned force vector from
+  `0x0047CB20`, then submits the result through `Badguy_MoveStep 0x00475FE0`
+  and `PlayerActor_MoveStep 0x00525800`. Large submissions are subdivided at
+  `collisionRadius - 1`.
+
+Injected-loader supporting evidence used retail executable SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`,
+PID 21192, generated Arena SHA-256
+`2d836901476f6943212ba10e6f7680aabbc82d02676b44d12b0653d79897a929`,
+and only `sample.lua.ui_sandbox_lab`. Every opening Skeleton exposed live
+`+0x1E0=300`. A narrow trace of `0x00473750` recorded four calls in three
+seconds; simultaneous live flank states included timers `232`, `245`, and
+`294`, speed factor `1.5`, and turn factor `1.3999999761581`. The traces were
+removed before the owned process was stopped. This runtime evidence supports,
+but does not replace, the instruction-derived contract above.
+
 ## Skeleton family: executable template
 
 The interpreter has two layers. The locomotion brain chooses conceptual

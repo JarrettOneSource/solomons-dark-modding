@@ -459,11 +459,62 @@ not the number simultaneously alive and not an assertion that one traversal
 executes every branch.
 
 The generated opening makes the ownership visible. It sets spawn locating,
-spawns ten Skeletons at graph time 0, schedules five more across four seconds
-at graph time 5, pauses in live-count mode 3 with threshold 4 at time 9, then
-sets the next locating policy and enters label `Wave1`. The opening is already
-part of the TimeLine; adding a separate browser-authored “wave one delay”
-would double the stock sequence.
+spawns `8 + RandomInt(5)` Skeletons at graph time 0, schedules
+`3 + RandomInt(3)` more across four seconds at graph time 5, pauses in
+live-count mode 3 with threshold `1 + RandomInt(4)` at time 9, then sets the
+next locating policy and enters label `Wave1`. The opening is already part of
+the TimeLine; adding a separate browser-authored “wave one delay” would double
+the stock sequence.
+
+### Opening ambush variability and live execution — 2026-08-22 correction
+
+The earlier `10 + 5`, threshold-4 statement described one generated file, not
+the generator. Raw `WaveData_Parse 0x00632730` instructions close all three
+authored draws:
+
+- `0x0063298F..0x006329BA` calls `RandomInt(5)` and stores `8 + result` as the
+  immediate event count;
+- `0x00632AE4..0x00632B0F` calls `RandomInt(3)` and stores `3 + result` as the
+  four-second event count; and
+- `0x00632C70..0x00632C93` calls `RandomInt(4)` and stores `1 + result` as the
+  following mode-3 population threshold.
+
+Both spawn records are default Skeleton `1001` with modifier codes `4,2,7`
+(`FLAG_WEAK`, `FLAG_HPDOWN`, `FLAG_XPBONUS`). The preceding `SPAWN LOCATING`
+event is exactly integers `[0,0]`: location zero selects a player plus a
+100-unit random vector, and position policy zero requests a dark point. This
+is the stock opening “ambush”; there is no separate class, flag, animation, or
+string named Ambush. At time 9, `[1,0]` restores anywhere plus dark placement.
+
+A read-only census of 40 distinct generated retail Boneyards found every
+immediate count from 8 through 12 and every follow-up count from 3 through 5.
+The observed pair set was
+`(8,3) (8,4) (8,5) (9,3) (9,5) (10,3) (10,4) (10,5) (11,4) (12,3)`;
+the instructions, rather than that finite sample, establish the complete
+Cartesian ranges.
+
+Two isolated generated-Arena checks used the unchanged 4,723,200-byte retail
+executable named above, disabled audio, a temporary profile, and only
+`sample.lua.ui_sandbox_lab`. They are loader-injected supporting diagnostics,
+not clean-stock parity captures:
+
+- In PID 21192, the live Spawner exposed `+0x3C=0` and `+0x40=0`, Arena
+  `+0x8F00=0`, and ten entries through `SpawnPositionPolicy 0x00466200`.
+  Every raw point was `99.99998..100.00004` units from player
+  `(1522.3927001953125,150)`. The ten registered roots ended
+  `228.309..462.691` units away after dark/collision search; three were outside
+  full Arena `(0,0,2166.280029296875,3633.719970703125)`.
+- The untraced control generated counts `8 + 3` and threshold 1. It registered
+  all eleven Skeletons at the expected eight-at-once then three-over-four-
+  seconds cadence. Their final roots were `271.084..413.887` units from player
+  `(261.9573974609375,3034.199951171875)`; five were outside full Arena
+  `(0,0,2615.800048828125,3184.199951171875)`.
+
+The ambush therefore works end to end in stock: randomized records become
+real near-player/dark Spawners and real enemy actors. “Near player” describes
+the raw 100-unit proposal, not the final root. Dark-policy retries commonly
+move the birth hundreds of units and may accept outside the full Arena, exactly
+as the static policy-0 branch predicts.
 
 ### Provenance limitation in the Website geometry bank
 
@@ -714,6 +765,8 @@ players after sealing. Custom/mod Boneyards do not own the generated
 ### Validation matrix
 
 - generated south and north entrances recover their exact combat rectangles;
+- opening counts cover `8..12` immediate plus `3..5` spread births, the pause
+  threshold covers `1..4`, and all three draws retain native ordering;
 - mode-0 interpolation begins at `0.01`, grows by `1.01`, caps at one, and the
   400-tick cleanup/seal boundary is distinct from camera interpolation;
 - the two Gate leaves remain in replicated state while the camera and active

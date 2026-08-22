@@ -125,16 +125,53 @@ the recomputed envelope.
   - observed value handling:
     - `0` -> `actor + 0x1E0 *= 10`
     - `1` -> `actor + 0x1E0 *= 3`
+    - `2` -> leaves the constructor base unchanged
     - `3` -> `actor + 0x1E0 = 10`
   - `actor + 0x1E0` is a retarget-cadence divisor, not a movement-speed scaler
   - refreshes `actor + 0x168` from region/world bucket table:
     - `world + 0x500 + (actor_group * 0x800 + actor_slotish_index) * 4`
   - updates heading accumulator at `actor + 0x6C`
   - recomputes cadence modulo at `actor + 0x1DC`
-- current interpretation:
+  - current interpretation:
   - this is not full route solving by itself
   - it is a strong stock AI/path-target refresh helper driven by monster-definition pathfinding mode
-  - `world + 0x500` bucket lookup suggests target acquisition / chase lane selection is mixed into path refresh
+    - `world + 0x500` bucket lookup suggests target acquisition / chase lane selection is mixed into path refresh
+
+The constructor base is now closed too. `Badguy::Badguy 0x00473390` writes
+`actor+0x1E0=100`, so the live periods are 1,000, 300, 100, and 10 ticks for
+modes 0, 1, 2, and 3 respectively. A null definition follows the mode-1
+multiply-by-three branch. An isolated 2026-08-22 generated opening observed
+all ten definition-less Skeletons at live value 300.
+
+### 2b. Flanking is live steering state, not an editor-only Boolean
+
+`MonsterRecipe::MonsterRecipe 0x006400C0` writes packed default bytes
+`+0xB8/+0xB9 = 1/1`. `Badguy_SelectFlank 0x00473750` is the common runtime
+consumer reached by `Badguy_CommonChaseTick`:
+
+- always replace `actor+0x198` with `RandomFloat(360)`;
+- when flanking is allowed, write `actor+0x194 = 200 + RandomInt(201)`,
+  `actor+0x1A4 = 1.5`, and `actor+0x1A8 = float32(1.4)`;
+- while the timer is positive, `Badguy_BuildChaseVector 0x004763E0` steers at
+  the stored target-relative angle/radius and decrements it;
+- after expiry, the speed and turn factors decay by exact double `0.995` to
+  one; and
+- common chase invokes the selector from both its 20-tick / 1-in-150 random
+  lane and its 25-failed-update recovery lane.
+
+The 1-in-15 recovery winner is not a no-op. `Badguy_TriggerState0D
+0x004737F0` queues action `0x0D` through `0x0044F5F0`. Its constructor at
+`0x00448A20` spends `RandomInt(50)` and stores `(50 + draw) / actor+0x120`
+with the native integer conversion. `0x00449200` then faces the current target
+and counts the action down while the ordinary chase vector is suspended. The
+stall counter remains 25 on this winner; only the fourteen flank-reroll
+outcomes clear it.
+
+The same isolated run traced four selector calls in three seconds and sampled
+active timers 232/245/294 with factors 1.5/1.4. A direct-target vector with no
+flank state, gradual heading, or stalled-motion reroll is therefore not a
+stock-equivalent hostile path implementation even though both ultimately use
+collision-aware `PlayerActor_MoveStep`.
 
 ### 3. Immediate caller family around `0x00483480`
 
@@ -1085,9 +1122,15 @@ sd.debug.watch("enemy_target", enemy_actor + 0x168, 4)
 
 ## Open Questions
 
-- what exact semantic enum does `pathfinding_mode` use beyond observed values `0`, `1`, and `3`?
-- which class/vtable family owns `0x00483480`, and can RTTI or constructor recovery turn the current anonymous caller cluster into concrete enemy AI type names?
-- which of the `0x00525800` descendants (`0x00521B80`, `0x005218C0`, `0x00522C00`, `0x00522B20`, `0x00526520`) performs actual wall/obstacle resolution?
+- Mode 2 is instruction-closed as the unchanged 100-tick constructor base,
+  but the retail editor label for each numeric pathfinding mode remains
+  unrecovered.
+- Family-specific candidate adjustment virtuals still need individual naming
+  where they depart from the common target/flank point builder.
+- The movement descendants are now classified as cell gathering, adjacent
+  probing, type-2 response, circle separation, and general object response;
+  their remaining unknowns are per-family response flags rather than whether
+  a separate A* route planner exists.
 
 ## Claude Cross-Check
 
