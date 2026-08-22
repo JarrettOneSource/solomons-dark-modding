@@ -138,12 +138,14 @@ speed = 3 * (1 + mSpeed / 100)
 
 and the rank-1 and controlled rank-2 captures both retained `3.0` world units
 per native tick. For quantity `N`, the angular step is `30` degrees below four
-and `20` degrees otherwise. Let `base = aim + (N even ? step/2 : 0)`; child
-`i=0..N-1` uses `base + (-1)^i*i*step`. This deliberately non-symmetric native
-order yields `N=4: +10,-10,+50,-50`, not a conventional centered fan. The
-single cast-time damage roll is copied to every child. Every visual scale
-remains `1`; speed is `3*smartFactor`, while homing turn input alone decays as
-`2*smartFactor*0.75^i`. Homing then runs every tick.
+and `20` degrees otherwise. Let `base = aim + (N even ? step/2 : 0)` and
+`tier(i) = ceil(i/2)`. Child `i=0..N-1` uses
+`base + (i even ? +1 : -1)*tier(i)*step`. The zero-offset child is first, then
+matched left/right tiers follow: `N=4` is `+10,-10,+30,-30`, and `N=5` is
+`0,-20,+20,-40,+40`. The single cast-time damage roll is copied to every
+child. Every visual scale remains `1`; speed is `3*smartFactor`, while homing
+turn input is paired by tier as
+`2*smartFactor*0.75^ceil(i/2)`. Homing then runs every tick.
 
 The gameplay actor radius is `15`. The target-proximity pass runs every tick
 with the native `6`-unit probe constant. Terrain is tested every fifth tick
@@ -2927,9 +2929,9 @@ sample.
 
 The low-mana branch changes speed from `3` to `2.4` and effective turn input
 from `2` to `1.2`; it uses the same sign gate, deadband, accumulator, target
-root, and loss ordering. Learned quantity/fan construction, per-child
-`0.75^i` turn-input decay, and the non-rank-one retarget policy are upstream
-writers of these same fields, not alternate steering formulas.
+root, and loss ordering. Learned quantity/fan construction, paired
+`0.75^ceil(i/2)` turn-input decay, and the non-rank-one retarget policy are
+upstream writers of these same fields, not alternate steering formulas.
 
 ### Membership sweep
 
@@ -2960,6 +2962,113 @@ There is no authored steering table, asset, audio, rendering setting, or
 platform-degraded branch in this subsystem. All consumed constants and every
 shared-function xref are dispositioned above. Confidence is high from complete
 instruction streams and static xrefs; no native tracking unknown remains.
+
+## 2026-08-22 Magic Missile Shoot fan and skill-owned reacquisition correction
+
+The earlier learned-Magic-Missile pass trusted the decompiler's collapsed loop
+and did not inspect the branch at `0x0053DC20`. It therefore multiplied both
+fan offset and turn decay by raw child index. That finding was false. The later
+fixed-tick pass also documented final inactive-target steering correctly, but a
+subsequent integration restored the web's pre-liveness filter. This pass
+reopens the complete launch/tracking system instead of patching only the
+visible More Missiles spread.
+
+### Evidence and exact launch program
+
+The target remains retail `SolomonDark.exe`, 4,723,200 bytes, SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`.
+Fresh read-only Ghidra 12.0.3 decompilation and raw instructions cover
+dispatcher `0x0054CAF0`, Magic Missile handler `0x0053CFE0`, its launch loop
+`0x0053D9CF..0x0053DC43`, emitter `0x0053B830`, position writer `0x00622D90`,
+target query `0x00641160`, base tick `0x005FD270`, resolver `0x0045ADE0`, and
+continuation/reacquisition vslot `0x005E4B80`.
+
+The launch loop initializes `sign=+1`, `offset=0`, and `turnScale=1`. For an
+even quantity it first adds half of the chosen step (`30` below four missiles,
+otherwise `20`) to the caster heading. Each child is then initialized as:
+
+```text
+tier(i)       = ceil(i / 2)
+heading(i)    = base + (i even ? +1 : -1) * tier(i) * step
+turnInput(i)  = 2 * smartSpeedFactor * 0.75^tier(i)
+speed(i)      = 3 * smartSpeedFactor
+spawn(i)      = StaffEmitter + (0, 10)
+probe(i)      = spawn(i) + direction(heading(i)) * 100
+```
+
+Raw `NEG` at `0x0053DC1A` flips the sign every child, but
+`0x0053DC20..0x0053DC3B` increments offset and multiplies turn scale by `0.75`
+only after the positive member of a tier. Thus headings and turn inputs are
+paired. For four missiles at neutral Smart Missiles factor one, headings are
+`+10,-10,+30,-30` and turn inputs are `2,1.5,1.5,1.125`. Every child calls
+`0x00641160` around its own fanned probe. All children share the one damage
+roll; every constructor retains visual scale one. More Missiles' authored
+`mQuantity` table drains completely to quantities `1..14` (ranks `0..13`),
+and low mana forces the separate single-child `speed=2.4`, `turnInput=1.2`
+branch.
+
+The dispatcher calls the equipped-item virtual before selecting row 8. The
+handler pays the summed row `8/9/10/13/14` mana cost once, plays one launch
+cue, registers each actor, and then line-tests caster root to the born root
+with mask `0x380`. A blocked birth enters the missile's contact/removal vslot;
+it does not invent a different launch direction. Ether Blast's rounded pulse
+executes before that shared damage roll and missile loop. Pierce payload and
+underpowered suppression remain the previously recovered branches.
+
+### Target retention and Smart Missiles
+
+Initial acquisition and reacquisition are different native operations:
+
+- Initial launch calls `0x00641160` at the 100-unit fanned probe. The helper
+  iterates Region actor pointers in stored order, accepts actor flag `0x2`,
+  rejects only the explicitly excluded pointer, and replaces the winner only
+  on a strictly smaller squared distance below float32 `999999`. It does not
+  inspect active byte `+0xF9`, pending-removal byte `+0x05`, actor kind, LOS,
+  body radius, or spatial-cell order.
+- A retained handle that still resolves always supplies the post-move target
+  root to steering. Only afterward does `0x005FD502` read `+0xF9`; zero clears
+  the handle after that final sample. Actor flags are not rechecked.
+- An unresolvable handle supplies no steering and no accumulator step. If
+  policy byte `+0x150` is clear, the handle simply clears. If it is set,
+  `0x005FD528` calls `0x005E4B80`, which searches from the missile's current
+  root, not a forward probe, and stores a replacement without steering toward
+  it until the next tick. If neither query finds a target, the helper clears
+  `+0x150`; a projectile born with no handle never begins a free-running
+  reacquisition loop.
+- A surviving Pierce contact calls `0x005E4B80` with the contacted actor as
+  the first exclusion. If that search is empty, it retries with no exclusion;
+  only an empty retry clears the policy. This is current-root continuation,
+  not initial forward-probe selection.
+
+For pure Ether, handler `0x0053DB93..0x0053DBA7` sets Smart Missiles policy
+only when `smartSpeedFactor > 1.01`; authored positive ranks start at `1.10`.
+The three derived base-tick siblings keep their class writers: FireMissile
+tests its vector speed factor against `1.255`, FrostMissile against `1.0`, and
+BallLightning tests its post-`0.85` factor against double `0.860000014`.
+Underpowered `0.8` never enables the policy. All four classes then share the
+same move, resolve, steer, liveness, and replacement ordering in
+`0x005FD270`.
+
+### Membership and dispositions
+
+| Member | Native source | Disposition |
+| --- | --- | --- |
+| Row 8 rank/damage, one debit, one launch cue, repeated held Staff actions | `0x0054CAF0`, `0x0053CFE0` | exact-ported |
+| Row 9 Smart speed/turn and loss policy | `0x0053DB46..0x0053DBA7`, `0x005FD270`, `0x005E4B80` | exact-ported |
+| Row 10 quantities `1..14`, odd/even fan, step threshold, paired turn tiers | `0x0053D9D8..0x0053DC43`; authored `mQuantity` table | exact-ported |
+| Row 13 Pierce continuation and fallback retarget | `0x005F1F00`, `0x005E4B80` | exact-ported |
+| Row 14 Ether Blast pre-launch order | `0x0053CFE0` head and existing Ether Blast report | verified-already-at-parity |
+| Full-power and underpowered construction | `0x0053D95D..0x0053DBA7` | exact-ported |
+| Initial obstruction, per-tick terrain/contact, impact, render, light, audio, teardown | handler tail, `0x005FD270`, `0x005F1F00`, established presentation report | verified-already-at-parity |
+| Hub no-target and Boneyard actor collection | `0x00641160`, Website target projection | exact-ported |
+| FireMissile, FrostMissile, BallLightning shared base tracking | `0x005FD550`, `0x005FD7A0`, `0x005FD720` | exact-ported shared state transitions; class payload/presentation verified-already-at-parity |
+| Other `0x00410D60` and `0x00641160` consumers | complete prior xref sweeps | out-of-system: independent enemy, NPC, player-brain, Golem, GuidedMissile, EBoulder, and query owners |
+
+There is no platform-blocked member, authored steering table, renderer-owned
+homing branch, synchronized per-child RNG, or alternate multiplayer formula.
+Authority owns each child identity and tracking state; presentation keeps one
+complete radial Ether compositor per actor. No material native unknown remains.
+
 ## 2026-08-20 Fireball scenery and terrain-mask closure
 
 The remaining Fire bit-four scenery boundary was reopened because the Website

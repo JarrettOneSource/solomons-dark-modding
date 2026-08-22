@@ -575,8 +575,26 @@ def test_primary_targeting_homing_and_staff_cadence_are_pinned() -> str:
             "if gap <= 1 or gap >= 359: return 0",
             "always supplies one steering sample before liveness is\ntested",
             "`0x00410D60` has 26 callsites in 21 functions",
+            "## 2026-08-22 Magic Missile Shoot fan and skill-owned reacquisition correction",
+            "`0x0053D9CF..0x0053DC43`",
+            "tier(i)       = ceil(i / 2)",
+            "`+10,-10,+30,-30` and turn inputs are `2,1.5,1.5,1.125`",
+            "searches from the missile's current\n  root, not a forward probe",
+            "a projectile born with no handle never begins a free-running\n  reacquisition loop",
+            "FireMissile\ntests its vector speed factor against `1.255`",
+            "FrostMissile against `1.0`",
+            "double `0.860000014`",
         ),
         "primary targeting, homing, range, and Staff cadence document",
+    )
+    _require_tokens(
+        SKILLS_DOC_PATH.read_text(encoding="utf-8"),
+        (
+            "tier `ceil(i/2)`",
+            "paired child turn input `2*smartFactor*0.75^tier`",
+            "Smart replacement uses current missile position",
+        ),
+        "Magic Missile skill-owned launch contract",
     )
     return "Lightning fallback/arc, Ether homing, ranges, and held Staff cadence are pinned"
 
