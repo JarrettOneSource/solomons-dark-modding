@@ -867,6 +867,42 @@ uses its separate attachment path.
 | `1009` Air + Earth | `0x00545FC0` | `0x7E5 GroundSpark` | Creates a central spark and, outside the alternate/bot path, two side sparks. Each receives heading-derived motion plus vector-derived damage/effect fields at `+0x1A0..+0x1B0`. |
 | `80` Plane Orb | inline in `0x0054CAF0` | `0x7EF PlaneOrb` | Creates one aimed orb, copies caster group/world identity, derives `+0x154` from equipped-item state, registers it, emits the exact 27-child `0x0052D360` birth burst, requests `distortreality` at Region point gain and `lightningstart` at pitch `2.0` with the same gain, then writes Region alpha `0.1`. |
 
+### Fireball direct-versus-explosion contact partition
+
+A fresh read-only Ghidra pass on the pinned retail executable closes the
+low-base/high-Explode edge that the earlier web port had treated as invalid.
+`Fire 0x0053DC60` resolves row-16 Fireball damage into `Fireball+0x150`, row-18
+Explode damage into `+0x154`, Explode radius into `+0x158`, and the remaining
+Fire-family payloads into `+0x15C..+0x16E`. `Fireball_Impact 0x005E5160`
+then performs this exact direct-contact branch:
+
+```text
+direct = fireballDamage
+if explodeDamage > 0:
+    direct -= explodeDamage
+if direct > 0:
+    dispatch direct contact
+```
+
+There is no assertion, unsigned wrap, or minimum-one clamp. When an
+independently ranked Explode value equals or exceeds the rolled Fireball
+damage, stock simply skips the direct-contact dispatch. The impact callback
+still marks the projectile for retirement, creates the impact presentation,
+and continues into the radius-gated detonation/Ember payload path. This is a
+legal authored-rank combination: row 16 contains damage values
+`0,4,7,10,14,18,22,26,30,35,40,45,50,60,70,80,90,100,110,125,150,175,200,225,250,300`,
+while row 18 contains damage
+`0,5,9,12,15,18,20,22,24,26,28,30` and radius
+`0,10,11,12,13,14,15,16,17,18,19,20`.
+
+Evidence is instruction-derived from `0x005E5160`: the `+0x150` load, the
+positive `+0x154` subtraction, and the strict-positive guard occur before
+`0x006246F0` prepares contact state and `0x0063E7D0` dispatches to the struck
+actor. The later `+0x158 > 0` branch and call to `0x00642BF0` remain outside
+that guard. FireMissile and Meteor share Fire payload fields but retain their
+own direct-contact owners; this pure-Fireball subtraction must not be copied to
+those welded classes.
+
 The three Ether-derived welded missile handlers all read the normalized vector,
 not six CFG files at cast time. They consume the vector's first eight values,
 randomize damage between its first two entries, alternate heading around the
