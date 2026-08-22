@@ -200,6 +200,14 @@ def test_native_movement_integrators_and_collision_are_address_pinned() -> str:
             "factory type `0x07E9`",
             "ticks at `0x00600220`",
             "`0.6 * actor+0x30`",
+            "`0x00625680`",
+            "`Mod_ColdSlow 0x1B69`",
+            "`Mod_CircleSlow 0x1B70`",
+            "`Mod_Stun 0x1B6A`",
+            "`Mod_Frozen 0x1B6F`",
+            "`Mod_Dazzle 0x1B6E`",
+            "distinct list members",
+            "minimum factor loses combined control",
         ),
     )
     for constructor in (
@@ -221,7 +229,10 @@ def test_native_movement_integrators_and_collision_are_address_pinned() -> str:
             raise StaticReTestFailure(
                 f"enemy base-speed constructor is not pinned: {constructor}"
             )
-    return "player/enemy integrators, collision, radii, and Knockback addresses are pinned"
+    return (
+        "player/enemy integrators, collision, radii, temporary status composition, "
+        "and Knockback addresses are pinned"
+    )
 
 
 def test_native_tick_graph_reconciles_simulation_and_service_cadences() -> str:

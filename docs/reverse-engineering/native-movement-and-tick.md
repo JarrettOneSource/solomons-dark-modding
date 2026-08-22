@@ -250,6 +250,50 @@ class-overloaded state, not a universal movement-speed field. A browser port
 must use the constructor-family mapping rather than treating `+0x238` as a
 generic base speed.
 
+### Per-tick status-scalar ownership and reset
+
+The shared actor modifier pass at `0x00625680` proves that `actor+0x120` is a
+per-tick accumulator, not mutable authored speed. For every live actor update
+it first writes `1.0f` to `+0x120`, clears the transient modifier flags at
+`+0x138`, resets the material accumulator at `+0x124..+0x130`, and then walks
+the target-owned modifier manager at `actor+0x104` (count `+0x10C`) in list
+order. Each member's virtual slot `+0x1C` contributes to that fresh tick.
+Constructors also seed `+0x120 = 1.0f` through `0x006287D0`, but construction
+is not the expiry mechanism; the reset-before-apply pass is.
+
+The complete movement-scalar membership recovered from the modifier vtables is:
+
+| Modifier | Apply/update owner | Per-tick contribution | Merge/lifetime owner |
+| --- | --- | --- | --- |
+| `Mod_ColdSlow 0x1B69` | `0x00623080` | multiply `+0x120` by modifier `+0x1C`; set cold material/flag state | `0x00628000`: maximum remaining ticks, minimum factor |
+| `Mod_CircleSlow 0x1B70` | shared `0x006231B0` | multiply `+0x120` by modifier `+0x1C` | `0x00628000`: maximum remaining ticks, minimum factor |
+| `Mod_Stun 0x1B6A` | shared `0x006231B0` | multiply `+0x120` by modifier `+0x1C` | `0x00625850`: maximum remaining ticks, minimum factor |
+| `Mod_Frozen 0x1B6F` | `0x006236E0`; thaw update `0x00623730` | multiply `+0x120` by the current freeze/thaw factor; add the frozen material | `0x00626620`: maximum remaining ticks, minimum factor |
+| `Mod_Dazzle 0x1B6E` | update `0x00623490` | advance and clamp the recovery fraction, then multiply the current actor's `+0x120`; retire at factor one | `0x006263D0`: duration-derived increment and merge |
+
+These are distinct list members. Same-class reapplication invokes that class's
+merge callback, but a live ColdSlow, CircleSlow, Stun, Frozen, and Dazzle do
+not replace one another. Their callbacks multiply the scalar in modifier-list
+order. A port that stores only the minimum factor loses combined control; a
+port that aliases CircleSlow to ColdSlow also incorrectly shares their clocks
+and lets CircleSlow retain ColdSlow's cyan material after ColdSlow expires.
+Every real `Mod_ColdSlow` application owns that material blend; the material
+distinction is by modifier class, not by which spell created it.
+
+`Badguy::Tick 0x004835F0` consumes the composed value in the same fixed tick:
+a near-zero value returns before hostile movement/action work, while movement
+builders `0x004763E0/0x00476B90` multiply their displacement by it. On the next
+tick `0x00625680` starts from one again. Expiry therefore restores ordinary
+movement and action progression without a compensating inverse multiply.
+
+The other modifier subclasses do not add a hidden enemy slow lane. Burn,
+EtherBurn, FrostBurn, Poisoned, Prismatic, StoneSkin, and Planewalker write
+damage, material, or actor flags; Knockback and Pushback own displacement;
+Webbed scales the separate player move-step field `+0x218` for flag-1 actors.
+Turn Undead is not a repeated modifier multiply: helper `0x00647EF0` scales
+attack strength once only while the target's flee field still has its untouched
+sentinel, and later casts only refresh the flee countdown.
+
 ## Collision response
 
 ### Radius ownership
