@@ -264,6 +264,10 @@ current temperature persist in checkpoint metadata.
   `tracked_enemy` nor participants, and no script reads `native_minion*`).
   `ml-bot-policy-web-port.md` §1 records the gap; the Web Port amendment
   closes it with Blocks R and S.
+- Enemy wind-up/strike/recovery is resolved for 3 of 19 species (DemonSkull,
+  Dire Faculty, Imp Portal); the rest expose only the raw animation byte.
+  The Web Port amendment (§6.1) replaces this with the exact web action
+  clock.
 
 ## Install a trained checkpoint
 

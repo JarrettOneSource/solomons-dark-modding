@@ -145,6 +145,10 @@ contract; implementation phases execute against them.
 4. **Telegraph coverage**: launch with what is proven;
    `telegraph_known=0` for unmapped families while identity/facing/raw anim
    remain. Coverage grows post-launch; training does not block on all 19.
+   *Amended 2026-08-22 (Web Port, schema v5):* the web enemy brains make
+   phase and strike timing exact for every ported family; Block K is
+   re-sourced in `ml-bot-policy-web-port.md` §6.1 and `telegraph_known`
+   is retired.
 5. **Hazard registry rule**: damaging = hostile-sourced effects that apply
    damage/status by contact or area (projectile/area/beam). Excluded: pure
    presentation, friendly/self effects, and summons that are actors (enemy
@@ -272,9 +276,10 @@ native seam.
 
 Owner direction: the learned bot ships in the Web Port; all native-game bot
 planning is dropped. `ml-bot-policy-web-port.md` carries the amendment. Its
-rulings W1-W8: own effects first-class (Block R); own and allied minions
+rulings W1-W9: own effects first-class (Block R); own and allied minions
 first-class (Block S); enemy slots link to the minion's target; per-slot
 `effect_active` flags; masks stay legality-only; reward frozen with web
 `sourcePlayerId` attribution; hostile hazards re-sourced from the closed web
-registry; no native seam and no Lua. Width becomes 1,637. Sections A-E and
+registry; enemy phase and strike timing exact (Block K re-sourced); no
+native seam and no Lua. Width becomes 1,765. Sections A-E and
 the 2026-07-30 adjudications remain the frozen v3/v4 native record.

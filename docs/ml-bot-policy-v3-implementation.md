@@ -330,6 +330,11 @@ Unknown species/state yields `telegraph_known=0` and zero phase bits; it is not
 guessed from sprite motion. Completing all species' telegraph rows is an RE
 coverage decision, not a new runtime seam.
 
+*2026-08-22:* shipped coverage is 3 of 19 species (DemonSkull 1008, Dire
+Faculty 1010, Imp Portal 1013; `policy_enemy_descriptors.lua:57-75`). The
+Web Port amendment re-sources Block K from the exact web enemy brains and
+action clocks (`ml-bot-policy-web-port.md` §6.1).
+
 Status data is incomplete today. The wire/state contains only a two-bit
 Turn-Undead validity/active flag plus duration/flee/scalar
 (`SolomonDarkModLoader/include/multiplayer_runtime_protocol.h:254-274`;
@@ -1379,6 +1384,8 @@ participant-scoped native path, stop that seam for owner adjudication.
 4. **Telegraph coverage.** Decide whether v3 requires every one of the 19
    retail families mapped before training, or accepts `telegraph_known=0` for
    unresolved states while identity/facing/raw animation remain available.
+   *2026-08-22:* moot for the Web Port; see `ml-bot-policy-web-port.md`
+   §6.1.
 5. **Hazard registry.** The 46-class corpus is closed, but allegiance,
    velocity, radius, and lifetime fields remain family-specific. The
    orchestrator must freeze which classes count as damaging hazards versus

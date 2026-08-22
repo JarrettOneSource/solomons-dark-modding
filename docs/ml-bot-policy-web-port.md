@@ -4,7 +4,8 @@ Status: proposal, 2026-08-22. Owner direction the same day: the learned bot
 runs in the Web Port, and all native-game bot planning is dropped. This
 document amends the v3 charter (`ml-bot-policy-v3.md`) for the Web Port
 runtime and answers one question precisely: does the policy see projectiles
-— its own and the enemy's — and the minions it summons?
+— its own and the enemy's — and the minions it summons? A same-day follow-up adds a second: does it
+see which phase of an attack each enemy is in (W9, §6.1)?
 
 It is a contract document in the v3 sense. Every field has a named source in
 the web simulation (`Website/frontend/src/game/`), every scale is a named
@@ -23,6 +24,7 @@ Verified 2026-08-22 against `origin/codex/ml-bot-v3-20260730`.
 | The bot's own golem (Raise Golem 45, Iron Golem 75) | **not observed** | Run replication carries it as a `native_minion` actor with owner, iron flag, and timers (`world_snapshot_capture.inl` `IsNativeMinionType`; Lua row fields `native_minion*` at `lua_engine_bindings_gameplay.cpp:200-281`), but `steering.live_enemies` keeps only `tracked_enemy` actors, Block I is built from `participants[]`, and no bot-brain script reads any `native_minion*` field. |
 | Allied players' golems | **not observed** | Same. |
 | Enemy-side summons (Imp splits, Portal spawns, Coffin maggots, cocoons) | observed | They are `tracked_enemy` actors, so Blocks D/K carry them as ordinary enemies. |
+| Enemy attack phase (wind-up / strike / recovery) | **3 of 19 species** | Block K reads the native animation byte through `policy_enemy_descriptors.lua:57-75`, which maps DemonSkull (1008), Dire Faculty (1010), and Imp Portal (1013) only; every regular-roster enemy reads `telegraph_known = 0` plus an opaque `anim_state / 255`. |
 
 The golem omission is an absence, not a misclassification: the golem never
 leaks into the enemy block, so the target head cannot select it. But a golem
@@ -58,6 +60,11 @@ to the own-effects block below.
   simulation state; the observation builder is TypeScript inside the
   headless environment. The v3 seam list (`ml-bot-policy-v3-implementation.md`
   §F) is retired, not ported.
+- **W9. Enemy phase and strike timing are exact.** Block K is re-sourced
+  from the web enemy brains: a closed phase one-hot, time-to-strike and
+  time-to-action-end from the action clock, the enemy's target links, and
+  statuses joined from the secondary target-effect table. Raw animation
+  poses are never observed; they are derived from the same clock (§6.1).
 
 ## 3. Web simulation sources
 
@@ -72,6 +79,9 @@ to the own-effects block below.
 | Own and allied golems | Secondary actor with `kind: 'golem'` and `golem: NativeSecondaryGolemState` — `currentHealth`, `maximumHealth`, `iron`, `phase` (active, assembly, attack, provoke), `reflectFactor`, `damageMaximum`; actor `position`, `rotationRadians`, `targetId`, `ageTicks`, `ownerId` | `core-kernels/native-secondary-golem.ts:30-75`; `deriveGolemAllyHudRows` already lists them for the ally HUD |
 | Per-player secondary state | `NativeSecondaryPlayerState` — `heldSlot`, `planeOrbHeld`, `magicShieldAbsorb`, `stoneskinTicksRemaining`, `cooldownTicksBySkill`, `globalCooldownTicks` | `core-kernels/native-secondary-abilities.ts:189-211` (self-state; see §12) |
 | Golem cap and placement | `maximumGolem` feature, `golemPlacement`, `golemMovement` | `core-server/game-simulation.ts:1847-1880, 1991` |
+| Enemy brains and action clocks | `BoneyardEnemyActor.brain` — per-family `phase`, `actionProgress`, `markerEmitted`, `contactTargetPlayerId`, `actionTick`, `cooldownTicks`, `phaseTicksRemaining`, `impactStateTicksRemaining`, `castProgram`, `castRoll`, `actionRate`; actor `targetPlayerId`, `lifeState`, `headingDeg`, `maximumHealth`, `shieldHealth`, `shieldMaximumHealth`, `config.attackSpeed`, `config.family.armor`, `staffActionFactor` | `core-server/boneyard-enemy-store.ts:225-372`; programs `:91-120`; clock steps `:2215-2250, 2264-2300, 3368-3394`; `staffAttackSpeed` `:3498`; zombie `NATIVE_ZOMBIE_BEAT_ACTION_PROGRAM` (`core-kernels/boneyard-zombie-beat.ts`) |
+| Enemy statuses | `NativeSecondaryTargetEffectState` by `targetId` — `coldSlowTicks`, `coldSlowFactor`, `frozenTicks`, `stunTicks`, `stunFactor`, `fleeTicks`, `dazzleTicks`, `disruptedTicks`, `prismaticTicks`, `electricBurn`, `frostBurnTicks`, `steamed`, `weakenFactor`, `timeScale`; burn carrier actors `fire-burn` / `ether-burn` / `electric-burn` with `targetId` | `core-kernels/native-secondary-abilities.ts:232-256, 4553-4638` |
+| Enemy animation (presentation, never observed) | `BoneyardEnemySnapshot.animation` — `state`, `action`, `actionProgress`, poses, limb rotations | `protocol/game-state.ts:521-580` |
 
 Everything is owner-keyed by `PlayerId` (string). "Own" means
 `ownerId === self`; "allied" means any other participant in the run.
@@ -219,6 +229,8 @@ Semantics:
   Block S is full of party golems.
 - **Block D** appends `targeted_by_own_minion` to each of the eight enemy
   slots.
+- **Block K** is re-sourced from the web enemy brains and the secondary
+  target-effect table (§6.1).
 - **Block N** is re-sourced from `enemyProjectiles` and
   `mageLightningPulses`. Per slot the v4 list drops
   `hazard_type_index_scaled`, `type_known`, and `source_enemy` (every web
@@ -264,18 +276,179 @@ already_hit_me
   so there is no unknown class; adding a kind to the union without adding
   it here must fail the contract test.
 
+### 6.1 Block K — enemy phase, action clock, targeting, statuses
+
+v4 Block K carries `anim_state_scaled, telegraph_known, winding_up,
+attack_active, recovering`, read from the native animation byte through a
+per-species table that maps 3 of 19 species
+(`policy_enemy_descriptors.lua:57-75`: DemonSkull 1008, Dire Faculty 1010,
+Imp Portal 1013). Every regular-roster enemy reads `telegraph_known = 0`
+plus an opaque `anim_state / 255`. The web enemy simulation makes the same
+information exact and complete: every enemy carries a family brain with a
+semantic `phase` (`boneyard-enemy-store.ts:225-328`), and every attack runs
+on an action clock whose marker is the tick the hit or shot happens
+(`directContactPlayerDamage` at the marker for skeletons, `:2215-2250`;
+`onMarker` spawning the arrow, firebolt, or bomb for ranged families,
+`:3368-3394`) and whose `strictEnd` returns the enemy to approach or
+range-control. The raw animation (`BoneyardEnemySnapshot.animation`:
+`state`, `action`, `actionProgress`, poses, limb rotations) is derived from
+that clock and is never observed; the policy reads the clock.
+
+Per slot, 43 values replace the 27 of v4 (prefix `enemy_<slot>_`):
+
+```text
+species_skeleton
+species_archer
+species_mage
+species_imp
+species_zombie
+species_wraith
+species_demon
+species_coffin
+facing_dx
+facing_dy
+phase_approach
+phase_range_control
+phase_orbit
+phase_windup
+phase_recover
+phase_cooldown
+phase_knockback
+phase_dormant
+phase_opening
+phase_open
+time_to_strike_scaled
+time_to_action_end_scaled
+phase_remaining_scaled
+marker_emitted
+targeting_self
+contact_targeting_self
+max_hp_scaled
+shield_ratio
+armored
+status_cold_slow
+status_cold_slow_remaining_scaled
+status_frozen
+status_frozen_remaining_scaled
+status_stunned
+status_stun_remaining_scaled
+status_fleeing
+status_flee_remaining_scaled
+status_dazzled
+status_disrupted
+status_prismatic
+status_burning
+status_weaken_factor_scaled
+status_time_scale
+```
+
+Phase mapping, closed — one row per brain phase, checked exhaustively by the
+spec module's type test:
+
+| Family | `brain.phase` | v5 phase |
+| --- | --- | --- |
+| skeleton | approach | approach |
+| skeleton | attack | windup while a marker is pending, else recover (claw loops: always windup) |
+| archer | range-control | range_control |
+| archer | attack | windup / recover |
+| mage | range-control | range_control |
+| mage | cast | windup / recover |
+| imp | flight | approach |
+| imp | contact | windup / recover (`markerTick` 6, `strictEndTick` 11) |
+| imp | cooldown | cooldown |
+| zombie | approach | approach |
+| zombie | swipe | windup / recover |
+| zombie | knockback | knockback |
+| wraith | approach | approach |
+| wraith | orbit | orbit |
+| wraith | drain | windup / recover (`markerTick` 4, `strictEndTick` 9) |
+| wraith | cooldown | cooldown |
+| demon | approach | approach |
+| demon | bomb | windup / recover |
+| coffin | hidden, rising, holding | dormant |
+| coffin | opening | opening |
+| coffin | open | open |
+| any | death (`lifeState === 'dying'`) | not present |
+
+Semantics:
+
+- Species is a one-hot over the closed `enemyToken` union. The v4
+  `species_index_scaled`/`species_known` pair and the eight role bits go
+  away: roles are a deterministic function of a closed species set. A new
+  token, or a new phase in any brain union, without a mapping row fails the
+  contract test — the Block N rule.
+- Clock math uses the rate the step uses: `rate = progressPerTick ×
+  config.attackSpeed × staffActionFactor` (`staffAttackSpeed`, `:3498`),
+  times `(1 + castRoll)` for the mage cast (`:2398`); the zombie swipe
+  advances by `brain.actionRate` against `NATIVE_ZOMBIE_BEAT_ACTION_PROGRAM`
+  (marker 100, completion 125). `time_to_strike = (next pending marker −
+  actionProgress) / rate` ticks and `time_to_action_end = (strictEnd −
+  actionProgress) / rate`. Imp contact and wraith drain use their tick
+  clocks (`markerTick − actionTick`, `strictEndTick − actionTick`). The
+  skeleton weapon swing has two markers (`NATIVE_SKELETON_WEAPON_MARKERS`
+  9/20); after the first lands, `time_to_strike` points at the second. The
+  skeleton claw is a looping clock that wraps at `strictEnd + 1` with
+  markers at 4 and 8 (`inclusiveCircularMarkerCrossed`, `:2264-2300`), so
+  the next marker is computed modulo the wrap, `phase_windup` stays set,
+  and `time_to_strike` counts down to the next hit. Both times are seconds
+  over `enemy_action_scale_seconds` and saturate at 1 when nothing is
+  pending.
+- `phase_remaining_scaled` is `cooldownTicks` (imp), `phaseTicksRemaining`
+  (wraith, zombie, coffin), or `impactStateTicksRemaining` (zombie
+  knockback) over `enemy_phase_scale_seconds`; 0 when the phase has no
+  timer.
+- `marker_emitted` is the brain's own flag: the first hit of a multi-marker
+  swing has landed.
+- `targeting_self` is `targetPlayerId === self` (who the enemy is chasing);
+  `contact_targeting_self` is `contactTargetPlayerId === self` (who the
+  current swing was locked onto when it started: skeleton, imp, zombie,
+  wraith). v4 has neither.
+- `max_hp_scaled = maximumHealth / hp_scale`; `shield_ratio = shieldHealth
+  / shieldMaximumHealth` (0 when the maximum is 0); `armored` is
+  `config.family.armor` (the armored skeleton variant, `:2305`).
+- Statuses join `NativeSecondaryTargetEffectState` on `targetId`
+  (`native-secondary-abilities.ts:232-256`): `status_cold_slow =
+  coldSlowTicks > 0`, `status_frozen = frozenTicks > 0`, `status_stunned =
+  stunTicks > 0`, `status_fleeing = fleeTicks > 0` (Turn Undead),
+  `status_dazzled`, `status_disrupted`, and `status_prismatic` likewise;
+  `status_burning` is `electricBurn ≠ null`, `frostBurnTicks > 0`,
+  `steamed ≠ null`, or a `fire-burn`/`ether-burn`/`electric-burn` carrier
+  actor (`:4553-4638`) whose `targetId` is this enemy;
+  `status_weaken_factor_scaled = weakenFactor` and `status_time_scale =
+  timeScale`, both 1 when unaffected. Remaining times are seconds over
+  `status_duration_scale_seconds`. v4's `poisoned` and `webbed` have no web
+  source (players do not poison; Spider is not ported) and are dropped.
+- Dying enemies (`lifeState === 'dying'`) are absent from Blocks D, K, E,
+  and L and the target-head mask drops them; the death program is
+  presentation.
+
+What this buys, at nominal rate: the skeleton claw hits every 0.32 s for
+as long as the skeleton stays in attack; the pike lands at 0.16 s and
+recovers until 0.96 s; the weapon swing lands at 0.36 s and 0.80 s and
+recovers until 0.96 s; the archer looses at 1.54 s of a 1.90 s action; the
+mage long cast fires at 1.22 s of 1.86 s (short: 0.99 s of 1.62 s); the
+demon bomb leaves at 0.43 s of 0.85 s; imp contact lands at tick 6 of 11
+with an 18-tick cooldown; wraith drain at tick 4 of 9 with a 50-tick
+cooldown. Stepping out of reach before the marker, hitting enemies in
+recovery or cooldown, and knowing which enemy is after the bot are all
+learnable from these fields and were unlearnable in v4 for the regular
+roster.
+
 ## 7. Scales
 
 Reused from `policy_spec.lua` without change: `range_scale 1000`,
 `velocity_scale 1000`, `radius_scale 100`, `hp_scale 1000`,
 `skill_damage_scale 500`, `multiplier_scale 4`, hazard contact 10 s,
-`hazard_lifetime_scale_seconds 60`. Added:
+`hazard_lifetime_scale_seconds 60`, `status_duration_scale_seconds 60`.
+Added:
 
 ```text
 effect_lifetime_scale_seconds = 60
 minion_age_scale_seconds = 60
 own_effect_count_scale = 16
 minion_count_scale = 4
+enemy_action_scale_seconds = 2
+enemy_phase_scale_seconds = 5
 ```
 
 Counts are `min(count, scale) / scale`, the Block I convention. None of
@@ -317,6 +490,13 @@ flag inverted must fail the fixture).
 | hazard-ttc-exact | archer arrow aimed at a stationary bot | `time_to_contact_scaled` equals the tick the store reports contact, within one tick |
 | already-hit-me | bouncing demon-bomb hits the bot | `already_hit_me` flips to 1 and the row persists until the projectile dies |
 | golem-kill-credit | golem alone kills an enemy | owner's `own_source_enemy_hp_ratio_damage > 0` and `own_kill_xp_delta > 0`; allies read 0 |
+| strike-tick-exact | weapon skeleton swings at a stationary bot | `time_to_strike_scaled × enemy_action_scale_seconds × 100` predicts both `attackMarker` ticks within one tick; still exact under staff disable (`staffActionFactor < 1`) |
+| claw-loop | claw skeleton held in attack | `phase_windup` stays set and `time_to_strike_scaled` saws between 0 and 0.16 with a 0.32 s period |
+| ranged-strike-exact | archer attack | the predicted strike tick is the tick the arrow appears in Block N |
+| phase-closed | add a token to `enemyToken` or a phase to a brain union in a test build | the spec module's exhaustiveness test fails |
+| dying-excluded | kill an enemy | absent from Blocks D/K/E/L on the next decision and the target mask drops it |
+| targeting-self | two participants, enemy chases the bot | bot reads `targeting_self = 1`, ally reads 0; `contact_targeting_self` flips only when the swing starts |
+| status-join | freeze an enemy through the secondary kernel | `status_frozen = 1`, `status_frozen_remaining_scaled` strictly decreasing, 0 at expiry |
 
 Behavior probes to add to the §3.9 scorecard of `ml-bot-diagnostics.md`:
 
@@ -326,6 +506,8 @@ Behavior probes to add to the §3.9 scorecard of `ml-bot-diagnostics.md`:
 | recast-timing | golem alive at 80% HP, full mana | no Raise Golem recast within 10 s |
 | circle-kite | Magic Circle build, melee pack | ≥ 1 enemy crosses the bot's own circle per 20 s of combat |
 | trap-stack | live Magic Trap underfoot | no second trap within its radius while it lives |
+| swing-dodge | weapon skeleton at reach, bot at full HP | leaves `BOUNDED_ENEMY_ATTACK_REACH.SKELETON` before the first marker on ≥ 70% of swings |
+| recovery-punish | mixed melee wave | damage/s dealt during enemy recover or cooldown ≥ damage/s dealt during windup |
 
 Observation audit (§3.4): Blocks R and S must be non-constant on every
 composition that includes Raise Golem or an area skill, so the composition
@@ -341,8 +523,9 @@ a live own golem while a target is engaged.
 
 Hard cut, no shim: observation, model, main trajectory, and choice
 trajectory are all version 5; loaders reject 1-4; the seed is a fresh
-bootstrap. Block order preserves v4 relative order, extends B, C, D, and N in
-place (new suffixes appended at the end of each slot), and appends R and S
+bootstrap. Block order preserves v4 relative order, extends B, C, and D in
+place (new suffixes appended at the end of each slot), re-sources K and N
+in place, and appends R and S
 after Q.
 
 | Block | Shape | Count |
@@ -357,7 +540,7 @@ after Q.
 | I. Allies | 4 x 10 + 1 | 41 |
 | H. Aggregates/history | fixed | 45 |
 | J. Self potion timers | 3 | 3 |
-| K. Enemy identity/combat/status | 8 x 27 | 216 |
+| K. Enemy phase/clock/targeting/status (re-sourced) | 8 x 43 | 344 |
 | L. Persisted-target motion/facing | 4 | 4 |
 | M. Exact nearest obstacles | 8 x 14 | 112 |
 | N. Hostile hazards (web registry) | 12 x 24 + 1 | 289 |
@@ -366,7 +549,7 @@ after Q.
 | Q. Inventory summary | 11 | 11 |
 | R. Own active effects | 6 x 23 + 3 | 141 |
 | S. Friendly minions | 4 x 15 + 2 | 62 |
-| **Total** |  | **1,637** |
+| **Total** |  | **1,765** |
 
 Exact positions are derived from this table by one TypeScript spec module
 that also emits the ordered-name JSON the trainer validates. The Lua/Python
@@ -397,3 +580,7 @@ promotion rule.
    `NativeSecondaryPlayerState` are not in Block A. Recommended as a small
    v5 delta to Block A so shields and toggles are visible.
 4. Expert rules in §9 for the bootstrap, or a narrower variant.
+5. Wave flags (`BoneyardEnemyFlag`: FLAG_PIKE, FLAG_SPLITMANY, FLAG_ROTTEN,
+   FLAG_IGNITE, FLAG_IMMORTALIZE, ...) as a per-slot one-hot. Recommended
+   no: the program-changing flags are already absorbed by the clock fields;
+   revisit only if a flag changes whether an enemy can be killed.

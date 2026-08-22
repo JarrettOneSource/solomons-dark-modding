@@ -192,6 +192,8 @@ machinery; each returns pass/fail + a scalar. Initial set:
 | recast-timing (web) | golem alive at 80% HP, full mana | no Raise Golem recast within 10s |
 | circle-kite (web) | Magic Circle build, melee pack | ≥ 1 enemy crosses own circle per 20s of combat |
 | trap-stack (web) | live Magic Trap underfoot | no second trap within its radius while it lives |
+| swing-dodge (web) | weapon skeleton at reach, bot at full HP | leaves skeleton reach before the first marker on ≥ 70% of swings |
+| recovery-punish (web) | mixed melee wave | damage/s dealt during enemy recover/cooldown ≥ damage/s during windup |
 
 The scorecard turns "the model got better" into a behavior-level diff
 between checkpoints, and each probe doubles as an integration fixture
@@ -200,8 +202,10 @@ between checkpoints, and each probe doubles as an integration fixture
 Web Port (schema v5) integration fixtures precede the probes above:
 own-projectile-visible, own-held-visible, own-area-visible,
 effect-active-flags, own-golem-visible, ally-golem-visible,
-minion-target-link, hazard-ttc-exact, already-hit-me, and
-golem-kill-credit, as specified in `ml-bot-policy-web-port.md` §9. Each
+minion-target-link, hazard-ttc-exact, already-hit-me, golem-kill-credit,
+strike-tick-exact, claw-loop, ranged-strike-exact, phase-closed,
+dying-excluded, targeting-self, and status-join, as specified in
+`ml-bot-policy-web-port.md` §9. Each
 fixture ships with its mutation (block zeroed or flag inverted must fail),
 and the observation audit (§3.4) must show non-constant Blocks R and S on
 every composition that includes Raise Golem or an area skill.
