@@ -271,6 +271,66 @@ A white object at scalar `0.5` therefore receives byte 127, not 128. Browser
 analytic tint must use truncation; rounding introduces a systematic one-byte
 brightness error across the scene.
 
+### Building elevated-surface query and retained vertex grid
+
+The generic root-scalar rule does not own Building art. A fresh complete
+caller/callee pass on 2026-08-22 corrected the earlier inference that the late
+Building upper sprite retained white caller color. `Building::Render
+0x0060E940` replaces the generic color with a retained vertex-colored mesh
+whenever `Game.ComplexLighting` is enabled. `Building::RenderUpper
+0x0060EC50` later draws the upper/roof glyph with its own positions and UVs but
+the exact same color array at Building `+0x168`. Base and roof therefore share
+one current lighting result even though the roof remains in slot `+0x24` after
+the shared queue.
+
+Lazy mesh initializer `0x0060E5B0` calls glyph tessellator `0x00417510` for
+both DeadHawg base rows `148..151` and upper rows `152..155`. The tessellator
+clamps each dimension to at least two, emits row-major bilinear positions and
+UVs over the complete glyph quad, and indexer `0x00416B80` emits two triangles
+per cell in this order:
+
+```text
+(row,col), (row,col+1), (row+1,col)
+(row,col+1), (row+1,col), (row+1,col+1)
+```
+
+`Game.FastCPU` / Enhanced Effects selects a `3 x 3` grid when true and a
+`2 x 2` grid when false. Every Building selector is covered. Selectors `0`
+and `1` shift only the lighting query positions in every row except the last
+by `+135` and `+100` world Y respectively; selectors `2` and `3` use zero
+offsets. The offsets never move raster geometry or UVs. Each base-grid point,
+plus the Building root and that selector offset, is transformed through the
+Arena and sampled by `0x0057E640`. The resulting grayscale scalar is packed
+through the ordinary truncate-to-byte color path before interpolation.
+
+The specialized query has exactly three direct xrefs: Building
+`0x0060EA84` and the two endpoint samples inside shared Wall/ZFightHelper
+painter `0x0061DF40` at `0x0061DF7E` and `0x0061DFBC`. For a query point `q`
+and each locally indexed source `s`, let `c(q,s)` be the ordinary elliptical
+contribution above. With the Region ambient scalar reset to zero by
+`0x0057D4E0`, `0x0057E640` returns:
+
+```text
+radial   = max_s c(q,s)
+height_s = 1                                      when q.y <= s.y
+           max(0, 1 - (q.y - s.y) * 1.5 / 145)  when q.y >  s.y
+elevated = max_s (c(q,s) * height_s)
+surface  = radial * elevated
+```
+
+The constants are retail doubles `0x007DE860 == 1.5` and
+`0x00794E50 == 145`. This is a product of two independently maximized lanes,
+not a root sample, an average, a sum, or the ordinary contribution squared per
+source. Different sources may own the two maxima.
+
+When Complex Lighting is off, both Building painters bypass the grid and draw
+their glyphs with ordinary white caller color. Monument is the negative
+control family: `Monument::Render 0x0060E210` has no call to `0x0057E640` and
+draws all 21 DeadHawg rows `156..176` under the common dispatcher root scalar.
+Its shadow painter `0x0060E280` changes no main-art color. Wall owns the other
+`0x0057E640` consumer through its separate generated-mesh painter, while
+ZFightHelper is an internal endpoint helper rather than Building/Monument art.
+
 ## Persistent provider census
 
 The formulas below use `U(a)` for stock unsigned `RandomFloat(a)` on its

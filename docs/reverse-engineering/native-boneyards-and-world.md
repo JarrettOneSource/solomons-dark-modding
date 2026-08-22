@@ -259,10 +259,12 @@ The constants are retail doubles/floats at `0x00785858 == 0.85`,
 object `+0xCC` and multiplies it into the object's requested tint before its
 main painter. Base ground and explicit pre-main underlays do not acquire an
 object scalar, but they are already present when the Region light texture is
-multiplied in the Complex Lighting branch. Late proxy/foreground art retains
-its caller-owned color because it is submitted afterward. A single multiply
-over the completed scene is therefore also wrong: it would move the boundary
-past the main queue and late proxies.
+multiplied in the Complex Lighting branch. Ordinary late proxy/foreground art
+retains its caller-owned color because it is submitted afterward; Tree
+secondary explicitly reapplies its root scalar, and Building roof reuses the
+base painter's vertex-color grid. A single multiply over the completed scene
+is therefore also wrong: it would move the boundary past the main queue and
+late proxies.
 
 The ordinary player provider at `0x005299A0` submits a point 15 world units
 along the player's heading with `radius=2.6`, `intensity=1`, and flag `1` when
@@ -893,8 +895,12 @@ Unlike ordinary late foreground art, `0x00608830` explicitly multiplies
 Tree's color scalar `+0xD0` by that stored `+0xCC`, installs the resulting RGB
 with current alpha, draws the secondary sprite, and restores white. The Tree
 secondary is therefore lit from the same root and faded by the same local
-state as the main Tree. Building upper art remains caller-owned; it is not a
-precedent for leaving Tree secondary art white.
+state as the main Tree. Building is a different explicit exception, not a
+precedent for leaving either foreground family white: base painter
+`0x0060E940` builds per-vertex elevated-surface colors and upper painter
+`0x0060EC50` reuses that exact color array for the late roof glyph. The full
+grid, selector offsets, and `0x0057E640` query are owned by
+[`native-lighting-and-shadow-system.md`](native-lighting-and-shadow-system.md#building-elevated-surface-query-and-retained-vertex-grid).
 
 Evidence is high-confidence instruction/decompiler output for
 `0x005E46D0`, `0x005F1A40`, `0x005F1C50`, `0x00608480`, `0x00608830`,

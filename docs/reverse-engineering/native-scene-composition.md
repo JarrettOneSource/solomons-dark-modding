@@ -321,7 +321,10 @@ multiply; late proxy/foreground art is not. Tree secondary painter
 `0x00608830` is the explicit exception to the generic late-lane rule: after
 the multiply boundary it installs RGB from Tree color scalar `+0xD0` times the
 already sampled root scalar `+0xCC`, and uses Tree visibility alpha `+0x150`.
-Building upper art retains its caller-owned color.
+Building is the other explicit exception. Its main painter `0x0060E940`
+samples the elevated Region query `0x0057E640` at every retained grid vertex;
+upper painter `0x0060EC50` reuses the same packed color array for the late roof
+glyph. Monument remains on the common root-scalar path.
 
 Renderer color installation at `0x0041FE50` stores the requested RGBA floats
 at renderer offsets `+0x1EC..+0x1F8`; its effective color lanes at
