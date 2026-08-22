@@ -26,6 +26,24 @@ The learned policy decides every 100 ms of simulation time. The launcher's
 **Scripted bot cadence** setting therefore affects only the three scripted
 behaviors.
 
+## Web Port direction (2026-08-22)
+
+The learned bot's runtime target is the Web Port; native bot-brain planning
+is dropped. `docs/ml-bot-policy-web-port.md` amends the policy v3 contract
+for that runtime (schema v5): it re-sources hostile hazards from the web
+simulation, adds first-class blocks for the bot's own projectiles and
+persistent areas (Block R) and for own and allied minions (Block S), none of
+which v3/v4 observe, re-sources Blocks A-Q from the web simulation (§6.2),
+and rules that the bot joins a session as a server-hosted client through
+the ordinary `client-hello`/`client-input` path (W10), so other clients see
+it as any other player.
+
+The v3 contract it amends — `ml-bot-policy-v3.md`,
+`ml-bot-policy-v3-implementation.md`, and `ml-bot-diagnostics.md` —
+documents the native v3/v4 runtime on the ML branch
+`codex/ml-bot-v3-20260730` (tip `b23545c3`, not merged into `main`). The
+sections below describe the policy v2 runtime that ships on `main`.
+
 ## What policy v2 controls
 
 Policy v2 has three masked action heads:
