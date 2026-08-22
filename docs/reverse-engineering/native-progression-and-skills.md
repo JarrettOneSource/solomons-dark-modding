@@ -860,10 +860,16 @@ and copies progression `+0x68` into the progression-wide current timer at
 1.5-second gate, not the maximum row cooldown: a Teleport keeps its 6,000-tick
 private row while other skills become available after the 150-tick common
 gate. Phasing's 100-tick row is cleared because the common timer outlasts it.
-With Focus selected in a
-concentration lane (or the timed concentration override), `RandomInt(100)`
-values `75..99` bypass that copy: the skill is immediately ready in exactly
-25 of 100 outcomes. This roll is part of the active gameplay RNG stream.
+With Focus selected in a concentration lane (or the timed concentration
+override), `0x00661F40` draws `RandomInt(100)`. Values `75..99` return from
+that function before `0x0065EDE0` is called. The accepted cast therefore
+leaves the selected row current, every sibling row current, and the
+progression-wide current timer unchanged; on an otherwise-ready belt both the
+row and common timer remain zero: values `75..99` bypass that copy and every
+other write owned by the arming helper. The ordinary accepted action still owns its
+independent StaffCast2 no-interrupt lifetime. This is an exact 25-of-100
+instant-recharge branch on the active gameplay RNG stream, not a row-only
+cooldown clear followed by the ordinary 150-tick common gate.
 
 Progression recurrence `0x00656E70` walks every skill row and subtracts
 `max(progression +0xD0, progression +0xD4 + 4*row.category)` from its current
@@ -874,9 +880,9 @@ factor and defaults to one. `+0xD4[...]` is the equipment-owned per-category
 recharge factor used by `FX_RECHARGECLASS`; it also defaults to one. Therefore
 rank-1 Focus makes ordinary secondary timers drain two native ticks per fixed
 update, while an equipped category bonus may win the maximum independently.
-The Website currently models no concentration selection or
-`FX_RECHARGECLASS` producer; those two branches must be added only with their
-own complete owners, never synthesized as a random cooldown shortcut.
+The Website now receives concentration selection and `FX_RECHARGECLASS`
+through their separately recovered player-progression and equipment owners;
+neither may be synthesized as a random cooldown shortcut.
 
 `BeltButton::Present 0x005D3E10` enters cooldown drawing only when the selected
 row's authored capacity is positive. It compares row current with common
@@ -897,6 +903,9 @@ as previously recovered.
 - Arm the progression-wide timer to exactly 150 after each dispatcher success,
   clear every shorter row current, and gate every secondary slot on it.
 - Apply the Focus scalar to every cooling row, not only the selected belt slot.
+- On the concentrated-Focus `75..99` branch, skip the complete arming helper:
+  preserve zero row/common currents and retain only the separately owned cast
+  action. Do not arm a 150-tick common timer after the successful roll.
 - Keep cooldown rejection, action rejection, mana rejection, and a helper-level
   post-payment failure (for example fully blocked Phasing) as distinct edges.
 - Regress neutral 51-update occupancy, Faster Caster float32 shortening,

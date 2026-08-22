@@ -99,6 +99,26 @@ The first positive-motion tick selects a seeded `-15/+15` deflection, enters
 state 4, and fires trigger 15 `SOLOMON RUNS`. That edge, not proximity or
 speech completion, starts the TimeLine.
 
+Fresh read-only decompilation on 2026-08-22 pins the player-combat admission
+edge to that same transition. State 2 body `0x0047D450` restores the selected
+participant's paired controls and writes Arena `+0x902A`, but it does not call
+the trigger dispatcher. State 3 body `0x0047D570` consumes the 25-tick hold,
+then advances the retreat accumulator while Solomon remains in state 3. Only
+when the accumulator becomes strictly positive does it write state 4 and call
+`0x0068B6D0(Arena+0x8528, 15)` before constructing the escape path and cycling
+walk program. The preserved no-wave live probe independently observed that a
+left-click remained inert before the stock combat-prelude sequence and
+latched a cast after that sequence. The Website consequence is one
+authoritative gate: movement and primary-skill selection remain available,
+but staff action admission, primary emission admission, and all category-2
+cast inputs stay sealed through digging, turning, speaking, retreat hold, and
+state-3 acceleration. They open on the state-4/`SOLOMON RUNS` tick itself.
+
+Custom/mod Arenas without the retail Solomon actor are not members of this
+gate. Existing action objects, cooldown recurrence, effect teardown, and world
+presentation continue to tick; the gate suppresses new player-combat
+admission rather than pausing the ActorWorld.
+
 State 4 follows a precomputed 4096-unit collision-clipped path, starts at speed
 2, adds `0.05/tick`, hops with `-3` then `+0.25/tick`, resets to `-2` on
 landing, moves on its final tick, and retires after 515 ticks. Generated script
