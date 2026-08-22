@@ -358,6 +358,26 @@ Lua, picker UI, and forced-choice cleanup, but holds enemies, projectiles,
 pickups, and effects. Once every participant confirms its choice, the stock
 actor-world dispatcher resumes on the next frame.
 
+### Web-port clock consequence (2026-08-22)
+
+The native ownership split above also constrains a networked renderer. The
+authoritative actor-world tick is the simulation clock; a packet sequence or
+arrival timestamp is not. A web client may receive several state replacements
+for one frozen tick while participants resolve the cohort, especially when a
+shared host continues broadcasting for another world instance. Replacing the
+newest same-tick payload is valid, but restarting interpolation or local
+prediction from its delivery time would repeatedly replay the last pre-barrier
+actor interval. That produces motion the native `ActorWorld` did not execute.
+
+The correct port keeps one presentation epoch per distinct authoritative tick:
+same-tick payloads replace state without replacing that tick's first receipt
+clock, and only a greater tick starts another interpolation interval. Any web
+local-prediction lane must also be held at authoritative state while the
+barrier owns the world. The PlayerActor exception above does not authorize
+predicted movement: the Website reconstructs its proven level-up
+beam/sparkle/light as a separate presentation lane, alongside the independently
+advancing `LevelupScreen` UI clock.
+
 ## Regression Harness
 
 Run the live bot skill-choice regression with:
