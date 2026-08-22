@@ -154,6 +154,25 @@ def _require_tokens(text: str, tokens: tuple[str, ...], subject: str) -> None:
         _fail(f"{subject} is missing: {', '.join(missing)}")
 
 
+def test_held_one_shot_staff_action_handoff_is_pinned() -> str:
+    doc = _document()
+    _require_tokens(
+        doc,
+        (
+            "## 2026-08-22 held one-shot Staff action handoff",
+            "`0x0054961A..0x005496C6`",
+            "`0x005496C8..0x005496D6`",
+            "`Action_PlayerWizard_StaffCast1` construction at `0x0044B170`",
+            "`0x0044B370` selects `frames[trunc(progress)]`",
+            "Stock avoids an inserted idle-pose flash between actions",
+            "pure Ether `8`, pure Fire `16`, and welded\none-shots `1000`, `1001`, `1002`, and `1009`",
+            "an explicit presentation override rather than\nretail parity",
+        ),
+        "held one-shot Staff action handoff",
+    )
+    return "Held one-shot admission, pose handoff, and complete direct membership are pinned"
+
+
 def test_projectile_spell_native_dispatch_contract_is_complete() -> str:
     doc = _document()
     _require_tokens(

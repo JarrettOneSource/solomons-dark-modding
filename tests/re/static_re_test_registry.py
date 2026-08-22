@@ -602,6 +602,7 @@ from static_re_projectile_spell_mechanics_contracts import (
     test_fireball_contact_range_and_recast_closure_is_pinned,
     test_fireball_scenery_and_terrain_masks_are_pinned,
     test_frost_jet_operand_widths_and_rank_one_update_ownership_are_pinned,
+    test_held_one_shot_staff_action_handoff_is_pinned,
     test_materialized_projectile_trajectories_pin_native_motion,
     test_low_mana_primary_branch_and_all_consumers_are_pinned,
     test_primary_targeting_homing_and_staff_cadence_are_pinned,
@@ -2281,6 +2282,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "projectile/spell native dispatch is complete",
         test_projectile_spell_native_dispatch_contract_is_complete,
+    ),
+    (
+        "held one-shot Staff action handoff is pinned",
+        test_held_one_shot_staff_action_handoff_is_pinned,
     ),
     (
         "projectile goldens pin live provenance and ranks",

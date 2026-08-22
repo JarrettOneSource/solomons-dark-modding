@@ -3242,3 +3242,42 @@ decompilation of `0x00620B60`, `0x00524180`, and `0x005E5450`, instructions at
 authored collision-primitive inventory. Confidence is high; there is no
 unextracted table, collision mask, cadence, or sibling carrier branch in this
 boundary.
+
+## 2026-08-22 held one-shot Staff action handoff
+
+A held Ether report reopened the boundary between repeated one-shot admission
+and the wizard equipment-pose writer. Fresh read-only Ghidra 12.0.3 evidence
+uses the pinned retail image above; this is instruction-derived native truth,
+not a browser inference.
+
+`PlayerActorTick` tests the held primary level and current action occupancy at
+`0x0054961A..0x005496C6`. When the level remains held and the prior action is
+gone, `0x005496C1` calls the existing one-shot startup path `0x0052DA80` in the
+same player tick. Only the released/no-action branch at
+`0x005496C8..0x005496D6` writes idle equipment pose `0` to actor `+0x238`.
+
+`Action_PlayerWizard_StaffCast1` construction at `0x0044B170` initializes its
+progress, marker, end, frame array, and actor link. It does not write
+`actor+0x238`; its only adjacent actor presentation write is zeroing
+`actor+0x23C`. The successor's insertion tick therefore retains the previous
+action's last visible `K`. On its first fixed action tick,
+`0x0044B370` selects `frames[trunc(progress)]` and writes the next `K` to
+`actor+0x238`. Every later held one-shot action then runs the same complete
+Staff Cast 1 program again: branch A `[1,8,7,7,7]` or branch B
+`[8,7,7,7,7]`. Stock avoids an inserted idle-pose flash between actions, but
+it does replay the cast program for every emitted shot.
+
+The complete direct membership is pure Ether `8`, pure Fire `16`, and welded
+one-shots `1000`, `1001`, `1002`, and `1009`; all route through
+`0x0052DA80` and item-selected Cast 1 mode `3`, `6`, or `9`. Pure Air `24`,
+Water `32`, Earth `40`, welded channels `1003..1005`, and welded persistent
+casts `1006..1008` instead use renewed Constant actions and retain their
+already recovered constant-pose lifecycle. Staff mode `3` is the reported
+branch. Bare-hand mode `6` and Wand mode `9` are sibling pose programs, not
+alternative Staff rows.
+
+This finding corrects only the action-handoff wording. It does not change
+projectile cadence, marker timing, mana, targeting, audio, or the previously
+recovered pose arrays. A Website policy that holds one release pose across
+successive one-shot actions is an explicit presentation override rather than
+retail parity and must be identified as such in the web ledger.
