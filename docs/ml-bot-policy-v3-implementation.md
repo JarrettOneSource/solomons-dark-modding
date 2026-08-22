@@ -463,6 +463,18 @@ history where native motion is unresolved, merges any useful address-free
 player spell-effect rows, sorts K=12 by edge distance, and emits only active
 hostile hazards. Air-chain presentation does not enter the persistent K block.
 
+**Gap recorded 2026-08-22.** As shipped, Block N is the only effect block
+and it is hostile-only (`policy_hazards.lua` keeps `hostile == true`), so the
+policy never observes its own projectiles or persistent areas. The golem is
+replicated as a `native_minion` actor (`world_snapshot_capture.inl`
+`IsNativeMinionType`; Lua row fields `native_minion*` at
+`lua_engine_bindings_gameplay.cpp:200-281`), but `steering.live_enemies`
+keeps only `tracked_enemy` actors, Block I is built from `participants[]`,
+and no bot-brain script reads `native_minion*`: own and allied golems are
+unobserved, not misclassified. The Web Port amendment
+(`ml-bot-policy-web-port.md`) adds Blocks R and S for these; no native seam
+is planned.
+
 ### B4. Aim-point offset
 
 Current policy casts exactly at the selected actor's current `x,y`

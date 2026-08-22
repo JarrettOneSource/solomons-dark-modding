@@ -15,6 +15,15 @@ NumPy, a GPU, a model service, an account, or an internet connection. Learned
 and scripted rows may coexist. Learned decisions occur every 100 ms of
 simulation time; **Scripted bot cadence** affects only scripted behaviors.
 
+## Web Port direction (2026-08-22)
+
+The learned bot's runtime target is the Web Port; native bot-brain planning
+is dropped. `docs/ml-bot-policy-web-port.md` amends the v3 contract for that
+runtime (schema v5): it re-sources hostile hazards from the web simulation
+and adds first-class blocks for the bot's own projectiles and persistent
+areas (Block R) and for own and allied minions (Block S), none of which
+v3/v4 observe. The sections below describe the native v4 runtime as shipped.
+
 ## Policy v3 contract
 
 The main policy has four masked heads:
@@ -250,6 +259,11 @@ current temperature persist in checkpoint metadata.
 - The controlled one-enemy arena intentionally has no stock XP reward context
   and is curriculum plumbing only. Default training uses stock waves; broader
   builds and a multi-layout corpus remain evaluation work.
+- The policy does not observe its own projectiles or persistent areas
+  (Block N is hostile-only), nor its own or allied golems (neither
+  `tracked_enemy` nor participants, and no script reads `native_minion*`).
+  `ml-bot-policy-web-port.md` §1 records the gap; the Web Port amendment
+  closes it with Blocks R and S.
 
 ## Install a trained checkpoint
 

@@ -188,10 +188,23 @@ machinery; each returns pass/fail + a scalar. Initial set:
 | level-choice | forced level-up | legal, non-degenerate selection |
 | powerup | powerup drop nearby, enemies present | collects within episode |
 | drop-triage | health potion vs junk equipment drop, low HP | routes to potion first |
+| golem-anchor (web) | Raise Golem build, mixed melee wave | golem alive ≥ 60% of episode; bot within 300u of it ≥ 50% of combat ticks |
+| recast-timing (web) | golem alive at 80% HP, full mana | no Raise Golem recast within 10s |
+| circle-kite (web) | Magic Circle build, melee pack | ≥ 1 enemy crosses own circle per 20s of combat |
+| trap-stack (web) | live Magic Trap underfoot | no second trap within its radius while it lives |
 
 The scorecard turns "the model got better" into a behavior-level diff
 between checkpoints, and each probe doubles as an integration fixture
 (a probe that no policy can pass is a seam bug by two-surface order).
+
+Web Port (schema v5) integration fixtures precede the probes above:
+own-projectile-visible, own-held-visible, own-area-visible,
+effect-active-flags, own-golem-visible, ally-golem-visible,
+minion-target-link, hazard-ttc-exact, already-hit-me, and
+golem-kill-credit, as specified in `ml-bot-policy-web-port.md` §9. Each
+fixture ships with its mutation (block zeroed or flag inverted must fail),
+and the observation audit (§3.4) must show non-constant Blocks R and S on
+every composition that includes Raise Golem or an area skill.
 
 ### 3.10 Checkpoint arena **[build]**
 Round-robin evaluation of stored checkpoints on the frozen eval sets,

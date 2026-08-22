@@ -152,6 +152,9 @@ contract; implementation phases execute against them.
    evidence in the spec. **Unknown new hostile effect classes default to
    included with `type_known=0`** — an unclassified threat must be visible,
    never silently dropped.
+   *Amended 2026-08-22 (Web Port, schema v5):* friendly/self effects and
+   own/allied minions stay outside this hostile block but are no longer
+   unobserved — they become Blocks R and S in `ml-bot-policy-web-port.md`.
 6. **Aim head**: discrete center+8 at 60 world units with per-family masks,
    as proposed. Continuous aim deferred.
 7. **Choice SMDP approved**: variable-duration GAE as specified, entropy
@@ -264,3 +267,14 @@ No reward term changes. Drop value must be learned through the existing
 vitals, damage, own-damage, and own-kill-XP channels. Existing replicated-loot
 identity fields and inventory content identities are sufficient; V3-9 adds no
 native seam.
+
+## Web Port amendment — 2026-08-22 (schema v5)
+
+Owner direction: the learned bot ships in the Web Port; all native-game bot
+planning is dropped. `ml-bot-policy-web-port.md` carries the amendment. Its
+rulings W1-W8: own effects first-class (Block R); own and allied minions
+first-class (Block S); enemy slots link to the minion's target; per-slot
+`effect_active` flags; masks stay legality-only; reward frozen with web
+`sourcePlayerId` attribution; hostile hazards re-sourced from the closed web
+registry; no native seam and no Lua. Width becomes 1,637. Sections A-E and
+the 2026-07-30 adjudications remain the frozen v3/v4 native record.
