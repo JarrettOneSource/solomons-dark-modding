@@ -3117,3 +3117,54 @@ contact runs after movement on every tick, while mask-`0x700` terrain
 lookahead runs only on the established five-tick cadence. Reusing the full
 player navigation polygon set would make graves, fences, trees, goodies, and
 posts block at the wrong geometry and often on the wrong tick.
+
+## 2026-08-22 Boulder solid-world collision correction
+
+Fresh instructions for shared Boulder contact owner `0x00620B60` close the
+solid-world half of the Earth collision system and correct the earlier
+endpoint-only Website interpretation.
+
+On every released flight update the native sequence is exact:
+
+1. save the prior actor root;
+2. commit `velocity * speed` to actor `+0x18/+0x1C` at
+   `0x00620C2D`;
+3. write collision radius `75 * charge` to `+0x30` using the double at
+   `0x007845C0`;
+4. call movement walker `0x00524180` at `0x00620E8E` over the capsule from the
+   advanced root to `advanced root + velocity`, with all three mode bytes zero
+   and exclusion mask zero; and
+5. if blocked, clear the residual pool before the later mask-`6` actor query,
+   then run the concrete terminal path at the already advanced root.
+
+This is a positive-radius swept/capsule query, not point occupancy at the old
+or advanced center and not the Fireball's point-sized five-tick line test.
+Mask zero means no authored movement member is excluded. The complete stock
+membership is Tree root circles, all Monument polygons, every Gravestone root
+circle plus the promoted overlay-`>=7` grave polygon, all Building polygons,
+Goodie circle/footprint, Fence endpoint posts and derived intact/broken/gate/
+rail/wall shapes, dynamic Gate leaves, Terrain records, and the Arena boundary.
+The collision result is therefore allowed to hit both the small Gravestone
+root primitive and its separately authored promoted geometry.
+
+Release finalizer `0x005E5450` does write the transitional radius
+`45 * charge`, but its only trailing call is `0x00462010`, whose entire body is
+`RET 0x10`. It performs no world query. Treating `45 * charge` as an immediate
+release collision probe is a falsified inference; the first solid-world test
+is the released flight path above at `75 * charge`.
+
+The direct shared-function membership is ordinary `Boulder 0x7D5` and
+`EBoulder 0x7E1` (`0x00621450 -> 0x00620B60`). Hasten Rocks, Bind Rocks, Rock
+Surge, and Gargantuan change upstream charge/pool inputs but not this geometry.
+`Hailstones 0x7E4` inherits a vtable address but its reachable released path
+uses the separately recovered per-rock substeps at `0x005FBDE0`, so it is not
+a whole-carrier member. Ordinary and Ethereal terrain retirement both own
+their already-recovered full breakup/audio teardown; dropping an EBoulder
+silently on solid contact is not native.
+
+Evidence is the pinned retail image above, fresh Ghidra 12.0.3 read-only
+decompilation of `0x00620B60`, `0x00524180`, and `0x005E5450`, instructions at
+`0x00620E28..0x00620E9E` and `0x005E54DB..0x005E5522`, and the existing full
+authored collision-primitive inventory. Confidence is high; there is no
+unextracted table, collision mask, cadence, or sibling carrier branch in this
+boundary.

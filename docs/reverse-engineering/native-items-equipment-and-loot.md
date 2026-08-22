@@ -799,3 +799,52 @@ snapshot boundaries.
 
 No website download or automatic mod enablement was implemented during this
 native decompilation pass.
+
+## 2026-08-22 equipped Staff element-effect painter depth correction
+
+Fresh instruction recovery of `PlayerWizard::Render 0x0054BA80` corrects the
+older claim that the Staff orb is one draw assigned wholly to the Staff
+attachment's back or front pass. The generated shaft and its two Clothes hand
+banks still are one pose-dependent attachment composite, but the equipped
+element effect has additional PlayerWizard-owned submissions through
+`0x0053B1D0`.
+
+For the ordinary `renderPhase != 9` branch, the complete element-effect depth
+program is:
+
+- the base back-angle call at `0x0054BDE4` occurs before the robe for integer
+  heading `<= 90` or `> 270` degrees;
+- the matching base front-angle call at `0x0054C842` occurs after the robe for
+  headings in the inclusive `90..270` range when render-drive overlay alpha
+  `+0x248` is zero (its constructor value at `0x0052B4C0`);
+- for the back-angle half-plane, `0x0054C09E` also submits the complete element
+  painter in the front transform while equipped-effect phase `+0x268 <= 0.1`;
+  and
+- `0x0054C8AE` submits that front-transform copy when `+0x268 > 0.1`.
+
+The two `+0x268` comparisons use the executable double `0.10000000149011612`
+at `0x007849E8`. They partition the finite phase domain, so every ordinary
+heading has a front-of-clothes element-effect submission. At back headings the
+stock renderer may also retain the earlier behind-robe base copy; during a
+pulse, front headings may receive the separate base and enlarged front copy.
+At the exact 90-degree boundary the inclusive branch tests intentionally
+overlap. `+0x248` instead feeds the distinct colored sprite program at
+`0x0053B680`; it is not the Staff orb or the `+0x268` scale field.
+
+`0x0053B1D0` dispatches Ether, Fire, Air, Water, and Earth through their five
+already-catalogued element painters. It uses the active Staff record's point-1
+socket and applies `actorScale * (1 + 10 * +0x268)` to the phase-owned copy.
+Staff selectors `0..5` share the same code; Wand and empty-weapon branches are
+separate and do not authorize a Staff orb. Death/alternate drive byte `+0x160`
+suppresses the helper. The browser consequence is that Staff attachment depth
+cannot be reused as the sole orb z-order: a front element-effect copy must
+remain above every robe/fixed-clothes layer for every heading and Staff action
+pose.
+
+Evidence is the pinned 4,723,200-byte retail `SolomonDark.exe` (SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`,
+preferred base `0x00400000`), fresh Ghidra 12.0.3 read-only instructions at
+`0x0054BDCF..0x0054BDE9`, `0x0054C076..0x0054C0AF`, and
+`0x0054C7E6..0x0054C8BF`, plus decompilation of `0x0053B1D0`, `0x0053B680`,
+and constructor `0x0052B4C0`. Confidence is high; no painter-depth unknown
+remains for the equipped Staff family.
