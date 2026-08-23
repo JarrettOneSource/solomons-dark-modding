@@ -231,3 +231,56 @@ results, and teardown are instruction- or live-fixture-confirmed with high
 confidence. The retail binary has no multiplayer branch to extract. The host
 ownership and disconnect rules above are designed extension behavior required
 by the web multiplayer product, not claims about stock code.
+
+## 2026-08-23 audio-lane reopening
+
+The Website request to mute every non-music sound while the Pause Menu,
+mandatory LevelupScreen, or compact selected-skill picker is present reopens
+the modal/audio boundary without changing the suspension findings above. A
+fresh instruction pass against the same read-only retail project establishes
+that this is an explicit Website policy, not an omitted stock call:
+
+- `SimpleMenu_ModalLoop 0x005ABF10` registers the modal, calls
+  `0x005CBD40(true)`, runs `0x004281F0`, requests registry stream 131
+  `sounds\\MessageDone__Stream` at `0x005AC0B6..0x005AC0C4`, and only then
+  calls `0x005CBD40(false)` at `0x005AC0C9..0x005AC0D4`. It never calls either
+  audio-volume setter or the audio manager's pause virtual.
+- Mandatory LevelupScreen open `0x0067CAC0..0x0067CAED` increments the same
+  gameplay suspension depth and requests registry 64 `sounds\\openpanel` at
+  gain one. Destructor `0x006588C0` balances the gameplay suspension. Neither
+  path changes sound gain, music gain, or global BASS pause state.
+- The selected-primary and concentration HUD handler `0x005D8120` builds the
+  compact `Skills_Quickbar` through constructor/builder
+  `0x00657A70/0x0066F0B0`, runs it through modal owner `0x004281F0`, and tears
+  it down at `0x00658DC0`. Its acceptance path owns the recovered `click` and
+  `concentrate` requests, but the complete owner/callee trace has no sound-gain
+  setter or `Audio::Pause` call.
+- `Audio::Pause 0x00407400` is a separate reference-counted device-wide owner
+  at `Audio+0x88`. Its zero/nonzero transitions call `BASS_Start` and
+  `BASS_Pause`, so using it would pause music together with `Sound`,
+  `SoundStream`, and `SoundLoop`. It cannot implement the requested
+  "everything but music" behavior.
+- The independent persisted/effective lanes remain `Audio+0x7C/+0x84` for
+  sound through BASS configs 4/5 and `Audio+0x78/+0x80` for music through
+  config 6. A temporary Website modal multiplier must preserve both persisted
+  user settings and restore the current sound scalar when the final modal
+  owner leaves.
+
+The complete affected Website membership is the local Hub Pause Menu, the
+authoritative Boneyard Pause Menu as seen by its owner and waiting peers, the
+Dark Cloud Explore Pause Menu that shares the SimpleMenu surface, and the
+mandatory level-up barrier from picker opening through its closing/waiting
+tail. The compact primary/A/B `Skills_Quickbar` member is covered for its local
+owner and for every Website peer waiting on the replicated `skill-selector`
+pause source. One-shots, streams, gameplay loops, ambience, voices, and UI
+requests all belong to the non-music lane and are silent while that owner is
+active; scene music and its crossfade envelope remain live. Inventory, the full
+SkillScreen, trader dialogs, ordinary title/create surfaces, and application
+focus loss are independent modal or application owners and are not silently
+added to this policy.
+
+There is no browser constraint here. The Website already routes resident
+buffer playback through one Web Audio master while music uses independent
+`HTMLAudioElement` channels. Muting that master is the direct product-policy
+implementation. It must mute rather than destroy channels so loop/stream
+lifecycle and owner teardown continue normally behind the temporary zero gain.

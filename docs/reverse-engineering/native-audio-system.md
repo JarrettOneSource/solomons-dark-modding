@@ -431,6 +431,34 @@ content, specifically referenced dynamic audio, and a coherent music module
 plus table. Loading new files is separate from creating new gameplay references
 to them.
 
+## 2026-08-23 Website party-invitation notification boundary
+
+Retail 0.72.5 has no Website party/invitation model, so it contributes no
+native invitation trigger or cue selection. The Website request for a small
+incoming-invite noise is an explicit social-extension event mapped onto an
+already exact native asset:
+
+- registry row 0 / registry offset `+0x18` is `Sound`
+  `sounds\\click` (`sounds/click.wav`, 434 bytes, SHA-256
+  `8aeebcfeb69625bee2ee78fe9c63939e6b40edcc89d5facf2c0d35e1b5920307`);
+- the cue is a resident overlapping one-shot, not a stream, loop, voice, music
+  transition, or new asset;
+- one request is produced for each invitation id first introduced after the
+  connected session's initial party-state baseline; revision-only snapshots,
+  unchanged ids, denial/acceptance, scene remount, and reconnect history do not
+  replay it;
+- multiple newly introduced ids retain one request per id, while authoritative
+  duplicate prevention keeps the ordinary path to one;
+- the cue obeys the current user sound scalar and the temporary Pause/
+  LevelupScreen non-music mute. A notification received while muted is not
+  queued for later replay.
+
+Registry streams 131 `MessageDone__Stream` and 150
+`yougotamessage__stream` remain outside this feature. Their suggestive names do
+not establish a party-invitation producer, and the closed player-chat census
+found none. No native catalog row or trigger attribution is changed by the
+Website mapping above.
+
 ## Reproduction and verification
 
 Recover the compiled registry from the analyzed executable with:

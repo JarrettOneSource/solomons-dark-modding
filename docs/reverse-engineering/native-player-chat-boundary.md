@@ -75,3 +75,36 @@ exclusion while composing, HTML input/keyboard acceptance, inactivity fading,
 and a real multi-client browser journey. A stock-versus-web pixel comparison is
 inapplicable because stock has no corresponding player-chat surface; the
 stock comparison is instead the explicit `T`-binding deviation above.
+
+## 2026-08-23 transient world-speech extension
+
+The request to show an authoritative chat message over its sending wizard does
+not revise the negative native census. Fresh decompilation of `Chat` update and
+render `0x004FFEE0` / `0x004F9380` and `ChatExtend` render `0x004F7BA0`
+confirms that those classes remain merchant/book modal presentation. Neither
+consumes a player actor, world transform, authenticated sender, or multiplayer
+message. `PlayerWizard` world indicators and ExactText remain the closest
+native presentation sibling, not a hidden speech system.
+
+The Website extension is therefore bounded as follows:
+
+| Member | Owner and disposition |
+| --- | --- |
+| Authoritative message receipt and transcript append | Existing protocol-52 client-session and `GameChat`; verified-already-at-requested-policy. The world presentation consumes the same delivered event and never presents an optimistic or rejected draft. |
+| Global, Party, and Whisper visibility | Existing host recipient routing; exact-ported product policy. A bubble is only derivable on a client that received that channel event, so Party/Whisper content is not widened. |
+| Sender/player binding | Host-authored `message.sender.playerId` joined to the active presented player map; exact-ported authority. The client cannot choose a different actor. |
+| Local and remote wizard in the same active region | Website screen-space world-text layer; explicit product extension. Unlike the existing remote-only nameplate, the local sender is included. |
+| Hub Courtyard and every private Hub room | Shared Hub renderer plus active-region predicate; explicit product extension. Actors in another Hub region stay absent. |
+| Boneyard/Arena | Shared Boneyard renderer; explicit product extension. |
+| Missing/disconnected/off-region/invalid actor | No world item; exact lifecycle boundary. Transcript history remains unchanged. |
+| Replacement and ordering | At most the newest authoritative sequence per sender; explicit product policy. A newer line replaces the prior line instead of stacking an unbounded actor-local history. |
+| Hold/fade/expiry | Client-local monotonic presentation time: 3,000 ms fully visible, then a linear 2,000 ms fade, absent at 5,000 ms; explicit product policy, not a stock constant. |
+| Font and projection sibling | Existing native Fonts group 6 ExactText glyph/kerning atlas and post-world screen-space projection; verified-already-at-parity for the primitive. Panel, wrap width, speech-tail geometry, and timing remain declared Website styling. |
+| Unsupported glyphs | Omitted without an operating-system-font fallback, matching the native ExactText failure boundary. The complete authoritative message remains in the HTML transcript. |
+| Pause, level-up, scene replacement, and teardown | Presentation is nonauthoritative and does not tick simulation. It samples on the scene presentation clock, expires by monotonic wall time, is cleared with session replacement, and owns no save/Lua/snapshot state. |
+
+The layer renders after the world and existing nameplates but before later
+screen feedback/modal presentation. It is noninteractive and accessibility
+silent because the existing HTML chat live region remains the sole semantic
+announcement. No protocol field, server timer, persisted transcript, trader
+`Chat` reuse, message-named native stream, or system-font fallback is added.
