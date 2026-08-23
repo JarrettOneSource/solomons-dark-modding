@@ -573,6 +573,7 @@ from static_re_hagatha_perk_contracts import (
     test_hagatha_client_damage_ratio_allows_one_claim_quantum,
     test_hagatha_combat_modifiers_have_exact_two_owner_coverage,
     test_hagatha_derived_stats_have_a_two_owner_steam_matrix,
+    test_hagatha_effect_contract_is_complete,
     test_hagatha_one_shot_runtime_state_is_host_authoritative,
     test_hagatha_perks_replicate_as_participant_owned_native_state,
     test_native_hagatha_perk_catalog_is_complete,
@@ -2170,6 +2171,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native Hagatha perk catalog is complete",
         test_native_hagatha_perk_catalog_is_complete,
+    ),
+    (
+        "Hagatha gameplay effect contract is complete",
+        test_hagatha_effect_contract_is_complete,
     ),
     (
         "Hagatha perks replicate as participant-owned native state",

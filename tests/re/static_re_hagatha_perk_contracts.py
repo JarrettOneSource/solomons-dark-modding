@@ -122,14 +122,28 @@ def test_native_hagatha_perk_catalog_is_complete() -> str:
 
     catalog = json.loads(read_text(path))
     failures: list[str] = []
-    if catalog.get("schema_version") != 2:
-        failures.append("catalog schema_version is not 2")
+    if catalog.get("schema_version") != 3:
+        failures.append("catalog schema_version is not 3")
     if catalog.get("native_functions") != {
         "name": "0x00571DD0",
         "price_table": "0x005A7CA0",
         "description": "0x00573E90",
         "apply": "0x0066EF70",
         "refresh": "0x0067C360",
+        "cache_refresh": "0x006623F0",
+        "damage_player": "0x0052F540",
+        "increase_skill": "0x00660320",
+        "set_skill": "0x00660580",
+        "build_skill_offer": "0x0067CB70",
+        "render_seeker": "0x0052A640",
+        "auto_health_potion": "0x005296A0",
+        "auto_mana_potion": "0x00529710",
+        "mutate_health": "0x0052AC80",
+        "mutate_mana": "0x0052B150",
+        "tick_player_death": "0x00533520",
+        "common_mindblast": "0x00645B50",
+        "archive_completed_run": "0x005C9670",
+        "collect_completed_run": "0x005BE320",
     }:
         failures.append("catalog native function evidence is incomplete")
     if catalog.get("native_offsets") != {
@@ -200,6 +214,93 @@ def test_native_hagatha_perk_catalog_is_complete() -> str:
     if failures:
         raise StaticReTestFailure("; ".join(failures))
     return "all 28 stock Hagatha outcomes and the bundle have exact names, prices, tooltip copy, behavior, and native evidence"
+
+
+def test_hagatha_effect_contract_is_complete() -> str:
+    """Every tooltip claim must have an exact downstream native contract."""
+
+    catalog = json.loads(read_text(
+        ROOT / "docs/reverse-engineering/native-hagatha-perk-catalog.json"
+    ))
+    report_path = ROOT / "docs/reverse-engineering/native-hagatha-perk-effects.md"
+    report = read_text(report_path) if report_path.is_file() else ""
+    failures: list[str] = []
+
+    expected_constants = {
+        "life_factor": 1.25,
+        "mana_factor": 1.25,
+        "speed_factor": 1.100000023841858,
+        "item_candidate_bound_factor": 0.75,
+        "gold_candidate_bound_factor": 0.75,
+        "gold_amount_factor": 1.25,
+        "seeker_minimum_distance_exclusive": 100,
+        "seeker_distance_cap": 300,
+        "seeker_inner_start": 35,
+        "seeker_join": 50,
+        "seeker_outer_factor": 0.5,
+        "seeker_width": 3,
+        "seeker_rgb": [0.85, 0.73, 0.44],
+        "seeker_alpha_base": 0.75,
+        "seeker_alpha_amplitude": 0.5,
+        "seeker_tick_degrees": 2,
+        "seeker_actor_phase_degrees": 35,
+        "revelation_minimum_rank": 2,
+        "cheat_death_recovery_factor": 0.5,
+        "scatter_candidate_bound_factor": 0.5,
+        "war_mana_factor": 0.75,
+        "curing_poison_factor": 0.5,
+        "last_word_death_tick": 200,
+        "last_word_archive_tick": 300,
+        "last_word_presentation_scale": 15,
+        "last_word_query_scale": 55,
+        "last_word_radius": 825,
+        "last_word_raw_damage": 10000,
+        "last_word_damage_factor": 0.5,
+        "last_word_damage": 5000,
+        "drinker_health_threshold_inclusive": -10,
+        "glass_cannon_factor": 2.0,
+        "focus_recharge_factor": 1.25,
+        "bare_hands_damage_factor": 1.149999976158142,
+        "bare_hands_mana_factor": 0.8500000238418579,
+        "curse_bosses_factor": 3.0,
+        "curse_boss_native_type_ids": [1008, 1009, 1010, 1011],
+        "arcane_attractor_candidate_bound_factor": 0.800000011920929,
+        "serendipity_damage_factor": 3.0,
+        "brute_melee_factor": 3.0,
+        "brute_push_factor": 2.0,
+        "tonic_capacity_delta": 3,
+        "tonic_purchase_limit": 2,
+        "maximum_capacity": 9,
+    }
+    if catalog.get("effect_constants") != expected_constants:
+        failures.append("catalog effect constants are incomplete or changed")
+
+    _require(
+        "native Hagatha effect report",
+        report,
+        (
+            "# Native Hagatha perk gameplay effects",
+            "0x0052A640",
+            "0x00660320/0x00660580",
+            "0x0052F540",
+            "0x006623F0",
+            "0x0067CB70",
+            "0x0052AC80",
+            "0x0052B150",
+            "0x00533520",
+            "0x00645B50",
+            "0x005C9670 -> 0x005BE320",
+            "distance strictly greater than 100",
+            "radius 825 and damage 5000",
+            "HP `<= -10`",
+            "1008 DemonSkull, 1009 Demon, 1010 DireFaculty, and 1011 Heartmonger",
+            "No member is blocked by the browser platform.",
+        ),
+        failures,
+    )
+    if failures:
+        raise StaticReTestFailure("; ".join(failures))
+    return "all 28 Hagatha rows have exact downstream constants, owners, lifecycle, and platform dispositions"
 
 
 def test_hagatha_perks_replicate_as_participant_owned_native_state() -> str:
