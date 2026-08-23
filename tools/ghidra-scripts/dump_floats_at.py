@@ -2,12 +2,16 @@
 
 Usage:
     -postScript dump_floats_at.py 0x007847b0 0x00786410 ...
+    (addresses may also arrive as one ";"- or space-separated argument)
 """
+import re
 import struct
 
 
 def parse_args():
-    args = [a.strip() for a in getScriptArgs() if a.strip()]
+    args = []
+    for argument in getScriptArgs():
+        args.extend(value.strip() for value in re.split(r"[;\s]+", argument) if value.strip())
     if not args:
         print("ERROR: expected addresses")
         raise SystemExit(1)

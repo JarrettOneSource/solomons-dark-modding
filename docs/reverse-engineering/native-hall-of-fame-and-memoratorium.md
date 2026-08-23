@@ -1,6 +1,8 @@
 # Native Hall of Fame and Memoratorium memorial system
 
-Status: closed for the retail executable with preferred image base `0x00400000`.
+Status: closed for the retail executable with preferred image base `0x00400000`;
+row presentation reopened and re-closed on 2026-08-22 (see
+[Hall row render contract](#hall-row-render-contract-0x005a2c80)).
 The executable used for static analysis and the clean populated observation has
 SHA-256 `03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`.
 
@@ -229,6 +231,240 @@ AWESOMEST KILL: SKELETON
 
 The pristine committed fixture correctly shows the same frame with no entry
 rows. Empty is a valid collection state, not a loading error.
+
+## Hall row render contract (`0x005A2C80`)
+
+Recovered 2026-08-22 against the same retail image (SHA-256 above). The
+2026-08-20 pass closed the row as a text list; this section is the full draw
+contract of `HallOfFameBox::Render` (`0x005A2C80`), verified pixel by pixel
+against a clean populated 1600x900 stock capture (`solomon-hall-20260822`,
+PID 1856, 19:43:56-20:01:58 local). Every number below is box space unless it
+says screen space; the box is `(200, 80)`-`(1400, 775)` at 1600x900, so
+`W = 1200`, `H = 695`, and screen = box + `(200, 80)`.
+
+### Cursor, pen, and row cadence
+
+- `yCursor` starts at `80`. Each row advances `yCursor += 250` (`rowH`), plus
+  `150` (`expH`) first when the row is expanded.
+- Every sprite and text draw of a row goes through a pushed pen
+  `pen = (px, yCursor + 15)`. On wide clients (`>= 1280` px) `px` starts at
+  `-10`, becomes `+10` after the skill block (`px += 20`) and `+25` after the
+  perk block (`px += 15`). The highlight rectangle and the separators are
+  computed from `yCursor` directly and do not move with the pen.
+- Narrow clients (`< 1280` px) take a second layout branch with different
+  column constants. The Website stage is fixed at 1600 wide, so only the wide
+  branch was extracted; the narrow branch stays documented as unreachable.
+- Global tick: 100 Hz (`elapsedTicks / 100` is the same clock the survival
+  time formats). Pulses below use `sin(tick * 3 deg)`, period 1.2 s.
+
+### Background
+
+- UI record `49` (`264x264`) tiled 5 columns by 4 rows across the box. The
+  tile origin is the box origin plus the scroll offset modulo 264, so the tile
+  scrolls with the content. The unscrolled capture matches a 264-pixel vertical
+  period aligned to the box top (mean abs diff 6.2 at `dy = 264` against
+  13.8 at `dy = 263/265`).
+
+### Row block (`rowH = 250`)
+
+| Member | Draw | Position |
+| --- | --- | --- |
+| Highlight rectangle | filled rect | `(50, yCursor - 25, W - 100, rowH - 10 + (expanded ? expH : 0))` |
+| Current-wizard fill | gold `(0.85, 0.73, 0.44)` | alpha `0.1 + 0.05 * sin(tick * 3 deg)`; other rows draw no fill |
+| Row frame | 9-slice UI record `17` (`80x83`), white | current wizard alpha `0.5 + 0.2 * sin(tick * 3 deg)`; other rows alpha `0.2` |
+| Rank numeral | font 4 (heading, 29 px digits), gold, centered | baseline `(W/2 - 60, pen.y + rowH/2 - 65)` = `(540, yCursor + 75)` |
+| Rank ornament | UI record `25` (`22x21`), center-anchored | `(W/2 - 60 - rankW/2 - 11, pen.y + rowH/2 - 65 - 10.5)`; `rankW` = measured numeral width, so the ornament's right edge meets the numeral's left edge |
+| Wizard composite | serialized wizard (`entry + 0x20`) incl. the element orb VFX, RNG seed 5 swapped around the draw | scale `1.25 * entry.portraitScale`, anchor (frame center / feet) `(W/2, pen.y + 73)` = `(600, yCursor + 88)` |
+| Name | font 3 (menu), gold, centered | baseline `(W/2, pen.y + 125)` = `(600, yCursor + 140)` |
+| `Level %d %s` (exe string `0x0079965c`; `%s` is the class name in capitals) | font 1 (medium, font object `+0x4d530`), gold, centered | baseline `(W/2, pen.y + 140)` = `(600, yCursor + 155)` |
+| `Awesomeness: %d` (exe string `0x0079964c`) | font 1 (medium), gold, centered; `eA` = measured medium width (`155` for `Awesomeness: 91`) | baseline `(W/2, pen.y + 155)` = `(600, yCursor + 170)` |
+| Expand chevron | UI record `9` (`22x20`), gold, center-anchored, rotated 90 deg collapsed / 180 deg expanded; quad placed per "Sprite placement" below | `(W/2 - eA/2 - 25, pen.y + 140)` = `(600 - eA/2 - 25, yCursor + 155)`; the click hotspot is the chevron's rect and toggles `entry + 0x10c` |
+
+Capture proof (row 1, `yCursor = 80`, screen space = box space + `(200, 80)`;
+the capture's client origin is `(3, 26)`): highlight top `135`;
+name `VOLUSIUS` ink `731-866 x 284-300` (center 798.5, baseline 300);
+`Level 3 SEER` ink `741-858 x 304-315` (medium width 118, centered pen 740;
+column 0 of `L` is the blank atlas gutter so the ink starts at 741 — the
+first-pass "font 0" reading measured the all-capitals string `LEVEL 3 SEER`
+against 113.5 body / 138.5 medium and is withdrawn); `Awesomeness: 91` ink
+`722-873 x 319-330` (medium width 155, pen 722); chevron ink `688-707 x
+306-323` (center 697.5 = `800 - 155/2 - 25`); rank `1` ink
+`733-743 x 208-234` (centered at 740, baseline 235); ornament ink
+`704-724 x 214-234` (center 714 = `725.5 - 11`, 224 = `234.5 - 10.5`);
+composite ink `774-869 x 174-253` around the anchor `(800, 248)` with 1,723
+ether-purple orb pixels at `831-869 x 179-239`.
+
+### Expanded block (`expH = 150`, `T = pen.y + rowH - 75`)
+
+All text is gold unless stated. `T` lands at `yCursor + 190`.
+
+| Member | Draw | Position |
+| --- | --- | --- |
+| `SURVIVAL` | font 1 (medium), left | `(100 + px, T)` |
+| `Time:` / `Wave:` labels | font 1, left | `(131 + px, T + 20)` / `(120 + px, T + 35)` |
+| Time / wave values | font 1, left, plain gold | `(180 + px, T + 20)` / `(180 + px, T + 35)` |
+| `HIGHEST SKILLS` | font 1, left | `(100 + px, T + 70)` |
+| Skill cell `i = 0..2` | see below | `cellX = 100 + 60 i + px`, `Y = T + 108`, anchor center `(cellX + 30, Y)` |
+| `PERKS USED` | font 1, right-aligned, after `px += 20` | `(W - 100 + px, T)` |
+| Perk cell `k = 0..8` | Inventory record `10` scale `0.57`, then Skills record `127 + selector` scale `0.7` when the perk exists; no numeral | center `(W - 162 + 42 gx + px, T + 75 + 42 gy)`, `gx = k % 3 - 1`, `gy = floor(k / 3) - 1` |
+| Kills box | after `px += 15`; `y_k = T + expH/2 - f60/2 + 8`, `f60 = 50` (the font-3 line box), `-18` when the boast branch adds a line | `Monsters Killed: %d` font 1 centered `(W/2 + px, y_k)`; `Awesomest Kill:` font 1 centered `(W/2 + px, y_k + 20)`; awesomest name font 3 centered `(W/2 + px, y_k + 40)`; 9-slice UI record `50` (`13x14`) white alpha `0.5` at `(W/2 - 150 + px, y_k - 30, 300, f60 + 40)` |
+| Boast / story branch | boast text and failed / succeeded / not-accomplished states | campaign data only; no Website counterpart |
+
+Skill cell draw order (anchor `(cx, Y) = (cellX + 30, Y)`):
+
+1. empty slot: Inventory record `10` (`72x72`) at scale `0.8`, nothing else;
+2. otherwise Skills record `164` (`57x57`) tinted with the skill's element
+   color (`skillbook slot + 0x90`), scale `1`;
+3. Skills record `27 + skillId` at scale `0.9`;
+4. black alpha `0.5` badge rect `(cellX + 52 - w, Y + 11, w + 3, 15)` where
+   `w` = font-0 width of the rank string;
+5. rank numeral, font 0, white, right-aligned at `(cellX + 53, Y + 22)`;
+6. Inventory record `10` frame at scale `0.8` on top.
+
+Capture proof (row 1 expanded): `SURVIVAL` ink `291-379 x 339-350`
+(baseline 350 = `80 + 255 + 15`); `Time:` `321-356`, values from `371`;
+`Wave:` `310-356`, value `373`; `HIGHEST SKILLS` `290-435 x 409-419`; skill
+frames `292-347`, `352-407`, `412-467` x `430-484` (centers 319.5 / 379.5 /
+439.5 x 457); `PERKS USED` right ink edge `1308` (`1310 = 1300 + px 10`);
+perk grid center `(1248, 425)` (`1048 = 1200 - 162 + 10`); kills frame ink
+`675-974 x 378-467` (`675 = 800 - 150 + 25`, height 90 = `f60 + 40`);
+`Monsters Killed` ink `736-911 x 396-408` (center 823.5, baseline 408 =
+`y_k`); `Awesomest Kill:` bottom 428/429; awesomest name ink `752-895 x
+427-448` (baseline 448 = `y_k + 40`). The measured medium widths of
+`SURVIVAL` (91), `PERKS USED` (116), and `HIGHEST SKILLS` (147) match the ink
+within 2 px, which is what proves the name-block lines are the smaller font.
+
+### Separators
+
+After `yCursor += rowH`, two 2-px lines at `y = yCursor - 50`:
+`(150, y) -> (W/2, y)` and `(W - 150, y) -> (W/2, y)`. Each is a gradient from
+transparent gold at the outer end to opaque gold `(217, 186, 112)` at the
+center. The instruction-derived reading of the gradient direction was wrong;
+the capture (first separator at screen `y = 359-360`, bright at `x = 800`,
+fading toward `350` and `1250`) fixed it. The ramp is linear in alpha; the
+brighter row under it belongs to the row frame (see the mirrored-texel note
+in the 9-slice section), not to the separator.
+
+### 9-slice primitive (`FUN_00417760`)
+
+`FUN_00417760(glyph, x, y, W, H, fill)` draws a frame from a single corner
+glyph of size `w x h`:
+
+- corners: top-left as drawn; top-right mirrored in X; bottom-left mirrored in
+  Y; bottom-right mirrored in both;
+- top and bottom strips: the glyph's last `5%` of columns (UV `0.95..1.0`,
+  constant `_DAT_007de96c = 0.95`) stretched across `W - 2w`; the bottom strip
+  is the vertical mirror;
+- left and right strips: the glyph's last `5%` of rows stretched across
+  `H - 2h`; the right strip is the horizontal mirror;
+- `fill` is `0` for both Hall frames (row frame record `17`, kills box record
+  `50`), so the interior stays untouched;
+- mirrored pieces sample texel `w - j` (or `h - j`) at pixel `j`: the art
+  lands one pixel further out along each mirrored axis and the glyph's
+  column / row 0 (the transparent atlas gutter) is never drawn on the mirrored
+  sides. Measured on the row frame: the right edge's column profile
+  `[61, 61, 52, 48]` is the left edge's `[58, 61, 53, 45]` mirrored and shifted
+  by exactly +1 px, and the frame's inner decorative line sits one pixel lower
+  on the bottom strip than a naive mirror predicts. That inner line, not the
+  separator, is the "brighter row" visible under each separator.
+
+### Sprite placement (`FUN_00414ea0` / `FUN_00414f90`)
+
+Traced (Ghidra, 2026-08-22): a UI sprite is drawn by `FUN_00414ea0(x, y, scale)`
+(uniform scale matrix) or `FUN_00414f90(x, y, angleDeg)` (rotation matrix from
+`FUN_00403120`: `angle = -deg * pi / 180` with the pi global `DAT_00b4027c`;
+the chevron passes `_DAT_00785d98` = 90 collapsed and `_DAT_00784738` = 180
+expanded). Both add the translation `(x, y)` to the matrix and call
+`FUN_00414540`, which transforms the sprite's four stored corners
+(`sprite + 0x2c .. + 0x48`) as floats and hands them to `TextQuad_Draw`
+(`0x0041e990`); `FUN_00412d70` appends each vertex verbatim (corner + the
+renderer's pending translation `+0x68 / +0x6c`, tint `+0x448`, UV) and
+`FUN_0041c540` emits the two triangles. Nothing in that path rounds or applies
+a pixel-center correction, so sprite quads are not snapped to whole pixels.
+
+Measured (alpha-aware bilinear fit of the stock captures against the atlas
+art, box space): the unrotated rank ornament (UI `25`, `22x21`, nominal quad
+left/top `503.5 / 134`) sits at `503.75 / 134.05`; the chevron (UI `9`,
+`22x20`, nominal center `(497.5, 235)`) sits at `488.25 / 224.05` collapsed
+(90 deg, nominal `487.5 / 224`) and `487.30 / 225.85` expanded (180 deg,
+nominal `486.5 / 225`). The rotated states are therefore about `+0.75 px`
+right of nominal and the 180 deg state about `+0.85 px` lower, with
+bilinear-soft edges on all four sides. That pattern is consistent with the
+stored corners carrying a half-pixel bias that rotates with the quad against
+Direct3D 9's half-pixel convention; the corner values themselves were not
+dumped, so the sub-pixel offsets are carried as measurements. The nearest
+whole-pixel quads are `x 488..507, y 224..245` collapsed and
+`x 487..508, y 226..245` expanded (within 0.3 px of the fitted positions);
+the earlier claim that the sprite pass itself snaps to round-half-up edges
+is withdrawn.
+
+### Fonts and anchors
+
+| Group | Name | Nominal px | Line box | Space advance |
+| --- | --- | --- | --- | --- |
+| 0 | body | 13 | 28 | 3 |
+| 1 | medium | 16 | 28 | 4 |
+| 3 | menu | 24 | 28 | 6 |
+| 4 | heading | 40 (digits 29 px tall) | 28 | 20 |
+
+Text anchors are baselines. Every metric is an integer (per-glyph advance /
+`offX` / `offY`, the 105 kerning pairs, the space advances), and the pen is
+an integer: centered text (`String_Assign(font)`) starts at
+`pen = trunc(x - width / 2)` (= `x - ceil(width / 2)`), right-aligned text
+(`FUN_0042d610`) at `x - width`, left-aligned text
+(`DarkCloudBrowser_ExactTextRender`) at `x`; `FUN_0042d700` measures a
+string. Each glyph quad is then placed at
+`left = round-half-up(pen + offX - w / 2)`,
+`top = round-half-up(y + offY - h / 2)` (per-glyph `offY` negative) and
+`pen += advance + kerning`, so every quad sits on whole pixels and the glyphs
+are crisp — there is no half-pixel blur. Verified by per-glyph fits on 73
+glyphs across 7 strings of the 2026-08-22 captures (every quad on a whole
+pixel, constant +0.125 fit phase from the colour model). Colour is set through
+`FUN_0041fe50`; the `0.85` constant next to the row text is the red channel
+of the gold `(0.85, 0.73, 0.44)`, not a font scale. Font objects:
+`+0x1351cc` = group 4 (rank numeral), `+0xe7d98` = group 3 (name, awesomest
+kill — rendered exactly as stored), `+0x4d530` = group 1 (every other row
+line). Sprites go through `FUN_00414ea0`, gradient rects through
+`FUN_0041dd70`. The font has no `…` glyph; what the renderer does with a
+character the font lacks was not traced.
+
+### Scroll and current-wizard behavior
+
+- Rows whose wizard id equals the active wizard (`DAT_00819ed8`) are the
+  "current" rows: they get the pulsing gold fill and the brighter frame,
+  default to expanded (`entry + 0x10c = 1` on load), and the box performs a
+  one-shot scroll to the first current row (`box + 0xDC`).
+- The scroll extent is `yCursor - H` after the last row. The mouse wheel
+  scrolls the box; the expand toggle only flips `entry + 0x10c` and never
+  writes the scroll. (The earlier reading that the toggle "eases the scroll so
+  the expanded row stays in view" was wrong: the only eased scroll write in
+  the box tick is the one-shot program below.)
+- One-shot scroll contract, box fields: `+0xDC` pending target (float; init
+  `-2.0` = `_DAT_00784edc`, "never targeted"; `-1.0` = `_DAT_007de858`,
+  "done"), `+0xE0` ease counter (init 0), `+0x84` / `+0x88` scroll x / y,
+  `+0xFC` = 250 (`_DAT_007853a0`, row height), `+0x100` = 150
+  (`_DAT_0078489c`, expansion height; the narrow client overrides it), `+0x20`
+  = box height `H` (695).
+  - Render (`0x005A2C80`), the first frame that draws the current row while
+    `+0xDC == -2`: `f = max(0, yCursor + 250 + 150 + 0.25 * H)`;
+    `target = f - (250 + 150) - 0.5 * H = yCursor - H / 4` (`rowTop - 173.75`
+    at `H = 695`); `+0xDC = target`; the scroll is pushed through vtable slot
+    `0xC4 / 4` `setScroll(x, y)` (which clamps to the extent), `+0xDC` is
+    re-read from the clamped scroll, and the previous scroll is restored so
+    the ease starts from the old position.
+  - Box tick (`0x00589DD0`, 100 Hz) while `+0xDC > 0`:
+    `scroll = sin(pi * t / 180) * target` with `t = +0xE0`, then `t += 1.0`
+    (`_DAT_007de820`); once `t >= 90` (`_DAT_00785d98`) it writes
+    `+0xDC = -1`; `setScroll(x, scroll)` runs every tick. The sine is the CRT
+    `_CIsin` (`0x007470d0`, `FSIN` at `0x00747128`); pi is `_DAT_007de8a8` =
+    3.14159274f copied into `0x00b4027c` by `0x004100d0`; the divisor is
+    `_DAT_007de888` = 180.0. Net effect: the scroll eases from 0 to
+    `sin(89 deg) * target` over 90 ticks (0.9 s) and parks the current row a
+    quarter box below the top edge.
+  - Other constants on this path: `_DAT_007847b8` = 80.0 (`yCursor` start),
+    `_DAT_007de808` = 0.5 (double), `_DAT_007de8f0` = 0.25 (double),
+    `_DAT_007de810` = 10.0.
+- The toggle path contains no sound call.
 
 ## Global leaderboard adjacency
 
