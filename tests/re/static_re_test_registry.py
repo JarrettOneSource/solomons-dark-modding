@@ -88,6 +88,9 @@ from static_re_native_hud_contracts import (
     test_native_hud_recorder_is_self_provenanced_settled_and_visual_diffable,
     test_native_hud_visibility_scaling_and_multiplayer_are_pinned,
 )
+from static_re_native_hud_skill_selector_contracts import (
+    test_native_hud_skill_selector_ownership_geometry_and_audio_are_pinned,
+)
 from static_re_webgame_asset_contracts import (
     test_webgame_asset_double_build_and_weight_report_are_pinned,
     test_webgame_asset_fixture_covers_native_families_and_golden_references,
@@ -1076,6 +1079,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native HUD recorder is self-provenanced, settled, and visual-diffable",
         test_native_hud_recorder_is_self_provenanced_settled_and_visual_diffable,
+    ),
+    (
+        "Native HUD selected-skill selector ownership, geometry, and audio are pinned",
+        test_native_hud_skill_selector_ownership_geometry_and_audio_are_pinned,
     ),
     (
         "Webgame asset manifest schema and provenance are pinned",

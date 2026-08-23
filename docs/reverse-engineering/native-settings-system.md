@@ -11,9 +11,16 @@ bytes, SHA-256
 The static pass used program `SolomonDark.exe` in
 `Decompiled Game/ghidra_project/SolomonDark.gpr` through the read-only replica
 pool and Ghidra 12.0.3. Fresh 2026-08-21 headless queries covered
-`0x005A81A0`, `0x005D8DC0`, `0x005D8F30`, `0x005D8120`, `0x005D8FC0`,
+`0x005A81A0`, `0x005D8DC0`, `0x005D8F30`, `0x005D8FC0`,
 `0x005D9A50`, `0x005DAEF0`, `0x00407190`, `0x004072B0`, `0x0041CE20`, and
 `0x005BAB60`, plus every settings label and persistence-key xref.
+
+Correction (2026-08-23): the former inclusion of `0x005D8120` was an owner
+misattribution. That function is `Game::vftable +0x10` and handles live HUD
+backpack, tome, selected-primary, concentration, and belt buttons.
+`MyCPanel::vftable +0x10` is `0x00434C60`. The skill selectors are therefore
+HUD members, not Settings rows; their durable contract is now in
+`native-skill-screen-and-quickbar.md`.
 
 Live presentation evidence is the settled `game-settings-title`,
 `game-settings-gameplay`, `game-settings-dark-cloud`, `controls`, and
@@ -46,11 +53,10 @@ gameplay Settings retains the already-paused world until the panel dies.
 
 The in-session SimpleMenu returns `0` for `GAME SETTINGS` and dispatches
 `0x005A81A0`; title and Dark Cloud edges reach the same panel owner through
-their own callers. `SettingsControl_HandleAction 0x005D8120` routes Login,
-Performance, Customize Keyboard, Select Primary Attack, Select Concentration,
-and the in-game pause handoff. Child panels return to the still-live Settings
-owner. Done destroys that owner and returns to its invoker; it does not create
-a second independent settings store.
+their own callers. Child panels return to the still-live Settings owner. Done
+destroys that owner and returns to its invoker; it does not create a second
+independent settings store. Selected primary/concentration mutation is not a
+Settings child path.
 
 ## Complete semantic membership
 
@@ -62,11 +68,9 @@ a second independent settings store.
 | Music Vol | `0x005D9A50`; apply `0x005D8FC0 -> 0x00407340` | Continuous `0..1` user gain. It multiplies the independent effective music lane. Persisted as `Audio.MusicVolume`. |
 | Fullscreen | `0x005D9A50`; display apply `0x005DAEF0 -> 0x0041D4A0` | Boolean display mode, persisted as `Graphics.Fullscreen`. |
 | Resolution | `0x005D9A50`; display apply `0x005DAEF0 -> 0x0041D4A0` | Enumerated supported modes. Selectable only when title, Gameplay/Dark Cloud instead show `RESOLUTION AVAILABLE FROM MAIN MENU ONLY`. Persisted as `Graphics.Resolution`. |
-| Login Info | control `MyCPanel+0x22C`; `0x005D8120 -> 0x005C6F10` | Opens Dark Name/password settings when its optional enabled pointer permits it. |
-| Customize Keyboard | control `MyCPanel/Game owner +0xD4C`; `0x005D8120` | Title builds the rollout inline through `0x005DAEF0` and `CPanelRollout 0x00437630`; gameplay uses the same binding family under the held pause owner. |
-| Tweak Game | control `+0x2EC`; `0x005D8120 -> 0x005CA640` | Opens the Performance child when its optional enabled pointer permits it. |
-| Select Primary Attack | control `+0x3AC`; `0x005D8120` | Gameplay-only picker using the live learned-primary set. The selected primary is committed through the player/progression owner. |
-| Select Concentration | controls `+0x46C` and sibling `+0x52C`; `0x005D8120` | Gameplay-only concentration picker with the native eligibility and active-concentration paths. |
+| Login Info | root builder and `MyCPanel +0x10 -> 0x00434C60` action family | Opens Dark Name/password settings when its optional enabled pointer permits it. |
+| Customize Keyboard | `0x005DAEF0`; `MyCPanel +0x10 -> 0x00434C60` action family | Title builds the rollout inline through `CPanelRollout 0x00437630`; gameplay uses the same binding family under the held pause owner. |
+| Tweak Game | root builder and `MyCPanel +0x10 -> 0x00434C60` action family | Opens the Performance child when its optional enabled pointer permits it. |
 | Done | `0x005D9A50` | Closes the root, returning to title, Dark Cloud, or the held gameplay invoker. |
 
 ### Customize Keyboard rows

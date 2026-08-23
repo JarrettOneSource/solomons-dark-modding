@@ -168,7 +168,7 @@ functions. They divide into these owner families:
 | generic quick-canceller modals | `0x004C2AA0`, `0x004C2E30` | sibling modal framework; shares nesting helper, not the pause-menu input or rows |
 | Inventory | open `0x00555810`, close/destruction `0x005684C0` | independently triggered gameplay surface using the same region suspension depth |
 | quick panel/settings | `0x005D8DC0`, `0x005D8F30` | independently triggered nested settings surface |
-| skill/spell/book selection | `0x006588C0`, `0x0066B200`, `0x0066F0B0`, `0x0066F920`, `0x0067CAC0` | independently triggered mandatory or settings pickers using the same suspension depth |
+| skill/spell/book selection | `0x006588C0`, `0x0066B200`, `0x0066F0B0`, `0x0066F920`, `0x0067CAC0` | independently triggered mandatory, HUD, or book pickers using the same suspension depth |
 
 The constructor/modal xref sweep also found every consumer of the shared
 `SimpleMenu` renderer. Their disposition relative to the ESC system is:
@@ -178,7 +178,7 @@ The constructor/modal xref sweep also found every consumer of the shared
 | gameplay Pause Menu | `0x0058EA50` | in-system; exact authored three-row instance above |
 | Hub-owner menu action | `0x004BB3F0` | out-of-system; independently triggered Hub/profile action |
 | title/profile UI owner | `0x005A5530` | out-of-system; separate front-end/profile flow |
-| settings/control handler | `0x005D8120` | out-of-system; separate settings owner which can open its own SimpleMenu |
+| selected-skill Game HUD handler | `0x005D8120` | out-of-system; separate HUD owner which opens `Skills_Quickbar`, not `SimpleMenu` |
 
 They share the renderer facts above. None provides a second pause-menu style,
 font, hover rule, or fallback path.

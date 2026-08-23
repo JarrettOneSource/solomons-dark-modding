@@ -1030,7 +1030,7 @@ hidden world.
   duplicate skill IDs are legal and each slot remains independently bound.
   A port that removes the old occurrence or rejects duplicate belt IDs is not
   native behavior.
-- Learned-category selector `0x0066F0B0` and settings action
+- Learned-category selector `0x0066F0B0` and Game HUD action
   `0x005D8120` own `Select Primary Attack` and `Select Concentration` modal
   choices. Primary accepts learned category-1 primary identities.
   Concentration accepts exactly `57..63` and `65..71`, fills A, conditionally

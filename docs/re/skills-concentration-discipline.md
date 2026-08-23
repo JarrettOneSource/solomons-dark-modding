@@ -33,7 +33,11 @@ In formulas, `r` is the effective rank, `V_r` is the `mValue` entry at that rank
 
 The stock constructor at `0x00674EE0` assigns category byte `3` to exactly rows 57–63 and 65–71. The `Skills_Wizard` predicate at vtable `0x007A0CD4`, slot `+0x24` (`0x0067BEE0`), tests that category. Thus Mana Up (56) and Health Up (64) are discipline-family passives but cannot be concentrated; the eligible set is the other fourteen Mind/Body passives.
 
-The player opens Settings/Skills and invokes **Select Concentration**. `SettingsControl_HandleAction` at `0x005D8120` opens the skill picker at `0x0066F0B0`; the chosen row is passed to `0x005D5600`. That setter:
+The first concentration can be chosen by clicking its non-draggable category-3
+card in SkillScreen (`0x00674110 -> 0x005D5600`). Once a slot is occupied, the
+player can click its live HUD emblem: `Game_HandleControlAction` at `0x005D8120`
+opens the compact picker at `0x0066F0B0`, targeting the clicked A/B slot. Both
+paths pass the chosen row to `0x005D5600`. That setter:
 
 1. rejects a non-category-3 row;
 2. rejects a row already present in either slot;

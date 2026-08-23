@@ -238,6 +238,28 @@ concentratable consumer active and locks selection while leaving the selected
 A/B presentation owner intact. DamageX4 and the other potion/status timers
 likewise add no screen-HUD badge.
 
+### Selected-skill hit targets and compact selectors
+
+The emblem cluster is interactive even though `0x005D2520` paints it directly.
+`Game` embeds three `UIButton` children at `+0x3AC/+0x46C/+0x52C`; constructor
+registration `0x005CBA00`, layout `0x005D76C0`, refresh `0x005D50E0`, and Game
+vtable action `+0x10 -> 0x005D8120` own their lifetime. The former
+`SettingsControl_HandleAction` label for `0x005D8120` is superseded: the
+Settings `MyCPanel` has a different vtable and callback.
+
+Each logical button is exactly `40 x 65`, shares the selected emblem's dynamic
+center, and normally spans `y=[-7,58)`. With zero, one, and two concentrations,
+the button centers are respectively `[800]`, `[780,820]`, and
+`[760,800,840]` in visual order primary, B, A; the inactive A/B controls are
+parked at `-1000/-9999`. These rectangles participate in the ordinary reverse-z
+HUD hit test, so their click is swallowed before the arena aim/cast fallback.
+
+Primary opens the category-1 `Skills_Quickbar` titled `Select Primary Attack`;
+A/B open the category-3 `Skills_Quickbar` titled `Select Concentration` and
+target the clicked slot. The compact selector, its complete option and audio
+membership, and exact renderer geometry are owned by
+[`native-skill-screen-and-quickbar.md`](native-skill-screen-and-quickbar.md#selected-skill-hud-controls-and-selector-modal).
+
 ### Cast cards, belt slots, cooldown, and charges
 
 The two large `UI.47`/`UI.48` cards are fixed primary/secondary cast affordances. Game construction owns eight `BeltButton` objects at `Game+0x5EC`, stride `0xEC`; each object's byte `+0xE8` is its input-slot index `0..7`. The eight input slots are ordered left-to-right by that index, even when empty. Each logical box is 53 x 53 and the horizontal pitch is 60 px. Empty slots emit no sprite. Populated item slots draw a black `+5,+5` shadow followed by the base art.

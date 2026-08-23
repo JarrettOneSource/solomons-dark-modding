@@ -26,7 +26,7 @@ The staged source of truth for recovered addresses now lives in `config/binary-l
 - `dark_cloud_browser`: `0x00594FC0` renders the post-beta browser screen with `THE DARK CLOUD`, `RECENT`, `ONLINE LEVELS`, `my levels`, `BONEYARD NAME`, `AUTHOR`, `RATING`, `PLAY`, and `OPTIONS`
 - `pause_menu`: `0x0058EA50` renders `RESUME GAME[1]|GAME SETTINGS[0]|LEAVE GAME[2]`
 - `settings`: `0x005D9A50` builds `Sound and Music`, `Video Settings`, `Dark Cloud Settings`, `CONTROLS`, and `Performance`
-- `controls`: `0x005DAEF0` builds the concrete control-binding UI and `0x005D8120` handles multiple settings/control actions
+- `controls`: `0x005DAEF0` builds the concrete control-binding UI; its `MyCPanel` action family is separate from Game HUD callback `0x005D8120`
 - `control_scheme_picker`: `0x005B9A30` owns `SELECT A CONTROL SCHEME`
 - `inventory`: `0x004EB0F0` loads `Inventory` / `Inventory@2X`; `0x005D08C0` renders the `ACCESS YOUR INVENTORY` HUD prompt
 - `skills`: `0x004ED280` loads `Skills` / `Skills@2X`
@@ -98,7 +98,7 @@ The staged source of truth for recovered addresses now lives in `config/binary-l
 - Title-settings `CUSTOMIZE KEYBOARD` is an inline rollout built by `0x005DAEF0`
   and toggled through `CPanelRollout::slot+0x10` at `0x00437630`, not a direct
   transition into the `controls` surface.
-- Skills/settings actions handled from `0x005D8120`:
+- Selected-skill Game HUD actions handled from `0x005D8120`:
   - `Select Primary Attack`
   - `Select Concentration`
 - Runtime pickers:

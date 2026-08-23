@@ -5173,7 +5173,7 @@
         },
         {
           "function": "0x005D8120",
-          "name": "SettingsControl_HandleAction"
+          "name": "Game_HandleControlAction"
         },
         {
           "function": "0x005D8A00",
@@ -57990,7 +57990,7 @@
         {
           "offset": "0x10",
           "function": "0x005D8120",
-          "name": "SettingsControl_HandleAction"
+          "name": "Game_HandleControlAction"
         },
         {
           "offset": "0x14",

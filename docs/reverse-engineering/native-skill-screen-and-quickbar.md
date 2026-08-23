@@ -99,20 +99,21 @@ The wizard `Skills` vtable classifies the authored byte at skill-row `+0x26`:
 | `0` or `4` | `0x0067BF40` | passive/modifier | no draggable border |
 | `1` | `0x0067BEB0` | primary attack | green when selected; quickbar selects it |
 | `2` | `0x0067BF10` | secondary cast | gold; quickbar invokes it |
-| `3` | `0x0067BEE0` | concentration | selected through the separate concentration control |
+| `3` | `0x0067BEE0` | concentration | non-draggable card click selects through the shared category router |
 
 Category `1` contains the five elemental primary rows and Spell Welding row
 `52`. Category `2` contains all 23 secondary abilities. Those two categories
 are the complete skill membership accepted by automatic belt population and by
 the gold/green Skill Screen drag affordance.
 
-`HoverButton` click callback `0x00674110` adds one category-specific branch.
-When the card is draggable and no drag began, category `1` is passed to
-`0x005D5600` and immediately becomes the selected primary. Category `2` is
-excluded from that click branch because clicking a secondary card does not cast
-it; it must be dragged to the quickbar and invoked there. Category `3` remains
-non-draggable and is selected through the separate `Select Concentration`
-`Skills_Quickbar` modal.
+`HoverButton` click callback `0x00674110` reads the authored action byte at row
+`+0x32`; when it is nonzero and no drag began, every category except `2` is
+passed to `0x005D5600`. Category `1` immediately becomes the selected primary.
+Category `3` remains non-draggable but its card selects the first concentration
+or consumes the shared Split Mind fill/alternating-replacement rule. This is the
+path that seeds concentration A before an A emblem exists. Category `2` is
+excluded from the click branch because clicking a secondary card does not cast
+it; it must be dragged to the quickbar and invoked there.
 
 ## Drag/drop and quickbar representation
 
@@ -166,7 +167,7 @@ but no primary binding.
 
 ## Activation routing
 
-`SettingsControl_HandleAction (0x005D8120)` routes a clicked/pressed
+`Game_HandleControlAction (0x005D8120)` routes a clicked/pressed
 `0x1B67` belt entry to `0x005D5600`. That function asks the same authoritative
 wizard skill object for the row category:
 
@@ -175,19 +176,91 @@ wizard skill object for the row category:
 - category `3`: update the separately selected concentration action;
 - category `2`: validate current actor eligibility and invoke the exact skill.
 
-The category-`3` branch is shared with the separate `Skills_Quickbar` modal
-used by the settings control; category-`3` cards are not gold/green Skill
-Screen drag members. The gameplay quickbar model should consequently expose
-category `1` and `2`, while concentration remains its own selected skill.
+The category-`3` branch is shared by SkillScreen card clicks and the compact HUD
+`Skills_Quickbar` modal; category-`3` cards are not gold/green Skill Screen drag
+members. The gameplay quickbar model should consequently expose category `1`
+and `2`, while concentration remains its own selected skill.
 
-The SettingsControl concentration branches at `0x005D8120` build a horizontal
+The HUD concentration branches at `0x005D8120` build a horizontal
 `Skills_Quickbar` through `0x0066F0B0` with category filter `3` and title
 `Select Concentration`. `0x005D5600` returns without mutation when the selected
 row already occupies concentration action `0x10` or `0x14`. Without Split Mind,
 the new row replaces action `0x10`; with Split Mind, it fills the empty action
-first and otherwise alternates replacement between `0x10` and `0x14`. This
-selector is a separate settings surface and must not make category-3 Skill
-Screen cards draggable.
+first and otherwise alternates replacement between `0x10` and `0x14`. The HUD
+buttons pre-clear one addressed slot before this shared category router, so a
+button-originated choice replaces that exact A/B slot rather than consuming the
+alternating fallback. This selector is a separate HUD modal which coexists with
+the SkillScreen category-3 click path; neither path makes category 3 draggable.
+
+## Selected-skill HUD controls and selector modal
+
+The earlier `SettingsControl_HandleAction` name was a bad ownership inference.
+`0x005D8120` is `Game::vftable +0x10`, while `MyCPanel::vftable +0x10` is the
+unrelated `0x00434C60`. The three skill actions are live HUD children registered
+by `0x005CBA00`, not Settings rows:
+
+| Game field | Binding | Purpose |
+|---:|---:|---|
+| `+0x3AC` | `12` | selected primary; opens `Select Primary Attack` |
+| `+0x46C` | `16` | concentration A; opens a category-3 selector targeting A |
+| `+0x52C` | `20` | concentration B; opens a category-3 selector targeting B |
+
+`0x005D76C0` gives every button a `40 x 65` logical rectangle. The normal HUD
+top is `y=-7`, so the clickable vertical interval is `[-7,58)`. Refresh
+`0x005D50E0` centers the buttons on the same cluster positions drawn by
+`0x005D367A..0x005D399F`:
+
+- primary only: primary center `800`; A/B are parked off-screen;
+- primary plus one concentration: primary `780`, occupied concentration `820`;
+- Split Mind A+B: primary `760`, B `800`, A `840`.
+
+The exact hit rectangles are therefore the corresponding centers plus
+`[-20,+20)` horizontally and `[-32.5,+32.5)` vertically around center
+`y=25.5`. `0x005C7200` moves all three controls with the same HUD-hide vertical
+offset, so their hit geometry cannot remain behind when the HUD slides away.
+Reverse-z UI traversal gives a winning HUD button the click; it never falls
+through into world primary casting.
+
+The primary action returns without opening while binding 12 is the temporary
+Plane Orb row `80`. Otherwise it plays registry sound 0 `sounds\\click`, builds
+the selector with category `1`, and includes every learned category-1 row in
+ascending native row-id order. This drains pure primaries `8,16,24,32,40` and
+learned Spell Welding `52`; Welding uses its active build icon.
+
+Builder `0x0066F0B0` also skips a row when the corresponding byte in Game's
+512-byte `+0x1668` exclusion array is nonzero. The Game constructor zeroes the
+array; `0x005C7AB0` imports/exports it with raw native game state, while skill
+acquisition/offer/selector paths read it. The complete xref sweep found no
+ordinary fresh-session gameplay writer. It is therefore a persisted native-
+state exclusion input, not a selector-local filter or a reason to reorder the
+remaining rows.
+
+The A and B actions both use category `3`, covering exactly
+`57..63,65..71`. Each passes the other slot's current skill as the selector's
+one exclusion, preventing a duplicate across A/B. On acceptance, A clears
+action `0x10` and B clears action `0x14` before routing the selected row through
+`0x005D5600`. B exists only under Split Mind. Mind Chug prevents the mutation.
+
+`Skills_Quickbar` constructor `0x00657A70`, builder `0x0066F0B0`, renderer
+`0x0066F330`, pointer handler `0x00659AD0`, destructor `0x00658DC0`, and the
+generic modal loop `0x004281F0` own the complete selector lifecycle. Its stable
+`1600 x 900` geometry is:
+
+- one horizontal `52 x 52` cell per eligible skill, ordered by native row id;
+- cells centered as a group at `y=100`, so their top is `74`;
+- a black `0.95`-alpha rectangle at `y=52`, height `79`, width
+  `max(optionCount * 52, titleWidth) + 10`, centered on `x=800`;
+- the title centered at baseline `y=69` in the medium bitmap font
+  (`Fonts.93..184`), color `(0.85,0.73,0.44,0.75)`;
+- full-white, full-alpha authored Skills icons centered at
+  `x=left+26+52*i,y=100`.
+
+Pointer hit testing is strict inside the option strip. An outside click returns
+`-1` and closes without mutation. Opening either family and accepting a primary
+both play registry 0 `sounds\\click`. Accepted concentration plays the same
+click followed by registry 17 `sounds\\concentrate`. The modal owns local input
+suspension from before its first frame until teardown and has no open/close
+animation.
 
 ## Port consequences
 
@@ -196,4 +269,7 @@ ids or duplicates. Native parity requires a `skillQuickbar`, native category
 validation, category-routed activation, authoritative bind mutations, and a
 Skill Screen that reads the full learned catalog. Spell Welding is a category-
 `1` primary selection: learned weld identity and currently selected primary
-must not be represented by the same nullable field.
+must not be represented by the same nullable field. The selected-skill HUD must
+retain three actor-addressed buttons, the compact selector modal, exact A/B
+replacement, click/concentrate audio, and modal input ownership; opening the
+full Skill Screen in place of this selector is not the stock interaction.
