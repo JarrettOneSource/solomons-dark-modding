@@ -232,6 +232,54 @@ AWESOMEST KILL: SKELETON
 The pristine committed fixture correctly shows the same frame with no entry
 rows. Empty is a valid collection state, not a loading error.
 
+### Highest-skill selection and colour ownership (2026-08-23 correction)
+
+The 2026-08-22 render pass recovered the three destination fields and their
+draw order but did not trace the producer that fills them. That omission let
+the Website rank every positive serialized skill row, including the element
+and discipline roots, even though stock ranks only the learned/visible list.
+
+`HallOfFameBox` construction initializes the three skill-id fields at entry
+`+0x88`, `+0x8C`, and `+0x90` to `-1`. The instruction range
+`0x005A2210..0x005A22F3` then fills each slot independently:
+
+1. scan the ordered learned/visible skill-id list at
+   `Skills_Wizard +0x850/+0x854`;
+2. skip an id already present in any of the three destination fields;
+3. read its permanent rank from the signed 16-bit row field `+0x22`;
+4. replace the current candidate only when `candidateRank > bestRank`; and
+5. repeat for the next destination slot.
+
+The strict comparison makes ties preserve `+0x850` list order. The list is
+the same authoritative public-skill membership consumed by Skill Screen
+construction (`0x0066B380`): roots `0..7` live in the rank table but are not
+members, public learned rows `8..79` are members in acquisition order, and
+runtime Plane Orb `80`, reserved row `81`, and the row-82 storage pad are not
+members. Thus a fresh Ether/Mind wizard produces rows `8` (Magic Missile) and
+`11` (Call Leviathan), followed by an empty third slot. The clean level-one
+capture `solomon-hall-20260822/04-hall-expanded.png` shows exactly those two
+icons and one empty frame.
+
+Colour lookup is a separate renderer contract. The virtual call used by
+`0x005A2C80` is `Skills_Wizard::vftable +0x90 -> 0x00660CE0`. It reads the
+selected row's root field at `+0x1C`, maps that root through the eight-entry
+wizard colour table, and returns the tint used on Skills record `164`.
+Constructor `0x00674EE0` stores each root row's own id in `+0x1C` for rows
+`0..7`; descendants store their owning root, and Plane Orb `80` stores Ether
+root `0`. Therefore the renderer can colour a root row correctly if supplied
+one, although the stock highest-skill producer never supplies roots. This
+distinction matters for Website records written by the faulty pre-correction
+producer: they can remain visible without weakening the native selection rule.
+
+Validation receipt: the selection loop was decompiled from the canonical
+read-only `SolomonDark` Ghidra replica and its strict comparison was confirmed
+against raw instructions `0x005A2210..0x005A22F3`; vtable slot `+0x90` resolved
+to `0x00660CE0`. The corrected report on base `17e5a6be` was transferred
+byte-identically to the Mac worktree
+`/Users/jarrett/codex-acceptance/hall-skill-native-re-20260823.z4DZyv/mod-loader`.
+The final exact-tree
+`python3 tests/re/run_static_re_tests.py --ci` run passed `494/494`.
+
 ## Hall row render contract (`0x005A2C80`)
 
 Recovered 2026-08-22 against the same retail image (SHA-256 above). The
