@@ -611,6 +611,7 @@ from static_re_projectile_spell_mechanics_contracts import (
     test_projectile_goldens_pin_live_capture_provenance_and_rank_coverage,
     test_projectile_presentation_and_fire_goodguy_semantics_are_pinned,
     test_projectile_spell_native_dispatch_contract_is_complete,
+    test_primary_collision_and_target_priority_reopening_is_pinned,
 )
 from static_wan_corpse_rendering_contracts import (
     test_authoritative_life_correction_uses_the_recipient_native_maximum,
@@ -2343,6 +2344,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Fireball scenery and terrain masks are pinned",
         test_fireball_scenery_and_terrain_masks_are_pinned,
+    ),
+    (
+        "Primary collision and target priority reopening is pinned",
+        test_primary_collision_and_target_priority_reopening_is_pinned,
     ),
     (
         "Ether flight compositor and contact ownership are pinned",

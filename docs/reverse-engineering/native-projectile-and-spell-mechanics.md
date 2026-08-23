@@ -3281,3 +3281,139 @@ projectile cadence, marker timing, mana, targeting, audio, or the previously
 recovered pose arrays. A Website policy that holds one release pose across
 successive one-shot actions is an explicit presentation override rather than
 retail parity and must be identified as such in the web ledger.
+
+## 2026-08-23 primary collision and target-priority reopening
+
+The earlier Fireball scenery closure stopped at the first point-query result,
+the Ether closure did not follow either line-query mask into the Website, and
+the Lightning inventory promoted Gravestone alone even though four sibling
+constructors write the same flags and priority. Those were extractable native
+branches. This section supersedes the incomplete collision/priority wording in
+the 2026-08-14 and 2026-08-20 sections.
+
+Evidence is the retail 0.72.5 `SolomonDark.exe`, 4,723,200 bytes, SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`,
+preferred image base `0x00400000`. Ghidra 12.0.3 read-only replicas supplied
+the instruction facts below. A loader-injected read-only run on 2026-08-23 is
+supporting runtime evidence: at a 1600-by-900 stock surface it read
+`App+0x1D0/+0x1D4 = 1600/900`, `App+0x1DC/+0x1E0 = 1600/900`, and a live
+player cell with one actor in slot zero. Its runtime cell vtable rebased to
+preferred `0x00793A00`, the `PointerList<Object*>` table used below.
+
+### Exact spatial order
+
+Point query `0x00641220 -> 0x00522E30`, polygon query `0x00642940 ->
+0x005235F0`, and cone query `0x00641500 -> 0x00522F50` consume each 100-unit
+cell's `PointerList<Object*>` in ascending slot order. The complete order
+lifecycle is now closed:
+
+- actor registration `0x0063F6D0` reaches the actor attach vslot and
+  `0x005212F0`, which appends to the resolved cell;
+- `WorldCellGrid_RebindActor 0x005217B0` does nothing while the computed cell
+  is unchanged; on a change it calls old-cell vslot `+0x1C`, then new-cell
+  vslot `+0x10`, and writes actor `+0x54`;
+- live cell vtable `0x00793A00` resolves `+0x10 -> 0x00402720 ->
+  0x004013C0/0x004013E0`, which inserts at `count`, so destination insertion is
+  a tail append;
+- its `+0x1C -> 0x004014B0`, `+0x20 -> 0x00402770` removal finds the pointer,
+  shifts every later pointer down by one, clears the old tail, and decrements
+  count. Removal is stable compaction, not swap-with-last;
+- actor death clears flags `+0x14` at `0x0063E7C0`, so a retained death actor
+  no longer survives the mask filter even before final manager retirement.
+
+Thus the exact web projection requires two distinct stable orders: manager
+registration order for `0x00641160` Magic Missile acquisition, and cell-binding
+order for cell broadphases. Same-cell movement preserves both. Cross-cell
+movement preserves manager order but assigns a new destination-tail cell
+order. Static authored objects bind before later wave actors; every later
+targetable spawn appends at its actual registration edge.
+
+### Fireball hostile-over-scenery precedence
+
+After Fireball moves, `0x005FDD90` point-queries radius `20`, mask `6`. A
+flags-`0x2` result contacts immediately. A first result without bit `0x2`
+(therefore a flags-`0x4` scenery actor) enters the previously omitted branch at
+`0x005FDFA4..0x005FE1F6`:
+
+1. normalize Fireball velocity `D`;
+2. form perpendicular `Q=(D.y*20,-D.x*20)`;
+3. build polygon `[P+Q, P-Q, P+W*D-Q, P+W*D+Q]`, where `W` is the live integer
+   at `App+0x1DC`;
+4. `0x00642940` counts mask-`2` actor roots inside that polygon, excluding type
+   `0xBB9`;
+5. if at least one exists and squared root distance from Fireball to the first
+   scenery candidate is greater than or equal to exact float `2.0`, skip
+   contact for this tick. Strictly below `2.0`, contact still occurs.
+
+The polygon point test is ray casting `0x00405160`: each edge toggles only when
+`y < current.y` differs from `y < previous.y` and `x` is strictly below the
+computed crossing. This branch gives a hostile in the forward 40-unit-wide,
+live-viewport-length corridor precedence over an earlier cell-slot scenery
+candidate. It deliberately does not rescan and contact the hostile in the same
+tick. The existing final Fire particle still emits.
+
+Fireball birth and age-divisible-by-five line checks remain mask `0x700`.
+Tree, Monument, Gravestone, Building, and Goodie retain the previously
+extracted radii and flags. The new finding changes precedence, not membership,
+terrain masks, impact presentation, damage partition, or teardown.
+
+### MagicMissile inheritance-family collision masks
+
+Pure Magic Missile handler `0x0053CFE0` tests caster root to each born root
+with exclusion mask `0x380` at `0x0053DBC2..0x0053DC14`. FireMissile
+`0x0053E6A0`, BallLightning `0x0053EDB0`, and FrostMissile `0x0053F3C0`
+perform the same initial class-family test. Constructors `0x005E4990`,
+`0x005E4C50`, `0x005E4F30`, and `0x005E4FB0` all write `0x700` to actor
+`+0x38`. Shared tick `0x005FD270` passes that field to line walker
+`0x00524D70` on every age-divisible-by-five flight lookahead.
+
+Shared contact probe `0x005E4A80` uses radius `6` and mask `2` while age is
+strictly below `200` and target-handle byte `+0x140` is not `-1`. At age
+`>=200`, or as soon as the handle is absent, it uses mask `6`. The first
+qualifying current-cell slot wins. Consequently Tree, Monument, Gravestone,
+Building, or Goodie can consume any of the four family members after widening;
+the concrete contact callbacks dispatch gameplay only for bit-`2` actors but
+always own their class impact and retirement. `GroundSpark 0x7E5` is not a
+member: it has a distinct constructor, tick, contact geometry, and handler.
+
+### Lightning priority membership
+
+Cone query `0x00641500` first rejects pending actors, the excluded pointer, and
+type `0xBB9`, then applies angle, Region LOS, and strict range. Selection is
+lexicographic: a lower signed integer at actor `+0xFC` wins regardless of
+distance; equal priority replaces only on a strictly smaller squared distance;
+an exact tie preserves earlier cell traversal order.
+
+Base Puppet constructor `0x006287D0` writes priority `0`. Constructors Tree
+`0x005E46D0`, Monument `0x005E0DB0`, Gravestone `0x005E5C30`, Building
+`0x005F2C30`, and Goodie `0x005E3D60` each write flags containing `0x4` and
+priority `1000`. Their vtables all resolve attachment slot `+0x34` to
+`0x00448D50`, returning `(0,0)`. All five are therefore native Lightning
+fallback candidates. Coffin remains excluded because its constructor clears
+the query flags. Chain query `0x00641340` remains mask `2`, nearest unused, and
+does not inherit the scenery fallback.
+
+Goodie's unlock/open timer does not retire its actor. Flags `0x2004` remain
+query-visible after the tick-250 contents materialization, so an opened Goodie
+continues to be a valid flags-`4`, priority-`1000` fallback.
+
+### Membership disposition
+
+| Member | Disposition | Contract |
+| --- | --- | --- |
+| Fireball `0x7D4` birth/flight masks, point query, corridor precedence | exact-ported | masks `0x700`, radius/mask `20/6`, live viewport polygon, strict `d2 < 2` exception |
+| MagicMissile `0x7D3` | exact-ported | birth `0x380`, flight `0x700`, radius `6`, dynamic mask `2 -> 6` |
+| FireMissile `0x7DE` | exact-ported | inherited masks/query; class Fire impact on scenery |
+| BallLightning `0x7DF` | exact-ported | inherited masks/query; class Lightning fade on scenery |
+| FrostMissile `0x7E0` | exact-ported | inherited masks/query; class Frost fade on scenery |
+| GroundSpark `0x7E5` | out-of-system | distinct non-MagicMissile collision owner |
+| Lightning primary acquisition | exact-ported | priority then distance; exact-tie cell order |
+| Tree, Monument, Gravestone, Building, Goodie | exact-ported | complete flags-`4`, priority-1000, zero-attachment membership |
+| living hostile actors and Maggots | exact-ported | priority zero, flags two, exact manager/cell order |
+| Coffin | verified-already-at-parity | flags zero; never eligible |
+| Water/Earth cell broadphase traversal | exact-ported shared order only | their class-specific contact consequences are separate owners |
+| Hub primary collision | out-of-system | Website shared Hub is authoritatively noncombat |
+
+No member is blocked by the browser platform. The caster's current logical
+viewport width is ordinary authoritative input in the web architecture and can
+drive the same Fireball polygon without client-side collision ownership.

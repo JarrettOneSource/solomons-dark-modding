@@ -884,10 +884,13 @@ This separates three native layers which must not be conflated:
 `0x0054CAF0` is the proven one-shot dispatcher. It first invokes the equipped
 item's virtual `+0x68`, then selects the handler below. World objects are
 created by `GameObjectFactory_Create (0x005B7080)`, assigned the caster's
-group/owner identity, and registered through `0x0063F6D0`. The missile,
-fireball, and GroundSpark paths also test the initial world segment and route
-an obstructed spawn through the object's impact/removal callback; Plane Orb
-uses its separate attachment path.
+group/owner identity, and registered through `0x0063F6D0`. Fireball tests its
+initial caster-root-to-birth segment with exclusion mask `0x700`. Magic
+Missile and all three MagicMissile-derived welds test that segment with mask
+`0x380`; their constructors then store `0x700` at actor `+0x38` for every
+age-divisible-by-five flight lookahead. GroundSpark has a separate class-owned
+path. An obstructed birth routes through the concrete impact/removal callback;
+Plane Orb uses its separate attachment path.
 
 | Selected ID/build | Handler | Created type | Initialization contract |
 | ---: | ---: | --- | --- |
@@ -953,7 +956,7 @@ than a raw actor pointer.
 
 | Selected ID/build | Handler | Native behavior and owned effects |
 | ---: | ---: | --- |
-| `24` Lightning | `0x0053F9C0` | Traces a beam from the cast origin, retains or reacquires a target, dispatches repeated contact, creates `Mod_Stun (0x1B6A)` when the learned stun scalar is active, applies the Disintegrate proc through transient damage flag `0x4`, emits `Anim_FadeLightning` wrappers, and uses `0x00641340` for the learned chain count. |
+| `24` Lightning | `0x0053F9C0` | Traces a beam from the cast origin, retains or reacquires a target, dispatches repeated contact, creates `Mod_Stun (0x1B6A)` when the learned stun scalar is active, applies the Disintegrate proc through transient damage flag `0x4`, emits `Anim_FadeLightning` wrappers, and uses `0x00641340` for the learned chain count. Query `0x00641500` orders lower actor `+0xFC` first and then strictly nearer roots. Tree `2001`, Monument `2009`, Gravestone `2029`, Building `2040`, and Goodie `2061` all carry flags `0x4`, priority `1000`, and zero attachment; living combat actors inherit priority `0`. |
 | `32` Frost Jet | `0x00543860` | Builds a widening cone, emits `Anim_FrostJetEffect`/`_Over`, queries actors through `0x00641B10`, applies damage, pushback, and `Mod_ColdSlow (0x1B69)`. Its learned branches emit `Anim_Hail`, run the Cold Aura circle query, and add Harden armor up to its configured maximum. |
 | `40` Boulder | `0x00544C60` | Creates one persistent `Boulder (0x7D5)`, stores its group/slot handle, then repositions and re-aims it every cast tick. Gargantuan's `mSize` writes boulder `+0x1FC`; Rock Surge's `mChance`/`mManaCost` can move the active rock forward and invoke its surge behavior. |
 | `1003` Fire + Air | `0x005408F0` | Reuses the Lightning beam/chain geometry, adds the normalized fire payload to the contact globals, can attach `Mod_Stun`, and emits the lightning fade chain. |

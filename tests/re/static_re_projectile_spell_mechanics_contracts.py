@@ -223,6 +223,41 @@ def test_fireball_scenery_and_terrain_masks_are_pinned() -> str:
     return "Fireball mask-6 scenery roots and mask-0x700 terrain exclusions are pinned"
 
 
+def test_primary_collision_and_target_priority_reopening_is_pinned() -> str:
+    mechanics = _document()
+    skills = SKILLS_DOC_PATH.read_text(encoding="utf-8")
+    _require_tokens(
+        mechanics,
+        (
+            "## 2026-08-23 primary collision and target-priority reopening",
+            "`0x005FDFA4..0x005FE1F6`",
+            "`App+0x1DC`",
+            "squared root distance from Fireball to the first",
+            "greater than or equal to exact float `2.0`",
+            "exclusion mask `0x380`",
+            "`0x005E4C50`, `0x005E4F30`, and `0x005E4FB0` all write `0x700`",
+            "strictly below `200` and target-handle byte",
+            "live cell vtable `0x00793A00`",
+            "Cross-cell\nmovement preserves manager order but assigns a new destination-tail cell\norder",
+            "`0x005E46D0`, Monument `0x005E0DB0`, Gravestone `0x005E5C30`, Building",
+            "`0x005F2C30`, and Goodie `0x005E3D60`",
+            "Goodie's unlock/open timer does not retire its actor",
+            "`GroundSpark 0x7E5` is not a",
+        ),
+        "primary collision and target-priority reopening",
+    )
+    _require_tokens(
+        skills,
+        (
+            "Fireball tests its\ninitial caster-root-to-birth segment with exclusion mask `0x700`",
+            "Magic\nMissile and all three MagicMissile-derived welds test that segment with mask\n`0x380`",
+            "Tree `2001`, Monument `2009`, Gravestone `2029`, Building `2040`, and Goodie `2061`",
+        ),
+        "primary collision skill summary",
+    )
+    return "Fireball, MagicMissile-family, cell order, and Lightning priority are pinned"
+
+
 def test_low_mana_primary_branch_and_all_consumers_are_pinned() -> str:
     mechanics = _document()
     skills = SKILLS_DOC_PATH.read_text(encoding="utf-8")
