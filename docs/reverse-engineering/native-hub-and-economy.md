@@ -1700,6 +1700,76 @@ names pre-existing Website behavior independently covered before this pass.
 | Equipment FX application and Clothes attachment painting | 86 declarations and 39 downstream consumers | out-of-system (separate combat/stat/render consumers) | complete item catalog plus consumer trace |
 | Annalist, Librarian, Arch Chancellor, Painting common-animator siblings | common animator xrefs outside merchant actors | out-of-system (non-trader services/props) | complete `0x00501610` xref sweep |
 
+### 2026-08-23 correction: complete InventoryScreen selection, release, and selected-StoreGrid ownership
+
+The earlier inventory closure correctly recovered double activation and drag,
+but it did not state the empty-hit teardown or the complete selected-StoreGrid
+sprite branch. It also left room to misread a requested browser convenience as
+stock behavior. This correction reopens that input row before the Website is
+changed.
+
+`InventoryScreen::PointerPress` (`0x0056F760`) asks the active grid for the
+object under the pointer and assigns that result, including null, to the current
+selection. A null hit destroys the existing `ItemInfo`, clears the current and
+previous object references, and therefore prevents the formerly selected item
+from satisfying the next 50-tick second-activation comparison. Clicking empty
+inventory chrome is a real deselection path, not an inert hole in the action
+layer.
+
+The ordinary stock click path remains object-centric. A first press selects one
+live object; a same-object activation within 50 ticks reaches
+`0x0056D920`. For equipment in the backpack that dispatcher validates and
+attaches the object, using the first native accepting sink selected by the
+inventory owner. Pressing a different empty or occupied equipment sink after a
+backpack object was selected does **not** consume the previous selection to
+equip or swap it. Click-item then click-explicit-slot is therefore a disclosed
+Website interaction extension when the owner requests it; it must call the
+same authoritative compatibility and attach transaction and must not replace
+stock double activation.
+
+`InventoryScreen::PointerRelease` (`0x0056FC90`) retains the 10-pixel drag
+threshold and the detached `InventoryDragger`. Compatibility is exactly
+`0x00570CD0`: sink 1 Hat, 2 Robe, 4 Staff/Wand, 5 Ring, 6 Amulet, while the
+inventory sinks 0 and 7 accept any item. An accepted backpack-to-equipment
+release calls the shared detach/attach path; the prior occupant is inserted
+back into the same backpack as the exact live object. Releasing a removable
+equipped object over the backpack detaches and reinserts it once. Hat and Robe
+removal still open their stock MsgBoxes, while replacement remains legal.
+Invalid releases restore the source object. Merely selecting a compatible
+backpack object does not turn sinks green; that highlight belongs only to an
+active compatible dragger.
+
+The selected shop/storage picture is owned by `StoreGrid` vtable slot `+0xC8`,
+`0x00565B40`. A selected purchasable row replaces its item picture with the UI
+84 `BUY / CLICK AGAIN` record; a selected Luthacus storage row uses UI 111
+`TAKE / CLICK AGAIN`. Their adjacent arrays contain UI 85 `BUY / TOUCH AGAIN`
+and UI 112 `TAKE / TOUCH AGAIN`, but the retail Windows helper
+`0x00461F60` always returns zero, so this executable always chooses array index
+zero. Affordability is a separate rejection picture (UI 46), and companion
+InventoryScreen selection remains a different owner: selecting a backpack item
+must never paint BUY or TAKE in the StoreGrid.
+
+Complete disposition for this correction:
+
+| Member | Native owner | Disposition |
+| --- | --- | --- |
+| live-object first selection and 50-tick same-object activation | `0x0056F760`, `0x0056D920` | native contract retained |
+| null-hit deselection plus ItemInfo teardown | `0x0056F760` | Website implemented and Mac-validated |
+| typed sink admission | `0x00570CD0` | native contract retained |
+| 10-pixel drag, accepted swap, single unequip, invalid restore | `0x0056FC90`, `InventoryDragger` | Website implemented and Mac-validated |
+| Hat/Robe no-empty invariant | `0x0056FC90` | native contract retained |
+| BUY CLICK AGAIN / TAKE CLICK AGAIN | `StoreGrid::+0xC8`, `0x00565B40`, UI 84/111 | Website implemented; exact-record tests and Mac visual witnesses |
+| TOUCH AGAIN records | UI 85/112, selector `0x00461F60` | dormant in this retail executable |
+| click selected item then explicit compatible sink | no stock producer | owner-requested Website extension; authoritative transaction Mac-validated |
+
+The Website candidate on `d9dace8c` passed its complete Mac gate and a
+production-bundle Chrome journey covering compatible/incompatible click-to-slot,
+occupied replacement, blank deselection, both drag directions, and the selected
+storage picture with empty-cell teardown. The separate BUY witness renders UI
+84 at the same common StoreGrid offset; UI 85/112 remain unused. This closes
+the reopened web-port rows without reclassifying the requested click-to-slot
+extension as retail behavior.
+
 ## Not Yet Reversed
 
 These are portability findings, not invitations to fill in plausible behavior:
