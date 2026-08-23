@@ -16,6 +16,7 @@ SKILLS_DOC = ROOT / "docs/reverse-engineering/native-skills-and-spells.md"
 EFFECTS_DOC = ROOT / "docs/reverse-engineering/native-projectiles-and-effects.md"
 AUDIO_DOC = ROOT / "docs/reverse-engineering/native-audio-events.md"
 LIGHTING_DOC = ROOT / "docs/reverse-engineering/native-lighting-and-shadow-system.md"
+COOLDOWN_DOC = ROOT / "docs/reverse-engineering/native-secondary-cooldown-and-golem-mana-2026-08-23.md"
 GENERATOR = ROOT / "tools/generate_native_secondary_ability_catalog.py"
 
 EXPECTED = {
@@ -82,7 +83,7 @@ def test_native_secondary_ability_membership_rank_and_identity_are_closed() -> s
     abilities = _rows(document, "abilities", "skill_id")
     skills = _rows(skills_document, "skills", "id")
 
-    if document.get("schema") != "solomon-dark-native-secondary-ability-catalog-v2":
+    if document.get("schema") != "solomon-dark-native-secondary-ability-catalog-v3":
         raise StaticReTestFailure("secondary catalog schema drifted")
     source = document.get("source", {})
     if source.get("size") != 4_723_200 or source.get("sha256") != (
@@ -127,6 +128,74 @@ def test_native_secondary_ability_membership_rank_and_identity_are_closed() -> s
         if forbidden in lowered:
             raise StaticReTestFailure(f"secondary catalog contains unresolved marker {forbidden!r}")
     return "all 23 category-2 abilities retain exact authored rank and binary identity"
+
+
+def test_native_secondary_cooldown_rows_and_composite_mana_are_closed() -> str:
+    document = _load(CATALOG)
+    cooldown = document.get("cooldown_system")
+    if not isinstance(cooldown, dict):
+        raise StaticReTestFailure("secondary catalog lost its cooldown system")
+    if cooldown.get("fixed_tick_hz") != 100 or cooldown.get("common_capacity_ticks") != 150:
+        raise StaticReTestFailure("secondary fixed/common clock drifted")
+    if cooldown.get("constructor") != "0x00674EE0" or cooldown.get("presenter") != "0x005D3E10":
+        raise StaticReTestFailure("secondary cooldown constructor/presenter ownership drifted")
+
+    rows = cooldown.get("rows")
+    if not isinstance(rows, dict):
+        raise StaticReTestFailure("secondary cooldown row table vanished")
+    normalized = {int(skill_id): row for skill_id, row in rows.items()}
+    if list(normalized) != list(EXPECTED):
+        raise StaticReTestFailure("secondary cooldown membership/order drifted")
+    fixed = {
+        11: 833, 12: 2500, 15: 833, 21: 2500, 23: 50, 27: 1250,
+        30: 1250, 35: 2500, 41: 2500, 45: 2500, 46: 10000, 48: 2500,
+        49: 2500, 50: 625, 51: 2000, 54: 2500, 72: 2500, 73: 277,
+        74: 3750, 76: 1250, 77: 1875, 78: 50, 79: 50,
+    }
+    if {
+        skill_id: row.get("constructor_capacity_ticks")
+        for skill_id, row in normalized.items()
+    } != fixed:
+        raise StaticReTestFailure("secondary constructor capacity table drifted")
+    if normalized[15].get("rank_capacity_ticks") != [0, 100]:
+        raise StaticReTestFailure("Phasing ranked capacity drifted")
+    if normalized[48].get("rank_capacity_ticks") != [
+        0, 6000, 3000, 1500, 1000, 500, 400, 300, 100,
+    ]:
+        raise StaticReTestFailure("Teleport ranked capacities drifted")
+    if normalized[23].get("arm") != "toggle-on only; row clears below common 150":
+        raise StaticReTestFailure("Firewalker asymmetric arming drifted")
+    if any(
+        "dispatcher_false" not in normalized[skill_id].get("arm", "")
+        for skill_id in (78, 79)
+    ):
+        raise StaticReTestFailure("actionless toggle cooldown disposition drifted")
+
+    composite = _rows(document, "composite_mana_costs", "skill_id")
+    if {
+        skill_id: row.get("components") for skill_id, row in composite.items()
+    } != {27: [27, 28], 45: [45, 75], 54: [54, 55]}:
+        raise StaticReTestFailure("secondary composite mana membership drifted")
+    golem = composite[45]
+    if golem.get("rank_one_raw_total") != 60 or golem.get("iron_golem_rank_zero_cost") != 50:
+        raise StaticReTestFailure("Raise/Iron Golem raw mana composition drifted")
+    if any(
+        row.get("resolve_once_as_skill_id") != skill_id
+        for skill_id, row in composite.items()
+    ):
+        raise StaticReTestFailure("composite mana no longer resolves once as the base skill")
+
+    correction = read_text(COOLDOWN_DOC)
+    for witness in (
+        "`0x00674EE0`",
+        "| 45 | Raise Golem |",
+        "`10+50=60`",
+        "Magic Storm 27 + Magic Tornado 28",
+        "100-Hz",
+    ):
+        if witness not in correction:
+            raise StaticReTestFailure(f"secondary correction report lost {witness}")
+    return "all cooldown rows, clock owners, reset branches, and aggregate mana operands are pinned"
 
 
 def test_native_secondary_belt_presentation_is_closed() -> str:
@@ -677,6 +746,8 @@ def test_native_secondary_ability_documents_and_generator_are_wired() -> str:
         "generator": (
             "SECONDARY_IDS = (",
             "BELT_PRESENTATION = {",
+            "COOLDOWN_ROWS:",
+            "COMPOSITE_MANA_COSTS = [",
             "CONTRACTS:",
             '"closed_native_contract"',
             "unresolved audio path",

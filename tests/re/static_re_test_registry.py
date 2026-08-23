@@ -145,6 +145,7 @@ from static_re_native_progression_contracts import (
 from static_re_native_secondary_ability_contracts import (
     test_native_secondary_ability_art_audio_and_lifecycle_are_pinned,
     test_native_secondary_belt_presentation_is_closed,
+    test_native_secondary_cooldown_rows_and_composite_mana_are_closed,
     test_native_secondary_ability_documents_and_generator_are_wired,
     test_native_secondary_ability_membership_rank_and_identity_are_closed,
     test_native_secondary_region_screen_feedback_lane_is_closed,
@@ -1242,6 +1243,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native secondary BeltButton presentation is closed",
         test_native_secondary_belt_presentation_is_closed,
+    ),
+    (
+        "Native secondary cooldown rows and composite mana are closed",
+        test_native_secondary_cooldown_rows_and_composite_mana_are_closed,
     ),
     (
         "Native secondary Region screen-feedback lane is closed",

@@ -819,8 +819,9 @@ using this order:
 
 Fresh read-only decompilation of the retail image rejoined the belt input,
 wizard dispatcher, action object, cooldown arming, and progression recurrence.
-This closes the stock behavior around the already-recovered Phasing and
-Teleport row capacities; those two row-local timers are not standalone delays.
+This originally closed only the gate around the already-recovered Phasing and
+Teleport rank overrides. The 2026-08-23 constructor sweep below supersedes its
+incorrect inference that the other category-2 rows had zero capacity.
 
 ### Input and action ownership
 
@@ -888,15 +889,17 @@ neither may be synthesized as a random cooldown shortcut.
 row's authored capacity is positive. It compares row current with common
 current and draws the larger. When row current is positive it divides by the
 row capacity; otherwise it divides common current by common capacity 150.
-Consequently Phasing displays the 150-tick common fan, Teleport displays its
-longer 6,000-tick row fan, and zero-`mCooldown` abilities can be silently common-
-gated without drawing a fan. The dark-red square geometry and icon alpha remain
-as previously recovered.
+Consequently Phasing displays the 150-tick common fan. Teleport displays its
+longer 6,000-tick row fan at rank one. The claim that missing CFG
+`mCooldown` meant a zero-capacity row is superseded below: `0x00674EE0`
+hard-codes positive capacities for every other category-2 row. The dark-red
+square geometry and icon alpha remain as previously recovered.
 
 ### Implementer and regression contract
 
-- Preserve the shared action lock independently from row timers. A zero-
-  cooldown ability still cannot be recast during its accepted StaffCast2.
+- Preserve the shared action lock independently from row timers. Mindstar,
+  Regenerate, and Firewalker toggle-off are the dispatcher-false branches;
+  every other accepted category-2 branch arms its recovered row/common state.
 - Store and decrement row capacities in native fixed-tick units: Phasing rank
   one is authored as 100 but is subsumed by the common 150; Teleport rank one
   is 6,000 and remains row-local after the common gate expires.
@@ -911,6 +914,31 @@ as previously recovered.
 - Regress neutral 51-update occupancy, Faster Caster float32 shortening,
   Focus rank-one two-per-update recharge, the common/Phasing/Teleport presenter
   branches, and the three actionless toggle/state branches.
+
+## 2026-08-23 category-2 constructor-capacity and Golem-cost correction
+
+The earlier pass violated the membership-sweep rule: it followed the two CFG
+`mCooldown` properties but did not drain the category-2 row writes in
+`Skills_Wizard` constructor `0x00674EE0`. Fresh read-only Ghidra plus all 15
+raw 0x70-byte progression books prove positive hard-coded capacities for the
+other 21 rows. The complete table, constant addresses, dynamic rank overrides,
+dispatcher-false exceptions, reset lifecycle, and Golem cost proof are in
+[native-secondary-cooldown-and-golem-mana-2026-08-23.md](native-secondary-cooldown-and-golem-mana-2026-08-23.md).
+
+The neutral fixed capacities are: `11=833`, `12=2500`, `21=2500`, `23=50`,
+`27=1250`, `30=1250`, `35=2500`, `41=2500`, `45=2500`, `46=10000`,
+`49=2500`, `50=625`, `51=2000`, `54=2500`, `72=2500`, `73=277`,
+`74=3750`, `76=1250`, `77=1875`, and `78=79=50` ticks. Phasing and
+Teleport retain ranked `mCooldown*100`. Successful dispatcher returns arm the
+selected row and common 150-tick gate; Firewalker-off, Mindstar, and Regenerate
+return false and do not arm. Firewalker-on and rank-one Phasing have positive
+capacities below 150, so arming clears their row current and the presenter
+shows the common 1.5-second fan.
+
+The native and Website clocks are both 100 Hz at neutral settings: elapsed
+seconds are `currentTicks/100`. Focus and category equipment intentionally
+increase the per-update subtraction. Snapshot or browser-render frequency does
+not own cooldown time.
 
 ## SkillScreen, InventoryScreen coexistence, and live loadout editing
 

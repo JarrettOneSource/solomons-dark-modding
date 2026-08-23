@@ -1,5 +1,5 @@
 {
-  "schema": "solomon-dark-native-secondary-ability-catalog-v2",
+  "schema": "solomon-dark-native-secondary-ability-catalog-v3",
   "source": {
     "executable": "SolomonDarkAbandonware/SolomonDark.exe",
     "size": 4723200,
@@ -165,6 +165,200 @@
       }
     }
   },
+  "cooldown_system": {
+    "constructor": "0x00674EE0",
+    "dynamic_rank_refresh": "0x00661530",
+    "belt_gate": "0x005D5600",
+    "dispatcher": "0x0054CC50",
+    "arming": [
+      "0x00661F40",
+      "0x0065EDE0"
+    ],
+    "recurrence": "0x00656E70",
+    "presenter": "0x005D3E10",
+    "fixed_tick_hz": 100,
+    "common_capacity_ticks": 150,
+    "common_capacity_source": "0x0078489C",
+    "rows": {
+      "11": {
+        "constructor_capacity_ticks": 833,
+        "capacity_source": "0x007A0CBC",
+        "arm": "dispatcher_true"
+      },
+      "12": {
+        "constructor_capacity_ticks": 2500,
+        "capacity_source": "0x00786C18",
+        "arm": "both_toggle_edges"
+      },
+      "15": {
+        "constructor_capacity_ticks": 833,
+        "capacity_source": "0x00661530 mCooldown[effectiveRank]*100",
+        "rank_capacity_ticks": [
+          0,
+          100
+        ],
+        "arm": "dispatcher_true; rank-one row clears below common 150"
+      },
+      "21": {
+        "constructor_capacity_ticks": 2500,
+        "capacity_source": "0x00786C18",
+        "arm": "dispatcher_true"
+      },
+      "23": {
+        "constructor_capacity_ticks": 50,
+        "capacity_source": "0x00784CF8",
+        "arm": "toggle-on only; row clears below common 150"
+      },
+      "27": {
+        "constructor_capacity_ticks": 1250,
+        "capacity_source": "0x007A0CC8",
+        "arm": "dispatcher_true"
+      },
+      "30": {
+        "constructor_capacity_ticks": 1250,
+        "capacity_source": "0x007A0CC8",
+        "arm": "dispatcher_true"
+      },
+      "35": {
+        "constructor_capacity_ticks": 2500,
+        "capacity_source": "0x00786C18",
+        "arm": "dispatcher_true"
+      },
+      "41": {
+        "constructor_capacity_ticks": 2500,
+        "capacity_source": "0x00786C18",
+        "arm": "dispatcher_true"
+      },
+      "45": {
+        "constructor_capacity_ticks": 2500,
+        "capacity_source": "0x00786C18",
+        "arm": "dispatcher_true"
+      },
+      "46": {
+        "constructor_capacity_ticks": 10000,
+        "capacity_source": "0x00786C08",
+        "arm": "dispatcher_true"
+      },
+      "48": {
+        "constructor_capacity_ticks": 2500,
+        "capacity_source": "0x00661530 mCooldown[effectiveRank]*100",
+        "rank_capacity_ticks": [
+          0,
+          6000,
+          3000,
+          1500,
+          1000,
+          500,
+          400,
+          300,
+          100
+        ],
+        "arm": "dispatcher_true; rank-eight row clears below common 150"
+      },
+      "49": {
+        "constructor_capacity_ticks": 2500,
+        "capacity_source": "0x00786C18",
+        "arm": "dispatcher_true"
+      },
+      "50": {
+        "constructor_capacity_ticks": 625,
+        "capacity_source": "0x0078CC68",
+        "arm": "dispatcher_true"
+      },
+      "51": {
+        "constructor_capacity_ticks": 2000,
+        "capacity_source": "0x00785CF0",
+        "arm": "dispatcher_true plus CastSpin"
+      },
+      "54": {
+        "constructor_capacity_ticks": 2500,
+        "capacity_source": "0x00786C18",
+        "arm": "dispatcher_true"
+      },
+      "72": {
+        "constructor_capacity_ticks": 2500,
+        "capacity_source": "0x00786C18",
+        "arm": "dispatcher_true"
+      },
+      "73": {
+        "constructor_capacity_ticks": 277,
+        "capacity_source": "0x007A0CC4",
+        "arm": "dispatcher_true"
+      },
+      "74": {
+        "constructor_capacity_ticks": 3750,
+        "capacity_source": "0x007A0CC0",
+        "arm": "dispatcher_true"
+      },
+      "76": {
+        "constructor_capacity_ticks": 1250,
+        "capacity_source": "0x007A0CC8",
+        "arm": "dispatcher_true"
+      },
+      "77": {
+        "constructor_capacity_ticks": 1875,
+        "capacity_source": "0x007A0CCC",
+        "arm": "dispatcher_true"
+      },
+      "78": {
+        "constructor_capacity_ticks": 50,
+        "capacity_source": "0x00784CF8",
+        "arm": "dispatcher_false; no cooldown or action"
+      },
+      "79": {
+        "constructor_capacity_ticks": 50,
+        "capacity_source": "0x00784CF8",
+        "arm": "dispatcher_false; no cooldown or action"
+      }
+    },
+    "reset": "Full rejuvenation clears common and category-2 currents; owner teardown removes private state."
+  },
+  "composite_mana_costs": [
+    {
+      "skill_id": 27,
+      "components": [
+        27,
+        28
+      ],
+      "resolve_once_as_skill_id": 27,
+      "evidence": [
+        "0x0054CC50",
+        "0x006741B0",
+        "0x006600F0"
+      ]
+    },
+    {
+      "skill_id": 45,
+      "components": [
+        45,
+        75
+      ],
+      "resolve_once_as_skill_id": 45,
+      "rank_one_raw_total": 60,
+      "iron_golem_rank_zero_cost": 50,
+      "evidence": [
+        "0x0054E4E0",
+        "0x0054E4F7",
+        "0x006741B0",
+        "0x005290F0",
+        "0x0065D540",
+        "0x006600F0"
+      ]
+    },
+    {
+      "skill_id": 54,
+      "components": [
+        54,
+        55
+      ],
+      "resolve_once_as_skill_id": 54,
+      "evidence": [
+        "0x0054CC50",
+        "0x006741B0",
+        "0x006600F0"
+      ]
+    }
+  ],
   "abilities": [
     {
       "skill_id": 11,

@@ -754,6 +754,19 @@ resolver `0x00645910` collision-adjusts it with radius 25 and scenery mask
 Iron Golem `75` sets byte `+0x210` and writes `mReflect/100` to
 `+0x214`.
 
+The cast cost is composite even before Iron Golem is learned. Dispatcher case
+45 and mana-cache resolver `0x006741B0` both read Raise Golem 45
+`mManaCost[effectiveRank]` and Iron Golem 75
+`mManaCost[effectiveRank]`, add the raw values, then call `0x006600F0` once as
+skill 45. Property path `0x005290F0 -> 0x0065D540` indexes rank zero normally;
+Iron Golem's rank-zero value is 50. A learned rank-one Raise Golem therefore
+costs raw `10+50=60` MP at neutral modifiers, whether or not Iron Golem is
+learned. Ranks 2..9 cost 70..140; ranks 10..12 clamp the Raise Golem array and
+cost 150. Raise Golem's row is not marked offensive, so Battle Mage does not
+scale this total. Applying shared cost modifiers separately to the two operands
+is not native. The complete proof is in
+[native-secondary-cooldown-and-golem-mana-2026-08-23.md](native-secondary-cooldown-and-golem-mana-2026-08-23.md).
+
 Progression feature bit `+0x878 & 0x08` controls the summon limit. With the
 bit clear, casting expires every existing golem owned by that wizard before
 creating the new one: the effective cap is one. With the bit set, one existing
