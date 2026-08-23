@@ -755,11 +755,14 @@ the stock front-end lineage. Therefore the old run is no longer an active
 remain on disk. Retail's observable contract is invalidation of the resume
 namespace, not secure erasure of every byte.
 
-The browser port owns one transactional normalized document instead of the
-retail profile/run/cache file split. Deleting that one document on the first
-authoritative Game Over edge is the direct observable equivalent requested for
-the web product. It intentionally does not reproduce retail's orphan-file
-artifact or its retained cross-run profile archival.
+The first browser pass owned one transactional normalized document instead of
+the retail profile/run/cache file split and deleted that whole document on the
+first authoritative Game Over edge. That is not native-equivalent: it removes
+the durable profile together with the resume namespace, even though retail
+archives the completed run into `darkdata.cfg` before invalidating Last Game.
+The 2026-08-23 reopening below supersedes that browser mapping. One atomic web
+record remains appropriate, but it must contain two independently lived parts:
+a durable profile and a nullable resumable continuation.
 
 ### Browser checkpoint mapping
 
@@ -821,3 +824,58 @@ explicit in-game leave action: request a final host-authored owner projection,
 commit it to the selected storage adapter, and only then destroy the client
 session. A browser process killed before that acknowledgement remains
 fundamentally weaker than retail's synchronous destructor.
+
+## 2026-08-23 durable-profile and update-compatibility reopening
+
+The browser report that a deployment left Last Game unavailable and that an
+attempted resume disconnected exposed two separate violations of the native
+persistence boundary: historical web schema versions were discarded rather
+than migrated, and Game Over deleted the durable profile together with the
+active continuation. The retail executable was re-hashed as
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`.
+Targeted read-only queries used the canonical `SolomonDark` Ghidra project
+through replica slot 1; all addresses below are preferred-image addresses.
+
+### Completed-run archival gate
+
+Raw instructions at `0x005C9670` close the previously unresolved boolean passed
+to completed-run processor `0x005BE320`:
+
+- `Player +0x1C0` is initialized to zero by Player constructor `0x0052A500`.
+- `0x005C9670` reads that byte, applies `SETZ`, and passes the result as the
+  ordinary equipment/backpack-transfer flag. Clear means carried items are
+  eligible for the retained Sack; set means that ordinary transfer is skipped.
+- Player tick `0x00533520` sets `+0x1C0 = 1` only after a nearby active Ether
+  Drain receives capture callback `0x005EE840`. This is the consumed-corpse
+  branch, not a generic alive, victory, insurance, or disconnect flag.
+- The adjacent argument remains progression `+0x7D8`, the Last Word gate that
+  additionally sweeps eligible ground Sacks and Gold.
+
+Thus the completed-run membership is exact: archive durable gold/profile
+fields; retain eligible carried contents unless the corpse was consumed by
+Ether Drain; optionally sweep Last Word ground contents; persist the resulting
+profile; invalidate only the active run name and disposable caches.
+
+### Browser consequence
+
+A normalized browser row may remain one revision-conditional atomic document,
+but its schema must represent the two native lifetimes explicitly:
+
+- a durable participant profile containing the web-owned equivalents of gold,
+  Luthacus storage, Hagatha ownership/first-mix/capacity and exact one-shot
+  runtime state, Shlorio fee, permanent unforge/stat bonuses, and stable item
+  identity; and
+- a nullable owner-only continuation containing the active Hub/Boneyard
+  simulation, loaded Boneyard identity, run state, mod state, and resume
+  summary.
+
+Game Over writes the archived profile with a null continuation. Last Game is
+disabled for that record, but New Game consumes the same profile. Clean leave,
+semantic checkpoints, periodic browser checkpoints, and deployment drain write
+both parts with a live continuation. Known browser schemas 1 through 4 are
+historical inputs to an explicit migration path; an update may not dim Last
+Game or disconnect merely because implementation-owned runtime fields were
+added. Every browser WebSocket layer must also admit the full declared document
+bound; a smaller public-proxy cap rejects a valid run before migration can run.
+Unknown/corrupt structures still fail closed, and the browser's abrupt
+termination window remains the sole platform-blocked persistence edge.
