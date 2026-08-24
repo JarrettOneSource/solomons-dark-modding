@@ -900,3 +900,36 @@ center alpha `61`, white RGB `765`, and exact far alpha/RGB zero while holding
 Lantern flicker, visible endpoint illumination, and no browser errors. The
 Loader portable suite passed 87/87 modules and 795 tests against this corrected
 ledger.
+
+## 2026-08-23 PlayerWizard `+0x268` event-writer correction
+
+The shared equipped-element/light phase is one actor field with event writers,
+not a collection of held-action booleans. Fresh read-only instructions and
+supporting write watches close the writer cadence that the 2026-08-22 Website
+port left implicit:
+
+| Writer family | Callback/store | Exact value and recurrence |
+| --- | --- | --- |
+| Staff/Hand/Wand Cast 1 modes `3/6/9` | `0x00550180`, mode-3 Staff store `0x005502F6` | `0.15` once at the action-progress marker; no occupancy refresh |
+| Staff/Hand/Wand Cast 2 modes `4/7/10` | same callback, mode-4 Staff store in the adjacent branch | `0.45` once at the Cast 2 marker |
+| Staff/Hand/Wand Constant modes `5/8/11` | mode-5 Staff conditional store `0x00550317` | `0.25` once on the qualifying start edge; no held-level refresh |
+| Ether Blast charge integer crossing | Player tick `0x0054B9C8` | `0.25` per crossed integer |
+| fixed-tick decay | `0x00548FFC..0x00549012` | `float32(previous * 0.8999999761581421)` every tick without a writer |
+
+The values were re-dumped from the pinned retail image:
+`0x00784D64 = 0.15000000596046448f`,
+`0x007DE978 = 0.25f`, and `0x00785370 = 0.44999998807907104f`.
+The equipped-element helper still consumes the resulting single field as
+`actorScale * (1 + 10*phase)`, and the player analytic light still consumes it
+as `(1 + phase) * 2.5999999046325684`. Those consumers must see the same phase
+sample. A web model that continuously rewrites the phase while Cast 1 or a
+Constant action is occupied pins the orb/light above native size and is not an
+equivalent approximation.
+
+The complete writer membership is Cast 1, Cast 2, Constant, Ether Blast, and
+decay across Staff, empty-hand, and Wand equipment branches. Dampen's separate
+mode-21 CastSpin has no case in `0x00550180` and therefore contributes no
+`+0x268` write. Toggle-off and actionless secondary branches likewise do not
+inherit a Cast 2 pulse. Death, actor removal, world replacement, and
+construction/reset retain the existing zero/teardown ownership. No member is
+blocked by the browser platform.

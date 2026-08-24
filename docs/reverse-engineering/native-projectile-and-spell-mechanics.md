@@ -3417,3 +3417,80 @@ continues to be a valid flags-`4`, priority-`1000` fallback.
 No member is blocked by the browser platform. The caster's current logical
 viewport width is ordinary authoritative input in the web architecture and can
 drive the same Fireball polygon without client-side collision ownership.
+
+## 2026-08-23 Staff Cast 1 phase edge and exact held cadence reopening
+
+The equipped-effect phase and one-shot cadence were reopened after the Website
+Staff orb again appeared oversized and held Ether was suspected of firing too
+quickly. The prior reports correctly recovered the Staff Cast 1 rate and strict
+end comparison, but they used absolute capture indices as web duration
+constants and did not state that the `+0x268` write is marker-owned rather than
+action-occupancy-owned.
+
+Evidence uses the pinned retail 0.72.5 image, 4,723,200 bytes, SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`,
+preferred base `0x00400000`. Fresh Ghidra 12.0.3 read-only replicas covered
+`Action_PlayerWizard_StaffCast1` construction/tick
+`0x0044B170`/`0x0044B370`, shared progress tick `0x004486E0`, player callback
+`0x00550180`, one-shot admission `0x0052DA80`, and player decay
+`0x00548FFC..0x00549012`.
+
+### Marker ownership and phase recurrence
+
+`0x0044B170` initializes progress `0`, rate float32
+`0.07500000298023224`, marker `1`, and strict end `4`. The action tick calls the
+player callback only when `0x004486E0` reports the marker crossing. For mode 3,
+the callback dispatches the selected one-shot and the instruction at
+`0x005502F6` writes float32 `0.15000000596046448` to PlayerWizard `+0x268`.
+No mode-3 instruction writes that value merely because the action remains
+occupied. Player tick `0x00549012` independently stores
+`float32(phase * 0.8999999761581421)` once per fixed tick.
+
+A supporting loader-injected read-only write watch on a staged byte-identical
+Ether process (PID 2424, runtime image base `0x00960000`) observed runtime
+`0x00AB02F6` write bytes `9A 99 19 3E` exactly once for a short cast, followed
+only by runtime `0x00AA9012` decay writes. During a 1.4-second held burst the
+same marker writer appeared at write-hit indices `69`, `125`, and `181`.
+Because each marker adds one extra write beside the per-tick decay, both gaps
+are exactly `55` native fixed ticks. This runtime trace supports the static
+instructions; it is not clean-stock visual evidence.
+
+The sibling Constant action is also edge-owned. Mode 5 tests
+PlayerWizard `+0x26C`, then `0x00550317` writes float32 `0.25`. A supporting
+held-Air write watch (PID 2088, runtime image base `0x00460000`) observed one
+runtime `0x005B0317` write followed only by `0x005A9012` decay writes during
+the sampled hold. It did not refresh `0.25` on every occupied primary tick.
+
+### Exact neutral one-shot clocks
+
+The action recurrence, rather than a cooldown, owns both families:
+
+| Family | Native progress rate | Marker update | Completion update | Next held insertion / repeat |
+| --- | ---: | ---: | ---: | ---: |
+| Ether `8` | `float32(0.075)` | `14` | `54` (`4.050001621246338`) | `55` ticks / `0.55 s` |
+| Fire `16` | `float32(float32(0.075) * 0.75)` | `18` | `72` (`4.050002574920654`) | `73` ticks / `0.73 s` |
+
+The completion update still owns the action. On the following player tick the
+slot is absent and held input queues the successor. The existing native Fire
+golden independently records insertion at tick `15981`, marker/pose transition
+at `15999`, last occupied action at `16053` with progress `4.05000257`, and
+idle at `16054`. Thus insertion-relative values are `18`, `72`, and `73`; the
+older labels `19` and `74` were capture indices relative to the preceding
+idle sample, not action durations.
+
+Faster Caster remains the multiplier returned by `0x00656580`. Applying the
+authored factors to the float32 rate changes the first strict marker/end
+crossings; it does not add a cooldown. The Website may retain a normalized
+progress clock only if its crossing and one-tick teardown rules reproduce the
+float32 recurrence for every authored factor.
+
+### Complete direct membership
+
+Pure Ether `8`, pure Fire `16`, and welded one-shots
+`1000,1001,1002,1009` share Cast 1 modes `3` (Staff), `6` (empty hand), or `9`
+(Wand), the single `0.15` callback edge, held re-admission, and exact rate
+multiplier. Pure Air `24`, Water `32`, Earth `40`, and welded Constant builds
+`1003..1008` share the one-time `0.25` start edge and subsequent decay.
+Projectile creation, mana, target selection, sockets, audio, collision,
+contact, and teardown remain owned by their already recovered concrete
+handlers. No browser constraint prevents exact fixed-tick reproduction.
