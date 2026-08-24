@@ -1670,7 +1670,7 @@ per-tick alpha loss `0.1 * [1.5,2)`, or `[0.15,0.2)`. Visible trail ages are
 therefore `0..5` or `0..6`; there is no twelve-tick red/additive child.
 
 Impact `0x005E7C20` creates `Anim_FireBurst` over records `251..254` at
-`(x,y-1)`, then removes the projectile. Shared tick `0x00457540` advances the
+`(x,y-10)`, then removes the projectile. Shared tick `0x00457540` advances the
 four-frame selector by `0.25` and specialized tick `0x004575B0` moves it up
 one unit/tick, so visible ages are exactly `0..15` and every record lasts four
 ticks. Draw `0x0045E2D0` first submits record 110 source-over at five times
@@ -1785,3 +1785,44 @@ attempt. Reflection, removal, and persistent-area formulas above instead rest
 on their exact native branch and contact-context flows, which are sufficient
 to close the native ABI. Future automated spell scenarios would be regression
 tests of those recovered contracts, not missing decompilation work.
+
+## 2026-08-23 complete `Anim_FireBurst` constructor xref census
+
+Fresh `refs_to_addr_decompile.py 0x00453470` and raw instruction windows close
+all eleven callers of the shared four-frame burst constructor. The registration
+column distinguishes ordinary `ZAnim` in the shared world-sorted queue, direct
+`Region+0x1E0` post-world animation, and `ZAnimLit 0x005E03D0` in the shared
+queue. Only the last form adds a provider source and nonzero painter bias.
+
+| Caller | Owner / branch | Plant and scale | Registration | Website survival disposition |
+| ---: | --- | --- | --- | --- |
+| `0x00485DC0` | hostile/Good Imp landing contact | actor `(0,-15)` plus heading vector `15`; `0.5+U(0.1)` | `ZAnim`, bias `0`, via `0x0063E5E0` | exact-port required |
+| `0x00487300` | Lesser Demon dead clock 95 | local `(0,-20)`; fixed `2`; phase step `0.25*0.75` | direct `Region+0x1E0` | exact-port required |
+| `0x00489CC0` | Portal flash | Portal-owned point; `1+S(0.1)` | `ZAnim`, bias `15`, via `0x0063E5E0` | out-of-system: Portal factory absent |
+| `0x0049A270` | Lesser Demon bomb marker | controller point 5 plus heading vector `25`; fixed `1`; phase step `0.25*0.75` | direct `Region+0x1E0` | exact-port required |
+| `0x005E5160` | Fireball contact | `(x,y-10)`; `1+S(0.1)` | `ZAnimLit` | out-of-system here; primary Fire owner |
+| `0x005E4CA0` | FireMissile impact | `(x,y-10)`; `1+S(0.1)` | `ZAnimLit` | out-of-system: no survival factory owner |
+| `0x005E5700` | Ember impact | `(x,y-10)`; `1+U(0.1)` | `ZAnimLit` | out-of-system here; primary Fire owner |
+| `0x005E5D30` | Fire Arrow impact | `(x,y-10)`; `0.5+U(0.1)` | `ZAnimLit` | exact-port required for Archer fire payload |
+| `0x005E7C20` | Firebolt impact | `(x,y-10)`; `0.75+S(0.1)` | `ZAnimLit` | exact-port required for Mage fire payload |
+| `0x005F2980` | EvilEmber hostile contact | `(x,y-10)`; `1+U(0.1)` | `ZAnimLit` | out-of-system: story hostile-spell owner |
+| `0x005F76B0` | DarkFireball impact | `(x,y-10)`; `1.75+U(0.25)` | `ZAnimLit` | out-of-system: Dire Faculty owner absent |
+
+The constructor consumes `U(360)` rotation, then `0.5+U(1)` angular
+magnitude, then one sign word. Caller scale draws occur afterward. Ordinary
+phase is `0.25` and specialized tick `0x004575B0` moves Y by `-1` per tick.
+Draw `0x0045E2D0` submits source-over BadGuys 110 at five times caller scale
+and fading alpha `0.5*(1-phase/4)`, then additive `251+trunc(phase)` under tint
+`(1,1,0.75)`.
+
+Every `ZAnimLit` row sets radius `1.5`, intensity `1`, intensity delta
+`-0.04`, Multiple Shadows false, and painter bias `50`. Wrapper render
+dispatches the child directly rather than through the common Region-tint
+dispatcher. A web port that splits glow/frame sprites may still use two
+presentation records, but they must retain one wrapper owner: one provider
+registration, shared `ZAnim` queue ownership, bias 50, and self-lit child
+composition. Imp's ordinary `ZAnim` burst keeps the same shared queue at bias
+zero and no provider; the two Demon bursts remain direct children between the
+world-queue flush and foreground/overlay passes and acquire neither the queue
+wrapper nor its light/bias. All three paths call the child's full draw directly
+and therefore bypass inbound Region tint.

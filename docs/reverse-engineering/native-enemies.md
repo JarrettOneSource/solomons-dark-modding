@@ -374,14 +374,18 @@ vertical offset triggers the landing edge: speed becomes
 `4.5*(1+Float(1.5))`, vertical velocity becomes `-(3+Float(3))`,
 `Integer(4)` selects the body bank, signed `Float(60)` selects rotation,
 upper alpha becomes one, and `Integer(20)==3` multiplies the lift by `1.5`.
-The same edge selects one of eight `sounds\\imp\\imp1..8` rows.
+The same edge selects one of eight `sounds\\imp\\imp1..8` rows, then calls
+Imp vslot `+0x98 -> 0x00478A20` to create the BadGuys-15 landing flare in the
+pre-world `Region+0x278` animation manager. This happens on every landing,
+before any target-distance test.
 
 The landing contact threshold is
 `distance <= (target radius + 45) * 1.25`. Success selects one of three
 `sounds\\Bite\\bite1..3` rows, creates the independent
 `BadGuys[251..254]` contact child at a 15-unit heading offset and `y-15` with
-scale `0.5+Float(0.1)`, turns by `180+Float(45)`, and invokes inherited
-presentation vslot `+0xA0` (`0x00478A20`). There is no separate 6/11/18-tick
+scale `0.5+Float(0.1)`, wraps it in ordinary bias-zero `ZAnim` through
+`0x0063E5E0`, turns by `180+Float(45)`, and invokes inherited base-contact
+vslot `+0xA0 -> 0x00474000`. There is no separate 6/11/18-tick
 Imp melee action clock. Renderer `0x00492E10` draws the body opaque from
 `BadGuys[285..332]` using retained scale/rotation, then applies `+0x228` alpha
 only to upper `333..342` at `y-10`. The eight Imp rows play at
@@ -804,3 +808,89 @@ The DeadHawg `46..77` source sheet is consumed additively. Normal source-over
 composition exposes its opaque black source rectangle and is observably wrong
 for Skeleton-family burning, Lesser Demon flames, Demon Bomb ground fire, and
 the two Demon-fire handoff actors.
+
+## 2026-08-23 Imp flight/contact and shared-burst reopening
+
+The 2026-08-20 auxiliary audit stopped after identifying the Imp body, upper
+effect, and `Anim_FireBurst` records. It did not place the Imp vtable calls on
+the two sides of the landing contact threshold, did not recover their manager
+lanes, and did not reconcile the already recovered landing/contact machine with
+the Website's bounded contact timer. Those omissions are the process failure
+reopened here.
+
+Fresh read-only analysis used the canonical Ghidra `SolomonDark` project and
+retail `SolomonDark.exe` 0.72.5, preferred image base `0x00400000`, 4,723,200
+bytes, SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`.
+Constructor `0x00473E30`, movement `0x00478560`, tick `0x00485DC0`, landing
+presenter `0x00478A20`, base-contact dispatch `0x00474000`, and renderer
+`0x00492E10` form one ownership thread.
+
+The exact hostile-Imp flight/contact relation is:
+
+1. Constructor horizontal speed is `4.5`; upper phase is `Float(10)`, body
+   bank is `Integer(4)`, and body angle is signed `Float(45)`.
+2. Every active tick with nonzero horizontal speed advances upper phase by
+   `abs(speed)*0.25`, integrates vertical offset/velocity with gravity `0.4`,
+   and subtracts `0.05` from upper alpha.
+3. A positive vertical offset is the landing edge. It rerolls horizontal speed
+   as `4.5*(1+Float(1.5))`, vertical velocity as `-(3+Float(3))`, body bank as
+   `Integer(4)`, signed body angle as `Float(60,true)`, upper alpha as one, and
+   the one-in-twenty lift multiplier. It also plays one of Imp cues 1..8 at
+   pitch `1+Float(0.1)`, then invokes vslot `+0x98 -> 0x00478A20` for the
+   BadGuys-15 landing flare before testing contact.
+4. Only that landing edge tests contact. The exact center threshold is
+   `(target_radius + 45)*1.25`. A success plays Bite 1..3 at
+   `1+Float(0.25)`, creates the contact FireBurst, stores escape heading
+   `heading+180+Float(45)`, and only then invokes base-contact vslot
+   `+0xA0 -> 0x00474000` to dispatch configured primary damage.
+5. Movement `0x00478560` follows the target before the first contact and the
+   retained escape heading afterward. There is no 6-tick windup, 11-tick body
+   action, 18-tick cooldown, or contact-selected body bank.
+
+The landing edge and accepted contact own different children:
+
+- Every landing invokes `0x00478A20` and constructs
+  `Anim_FadeAdditive_Perspective` over BadGuys 15 at the actor root. Scale is
+  `0.5+Float(0.6)`, X/Y draw scale is `(s,0.8*s)`, RGB is
+  `(1,0.25+Float(0.5),0)`, and alpha loses float32
+  `0.1*0.800000011920929` per tick. Visible ages are `0..12`. The child enters
+  `Region+0x278`, whose direct animation pass runs before the shared world
+  queue flush. Arena render calls that manager at `0x0046F9AC`, before the
+  queue flush at `0x0046FDA4`.
+- Accepted contact constructs `Anim_FireBurst 0x00453470` at actor position
+  `(0,-15)` plus 15 units along heading. Its caller scale is
+  `0.5+Float(0.1)`. The constructor supplies random rotation and signed angular
+  velocity, tick `0x004575B0` moves it upward one unit, and draw `0x0045E2D0`
+  composites fading BadGuys 110 plus additive `251..254` for 16 visible ages.
+  `0x0063E5E0` gives it an ordinary bias-zero `ZAnim` owner in the shared
+  world-sorted queue; it has no `ZAnimLit` provider.
+
+The shared `Anim_FireBurst` constructor has eleven xrefs. The survival graph
+reaches five: Imp contact `0x00485DC0`, Lesser Demon dead tick `0x00487300`,
+Lesser Demon bomb event `0x0049A270`, Fire Arrow impact `0x005E5D30`, and
+Firebolt impact `0x005E7C20`. Portal `0x00489CC0` and the remaining player,
+story, or hostile-spell callsites are outside the Website survival factory.
+The complete raw/wrapped xref table lives in
+[`native-projectiles-and-effects.md`](native-projectiles-and-effects.md).
+
+Two Lesser Demon branches were also incomplete in the earlier audit:
+
+- Bomb event `0x0049A270` creates a raw burst at the current controller's
+  authored point 5 plus 25 units along facing. Scale is one and the constructor
+  phase step is multiplied by `0.75`, producing a `0.1875` frame step. This is
+  an independent muzzle child in direct `Region+0x1E0` post-world order before
+  the foreground/screen-overlay passes and before the `DemonBomb 0x7F7` actor.
+  Its rotation, angular-magnitude, and sign draws therefore precede the bomb
+  actor's countdown and speed draws.
+- At dead clock 95, tick `0x00487300` creates another raw burst at local
+  `(0,-20)`, fixed scale two, and the same `0.1875` frame step. Its visible
+  frame/alpha clock is therefore longer than the ordinary 16-tick burst; it is
+  not a scale near one at `(0,-1)`. It uses the same direct `Region+0x1E0`
+  post-world, pre-foreground manager, drawn by Arena at `0x0046FFB7`.
+
+The other survival auxiliary rows remain unchanged: Skeleton equipment,
+Archer held arrows, Mage hand charge/particles, Zombie gas/flies, Wraith
+wisps, Demon five persistent flames, Coffin/Maggot ownership, hit redraws,
+ambient loops, and family death membership have no additional constructor or
+renderer branch exposed by this sweep.
