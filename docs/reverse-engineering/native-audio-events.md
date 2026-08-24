@@ -108,7 +108,7 @@ event.
 | Magic Trap `50` | Initialize `0x005E95D0` requests `settrap__Stream`, then the bound-primary start cue; terminal trigger requests `trap__stream`. An air-selector target's live 100-update `Mod_ElectricBurn` renews `electric__loop`; merge extends the existing target-owned modifier rather than adding a second loop owner. |
 | Dampen `51` | Accepted helper requests `flash` and `dampen__stream` before its CastSpin presentation. |
 | Magic Shield `54` | Install/refresh requests `magicshieldup`; absorbed contact requests `hitshield`; break `0x00546650` requests `popshield`; learned Explosive Shield adds `magicshieldexplode`. |
-| Acid Rain `72` | Cast reuses `magicstorm`; live damage/residue requests pitched `acidsizzle`; rain/residue renew `rainfall__loop`. |
+| Acid Rain `72` | Cast reuses `magicstorm`; authoritative damage pulses may request pitched `acidsizzle`. The tick tail submits `pointGain * cloudAlpha(+0x144)` to the shared maximum `rainfall__loop` request only while cloud alpha is positive. The later ground-residue-only phase `+0x158 > 0`, `+0x144 == 0` is silent. |
 | Fire Wall `73` | Creation requests `ignite` and `fireballhit`; live fire patches renew `lowfire__loop`. |
 | Ether Drain `74` | State transition requests `distortreality` and pitched `lightningstart`; the live field renews `PlaneCross__Loop` and `steadywind__loop`. |
 | Call Comet `76` | Fall renews `comet__loop` and later requests `cometwhistle`; impact layers request `explodesteam`, `magicshieldexplode`, `bigfire`, and `ringofice`. |

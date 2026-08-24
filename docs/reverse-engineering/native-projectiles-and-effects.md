@@ -1043,24 +1043,45 @@ head tinted `0xb3f2bf`; the ground sprite uses tint `0xccffcc` and alpha
 BadGuys-10 splash,
 consuming the recovered discarded rotation, rotation, scale, distance, and
 unit-vector draws; life is `0.25`, decay `0.0125`, and velocity damping `0.95`.
-Parent painter `0x005EB290` owns two distinct BadGuys-10 passes. With field
-scale `s`, ground/residue scalar `g`, age `a`, and constructor phase `p`, the
-first is additive, tint `(0.41,0.55,0.32)`, alpha `0.75*g`, rotation
-`a*0.03125*p` degrees, and scale `(5*s,4*s)`. The second is tint
-`(0.25,0.45,0.15)`, source-over, alpha `g`, rotation `-0.5*a` degrees,
-local Y `-50*s`,
-and scale `(7.5*s*p,6*s)`. Auxiliary pass `0x005EB1D0`, while rain alpha is
-positive, draws BadGuys-10 source-over at the field root with tint `(0.05,0.1,0.05)`,
-that rain alpha, and uniform scale `4.5`; it is not a red quarter-scale sprite.
-After activity, ground alpha takes 100 ticks to fade and remaining rain alpha
-takes 2,000, yielding the 3,600-tick maximum ownership window. Light callback
-`0x005EB5C0` submits radius `2`, intensity `0.5*alpha`, and no shadow.
+Parent cloud painter `0x005EB290` owns two distinct BadGuys-10 passes. The
+earlier account incorrectly classified these as ground passes because it
+followed each glyph call but skipped the shared renderer transform surrounding
+the complete function. Raw instructions `0x005EB2A3..0x005EB2C9` add zero to
+renderer X and subtract the compiled double `175.0` at `0x00786C10` from
+renderer Y before either glyph. Instructions `0x005EB580..0x005EB5AB` restore
+that translation after both glyphs. With field scale `s`, cloud alpha `c`, age
+`a`, and constructor phase `p`, the absolute actor-local passes are therefore:
+
+- overhead additive cloud at `(0,-175)`, tint `(0.41,0.55,0.32)`, alpha
+  `0.75*c`, rotation `a*0.03125*p` degrees, and scale `(5*s,4*s)`;
+- overhead source-over cloud at `(0,-175-50*s)`, tint `(0.25,0.45,0.15)`,
+  alpha `c`, rotation `-0.5*a` degrees, and scale `(7.5*s*p,6*s)`.
+
+Auxiliary slot `+0x28 -> 0x005EB1D0` performs no renderer translation. While
+residue alpha `r` is positive, it draws BadGuys-10 source-over at the aimed
+ground root with tint `(0.05,0.1,0.05)`, alpha `r`, and uniform scale `4.5`;
+it is not a red quarter-scale sprite. Arena invokes the direct auxiliary actor
+pass at `0x0046F8F9`, before the shared world-queue flush at `0x0046FDAF`, so
+this ground residue is scene underlay rather than a Y-sorted world sprite.
+After activity, cloud alpha takes 100 ticks to fade; only after that does
+ground residue take 2,000 ticks to fade, yielding the 3,600-tick maximum
+ownership window. Tick tail `0x00605461..0x006054B3` multiplies Region point
+gain by cloud alpha `+0x144` for the shared maximum rainfall request and enrolls
+the actor in the provider list only while that same field is positive. The
+later residue-only phase at `+0x158 > 0`, `+0x144 == 0` is silent and unlit;
+it does not renew rainfall or enter the per-frame provider-source list. The
+actor itself remains owned by its normal world manager until residue teardown.
 
 Draw-registration callback `0x005E3600` passes scalar 350 and the actor to
-`0x0064E910`, which allocates a `PuppetPointer`, copies the actor root,
-offsets its scene-submission Y extent by 350, and inserts it into the world
-list. This is painter/culling ownership, not a second radius-350 light; the
-separate provider remains on the ordinary Region-light lane.
+`0x0064E910`, which allocates a `PuppetPointer`, copies the actor root, adds
+350 to the proxy Y, and inserts the proxy into the shared world queue.
+`PuppetPointer +0x0C -> 0x0063ED70` delegates to the Acid Rain cloud slot
+`+0x24`; sorted insertion `0x0068C0F0` compares object Y at `+0x1C`. The
+overhead cloud therefore keeps an actor-root queue key of `rootY+350` even
+though its pixels are translated upward. This is painter/culling ownership,
+not a second radius-350 light. Light callback `0x005EB5C0` separately submits
+radius `2`, intensity `0.5*cloudAlpha`, and no shadow on the ordinary Region
+provider lane.
 
 ### Earthquake (`0x7F1`)
 
