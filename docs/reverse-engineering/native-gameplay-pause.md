@@ -284,3 +284,21 @@ buffer playback through one Web Audio master while music uses independent
 `HTMLAudioElement` channels. Muting that master is the direct product-policy
 implementation. It must mute rather than destroy channels so loop/stream
 lifecycle and owner teardown continue normally behind the temporary zero gain.
+
+## 2026-08-24 LevelupScreen audio-policy correction
+
+The Website's LevelupScreen membership in the 2026-08-23 product policy is
+superseded. The native evidence above already proves why: an owned
+LevelupScreen requests `sounds\\openpanel` on entry, later requests
+`pickskill`, `summon`, `click`, `unlockskill`, and pitched `openpanel` on its
+recovered action edges, and never acquires a sound mute. Its adjacent local
+PlayerActor requests `sounds\\levelup` once for the threshold transition.
+
+The current Website boundary therefore keeps the resident-buffer sound master
+live for every locally owned picker phase: initial reveal, settled selection,
+reroll/rebuild, queued-choice handoff, and close. The web-only surface shown to
+a participant who has no local offer and is merely waiting for the cohort may
+retain the temporary sound-only mute because no native LevelupScreen exists on
+that client. Pause Menu and compact `Skills_Quickbar` mute ownership is
+unchanged. This correction adds no native call-site claim and requires no
+per-cue bypass, alternate bus, delayed replay, or audio-asset change.

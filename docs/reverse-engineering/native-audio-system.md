@@ -449,9 +449,10 @@ already exact native asset:
   replay it;
 - multiple newly introduced ids retain one request per id, while authoritative
   duplicate prevention keeps the ordinary path to one;
-- the cue obeys the current user sound scalar and the temporary Pause/
-  LevelupScreen non-music mute. A notification received while muted is not
-  queued for later replay.
+- the cue obeys the current user sound scalar and the temporary Pause,
+  compact-selector, or peer-only level-up-wait non-music mute. An owned
+  LevelupScreen keeps the sound lane live for its native cues. A notification
+  received while muted is not queued for later replay.
 
 Registry streams 131 `MessageDone__Stream` and 150
 `yougotamessage__stream` remain outside this feature. Their suggestive names do
