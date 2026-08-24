@@ -1024,8 +1024,17 @@ scale `0.01`, and has a 1,500-tick active lifetime, a separate
 fade/ground-residue scalar, and a 25-tick authoritative hit cadence after its
 initial 50-tick delay.
 `0x00604E90` emits two `Anim_AcidRaindrop` children every tick, or five while
-the shipped Enhanced Effects byte is enabled. It queries the hostile area,
-shuffles the candidate list through `0x005E41F0`, and damages exactly
+the shipped Enhanced Effects byte is enabled. At `0x006052A1..0x006052D6`, the
+damage pulse loads float `400.0` from `0x00787110`, copies the actor's aimed
+ground root, passes hostile mask `2`, and calls Region query wrapper
+`0x00642280`. That wrapper multiplies the supplied width by double `0.5` at
+`0x007DE808` before calling spatial query `0x00523140`. The spatial query tests
+actor root fields `+0x18/+0x1C` with strict
+`dx*dx+dy*dy < 200*200`; it does not expand the boundary by collision/body
+radius. The wrapper then excludes native type `0xBB9` (Coffin). Acid Rain's
+attack area is therefore one strict 400-diameter circle centered at the aimed
+ground point, not a radius-400 circle and not the overhead cloud proxy point.
+It shuffles the resulting candidate list through `0x005E41F0` and damages exactly
 `min(n, floor(n / 3) + 1)` returned actors on a pulse. The loop always consumes
 the shuffled entry at index zero first, increments the damaged count, and
 breaks when `floor(n / 3) < damaged`; this is why one or two candidates still

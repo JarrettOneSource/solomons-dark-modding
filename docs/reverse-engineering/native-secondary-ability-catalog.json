@@ -3127,15 +3127,16 @@
           "name": "Acid splash"
         }
       ],
-      "gameplay": "Rain for 1500 active ticks, emit two drops per tick or five with Enhanced Effects plus the one-in-four splash branch, and after the 50-tick startup delay shuffle hostile candidates and damage exactly min(n, floor(n/3)+1) every 25 ticks for float32 mDamage/6 per target; damage is direct, not poison.",
+      "gameplay": "Rain for 1500 active ticks, emit two drops per tick or five with Enhanced Effects plus the one-in-four splash branch, and after the 50-tick startup delay query the strict root-center circle of radius 200 at the aimed ground point, shuffle hostile candidates, and damage exactly min(n, floor(n/3)+1) every 25 ticks for float32 mDamage/6 per target; damage is direct, not poison.",
       "timing": {
         "active_ticks": 1500,
         "initial_pulse_delay_ticks": 50,
         "damage_period_ticks": 25,
         "contact_damage_formula": "f32(mDamage[effective rank] / 6)",
-        "field_pass_one": "additive BadGuys[10] tint (0.41,0.55,0.32), alpha 0.75*g, rotation a*0.03125*p degrees, scale (5*s,4*s)",
-        "field_pass_two": "source-over BadGuys[10] tint (0.25,0.45,0.15), alpha g, rotation -0.5*a degrees, y -50*s, scale (7.5*s*p,6*s)",
-        "residue_pass": "source-over BadGuys[10] tint (0.05,0.1,0.05), rain alpha, uniform scale 4.5",
+        "target_query": "supplied width 400; strict root-center distance squared < 200*200; hostile mask 2; Coffin type 0xBB9 excluded; no body-radius expansion",
+        "field_pass_one": "world-sorted additive BadGuys[10] at y -175, tint (0.41,0.55,0.32), alpha 0.75*c, rotation a*0.03125*p degrees, scale (5*s,4*s)",
+        "field_pass_two": "world-sorted source-over BadGuys[10] at y -175-50*s, tint (0.25,0.45,0.15), alpha c, rotation -0.5*a degrees, scale (7.5*s*p,6*s)",
+        "residue_pass": "pre-world source-over BadGuys[10] at the ground root, tint (0.05,0.1,0.05), residue alpha, uniform scale 4.5",
         "drops_per_tick": 2,
         "enhanced_drops_per_tick": 5,
         "splash_gate": "Integer(4)==3 after raindrop allocation",
@@ -3156,13 +3157,18 @@
           "mode": "gradient_world"
         }
       ],
-      "authority": "Caster authority stores ranked mDamage, shuffles candidates, and applies float32 mDamage/6 direct periodic damage; drops/residue are presentation state.",
-      "cleanup": "The actor retires only after active lifetime and residue fade both end; loop renewal stops with residue ownership.",
+      "authority": "Caster authority stores ranked mDamage, owns the strict radius-200 root-center query and shuffle, and applies float32 mDamage/6 direct periodic damage; drops and residue are presentation state.",
+      "cleanup": "Cloud light and rainfall renewal stop at zero cloud alpha; the actor retires only after the later residue fade.",
       "evidence": [
         "0x0054CC50",
         "0x0054F331",
         "0x005E3540",
         "0x00604E90",
+        "0x006052A1",
+        "0x00642280",
+        "0x00523140",
+        "0x00787110",
+        "0x007DE808",
         "0x007852E0",
         "0x005E3600",
         "0x005EB290",
@@ -3180,7 +3186,7 @@
         },
         {
           "path": "sounds/acidsizzle.wav",
-          "trigger": "damage/residue pulses with native pitch",
+          "trigger": "accepted damage pulse with native pitch",
           "mode": "one_shot",
           "registry_index": 3,
           "registry_member_offset": "0x0000009C",
@@ -3189,7 +3195,7 @@
         },
         {
           "path": "sounds/rainfall__loop.wav",
-          "trigger": "renewed through active rain and residue",
+          "trigger": "renewed at cloud-alpha gain while cloud alpha is positive",
           "mode": "ambient_loop_request",
           "registry_index": 167,
           "registry_member_offset": "0x00001A6C",
