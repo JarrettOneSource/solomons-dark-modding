@@ -1036,6 +1036,16 @@ hidden world.
   Concentration accepts exactly `57..63` and `65..71`, fills A, conditionally
   fills B with Split Mind, alternates replacement when full, rejects
   duplicates, and rejects changes while Mind Chug owns the timed override.
+  Independently, `ActorProgressionRefresh 0x0065F9A0` auto-fills any empty or
+  invalid A/B lane from the eligible learned category-3 rows, excluding the
+  opposite lane and choosing uniformly through the active gameplay RNG. This
+  owns first concentration after a category-3 level-up, including the stock
+  Tutorial's forced offer; manual selection is not required to create A. The
+  same refresh then validates selected primary index 12 (preserving temporary
+  Plane Orb row 80), enumerates every learned category-1 row when the ordinary
+  selection is invalid, and uniformly replaces it through the same RNG at
+  `0x0065FD43..0x0065FE75`. The exact RNG order is A, B when Split Mind is
+  active, then primary.
 - Both screens suspend the local actor input before the first presented frame.
   Accepted inventory use/equip and book/loadout commands mutate only the
   addressed actor/profile. Hub and Boneyard are consumers of the same screen

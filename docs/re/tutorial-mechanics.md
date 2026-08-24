@@ -365,7 +365,7 @@ Important Tutorial fields are:
 | `+0x9C` | forced-movement decay timer, set to 250 during intro |
 | `+0xA0` | per-stage one-shot dialogue flag |
 | `+0xA4` | dialogue delay (50 initially), later stage-11 counter |
-| `+0xAC` | stage-14 callout suppression byte; initialized to zero and not set by the recovered Tutorial path |
+| `+0xAC` | selected-HUD lesson acknowledgement byte; initialized to zero, set to one by the primary or concentration-A HUD click before its compact selector opens, and read only by stage-14 presentation |
 
 [E01:005D5CF0,005D5FE0,005D6330]
 
@@ -422,9 +422,9 @@ case are intentionally blank presentation phases, not missing analysis.
 | 10 | Inventory-screen callouts: resume key, quick-use slots, equipped-item area, backpack drag/double-click help, and arrows to each | Waits for inventory screen close/resume byte `screen+0x14C`; queues `SAY_UNREDEEMABLE`, `SAY_SOUNDLIKEMYMOTHER`, `SAY_ACCEPTYOURFATE`; starts next wave; zeroes counter; -> 11. | Starts wave 3. |
 | 11 | Conditional `WALK INTO ENEMIES TO CLUB THEM`; `This requires an equipped staff` | Increments counter. After 100 ticks, if enemies are gone and progression level `+0x30 < 2`, grants 10 XP per tick through `0x00680AB0(...,10,1)` until level-up. Once player action/cooldown `+0x168 == 0`, level > 1, and progression `+0x83C == 0`, enables skills at `+0x1AC1`, queues `SAY_MAKEMESTRONGER` and `SAY_LEVELLINGUP`, -> 12. | Wave 3 supplies the normal XP; controller guarantees progress if it was insufficient. |
 | 12 | `ACCESS YOUR SKILLS`; dynamic open key; pointer to skills control | Waits for skills screen pointer `Game+0x1664`; reparents/attaches overlay; -> 13. | none |
-| 13 | Skill-screen callouts: resume, quick-use, automatic concentration/new-skill explanation, and hover-for-information; arrows to each | Waits for skills screen close/resume byte `screen+0x98`; starts next wave, enables combat/status HUD at `+0x1AC4`, disables early protection `+0x1CD5`, and -> 15. | Starts wave 4. |
+| 13 | Skill-screen callouts: resume, quick-use, automatic concentration/new-skill explanation, and hover-for-information; arrows to each. The preceding category-3 choice is auto-filled into A by `ActorProgressionRefresh 0x0065F9A0`. | Waits for skills screen close/resume byte `screen+0x98`; starts next wave, enables combat/status HUD at `+0x1AC4`, disables early protection `+0x1CD5`, and -> 15. | Starts wave 4. |
 | 15 | none | Waits for enemy count > 2, then rearms dialogue and -> 14. | Ensures wave 4 has materialized before the teaching overlay resumes. |
-| 14 | While `+0xAC` remains zero, arrows/callouts to primary attack and concentration icons: `click these icons to change your` / `primary attack or concentration` | If armed, enemies < 4, and player HP < max HP, queues `SAY_LOOKINGBEATUP` once. Enemy count zero starts next wave and -> 16. | Clears wave 4; starts wave 5. |
+| 14 | While selected-HUD acknowledgement `+0xAC` remains zero, one live-rectangle pointer plus two unframed lines teach the primary and concentration-A controls: `click these icons to change your` / `primary attack or concentration`. Either eligible control click suppresses that presentation for the remainder of this Tutorial object. | If armed, enemies < 4, and player HP < max HP, queues `SAY_LOOKINGBEATUP` once. Enemy count zero starts next wave and -> 16; the HUD click does **not** advance the stage. | Clears wave 4; starts wave 5. |
 | 16 | none | Polls first actor type `0x7DD`, stores it at `+0x88`; when present -> 17. | Wave 5 is the single Potion Skeleton; its death link drops a health potion. |
 | 17 | world-object arrow | Repeats first-`0x7DD` lookup. When no such actor remains -> 18. | Intended transition is potion pickup/removal. |
 | 18 | `DRINK POTION`; dynamic potion key; arrows to potion belt slot and HP display | Recursively counts potion type `0x1B59` through `0x00552A80`; when zero, starts next wave, queues `SAY_FACETHEWRATH` and `SAY_IMBORED`, -> 19. | Starts wave 6 after the health potion is consumed. |
@@ -493,6 +493,78 @@ SURVIVE
 ```
 
 [E01:005D08C0] [E09]
+
+#### Stage-14 selected-HUD acknowledgement and exact layout correction
+
+The earlier pass incorrectly described Tutorial `+0xAC` as having no recovered
+writer. That pass stopped at the Tutorial constructor/tick/render xrefs and did
+not follow the two Game-owned HUD controls back through their shared action
+handler. A fresh read-only replica pass against the same retail image closes
+the omitted input edge:
+
+- `Game::HandleControlAction 0x005D8120` compares the activated control with
+  primary control `Game+0x3AC`. When a Tutorial exists at `Game+0x1CD0`, the
+  instruction at `0x005D8281` stores byte `1` to `Tutorial+0xAC` **before**
+  the Plane Orb guard, compact-selector allocation, or selection result.
+- The same handler compares concentration-A control `Game+0x46C`; instruction
+  `0x005D8358` performs the identical store before constructing `Select
+  Concentration`.
+- Concentration-B control `Game+0x52C` is a real sibling compact selector, but
+  its branch has no Tutorial write. The stock Tutorial does not grant Split
+  Mind, and the stage-14 lesson names the primary/A pair only.
+- The stage-13 “CONCENTRATING ... automatically” statement is enforced by
+  `ActorProgressionRefresh 0x0065F9A0`, not by the Tutorial controller. After
+  the forced level-up grants exactly one of rows 65, 67, or 60, refresh sees an
+  empty A/index 16, enumerates learned category-3 rows excluding B, and picks a
+  uniform candidate with the active gameplay RNG. In this Tutorial there is
+  exactly one candidate, so A becomes the newly learned row without a draw-
+  dependent visible outcome. The valid stage-14 selected HUD is therefore the
+  primary-plus-A layout, not a primary-only fallback.
+- Opening and then cancelling either covered selector still acknowledges the
+  lesson. Choosing a different skill is not the predicate. The byte remains
+  set for the lifetime of the Tutorial object and is reset only by activation
+  `0x005D5FE0` at `0x005D6016`; no stage transition clears it.
+- `Tutorial::Render 0x005D08C0` reads the byte at `0x005D1D29`. A nonzero
+  value suppresses the complete stage-14 pointer and both text lines. It does
+  not alter stage `+0x7C`; wave-4 enemy count zero remains the only 14 -> 16
+  transition.
+
+The same render case resolves live rectangles rather than fixed screen
+coordinates. `Game+0x3C0` is the rectangle inside primary control `+0x3AC`,
+and `Game+0x480` is the rectangle inside concentration-A control `+0x46C`.
+Let their centers be `P=(Px,Py)` and `A=(Ax,Ay)`. The exact authored layout is:
+
+```text
+pointer origin = ((Px + Ax) * 0.5, (Py + Ay) * 0.5)
+pointer target = (Px + 30, Py + 50)
+line 1 center/baseline = (Px - 220, Py + 50)
+line 2 center/baseline = (Px - 220, Py + 70)
+```
+
+The constants are instruction-read doubles `0.5` at `0x007DE808`, `30` at
+`0x00784D50`, `50` at `0x007847C8`, `220` at `0x0079B860`, and `70` at
+`0x00787C40`. With the ordinary Tutorial primary-plus-A cluster recovered in
+`native-skill-screen-and-quickbar.md`, `P=(780,25.5)` and `A=(820,25.5)`, so
+the pointer origin is `(800,25.5)`, its target is `(810,75.5)`, and the two
+text centers/baselines are `(560,75.5)` and `(560,95.5)`. HUD-hide movement changes both
+live rectangles together; a fixed `(800,25)` or viewport-centered text block
+is not the stock contract.
+
+Evidence: retail `SolomonDark.exe` 0.72.5, preferred image base `0x00400000`,
+SHA-256 `03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`;
+fresh replica `decompile_targets.py` for `0x005D8120`, `0x005D08C0`, and
+`0x005D50E0`; `find_writes_to_offset.py 0xAC`; and
+`dump_floats_at.py` for the five constants above. Confidence is high: the
+writers, reader, reset, geometry producers, constants, selector siblings, and
+stage transition are all instruction-derived.
+
+The residual sweep through `ActorProgressionRefresh` also closes its selected-
+primary sibling: after A and optional B, `0x0065FD43..0x0065FE75` preserves
+temporary Plane Orb ID 80, otherwise replaces an invalid primary with one
+uniformly selected learned category-1 row. The Tutorial's Magic Missile row 8
+is already valid, so this sibling does not change its stage-14 pixels, but it
+shares the same refresh/RNG owner and is recorded in
+`native-progression-and-skills.md` rather than silently omitted.
 
 The stock screen arrows to spell, inventory, quick-use, equipment, backpack,
 skills, concentration, potion, and HP controls all use the same

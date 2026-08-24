@@ -33,11 +33,23 @@ In formulas, `r` is the effective rank, `V_r` is the `mValue` entry at that rank
 
 The stock constructor at `0x00674EE0` assigns category byte `3` to exactly rows 57–63 and 65–71. The `Skills_Wizard` predicate at vtable `0x007A0CD4`, slot `+0x24` (`0x0067BEE0`), tests that category. Thus Mana Up (56) and Health Up (64) are discipline-family passives but cannot be concentrated; the eligible set is the other fourteen Mind/Body passives.
 
-The first concentration can be chosen by clicking its non-draggable category-3
-card in SkillScreen (`0x00674110 -> 0x005D5600`). Once a slot is occupied, the
-player can click its live HUD emblem: `Game_HandleControlAction` at `0x005D8120`
-opens the compact picker at `0x0066F0B0`, targeting the clicked A/B slot. Both
-paths pass the chosen row to `0x005D5600`. That setter:
+An empty concentration is populated by progression refresh before manual UI is
+required. `ActorProgressionRefresh 0x0065F9A0` first validates A. If it is
+empty or no longer learned, the local-player branch enumerates every learned
+category-3 row except the row already occupying B, draws one uniform index with
+the active gameplay RNG (`0x00818B08 -> 0x00401170(count,0)` at
+`0x0065FB1D`), and writes the winner to gameplay index 16. With Split Mind it
+performs the symmetric pass for B/index 20, excluding A. An empty candidate
+set writes `-1`. This is why the Tutorial's first forced category-3 level-up
+becomes concentration A automatically and why the stage-13 text is literal
+behavior rather than explanatory shorthand.
+
+The player can also choose or replace concentration by clicking a
+non-draggable category-3 card in SkillScreen
+(`0x00674110 -> 0x005D5600`). Once a slot is occupied, its live HUD emblem
+opens the compact picker through `Game_HandleControlAction 0x005D8120 ->
+0x0066F0B0`, targeting the clicked A/B slot. Both manual paths pass the chosen
+row to `0x005D5600`. That setter:
 
 1. rejects a non-category-3 row;
 2. rejects a row already present in either slot;
@@ -45,7 +57,14 @@ paths pass the chosen row to `0x005D5600`. That setter:
 4. fills slot A first; and
 5. if Split Mind is owned, fills B next, then alternates replacement of A and B using gameplay `+0x1C24` when both are occupied.
 
-There is no stock “empty this slot” action. A skill leaves by being replaced, by validation after its effective rank becomes zero, or when Create/reset clears the lanes. `0x0065F9A0` validates A and, when Split Mind is active, B against the current skill book, clearing an invalid row before rebuilding derived state. Health and mana ratios are preserved across that rebuild. Evidence: `ghidra/decompile-core-mechanics.txt`, targets `0x005D5600`, `0x0065F9A0`, and `0x005D0290`.
+There is no stock “empty this slot” action. A skill leaves by being replaced,
+when its effective rank becomes zero, or when Create/reset clears the lanes.
+An ordinary refresh immediately refills a cleared/invalid lane when at least
+one eligible learned row exists. Health and mana ratios are preserved across
+that rebuild. Evidence: `ghidra/decompile-core-mechanics.txt`, targets
+`0x005D5600`, `0x0065F9A0`, and `0x005D0290`; fresh 2026-08-24 raw-instruction
+confirmation spans `0x0065FA2D..0x0065FBA4` for A and
+`0x0065FBA7..0x0065FD36` for B.
 
 ### Capacity, scope, and native state
 
