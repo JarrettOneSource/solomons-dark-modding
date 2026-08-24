@@ -1266,6 +1266,54 @@ draws no subtitle, speaker label, dialogue box, or portrait over the teaching
 heading/world. The narration owner is therefore audio/queue state in this
 scene; a visible web caption panel would be an invented presentation member.
 
+### Viewport, live HUD anchors, and the transient stage-2 heading
+
+A 2026-08-24 follow-up reopened the Tutorial presentation family after the web
+port placed the 1600 x 900 coordinates directly into its overlay. The native
+renderer does not own a fixed 1600-wide child surface. `Tutorial::Render`
+`0x005D08C0` reads the active UI owner's width/height from the Tutorial base
+fields at `+0x1C/+0x20`: primary and secondary copy use center X
+`width * 0.5`; stages 5/9/12/18 use baselines `height - 170` and
+`height - 140`. Prelude record 43 and record 68 likewise use that live UI
+coordinate context. The observed `(800, 450)` and `(800, 350-100*blend)`
+positions are therefore the 1600 x 900 instance, not invariant coordinates for
+an expanding browser viewport. [E01:005D08C0] [E09:005D0A59..005D0E80]
+
+The in-world pointer cases resolve the target again on every render through
+the Game-owned widget rectangle and `0x00403730`; `0x005C9BB0` then draws the
+arrow at a recovered offset from that live target. The complete movable-HUD
+membership is:
+
+| Stage | Semantic target | Native source | Arrow origin relative to resolved target |
+| ---: | --- | --- | --- |
+| 5 | secondary quick slot / spell control | Game widget `+0x600`; `0x005D0E97..0x005D0EFA` | `(-70,-50)` |
+| 9 | inventory control | Game widget `+0x240`; `0x005D1197..0x005D11FD` | `(-40,-40)` |
+| 12 | skills control | Game widget `+0x300`; `0x005D1875..0x005D18F8` | `(+40,-40)` |
+| 14 | primary/concentration icon lane | midpoint of Game widgets `+0x480` and `+0x3C0`; `0x005D1D36..0x005D1DE9` | from the `+0x3C0` anchor plus `(+30,+50)` to the midpoint |
+| 18 | health-potion control | Game widget `+0x8C4`; `0x005D214B..0x005D21C3` | `(-50,-30)` |
+| 18 | health display | Game widget `+0x3C0`; `0x005D21C8..0x005D2279` | `(-100,+70)` |
+
+The scalar dump from the canonical read-only replica pins the shared constants:
+`0x00787C40 = 70`, `0x007847C8 = 50`, `0x00784650 = 40`,
+`0x00784D50 = 30`, and `0x007DE908 = 100`. Modal stages 10 and 13 use the
+same live-rectangle rule, including their modal-owned quick-slot, equipment,
+first-backpack-entry, concentration, and hover targets. Unlike the in-world
+HUD, those targets and their Tutorial overlay are reparented into the same
+fixed native modal surface; moving/scaling that surface moves both together.
+[E01:005D1285..005D1CDE] [E30] [E31] [E32] [E35]
+
+The apparently broken lifetime of stage 2 is native. Script-thread tick
+`0x0068B060` executes up to ten non-blocking commands per tick. Wave-1 script
+10002 loops twice over group 10010 without a sleep; group helper `0x0046C710`
+therefore calls enemy factory `0x00469580` for all ten Starter Skeleton rows in
+the same script tick. BadGuy construction at `0x00473390` increments global
+enemy count `0x0081984C` immediately. The Tutorial first enters stage 2 at the
+Solomon combat-release edge; on its next tick the exact branch at
+`0x005D6624..0x005D6633` sees `enemyCount > 5` and enters blank stage 3. Thus
+the Magic Missile heading is intentionally a one-fixed-tick transitional
+member unless a primary-cast branch wins first. A web delay would not be a
+parity correction.
+
 ### Web-port consequence
 
 The exact port boundary is now: confirmed-absent selected browser save ->
