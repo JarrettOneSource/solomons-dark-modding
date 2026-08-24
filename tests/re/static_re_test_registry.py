@@ -92,6 +92,9 @@ from static_re_native_hud_contracts import (
 from static_re_native_hud_skill_selector_contracts import (
     test_native_hud_skill_selector_ownership_geometry_and_audio_are_pinned,
 )
+from static_re_native_ui_kit_contracts import (
+    test_native_ui_kit_catalog_is_complete_and_regenerable,
+)
 from static_re_webgame_asset_contracts import (
     test_webgame_asset_double_build_and_weight_report_are_pinned,
     test_webgame_asset_fixture_covers_native_families_and_golden_references,
@@ -702,6 +705,10 @@ from static_qol_backend_contracts import (
 )
 
 TESTS: list[tuple[str, Callable[[], str]]] = [
+    (
+        "Native UI kit catalog is complete and regenerable",
+        test_native_ui_kit_catalog_is_complete_and_regenerable,
+    ),
     (
         "Mod transfer protocol is versioned, fixed-width, and bounded",
         test_mod_transfer_protocol_is_versioned_fixed_width_and_bounded,
