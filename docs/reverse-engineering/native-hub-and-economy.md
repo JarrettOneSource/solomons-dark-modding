@@ -533,12 +533,14 @@ inventory revisions.
 
 ### Other service surfaces
 
-Annalist (`!BOAST`), Librarian (`!BOOKS`), and Teacher (`!SPELLS`) are hub
-upgrade/progression services but not gold-stock traders in the paths recovered
-here. Their content tables and exact progression mutations belong to G6. G8
-pins their actors, gates, trigger targets, and open/close behavior; it does not
-invent offer rows or prices for services whose content path was not reachable
-through the existing probes.
+The Annalist (`!BOAST`), Librarian (`!BOOKS`), and Teacher (`!SPELLS`) closure
+is now recorded in
+[`native-hub-npc-interactions.md`](native-hub-npc-interactions.md). That report
+owns the five complete Boast rows and downstream challenge lifecycle, all 26
+BookReview rows and the durable Lace one-shot, all eight SellSpell rows/prices
+and progression unlocks, the optional Skorcha/Tyrannia population, and the
+complete non-trader survival dialogue graph. G8 continues to own their actor
+geometry, common lifetime, gold ledger, and trader/inventory boundaries.
 
 ## Solomon Dig and the upgrade loop
 
@@ -1868,6 +1870,6 @@ These are portability findings, not invitations to fill in plausible behavior:
 - **RNG-selected Sack name.** The five suffixes and `Integer(5)` path are exact,
   but G8 did not capture the full active state immediately before archival.
   Persist the chosen suffix or stream state if exact replay spans run completion.
-- **Annalist/Librarian/Teacher content.** Their target, gate, special action, and
-  lifetime are pinned. Their complete progression offer tables and effects are
-  G6 work; no prices or rewards are inferred here.
+- **Annalist/Librarian/Teacher content.** Closed 2026-08-24 by
+  [`native-hub-npc-interactions.md`](native-hub-npc-interactions.md); no inferred
+  offer, price, or reward remains in this boundary.
