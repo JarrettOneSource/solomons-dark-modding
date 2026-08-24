@@ -1,5 +1,5 @@
 {
-  "schema_version": 8,
+  "schema_version": 9,
   "source": {
     "build": "retail 0.72.5",
     "executable": "SolomonDark.exe",
@@ -49,7 +49,50 @@
     "dismiss_function": "0x00505010",
     "service_dispatch_function": "0x00514A20",
     "dialog_command_dispatch_function": "0x004FB890",
-    "blocked_during_region_fade": true
+    "blocked_during_region_fade": true,
+    "potion_belt": {
+      "input_owner": "0x005CB360",
+      "action_owner": "0x005D8120",
+      "refresh_owner": "0x005D50E0",
+      "drop_router": "0x005C7090",
+      "binding_globals": "0x00B3BCD0..0x00B3BCEC",
+      "health": {
+        "entry_type": "0x1B65",
+        "recursive_finder": "0x005529A0",
+        "zero_based_slot": 3,
+        "button_base": "Game+0x8B0",
+        "button_rect": "Game+0x8C4",
+        "wasd_default_scan_code": "0x04",
+        "wasd_default_key": "3"
+      },
+      "mana": {
+        "entry_type": "0x1B66",
+        "recursive_finder": "0x00552B70",
+        "zero_based_slot": 4,
+        "button_base": "Game+0x99C",
+        "button_rect": "Game+0x9B0",
+        "wasd_default_scan_code": "0x05",
+        "wasd_default_key": "4"
+      },
+      "accepted_use_dispatcher": "0x0056D1B0",
+      "empty_search_behavior": "consume the belt edge without falling through to a skill cast"
+    },
+    "hub_shortcut_rail": {
+      "render_owner": "0x00500250",
+      "whole_hud_owner": "0x005D2520",
+      "registration_owner": "0x005CBA00",
+      "action_owner": "0x005D8120",
+      "region_dispatcher": "0x00514A20",
+      "visible_in": "Hub only",
+      "service_distance_gate": false,
+      "members": [
+        {"order": 0, "id": "annalist", "control_offset": "0xF68", "level_picker_record": 0, "stock_action": "diagnostic log Annalist?"},
+        {"order": 1, "id": "hagatha", "control_offset": "0x101C", "level_picker_record": 6, "stock_action": "open HAGATHA'S CHARMS AND CURSES"},
+        {"order": 2, "id": "luthacus", "control_offset": "0x10D0", "level_picker_record": 4, "stock_action": "open LUTHACUS' SCAVENGED GOODS"},
+        {"order": 3, "id": "fomentius", "control_offset": "0x1184", "level_picker_record": 5, "stock_action": "open FOMENTIUS' USEFUL THYNGS"},
+        {"order": 4, "id": "shlorio", "control_offset": "0x1238", "level_picker_record": 2, "stock_action": "open SHLORIO'S DISCOUNT DOWSING"}
+      ]
+    }
   },
   "transaction_audio": {
     "native_tick_ms": 10,

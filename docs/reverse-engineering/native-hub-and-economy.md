@@ -1667,6 +1667,72 @@ These instructions also close two prior class-layout unknowns: progression
 gain bonus fraction. `+0x874` is the unforge attempt count used by this odds
 curve. Those facts are also corrected in `native-class-loadouts.md`.
 
+### 2026-08-23 supplemental closure: potion belt edges and Hub shortcut rail
+
+The reported Website gaps reopened two pieces of the same `Game` control
+family which the earlier renderer/economy pass had painted but had not followed
+through activation. The evidence target remains retail Beta 0.72.5
+`SolomonDark.exe`, 4,723,200 bytes, SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`,
+preferred image base `0x00400000`. Fresh read-only Ghidra replica queries used
+the canonical `SolomonDark` project and the repository wrapper.
+
+#### Heterogeneous belt activation and stock potion defaults
+
+`Game_TickInput 0x005CB360` checks the eight binding globals
+`0x00B3BCD0..0x00B3BCEC` with the queued keyboard-edge query and invokes the
+corresponding `BeltButton` exactly once per press. `Game_HandleControlAction
+0x005D8120` then dispatches by the addressed button's entry type:
+
+- `0x1B65` recursively finds the first Health Potion through `0x005529A0`;
+- `0x1B66` recursively finds the first Mana Potion through `0x00552B70`;
+- `0x1B67` is a learned primary/secondary skill; and
+- every other nonempty item type resolves its live inventory object before the
+  common use dispatcher.
+
+Both potion branches pass the found live object to the ordinary authoritative
+inventory-use dispatcher `0x0056D1B0`; they do not duplicate potion effects in
+the HUD or input owner. `Game_RefreshBelt 0x005D50E0` refreshes recursive potion
+counts/names and removes stale ordinary item bindings.
+
+Fresh-game setup `0x005CFA80` finds the two starter potions and calls the common
+belt drop router `0x005C7090` with the exact live rectangles at `Game+0x8C4`
+and `Game+0x9B0`. The owning `BeltButton` bases are `Game+0x8B0` and
+`Game+0x99C`, which are zero-based slots 3 and 4 in the eight-entry array
+beginning at `Game+0x5EC` with stride `0xEC`. The default WASD binding table
+therefore makes Health Potion `3` (`0x04`) and Mana Potion `4` (`0x05`). This is
+not a new health/mana key family: rebinding belt slots 4/5 moves those inputs.
+Empty recursive searches consume the button edge but find no item; the edge
+must never fall through as a skill cast.
+
+#### Five-member Hub shortcut rail
+
+The Hub-only renderer `0x00500250`, called from the Hub branch of whole-HUD
+renderer `0x005D2520`, paints exactly five `LevelPicker` records in this order:
+
+| Rail member | Game control | `LevelPicker` record | Action in `0x00514A20` |
+| --- | ---: | ---: | --- |
+| Annalist | `+0xF68` | 0 | stock diagnostic log `Annalist?`; no service constructor |
+| Hagatha | `+0x101C` | 6 | construct `HAGATHA'S CHARMS AND CURSES` |
+| Luthacus | `+0x10D0` | 4 | construct `LUTHACUS' SCAVENGED GOODS` |
+| Fomentius | `+0x1184` | 5 | construct `FOMENTIUS' USEFUL THYNGS` |
+| Shlorio | `+0x1238` | 2 | construct `SHLORIO'S DISCOUNT DOWSING` |
+
+`Game_HandleControlAction 0x005D8120` forwards each winning child to the active
+Region vtable action without a participant-distance check. The Region service
+dispatcher refuses all service construction only while its fade at `+0x8E48`
+is positive. The rail is therefore a global Hub service shortcut, not a set of
+world-space NPC hit circles. `Game_AttachRegion 0x005CBA00` registers all seven
+Region/HUD controls (the five rail children plus the separate help/start
+controls) while a Region owner exists, and the Boneyard/player-death HUD branch
+does not paint the rail.
+
+The fifth source record is Shlorio. Any Website asset identifier calling it
+`teacher` is a stale visual guess disproved by the control field and service
+constructor. Annalist is the only stock rail member without a useful action;
+making that browser button open Annalist dialogue is an explicit requested web
+product correction, not a claim about retail instructions.
+
 ### Reachable-system membership disposition
 
 This table is the exhaustive retail membership boundary used by the Website
@@ -1696,6 +1762,8 @@ names pre-existing Website behavior independently covered before this pass.
 | Dormant Luthacus random outfit row | scavenger data row; absent executable command/xref | out-of-system (not wired by the retail builder) | literal/xref and builder inspection |
 | Dormant targeted-dowsing branch | target `+0x344`; constructor xrefs and union helpers above | out-of-system (no retail hub producer) | constructor/xref/writer sweep |
 | All six potion-use effects, stack mutation, and accepted/rejected audio | `0x0056d1b0`, `0x0056d246`, `0x0056d3d2` | exact-ported | per-subtype authoritative inventory/effect/audio tests |
+| Health/Mana belt entries, recursive finders, slots 3/4, and binding edges | `0x005CFA80`, `0x005C7090`, `0x005CB360`, `0x005D8120`, `0x005D50E0` | exact-ported | default/rebound press-edge tests and authoritative consume receipt |
+| Hub shortcut rail records 0/6/4/5/2 and controls `+0xF68..+0x1238` | `0x00500250`, `0x005CBA00`, `0x005D8120`, `0x00514A20` | exact-ported for four services; Annalist diagnostic is exact dormant behavior | complete record/control mapping and per-button browser receipt |
 | Ground loot and archive/persistence producer | non-shop inventory consumers | out-of-system (separate gameplay/save systems) | ownership/call-boundary trace |
 | Equipment FX application and Clothes attachment painting | 86 declarations and 39 downstream consumers | out-of-system (separate combat/stat/render consumers) | complete item catalog plus consumer trace |
 | Annalist, Librarian, Arch Chancellor, Painting common-animator siblings | common animator xrefs outside merchant actors | out-of-system (non-trader services/props) | complete `0x00501610` xref sweep |

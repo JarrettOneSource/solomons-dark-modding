@@ -264,10 +264,39 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
         raise StaticReTestFailure(
             f"the native hub/trader catalog is not reviewable JSON: {exc}"
         ) from exc
-    if catalog.get("schema_version") != 8:
+    if catalog.get("schema_version") != 9:
         raise StaticReTestFailure("hub/trader consumers lost the complete UI-family schema")
     if catalog.get("source", {}).get("sha256") != EXPECTED_RETAIL_SHA256:
         raise StaticReTestFailure("hub/trader UI provenance no longer names retail 0.72.5")
+
+    interaction = catalog.get("interaction", {})
+    potion_belt = interaction.get("potion_belt", {})
+    if (
+        potion_belt.get("input_owner") != "0x005CB360"
+        or potion_belt.get("action_owner") != "0x005D8120"
+        or potion_belt.get("refresh_owner") != "0x005D50E0"
+        or potion_belt.get("health", {}).get("zero_based_slot") != 3
+        or potion_belt.get("health", {}).get("wasd_default_key") != "3"
+        or potion_belt.get("mana", {}).get("zero_based_slot") != 4
+        or potion_belt.get("mana", {}).get("wasd_default_key") != "4"
+        or potion_belt.get("accepted_use_dispatcher") != "0x0056D1B0"
+    ):
+        raise StaticReTestFailure("native Health/Mana belt ownership or defaults drifted")
+    rail = interaction.get("hub_shortcut_rail", {})
+    if (
+        rail.get("render_owner") != "0x00500250"
+        or rail.get("action_owner") != "0x005D8120"
+        or rail.get("region_dispatcher") != "0x00514A20"
+        or rail.get("service_distance_gate") is not False
+        or rail.get("members") != [
+            {"order": 0, "id": "annalist", "control_offset": "0xF68", "level_picker_record": 0, "stock_action": "diagnostic log Annalist?"},
+            {"order": 1, "id": "hagatha", "control_offset": "0x101C", "level_picker_record": 6, "stock_action": "open HAGATHA'S CHARMS AND CURSES"},
+            {"order": 2, "id": "luthacus", "control_offset": "0x10D0", "level_picker_record": 4, "stock_action": "open LUTHACUS' SCAVENGED GOODS"},
+            {"order": 3, "id": "fomentius", "control_offset": "0x1184", "level_picker_record": 5, "stock_action": "open FOMENTIUS' USEFUL THYNGS"},
+            {"order": 4, "id": "shlorio", "control_offset": "0x1238", "level_picker_record": 2, "stock_action": "open SHLORIO'S DISCOUNT DOWSING"},
+        ]
+    ):
+        raise StaticReTestFailure("five-member native Hub shortcut rail drifted")
 
     ui = catalog.get("ui")
     if not isinstance(ui, dict):
