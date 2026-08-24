@@ -822,6 +822,13 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
         or shops.get("grid_slot_pitch") != [75, 75]
         or shops.get("grid_slot_extent") != [72, 72]
         or shops.get("grid_slot_rgba") != [1.0, 1.0, 1.0, 0.6]
+        or shops.get("slide_owner")
+        != "Shop::Update 0x00550D80; DowsingShop override 0x005512F0"
+        or shops.get("slide_formula")
+        != "root_y = -20 - (1 - attached_inventory_reveal) * 100"
+        or shops.get("slide_easing") != "linear fixed-tick; no easing curve"
+        or shops.get("reveal_step_per_native_tick") != 0.025
+        or shops.get("native_tick_hz") != 100
     ):
         raise StaticReTestFailure("common Shop settled root or exact StoreGrid geometry drifted")
     if shops.get("done_detail_visible_rects") != {
@@ -860,6 +867,14 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
         raise StaticReTestFailure("shop color or duplicate background composite passes drifted")
     if ui.get("dowsing_retained_capacity") != 9 or ui.get("dowsing_columns") != 3:
         raise StaticReTestFailure("DowsingShop lost its complete 3 by 3 result family")
+    if ui.get("dowsing_states") != [
+        "pre-roll",
+        "result",
+        "insufficient-funds-msgbox",
+        "roll-flash",
+        "purchase-flash",
+    ]:
+        raise StaticReTestFailure("DowsingShop state membership drifted")
     if hagatha != {
         "owner": "companion InventoryScreen left pane",
         "outer_content_rect": [103, 89, 320, 320],
@@ -892,8 +907,15 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
             "mirror_header_visible_rect": [693, 54.5, 214, 41],
             "reference_drop_rect": [750, 101, 100, 149],
             "button_visible_rect": [623.5, 265.5, 353, 69],
+            "button_hit_rect": [675, 265.5, 250, 69],
             "button_side_visible_rects": [[669, 259.5, 70, 85], [861, 259.5, 70, 85]],
-            "button_records": [101, 54],
+            "button_records": {
+                "idle_body": 101,
+                "pressed_body": 102,
+                "fixed_side": 54,
+            },
+            "pressed_copy_offset": [6, 6],
+            "hover_visual_branch": None,
             "button_art_rgba": [1.0, 1.0, 1.0, 1.0],
             "label": "DOWSE",
             "label_text_baseline_y": 302,
@@ -925,7 +947,23 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
         "duration_native_ticks": 20,
         "duration_ms_at_100_hz": 200,
         "color_rgba": [1.0, 0.0, 0.0, "state_field"],
-        "trigger": "successful dowsing roll",
+        "triggers": [
+            {
+                "event": "accepted dowsing roll",
+                "write": "0x0055FD99",
+            },
+            {
+                "event": "accepted dowsing offer purchase after clear, fee reroll, and distortion request",
+                "write": "0x0056D194",
+            },
+        ],
+        "non_triggers": [
+            "insufficient roll funds",
+            "rejected offer purchase",
+            "service restore with active offers",
+            "selection or hover",
+            "Done or range teardown",
+        ],
     }:
         raise StaticReTestFailure("DowsingShop red-flash timing or trigger drifted")
     if ui.get("insufficient_gold_msgbox") != {
@@ -1003,7 +1041,11 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
         or msgbox.get("inner_nine_slice_inflate_pixels") != 20
         or msgbox.get("inner_visible_rect") != [540.5, 163, 519, 374]
         or msgbox.get("skull_header_visible_rect") != [669, 97, 262, 67]
+        or msgbox.get("primary_button_record") != 101
+        or msgbox.get("primary_button_pressed_record") != 102
         or msgbox.get("primary_button_visible_rect") != [623.5, 397.5, 353, 69]
+        or msgbox.get("primary_button_hit_rect") != [702, 397.5, 196, 69]
+        or msgbox.get("primary_button_pressed_copy_offset") != [6, 6]
         or msgbox.get("primary_button_side_visible_rects")
         != [[696, 391.5, 70, 85], [834, 391.5, 70, 85]]
         or msgbox.get("primary_button_art_rgba") != [1.0, 1.0, 1.0, 1.0]
@@ -1020,6 +1062,7 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
 
     functions = catalog.get("functions")
     required_functions = {
+        "shop_update": "0x00550D80",
         "shop_render": "0x00557D40",
         "shop_item_detail_render": "0x00565E00",
         "inventory_screen_render": "0x00568B90",
@@ -1044,6 +1087,14 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
         "perk_purchase": "0x0056C340",
         "inventory_transfer": "0x0056CD00",
         "dowsing_purchase": "0x0056D110",
+        "dowsing_update": "0x005512F0",
+        "dowsing_state_rebuild": "0x0055F9F0",
+        "dowsing_render": "0x00558160",
+        "dowsing_action": "0x0055FAF0",
+        "dowsing_flash_render": "0x00551350",
+        "button_hot_rect": "0x00427710",
+        "ui_labeled_control_render": "0x005C60F0",
+        "dialog_finalize": "0x005AB5C0",
         "inventory_unforge_type_gate": "0x00550450",
         "inventory_unforge_transaction": "0x005D6DF0",
     }

@@ -1402,10 +1402,11 @@ presentation membership.
 
 `DowsingShop` owns audio and visual feedback members which cannot be collapsed into button
 disabled state. Successful rolling writes `1.0` to `DowsingShop+0x360` at
-`0x0055FC18`; `0x005512F0` subtracts the image double `0.05` each 100 Hz tick,
-and `0x00551350` draws a full-screen `(1,0,0,alpha)` rectangle. The resulting
-red flash lasts 20 ticks, or 200 ms, and belongs to the roll transition rather
-than the later item purchase. If the participant cannot pay the roll fee,
+`0x0055FD99`, and a successful result purchase writes the same value at
+`0x0056D194`. `0x005512F0` subtracts the image double `0.05` each 100 Hz tick,
+and `0x00551350` draws a full-screen `(1,0,0,alpha)` rectangle. Each accepted
+transition therefore starts its own 20-tick, 200-ms red flash. If the
+participant cannot pay the roll fee,
 `0x0055FAF0` constructs a `MsgBox` with `NOT ENOUGH GOLD!`, the exact
 compensation paragraph, and the executable literal `OKAY` at `0x007930D8`;
 the transaction remains unchanged. The settled MsgBox is its own authored
@@ -1846,6 +1847,82 @@ storage picture with empty-cell teardown. The separate BUY witness renders UI
 84 at the same common StoreGrid offset; UI 85/112 remain unused. This closes
 the reopened web-port rows without reclassifying the requested click-to-slot
 extension as retail behavior.
+
+### 2026-08-24 correction: DowsingShop fixed-tick controls, motion, and dual flash
+
+The earlier Dowsing presentation closure recovered the settled art but made
+three causal mistakes: it treated the natural `UI.101` sprite extent as the
+button hit rectangle, substituted cubic browser easing for the owner-provided
+InventoryScreen reveal, and stopped the flash trace at the roll writer. A fresh
+read-only canonical-replica pass against the same retail image corrects all
+three before the Website implementation changes.
+
+Exact evidence remains retail `SolomonDark.exe` 0.72.5, 4,723,200 bytes,
+SHA-256 `03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`,
+preferred image base `0x00400000`. `DowsingShop::vftable` `0x00790524`
+enumerates rebuild/update/render/action at `0x0055F9F0`, `0x005512F0`,
+`0x00558160`, and `0x0055FAF0`; its secondary StoreGrid vtable continues at
+`0x007905DC` with Dowsing background `0x00554E20`, flash render `0x00551350`,
+and purchase callback `0x0056D110`.
+
+- Raw instructions `0x0055FA51..0x0055FA6F` construct the embedded DOWSE
+  Button at `DowsingShop+0x290` with a `250 x 69` HotRect. Its stage hit
+  rectangle is `(675,265.5,250,69)`. `UI.101` remains a natural-size
+  `353 x 69` visual centered over that smaller input owner, so the black side
+  art at `(623.5,265.5,353,69)` is visible but not clickable.
+- `Dialog_Finalize 0x005AB5C0` calls the same HotRect builder `0x00427710`
+  with float `196` at `0x00799D54` and float `69` at `0x0079250C`. The
+  insufficient-gold OKAY hit rectangle is therefore
+  `(702,397.5,196,69)`, distinct from its `UI.101` visual rectangle
+  `(623.5,397.5,353,69)`.
+- `UiLabeledControl_Render 0x005C60F0` reads Button byte `+0x78`: state zero
+  selects `UI.101`; pressed state one selects adjacent `UI.102`. Both DOWSE
+  and its separate fee renderer add `state * 6` to X and Y, while the `UI.54`
+  endcaps stay fixed. MsgBox primary copy follows the same `(6,6)` pressed
+  shift. Pointer cancel/leave/release clears the state; hover alone has no
+  visual branch.
+- Common `Shop::Update 0x00550D80` and `DowsingShop::Update 0x005512F0`
+  share the exact root formula
+  `y = -20 - (1 - inventoryReveal) * 100`. The reveal source is the attached
+  InventoryScreen alpha, advanced by `0.025` per 100-Hz tick at
+  `0x00551A10`. There is no easing curve and no render-frame clock owner.
+- Accepted DOWSE writes flash `1.0` at `0x0055FD99`. After the ordinary buy,
+  fee reroll, and distortion request, accepted `0x0056D110` writes the same
+  field at `0x0056D194`. Both transitions then take the identical fixed-tick
+  decrement/render path. Insufficient roll funds, rejected purchases, restore
+  with active offers, hover, selection, and close do not write the field.
+- Dowsing result tint continues to consume the integer native tick. The
+  720-tick sine and Chat/InventoryScreen/MsgBox reveal/scroll rates are fixed
+  100-Hz state, not fractional browser-frame interpolation.
+
+Complete corrected membership:
+
+| Member | Native owner | Disposition |
+| --- | --- | --- |
+| Shop, PerkShop, InventoryShop, Dowsing pre-roll/result linear slide | `0x00550D80`, `0x005512F0`, attached InventoryScreen `+0x150` | exact contract; every shared Website service must use the same linear fixed-tick projection |
+| DOWSE idle/pressed art, copy, hit rectangle, cancel/leave/release | `DowsingShop+0x290`, `0x00427710`, `0x005C60F0` | exact contract |
+| accepted roll flash | `0x0055FD99 -> +0x360` | exact contract |
+| accepted purchase flash after clear/fee/audio | `0x0056D110`, write `0x0056D194` | exact contract |
+| flash decrement/full-screen painter | `0x005512F0`, `0x00551350` | exact contract |
+| insufficient-gold MsgBox idle/pressed OKAY and narrow HotRect | `0x005AB5C0`, `0x005C4530`, `0x005C60F0` | exact contract; Hat/Robe one-button MsgBox siblings share the corrected primitive |
+| three-by-three result grid, selection, HoverBox, purchase rejection | `0x00554E20`, StoreGrid family | verified already at parity; retained |
+| DOWSE/fee, result tint, Chat, InventoryScreen and MsgBox 100-Hz clocks | owners above | exact contract; fractional render cadence is out-of-system |
+| targeted Dowsing | no retail hub producer | out-of-system; unchanged |
+
+No browser-platform approximation is needed. The validation contract is a
+focused fixed-step/control-render test plus a real Mac Chrome journey which
+holds DOWSE and OKAY pressed, rejects clicks in visible art outside each native
+HotRect, captures both roll and purchase flashes, verifies exact flash samples
+and reset, and retains close/discard/reopen plus participant isolation.
+
+The corrected report, catalog, and expanded static contract passed all
+`499/499` CI-safe RE tests on macOS. The byte-matched Website implementation
+then passed its `55/55` focused Hub UI group and complete canonical gate. Built
+Chrome `151.0.7922.170` exercised a two-participant Shlorio lifecycle with
+empty browser-error and failed-response arrays, exact narrow HotRects, held
+`UI.102` states, independent roll/purchase flashes, purchase/equip,
+insufficient-gold MsgBox, discard/reopen, and owner-isolated gold. No platform
+block or native unknown remains in this correction.
 
 ## Not Yet Reversed
 

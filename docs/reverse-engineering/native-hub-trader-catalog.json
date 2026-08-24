@@ -203,6 +203,8 @@
     "inventory_transfer": "0x0056CD00",
     "dowsing_action": "0x0055FAF0",
     "dowsing_purchase": "0x0056D110",
+    "button_hot_rect": "0x00427710",
+    "ui_labeled_control_render": "0x005C60F0",
     "inventory_screen_render": "0x00568B90",
     "inventory_screen_detail_render": "0x00556940",
     "inventory_stats_render": "0x00562520",
@@ -251,6 +253,7 @@
     "dialog_add_primary_button": "0x005AB7E0",
     "dialog_add_secondary_button": "0x005AB980",
     "dialog_add_line": "0x005BCCB0",
+    "dialog_finalize": "0x005AB5C0",
     "fomentius_restock": "0x005C8960",
     "inventory_insert_or_stack": "0x0055FF20",
     "equipment_accepts": "0x00570CD0",
@@ -656,6 +659,11 @@
       "constructor_layout_argument": [215, -20, 604, 400],
       "settled_stage_rect": [498, -20, 604, 430],
       "slide_distance_stage_pixels": 100,
+      "slide_owner": "Shop::Update 0x00550D80; DowsingShop override 0x005512F0",
+      "slide_formula": "root_y = -20 - (1 - attached_inventory_reveal) * 100",
+      "slide_easing": "linear fixed-tick; no easing curve",
+      "reveal_step_per_native_tick": 0.025,
+      "native_tick_hz": 100,
       "companion_inventory_screen": {
         "constructor": "0x00560380",
         "gameplay_field": "+0x15A0",
@@ -757,14 +765,21 @@
     "ordinary_shop_retained_capacity": 28,
     "dowsing_columns": 3,
     "dowsing_retained_capacity": 9,
-    "dowsing_states": ["pre-roll", "result", "insufficient-funds-msgbox", "roll-flash"],
+    "dowsing_states": ["pre-roll", "result", "insufficient-funds-msgbox", "roll-flash", "purchase-flash"],
     "dowsing_presentation": {
       "pre_roll": {
         "mirror_header_visible_rect": [693, 54.5, 214, 41],
         "reference_drop_rect": [750, 101, 100, 149],
         "button_visible_rect": [623.5, 265.5, 353, 69],
+        "button_hit_rect": [675, 265.5, 250, 69],
         "button_side_visible_rects": [[669, 259.5, 70, 85], [861, 259.5, 70, 85]],
-        "button_records": [101, 54],
+        "button_records": {
+          "idle_body": 101,
+          "pressed_body": 102,
+          "fixed_side": 54
+        },
+        "pressed_copy_offset": [6, 6],
+        "hover_visual_branch": null,
         "button_art_rgba": [1.0, 1.0, 1.0, 1.0],
         "label": "DOWSE",
         "label_text_baseline_y": 302,
@@ -798,7 +813,23 @@
       "duration_native_ticks": 20,
       "duration_ms_at_100_hz": 200,
       "color_rgba": [1.0, 0.0, 0.0, "state_field"],
-      "trigger": "successful dowsing roll"
+      "triggers": [
+        {
+          "event": "accepted dowsing roll",
+          "write": "0x0055FD99"
+        },
+        {
+          "event": "accepted dowsing offer purchase after clear, fee reroll, and distortion request",
+          "write": "0x0056D194"
+        }
+      ],
+      "non_triggers": [
+        "insufficient roll funds",
+        "rejected offer purchase",
+        "service restore with active offers",
+        "selection or hover",
+        "Done or range teardown"
+      ]
     },
     "insufficient_gold_msgbox": {
       "title": "NOT ENOUGH GOLD!",
@@ -885,7 +916,10 @@
       "arrow_record": 8,
       "arrow_centers_and_scales": [[800, 592, 1], [725, 579, 0.75], [875, 579, 0.75]],
       "primary_button_record": 101,
+      "primary_button_pressed_record": 102,
       "primary_button_visible_rect": [623.5, 397.5, 353, 69],
+      "primary_button_hit_rect": [702, 397.5, 196, 69],
+      "primary_button_pressed_copy_offset": [6, 6],
       "primary_button_side_record": 54,
       "primary_button_art_rgba": [1.0, 1.0, 1.0, 1.0],
       "primary_button_text_rgba": [0.85, 0.73, 0.44, 1.0],
