@@ -287,6 +287,36 @@ calls `0x0043FA80` to release the slot's Direct3D texture and associated
 surfaces, clears all 0x20 slot fields, unbinds the handle if it was current,
 and removes it from the renderer page table.
 
+## Renderer texture addressing and filtering
+
+Renderer reset `0x0041D000` configures two independent pieces of sampler state.
+The requested byte at renderer `+0x239` is texture addressing, not filtering.
+Dispatcher `0x004208A0` compares it with cached byte `+0x23A`; requested state
+one calls `0x00442ED0`, which sets sampler states `1/2`
+(`D3DSAMP_ADDRESSU/ADDRESSV`) to value one (`D3DTADDRESS_WRAP`) on stages zero
+and one. Alternate state zero calls `0x00442E70` and writes value three
+(`D3DTADDRESS_CLAMP`). A complete displacement census finds only reset's
+sentinel/final request writes and the dispatcher's cache write for this field.
+
+Minification/magnification use Direct3D sampler states `6/5`. The same reset
+checks render ratios `0x00818670/0x00818674`; when both equal one it writes
+value two (`D3DTEXF_LINEAR`) to stage-zero MINFILTER and MAGFILTER and records
+the enabled state at renderer `+0x238`. Both retail data values initialize to
+`1.0`. Renderer sizing function `0x00440890` recomputes them as target width /
+backbuffer width and target height / backbuffer height, so the stock
+1600-by-900 parity branch is linear. `0x00421560` can switch stage-zero min/mag
+between point and linear for explicit text-rendering branches and restores the
+prior choice; this is separate from address U/V state.
+
+`Anim_FadeScale::Draw 0x00455DF0` changes additive blend and RGBA state but
+does not change filtering. Its Arena `DeadHawg[24]` splash therefore inherits
+linear sampling in the 1x stock comparison. Record 24 is a 20 by 17 crop whose
+web extraction is pixel-identical to the retail atlas: 110 pixels have zero
+alpha, 230 contribute, maximum alpha is 95/255, and the centre is fully
+transparent black. A dark centre or dim rim under Region multiplication is an
+authored input; it must not be diagnosed as subtractive blending without a
+same-frame framebuffer differential.
+
 ## Device loss, restoration, and destruction
 
 Texture slots distinguish ordinary loaded pages from persistent/recreatable
