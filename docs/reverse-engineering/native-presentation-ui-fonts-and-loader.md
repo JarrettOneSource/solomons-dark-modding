@@ -522,6 +522,64 @@ layer must not absorb save selection, settings persistence, tab data loading,
 inventory authority, skill application, level-up barriers, or screen
 transitions.
 
+### 2026-08-24 concrete MsgBox consumer closure
+
+The title New Game retirement prompt was re-opened after the Website's first
+port used a CSS-drawn dialog and non-native Resume/Kill action labels. The
+canonical image and preferred-base addresses above remain unchanged. A fresh
+read-only Ghidra pass and a clean retail observation close both this concrete
+consumer and the shared family it exposed:
+
+- `MsgBox 0x004A98E0` installs vtable `0x00788E04`; shared tick/render/layout/
+  finalizer ownership is `0x005AB710`, `0x005C4530`, `0x005AB060`, and
+  vslot `+0xB4 -> 0x005AB2C0`;
+- `Dialog_AddLine 0x005BCCB0`, primary button `0x005AB7E0`, secondary button
+  `0x005AB980`, and `Dialog_Finalize 0x005AB5C0` are the complete construction
+  seam used by `0x0058E260`;
+- 25 constructor references resolve to 16 owning functions. The title kill,
+  per-level resume, beta notice, Dark Cloud/account/error, level-option, and
+  editor/result dialogs are sibling consumers of this same primitive. The 194
+  `Dialog_AddLine` references resolve to 22 owning functions and do not imply
+  a second message painter;
+- the shared render owns the full-screen curtain, `UI.49` background,
+  `UI.10/.79` edges, `UI.107..110` corners, `UI.17` inner frame, `UI.18`
+  header, `UI.8` arrows, bitmap lines, stock buttons, pointer, and opening/
+  closing opacity. Screen owners supply only content, action meaning, and
+  transition state.
+
+For the concrete `0x0058E260` consumer, the exact line sequence is Fonts group
+3 `Kill character?`, Fonts group 1 warning wrapped at 400 pixels into three
+lines, and Fonts group 1 `Are you sure you want to do this?`. The exact actions
+are primary `YES` and secondary `NO`; `NO` returns to the Play menu without
+mutation and `YES` continues into the already documented current-wizard
+retirement path. `Dialog_Finalize` centers the content-sized dialog in the
+client and applies its 25-pixel margin.
+
+The clean stock capture is
+[kill-character.png](../assets/stock-prompts-20260824/kill-character.png),
+1606x929 including the Windows frame and 1600x900 client content, SHA-256
+`26a83bb43c05592fcf60ed9472ba1b2c4bfba14b06d8b28d77f5adc9f871f256`.
+It is presentation evidence only: the injected loader was not present in this
+retail process. The capture confirms the deterministic painter order, four
+visible text bands after the title, two stock buttons, centered client
+placement, and the dimmed live title scene beneath the modal.
+
+Disposition remains `exact-ported` for the shared MsgBox vocabulary and this
+title consumer. The other 15 constructors remain `out-of-system` as screen
+owners unless their existing Website screen already consumes the exact shared
+plan; no sibling is reclassified as missing merely because this title prompt
+became reachable in the web port.
+
+Validation used isolated Mac commit `719ea43f`, tree
+`89792f810c242c46e4f131d92435ebc25e4b72f9`, on Apple arm64 macOS `26.6.2`.
+The complete CI-safe static RE registry passed `499/499`; log SHA-256 is
+`63ec2a3765b1b20bd2cd7759e278a0619797cbdb637c19addaf68619bfda9f11`.
+The portable discovery suite passed all 88 eligible modules and 801 tests with
+the eight declared machine-dependent modules excluded; log SHA-256 is
+`1364f7580e416f3f769ba298564a8e6e80135d7c000c57bc13ffe14c60b0c133`.
+The candidate worktree remained clean. Publication to `main` is authorized;
+no production loader packaging or deployment was requested.
+
 ### Ownership, lifetime, and failure contract
 
 The browser adapter may cache derived subtextures while its source atlas pages

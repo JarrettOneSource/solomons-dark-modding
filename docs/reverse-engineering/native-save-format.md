@@ -897,9 +897,24 @@ wizard. Its exact static strings are:
 
 - title `Kill character?` at `0x00798474`;
 - body `Starting a new game will kill off your current game and character
-  (Lucritius will scavenge his equipment)!` at `0x00798408`; and
+  (Lucritius will scavenge his equipment)!` at `0x00798408`;
+- confirmation `Are you sure you want to do this?` at `0x007983E0`; and
 - common primary/secondary labels `YES` / `NO` at `0x0078C4CC` /
   `0x0078C4C8`.
+
+The title is added with Fonts group 3; the warning and confirmation use Fonts
+group 1. `Dialog_AddLine 0x005BCCB0` wraps the warning at the common 400-pixel
+limit into exactly `Starting a new game will kill off your` / `current game
+and character (Lucritius` / `will scavenge his equipment)!`, then retains the
+confirmation as its own line. `0x0058E260` adds the primary action through
+`0x005AB7E0`, the secondary through `0x005AB980`, and calls
+`Dialog_Finalize 0x005AB5C0` with the client center and the common 25-pixel
+margin. The settled 1600x900 retail capture is
+[kill-character.png](../assets/stock-prompts-20260824/kill-character.png)
+(SHA-256 `26a83bb43c05592fcf60ed9472ba1b2c4bfba14b06d8b28d77f5adc9f871f256`).
+It confirms the complete fourth text line and stock `YES` / `NO` ownership;
+the earlier Website `RESUME LAST GAME` / `KILL WIZARD` labels were a web
+adaptation, not retail behavior.
 
 The function has one direct caller, `0x0058E600`. That caller invokes it only
 on the New Game control while its selected-profile/current-wizard flag at
