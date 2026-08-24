@@ -301,6 +301,13 @@ their meaning:
 | picker `+0x138` | WASD keyboard scheme | movement keys 17/31/30/32 and related action globals; picker mode 2 |
 | picker `+0x1EC` | mouse scheme | `0x00B3BCB0 = 1`; picker mode 4 |
 
+The complete two visible keyboard presets share Escape menu, `I` inventory,
+`T` skills, and right-mouse belt 1. WASD mode maps belts 2..8 to `1`..`7`;
+Arrow mode maps them to Delete, End, Backspace, Page Up, Page Down, Insert,
+and Home. These assignments are part of the picker transaction, not retained
+preferences outside the selected preset. The full scan-code table is pinned in
+`docs/reverse-engineering/native-input-model.md`.
+
 All three choices trigger the same fade/selection transition. When the fade
 reaches 1.0, tick `0x005B9990` calls `TutorialGame_Bootstrap` at `0x005B6B00`
 and destroys the picker. [E01:005A8790,005B9990,005B9A30]
@@ -348,7 +355,7 @@ Important Tutorial fields are:
 | `+0x90` | tutorial overlay opacity lane |
 | `+0x94` | pre-stage intro active byte |
 | `+0x98` | intro countdown, initialized to 25 |
-| `+0x9C` | camera/zoom timer, set to 250 during intro |
+| `+0x9C` | forced-movement decay timer, set to 250 during intro |
 | `+0xA0` | per-stage one-shot dialogue flag |
 | `+0xA4` | dialogue delay (50 initially), later stage-11 counter |
 | `+0xAC` | stage-14 callout suppression byte; initialized to zero and not set by the recovered Tutorial path |
@@ -373,12 +380,17 @@ at `0x0081F630` through virtual `+0xAC`. These are ambient global presentation
 side effects and are a **dirty** reuse seam. [E01:005D5FE0]
 
 The 25-tick intro countdown triggers a stock fade/effect at count 20, initializes
-a 250-tick camera/zoom lane, fades the Tutorial overlay in/out, and manipulates
-the player camera/zoom presentation fields at actor `+0x158/+0x15C`. Only after
-that intro byte clears does stage 0 run. Its renderer uses stock full-screen
-fade/panel drawing, including UI bundle record `[0x008199E4] + 0x2124` through
-the common glyph/sprite path. [E01:005D6330,005D08C0] [E09:005D0A59,
-005D0B7E] [E12]
+a 250-tick forced-movement lane, and fades the Tutorial overlay in/out. Once
+blend exceeds `0.8`, the controller writes the player actor movement accumulator
+`+0x158/+0x15C` to `(0,-actor+0x70)`. After intro teardown, the 250-tick lane
+writes `(0,-actor+0x70*(remaining/250))` while decrementing. `PlayerActorTick
+0x00548B00` then clamps that accumulator through the normal wizard speed
+envelope, calls `PlayerActor_MoveStep 0x00525800`, and damps it. This is the
+stock automatic northward walk into the opening scene, not camera or zoom
+presentation. Only after the intro byte clears does stage 0 run. Its renderer
+uses stock full-screen fade/panel drawing, including UI bundle record
+`[0x008199E4] + 0x2124` through the common glyph/sprite path.
+[E01:005D6330,005D08C0] [E09:005D0A59,005D0B7E] [E12]
 
 ### Complete stage progression
 
@@ -766,7 +778,7 @@ stock call path.
 | resolve modal UI element anchor | equipment `0x00570F80`; backpack `0x005D07A0 -> 0x00558E40 -> 0x004F9320`, then `0x004282D0` | live owning modal; for backpack, `Game+0x15A0`, non-null member `+0x294`, list `+0x188`, entry zero | dirty/index-coupled | resolve a stable semantic handle to a participant-local modal anchor |
 | narration queue/idle | `0x004FCEC0`, `0x00462090` | global narration owner, existing localization/audio records | dirty/global | mod-owned prompt/audio queue with cancellation and local scope |
 | stock speaker/portrait installation | `0x005D5FE0`; Game `+0x1C94/+0x1C9C/+0x1CA0` | global stock asset tuple and narration/UI owners | dirty/global | dialogue speaker/portrait resource owned by the mod prompt session |
-| intro fade/camera presentation | `0x005D6330`, `0x005D08C0`; actor `+0x158/+0x15C`; UI record `[0x008199E4]+0x2124` | Tutorial UI object, player presentation fields, global render state | dirty | scoped scene-intro transition/spotlight with save-and-restore |
+| intro fade and forced north movement | `0x005D6330`, `0x005D08C0`; PlayerActor movement accumulator `+0x158/+0x15C`; `PlayerActorTick 0x00548B00`; UI record `[0x008199E4]+0x2124` | Tutorial UI/controller object, authoritative player actor, global render state | dirty | scoped scene-intro transition plus authority-owned forced movement |
 | linked action on monster death | `0x004819D0 -> 0x0068BB10 -> 0x006894F0` | MonsterRecipe linked Trigger, ScriptThread/TriggerControl alive | clean-ish inside scenario | `on_enemy_death` event -> validated scenario action |
 | spawn definition-backed ground item | `0x00469FE0 -> 0x004699B0 -> 0x0046A360` | active Arena, ItemRecipe, resolved location | clean-ish | semantic item-reward spawn returning actor identity |
 | spawn health potion | `0x00466B50 -> Arena vslot +0x148 / 0x0046AE20` | active Arena, subtype/location | clean-ish | potion-reward spawn returning actor identity |
@@ -993,3 +1005,196 @@ Representative static pass:
 
 The complete commands and tool/input hashes are recorded in the evidence
 packet. The canonical Ghidra project and stock game tree were not modified.
+
+## 2026-08-23 web-port closure addendum
+
+This addendum reopens the 2026-08-01 report only where a complete browser port
+needs facts that the earlier loader-seam question did not consume. The stage
+machine, authored level graph, and pointer conclusions above remain valid.
+
+### Fresh-profile entry has no tutorial-choice dialog
+
+A fresh direct-retail run was made from a task-owned copy of the verified
+4,723,200-byte executable. Its copied `sandbox` directory was removed before
+launch; the source game tree and real saves were untouched. No loader DLL or
+mod was present. At `1600 x 900`, retail showed, in order:
+
+1. the stock beta notice;
+2. `SELECT A CONTROL SCHEME`, with `Controls.0` and `Controls.2` visible;
+3. the baked `...MIDNIGHT / SIX MONTHS AGO...` prelude card; and
+4. Tutorial stage 0 in the rain-darkened Boneyard, with no ordinary HUD and
+   `USE YOUR KEYBOARD / TO MOVE THE WIZARD` above
+   `FIND AND CONFRONT SOLOMON DARK`.
+
+The durable captures are:
+
+| Capture | SHA-256 |
+| --- | --- |
+| [`control-picker.png`](../assets/tutorial-stock-20260823/control-picker.png) | `d494e30118af4ce3001b52895925e460d3533c42cd0f1227e78a0dd23771bdd2` |
+| [`midnight-prelude.png`](../assets/tutorial-stock-20260823/midnight-prelude.png) | `11816ad1334d2024603c7b9725180b514b192f980fee31c55e42794bacba8c2d` |
+| [`stage-0.png`](../assets/tutorial-stock-20260823/stage-0.png) | `8b43df2d8bcaa5bd9d92894e31cf9dc749d67e4f5fa99ec1bac39c26b286829c` |
+
+A fresh canonical read-only Ghidra replica search found the existing
+`tutorial` level/command strings and the control-picker heading, but zero
+functions or strings for `WOULD YOU`, `PLAY THE TUTORIAL`, or
+`SKIP TUTORIAL`. `YES` is a general UI literal used by unrelated screens.
+Retail therefore enters the tutorial automatically from the persisted
+fresh-profile byte; it does not ask a tutorial-specific yes/no question. A web
+yes/no offer is an explicit product gate in front of the native sequence, not
+a recovered retail screen.
+
+The control-picker membership is also sharper than the earlier callback-only
+description. Exact UI-tree fixture `menu-goldens.json` and the clean capture
+show `Controls.0` at `(477.5,290)-(722.5,610)` and `Controls.2` at
+`(850.5,324)-(1149.5,576)`. `Controls.1` is constructed but parked off-screen
+in this build. The callback branches remain arrow keyboard (mode 1), WASD
+keyboard (mode 2), and dormant mouse mode 4. The browser port must preserve the
+two visible choices and must not make the native-hidden third panel visible.
+
+The intro card is not a recoverable text string. `Tutorial::Render`
+`0x005D08C0` draws UI bundle record 43 through the two calls using
+`[0x008199E4] + 0x2124`; the extracted exact record is frame
+`(266,62,340,66)`, logical size `443 x 171`, trim `(50,50)`. The first-play
+owner selects music key `prelude` at `0x005B6C90`; `music.txt` maps it to
+module subsong 0.
+
+### Exact intro-card, teaching-text, and callout rendering
+
+A final screenshot comparison against the fresh retail captures exposed that
+the earlier web-port consequence compressed the intro and used approximate
+font/color styling. The render and tick instructions close those fields
+without inference:
+
+- `Tutorial::Activate` initializes blend `+0x8C = 0`, fade `+0x90 = 1`,
+  intro-active `+0x94 = 1`, and delay `+0x98 = 25`. When the delay is 20,
+  `Tutorial::Tick` arms forced-movement lane `+0x9C = 250`. Once the delay
+  reaches zero, blend adds the double constant `0.0025` per 100-Hz tick with a
+  float32 store and clamps to one. At one, fade subtracts double `0.02` per
+  tick, clamps to zero, clears intro-active, and invokes the intro teardown
+  callback. The exact float32 sequence clears after 475 ticks. No controller
+  stage predicate runs while intro-active remains set; the 250-tick lane only
+  begins decrementing afterward.
+- During intro-active ticks with blend strictly above `0.8`, the controller
+  overwrites PlayerActor movement accumulator `(+0x158,+0x15C)` with
+  `(0,-actor+0x70)`. After teardown it decrements `+0x9C` first and, while the
+  result is positive, writes `(0,-actor+0x70*(remaining/250))`. The shared
+  player tick clamps and consumes this as ordinary motion. The opening
+  northward walk is therefore authoritative Tutorial movement and must not be
+  replaced by a camera offset or left to user input.
+- UI record 43 is drawn centered at `(800,450)` in the retail DirectX branch
+  with RGB floats `(0.85,0.73,0.44)`, the shared packed browser tint
+  `0xD9BA70`. UI record 68 is the complete skull backdrop: frame/logical size
+  `(753,335,93,99)` / `93 x 99`, scale `4`, alpha `blend^2`, center X `800`,
+  and center Y `350 - 100*blend`. The world/lesson layer is multiplied by
+  `1-fade`; record 43 and the skull remain above the black intro surface until
+  teardown.
+- `ControlSchemePicker::Render 0x005B9A30` draws its heading with Fonts group
+  4 (`+0x1351CC`, the `40/10/28` heading wrapper), common gold `0xD9BA70`,
+  center X `800`, and baseline Y `50`. It does not use the smaller menu face.
+- On selection, `0x005A8790 -> 0x005B9990` commits the binding globals once,
+  fades the visible picker alpha by `0.02` per tick to black in 50 ticks,
+  decays the selected-panel flash by `0.1` per tick, and advances its handoff
+  scalar by float32 `0.01` per tick until the Tutorial bootstrap at 100 ticks.
+- Tutorial primary headings (`0x005C9710`) use the same Fonts group 4 and
+  common gold. Secondary text (`0x005C9960`) uses Fonts group 3
+  (`+0x0E7D98`, the `24/6/28` menu wrapper) and the same gold. Both helpers
+  first draw a crisp black copy at `(x+2.25,y+2.25)`, then the gold copy at the
+  authored baseline; no blurred CSS shadow or white subtitle exists.
+- Stage 0/2 primary and secondary baselines are `100/170`. Stages 5/9/12/18
+  use `screenHeight-170` / `screenHeight-140` (`730/760` at `1600 x 900`).
+  The conditional stage-11 pair uses `80/110`; stage 19 uses primary baseline
+  `200`.
+- Bordered modal callouts (`0x005C9C70`) measure Fonts group-3 text, expand the
+  frame by `20 x 28`, draw the filled mirrored nine-slice from UI record 4,
+  and paint the text in common gold. Stage 14 does not use that callout: its
+  two lines go through the unframed secondary-text helper.
+
+These are members of the stock Tutorial presentation owner, not optional UI
+polish. A web implementation is incomplete if it shows a white baked card,
+omits record 68, advances the lesson during the 475-tick intro, uses the menu
+font for the picker/primary heading, paints secondary/callout text white, or
+wraps the stage-14 copy in an invented panel.
+
+### Exact forced-spawn and survival-trigger semantics
+
+The START GAME script's two command-1061 rows are also fully typed. Each calls
+the stock `Fire 0x7E3` factory with scalar arguments `(1.0, 100.0, 1000.0)`
+and its authored point: `(1766.1005859375, 147.63815307617188)` or
+`(1852.1005859375, 199.63815307617188)`. Dispatcher helper `0x00466C60`
+copies the first scalar into the Fire payload, normalizes the second into the
+area/scale lane, stores the third in the actor lifetime lane, enables the
+actor, and registers it. These are two distinct 1,000-tick `Fire` actors using
+the shared DeadHawg 46..77 presentation, not baked level sprites or an
+indefinite ambient decoration.
+
+Fresh canonical read-only decompilation closes two previously opaque pieces of
+the Tutorial Boneyard graph:
+
+- `0x00462680` stores the script operand at Arena `+0x8F00`.
+- `0x00469580` obtains the raw point from `0x00465E40`, temporarily applies
+  that Arena policy, then always runs `0x00466200` and collision/path
+  adjustment `0x00463D30`.
+- In `0x00466200`, policy `1` is the light-point branch and policy `2` is the
+  off-screen branch. Thus Tutorial wave 2 and the delayed wave-3 groups really
+  use off-screen placement, while the final wave-2 group, wave 5, and survival
+  groups use light placement. These are placement policies, not author-written
+  coordinates.
+
+Interval trigger `0x00681BA0` multiplies the serialized seconds at `+0x60` by
+the 100-Hz game clock and truncates it; `0x0068BBC0` compares against the Game
+tick at `Game+0x28`, records the current tick at trigger `+0x44`, and advances
+one round-robin interval-trigger cursor per fixed tick. Predicate dispatcher
+`0x00689750` and comparator `0x006819C0` resolve every authored Tutorial
+operand as follows:
+
+| Trigger | Period | ALL predicate | Script result |
+| ---: | ---: | --- | --- |
+| 10074 | 100 ticks | live enemy count `< 100` | force light placement; spawn one random member of group 10078 |
+| 10081 | 100 ticks | enemy count `> 10`, enemy count `< 150`, and player level `< 4` | the same script 10075 and group 10078 |
+| 10083 | 150 ticks | player level `> 3` | spawn one random member of group 10086 |
+
+All three start disabled and wave-6 script 10080 enables them. The first two
+share a script but retain independent clocks and eligibility. This explains
+why the survival phase can accelerate below level 4 without either inventing
+a wall-clock spawner or treating the serialized `1.0/1.5` values as unknown.
+
+### Tutorial-specific Solomon dialogue branch
+
+The opening Solomon actor is another member of the stock tutorial, not just
+the ordinary generated-Boneyard six-cue encounter:
+
+- When Solomon finishes facing a player and `Game+0x1CD0` contains the
+  Tutorial controller, `0x0047D0F0` queues, in order,
+  `SAY_OHBOYANOTHERWIZARD`, `SAY_IHAVEBEENDISPATCHED`,
+  `SAY_ILLDOTHEDISPATCHING`, `SAY_YOURPERVERSIONS`, and
+  `SAY_TODEATHEXACTLY`. Speaker side alternates Solomon/player.
+- At retreat start, `0x0047D570` queues `SAY_SOLOMON_LAUGH1`,
+  `SAY_COWARDCOMEBACK`, and `SAY_GETHIMBOYS`; the last remains the combat
+  release cue.
+- These eight cues share the same global narration queue as the sixteen
+  Tutorial-controller keys listed above. They may not overlap or bypass the
+  stage-4 narration-idle wait.
+
+The complete stock tutorial narration membership is therefore 24 cue keys,
+not 16. Every corresponding WAV is present in the retail `voices` directory;
+the browser implementation must carry the exact source bytes and derive queue
+duration from the PCM extent.
+
+A second clean fresh-profile observation sampled Tutorial stage 0 at 0.3,
+1.0, 2.0, and 4.0 seconds after the control-picker handoff. The
+`SAY_SOLOMONDARKSHOWYOURSELF` queue is audible across those samples, but retail
+draws no subtitle, speaker label, dialogue box, or portrait over the teaching
+heading/world. The narration owner is therefore audio/queue state in this
+scene; a visible web caption panel would be an invented presentation member.
+
+### Web-port consequence
+
+The exact port boundary is now: confirmed-absent selected browser save ->
+web-only yes/no offer -> native visible control picker -> native prelude card
+and music -> exact Tutorial level/controller/Solomon graph -> ordinary Game
+Over and durable-profile teardown. A present, corrupt, or temporarily
+unreadable selected save is not “absent” and must suppress the offer. The
+authenticated adapter checks its cloud row; the anonymous adapter checks its
+device-local row. Tutorial gameplay is solo-authoritative, but its
+presentation, stage, trigger clocks, loot identities, narration queue, and
+completion boundary must remain resumable browser-save state.
