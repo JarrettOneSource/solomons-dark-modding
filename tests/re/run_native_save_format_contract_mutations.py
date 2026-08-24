@@ -542,7 +542,7 @@ MUTATIONS: tuple[Mutation, ...] = (
         "fixture-hash.shared-helper-compares-file",
         FIXTURE_HASH,
         helper_sees_mismatched_committed_hash,
-        "G10 save-format fixture provenance does not match its file: recorded fff14fb768603abf, save-format-goldens.json hashes to eff14fb768603abf",
+        "G10 save-format fixture provenance does not match its file: recorded f6ab36abbde30b87, save-format-goldens.json hashes to 16ab36abbde30b87",
     ),
 )
 

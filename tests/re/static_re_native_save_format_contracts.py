@@ -35,6 +35,9 @@ FIXTURE = ROOT / "tests/fixtures/webgame/save-format-goldens.json"
 TOOL = ROOT / "tools/native_save_format.py"
 RECORDER = ROOT / "tests/re/record_live_save_format_goldens.py"
 HUB_DOC = ROOT / "docs/reverse-engineering/native-hub-and-economy.md"
+MEMORIAL_DOC = (
+    ROOT / "docs/reverse-engineering/native-hall-of-fame-and-memoratorium.md"
+)
 SKILL_DOC = ROOT / "docs/re/skills-concentration-discipline.md"
 LOCAL_SAVE_CATALOG = (
     ROOT / "SolomonDarkModLauncher.UI/src/Infrastructure/LocalSaveCatalog.cs"
@@ -69,7 +72,7 @@ EXPECTED_BINARY_SHA256 = (
     "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3"
 )
 EXPECTED_FIXTURE_SHA256 = (
-    "eff14fb768603abfb47c6d94006a71d04dd2b77954c2458703ca06d773373b8d"
+    "16ab36abbde30b8732883888edbf421986153490c75e614a7972b2a9eb1d1eb9"
 )
 EXPECTED_KEY_SHA256 = (
     "27c0dc1eb34b7d60a2f79cbb60cab0a2da05e336dbf8d75ff8b68d4fad5d0cf3"
@@ -96,9 +99,9 @@ EXPECTED_FRESH_PROFILE_DEFAULTS = {
     "class_available": [False, True, True, True, False, True, True, False, False, True],
     "stock_tutorial_pending": True,
     "class_enabled": [True] * 10,
-    "class_display_order": [9, 1, 0, 2, 7, 4, 3, 8, 5, 6],
-    "profile_stat_0xf4": 1000,
-    "class_canonical_order": list(range(10)),
+    "memorial_slot_ages": [9, 1, 0, 2, 7, 4, 3, 8, 5, 6],
+    "portrait_age_counter": 1000,
+    "memorial_portrait_ids": list(range(10)),
     "next_portrait_index": 100,
     "last_portrait_index": 0,
     "profile_flag_0x105": False,
@@ -113,9 +116,9 @@ EXPECTED_CORE_FIELD_LAYOUT = (
     *((f"class_available[{i}]", 4 + i, 1, "bool", 0x90 + i) for i in range(10)),
     ("stock_tutorial_pending", 14, 1, "bool", 0x104),
     *((f"class_enabled[{i}]", 15 + i, 1, "bool", 0x9A + i) for i in range(10)),
-    *((f"class_display_order[{i}]", 25 + i * 4, 4, "i32", 0xA4 + i * 4) for i in range(10)),
-    ("profile_stat_0xf4", 65, 4, "i32", 0xF4),
-    *((f"class_canonical_order[{i}]", 69 + i * 4, 4, "i32", 0xCC + i * 4) for i in range(10)),
+    *((f"memorial_slot_ages[{i}]", 25 + i * 4, 4, "i32", 0xA4 + i * 4) for i in range(10)),
+    ("portrait_age_counter", 65, 4, "i32", 0xF4),
+    *((f"memorial_portrait_ids[{i}]", 69 + i * 4, 4, "i32", 0xCC + i * 4) for i in range(10)),
     ("next_portrait_index", 109, 4, "i32", 0xF8),
     ("last_portrait_index", 113, 4, "i32", 0xFC),
     ("profile_flag_0x105", 117, 1, "bool", 0x105),
@@ -417,6 +420,45 @@ def test_native_save_goldens_round_trip_all_committed_files() -> str:
         "native save round-trip sweep did not examine all nine committed file recordings",
     )
     return "three live saves and all nine decoded files round-trip to exact native hashes"
+
+
+def test_native_memoratorium_fifo_profile_fields_are_named_and_closed() -> str:
+    document = _read_text(
+        MEMORIAL_DOC,
+        "native Memoratorium FIFO report disappeared",
+    )
+    for witness in (
+        "0x0051549F..0x00515547",
+        "0x005BF3B6..0x005BF3CD",
+        "0x005CF85A..0x005CF88A",
+        "0x00513090",
+        "0x00518620",
+        "9,1,0,2,7,4,3,8,5,6",
+        "2,1,3,6,5,8,9,4,7,0",
+        "marker[slot] = Integer(5) != 3",
+        "This is FIFO eviction by persisted age",
+    ):
+        _require(
+            witness in document,
+            f"native Memoratorium FIFO report lost evidence witness {witness!r}",
+        )
+    fields = {field.name: field.semantics for field in DARKDATA_CORE_FIELDS}
+    _require(
+        [fields[f"memorial_slot_ages[{index}]"] for index in range(10)]
+        == ["Memoratorium Painting-slot FIFO age"] * 10,
+        "darkdata decoder no longer names all ten Memoratorium FIFO ages",
+    )
+    _require(
+        fields.get("portrait_age_counter")
+        == "portrait age counter incremented after each raw capture",
+        "darkdata decoder lost the portrait age counter",
+    )
+    _require(
+        [fields[f"memorial_portrait_ids[{index}]"] for index in range(10)]
+        == ["Memoratorium Painting-slot portrait id"] * 10,
+        "darkdata decoder no longer names all ten Memoratorium portrait ids",
+    )
+    return "Memoratorium strict-min FIFO, ten-id ring, reveal, and profile fields are pinned"
 
 
 def _core_layout_groups() -> list[list[tuple[str, int, int, str, int]]]:
@@ -1195,6 +1237,7 @@ def test_native_active_wizard_saved_run_and_tutorial_boundaries_are_pinned() -> 
 TESTS = [
     test_native_save_container_codec_and_layout_are_pinned,
     test_native_save_goldens_round_trip_all_committed_files,
+    test_native_memoratorium_fifo_profile_fields_are_named_and_closed,
     test_native_save_document_node_and_payload_tables_are_exact,
     test_native_save_fresh_defaults_and_runtime_offsets_are_pinned,
     test_native_save_recorder_is_self_provenanced_settled_bounded_and_owned,

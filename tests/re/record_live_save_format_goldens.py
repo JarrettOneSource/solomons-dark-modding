@@ -424,15 +424,15 @@ emit('profile_address', profile)
 emit('gold', sd.debug.read_i32(profile + 0x58))
 emit('stock_tutorial_pending', sd.debug.read_u8(profile + 0x104))
 emit('profile_flag_0x105', sd.debug.read_u8(profile + 0x105))
-emit('profile_stat_0xf4', sd.debug.read_i32(profile + 0xf4))
+emit('portrait_age_counter', sd.debug.read_i32(profile + 0xf4))
 emit('next_portrait_index', sd.debug.read_i32(profile + 0xf8))
 emit('last_portrait_index', sd.debug.read_i32(profile + 0xfc))
 emit('shlorio_fee', sd.debug.read_i32(profile + 0x100))
 for index = 0, 9 do
   emit('class_available.' .. index, sd.debug.read_u8(profile + 0x90 + index))
   emit('class_enabled.' .. index, sd.debug.read_u8(profile + 0x9a + index))
-  emit('class_display_order.' .. index, sd.debug.read_i32(profile + 0xa4 + index * 4))
-  emit('class_canonical_order.' .. index, sd.debug.read_i32(profile + 0xcc + index * 4))
+  emit('memorial_slot_ages.' .. index, sd.debug.read_i32(profile + 0xa4 + index * 4))
+  emit('memorial_portrait_ids.' .. index, sd.debug.read_i32(profile + 0xcc + index * 4))
 end
 for index = 0, 29 do
   emit('hagatha_first_mix.' .. index, sd.debug.read_u8(profile + 0x6c + index))
@@ -586,7 +586,7 @@ def normalized_profile_state(values: dict[str, str]) -> dict[str, Any]:
         "gold": as_int(values.get("gold")),
         "stock_tutorial_pending": bool(as_int(values.get("stock_tutorial_pending"))),
         "profile_flag_0x105": bool(as_int(values.get("profile_flag_0x105"))),
-        "profile_stat_0xf4": as_int(values.get("profile_stat_0xf4")),
+        "portrait_age_counter": as_int(values.get("portrait_age_counter")),
         "next_portrait_index": as_int(values.get("next_portrait_index")),
         "last_portrait_index": as_int(values.get("last_portrait_index")),
         "shlorio_fee": as_int(values.get("shlorio_fee")),
@@ -598,12 +598,12 @@ def normalized_profile_state(values: dict[str, str]) -> dict[str, Any]:
             bool(as_int(values.get(f"class_enabled.{index}")))
             for index in range(10)
         ],
-        "class_display_order": [
-            as_int(values.get(f"class_display_order.{index}"))
+        "memorial_slot_ages": [
+            as_int(values.get(f"memorial_slot_ages.{index}"))
             for index in range(10)
         ],
-        "class_canonical_order": [
-            as_int(values.get(f"class_canonical_order.{index}"))
+        "memorial_portrait_ids": [
+            as_int(values.get(f"memorial_portrait_ids.{index}"))
             for index in range(10)
         ],
         "hagatha_first_mix_flags": [

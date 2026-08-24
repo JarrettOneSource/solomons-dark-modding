@@ -2,7 +2,9 @@
 
 Status: closed for the retail executable with preferred image base `0x00400000`;
 row presentation reopened and re-closed on 2026-08-22 (see
-[Hall row render contract](#hall-row-render-contract-0x005a2c80)).
+[Hall row render contract](#hall-row-render-contract-0x005a2c80)); the
+Memoratorium portrait archive/FIFO producer was reopened and closed on
+2026-08-24.
 The executable used for static analysis and the clean populated observation has
 SHA-256 `03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`.
 
@@ -574,6 +576,92 @@ The normal new-game values remain portrait ids `0..9` and marker bits
 the `Annalist2` replacement and story-only population are outside that product
 surface. The ordinary glow, portrait, marker, Memorator, flame, collision, and
 transition members are not optional.
+
+## Memoratorium portrait archive and FIFO producer (2026-08-24 reopening)
+
+The earlier consumer closure stopped at the three renderer branches and left
+the producer behind portrait ids `>=100` untraced. That omission also caused
+the save-format report to misname two persisted ten-element arrays as class
+selector permutations. Read-only Ghidra decompilation and raw instructions now
+close the full producer against the same retail image named above.
+
+### Persisted state and defaults
+
+The profile singleton is rooted at `0x0081A330`. Its initializer
+`0x005A8390` writes the complete memorial state:
+
+| Profile field | Runtime address | Default | Recovered role |
+| --- | --- | --- | --- |
+| marker bits `+0x90[10]` | `0x0081A3C0..0x0081A3C9` | `0,1,1,1,0,1,1,0,0,1` | record-8 urn marker for each Painting slot |
+| age stamps `+0xA4[10]` | `0x0081A3D4..0x0081A3FB` | `9,1,0,2,7,4,3,8,5,6` | FIFO age for each physical Painting slot |
+| portrait ids `+0xCC[10]` | `0x0081A3FC..0x0081A423` | `0..9` | bundled id `0..9`, blank `-1`, or external raw id `100..109` |
+| age counter `+0xF4` | `0x0081A424` | `1000` | monotonically incremented by each portrait capture |
+| next raw id `+0xF8` | `0x0081A428` | `100` | next `Portraits\\portrait<N>.raw` id |
+| latest raw id `+0xFC` | `0x0081A42C` | `0` | portrait carried into the completed-run Mortuary |
+
+All six fields are serialized through the existing `darkdata.cfg` profile
+path. The age permutation is deliberately not spatial order: its ascending
+slot order is `2,1,3,6,5,8,9,4,7,0`, so the first ten completed portraits
+replace the ten authored residents in exactly that sequence.
+
+### Capture, rollover, eviction, and reveal
+
+`PlayerWizard` local death calls portrait writer `0x005BED10`. The writer
+temporarily presents the wizard alive, selects the already-documented random
+heading and scale, draws `images\\paintbkg` into a `64 x 64` capture, places the
+wizard at capture center plus 20 pixels on Y, and writes raw RGBA bytes to
+`Portraits\\portrait<profile+0xF8>.raw`. Instructions
+`0x005BF3B6..0x005BF3CD` then increment the age counter, copy the current raw
+id to `+0xFC`, and increment the next raw id.
+
+The completed-run transition `0x005CF4F0` constructs the Mortuary, writes
+`Region+0x8F10 = 1`, copies the latest raw id into `Region+0x8F14`, and resets
+the next id to `100` only when it has advanced past `109`
+(`0x005CF85A..0x005CF88A`). The files are therefore a ten-id ring, not an
+unbounded archive.
+
+`Mortuary::Build 0x00515290` scans all ten age stamps at
+`0x0051549F..0x00515547`. Every comparison is strict: it replaces the current
+candidate only when the next age is lower. The minimum age is evicted; an
+equal-age tie keeps the lower slot index already selected. The chosen slot is
+then updated atomically at `0x00515547..0x0051557A`:
+
+```text
+marker[slot] = Integer(5) != 3
+portraitId[slot] = -1
+age[slot] = profileAgeCounter
+memorator.selectedSlot = slot
+```
+
+This is FIFO eviction by persisted age. It is neither Hall Awesomeness order
+nor a fixed spatial ring cursor.
+
+`Memorator::Tick 0x00513090` owns the staged ceremony. State 0 begins with a
+235-tick countdown; state 1 waits 25 more ticks and then copies
+`Region+0x8F14` into both the selected Painting actor's `+0x174` and the
+persisted portrait-id slot; states 2 and 3 retain the subsequent 50- and
+100-tick presentation intervals. `Mortuary::RenderPainting 0x00518620` then
+selects blank easel record 4 for `-1`, bundled portrait `14+id` for `0..9`, or
+the raw capture for `100..109`, always inside records 3 and 7 and with optional
+marker record 8. Painting callback `0x00506190 -> 0x00506100` formats
+`SAY_EULOGY_<current portrait id>`, so the interaction follows the replaced
+portrait rather than the physical easel's original id.
+
+### Multiplayer/Web consequence
+
+Retail owns one persisted local profile and one completing wizard. A Website
+shared-Hub memorial is therefore an explicit authority extension: the server
+must apply the same ten-slot age/FIFO rule to every completed participant,
+publish the resulting slots in the authoritative Hub snapshot, and let late
+joiners receive that same state. A browser-local list, Hall-score sort, or one
+memorial per party would contradict both the recovered owner and the requested
+shared-Hub product boundary.
+
+Validation receipt: after rebasing onto `c00f8143`, the eight-file Mod Loader
+manifest was byte-identical in the Mac worktree. The registered
+`python3 tests/re/run_static_re_tests.py --ci` suite passed `500/500`, including
+the new strict-min FIFO, ten-id ring, reveal, and corrected profile-field
+contract. No native binary, loader runtime, push, or deployment changed.
 
 ## Implementation consequences
 

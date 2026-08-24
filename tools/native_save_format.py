@@ -487,31 +487,31 @@ DARKDATA_CORE_FIELDS: tuple[DarkdataField, ...] = (
     ),
     *(
         DarkdataField(
-            f"class_display_order[{index}]",
+            f"memorial_slot_ages[{index}]",
             25 + index * 4,
             4,
             "i32",
             0xA4 + index * 4,
-            "class selector permutation; names not yet reversed",
+            "Memoratorium Painting-slot FIFO age",
         )
         for index in range(10)
     ),
     DarkdataField(
-        "profile_stat_0xf4",
+        "portrait_age_counter",
         65,
         4,
         "i32",
         0xF4,
-        "opaque profile statistic; default 1000",
+        "portrait age counter incremented after each raw capture",
     ),
     *(
         DarkdataField(
-            f"class_canonical_order[{index}]",
+            f"memorial_portrait_ids[{index}]",
             69 + index * 4,
             4,
             "i32",
             0xCC + index * 4,
-            "class selector permutation; names not yet reversed",
+            "Memoratorium Painting-slot portrait id",
         )
         for index in range(10)
     ),
@@ -547,9 +547,9 @@ FRESH_PROFILE_DEFAULTS: dict[str, Any] = {
     "class_available": [False, True, True, True, False, True, True, False, False, True],
     "stock_tutorial_pending": True,
     "class_enabled": [True] * 10,
-    "class_display_order": [9, 1, 0, 2, 7, 4, 3, 8, 5, 6],
-    "profile_stat_0xf4": 1000,
-    "class_canonical_order": list(range(10)),
+    "memorial_slot_ages": [9, 1, 0, 2, 7, 4, 3, 8, 5, 6],
+    "portrait_age_counter": 1000,
+    "memorial_portrait_ids": list(range(10)),
     "next_portrait_index": 100,
     "last_portrait_index": 0,
     "profile_flag_0x105": False,

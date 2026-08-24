@@ -198,147 +198,147 @@
         "runtime_offset": 163
       },
       {
-        "name": "class_display_order[0]",
+        "name": "memorial_slot_ages[0]",
         "payload_offset": 25,
         "size": 4,
         "type": "i32",
         "runtime_offset": 164
       },
       {
-        "name": "class_display_order[1]",
+        "name": "memorial_slot_ages[1]",
         "payload_offset": 29,
         "size": 4,
         "type": "i32",
         "runtime_offset": 168
       },
       {
-        "name": "class_display_order[2]",
+        "name": "memorial_slot_ages[2]",
         "payload_offset": 33,
         "size": 4,
         "type": "i32",
         "runtime_offset": 172
       },
       {
-        "name": "class_display_order[3]",
+        "name": "memorial_slot_ages[3]",
         "payload_offset": 37,
         "size": 4,
         "type": "i32",
         "runtime_offset": 176
       },
       {
-        "name": "class_display_order[4]",
+        "name": "memorial_slot_ages[4]",
         "payload_offset": 41,
         "size": 4,
         "type": "i32",
         "runtime_offset": 180
       },
       {
-        "name": "class_display_order[5]",
+        "name": "memorial_slot_ages[5]",
         "payload_offset": 45,
         "size": 4,
         "type": "i32",
         "runtime_offset": 184
       },
       {
-        "name": "class_display_order[6]",
+        "name": "memorial_slot_ages[6]",
         "payload_offset": 49,
         "size": 4,
         "type": "i32",
         "runtime_offset": 188
       },
       {
-        "name": "class_display_order[7]",
+        "name": "memorial_slot_ages[7]",
         "payload_offset": 53,
         "size": 4,
         "type": "i32",
         "runtime_offset": 192
       },
       {
-        "name": "class_display_order[8]",
+        "name": "memorial_slot_ages[8]",
         "payload_offset": 57,
         "size": 4,
         "type": "i32",
         "runtime_offset": 196
       },
       {
-        "name": "class_display_order[9]",
+        "name": "memorial_slot_ages[9]",
         "payload_offset": 61,
         "size": 4,
         "type": "i32",
         "runtime_offset": 200
       },
       {
-        "name": "profile_stat_0xf4",
+        "name": "portrait_age_counter",
         "payload_offset": 65,
         "size": 4,
         "type": "i32",
         "runtime_offset": 244
       },
       {
-        "name": "class_canonical_order[0]",
+        "name": "memorial_portrait_ids[0]",
         "payload_offset": 69,
         "size": 4,
         "type": "i32",
         "runtime_offset": 204
       },
       {
-        "name": "class_canonical_order[1]",
+        "name": "memorial_portrait_ids[1]",
         "payload_offset": 73,
         "size": 4,
         "type": "i32",
         "runtime_offset": 208
       },
       {
-        "name": "class_canonical_order[2]",
+        "name": "memorial_portrait_ids[2]",
         "payload_offset": 77,
         "size": 4,
         "type": "i32",
         "runtime_offset": 212
       },
       {
-        "name": "class_canonical_order[3]",
+        "name": "memorial_portrait_ids[3]",
         "payload_offset": 81,
         "size": 4,
         "type": "i32",
         "runtime_offset": 216
       },
       {
-        "name": "class_canonical_order[4]",
+        "name": "memorial_portrait_ids[4]",
         "payload_offset": 85,
         "size": 4,
         "type": "i32",
         "runtime_offset": 220
       },
       {
-        "name": "class_canonical_order[5]",
+        "name": "memorial_portrait_ids[5]",
         "payload_offset": 89,
         "size": 4,
         "type": "i32",
         "runtime_offset": 224
       },
       {
-        "name": "class_canonical_order[6]",
+        "name": "memorial_portrait_ids[6]",
         "payload_offset": 93,
         "size": 4,
         "type": "i32",
         "runtime_offset": 228
       },
       {
-        "name": "class_canonical_order[7]",
+        "name": "memorial_portrait_ids[7]",
         "payload_offset": 97,
         "size": 4,
         "type": "i32",
         "runtime_offset": 232
       },
       {
-        "name": "class_canonical_order[8]",
+        "name": "memorial_portrait_ids[8]",
         "payload_offset": 101,
         "size": 4,
         "type": "i32",
         "runtime_offset": 236
       },
       {
-        "name": "class_canonical_order[9]",
+        "name": "memorial_portrait_ids[9]",
         "payload_offset": 105,
         "size": 4,
         "type": "i32",
@@ -394,7 +394,7 @@
       true,
       true
     ],
-    "class_display_order": [
+    "memorial_slot_ages": [
       9,
       1,
       0,
@@ -406,8 +406,8 @@
       5,
       6
     ],
-    "profile_stat_0xf4": 1000,
-    "class_canonical_order": [
+    "portrait_age_counter": 1000,
+    "memorial_portrait_ids": [
       0,
       1,
       2,
@@ -519,7 +519,7 @@
         "gold": 500,
         "stock_tutorial_pending": true,
         "profile_flag_0x105": false,
-        "profile_stat_0xf4": 1000,
+        "portrait_age_counter": 1000,
         "next_portrait_index": 100,
         "last_portrait_index": 0,
         "shlorio_fee": 500,
@@ -547,7 +547,7 @@
           true,
           true
         ],
-        "class_display_order": [
+        "memorial_slot_ages": [
           9,
           1,
           0,
@@ -559,7 +559,7 @@
           5,
           6
         ],
-        "class_canonical_order": [
+        "memorial_portrait_ids": [
           0,
           1,
           2,
@@ -921,214 +921,214 @@
                 "semantics": "class selection flag; selector identity not yet reversed"
               },
               {
-                "name": "class_display_order[0]",
+                "name": "memorial_slot_ages[0]",
                 "payload_offset": 25,
                 "payload_offset_hex": "0x19",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0A4",
                 "value": 9,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "class_display_order[1]",
+                "name": "memorial_slot_ages[1]",
                 "payload_offset": 29,
                 "payload_offset_hex": "0x1D",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0A8",
                 "value": 1,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "class_display_order[2]",
+                "name": "memorial_slot_ages[2]",
                 "payload_offset": 33,
                 "payload_offset_hex": "0x21",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0AC",
                 "value": 0,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "class_display_order[3]",
+                "name": "memorial_slot_ages[3]",
                 "payload_offset": 37,
                 "payload_offset_hex": "0x25",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0B0",
                 "value": 2,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "class_display_order[4]",
+                "name": "memorial_slot_ages[4]",
                 "payload_offset": 41,
                 "payload_offset_hex": "0x29",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0B4",
                 "value": 7,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "class_display_order[5]",
+                "name": "memorial_slot_ages[5]",
                 "payload_offset": 45,
                 "payload_offset_hex": "0x2D",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0B8",
                 "value": 4,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "class_display_order[6]",
+                "name": "memorial_slot_ages[6]",
                 "payload_offset": 49,
                 "payload_offset_hex": "0x31",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0BC",
                 "value": 3,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "class_display_order[7]",
+                "name": "memorial_slot_ages[7]",
                 "payload_offset": 53,
                 "payload_offset_hex": "0x35",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0C0",
                 "value": 8,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "class_display_order[8]",
+                "name": "memorial_slot_ages[8]",
                 "payload_offset": 57,
                 "payload_offset_hex": "0x39",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0C4",
                 "value": 5,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "class_display_order[9]",
+                "name": "memorial_slot_ages[9]",
                 "payload_offset": 61,
                 "payload_offset_hex": "0x3D",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0C8",
                 "value": 6,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "profile_stat_0xf4",
+                "name": "portrait_age_counter",
                 "payload_offset": 65,
                 "payload_offset_hex": "0x41",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0F4",
                 "value": 1000,
-                "semantics": "opaque profile statistic; default 1000"
+                "semantics": "portrait age counter incremented after each raw capture"
               },
               {
-                "name": "class_canonical_order[0]",
+                "name": "memorial_portrait_ids[0]",
                 "payload_offset": 69,
                 "payload_offset_hex": "0x45",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0CC",
                 "value": 0,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
-                "name": "class_canonical_order[1]",
+                "name": "memorial_portrait_ids[1]",
                 "payload_offset": 73,
                 "payload_offset_hex": "0x49",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0D0",
                 "value": 1,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
-                "name": "class_canonical_order[2]",
+                "name": "memorial_portrait_ids[2]",
                 "payload_offset": 77,
                 "payload_offset_hex": "0x4D",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0D4",
                 "value": 2,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
-                "name": "class_canonical_order[3]",
+                "name": "memorial_portrait_ids[3]",
                 "payload_offset": 81,
                 "payload_offset_hex": "0x51",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0D8",
                 "value": 3,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
-                "name": "class_canonical_order[4]",
+                "name": "memorial_portrait_ids[4]",
                 "payload_offset": 85,
                 "payload_offset_hex": "0x55",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0DC",
                 "value": 4,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
-                "name": "class_canonical_order[5]",
+                "name": "memorial_portrait_ids[5]",
                 "payload_offset": 89,
                 "payload_offset_hex": "0x59",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0E0",
                 "value": 5,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
-                "name": "class_canonical_order[6]",
+                "name": "memorial_portrait_ids[6]",
                 "payload_offset": 93,
                 "payload_offset_hex": "0x5D",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0E4",
                 "value": 6,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
-                "name": "class_canonical_order[7]",
+                "name": "memorial_portrait_ids[7]",
                 "payload_offset": 97,
                 "payload_offset_hex": "0x61",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0E8",
                 "value": 7,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
-                "name": "class_canonical_order[8]",
+                "name": "memorial_portrait_ids[8]",
                 "payload_offset": 101,
                 "payload_offset_hex": "0x65",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0EC",
                 "value": 8,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
-                "name": "class_canonical_order[9]",
+                "name": "memorial_portrait_ids[9]",
                 "payload_offset": 105,
                 "payload_offset_hex": "0x69",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0F0",
                 "value": 9,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
                 "name": "next_portrait_index",
@@ -1757,7 +1757,7 @@
         "gold": 875,
         "stock_tutorial_pending": true,
         "profile_flag_0x105": false,
-        "profile_stat_0xf4": 1000,
+        "portrait_age_counter": 1000,
         "next_portrait_index": 100,
         "last_portrait_index": 0,
         "shlorio_fee": 650,
@@ -1785,7 +1785,7 @@
           true,
           true
         ],
-        "class_display_order": [
+        "memorial_slot_ages": [
           9,
           1,
           0,
@@ -1797,7 +1797,7 @@
           5,
           6
         ],
-        "class_canonical_order": [
+        "memorial_portrait_ids": [
           0,
           1,
           2,
@@ -2159,214 +2159,214 @@
                 "semantics": "class selection flag; selector identity not yet reversed"
               },
               {
-                "name": "class_display_order[0]",
+                "name": "memorial_slot_ages[0]",
                 "payload_offset": 25,
                 "payload_offset_hex": "0x19",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0A4",
                 "value": 9,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "class_display_order[1]",
+                "name": "memorial_slot_ages[1]",
                 "payload_offset": 29,
                 "payload_offset_hex": "0x1D",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0A8",
                 "value": 1,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "class_display_order[2]",
+                "name": "memorial_slot_ages[2]",
                 "payload_offset": 33,
                 "payload_offset_hex": "0x21",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0AC",
                 "value": 0,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "class_display_order[3]",
+                "name": "memorial_slot_ages[3]",
                 "payload_offset": 37,
                 "payload_offset_hex": "0x25",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0B0",
                 "value": 2,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "class_display_order[4]",
+                "name": "memorial_slot_ages[4]",
                 "payload_offset": 41,
                 "payload_offset_hex": "0x29",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0B4",
                 "value": 7,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "class_display_order[5]",
+                "name": "memorial_slot_ages[5]",
                 "payload_offset": 45,
                 "payload_offset_hex": "0x2D",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0B8",
                 "value": 4,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "class_display_order[6]",
+                "name": "memorial_slot_ages[6]",
                 "payload_offset": 49,
                 "payload_offset_hex": "0x31",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0BC",
                 "value": 3,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "class_display_order[7]",
+                "name": "memorial_slot_ages[7]",
                 "payload_offset": 53,
                 "payload_offset_hex": "0x35",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0C0",
                 "value": 8,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "class_display_order[8]",
+                "name": "memorial_slot_ages[8]",
                 "payload_offset": 57,
                 "payload_offset_hex": "0x39",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0C4",
                 "value": 5,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "class_display_order[9]",
+                "name": "memorial_slot_ages[9]",
                 "payload_offset": 61,
                 "payload_offset_hex": "0x3D",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0C8",
                 "value": 6,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "profile_stat_0xf4",
+                "name": "portrait_age_counter",
                 "payload_offset": 65,
                 "payload_offset_hex": "0x41",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0F4",
                 "value": 1000,
-                "semantics": "opaque profile statistic; default 1000"
+                "semantics": "portrait age counter incremented after each raw capture"
               },
               {
-                "name": "class_canonical_order[0]",
+                "name": "memorial_portrait_ids[0]",
                 "payload_offset": 69,
                 "payload_offset_hex": "0x45",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0CC",
                 "value": 0,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
-                "name": "class_canonical_order[1]",
+                "name": "memorial_portrait_ids[1]",
                 "payload_offset": 73,
                 "payload_offset_hex": "0x49",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0D0",
                 "value": 1,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
-                "name": "class_canonical_order[2]",
+                "name": "memorial_portrait_ids[2]",
                 "payload_offset": 77,
                 "payload_offset_hex": "0x4D",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0D4",
                 "value": 2,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
-                "name": "class_canonical_order[3]",
+                "name": "memorial_portrait_ids[3]",
                 "payload_offset": 81,
                 "payload_offset_hex": "0x51",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0D8",
                 "value": 3,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
-                "name": "class_canonical_order[4]",
+                "name": "memorial_portrait_ids[4]",
                 "payload_offset": 85,
                 "payload_offset_hex": "0x55",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0DC",
                 "value": 4,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
-                "name": "class_canonical_order[5]",
+                "name": "memorial_portrait_ids[5]",
                 "payload_offset": 89,
                 "payload_offset_hex": "0x59",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0E0",
                 "value": 5,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
-                "name": "class_canonical_order[6]",
+                "name": "memorial_portrait_ids[6]",
                 "payload_offset": 93,
                 "payload_offset_hex": "0x5D",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0E4",
                 "value": 6,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
-                "name": "class_canonical_order[7]",
+                "name": "memorial_portrait_ids[7]",
                 "payload_offset": 97,
                 "payload_offset_hex": "0x61",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0E8",
                 "value": 7,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
-                "name": "class_canonical_order[8]",
+                "name": "memorial_portrait_ids[8]",
                 "payload_offset": 101,
                 "payload_offset_hex": "0x65",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0EC",
                 "value": 8,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
-                "name": "class_canonical_order[9]",
+                "name": "memorial_portrait_ids[9]",
                 "payload_offset": 105,
                 "payload_offset_hex": "0x69",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0F0",
                 "value": 9,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
                 "name": "next_portrait_index",
@@ -2985,7 +2985,7 @@
         "gold": 250,
         "stock_tutorial_pending": true,
         "profile_flag_0x105": false,
-        "profile_stat_0xf4": 1000,
+        "portrait_age_counter": 1000,
         "next_portrait_index": 100,
         "last_portrait_index": 0,
         "shlorio_fee": 600,
@@ -3013,7 +3013,7 @@
           true,
           true
         ],
-        "class_display_order": [
+        "memorial_slot_ages": [
           9,
           1,
           0,
@@ -3025,7 +3025,7 @@
           5,
           6
         ],
-        "class_canonical_order": [
+        "memorial_portrait_ids": [
           0,
           1,
           2,
@@ -3389,214 +3389,214 @@
                 "semantics": "class selection flag; selector identity not yet reversed"
               },
               {
-                "name": "class_display_order[0]",
+                "name": "memorial_slot_ages[0]",
                 "payload_offset": 25,
                 "payload_offset_hex": "0x19",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0A4",
                 "value": 9,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "class_display_order[1]",
+                "name": "memorial_slot_ages[1]",
                 "payload_offset": 29,
                 "payload_offset_hex": "0x1D",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0A8",
                 "value": 1,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "class_display_order[2]",
+                "name": "memorial_slot_ages[2]",
                 "payload_offset": 33,
                 "payload_offset_hex": "0x21",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0AC",
                 "value": 0,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "class_display_order[3]",
+                "name": "memorial_slot_ages[3]",
                 "payload_offset": 37,
                 "payload_offset_hex": "0x25",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0B0",
                 "value": 2,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "class_display_order[4]",
+                "name": "memorial_slot_ages[4]",
                 "payload_offset": 41,
                 "payload_offset_hex": "0x29",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0B4",
                 "value": 7,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "class_display_order[5]",
+                "name": "memorial_slot_ages[5]",
                 "payload_offset": 45,
                 "payload_offset_hex": "0x2D",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0B8",
                 "value": 4,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "class_display_order[6]",
+                "name": "memorial_slot_ages[6]",
                 "payload_offset": 49,
                 "payload_offset_hex": "0x31",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0BC",
                 "value": 3,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "class_display_order[7]",
+                "name": "memorial_slot_ages[7]",
                 "payload_offset": 53,
                 "payload_offset_hex": "0x35",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0C0",
                 "value": 8,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "class_display_order[8]",
+                "name": "memorial_slot_ages[8]",
                 "payload_offset": 57,
                 "payload_offset_hex": "0x39",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0C4",
                 "value": 5,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "class_display_order[9]",
+                "name": "memorial_slot_ages[9]",
                 "payload_offset": 61,
                 "payload_offset_hex": "0x3D",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0C8",
                 "value": 6,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot FIFO age"
               },
               {
-                "name": "profile_stat_0xf4",
+                "name": "portrait_age_counter",
                 "payload_offset": 65,
                 "payload_offset_hex": "0x41",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0F4",
                 "value": 1000,
-                "semantics": "opaque profile statistic; default 1000"
+                "semantics": "portrait age counter incremented after each raw capture"
               },
               {
-                "name": "class_canonical_order[0]",
+                "name": "memorial_portrait_ids[0]",
                 "payload_offset": 69,
                 "payload_offset_hex": "0x45",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0CC",
                 "value": 0,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
-                "name": "class_canonical_order[1]",
+                "name": "memorial_portrait_ids[1]",
                 "payload_offset": 73,
                 "payload_offset_hex": "0x49",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0D0",
                 "value": 1,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
-                "name": "class_canonical_order[2]",
+                "name": "memorial_portrait_ids[2]",
                 "payload_offset": 77,
                 "payload_offset_hex": "0x4D",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0D4",
                 "value": 2,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
-                "name": "class_canonical_order[3]",
+                "name": "memorial_portrait_ids[3]",
                 "payload_offset": 81,
                 "payload_offset_hex": "0x51",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0D8",
                 "value": 3,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
-                "name": "class_canonical_order[4]",
+                "name": "memorial_portrait_ids[4]",
                 "payload_offset": 85,
                 "payload_offset_hex": "0x55",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0DC",
                 "value": 4,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
-                "name": "class_canonical_order[5]",
+                "name": "memorial_portrait_ids[5]",
                 "payload_offset": 89,
                 "payload_offset_hex": "0x59",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0E0",
                 "value": 5,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
-                "name": "class_canonical_order[6]",
+                "name": "memorial_portrait_ids[6]",
                 "payload_offset": 93,
                 "payload_offset_hex": "0x5D",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0E4",
                 "value": 6,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
-                "name": "class_canonical_order[7]",
+                "name": "memorial_portrait_ids[7]",
                 "payload_offset": 97,
                 "payload_offset_hex": "0x61",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0E8",
                 "value": 7,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
-                "name": "class_canonical_order[8]",
+                "name": "memorial_portrait_ids[8]",
                 "payload_offset": 101,
                 "payload_offset_hex": "0x65",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0EC",
                 "value": 8,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
-                "name": "class_canonical_order[9]",
+                "name": "memorial_portrait_ids[9]",
                 "payload_offset": 105,
                 "payload_offset_hex": "0x69",
                 "size": 4,
                 "type": "i32",
                 "runtime_offset_hex": "0x0F0",
                 "value": 9,
-                "semantics": "class selector permutation; names not yet reversed"
+                "semantics": "Memoratorium Painting-slot portrait id"
               },
               {
                 "name": "next_portrait_index",

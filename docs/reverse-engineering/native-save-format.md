@@ -5,7 +5,7 @@ Status: **G10 closed** for retail `SolomonDark.exe` SHA-256
 
 The committed live corpus is
 [`save-format-goldens.json`](../../tests/fixtures/webgame/save-format-goldens.json),
-SHA-256 `eff14fb768603abfb47c6d94006a71d04dd2b77954c2458703ca06d773373b8d`.
+SHA-256 `16ab36abbde30b8732883888edbf421986153490c75e614a7972b2a9eb1d1eb9`.
 It contains a fresh profile, a scripted mid-progression profile, and a
 post-unlock profile. Every binary tree and every text settings file in those
 captures reconstructs to the recorded byte length and SHA-256. The native
@@ -250,12 +250,21 @@ are contiguous and their runtime ranges are inclusive.
 | `0x04..0x0D` | `bool[10]` | `+0x90..+0x99` | class-availability selector flags; class-name mapping not yet reversed | `0,1,1,1,0,1,1,0,0,1` |
 | `0x0E` | `bool` | `+0x104` | stock tutorial/game-over gate | `1` |
 | `0x0F..0x18` | `bool[10]` | `+0x9A..+0xA3` | class-selection enabled flags; class-name mapping not yet reversed | ten `1` bytes |
-| `0x19..0x40` | `i32[10]` | `+0xA4..+0xCB` | class display-order permutation | `9,1,0,2,7,4,3,8,5,6` |
-| `0x41..0x44` | `i32` | `+0xF4` | opaque persistent statistic | `1000` |
-| `0x45..0x6C` | `i32[10]` | `+0xCC..+0xF3` | canonical class-selector permutation | `0,1,2,3,4,5,6,7,8,9` |
+| `0x19..0x40` | `i32[10]` | `+0xA4..+0xCB` | Memoratorium Painting-slot FIFO age stamps | `9,1,0,2,7,4,3,8,5,6` |
+| `0x41..0x44` | `i32` | `+0xF4` | portrait age counter, incremented after each raw capture | `1000` |
+| `0x45..0x6C` | `i32[10]` | `+0xCC..+0xF3` | Memoratorium Painting-slot portrait ids | `0,1,2,3,4,5,6,7,8,9` |
 | `0x6D..0x70` | `i32` | `+0xF8` | next `portrait<N>.raw` index | `100` |
 | `0x71..0x74` | `i32` | `+0xFC` | most recently written portrait index | `0` |
 | `0x75` | `bool` | `+0x105` | opaque profile flag | `0` |
+
+The 2026-08-24 Memoratorium producer reopening corrected the former
+class-permutation labels. `Mortuary::Build 0x00515290` reads `+0xA4[10]` as
+ages, evicts their strict minimum, writes the current `+0xF4` age to that
+slot, and blanks the corresponding `+0xCC[10]` portrait until
+`Memorator::Tick 0x00513090` reveals the latest `+0xFC` raw id. Portrait writer
+`0x005BED10` increments `+0xF4`, `+0xF8`, and `+0xFC`; post-run transition
+`0x005CF4F0` wraps `+0xF8` from `110` to `100`. The ten external portrait ids
+and the ten physical Painting slots consequently form a persisted FIFO archive.
 
 The JSON expands every array element into an individual row with payload
 offset, size, type, runtime offset, semantic status, and captured value. That is
@@ -361,7 +370,7 @@ are split across:
 - `System.ComputerName`, which varied across isolated processes and is not a
   stable account key;
 - Hall of Fame wizard records and portrait indices; and
-- opaque profile statistic `+0xF4`.
+- the Memoratorium portrait age counter at profile `+0xF4`.
 
 None is a safe web account identity. A migration must bind the imported data to
 the already-authenticated website account and must never import or upload the
