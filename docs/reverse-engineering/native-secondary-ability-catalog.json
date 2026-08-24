@@ -3111,7 +3111,7 @@
         "name": "immediate_secondary_dispatch"
       },
       "region_screen_feedback": [],
-      "targeting": "aimed_world_point",
+      "targeting": "aimed_world_point_strict_radius_200",
       "trigger": "press_edge",
       "actors": [
         {
