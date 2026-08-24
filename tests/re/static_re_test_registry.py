@@ -612,6 +612,7 @@ from static_re_projectile_spell_mechanics_contracts import (
     test_fireball_scenery_and_terrain_masks_are_pinned,
     test_frost_jet_operand_widths_and_rank_one_update_ownership_are_pinned,
     test_held_one_shot_staff_action_handoff_is_pinned,
+    test_staff_phase_edges_and_one_shot_cadence_are_pinned,
     test_materialized_projectile_trajectories_pin_native_motion,
     test_low_mana_primary_branch_and_all_consumers_are_pinned,
     test_primary_targeting_homing_and_staff_cadence_are_pinned,
@@ -2372,6 +2373,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Ether flight compositor and contact ownership are pinned",
         test_ether_flight_compositor_and_contact_ownership_are_pinned,
+    ),
+    (
+        "Staff phase edges and one-shot cadence are pinned",
+        test_staff_phase_edges_and_one_shot_cadence_are_pinned,
     ),
     (
         "Rails and Wall custom shadow painters are pinned",

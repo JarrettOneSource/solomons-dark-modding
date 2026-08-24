@@ -1724,10 +1724,11 @@ and tables above.
   `0`; the alternate RNG branch starts at `8` and then joins `7`. Movement does
   not cancel the queued action. Death does. Releasing a short click does not
   rewind it. The one-shot emission marker is action-progress crossing `1`. In
-  the observed branch-A run this is fixed action tick 19 and the `K=1 -> K=8`
-  transition; branch B reaches the same progress marker while changing
+  the observed branch-A run this is insertion-relative update 18 (capture row
+  19 when the preceding idle row is counted) and the `K=1 -> K=8` transition;
+  branch B reaches the same progress marker while changing
   `K=8 -> K=7`.
-- Air, Water, and Earth do **not** run that 74-tick action program. The
+- Air, Water, and Earth do **not** run that one-shot action program. The
   sustained dispatcher `0x00548A00` calls the equipped-item resolver and then
   queues mode 5 `Action_PlayerWizard_StaffConstant` through `0x0044F5F0` at
   `0x00548A54..0x00548A66` on every active primary tick (mode 8 is the
@@ -1792,8 +1793,9 @@ on the acceptance tick. This is not a renderer transform.
 The active action then preserves that heading. Staff Cast 1 remains queued
 after a short Ether/Fire input release and keeps `+0x160` nonzero, so later
 movement ticks cannot replace the accepted cast heading before the action's
-marker or completion. Its marker is the fixed-tick progress crossing at tick
-19 and its observed program ends at tick 74. Air, Water, and Earth renew the
+marker or completion. Fire's marker is insertion-relative update 18, its last
+occupied update is 72, and the next-ready/idle row is update 73. The historical
+`19/74` labels counted the preceding idle capture row. Air, Water, and Earth renew the
 one-tick Staff Constant action while their primary remains active, giving the
 same facing priority for the channel lifetime. Earth retains the last cast
 heading while its minimum-charge selection latch delays release.
@@ -2302,7 +2304,8 @@ draw as the complete Fire primary.
   `0x0044B370` starts from float32 rate `0.075`. Helper `0x00656580` supplies
   the cast-speed scalar (neutral `1`), and Fire alone applies the adjacent
   double `0.75`, producing progress `0.05625`/tick, the observed marker at
-  fixed action tick `19`, and action release at tick `74`. `PlayerWizard`
+  insertion-relative update `18`, strict-end crossing at update `72`, and
+  action release/next-ready edge at update `73`. `PlayerWizard`
   callback `0x00550180` dispatches the mode-3 marker exactly once per action
   through `0x0054CAF0`. The occupied action rejects requeue, but a still-held
   primary level queues the next action after the prior one ends; release is not

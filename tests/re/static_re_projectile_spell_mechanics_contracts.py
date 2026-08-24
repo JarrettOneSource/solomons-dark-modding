@@ -11,6 +11,7 @@ from static_re_contract_support import ROOT, StaticReTestFailure
 
 
 DOC_PATH = ROOT / "docs/reverse-engineering/native-projectile-and-spell-mechanics.md"
+LIGHTING_DOC_PATH = ROOT / "docs/reverse-engineering/native-lighting-and-shadow-system.md"
 SKILLS_DOC_PATH = ROOT / "docs/reverse-engineering/native-skills-and-spells.md"
 EARTH_VFX_CATALOG_PATH = ROOT / "docs/reverse-engineering/earth-boulder-vfx-catalog.json"
 AUDIO_DOC_PATH = ROOT / "docs/reverse-engineering/native-audio-events.md"
@@ -171,6 +172,60 @@ def test_held_one_shot_staff_action_handoff_is_pinned() -> str:
         "held one-shot Staff action handoff",
     )
     return "Held one-shot admission, pose handoff, and complete direct membership are pinned"
+
+
+def test_staff_phase_edges_and_one_shot_cadence_are_pinned() -> str:
+    doc = _document()
+    lighting = LIGHTING_DOC_PATH.read_text(encoding="utf-8")
+    _require_tokens(
+        doc,
+        (
+            "## 2026-08-23 Staff Cast 1 phase edge and exact held cadence reopening",
+            "`0x005502F6` writes float32 `0.15000000596046448`",
+            "marker writer appeared at write-hit indices `69`, `125`, and `181`",
+            "| Ether `8` | `float32(0.075)` | `14` | `54`",
+            "| Fire `16` | `float32(float32(0.075) * 0.75)` | `18` | `72`",
+            "insertion at tick `15981`, marker/pose transition\nat `15999`",
+            "Pure Air `24`, Water `32`, Earth `40`, and welded Constant builds\n`1003..1008`",
+        ),
+        "Staff phase/cadence reopening",
+    )
+    _require_tokens(
+        lighting,
+        (
+            "## 2026-08-23 PlayerWizard `+0x268` event-writer correction",
+            "Cast 1 modes `3/6/9`",
+            "Cast 2 modes `4/7/10`",
+            "Constant modes `5/8/11`",
+            "`0x00784D64 = 0.15000000596046448f`",
+            "`0x007DE978 = 0.25f`",
+            "`0x00785370 = 0.44999998807907104f`",
+            "Dampen's separate\nmode-21 CastSpin has no case",
+        ),
+        "PlayerWizard phase writer document",
+    )
+
+    def clock(rate: float) -> tuple[int, int, float]:
+        progress = _f32(0.0)
+        marker = 0
+        for update in range(1, 200):
+            previous = progress
+            progress = _f32(progress + rate)
+            if marker == 0 and previous < 1.0 <= progress:
+                marker = update
+            if progress > 4.0:
+                return marker, update, progress
+        _fail("Staff Cast 1 recurrence did not complete")
+
+    _require(
+        clock(_f32(0.075)) == (14, 54, 4.050001621246338),
+        "Ether Cast 1 recurrence drifted",
+    )
+    _require(
+        clock(_f32(_f32(0.075) * 0.75)) == (18, 72, 4.050002574920654),
+        "Fire Cast 1 recurrence drifted",
+    )
+    return "Staff phase event writers and exact Ether/Fire marker/repeat clocks are pinned"
 
 
 def test_projectile_spell_native_dispatch_contract_is_complete() -> str:
