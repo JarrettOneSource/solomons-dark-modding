@@ -238,6 +238,17 @@ the result is one. A second `Integer(3)` chooses one of these exact placements:
 
 The actor has radius 10. Constructor/tick/render are
 `0x00502450/0x0050B1F0/0x0051C560`; art is College records `510..516`.
+The render instructions split that art into two independently registered
+banks: actor `+0x178` selects `Game+0x2644/+0x2648` records `510..512`, while
+`round(actor+0x144)` selects `Game+0x2654/+0x2658` records `513..516`. Both
+passes use actor `+0x17C` as horizontal scale; the second placement writes
+`-1`, and the constructor initializes the other placements to `+1`.
+The four-record hat bank uses the inherited animator at actor `+0x13C`: while
+idle, `Integer(200)==2` starts a sweep at
+`float((Float(3)+1.0)*0.45)` degrees per tick; the stored phase advances to
+180 and the render index is nearest-integer
+`sin(phase*pi/180) * (4.0-0.01)`. Index four is the vector's blank resized
+apex, while indices zero through three select College `513..516`.
 Every `Integer(10)+20` ticks, the actor chooses a new one of three gesture
 states, rejecting the immediately previous state. The dialogue title is
 `Skorcha`, the intro is `ENFORCER_INTRO`, and completion chooses uniformly from
@@ -254,6 +265,15 @@ Painting `+0x174` index to `0x00506100`. Static rows are
 after the principal line, adds one uniformly selected
 `SAY_BADEULOGY_0..7` unless the current run's Boast success bit is set. Walking
 away can select `SAY_EULOGY_INTERRUPT1..4` through the common speech lifetime.
+
+This edge is not the ordinary `Chat` engagement path. The Painting keeps its
+recovered radius-15 hit body beside the paired radius-40 solid, then its action
+override directly starts the Memorator-owned eulogy. Consequently the
+Painting itself does not enter the common radius-15 Chat teardown calculation;
+using that calculation as a controller proximity gate makes all ten targets
+unreachable behind their paired solids. A web controller prompt may use the
+paired radius 40 for reachability while the pointer hit remains the exact
+radius-15 actor circle.
 
 The Website's current static portrait labels may reproduce rows 0,1,3..9.
 Index 100 must remain empty unless the Website has a concrete archived-wizard
@@ -293,4 +313,3 @@ participant:
 - Browser acceptance must open every named NPC, every selector family, one
   representative book and every Teacher/Boast mutation family, and must capture
   empty page-error, console-error, and failed-response arrays.
-
