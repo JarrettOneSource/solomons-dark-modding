@@ -232,9 +232,18 @@ the result is one. A second `Integer(3)` chooses one of these exact placements:
 
 | Variant | Position | Extra authored state |
 | ---: | ---: | --- |
-| 0 | `(732.5, 1437.5)` | default |
-| 1 | `(403.5, 1637)` | actor `+0x17C = -1`; Luthacus `+0x15C = 1` |
+| 0 | `(1437.5, 732.5)` | default |
+| 1 | `(1637, 403.5)` | actor `+0x17C = -1`; Luthacus `+0x15C = 1` |
 | 2 | `(669, 705.5)` | default |
+
+The first two rows correct an earlier decompiler-order transcription error.
+Raw stores in `0x0050B720` write actor X at `+0x18` before Y at `+0x1C`:
+variant 0 writes globals `0x00792F8C = 1437.5` and
+`0x00792F88 = 732.5`; variant 1 writes `0x00792F94 = 1637` and
+`0x00792F90 = 403.5`; variant 2 writes `0x00792454 = 669` and
+`0x00792F98 = 705.5`. Reading the globals in ascending-address order had
+silently swapped X/Y for variants 0 and 1. All three are ordinary Courtyard
+resident coordinates owned by the normal camera bank.
 
 The actor has radius 10. Constructor/tick/render are
 `0x00502450/0x0050B1F0/0x0051C560`; art is College records `510..516`.

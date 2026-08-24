@@ -94,7 +94,7 @@ actor collision/click radius recorded by `sd.world.list_actors()`.
 | 5004 | Fomentius / `PotionGuy` | `(1397, 664)` | 30 | Potions and useful items (`Shop`) |
 | 5003 | Annalist | `(895.5, 455.5)` | 8 | Dialogue and Boast service |
 | 5005 | Luthacus / `ItemsGuy` | `(1700.5, 449.5)` | 25 | Participant's Scavenged Goods storage |
-| 5007 | Tyrannia | one of three builder placements; live `(669, 705.5)` | 10 | Optional dialogue-only visitor |
+| 5007 | Tyrannia | `(1437.5,732.5)`, `(1637,403.5)`, or live `(669,705.5)` | 10 | Optional dialogue-only visitor |
 | 5008 | Teacher | `(576.5, 710.5)` | 25 | Progression-gated spell service |
 
 The collision scenery is gameplay state even though G12 owns its drawing:
@@ -115,8 +115,10 @@ portable layout constants.
 
 Tyrannia is also regenerated. The normal builder `0x0050B720` creates her only
 when `Integer(3) == 1`, then a second `Integer(3)` chooses one of three variants
-or placements. The final census is one successful realization, not a guarantee
-that every Courtyard contains her.
+or placements. Raw X/Y stores and globals are enumerated in
+[`native-hub-npc-interactions.md`](native-hub-npc-interactions.md); they correct
+the formerly swapped first two coordinate pairs. The final census is one
+successful realization, not a guarantee that every Courtyard contains her.
 
 ### Mortuary
 
