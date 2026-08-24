@@ -84,8 +84,15 @@ Boneyard, not hard-coded as a generic Tutorial-controller reward.
 
 The item recipe is serialized in the level as type `AMULET`, name
 `Sorceror's Amulet`, description `A dull trinket, carved with a few beneficial
-runes`, all-white colors, and one opaque serialized child containing float
-10.0. The child is retained without an invented effect-field name.
+runes`, all-white colors, and one serialized FX child. Its exact ten-byte
+payload is `02 00 00 00 00 02 00 00 20 41`. `FX::Sync` at `0x00570A90`
+serializes byte kind `+0x14`, 32-bit target `+0x18`, byte operator `+0x1C`,
+then float magnitude `+0x20`, so the row decodes as kind 2
+`FX_SPELLCLASSDAMAGE`, target 0 Ether, percentage operator 2, magnitude 10.0.
+`FX_Apply` at `0x00576AA0` therefore multiplies the Ether-class damage lane by
+`1 + 10/100 = 1.1`; `FX_Format` at `0x00575C20` presents the row as
+`Ether Damage +10.0%`. The earlier opaque-child wording was incomplete and
+must not be used to justify a no-effect web item.
 The item command uses location mode 7. The potion command also uses location
 mode 7. At runtime `ScriptLocation_Resolve` (`0x00466600`) resolves mode 7 to
 the current script thread's trigger position at `[0x0081F618] + 0x64`; for these

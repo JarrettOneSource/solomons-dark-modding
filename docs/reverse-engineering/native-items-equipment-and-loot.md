@@ -179,6 +179,26 @@ Hat/Robe colors where needed, and calls `0x0057A000` to synthesize level-scaled
 FX. Random gear therefore does not require a matching `items.cfg` recipe, and
 its recipe/set identity differs from the named-definition path.
 
+### Fixed Tutorial authored equipment
+
+The Tutorial Boneyard embeds a third definition source outside `items.cfg` and
+the random factory: ItemRecipe UID 3010, materialized once by script 10050 as
+`Sorceror's Amulet`. Its exact authored fields are type 7003 Amulet, selector
+0, inventory records 30 and 18, two white RGBA colors, description
+`A dull trinket, carved with a few beneficial runes`, and one FX child with
+payload `02 00 00 00 00 02 00 00 20 41`.
+
+The FX vtable is `0x007873AC`; its sync virtual at `+0x14` is `0x00570A90`.
+That serializer writes kind byte `+0x14`, target dword `+0x18`, operator byte
+`+0x1C`, and magnitude float `+0x20`. The payload is therefore exactly kind 2
+`FX_SPELLCLASSDAMAGE`, target 0 Ether, operator 2 percentage, magnitude 10.0.
+The passive application branch at `0x00576AA0` multiplies progression's Ether
+class-damage lane `+0x100` by `1.1`, and formatter `0x00575C20` emits
+`Ether Damage +10.0%`. Clone `0x004699B0` retains the recipe strings and clones
+the FX list into the live item; common contextual builder `0x0057C4B0` emits
+the description and formatted live effect. This fixed row has no
+`items.cfg` source index or set membership, but it is not effectless.
+
 The initial class selector is native `Integer(6)`: Hat and Robe results 0/1
 each have two preimages out of the primitive's eight-value mask, while Staff,
 Wand, Ring, and Amulet each have one. Hat/Robe color construction uses the
