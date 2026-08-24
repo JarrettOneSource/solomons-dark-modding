@@ -213,7 +213,9 @@ state-0 tick then executes in this order:
 6. evaluate the late-cycle player-contact branch; and
 7. absent contact, when `cursor >= 29`, subtract `29`, draw `Integer(2)` and
    replace the wrapped cursor with `4` when the result is one, rearm both audio
-   bytes, then consume `Float(5) + 5` for the next dirt child's motion scalar.
+   bytes, then consume `Float(5) + 5` for the next dig-body bob amplitude at
+   `+0x24C`. The current body offset at `+0x250` is a half-sine of that
+   amplitude and is unrelated to `Anim_Flydirt` motion.
 
 The two sound calls are not pitch-and-gain calls. Instructions
 `0x00482061..0x0048207A` and `0x004820E5..0x004820FE` end at gain-only
@@ -792,3 +794,118 @@ The web's retained half-unit mobility probe compensates for collision shapes
 that have not yet been recovered as exact native actor geometry. Both are
 explicit boundaries; the native branches remain catalogued above rather than
 being silently described as implemented parity.
+
+## State-0 thrown-dirt visual actor — 2026-08-24 closure
+
+The missing web dirt report reopens the state-0 digging presentation boundary.
+The 2026-08-20 audio pass identified the `Anim_Flydirt` constructor call but
+left the visual actor as a separate future question even though it shares the
+same cursor edge, owner, fixed tick, child manager, asset bundle, lighting
+context, and teardown. That split was incomplete. Fresh read-only Ghidra
+replica queries close the visual member and correct the earlier interpretation
+of Solomon fields `+0x24C/+0x250`.
+
+### Evidence and complete membership
+
+All addresses below are preferred-image addresses for retail 0.72.5
+`SolomonDark.exe`, 4,723,200 bytes, SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`,
+image base `0x00400000`. The canonical `SolomonDark` Ghidra project was queried
+only through `scripts/Invoke-GhidraHeadless.ps1` and its read-only replica pool.
+
+| Member | Native evidence | Disposition |
+| --- | --- | --- |
+| dirt birth | sole constructor xref `0x00482155 -> 0x00453A70`, after the state-0 cursor first crosses strict `>15` | one child per armed cycle; exact same edge as the throw-dirt cue |
+| spawn root | call instructions `0x00482124..0x00482155`, qwords `0x00786C58=22`, `0x00786C50=62` | `(solomon.x - 22, solomon.y - 62)` |
+| flight/update | `Anim_Flydirt` vtable `0x00784F34`, update slot `+0x08 -> 0x00453AC0` | fixed 100 Hz integration, no RNG and no collision |
+| art/render | render slot `+0x0C -> 0x00458300`; Solomon bundle builder `0x004ED980` writes record 0 to object `+0x38` | exact Solomon record 0, drawn twice source-over at identical transform |
+| lighting | Solomon render `0x004A2610` samples Region lighting at `(x-22,y-62)`, installs it as the child-manager multiplier, then calls `0x004023F0` | source-root light scalar multiplies both dirt passes |
+| child lifetime | mark/remove slot `+0x18 -> 0x00401FD0`; manager update `0x004022A0` | remove before render on the 29th update when clamped alpha reaches zero |
+| owner/teardown | embedded `ObjectManager` at Solomon `+0x254`, constructed by `0x00402070`, rendered by `0x004023F0`, destroyed by `0x00402190` from `0x0047D010` | child persists across a contact edge until its own fade ends; Solomon destruction frees it |
+| state-0 body bob | state body `0x00482212..0x004822AF`, renderer `0x004902C0` | exact-ported with the same recurrence; not dirt motion |
+| placement modes 2..5 and 10 | every branch materializes the same type-5009 class | all use this one dirt/bob implementation |
+| placement modes 6..9, zero-candidate, duplicate-suppression | no type-5009 actor | no dirt or body bob by construction |
+| states 1..4 | no constructor call outside state 0; existing children remain manager-owned | no new dirt; an already-live child completes naturally |
+| Solomon record 1 | builder destination `+0xFC`, absent from `0x00458300` | out of this system; it is not a dirt variant |
+| other 83 RTTI-named `Anim_*` classes | complete `catalog_native_classes.py '^Anim_'` census; each has its own vtable/update/render and none references `0x00453A70` | out of this system; shared base lifecycle does not make them dirt variants |
+
+Constructor and vtable xref sweeps find exactly one `Anim_Flydirt` constructor,
+one constructor call, one update, and one renderer. There are no alternate
+dirt styles, random branches, enhanced-effects branches, audio-dependent
+branches, or sibling callers hidden elsewhere in the executable.
+
+### Exact behavioral contract
+
+At birth the child owns:
+
+```text
+position = (solomon.x - 22, solomon.y - 62)
+headingDegrees = 35.0f
+speed = 2.0f
+alpha = 1.0f
+```
+
+Each later fixed update uses the current heading and speed, in this order:
+
+```text
+position.x = f32(position.x + f32(speed * sinDegrees(headingDegrees)))
+position.y = f32(position.y + f32(speed * -cosDegrees(headingDegrees)))
+speed = f32(speed * 0.9750000238418579)
+headingDegrees = f32(headingDegrees + 2.0)
+alpha = max(0, f32(alpha - 0.03500000014901161))
+```
+
+The birth tick renders age zero without an update because the parent manager
+ticks existing children before state 0 creates the new one. Ages `0..28` are
+visible. Update 29 clamps alpha to zero, calls the mark/remove slot, and the
+manager deletes the child before that frame's child render. The effect therefore
+has 29 visible fixed-tick samples and is neither stopped nor accelerated by
+Solomon contact.
+
+Renderer `0x00458300` sets multiplicative white with the child alpha, invokes
+the rotated glyph painter twice with identical position, heading, and Solomon
+record 0, then restores white. The double submission is authored behavior, not
+a decompiler duplicate: raw instructions contain two complete consecutive
+`0x00414F90` calls. One draw or an alpha-combined substitute is not the same
+source-over program during the fade.
+
+`Solomon.bundle` SHA-256 is
+`a4d85b56f79486361a4ae18a6b4bc2bc1c0e28ba1a57f96ef68cc64e09e9cafa`;
+`Solomon.png` SHA-256 is
+`057a3661340a3a099cf88c491d88c4268d82b8bb48ab29d214961ce701140126`.
+Record 0 is atlas rectangle `(590,975,28,46)`, logical cell `28x46`, origin
+`(0,0)`, with RGBA-byte SHA-256
+`533c0a372b73446a65ba20b9aba523fdc99d97a4e78bfb632c1d8f3db61b3bf7`.
+Lossless optimized PNG extraction is 3,110 bytes with SHA-256
+`1a2631f8022e0bef521aa112e4059c9ab7df5f6bfafbe6235972b92788ee95e7`.
+
+The state-0 body bob is a separate sibling output of the same recurrence. For
+`3 < cursor <= 15`, native writes:
+
+```text
+bodyOffsetY = f32(
+  sin(pi * ((cursor - 3) / 12)) * digBodyBobAmplitude
+)
+```
+
+and otherwise writes zero. The constructor and each program wrap set
+`digBodyBobAmplitude = Float(5) + 5`, so the range is `[5,10)`. Renderer
+`0x004902C0` adds `+0x250` to Solomon's body Y. This draw is the RNG consumer
+previously mislabeled as the dirt child's motion; `Anim_Flydirt` itself consumes
+no random word.
+
+### Authority, ordering, and lifecycle consequence
+
+The stock child is presentation-only but its birth edge is generated by the
+authoritative state-0 cursor. A web port must therefore replicate one semantic
+dig event containing its birth tick, then let every peer reconstruct the fixed
+flight from that tick. Muted audio must not suppress dirt. A late join must not
+replay historical children because the native `ObjectManager` is not serialized;
+future events are consumed once. On an ordinary connected peer, snapshot delay
+may advance the child to the authoritative age but cannot change its path,
+double-pass draw, or retirement tick.
+
+The painter order is body/shadow first, then the child manager under the
+Region-light multiplier, all inside Solomon's ordinary dynamic painter block.
+The dirt does not get an independent world-Y sort key, shadow, collision body,
+light provider, audio call, network actor, or reward/gameplay effect.
