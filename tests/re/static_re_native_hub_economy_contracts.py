@@ -17,6 +17,9 @@ from static_re_contract_support import (
 
 
 DOC_PATH = ROOT / "docs/reverse-engineering/native-hub-and-economy.md"
+NPC_INTERACTIONS_DOC_PATH = (
+    ROOT / "docs/reverse-engineering/native-hub-npc-interactions.md"
+)
 GOLDEN_PATH = ROOT / "tests/fixtures/webgame/hub-economy-goldens.json"
 RECORDER_PATH = ROOT / "tests/re/record_live_hub_economy_goldens.py"
 HAGATHA_CATALOG_PATH = (
@@ -1414,6 +1417,10 @@ def _normalized_rng_state(state: Any, consequence: str) -> dict[str, Any]:
 
 def test_native_hub_entity_census_and_interactions_are_pinned() -> str:
     doc, _, fixture, regions, _ = _load_fixture()
+    npc_doc = _read(
+        NPC_INTERACTIONS_DOC_PATH,
+        "the native Hub NPC interaction contract is absent",
+    )
 
     census = fixture["hub_entity_census"]
     _require_header(
@@ -1594,7 +1601,19 @@ def test_native_hub_entity_census_and_interactions_are_pinned() -> str:
         r"^\| `hub\.run_entry` \| Stock `MapPicker` \| Courtyard control at `Gameplay\+0xE00`.*?$",
         "run entry could be mistaken for a world Portal because its UI control row drifted",
     )
-    return "five-room hub census, collision targets, NPC actions, and G14 intent mapping are pinned"
+    _require_tokens(
+        npc_doc,
+        (
+            "`0x004736D0`: `MOV AL,1; RET`",
+            "Semicus is constructed unconditionally",
+            "The normal survival builders contain only one conditional named-actor producer",
+            "Every normal Courtyard construction calls `Integer(3)`",
+            "next zero-to-one occupancy edge",
+            "Hub-resume reconstruction",
+        ),
+        "Hub NPC actor gating or Courtyard reconstruction ownership drifted",
+    )
+    return "five-room hub census, exact NPC gates, Region population lifecycle, actions, and G14 mapping are pinned"
 
 
 def test_native_hub_price_formulas_and_transaction_constants_are_pinned() -> str:

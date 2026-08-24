@@ -95,7 +95,7 @@ actor collision/click radius recorded by `sd.world.list_actors()`.
 | 5003 | Annalist | `(895.5, 455.5)` | 8 | Dialogue and Boast service |
 | 5005 | Luthacus / `ItemsGuy` | `(1700.5, 449.5)` | 25 | Participant's Scavenged Goods storage |
 | 5007 | Tyrannia | `(1437.5,732.5)`, `(1637,403.5)`, or live `(669,705.5)` | 10 | Optional dialogue-only visitor |
-| 5008 | Teacher | `(576.5, 710.5)` | 25 | Progression-gated spell service |
+| 5008 | Teacher | `(576.5, 710.5)` | 25 | Always-present actor; spell rows are progression-gated |
 
 The collision scenery is gameplay state even though G12 owns its drawing:
 
@@ -113,12 +113,16 @@ is the no-op `0x0055C300`; they have no talk or service target. Their count,
 positions, radii, and appearance are therefore regenerated observations, not
 portable layout constants.
 
-Tyrannia is also regenerated. The normal builder `0x0050B720` creates her only
-when `Integer(3) == 1`, then a second `Integer(3)` chooses one of three variants
-or placements. Raw X/Y stores and globals are enumerated in
+Tyrannia is also regenerated on every Courtyard construction. The normal
+builder `0x0050B720` creates her only when `Integer(3) == 1`, then a second
+`Integer(3)` chooses one of three variants or placements. Raw X/Y stores and
+globals are enumerated in
 [`native-hub-npc-interactions.md`](native-hub-npc-interactions.md); they correct
 the formerly swapped first two coordinate pairs. The final census is one
 successful realization, not a guarantee that every Courtyard contains her.
+The nearby Teacher branch is not an unlock: `0x004736D0` is exactly
+`MOV AL,1; RET`, so Machinimbus is constructed on every retail survival
+Courtyard build. Semicus is likewise unconditional in the Library builder.
 
 ### Mortuary
 
@@ -183,7 +187,7 @@ pin what the alternate builder does once selected.
 | --- | --- |
 | Five region classes, fixed named-NPC coordinates, Paintings, and collision props | Reconstructed from compiled builders on region entry |
 | Student population and fields | Regenerated; active-stream `Integer` and G1 `Float` consumers |
-| Tyrannia presence/variant | Regenerated; two active-stream `Integer(3)` calls |
+| Tyrannia presence/variant | Regenerated on every Courtyard construction; two active-stream `Integer(3)` calls |
 | Fomentius catalog | Rebuilt at game startup and after a completed run; retained while merely reopening the shop |
 | Hagatha catalog | Rebuilt beside Fomentius from current participant progression; no RNG |
 | Shlorio result list | Created by each paid DOWSE action; destroyed on Done or successful purchase |
@@ -238,7 +242,7 @@ surface. Run entry is a UI target and has no world radius.
 | `hub.npc.annalist` | `ANNAL_INTRO` | Boast -> `!BOAST`; action bubble suppressed when `DAT_0081A3CA` is set | same |
 | `hub.npc.luthacus` | `SCAVENGER_INTRO` | Examine Items -> `!INVENTORY`; action bubble suppressed by `DAT_0081A3CC` | same |
 | `hub.npc.tyrannia` | `ENFORCER_INTRO` | None; actor itself exists only on the 1-in-3 builder roll | dialogue completion, back, distance |
-| `hub.npc.teacher` | `TEACHER_INTRO`, then `TEACHER_Q` | “Per$uade” -> `!SPELLS`; actor is created only when gate `0x004736D0` succeeds | back, completion, distance, service Done |
+| `hub.npc.teacher` | `TEACHER_INTRO`, then `TEACHER_Q` | “Per$uade” -> `!SPELLS`; apparent gate `0x004736D0` always returns one, so only offer rows are gated | back, completion, distance, service Done |
 | `hub.npc.memorator` | `MEMORATOR_INTRO`, `MEMORATOR_Q1`, `MEMORATOR_Q2`, dismiss | None | dialogue completion, back, distance |
 | `hub.painting.<eulogy_index>` | Memorator line `SAY_EULOGY_<index>` | Painting must be the exact room actor; valid suffixes are `0,1,100,3,4,5,6,7,8,9` | line completion or back |
 | `hub.npc.librarian` | `LIBRARIAN_INTRO` | Books -> `!BOOKS` | back, completion, service Done |

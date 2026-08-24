@@ -21,7 +21,8 @@ Trader inventories and transactions remain owned by
 | Retail image | `SolomonDarkAbandonware/SolomonDark.exe`, identity above | All functions, vtables, globals, offsets, constants, and xrefs below refer to the same preserved executable. |
 | Runtime-loaded dialogue | Beta 0.72.5 `data/dialogue/survival.txt`, SHA-256 `5e792f4dc692667d0ecaa4e7304202f11d2d1cdc664820b97be83145fa3b2d67` | `Game` loads this aggregate through `0x005CDC70`; it is authoritative when it differs from the retained per-speaker authoring files. |
 | Selector content | `books.txt` SHA-256 `d7ca0a36c2fe6af90a4a950d5ff3dab7638f43640de97684eb6a7583a02b24a1`; `spellfacts.txt` SHA-256 `1d78d408664ea830465e7e5a8b56df2c6373cb4f6685dc025a1a6d0f90ab0e17`; `narration.txt` SHA-256 `5a80f605f8fcac7fc634f8234d5b0a0173d3d4aa563dc076cc6d1b4dbc649174` | Complete BookReview rows, Teacher explanations, Painting/eulogy lines, Boast eulogies, and interruption lines. |
-| Fresh static trace | `Game` ctor `0x005CC800`, dialogue loader `0x005CDC70`, survival Region builder `0x0050B720`, special dispatcher `0x004FB890`, common NPC action `0x00501800` | Recovers every actor, dialogue node, command edge, name owner, and construction path. |
+| Fresh static trace | `Game` ctor `0x005CC800`, dialogue loader `0x005CDC70`, survival Region builder `0x0050B720`, Courtyard constructor `0x00514EE0`, special dispatcher `0x004FB890`, common NPC action `0x00501800` | Recovers every actor, dialogue node, command edge, name owner, construction path, and Courtyard reconstruction boundary. |
+| Conditional-gate instructions | `0x004736D0`: `MOV AL,1; RET`; `0x00461F60`: `XOR AL,AL; RET`; builder calls at `0x0050BD0C/0x0050BDD9` | Machinimbus is unconditional in retail 0.72.5. The second constant-false branch controls an extra non-actor Region initialization call, not an unlockable NPC. |
 | Fresh class trace | `Chat` ctor/update/render/input `0x004F5D90/0x004FFEE0/0x004F9380/0x004FFBC0/0x004FFC40`; `ChatExtend` render `0x004F7BA0`; selector functions listed below | Recovers modal replacement, scrolling, row selection, prices, feedback, and teardown. |
 | Fresh downstream trace | Boast select `0x004FC340`; failure `0x005CB110`; potion/equipment/secondary/mana writers `0x005CB810/0x00577760/0x0054CC50/0x0052B150`; Levelup `0x00656B50/0x0066F920`; terminal award `0x005BC400` | Closes all five challenge branches, one-shot failure, automatic choice, Wave-30 contract, and score bonus. |
 
@@ -46,10 +47,10 @@ replacement, state mutation, or downstream Boast resolution.
 | Provokatus dialogue and five-row Boast service | type 5003; `ANNAL_INTRO`; `!BOAST`; `Boast/BoastBox` | exact-port required, including all challenge effects |
 | Luthacus dialogue and InventoryShop command | type 5005; `SCAVENGER_INTRO`; `!INVENTORY` | exact-port required; storage transaction already closed |
 | Skorcha optional dialogue and three dismissals | type 5007 `Tyrannia`; `ENFORCER_INTRO` and dismiss 1..3 | exact-port required with generated membership/placement |
-| Professor Machinimbus dialogue, question, and eight-row SellSpell service | type 5008; `TEACHER_INTRO/TEACHER_Q`; `!SPELLS`; `SellSpell/SellSpellBox` | exact-port required |
+| Professor Machinimbus dialogue, question, and eight-row SellSpell service | type 5008; `TEACHER_INTRO/TEACHER_Q`; `!SPELLS`; `SellSpell/SellSpellBox` | exact-port required; actor is unconditional because its apparent gate returns one |
 | Declarius dialogue and two questions | type 5017; `MEMORATOR_INTRO/Q1/Q2/DISMISS` | exact-port required |
 | Paintings `0,1,100,3,4,5,6,7,8,9` | type 5018; `0x00506190/0x00506100`; narration table | exact-port required; 100 deliberately has no static `SAY_EULOGY_100` row |
-| Professor Semicus dialogue and 26-row BookReview service | type 5013; `LIBRARIAN_INTRO`; `!BOOKS`; `BookReview/BookBox` | exact-port required, including one-shot Lace branch |
+| Professor Semicus dialogue and 26-row BookReview service | type 5013; `LIBRARIAN_INTRO`; `!BOOKS`; `BookReview/BookBox` | exact-port required; actor and 26 initial rows are unconditional in survival, including one-shot Lace removal |
 | Shlorio dialogue, price question, and DowsingShop command | type 5016; `DOWSER_INTRO/DOWSER_Q`; `!DOWSE` | exact-port required; transaction already closed |
 | Archchancellor dialogue, equipment question, dismissal | type 5012; `ARCH_INTRO/ARCH_Q/ARCH_DISMISS` | exact-port required |
 | roaming Students | type 5002, no-op action slot `0x0055C300` | out-of-system: native noninteractive ambient actors |
@@ -105,6 +106,27 @@ The common actor tick `0x00505010` additionally closes on Region loss or
 Inline `*...*` emphasis is part of the ExactText input. The aggregate's
 spelling, capitalization, punctuation, repeated spaces, and trailing spaces are
 content, not copy-edit opportunities.
+
+## Conditional actor gates and discoverability
+
+The normal survival builders contain only one conditional named-actor producer:
+Skorcha/Tyrannia. Semicus is constructed unconditionally in Library case
+`0xFA4` at `(512,595)`. Machinimbus appears to sit behind a call at
+`0x0050BD0C`, but the callee `0x004736D0` is exactly `MOV AL,1; RET`; every
+retail Courtyard therefore constructs the Teacher at `(576.5,710.5)`. His
+eight offer rows are progression-gated, not the actor.
+
+The nearby call to `0x00461F60` is not another NPC gate. That function is
+exactly `XOR AL,AL; RET`, so the guarded call to Region initializer
+`0x005001E0` is unreachable and the following unconditional call still runs.
+The three bytes `0x0081A3CA..CC` can suppress the Annalist, Hagatha, and
+Luthacus action bubbles during Region construction, but do not suppress those
+actors or their action callbacks; their wrappers at `0x005018A0/B0/C0` clear
+the corresponding byte and tail-call the common Chat action.
+
+Story-phase Polisher/Arch/alternate dialogue members are selected by the
+separate builder `0x00513BE0` and `Gameplay+0x1CD8`. They are not unlockable
+members of the normal survival Hub and must not be injected into that census.
 
 ## Provokatus and `Boast`
 
@@ -227,8 +249,9 @@ slot. It unlocks future acquisition.
 
 ## Optional Skorcha/Tyrannia
 
-The normal Courtyard builder calls `Integer(3)` and creates type 5007 only when
-the result is one. A second `Integer(3)` chooses one of these exact placements:
+Every normal Courtyard construction calls `Integer(3)` and creates type 5007
+only when the result is one. A second `Integer(3)` chooses one of these exact
+placements:
 
 | Variant | Position | Extra authored state |
 | ---: | ---: | --- |
@@ -262,8 +285,12 @@ Every `Integer(10)+20` ticks, the actor chooses a new one of three gesture
 states, rejecting the immediately previous state. The dialogue title is
 `Skorcha`, the intro is `ENFORCER_INTRO`, and completion chooses uniformly from
 the three compiled dismissal nodes. Presence, placement, animation state, and
-dismissal are generated once by the authoritative Hub owner and shared by all
-participants; clients must not reroll them independently.
+dismissal belong to that Courtyard instance. Stock destroys and reconstructs
+Region actors on a room switch, so a later Courtyard entry performs a fresh
+pair of population draws. A shared web Hub must keep one authoritative result
+while at least one participant occupies the Courtyard, destroy it when the
+Courtyard becomes empty, and reroll on the next zero-to-one occupancy edge;
+clients must never reroll independently.
 
 ## Paintings and Declarius
 
@@ -302,7 +329,9 @@ participant:
 - advanced spell unlocks live with the participant's progression book;
 - active Boast ID/text/failure/success live with the current resumable wizard
   and reset when that wizard is retired for the next run; and
-- optional Skorcha membership/placement is authoritative Hub-world state.
+- optional Skorcha membership/placement is authoritative Courtyard-instance
+  state, regenerated on each authoritative Courtyard construction rather than
+  participant-local render state or durable save state.
 
 ## Validation contract
 
@@ -317,8 +346,20 @@ participant:
 - Exercise all 26 books, Lace's present-then-absent durable transition, all
   eight Teacher prices, insufficient gold, accepted unlock, already-owned
   omission, and all-bought state.
-- Exercise all three Skorcha placements/gesture states and both absent/present
-  authoritative Hub populations.
+- Exercise all three Skorcha placements/gesture states, both absent/present
+  authoritative populations, shared occupancy retention, last-exit teardown,
+  next-entry reroll, and Hub-resume reconstruction.
 - Browser acceptance must open every named NPC, every selector family, one
   representative book and every Teacher/Boast mutation family, and must capture
   empty page-error, console-error, and failed-response arrays.
+
+## Conditional-population closure receipt
+
+The final manifest-identical Mac candidates passed the registered Loader
+static-RE suite `499/499` and the Website's complete supported gate, including
+59 Hub UI tests. Chrome 151 on Apple M2 Metal proved initial Skorcha absence,
+Library exit/re-entry, authoritative variant-0 reconstruction and prompt, all
+20 named interactions, and separate variant-1/variant-2 conversations with
+empty page, console, and failed-response arrays. Semicus's Library/BookReview,
+Machinimbus's always-present actor and gated spell rows, and Provokatus's
+five-row Boast selector were visible in the continuous journey.
