@@ -1158,8 +1158,9 @@ new Fomentius potion stack, selected the companion inventory after Hagatha's
 perk-only callback, and selected, revealed ItemInfo for, dragged, equipped,
 then restored a newly bought Shlorio object. Luthacus' asymmetric two-owner
 drag and second-activation paths, required-clothing rejection, dowsing flash
-and MsgBox, 10,000-gold initialization, and second-participant isolation also
-remained green.
+and MsgBox, the then-web 10,000-gold initialization, and second-participant
+isolation also remained green. The 2026-08-23 save/title reopening supersedes
+that invented amount with initializer `0x005A8390`'s retail value 500.
 
 The first 2026-08-15 Website pass closed authoritative inventory and merchant
 mechanics but incorrectly labelled its custom DOM modal as an exact stock UI

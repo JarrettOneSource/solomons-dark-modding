@@ -1166,6 +1166,32 @@ def test_native_save_fixture_provenance_hashes_the_committed_recording() -> str:
     return "the documented G10 fixture hash is checked against the committed recording"
 
 
+def test_native_active_wizard_saved_run_and_tutorial_boundaries_are_pinned() -> str:
+    document = _read_text(
+        DOC,
+        "native active-wizard save reopening disappeared",
+    )
+    for witness, consequence in (
+        ("`0x0058E260`", "New Game current-wizard confirmation owner"),
+        ("`0x0058E600`", "sole New Game confirmation caller"),
+        ("`Kill character?`", "exact replacement title"),
+        ("Starting a new game will kill off your current game and character", "exact replacement body"),
+        ("`0x0058F500`", "separate selected-level resume owner"),
+        ("`RESUME PREVIOUS GAME?`", "exact selected-level title"),
+        ("`0x005AAA30`", "front-end Last Game constructor"),
+        ("`MOV dword ptr [profile+0x58], 500`", "fresh profile gold instruction"),
+        ("`profile+0x104 = 1`", "fresh tutorial-pending instruction"),
+        ("legacy web wizards migrate pending false", "non-retroactive tutorial migration"),
+        ("saved current-wizard state", "wizard save versus Boneyard run distinction"),
+        ("client stream, checkpoint", "checkpoint stream identity"),
+    ):
+        _require(
+            witness in document,
+            f"native save reopening no longer pins {consequence}",
+        )
+    return "New Game retirement, Last Game, per-level run, 500-gold, tutorial, and checkpoint-stream boundaries are pinned"
+
+
 TESTS = [
     test_native_save_container_codec_and_layout_are_pinned,
     test_native_save_goldens_round_trip_all_committed_files,
@@ -1174,6 +1200,7 @@ TESTS = [
     test_native_save_recorder_is_self_provenanced_settled_bounded_and_owned,
     test_native_save_lifecycle_and_failure_semantics_are_pinned,
     test_launcher_save_layer_and_account_seam_are_pinned,
+    test_native_active_wizard_saved_run_and_tutorial_boundaries_are_pinned,
     test_native_save_fixture_provenance_hashes_the_committed_recording,
 ]
 

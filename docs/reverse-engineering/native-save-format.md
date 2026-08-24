@@ -879,3 +879,82 @@ added. Every browser WebSocket layer must also admit the full declared document
 bound; a smaller public-proxy cap rejects a valid run before migration can run.
 Unknown/corrupt structures still fail closed, and the browser's abrupt
 termination window remains the sole platform-blocked persistence edge.
+
+## 2026-08-23 active-wizard replacement and saved-run distinction
+
+The browser follow-up exposed a second lifetime collapse: it used one
+`continuation` both for a saved current wizard and for the claim that an active
+Boneyard run exists. It also retained a page-global checkpoint sequence and the
+port's 10,000-gold fresh-player grant. The canonical executable was re-hashed
+as `03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`.
+All queries below used the canonical read-only `SolomonDark` Ghidra project via
+replica slot 1; addresses are preferred-image addresses.
+
+### Title New Game owns current-wizard retirement
+
+`0x0058E260` constructs the common MsgBox used before replacing a current
+wizard. Its exact static strings are:
+
+- title `Kill character?` at `0x00798474`;
+- body `Starting a new game will kill off your current game and character
+  (Lucritius will scavenge his equipment)!` at `0x00798408`; and
+- common primary/secondary labels `YES` / `NO` at `0x0078C4CC` /
+  `0x0078C4C8`.
+
+The function has one direct caller, `0x0058E600`. That caller invokes it only
+on the New Game control while its selected-profile/current-wizard flag at
+owner `+0x474` is set. A false result returns without transitioning. A true
+result obtains the current run namespace, clears/rebuilds profile/game state,
+executes completed-wizard archival through the established save family, and
+continues toward Create. Thus New Game does not silently reuse or replace the
+current wizard.
+
+### A saved Boneyard timeline is a different owner
+
+`0x0058F500` is a separate selected-level branch with two dispatch references
+in `UiOwner_DispatchControlAction 0x005A5530`. When the requested level already
+has resume data, its MsgBox uses:
+
+- title `RESUME PREVIOUS GAME?` at `0x00798540`; and
+- body `Do you want to resume the previous game you were playing in this
+  level?` at `0x007984F8`.
+
+Acceptance calls the front-end Last Game constructor `0x005AAA30`, whose one
+load call is `0x005CC210`. Refusal clears the prior selected-level cache and
+continues with a new level. This per-level timeline decision is neither the
+durable `darkdata.cfg` profile nor the title's current-wizard existence test.
+A Hub game save can therefore be resumable without claiming an active
+Boneyard run; its scene-local region, transition, and coordinate state are
+regenerated on load.
+
+### Fresh-profile value and tutorial boundary
+
+The instruction body of missing-profile initializer `0x005A8390` begins with
+`MOV dword ptr [profile+0x58], 500` and later writes tutorial-pending byte
+`profile+0x104 = 1`. The existing G10 `fresh_profile` golden independently
+records 40 settled samples with gold 500 and that pending field. The Website's
+10,000 was never a retail default and must be removed.
+
+This pass does not infer tutorial entry, rewards, dialogue, completion behavior,
+or any field beyond the proven pending byte. The correct integration boundary
+is the one fresh-profile/player constructor: it emits the proven 500-gold and
+tutorial-pending defaults, after which the future tutorial system may apply
+only evidence-backed mutations before handing the same participant to
+Hub/Boneyard persistence. Save migration must never reset an existing profile
+to the fresh values; legacy web wizards migrate pending false.
+
+### Browser consequence
+
+- The next normalized schema must distinguish saved current-wizard state from
+  the derived active-Boneyard-run bit while still accepting schemas 1 through
+  5.
+- A Hub resume keeps durable wizard state but reconstructs its Hub scene and
+  spawn. A Boneyard resume retains its exact active world/run.
+- Each provisioned host owns its own checkpoint sequence. The browser store
+  owns a separate monotonically revised slot; `(client stream, checkpoint
+  sequence)` identifies the operation that a deployment/leave acknowledgement
+  waits for.
+- Every host-authored active document must carry the exact scavenged profile
+  projection used if title New Game retires that wizard. The title may then
+  invalidate the continuation after strict validation without synthesizing
+  state from a rendered snapshot.

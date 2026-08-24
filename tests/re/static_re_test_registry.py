@@ -59,6 +59,7 @@ from static_re_native_class_loadout_contracts import (
 )
 from static_re_native_save_format_contracts import (
     test_launcher_save_layer_and_account_seam_are_pinned,
+    test_native_active_wizard_saved_run_and_tutorial_boundaries_are_pinned,
     test_native_save_container_codec_and_layout_are_pinned,
     test_native_save_document_node_and_payload_tables_are_exact,
     test_native_save_fixture_provenance_hashes_the_committed_recording,
@@ -2516,6 +2517,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Launcher save layer and account seam are pinned",
         test_launcher_save_layer_and_account_seam_are_pinned,
+    ),
+    (
+        "Native active wizard, saved run, and tutorial boundaries are pinned",
+        test_native_active_wizard_saved_run_and_tutorial_boundaries_are_pinned,
     ),
     (
         "Native save fixture provenance hashes the committed recording",
