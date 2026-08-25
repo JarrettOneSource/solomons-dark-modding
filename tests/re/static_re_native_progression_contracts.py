@@ -648,11 +648,13 @@ def test_native_progression_offer_pool_selection_and_rng_are_pinned() -> str:
         (
             "active_gameplay_rng.Integer(1_000_000)",
             "fresh **actor-private\n   level-up offer RNG**",
-            "The builder\n   does not write `+0x834`",
+            "The builder does not write `+0x834`",
+            "Spell Welding build-pair choice at",
+            "`0x0067DE7A..0x0067DE82`",
             "IDs `72..79` have their corresponding global content-unlock bit",
             "Spell Welding 52 additionally requires more than one learned elemental",
             "The ordinary picker has no unconditional reroll or skip",
-            "selector` span). Reopening with unchanged book/level/seed",
+            "selector` span). Reopening with unchanged book/level/private seed",
             "explicit charm reroll action does",
             "20% `RandomInt(5)==1` Insight chance",
         ),
@@ -669,13 +671,16 @@ def test_native_progression_offer_pool_selection_and_rng_are_pinned() -> str:
             "`keep_started = (Integer(2)==1)`",
             "overwrite it with `Integer(5)!=2`",
             "overwrite it with `Integer(10)!=2`",
-            "Draw uniformly **with replacement**",
-            "Stock performs no ID-equality rejection",
+            "Draw candidate pointers uniformly **with replacement**",
+            "native uniqueness byte `+0x04 = 1`",
+            "displayed offer cannot contain the same skill ID twice",
             "A category-4 candidate is always retried",
             "category-1 row and fewer than 50 such collisions",
-            "append every ID `8..81` except 52 that passes",
+            "On attempt 100, append every ID",
+            "except 52 that passes the first global-disable",
             "On attempt 200, stop and return an undersized pool",
-            "This second shuffle is also not Fisher-Yates.",
+            "active gameplay RNG** at",
+            "This second shuffle is\n   also not Fisher-Yates.",
         ),
         "native offer selection lost an exact affordability, weighting, pruning, retry, or shuffle rule",
     )
@@ -693,9 +698,9 @@ def test_native_progression_offer_pool_selection_and_rng_are_pinned() -> str:
     )
     if phase_order_pattern.search(doc) is None:
         raise StaticReTestFailure(
-            "native offer phase order changed, so private-RNG consumption and display order are no longer pinned"
+            "native offer phase order changed, so private/shared RNG consumption and display order are no longer pinned"
         )
-    return "all 82 eligibility rows and three actor-private ordered offers are exact"
+    return "all 82 eligibility rows and three captured native offers are exact"
 
 
 def test_native_secondary_cooldown_and_action_gate_is_pinned() -> str:

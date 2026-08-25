@@ -278,6 +278,45 @@ calling the same progression vtable roll method.
 
 `0x0040B2D0` clears/frees the array value pointer and resets the count.
 
+### Offer membership and RNG ownership correction (2026-08-25)
+
+A controlled retail differential now supersedes the earlier assumption that
+the displayed result permits repeated non-category-4 IDs. The owned harness in
+`tools/capture_skill_offer_100_rolls.py` held one Ether/Arcane level-2 book
+fixed, generated 100 actor-private seeds with the retail RNG, invoked the stock
+`Skills_Wizard +0x74 -> 0x0067CB70` builder 100 times, applied no choice, and
+observed zero repeated IDs across all 100 three-card offers. The injected
+loader exposed and traced state only; it did not hook or replace the offer
+implementation.
+
+The missing native owner is the result container initialized at
+`0x0067D1F8..0x0067D21F`. It uses vtable `0x007846CC` with uniqueness byte
+`+0x04 = 1`. Insert dispatch `0x00402720` reaches
+`0x004013C0/0x004013E0`, whose `vtable +0x24 -> 0x00401510` lookup suppresses
+an already-present skill pointer without increasing the count. Candidate pools
+still retain duplicate pointers as native probability weights and are sampled
+with replacement, but every forced-prefix, root-priority, Welding, and fill
+insertion passes through this unique result owner. The category-4 and
+category-1 collision branches remain additional cross-ID family constraints.
+
+`tools/trace_skill_offer_rng_calls.py` also separates the two streams at live
+call sites. Focus, general pre-shuffle, root selection, pruning, and fill call
+`0x00401170` with the stack-local actor-private RNG. Spell Welding pair choice
+at `0x0067DA4B` and all final display swaps at
+`0x0067DE7A..0x0067DE82` call it with the active gameplay RNG from
+`0x00818B08`. A private seed therefore fixes ordinary membership, but it does
+not fix Welding build identity or card order unless the incoming gameplay RNG
+state is fixed too.
+
+The final controlled capture is SHA-256
+`d9716cf2fde89c8f29b822bf5d6e8f42f2e736d7868ce0f4b679b8e83ec0b81a`;
+the live call/result trace is
+`8952124149b5d32c9880075ec10c4ac5a17ce6d996dfda1d4ce67f133047e9ef`.
+On the rebased Website, all 100 paired private/gameplay states reproduce exact
+ordered IDs and final gameplay RNG, with zero metadata, predicate, unordered,
+duplicate, or RNG-state failures. The exact current-main Mod Loader candidate
+passed the complete registered Mac static-RE suite `500/500`.
+
 The build path consumes each rolled option immediately: at `0x0066FDF2` it
 loads the option id from `screen + 0x90 + index * 4`, then calls `0x00657C00`
 to resolve the name/icon payload. The return address after that call is

@@ -278,14 +278,24 @@ There are two named streams; they must not be collapsed:
    [`native-movement-and-tick.md`](native-movement-and-tick.md).
 2. Every call to offer builder `0x0067CB70` constructs a fresh **actor-private
    level-up offer RNG** from that stored seed. It is the same 55-word lagged
-   additive generator and biased bounded sampler specified by G1. The builder
-   does not write `+0x834`; identical actor book, level, and seed therefore
-   reproduce an identical pool and order.
+   additive generator and biased bounded sampler specified by G1. It owns the
+   focus, general pre-shuffle, root-priority/bias, learned pruning, and fill
+   draws. The builder does not write `+0x834`; identical actor book, level,
+   and seed therefore reproduce identical ordinary membership before the
+   two active-gameplay-RNG phases.
+
+The active gameplay RNG owns both the Spell Welding build-pair choice at
+`0x0067DA4B` and every final display-swap draw at
+`0x0067DE7A..0x0067DE82`. Identical actor-private seed and book do **not**
+determine Welding build identity or displayed order without the same incoming
+gameplay RNG state. The builder returns with that shared stream advanced by one
+word when a Welding pair was selected, plus one word per final result entry.
 
 Concentrated Creativity's later Insight roll is not part of the offer stream.
 It uses the active concentration/gameplay RNG after the displayed list exists.
-Naming these streams matters: replaying the offer RNG must not consume or
-advance the gameplay RNG.
+Naming these streams matters: replaying only actor-private candidate assembly
+must not advance gameplay RNG, while completing a displayed offer must consume
+the native Welding/final-shuffle words from that shared stream.
 
 ### Eligibility predicates
 
@@ -452,8 +462,9 @@ weights, not set insertion.
    one learned elemental primary. The cadence gate is exactly
    `((u32(+0x848)-u32(+0x840)) % 5 == 0) ||
    (u32(+0x848) <= u32(+0x840)+1)`. Build only the learned pairs in the table
-   below, choose one uniformly, append the special choice, and store its
-   synthetic build at `+0x844`. The prior/current-weld filter from
+   below, choose one uniformly with the **active gameplay RNG**, append the
+   special choice, and store its synthetic build at `+0x844`. This draw does
+   not advance the actor-private offer RNG. The prior/current-weld filter from
    [`spell-welding.md`](spell-welding.md) remains part of that candidate list.
 7. **Apply the learned-skill pruning draw.** Count permanent-ranked IDs
    `8..81`. Above 8, set `keep_started = (Integer(2)==1)`; above 12, consume
@@ -464,19 +475,28 @@ weights, not set insertion.
    array is already learned. The later thresholds overwrite the Boolean but do
    not erase the earlier RNG consumption.
 8. **Merge and fill.** Append the entire root-priority list to the general
-   list. Draw uniformly **with replacement** until `desired` entries exist.
+   list. Draw candidate pointers uniformly **with replacement** until
+   `desired` unique entries exist. The result `Array<int>` is constructed at
+   `0x0067D1F8..0x0067D21F` with its native uniqueness byte `+0x04 = 1`.
+   Its `vtable +0x10 -> 0x00402720 -> 0x004013C0/0x004013E0` insertion path
+   calls `vtable +0x24 -> 0x00401510` first; an already-present pointer is
+   silently not inserted, the result count stays unchanged, and the outer
+   loop draws again. Candidate-list duplicates remain deliberate probability
+   weights, but the displayed offer cannot contain the same skill ID twice.
    A category-4 candidate is always retried while the result already contains
    a category-4 row. Separately, a category-1 candidate is retried while the
    result already contains a category-1 row and fewer than 50 such collisions
    have occurred; after 50, another category-1 row is allowed.
-   Stock performs no ID-equality rejection and never removes a chosen
-   candidate, so duplicate non-category-4 IDs are possible. On attempt
-   100, append every ID `8..81` except 52 that passes the first global-disable
+   Exact-ID uniqueness is an independent container invariant for every forced,
+   root-priority, Welding, and fill insertion. On attempt 100, append every ID
+   `8..81` except 52 that passes the first global-disable
    byte plus `0x0065EBA0/0x0065ED00`; do not clear the old list, so repeated
    pointers add weight. On attempt 200, stop and return an undersized pool.
 9. **Final display shuffle.** Clear the output, perform another full-range
-   swap for every result index using the same private RNG, and then append the
-   shuffled entries. This second shuffle is also not Fisher-Yates.
+   swap for every result index using the **active gameplay RNG** at
+   `0x00818B08`, and then append the shuffled entries. This second shuffle is
+   also not Fisher-Yates. The actor-private RNG is no longer consumed after
+   the fill has completed.
 
 The ten Spell Welding build IDs used by phase 6 are:
 
@@ -506,8 +526,9 @@ clears `+0x839`, and rebuilds without decrementing pending count. SAVE SKILL
 moves one count from pending `+0x44` to deferred `+0x48`, closes the screen,
 and `0x0065F480` merges that deferred count back on a later screen creation.
 Neither action exists without the owned byte at `+0x7DD` (the
-`+0x7CC + selector` span). Reopening with unchanged book/level/seed still
-reproduces the same selection. The live recorder deliberately rewrites
+`+0x7CC + selector` span). Reopening with unchanged book/level/private seed
+reproduces ordinary membership; exact Welding build and display order also
+depend on the incoming active gameplay RNG. The live recorder deliberately rewrites
 `79225` before each of its three independent rolls; the builder itself never
 writes `+0x834`, while the explicit charm reroll action does. Concentrated
 Creativity then independently has a
