@@ -87,5 +87,21 @@ def test_native_hud_skill_selector_ownership_geometry_and_audio_are_pinned() -> 
     return "selected-skill HUD buttons, compact selector, slot routing, and audio are pinned"
 
 
+def test_native_skill_screen_ambient_seal_motion_is_pinned() -> str:
+    skill = SKILL_DOC.read_text(encoding="utf-8")
+    for marker in (
+        "2026-08-25 ambient-seal motion correction",
+        "`x = 800 + 40*sin(2*theta*pi/180)`",
+        "`theta - screenTick/60`",
+        "`+0x20 -> 0x00427800`",
+        "`_CIsin 0x007470D0`",
+        "no RNG call, seed, cursor, or time value participates",
+        "resets on every\nSkillScreen construction",
+        "frame `211 x 94`, trim\norigin `(405,108)`",
+    ):
+        require(marker in skill, f"native SkillScreen seal report lost marker {marker}")
+    return "SkillScreen ambient seals retain deterministic sine placement and local phase"
+
+
 if __name__ == "__main__":
     print(test_native_hud_skill_selector_ownership_geometry_and_audio_are_pinned())

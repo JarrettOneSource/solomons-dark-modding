@@ -93,6 +93,7 @@ from static_re_native_hud_contracts import (
 )
 from static_re_native_hud_skill_selector_contracts import (
     test_native_hud_skill_selector_ownership_geometry_and_audio_are_pinned,
+    test_native_skill_screen_ambient_seal_motion_is_pinned,
 )
 from static_re_native_ui_kit_contracts import (
     test_native_ui_kit_catalog_is_complete_and_regenerable,
@@ -1100,6 +1101,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native HUD selected-skill selector ownership, geometry, and audio are pinned",
         test_native_hud_skill_selector_ownership_geometry_and_audio_are_pinned,
+    ),
+    (
+        "Native SkillScreen ambient seal motion is pinned",
+        test_native_skill_screen_ambient_seal_motion_is_pinned,
     ),
     (
         "Webgame asset manifest schema and provenance are pinned",

@@ -33,6 +33,7 @@ UI-object owner.
 | Page construction and layout | `0x0066B380` |
 | Opening/closing tick | `0x006567E0` |
 | Begin close | `0x006568E0` |
+| Screen-local animation tick | `SkillScreen` vtable `+0x20 -> 0x00427800` |
 | Root/background/chrome painter | `0x0065B550` (`SkillScreen` vtable `+0x0C`) |
 | Page-region overlay/help painter | `0x0065BEF0` (`SkillScreen` vtable `+0x28`) |
 | `SkillPage` constructor | `0x006577F0` |
@@ -74,9 +75,13 @@ complete settled root passes at `1600 x 900`:
 
 - `0x0065B550` first draws an opaque black full-screen curtain. Its eight
   additive UI record `3` seal arcs share logical centre `y=490`, scale `1.9`,
-  rotations separated by `45` degrees, per-frame horizontal jitter within the
-  native `40`-pixel lane, and rotation phase `-frame/60` degrees. Settled alpha
-  is `0.15`; the opening envelope applies the native higher-order fade.
+  and rotations separated by `45` degrees. For member angle
+  `theta = 0,45,...,315`, the draw centre is
+  `x = 800 + 40*sin(2*theta*pi/180)`, `y = 490`; rotation is
+  `theta - screenTick/60` degrees. `screenTick` is the screen-local `+0x28`
+  field initialized to zero by `0x00427370` and advanced at 100 Hz by inherited
+  vtable slot `+0x20 -> 0x00427800`. Settled alpha is `0.15`; the opening
+  envelope applies the native higher-order fade.
 - UI record `33` is centred at `(80,30)` rotated `-90` degrees and at
   `(1520,30)` rotated `+90` degrees. UI record `31` is centred at `(200,20)`
   mirrored in X and `(1400,20)` ordinary. These authored quads are mostly
@@ -150,6 +155,32 @@ percent. ExactText commands such as `_s(.7)_o(0,1)_i` remain presentation
 commands and are not visible source text. This drains every public row
 `8..79`, including all fourteen concentration bonus sets, instead of choosing
 six generic properties in web-defined order.
+
+### 2026-08-25 ambient-seal motion correction
+
+The earlier full-renderer closure misread `_CIsin 0x007470D0` as a random
+generator and called the deterministic `40*sin(2*theta)` placement lane
+"per-frame horizontal jitter." That was a raw-instruction verification
+failure. The x87 sequence at `0x0065B6E1..0x0065B721` doubles the loop angle,
+converts degrees to radians with runtime pi, calls `_CIsin`, and multiplies by
+`40`; no RNG call, seed, cursor, or time value participates. The prior Website
+hash of `(wallFrame,index)` therefore invented 60 Hz 30-40-pixel jumps that
+stock cannot produce.
+
+The same pass also makes the clock ownership explicit. `0x0065B68F` reads
+`SkillScreen+0x28`, negates it, and divides by `60`; the class vtable at
+`0x0079F72C` places shared base tick `0x00427800` at `+0x20`. That method
+increments the screen-local field at 100 Hz. The phase begins at zero for each
+new screen rather than inheriting an absolute application/page time. The exact
+rotation rate is therefore `100/60` degrees per second and resets on every
+SkillScreen construction.
+
+UI record `3` is a trimmed `1024 x 768` logical sprite (frame `211 x 94`, trim
+origin `(405,108)`). `Text_Draw 0x00415130` consumes logical-centre placement,
+rotation, and uniform scale; the web native-UI Pixi adapter's `orig`/`trim` plus
+`anchor=.5` is the correct equivalent. The defect is solely the invented
+position generator and absolute/slow phase, not the asset registration, eight
+member count, additive blend, alpha envelope, scale, or painter order.
 
 ## Stock visual contract
 
