@@ -57,7 +57,8 @@ replacement, state mutation, or downstream Boast resolution.
 | StoreRoom | fixed Region with no named actor | out-of-system: no native NPC producer |
 | Solomon Dig | type 5009 Arena prelude | out-of-system: separately closed encounter/dialogue state machine |
 | recipe-authored `GameNPC` | type 5015 | out-of-system: Boneyard scripting family, not a compiled Hub named actor |
-| story-only Polisher, Annalist2, standing/desk Arch variants and `_0/_1` graphs | alternate builder `0x00513BE0` | out-of-system for the Website survival game; complete static membership remains documented in the Hub report |
+| first-story-Office Polisher and Archchancellor `_0` graphs | alternate builder `0x00513BE0`, phase `Game+0x1CD8 == 0` | exact-port required for the one-shot post-Tutorial College admission; not a normal survival-Hub population |
+| later-story Annalist2, standing/desk Arch variants and `_1` graphs | alternate builder `0x00513BE0`, later phases | out-of-system for the Website survival game and first admission |
 | dormant `ANNAL_Q`, `!RANDOMEQUIP`, targeted Dowsing | data with no normal-survival builder/dispatcher producer | out-of-system; must not be exposed as retail behavior |
 
 No member is blocked by the browser platform.
@@ -130,6 +131,31 @@ Chat action.
 Story-phase Polisher/Arch/alternate dialogue members are selected by the
 separate builder `0x00513BE0` and `Gameplay+0x1CD8`. They are not unlockable
 members of the normal survival Hub and must not be injected into that census.
+
+### First story Office admission subset
+
+The post-Tutorial first normal story Game selects `Gameplay+0x1CD8 == 0`.
+Unlike the normal survival Office, this one-shot scene contains two live Chat
+owners before Create is opened by the Office exit callback:
+
+| Actor | Geometry and marker | Exact graph | Audio / animation |
+| --- | --- | --- | --- |
+| Archchancellor type 5012 | `(514,467)`, radius 55, help-right Office record 15 | `ARCH_INTRO_0`, `ARCH_Q1_0`, `ARCH_Q2_0`, `ARCH_Q3_0`, `ARCH_DISMISS_0` | intro voice `voices/ARCH_INTRO_0.wav`; ordinary desk/body renderer |
+| Polisher type 5011 | `(566,735)`, radius 15, talk-left Office record 14 | `POLISHER_INTRO_0`, `POLISHER_Q1_0`, `POLISHER_Q2_0`, `POLISHER_DISMISS_0` | Office records 23..26; distance-attenuated `dynamic_sounds/wipeglass.wav` loop |
+
+The Polisher's phase begins at zero with signed speed `0.05`. Tick
+`0x00505EB0` advances it by `(1 + Float(0.25,false)) * speed`, wraps at four,
+and reverses the speed when `Integer(1500) == 3`; renderer `0x0051DD50` selects
+record `23 + trunc(phase)`. The wipe loop is full through distance 50, falls
+linearly to zero at distance 200, and is destroyed with the actor. The
+Archchancellor intro PCM is 1,231,088 bytes, SHA-256
+`b819a5aa7397df964ec9f9e03149941450d65d10fe207f71c3643419fd071255`.
+No other phase-zero Office line has a shipped voice WAV.
+
+These rows remain excluded from the settled survival actor census. They are
+included only while the participant owns the unconsumed first-story admission;
+the survival `ARCH_INTRO/ARCH_Q/ARCH_DISMISS` graph resumes for ordinary Office
+visits after Create/Courtyard settlement.
 
 ## Native interaction markers and pristine-profile onboarding
 

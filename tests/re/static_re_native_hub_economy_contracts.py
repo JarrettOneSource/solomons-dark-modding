@@ -230,6 +230,48 @@ def test_native_hub_npc_markers_and_profile_help_rows_are_pinned() -> str:
         ("memorator", 5017, "help", "left", 27, True, None),
     ]:
         raise StaticReTestFailure("native survival actor marker membership drifted")
+    story_office = catalog.get("first_story_office_actors")
+    if not isinstance(story_office, list) or [
+        (
+            row.get("interaction_id"),
+            row.get("type_id"),
+            row.get("position"),
+            row.get("interaction_radius"),
+            row.get("marker_record"),
+            row.get("dialogue"),
+        )
+        for row in story_office
+    ] != [
+        (
+            "arch-chancellor-story-0",
+            5012,
+            [514, 467],
+            55,
+            15,
+            ["ARCH_INTRO_0", "ARCH_Q1_0", "ARCH_Q2_0", "ARCH_Q3_0", "ARCH_DISMISS_0"],
+        ),
+        (
+            "polisher-story-0",
+            5011,
+            [566, 735],
+            15,
+            14,
+            ["POLISHER_INTRO_0", "POLISHER_Q1_0", "POLISHER_Q2_0", "POLISHER_DISMISS_0"],
+        ),
+    ]:
+        raise StaticReTestFailure("native first-story Office marker/dialogue membership drifted")
+    polisher = story_office[1]
+    if (
+        polisher.get("art_records") != [23, 24, 25, 26]
+        or polisher.get("phase_speed") != 0.05
+        or polisher.get("phase_float_draw") != 0.25
+        or polisher.get("reverse_draw_count") != 1500
+        or polisher.get("reverse_draw_value") != 3
+        or polisher.get("loop") != "dynamic_sounds/wipeglass.wav"
+        or polisher.get("loop_full_distance") != 50
+        or polisher.get("loop_silent_distance") != 200
+    ):
+        raise StaticReTestFailure("native first-story Polisher presentation contract drifted")
     help_table = catalog.get("profile_hint_table", {})
     if (
         help_table.get("profile_offset_start") != "0x9A"
@@ -262,6 +304,10 @@ def test_native_hub_npc_markers_and_profile_help_rows_are_pinned() -> str:
             "Chat` constructor `0x004F5D90` sets `DAT_008199F0`",
             "profile `+0xCC[10]` as ids `0..9`",
             "`SAY_EULOGY_<live portrait id>`",
+            "### First story Office admission subset",
+            "ARCH_INTRO_0",
+            "POLISHER_INTRO_0",
+            "dynamic_sounds/wipeglass.wav",
         ),
         "native NPC report lost marker ownership, onboarding, Chat order, or live Painting ids",
     )

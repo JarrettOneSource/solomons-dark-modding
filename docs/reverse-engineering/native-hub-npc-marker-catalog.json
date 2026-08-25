@@ -312,8 +312,47 @@
       }
     ]
   },
+  "first_story_office_actors": [
+    {
+      "interaction_id": "arch-chancellor-story-0",
+      "type_id": 5012,
+      "position": [514, 467],
+      "interaction_radius": 55,
+      "marker_record": 15,
+      "marker_style": "help-right",
+      "dialogue": [
+        "ARCH_INTRO_0",
+        "ARCH_Q1_0",
+        "ARCH_Q2_0",
+        "ARCH_Q3_0",
+        "ARCH_DISMISS_0"
+      ]
+    },
+    {
+      "interaction_id": "polisher-story-0",
+      "type_id": 5011,
+      "position": [566, 735],
+      "interaction_radius": 15,
+      "marker_record": 14,
+      "marker_style": "talk-left",
+      "dialogue": [
+        "POLISHER_INTRO_0",
+        "POLISHER_Q1_0",
+        "POLISHER_Q2_0",
+        "POLISHER_DISMISS_0"
+      ],
+      "art_records": [23, 24, 25, 26],
+      "phase_speed": 0.05,
+      "phase_float_draw": 0.25,
+      "reverse_draw_count": 1500,
+      "reverse_draw_value": 3,
+      "loop": "dynamic_sounds/wipeglass.wav",
+      "loop_full_distance": 50,
+      "loop_silent_distance": 200
+    }
+  ],
   "out_of_system_members": [
-    "story-only Polisher, Annalist2, and ArchChancellor variants",
+    "later-story Annalist2 and standing or desk ArchChancellor variants",
     "recipe-authored Boneyard GameNPC",
     "noninteractive Students",
     "Paintings, whose action starts Memorator speech without a common marker",

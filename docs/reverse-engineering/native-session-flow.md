@@ -731,3 +731,153 @@ Validation receipt: the rebased pre-receipt documentation candidate
 static RE suite `501/501` under Python 3.12.10. The paired Website candidate
 passed its canonical Mac gate and global/private Chrome journeys; exact run and
 frame receipts are owned by `Website/docs/game-native-parity-re.md`.
+
+## 2026-08-25 correction: first story-Game Office admission before Create
+
+The 2026-08-24 pass got the destination right and the lifecycle wrong. It
+stopped after finding the region-4 branch, treated a diagnostic run's held
+south input as an automatic native lane, and did not follow Office vtable slot
+`+0xC8` far enough to discover that it opens Create only *after* Office exit.
+It also reused the normal survival Office population instead of sweeping the
+story-mode builder. The corrected stock order is:
+
+```text
+Tutorial Game Over / first-play completion
+  -> front-end dispatch
+  -> first normal story Game
+  -> interactive story Office
+  -> Office exit and covered 4 -> 0 switch
+  -> Office post-switch callback opens Create
+  -> element + Discipline confirmation
+  -> Courtyard incoming transition
+```
+
+A port that shows Create first and then plays an automatic Office exit still
+skips the native onboarding system.
+
+### Mode, owner, and one-shot branch
+
+The Tutorial Game is a dedicated `Game` marked at `+0x1CD4`. Its terminal
+path `GameOver::Tick 0x005CF4F0` clears profile byte `0x0081A434`, saves,
+runs completed-run cleanup, and dispatches the front end through
+`0x005A7F60`. The Tutorial does not write survival selector
+`DAT_00B3BEDC`; the process remains in story mode `0`. The full-image writer
+sweep finds explicit writes of `1` for survival at `0x0058E8F6` and `2`
+for the editor/custom path at `0x0058F64A`, but no runtime writer that turns a
+Tutorial Game into survival mode before this first story Game.
+
+`Game::Game 0x005CC800` initializes the story-admission byte
+`Game+0x87 = 0` at `0x005CCE26`. `Gameplay_FinalizePlayerStart
+0x005CFA80` selects Office region `4` only when all of these are true:
+
+- ordinary non-test startup (`Game+0x1BB4 == 0`, `Game+0x1C05 == 0`);
+- story mode (`DAT_00B3BEDC == 0`);
+- no general modal/debug override (`DAT_00B3BCA0 == 0` at the destination
+  test); and
+- `Game+0x87 == 0`.
+
+Survival mode and a consumed story admission select Courtyard region `0`
+directly. The flag belongs to one native `Game`, not `darkdata.cfg`.
+
+### Interactive Office entry
+
+Office attach `0x005010C0` receives previous region `-1` for the initial
+story entry. With the first-start byte `Game+0x1CD6` set, it places the local
+actor at room center plus `(0,50)`: exact Office position `(512,562)`. It
+then uses the ordinary Office incoming rate `-0.01f`, so the black cover clears
+in 100 fixed ticks. The earlier claimed `(512,924)` / 40-tick hold was a
+diagnostic sample already driven to the exit and is not the initial attach.
+
+After the cover clears, ordinary player movement, collision, HUD, footsteps,
+camera, NPC contact, Chat, inventory, and menu input are live. Office tick
+`0x00509F10` does **not** force the actor south on entry. Only a later inclusive
+circle contact with exit segment `(412,924)..(612,924)` clears action/casting,
+starts scripted movement toward `(512,2024)` at native speed `1`, and raises
+the outgoing cover by `+0.01f`. This preserves an arbitrarily long,
+player-controlled conversation/exploration interval before exit.
+
+### Story Office phase-zero population
+
+Story-mode fixed-region builder `0x00513BE0`, selected by
+`DAT_00B3BEDC == 0`, consumes `Game+0x1CD8`. The first story Game uses phase
+zero and constructs the complete two-actor Office population:
+
+| Member | Native identity and geometry | Dialogue / presentation |
+| --- | --- | --- |
+| Archchancellor | type `5012`, ctor/tick/render `0x00502A80/0x0050B6B0/0x0051DE40`, `(514,467)`, interaction radius `55` | `ARCH_INTRO_0`, `ARCH_Q1_0`, `ARCH_Q2_0`, `ARCH_Q3_0`, `ARCH_DISMISS_0`; Office records `3,7..12`; help-right marker record `15` |
+| Polisher | type `5011`, ctor/tick/render `0x0050B4F0/0x00505EB0/0x0051DD50`, `(566,735)`, interaction radius `15` | `POLISHER_INTRO_0`, `POLISHER_Q1_0`, `POLISHER_Q2_0`, `POLISHER_DISMISS_0`; Office records `23..26`; talk-left marker record `14` |
+
+The Archchancellor intro has the only shipped story-Office voice file,
+`voices/ARCH_INTRO_0.wav`, 1,231,088 bytes, SHA-256
+`b819a5aa7397df964ec9f9e03149941450d65d10fe207f71c3643419fd071255`.
+Questions, dismissals, and Polisher lines have no corresponding retail WAV.
+
+Polisher animation starts at phase `0` and signed speed `0.05`. Each 100-Hz
+tick adds `(1 + Float(0.25,false)) * speed`, wraps the phase in `[0,4)`, and
+reverses speed on `Integer(1500) == 3`. Rendering selects Office record
+`23 + trunc(phase)`. Its embedded `dynamic_sounds/wipeglass.wav` loop is
+full gain through distance 50, falls linearly to zero across distance 50..200,
+and is silent beyond 200. Actor destruction/Office reconstruction owns loop
+teardown/restart.
+
+Phase one and the standing/desk Archchancellor variants remain the later story
+system. Normal survival `ARCH_INTRO/ARCH_Q/ARCH_DISMISS` remains the separate
+survival-Hub graph. Neither may replace the phase-zero first admission.
+
+### Exit opens Create; Create does not precede Office
+
+At exact outgoing black, `Gameplay_SwitchRegion 0x005CDDD0` performs the
+ordinary covered `4 -> 0` switch. Its post-switch callback invokes the old
+Office object's vtable slot `+0xC8`, `Office::AfterSwitch 0x00504AD0`.
+That callback is the decisive Create owner:
+
+- it verifies the callback argument is the local player;
+- it tests selected element root `player progression +0x82C == -1`;
+- it sets `Game+0x86 = 1`;
+- it allocates/attaches the `Create` surface and marks it as the in-Game
+  variant; and
+- it writes `Game+0x87 = 1`.
+
+The Courtyard may already be attached behind the opaque Create surface, but
+loadout selection remains the visible owner. After element and Discipline
+confirmation, `0x005D0290 -> 0x005CFA80` sees `Game+0x87 != 0`, selects
+Courtyard directly, and runs the ordinary Courtyard incoming placement
+`(952.5,67.5) -> (952.5,157.5)` with `-0.01f` cover. Later same-Game Create
+generations do not replay Office.
+
+### Portable web consequence
+
+A browser save/session can cross the native Game lifetime, so the smallest
+portable projection remains a durable pending bit, but its transition meaning
+is corrected:
+
+- fresh browser profiles start pending; historical profiles migrate completed;
+- Tutorial entry and Tutorial gameplay preserve pending;
+- after Tutorial terminal fade, and after the browser-only Tutorial `NO`
+  branch when the first normal Game begins, pending starts an interactive story
+  Office at `(512,562)` before any Create surface;
+- the initial incoming cover does not lock movement after tick 100;
+- story Archchancellor and Polisher are participant-local Office population;
+- touching the normal Office exit runs the ordinary outgoing kernel, then opens
+  Create at the covered switch boundary;
+- Create confirmation resumes the existing Courtyard incoming kernel;
+- pending clears only after the Courtyard entrance settles; and
+- disconnect/reload before settlement replays from the Office entry, while
+  later deaths/loadouts route directly to the Courtyard.
+
+In a shared browser Hub, one participant's story Office/Create flow is local to
+that participant. It does not pause, relocate, or replace the shared Courtyard
+for other participants. There is no browser-only cinematic timer, forced
+40-tick hold, automatic Office exit, survival Arch dialogue substitution, or
+Create-before-Office fallback.
+
+### Validation receipt
+
+The exact rebased documentation candidate
+`0e3dd4ce4b5c7776fa96d9b589873ae964cd8ac2` (tree
+`a15e08bf113dee9d6fb5474d1fe182f6fefe5572`, base
+`35d0941d6baad59dd7c46907a39d2ba6e6072c09`) passed the complete registered
+Mac static RE suite `502/502`. Log SHA-256 is
+`a77caa5631efaf25cc45edc74af5193e6700b6534d450c1bf5ae0a77ad45e2ba`.
+The paired Website exact-tree and Chrome/Metal receipts are recorded in
+`Website/docs/game-native-parity-re.md`.

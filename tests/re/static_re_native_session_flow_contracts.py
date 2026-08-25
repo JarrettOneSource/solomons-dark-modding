@@ -1200,3 +1200,63 @@ def test_native_session_flow_input_seal_boundaries_are_pinned() -> str:
         "session-flow lifecycle no longer preserves G14's drop-not-defer rule",
     )
     return "Arena entry seals before teardown and unseals after fade, wave start, and barrier release"
+
+
+def test_first_wizard_college_admission_contract_is_pinned() -> str:
+    doc = _read(DOC_PATH)
+    section = _section(
+        doc,
+        "## 2026-08-25 correction: first story-Game Office admission before Create",
+        "### Portable web consequence",
+    )
+    required = (
+        "Game+0x87",
+        "0x005CC800",
+        "0x005CCE26",
+        "0x005CFA80",
+        "DAT_00B3BEDC",
+        "0x005010C0",
+        "(512,562)",
+        "0x00509F10",
+        "(412,924)..(612,924)",
+        "0x00513BE0",
+        "ARCH_INTRO_0",
+        "POLISHER_INTRO_0",
+        "(566,735)",
+        "Integer(1500) == 3",
+        "dynamic_sounds/wipeglass.wav",
+        "Gameplay_SwitchRegion 0x005CDDD0",
+        "0x00504AD0",
+        "player progression +0x82C == -1",
+        "(512,2024)",
+        "(952.5,67.5)",
+        "(952.5,157.5)",
+        "-0.01f",
+    )
+    missing = [token for token in required if token not in section]
+    _require(
+        not missing,
+        "first-wizard College admission lost recovered ownership/constants: "
+        + ", ".join(missing),
+    )
+    _require(
+        re.search(
+            r"The flag belongs to one native `Game`, not `darkdata\.cfg`\.",
+            section,
+        )
+        is not None,
+        "College admission would be persisted under the wrong native owner",
+    )
+    _require(
+        re.search(
+            r"Office tick\s+`0x00509F10` does \*\*not\*\* force the actor south on entry",
+            section,
+        )
+        is not None,
+        "College admission regressed to the falsified automatic Office exit",
+    )
+    _require(
+        "Office post-switch callback opens Create" in section,
+        "College admission regressed to the falsified Create-before-Office order",
+    )
+    return "interactive story Office, exit-owned Create, and Courtyard handoff are pinned"
