@@ -692,3 +692,42 @@ Validation receipt: the exact documentation candidate based on
 static RE suite `501/501`. The paired Website candidate passed its canonical
 gate and real global/private Chrome journeys; those receipts and frame hashes
 are owned by `Website/docs/game-native-parity-re.md`.
+
+## 2026-08-25 Website durable-leader supersession
+
+This addendum supersedes the Website-only election rule immediately above.
+Retail process-loss authority migration remains unknown; no native claim has
+changed. The explicit Website policy is now that transport loss does not
+remove party membership and therefore cannot transfer leadership. The
+original `leaderPlayerId` remains the leader while its actor and socket are
+absent. The dedicated host process continues fixed ticks, but connected
+nonleaders receive no leader-only party, run-start, or portal authority.
+
+For coordinated replacement, each revision-bound signed checkpoint now carries
+the same full ordered party roster, original leader, visibility, and bounded
+last-authoritative ally projection. The first valid former member may still
+seed the recovered authority world, including a nonleader, but restoration
+installs the signed party before that member becomes observable. Later claims
+attach actors to the already restored membership. Return order consequently
+cannot elect, promote, or demote anyone.
+
+The materialization order becomes:
+
+`verify bound recovery and roster -> reconstruct authority world -> restore
+original membership and leader -> retain claimant detached when choices are
+pending -> advance live world while actor-private choices resolve -> cold
+Arena materialization -> accept gameplay input`.
+
+The durable party row is not a durable ActorWorld binding. Disconnected
+members remain in Website social/presentation membership but have no collision,
+target, cast, input, effect, or Hall actor lane until final materialization.
+Explicit Leave Party or Kick remains the membership-removal boundary and may
+then invoke the established Website promotion policy. Terminal/replaced run
+teardown still retires the recovery lineage rather than restoring a ghost
+world.
+
+Validation receipt: the rebased pre-receipt documentation candidate
+`00541fee374c9faffa2db15cbaf79d4fe3412f8e` passed the complete registered Mac
+static RE suite `501/501` under Python 3.12.10. The paired Website candidate
+passed its canonical Mac gate and global/private Chrome journeys; exact run and
+frame receipts are owned by `Website/docs/game-native-parity-re.md`.

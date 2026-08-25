@@ -130,3 +130,24 @@ append ABI, ordering, colors, bar geometry, and 10-pixel pitch. The exact
 ordering policy if several simultaneously owned Golems coexist was not needed
 for this reconstruction and remains unproven. No claim is made that Leviathan,
 Good Imp, or an unimplemented web summon should use this lane.
+
+## 2026-08-25 Website retained-row extension boundary
+
+The Website now deliberately retains player ally rows after authoritative
+death and transport disconnect. This is not a newly recovered retail branch.
+The complete append-xref census above remains decisive: the stock player
+producer publishes a nonlocal living connected participant, and the shared
+renderer has no dead/disconnected state input. Stock still removes both rows.
+
+The browser extension keeps the recovered player identity, authoritative
+current/max ratio, fixed row lane, and Golem exclusions. Party/recovery state,
+not the frame-local native row vector, owns the retained player. Life and
+connection project as independent states: death supplies a red overlay over
+the player health bar, disconnect supplies a distinct signal-loss treatment,
+and both may compose. A connected actor supersedes retained vitals; a detached
+actor or signed process-recovery roster supplies the last authoritative row
+while no live actor exists. The local player remains excluded, and dead Golems,
+Leviathan, and Good Imp do not acquire this Website-only behavior.
+
+No new address or retail visual constant is asserted by this addendum. The
+paired Website ledger owns the product policy and browser validation.

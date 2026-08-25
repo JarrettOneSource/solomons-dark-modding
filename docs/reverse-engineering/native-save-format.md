@@ -1055,3 +1055,27 @@ sealed actor projection; their duplicate saved world never overwrites the new
 live authority. Connected/reserved/retired claims fail closed. The same run ID
 and account lineage preserve the existing idempotent Hall submission boundary.
 An abrupt browser still cannot recover a checkpoint it never durably stored.
+
+## 2026-08-25 Website recovery-roster claim supersession
+
+The Website recovery claim is extended again; retail G10 bytes remain
+unchanged and contain none of these fields. In addition to the bindings above,
+every active-party claim seals the party's ordered member IDs, original leader,
+visibility, and a bounded last-authoritative ally row for each member (display
+name, element, current/maximum health, and life state). All member checkpoints
+for one frozen deployment state carry the same party projection. The claimant
+player remains separately bound to its own normalized owner document.
+
+The replacement host validates that the roster is unique and bounded, contains
+both claimant and leader, matches its declared member count, and agrees exactly
+with the already recovered lineage. The first valid claimant restores that
+membership and leader before accepting later claims; it does not become leader
+by arriving first. A live actor supersedes its sealed ally projection, while a
+member not yet returned is presented as disconnected with the sealed last
+authoritative vitals. These fields authorize neither gameplay input nor actor
+state and cannot be used to overwrite the recovered live world.
+
+The claim remains server-signed, revision-bound for process recovery, nullable
+outside an active Boneyard, and invalidated at terminal/replaced lineage
+teardown. This addendum makes no native persistence or process-resurrection
+claim.
