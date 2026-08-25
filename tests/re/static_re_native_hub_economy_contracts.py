@@ -771,8 +771,17 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
         or store_hover.get("content_margin") != 25
         or store_hover.get("source_gap") != 35
         or store_hover.get("source_exclusion_size") != 70
-        or store_hover.get("selected_special_item")
-        != "no HoverBox; diagnostic literal Hover over special item!"
+        or store_hover.get("current_item_field") != "StoreGrid+0xF8"
+        or store_hover.get("selected_item_field") != "StoreGrid+0xFC"
+        or store_hover.get("previous_selection_field") != "StoreGrid+0x100"
+        or store_hover.get("pointer_current_handler")
+        != "0x0055CEE0; invokes vtable +0xCC only when current item changes"
+        or store_hover.get("pointer_press_handler")
+        != "0x00565D40 -> 0x0055D680; changes selection without changing current item or invoking vtable +0xCC"
+        or store_hover.get("selected_ordinary_item")
+        != "remains kind zero; existing HoverBox survives first click and normal details rebuild on selected-cell re-entry"
+        or store_hover.get("kind_one_special_item")
+        != "separate dormant special-row variant; no retail Shop producer; diagnostic literal Hover over special item! and no HoverBox"
         or store_hover.get("price_branch") != {
             "owner_flag": "Shop+0x289",
             "enabled_for": ["Shop", "PerkShop", "DowsingShop"],
@@ -785,6 +794,12 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
             "bundle": "    Bulk discount: 50%",
             "first_mix": "    High price due to first mixing.",
         }
+        or store_hover.get("teardown") != [
+            "current-cell change",
+            "pointer exit",
+            "purchase rebuild",
+            "service close",
+        ]
     ):
         raise StaticReTestFailure("StoreGrid HoverBox ownership, copy, or geometry drifted")
     owned_perk_hover = interaction.get("hagatha_owned_perk_hover")

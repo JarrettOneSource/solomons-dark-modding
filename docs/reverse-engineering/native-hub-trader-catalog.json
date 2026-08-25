@@ -484,7 +484,13 @@
           "content_margin": 25,
           "source_gap": 35,
           "source_exclusion_size": 70,
-          "selected_special_item": "no HoverBox; diagnostic literal Hover over special item!",
+          "current_item_field": "StoreGrid+0xF8",
+          "selected_item_field": "StoreGrid+0xFC",
+          "previous_selection_field": "StoreGrid+0x100",
+          "pointer_current_handler": "0x0055CEE0; invokes vtable +0xCC only when current item changes",
+          "pointer_press_handler": "0x00565D40 -> 0x0055D680; changes selection without changing current item or invoking vtable +0xCC",
+          "selected_ordinary_item": "remains kind zero; existing HoverBox survives first click and normal details rebuild on selected-cell re-entry",
+          "kind_one_special_item": "separate dormant special-row variant; no retail Shop producer; diagnostic literal Hover over special item! and no HoverBox",
           "price_branch": {
             "owner_flag": "Shop+0x289",
             "enabled_for": ["Shop", "PerkShop", "DowsingShop"],
@@ -497,7 +503,7 @@
             "bundle": "    Bulk discount: 50%",
             "first_mix": "    High price due to first mixing."
           },
-          "teardown": ["current-cell change", "pointer exit", "selection special-state", "purchase rebuild", "service close"]
+          "teardown": ["current-cell change", "pointer exit", "purchase rebuild", "service close"]
         },
         "hagatha_owned_perk_hover": {
           "owner": "InventoryScreen pointer handler",

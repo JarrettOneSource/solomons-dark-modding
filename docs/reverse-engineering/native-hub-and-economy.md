@@ -1924,6 +1924,82 @@ empty browser-error and failed-response arrays, exact narrow HotRects, held
 insufficient-gold MsgBox, discard/reopen, and owner-isolated gold. No platform
 block or native unknown remains in this correction.
 
+### 2026-08-25 correction: StoreGrid selection retains ordinary HoverBox ownership
+
+The 2026-08-22 HoverBox pass made a causal error that a later selected-state
+pass did not reopen: it treated `StoreItem` kind one as the representation of a
+selected ordinary offer. That is false. Selection, current/hover, StoreItem
+kind, selected art, and HoverBox lifetime are separate native lanes.
+
+Exact evidence remains retail `SolomonDark.exe` 0.72.5, 4,723,200 bytes,
+SHA-256 `03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`,
+preferred image base `0x00400000`. The canonical read-only Ghidra replica pass
+recovered the complete StoreGrid thread:
+
+- `StoreGrid` current cell is the smart pointer at `+0xF8`; selected cell is
+  the independent smart pointer at `+0xFC`; prior selection is retained at
+  `+0x100`; the live HoverBox is at `+0x110`.
+- Pointer-current handler `0x0055CEE0` hit-tests into `+0xF8`, compares the new
+  smart pointer with the old one, and invokes vtable slot `+0xCC` only when the
+  current cell changes. StoreGrid resolves that slot to `0x0055E2C0`, which
+  destroys the prior `+0x110` object and builds ordinary kind-zero content.
+- Pointer press enters through StoreGrid override `0x00565D40` and base
+  selection writer `0x0055D680`. It copies `+0xFC` to `+0x100`, clears
+  `+0xFC`, and hit-tests the pressed cell back into `+0xFC`. It neither writes
+  `+0xF8` nor invokes slot `+0xCC`, so the already-open HoverBox survives the
+  first click.
+- Selected painter `0x00565B40` reads `+0xFC` and explicitly requires the
+  pointed `StoreItem` kind at offset zero to remain zero before it draws UI 84
+  `BUY CLICK AGAIN` or UI 111 `TAKE CLICK AGAIN`. Selection does not mutate the
+  item to kind one.
+- Ordinary offer builder `0x0055ACB0` allocates the complete 0x14-byte
+  `StoreItem`, writes kind zero, stores the live item pointer at `+0x4`, and
+  stores price/identity at `+0xC`. Its Shop rebuild and Dowsing-result xrefs
+  cover the retail offer producers. The kind-one diagnostic branch inside
+  `0x0055E2C0` is a separate special-row variant; the shop-side allocation and
+  producer sweep found no retail offer or selection writer that creates it.
+
+The corrected state contract is therefore exact: hovering an ordinary offer
+builds the HoverBox immediately; the first click changes only selection, so
+the same box remains visible while `BUY/TAKE CLICK AGAIN` is painted. Leaving
+the cell or moving to another cell changes `+0xF8` and rebuilds/destroys the
+box. Re-entering the selected ordinary cell builds its normal details again
+because it is still kind zero. Purchase/removal, shop rebuild, close, range
+exit, and scene teardown invalidate the content through their existing owner
+lifecycle. There is no timer, selection-owned tooltip clone, sound request, or
+network authority in this presentation state.
+
+Complete membership and disposition:
+
+| Member | Native source | Disposition |
+| --- | --- | --- |
+| Fomentius ordinary Shop offers, affordable and unaffordable selected art | `0x0055ACB0`, `0x0055CEE0`, `0x0055D680`, `0x00565B40`, `0x0055E2C0` | exact contract: ordinary HoverBox remains available while selected |
+| Hagatha reachable PerkShop offers and bundle | shared StoreGrid plus `0x00554690` suffix | exact contract through the same lifetime |
+| Luthacus arbitrary InventoryShop storage rows | shared StoreGrid; `Shop+0x289 = 0` | exact contract with no price line and UI 111 selected art |
+| Shlorio all 47 result offers | Dowsing StoreGrid and complete recipe table | exact contract through the same lifetime |
+| pointer, keyboard/current-cell, and Website focus/touch adapters | `+0xF8` current versus `+0xFC` selection | exact shared content lifetime; input adapters do not change copy |
+| empty cells and pointer/service teardown | null current plus owner destructors/rebuilds | exact no-stale-content state |
+| standalone InventoryScreen ItemInfo and Hagatha owned-perk HoverBox | separate delayed/owned-grid owners | out-of-system for StoreGrid selection lifetime; unchanged |
+| StoreItem kind one diagnostic branch | `0x0055E2C0`; no retail Shop producer in the complete shop-side allocation/writer sweep | out-of-system dormant special-row variant, not selection |
+
+The debugger-staged selected trader fixtures are retained only as renderer/art
+evidence: they inject a selected state and therefore cannot prove pointer event
+ordering or HoverBox lifetime. The instruction thread above is decisive. No
+browser-platform approximation or unresolved native member remains in this
+boundary.
+
+The byte-matched Mac documentation candidate
+`af004e13aff05f63955e8433f701a2cdcbf20678` passed the complete registered
+static RE suite `502/502`; log SHA-256 is
+`78e6fddf781059a2acaf1fadca053cdbd9bb3973f77360d10a51970033af3dc5`.
+The paired Website behavioral candidate
+`be1b901ea78ae25332ffede0d1318f1a9ab82eaf` passed the complete gate and
+production-browser journey across Fomentius, Hagatha, Luthacus, and Shlorio
+selected HoverBoxes, current-cell teardown/re-entry, focus, purchase, and
+close with empty page, console, failed-request, failed-response, and host-error
+arrays. This receipt-only documentation refresh changes no recovered native
+contract. Publication remained pending at this receipt point.
+
 ## Not Yet Reversed
 
 These are portability findings, not invitations to fill in plausible behavior:
