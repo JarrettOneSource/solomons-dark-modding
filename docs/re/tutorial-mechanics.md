@@ -1325,3 +1325,156 @@ authenticated adapter checks its cloud row; the anonymous adapter checks its
 device-local row. Tutorial gameplay is solo-authoritative, but its
 presentation, stage, trigger clocks, loot identities, narration queue, and
 completion boundary must remain resumable browser-save state.
+
+## Tutorial entrance-fence spawn and camera-lock correction — 2026-08-24
+
+The Website report that Tutorial enemies can materialize south of the entrance
+fence reopened the placement and camera branch above. The earlier report
+correctly named the common placement helpers, but it stopped before the
+UID-group cache field and treated the 300-tick script sleep as though it were
+the camera-lock lifetime. That left two false web assumptions: one raw point
+per group batch and a transient camera target.
+
+All addresses below are preferred-image addresses for retail 0.72.5 at image
+base `0x00400000`, 4,723,200 bytes, SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`.
+The canonical read-only Ghidra replica was queried through
+`Invoke-GhidraHeadless.ps1`; the exact stock `tutorial.boneyard` remains
+33,220 bytes with SHA-256
+`97802f2ca45d9bc6f90a497e7c12a55926298161e191fa70eee5e666b90106ed`.
+
+### Native ownership and call census
+
+- `SpawnEnemy 0x00469580` has exactly five direct callers:
+  `0x0046BCD0`, `0x0046C790`, `0x0046BB50`, script dispatcher
+  `0x00689750`, and `0x0046C710`.
+- Full-group helper `0x0046C710` has only the script-dispatcher caller.
+  Spawn-N helper `0x0046C790` is called by the dispatcher and
+  `Spawner::Tick 0x0046D000`.
+- Placement adjustment `0x00463D30` has three xrefs: the shared Arena policy
+  owner `0x00466200` and two player-action branches inside `0x0054CC50`.
+  The latter are not Tutorial-enemy producers.
+- Camera command `0x00464B20` and cleanup command `0x004728B0` each have one
+  xref, the authored-script dispatcher `0x00689750`. There is no hidden
+  Tutorial unlock caller or second cleanup owner.
+
+`0x00465E40` builds an eligible-player list, consumes the native selection draw
+even with one Tutorial participant, then obtains a random unit vector through
+`0x00410C50` and adds exactly `100` world units to the selected player root.
+`SpawnEnemy` invokes that raw-location path for each requested enemy. It then
+temporarily installs Arena policy `+0x8F00`, calls `0x00466200`, and registers
+the returned actor.
+
+`0x00463BE0` is the exact policy predicate. Raw instructions at
+`0x00463C2E..0x00463C39` show policy 0 accepts a Region light scalar less than
+**or equal to** zero; the earlier wording "below zero" was too strict. Policy
+1 is strictly greater than zero. Policies 2/3/4 remain off-screen, direct, and
+outside-rectangle respectively. `0x00463D30` first accepts a raw point only
+when both placement collision and the policy pass, otherwise it searches the
+recovered ellipse-compressed rings, with exact Y scale
+`0.800000011920929`, fresh starting angle per ring, and the policy-0 fallback
+at radius `350`.
+
+Stock has no fence-side or connected-component query in this chain. The
+entrance barrier affects ordinary movement collision, but spawn admission is
+collision plus policy around the sampled player root. A no-south-side guarantee
+is therefore not a hidden stock fence mechanism.
+
+### Complete UID-group placement table
+
+`0x0046C710` copies UIDGroup byte `+0x58` to `DAT_0081985D`, clears the cached
+root globals `0x00819864/0x00819868`, then calls `SpawnEnemy` once per ordered
+member. Every call still consumes its own raw player/direction draws. When
+`+0x58` is zero, every member resolves that fresh raw point independently.
+When it is nonzero, the first member's final policy/collision-adjusted root is
+cached and later members reuse that final root without another placement
+search. The exact serialized Tutorial rows are:
+
+| UID | Name | Ordered members | `+0x58` dword / byte | Final-root behavior |
+| ---: | --- | --- | --- | --- |
+| 10010 | `FIVE SKELETAL WARRIORS` | 10004 x5 | `0x00000000` / `0x00` | fresh raw and final root per member |
+| 10052 | `FIVE ITEM SKELETONS` | 10051 x5 | `0x00000000` / `0x00` | fresh raw and final root per member |
+| 10060 | `Archer + Melee Group` | 10059,10059,10004,10004,10004 | `0x00000000` / `0x00` | fresh raw and final root per member |
+| 10061 | `Three Archers` | 10059 x3 | `0xCDCDCDCD` / `0xCD` | first final root shared by all three |
+| 10078 | `Survive Group` | 10076,10077,10076 | `0x00000000` / `0x00` | selected member owns a fresh root |
+| 10086 | `deadly survive group` | 10085,10076 | `0x00000000` / `0x00` | selected member owns a fresh root |
+
+The remaining serialized tail values are also drained: fields `+0x5C/+0x60`
+are `0xCDCDCDCD` in all six rows, and `+0x34` is zero in all six. No seventh
+group or alternate placement flag exists. The `0xCD` value is file truth from
+the retail row; the web projection consumes only its proven nonzero cache
+semantics and does not infer author intent from the fill pattern.
+
+### Persistent camera target and delayed cleanup
+
+Trigger 642218 launches script 642219 when the player enters its serialized
+rectangle. Command 1065 mode 0 calls `0x00464B20`, which immediately:
+
+1. intersects the authored rectangle
+   `(-35.53448486328125,-37.4495849609375,2675.215576171875,887.3675537109375)`
+   with the Tutorial Arena;
+2. stores target bounds `(0,0,2043,849.91796875)` at
+   Arena `+0x8E98..+0x8EA4`;
+3. snapshots the live camera endpoints into `+0x8EA8..+0x8EB4`; and
+4. stores float32 blend `0.01` at `+0x8EB8`.
+
+Arena tick `0x0046E570` recursively moves all four current endpoints toward
+that target, multiplies the blend by exact double `1.01`, and caps it at one.
+Nothing in script 642219 unlocks it. Command 1065 mode 1 is the only unlock
+branch and has no Tutorial producer.
+
+The following 300-tick sleep belongs solely to command 1066. At expiry,
+`0x004728B0` removes out-of-target scenery residents, Roads, compact/decor
+records, bridge/spatial records, and related cached geometry, then rebuilds the
+affected spatial owners. It does not iterate the Fence manager at `+0x885C`,
+the BadGuy actor manager, or the player. The entrance Fence and live enemies
+therefore remain; cleanup is not the missing enemy relocation mechanism.
+
+Spawn policy adjustment reads the persistent target at
+`+0x8E98..+0x8EA4`. The local camera interpolates toward it until scene
+teardown. Save/resume is a Website extension, so it must persist enough lock
+age to reconstruct that presentation rather than reinterpret the 300-tick
+cleanup countdown as lock duration.
+
+The raw point still has its native collision/policy fast path before target
+containment. If a ring search is required, every non-dark candidate must fit
+inside the persistent target inset by the actor radius; dark policy alone
+bypasses that rectangle. Off-screen evaluation follows the current recursively
+interpolated camera, not the cleanup counter.
+
+### Observation and web consequence
+
+A fresh clean process was launched directly from a task-owned retail copy as
+PID 14644 at `2026-08-24 17:14:40-04:00`, with an empty copied sandbox, no
+loader, and only five loaded modules. The process path was
+`C:\Users\User\AppData\Local\Temp\solomon-stock-tutorial-fence-78bdsF\SolomonDark.exe`.
+At 1600 x 900, the player crossed the entrance, confronted Solomon, and the
+opening ten skeletons materialized on the combat side. The settled capture is
+`11-solomon.png`, SHA-256
+`86114c009a436722b88afdc2bc2e6aa67c73eb8ed84842036c67e7ab9a024dd8`.
+This observation confirms the normal visible result but does not replace the
+static conclusion that stock owns no absolute fence-side predicate.
+
+The Website must correct the stock facts first: fresh raw sampling per member,
+the exact one-row final-root cache, persistent lock target, recursive camera
+age, and delayed-cleanup lifetime. The user-required absolute exclusion of the
+spawn strip is then an explicit Website safety rule, not a falsely attributed
+native branch: while the exact Tutorial scene is active, every enemy placement
+candidate must stay on the combat side of the complete serialized entrance
+Fence chain, including across its dynamic Gate gap. Ordinary generated and
+custom Boneyards do not inherit that fixed-scene domain.
+
+### Validation receipt
+
+- Fresh read-only replica xrefs close all five `SpawnEnemy` callers, both group
+  helpers, all three placement-adjust xrefs, and the single camera/cleanup
+  dispatcher owners. Raw instructions confirm policy-0 equality and the
+  collision-radius/target-ring call shape. No canonical Ghidra project data
+  was modified.
+- The exact rebased report on Mod Loader base `6cb56037` passed the complete
+  registered Mac static RE suite `500/500`. Log SHA-256 is
+  `eed446e35a25d069c98e03a187bc2c8262fb616642b2974cec52b89d70b58512`.
+- The stock process was stopped by exact PID after capture. The isolated source
+  tree and clean-stock capture directory remain retained because publication
+  was not requested; no loader code, runtime patch, push, or deployment was
+  performed.
