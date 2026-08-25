@@ -1092,6 +1092,53 @@ equipment sinks, and owner isolation. A real browser journey must prove local
 movement/cast suppression while either screen is live and authoritative state
 survival after close in both scenes.
 
+## 2026-08-24 active-party rejoin catch-up integration
+
+This is an integration consequence of the existing actor-private ABI and
+multiplayer milestone contract, not a new retail algorithm or authored table.
+It closes the specific case where a Website participant is absent while its
+still-active party crosses one or more shared levels.
+
+The returning participant must not copy another participant's book, offer,
+seed, ranks, vitals object, or derived-state object. Its host-retained actor
+projection is materialized first. For the latest authority milestone reached
+while it was absent:
+
+1. compare the returning actor's retained level with the milestone level;
+2. construct the strictly increasing crossed-level sequence
+   `old+1 .. milestone.level`;
+3. apply the existing shared level/XP synchronization to that actor's own
+   progression and queue exactly one pending choice per crossed level;
+4. build every offer from that actor's roots, permanent ranks, dependencies,
+   unlocks, offer seed, Sorceror's Charm state, and Hagatha ownership;
+5. add the returning actor to the current run's one level-up cohort and hold
+   ActorWorld until all current pending participants resolve; and
+6. leave the live Arena, other books, current enemies/effects, and gameplay RNG
+   in their current authority-owned state except for the ordinary offer,
+   Creativity Insight, automatic-choice, and apply draws already named by this
+   contract.
+
+If no level was crossed and the retained actor has no unresolved choice, no
+picker or barrier may be synthesized. If the actor departed with a pending
+offer, that offer remains actor-private durable state for this active-run
+rejoin boundary and reconstructs the cohort even when no later level was
+crossed. If a cohort is already open, the returner joins that barrier rather
+than creating an independent pause or replacing the other participants'
+milestone.
+
+Disconnecting again while the returner is pending removes it from the live
+cohort so peers resume, but the host-retained actor projection still owns its
+unresolved pending sequence. A later return reconstructs only those choices.
+No disconnected wall time is translated into XP, fixed ticks, offers, effect
+ages, or RNG advancement.
+
+Website validation must cover zero, one, and several missed levels; an offer
+pending before departure; a peer cohort already open; Sorceror reroll/save and
+queued rebuild; owner-only option identity; disconnect/rejoin during catch-up;
+and coexistence with an independently owned gameplay pause. Each case must
+prove the returning book/ranks mutate alone and the Arena resumes on the first
+authoritative tick after the final pending choice.
+
 ## Not Yet Reversed
 
 - **Row 81 has no recovered consumer (LOW).** It occupies native selector space

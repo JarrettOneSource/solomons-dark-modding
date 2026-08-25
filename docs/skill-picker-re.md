@@ -395,6 +395,24 @@ predicted movement: the Website reconstructs its proven level-up
 beam/sparkle/light as a separate presentation lane, alongside the independently
 advancing `LevelupScreen` UI clock.
 
+### Active-run late-rejoin consequence (2026-08-24)
+
+An authenticated actor materialized into an already-active run follows the
+same cohort rule. If its host-retained progression is behind the run's latest
+shared milestone, it receives one actor-private pending choice for every
+crossed level. Its own `LevelupScreen` presents those offers in order; peers
+without offers receive only the waiting surface. The existing ActorWorld hold
+begins before the rejoined actor can submit gameplay input and ends on the next
+authoritative frame after the last current pending participant resolves.
+
+This must not replay the launch barrier, copy a peer's options, restore a saved
+enemy/world snapshot, or tick elapsed disconnect time. A second disconnect
+removes the waiter so peers are not held indefinitely; the unresolved offer
+sequence remains with the host-retained actor state and reconstructs on a later
+return while the same run nonce is active. An independently owned Pause Menu or
+book pause may coexist, and resolving the catch-up cohort cannot release that
+other pause source.
+
 ## Regression Harness
 
 Run the live bot skill-choice regression with:

@@ -606,3 +606,40 @@ release -> unseal`.
 Do not collapse this to `currentRoom = nextRoom`; that loses the exact points at
 which native state, actors, presentation, input, and multiplayer authority
 change owners.
+
+## 2026-08-24 Website active-party rejoin integration
+
+This addendum does not introduce a new retail address or claim that the stock
+application owns a browser save, Website party, supervisor, or rejoin token.
+It records the exact reuse boundary for the Website implementation so the
+already recovered `gameplay.arena` late-materialization row cannot be replaced
+by a save fork.
+
+The complete applicable G13 membership is:
+
+| Member | Native G13 disposition | Website consequence |
+| --- | --- | --- |
+| authenticated late Arena materialization | established: retained map digest plus authority run intent/nonce | a former party member may re-enter only the same still-active run after the host resolves those identities |
+| nonauthority departure | established: retire run membership and actor bindings | do not leave an idle or XP-receiving ghost actor while the browser is absent |
+| durable participant identity/loadout/progression/vitals | established survivor across materialization | retain one host-authoritative owner projection for the returning participant |
+| input, cast queue, target locks, equip/sack work, replicated actor/effect bindings | established transient cleanup membership | discard them; rejoin requires neutral input and newly allocated live bindings |
+| Boneyard selection, world, wave, enemies, loot, RNG, scripts, and run nonce | current authority-owned Arena state | never deserialize the returning browser's saved world over the live party run |
+| `loading.boneyard` frozen expected set | established initial-launch roster | active-party rejoin is a later materialization, not a mutation of the completed start barrier |
+| active `gameplay.arena` | established late-join state | exact eligible phase for reattachment |
+| Game Over, post-run, Hall, returned Hub, replaced/empty run | established terminal/non-Arena states | reject the live claim and use the ordinary saved-wizard flow |
+| authority departure | retail migration still not established | retain the Website's separately documented deterministic party-leader promotion without presenting it as stock evidence |
+
+For the Website, a random capability may authenticate the former participant,
+but it is a web transport mechanism only. It must bind player, party, session,
+sealed content, and run nonce; become usable only after that participant's live
+actor retires; and disappear when the run is no longer active. It is distinct
+from the public Party ID and must not make private or playing parties
+discoverable.
+
+The actor returns through the cold Boneyard materialization seam at the
+authored spawn. Its durable actor-private columns and Hall row are imported,
+while current world state remains resident and all transient action/effect
+owners stay cleared. No wall-clock disconnect interval is replayed as native
+fixed ticks. This is the same durable/transient ownership split already proven
+above, applied to a browser reconnection boundary rather than a new retail
+edge.

@@ -982,3 +982,34 @@ to the fresh values; legacy web wizards migrate pending false.
   projection used if title New Game retires that wizard. The title may then
   invalidate the continuation after strict validation without synthesizing
   state from a rendered snapshot.
+
+## 2026-08-24 active-party rejoin capability boundary
+
+Retail save bytes contain no Website party, session, account, admission
+ticket, or reconnect capability. Schema 10's nullable `partyRejoinToken` is
+therefore an explicit browser transport extension, not a native save field.
+Its only native-informed ownership is the already recovered split between one
+durable participant and a separately live Arena/run.
+
+The token is a random 256-bit capability stored only in the owner continuation
+summary. It identifies no public party or server route by itself. The live
+supervisor/host must resolve it to the exact player, party, session, sealed
+content, and active run nonce; the browser document cannot recreate that
+mapping. Schemas 1 through 9 migrate it as null. A profile-only document,
+Game Over clear, or killed-wizard retirement has no continuation and therefore
+cannot retain it.
+
+On `LAST GAME`, an available token selects live reattachment before ordinary
+save restore. The document still supplies strict player/character/content
+validation, but the current host's detached owner projection—not editable
+simulation bytes in the document—supplies the actor imported into the live
+run. A definitive inactive token falls back to the existing Hub/Boneyard
+saved-wizard path. Busy, replayed, mismatched, or temporarily unavailable
+claims fail closed so a browser cannot fork a run that may still be active.
+
+The capability becomes usable only after its matching actor disconnects,
+rotates after a successful return, and is erased with terminal, empty,
+replaced, or supervisor-lost runs. The existing abrupt-browser limitation
+remains: if no checkpoint containing the capability reached IndexedDB/cloud
+before the process died, the browser cannot reconstruct it after death. No
+server-to-account fallback is inferred from retail synchronous file I/O.
