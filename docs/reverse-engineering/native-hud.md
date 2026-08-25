@@ -624,3 +624,24 @@ No complete panel rect, label count, font, sprite identity, or natural featured
 membership is asserted. An implementing agent must leave this branch absent or
 explicitly incomplete until a naturally configured featured enemy is reachable
 and settle-gated. Do not reuse the ordinary local or ally-health rect.
+
+## 2026-08-25 stage-8 pickup secondary-report audit
+
+A second web report described missing arrow/text at the first equipment pickup.
+Retail 0.72.5 was rechecked through the canonical read-only Ghidra replica
+wrapper (slot 01), using `dump_insns_around.py 80,20,0x005D0F04,0x005D10B6`.
+The instruction window confirms the table above without adding a new member:
+
+- stage 8 starts at `0x005D0F04`, looks up the first registered object of type
+  `0x7DD` through `0x00646CB0`, and exits when none exists;
+- with a live object it computes the camera-projected pointer geometry, pushes
+  blink immediate `1` at `0x005D106D`, calls only pointer primitive
+  `0x005C9BB0` at `0x005D10B6`, and jumps to the renderer exit at
+  `0x005D10BB`;
+- there is no call to callout/text primitive `0x005C9C70` anywhere in the
+  complete stage-8 branch. Stage 9 begins separately at `0x005D10C0` and owns
+  the Inventory instruction/pointer.
+
+Therefore a web `GRAB THIS ITEM` string would be invented behavior. The exact
+stock contract remains: blinking world-Sack arrow at stage 8, then Inventory
+copy/control at stage 9; the SkillScreen gate remains a later stage-12 member.
