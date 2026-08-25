@@ -11,11 +11,9 @@ bar, and skill entries may be either primary attacks or secondary casts.
 - SHA-256: `03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`
 - Stock logical render size: `1600x900`
 - Clean Ether/Arcane level-one capture, Skill Screen open:
-  `e5bc0420354e3155579234ffe227b59daaf5f3aa2821c5620adb041286186904`
+  `5b2423d5daf56e6bb5d154dd2ce0abc80d947286f087c8f81134b01686bb1c87`
 - Stock capture after dragging Call Leviathan into another slot:
-  `15392a41dabb67eae6b02fc14d5dbb2b9c071be492caf3b92edd1570c8f7aabc`
-- Stock capture after dragging Magic Missile into another slot:
-  `8ea604ef93ee4d11b312faae2b5c719f6f3e6a116d560dd513f5ba4282f61597`
+  `e934a18512ef5ed92753be150f5a37e5182751c8ed25644f5030a5d63b87f05d`
 
 The captures came from a clean retail process with a newly created
 Ether/Arcane wizard. The process was stopped after the observations; no
@@ -35,10 +33,14 @@ UI-object owner.
 | Page construction and layout | `0x0066B380` |
 | Opening/closing tick | `0x006567E0` |
 | Begin close | `0x006568E0` |
-| Full-screen chrome painter | `0x0065BEF0` |
+| Root/background/chrome painter | `0x0065B550` (`SkillScreen` vtable `+0x0C`) |
+| Page-region overlay/help painter | `0x0065BEF0` (`SkillScreen` vtable `+0x28`) |
 | `SkillPage` constructor | `0x006577F0` |
 | Page interactive-card builder | `0x00673EE0` |
-| Page/card/tooltip painter | `0x006720F0` |
+| Page/card painter | `0x006720F0` |
+| Hover construction | `0x00656CE0 -> Skills_Wizard +0xA4` |
+| Hover content builder | `0x0066B990` |
+| Shared `HoverBox` constructor/render/layout | `0x005C38F0` / `0x005C3A60` / `0x005AB060` |
 | `HoverButton` drag threshold | `0x00656980` |
 | `HoverButton` click/release | `0x00674110` |
 | `SkillDragger` release | `0x006564A0` |
@@ -54,6 +56,100 @@ visible member and folds descendants into the same page through recursive
 relationship predicate `0x0065E670`. Pages are laid out and wrapped from their
 measured widths; the screen is not a hard-coded list of just the two starting
 skills.
+
+## 2026-08-25 corrective full-renderer closure
+
+The 2026-08-20 Website pass stopped at `SkillScreen` vtable `+0x28`
+(`0x0065BEF0`) and treated that overlay as the complete renderer. That was a
+one-hop ownership failure. The actual vtable root at `+0x0C` is `0x0065B550`,
+and hover is a separately owned shared `HoverBox` family reached through
+`HoverButton +0x98 -> 0x00656CE0`. The old report also called Skills record `5`
+the page/card background even though its authored logical size is only
+`87 x 88`; instructions prove that record `0` is the page-wide nine-slice and
+record `5` is only the ordinary icon frame. The earlier `exact-ported` visual
+claim is withdrawn.
+
+Fresh read-only Ghidra replica queries on the same retail image recover these
+complete settled root passes at `1600 x 900`:
+
+- `0x0065B550` first draws an opaque black full-screen curtain. Its eight
+  additive UI record `3` seal arcs share logical centre `y=490`, scale `1.9`,
+  rotations separated by `45` degrees, per-frame horizontal jitter within the
+  native `40`-pixel lane, and rotation phase `-frame/60` degrees. Settled alpha
+  is `0.15`; the opening envelope applies the native higher-order fade.
+- UI record `33` is centred at `(80,30)` rotated `-90` degrees and at
+  `(1520,30)` rotated `+90` degrees. UI record `31` is centred at `(200,20)`
+  mirrored in X and `(1400,20)` ordinary. These authored quads are mostly
+  above the viewport; placing whole wizard statues inside the leather field is
+  not stock.
+- UI record `30` is centred at `(0,860)` and `(1600,860)`. A bottom-only clip
+  `(0,820,1600,80)` contains UI record `32` at `(60,880)` and its mirrored
+  sibling at `(1540,880)`.
+- The page region remains `(0,50,1600,760)`. UI record `49` supplies its
+  leather field over the black root; semitransparent texels therefore reveal
+  black, not the earlier off-screen fixture pass. Overlay `0x0065BEF0` adds UI
+  record `10` horizontal chain rails, UI record `71` rail endcaps, the
+  UI-record-`4` title backing, and the exact title/help text. `SKILLS` and all
+  four help lines use Fonts group `3`
+  (`+0x0E7D98`, menu/dialog), not the medium/body faces. Title RGB is
+  `(0.5,0.5,0.5)`; help RGB is the same at settled alpha `0.75`.
+- `0x005C8740` renders the live XP, backpack, tome, and all eight `BeltButton`
+  children after the SkillScreen chrome. It does not invent a separate bright
+  numbered web belt.
+
+The complete settled SkillPage pass at `0x006720F0` is:
+
+1. One page-wide Skills-record-`0` nine-slice at `(0,0,pageWidth,300)` plus an
+   inset primitive `(12,12,pageWidth-24,276)`. RGB comes from the page root.
+   An unselected page uses alpha `0.1`; a page containing the first selected
+   primary/concentration row uses `0.5`. Record `0` then receives one
+   white-alpha-`0.5` additive edge pass, plus one additional pass for a
+   selected page.
+2. Every row centres at local `y=80`: root x `100`, first dependent x `280`,
+   then `+160` per dependent. Skills record `13` and root-tinted record `164`
+   are both drawn there at scale `1.15`; Spell Welding delegates its split
+   presentation to `0x00671810`. Record `6` connects each dependent to the
+   previous member.
+3. Record `5` is the ordinary `87 x 88` icon frame. Record `14` is the
+   actionable frame. The selected actionable row uses record `5` tinted
+   `0x97c797`: source RGB `(0.25,1,0.25)` blended `0.75` toward luminance by
+   `FUN_0040FC60`, with alpha `1`. The authored icon receives one opaque-black
+   copy at `(+4,+4)` followed by the white copy at the row centre.
+4. Source `casting` / `concentrate` uses Fonts group `0` (whose lowercase
+   glyphs produce the stock small-cap presentation); the name uses group `1`,
+   family uses group `5`, quick description uses group `1`, and the category
+   footer uses group `0`. `FUN_0043D030` wraps the original-case name and quick
+   description at `140` pixels before render; rank greater than one is appended
+   to the page name. The quick description is the sole white pass, without the
+   `(+1,+1)` black text shadow used by the other lanes. Its line-restart
+   behavior is visible in stock Call Leviathan as
+   `call leviathan / from the / ether`.
+   A per-row stretched frame, rounded primitive, fixed
+   purple fill, and universal white card copy are all non-native.
+
+Hover is not part of the page painter. `HoverButton +0x98` calls
+`0x0066B990(skillId,0,0)`, marks the returned shared `HoverBox` opaque, and
+lays it out vertically with a `50`-pixel source gap and `25`-pixel viewport /
+content margin. The box is centred above the source unless that would cross the
+top margin, in which case it flips below; horizontal bounds clamp to 25 pixels.
+It uses the shared opaque black fill, native edge pass, and case-preserving
+Fonts-group-`0` `ExactText` lines. Content is fully extractable from all public
+row CFGs:
+
+- optional `GRANTED BY ITEM` or `BOOSTED` when effective rank exceeds the
+  permanent rank;
+- the native name plus ` _s(.7)_o(0,1)%d/%d` rank suffix;
+- category, full `mDescription`, a blank line, and
+  `   Current Level: %d`;
+- every `mStats` row in authored order, prefixed `   `;
+- every category-3 `mBonus` row in authored order, also prefixed `   `.
+
+The formatter at `0x0065D7F0` uses `D -> %.0f`, `F -> %.1f`, `X -> %.2f`,
+and `N -> %.0f` for integral values otherwise `%.1f`; `%%` is a literal
+percent. ExactText commands such as `_s(.7)_o(0,1)_i` remain presentation
+commands and are not visible source text. This drains every public row
+`8..79`, including all fourteen concentration bonus sets, instead of choosing
+six generic properties in web-defined order.
 
 ## Stock visual contract
 
@@ -71,14 +167,18 @@ CAN BE DRAGGED INTO YOUR BELT
 
 Touch input substitutes `TOUCH AND HOLD` for `HOVER OVER`.
 
-Every `SkillPage` is a vertical card with the skill icon, upper-case name,
+Every `SkillPage` is one root-tinted page panel containing the root and every
+learned transitive dependent. Each row has the skill icon, upper-case name,
 family, quick description, and one of `PRIMARY CAST`, `SECONDARY CAST`, or the
-other native category labels. Hover/hold opens the authored full description,
-current rank, and evaluated rank values in a black tooltip.
+other native category labels. Hover/hold constructs the shared authored
+`HoverBox` with the full description, current rank, evaluated `mStats`, and
+category-3 `mBonus` membership.
 
-The card painter at `0x006720F0` uses the native Skills atlas:
+The page painter at `0x006720F0` uses the native Skills atlas:
 
-- record `5` is the ordinary card/icon frame;
+- record `0` is the page-wide nine-slice;
+- record `13` is the row aura and record `164` is the root-tinted glow;
+- record `5` is the ordinary icon frame;
 - record `14` is the gold draggable frame;
 - the selected primary is tinted green and receives the `CASTING` label;
 - record `6` is the rank/upgrade overlay;
@@ -273,3 +373,9 @@ must not be represented by the same nullable field. The selected-skill HUD must
 retain three actor-addressed buttons, the compact selector modal, exact A/B
 replacement, click/concentrate audio, and modal input ownership; opening the
 full Skill Screen in place of this selector is not the stock interaction.
+
+Presentation must also preserve the root/overlay split above: exact root
+records and partial off-screen transforms, one root-tinted page panel per
+dependency family, all CFG-authored HoverBox lines, and the live eight-button
+HUD painter. Stretching record `5` into a per-row card or replacing HoverBox
+with a fixed web tooltip is not a legal approximation.
