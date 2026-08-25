@@ -487,6 +487,131 @@ eligibility membership.
 No G9 derived-stat or selected-skill member remains `Not Yet Reversed`. The
 featured-enemy prefix below is an independent pre-existing G9 boundary.
 
+## HUD control layout and modal slide (`0x005D76C0`, `0x005C7200`)
+
+Recovered 2026-08-25 (retail 0.72.5, image base `0x00400000`, read-only
+replica) while closing the Tutorial modal callouts. `0x005D76C0(Game)` is the
+HUD control layout writer that positions the backpack, tome, and belt
+controls from the backbuffer size `(W, H)` read at `*0x00B401A8 + 0x1DC/+0x1E0`;
+`0x005C7200(Game, p)` is the modal slide writer that rewrites their `y`
+every tick from the open-modal progress `p`. `0x007DE808` is the double
+`0.5`, `0x007DE8D8` = `5`, `0x007DE910` = `3`, `0x0079ABE8` = `53` (float),
+`0x00785F00` = `65` and `0x007866E4` = `75` are the `FUN_00427710` push
+arguments for the backpack/tome control size (the drawn glyphs UI 47/48 are
+`58 x 62`).
+
+| Control | Game field (rect) | Layout `x` | Layout `y` (`p = 0`) | Slide `y` (`0x005C7200`) | Size |
+| --- | --- | --- | --- | --- | --- |
+| backpack | `Game+0x22C` (`+0x240`) | `W/2 - 69.5` | `H - 75` | `(H - 75) + 15p` | `58 x 62` |
+| tome | `Game+0x2EC` (`+0x300`) | `W/2 + 10.5` | `H - 75` | `(H - 75) + 15p` | `58 x 62` |
+| belt `k < 4` | `Game+0x5EC + 0xEC k` (`+0x600 + 0xEC k`) | centre `c(bp).x - 5 - 260 + 60k` | centre `c(bp).y + 3` | `(H - 75) + 8 + 15p` (top) | `53 x 53` |
+| belt `k >= 4` | same stride | centre `c(tome).x + 5 + 80 + 60(k - 4)` | centre `c(tome).y + 3` | same | `53 x 53` |
+| top controls | `+0x3C4`, `+0x484`, `+0x544` | unchanged | `-7` | `-7 - 80p` | |
+
+At `1600 x 900` the control centres are backpack `(759.5, 856)`, tome
+`(839.5, 856)`, belt `494.5, 554.5, 614.5, 674.5, 924.5, 984.5, 1044.5,
+1104.5` at `y = 859.5` when closed, and `(759.5, 871)`, `(839.5, 871)`,
+belt `y = 874.5` at `p = 1`. Belt loop bounds in `0x005D76C0` are the
+`int*` offsets `-0x104 .. < -0x14` and `0x50 .. < 0x140` in 60-byte steps
+(four slots each). The slide writer forces `p = 1` whenever both
+`Game+0x15A0` (InventoryScreen) and `Game+0x1664` (SkillScreen) exist;
+otherwise the InventoryScreen tick `0x00551A10` ramps `+0x150` by `0.025`
+(`0x007847B0`) per tick and the SkillScreen tick `0x006567E0` ramps `+0x94`
+the same way, so a modal is fully slid after 40 ticks.
+
+Tutorial stages 10 and 13 begin as soon as `Tutorial::Tick 0x005D6330` sees
+the corresponding screen pointer (`Game+0x15A0` / `Game+0x1664`), not after
+the 40-tick ramp settles. `Tutorial::Render` therefore reads the live control
+rectangles throughout opening. Closing sets the screen close byte and leaves
+the teaching stage at that edge; the teaching overlay is absent during the
+visual close ramp.
+
+## Tutorial teaching overlay (`0x005D08C0`)
+
+`0x005D08C0` is `Tutorial::Render` (class vtable `0x0079AFC4` slot `0x0C`;
+slot `0x08` is the tick `0x005D6330`). The class catalog keeps its historical
+name `InventoryHint_Render`; it renders every tutorial stage's callouts and
+pointers, not only inventory hints. Two primitives draw everything:
+
+- `0x005C9C70(String, x, y)` (wrapper `0x005CA560`): measures the `menu`
+  font text with `0x0043B890` -> `(w, h)`, draws UI record 4 (20 x 20
+  nine-slice) through `FUN_00417760` over
+  `(x - W/2, y + 4 - H/2, W, H)` with `W = w + 28` (`0x00795160`),
+  `H = h + 20` (`0x007DE920`), `+4` from `0x007DE8C8`, colour
+  `(0.85, 0.73, 0.44, 1)` (`0x00784D60`, `0x00788BDC`, `0x00788BE0`), then
+  draws the text with `0x004A57C0('menu', String, x, y)` in centred mode:
+  line `k` at `x_k = trunc(x - w_k/2)`, `y_k = trunc(y) + 25k`
+  (`0x007DE960` = 25 line pitch), `h = 24 + 25(n - 1)`, `w = max w_k`.
+- `0x005C9BB0(origin, tip, blink)`: draws UI record 28 (58 x 61) AT
+  `origin` (the first float pair), rotated by
+  `atan2(tip.x - origin.x, tip.y - origin.y)` in degrees (`+360` when
+  negative) through `0x00414F90(origin.x, origin.y, angle)`; `tip` only
+  steers the rotation. At every call site the pair allocated last
+  (`sub esp,8` nearest the call, lowest stack address) is `origin`. When
+  `blink != 0` it draws only while `0x0081F658 % 50 > 19`. `0x0081F658` is
+  `App+0x28`, the 100 Hz application tick (see
+  `native-movement-and-tick.md`): incremented by the base tick `0x00427800`
+  from the scheduler `0x0040D1B0`, never paused (`App+0x2C` has no writer),
+  skipped only while the scene-transition field `App+0x68 > 0`, and still
+  counting while InventoryScreen / SkillScreen are open. A blinking pointer
+  is therefore hidden 200 ms and shown 300 ms of every 500 ms, modal or not.
+  `0x00403730` is `Rect::Centre` (`(x + w/2, y + h/2)`).
+
+Pointer/callout members by stage (`Tutorial::Render` jump table `0x005D2324`
+on `[this+0x7C]`; stages 0/2/11/19 draw text only), with `c(r)` the
+rectangle centre, `bp`/`tome`/`belt[k]` the control rects above at the screen's
+live `p` for modal stages 10/13 and the resting layout otherwise. Every
+`0x005C9BB0` call
+site is listed with its pushed blink immediate:
+
+| Stage | Member | Gate | Anchor | Callout centre / pointer origin -> tip | Blink |
+| --- | --- | --- | --- | --- | --- |
+| 5 | secondary-slot pointer (`0x005D0EFA`) | none | secondary HUD slot | placement owned by the Website ledger 2026-08-23 row | 1 |
+| 8 | first ground-Sack world pointer (`0x005D10B6`) | first registered type `0x7DD` | projected Sack | placement owned by the Website ledger 2026-08-23 row | 1 |
+| 9 | inventory pointer (`0x005D11F8`) | none | `c(bp)` (`p = 0`) | `(c.x - 40, c.y - 40) -> c` | 1 |
+| 10 | resume callout + pointer (`0x005D133E`) | none | `c(bp)` | callout `(c.x - 50, c.y - 120)`; pointer `(c.x - 50, c.y - 50) -> c` | 1 |
+| 10 | quick-use callout + pointer (`0x005D143C`) | none | `c(belt[7])`, tip `c(belt[6])` | callout `(c7.x + 0, c7.y - 115)`; pointer `(c7.x - 20, c7.y - 50) -> c6` | 0 |
+| 10 | equipment callout + pointer (`0x005D1529`) | none | `pt = FUN_00570f80([[[Game+0x15A0]+0x15C]+0x30])` = STAFF/WAND sink centre | callout `(pt.x - 250, pt.y + 50)`; pointer `(pt.x - 60, pt.y + 40) -> pt` | 0 |
+| 10 | backpack callout + pointer (`0x005D16E1`) | `Game+0x15A0 && [screen+0x294]`; entry 0 of grid `screen+0x188` (`0x005D07A0`), `*entry`, holder `[[entry]+0x10]`, item `[holder]`, `[item+4] != 0` | `pt = 0x004282D0(grid, [obj+0], [obj+4])` = cell-0 top-left | callout `(pt.x + 410, pt.y - 7)`; pointer `(pt.x + 60, pt.y - 5) -> pt` | 0 |
+| 12 | skills pointer (`0x005D1875..0x005D18C0` sets `origin.x`, pushes 1 at `0x005D188D`, then `jmp 0x005D11E2` into the stage-9 tail that sets `origin.y` and shares the `0x005D11F8` call) | none | `c(tome)` (`p = 0`) | `(c.x + 40, c.y - 40) -> c` | 1 |
+| 13 | resume callout + pointer (`0x005D1A00`) | none | `c(tome)` | callout `(c.x + 50, c.y - 110)`; pointer `(c.x + 40, c.y - 40) -> c` | 1 |
+| 13 | quick-use callout + pointer (`0x005D1AF5`) | none | `c(belt[1])` | callout `(c1.x + 0, c1.y - 125)`; pointer `(c1.x - 20, c1.y - 50) -> c1` | 0 |
+| 13 | concentration pointer + callouts A/B (`0x005D1B9B`) | `[ss+0x84] > 2 && [[ss+0x90]+8]` (`ss = [Game+0x1664]`) | `pt = 0x004282D0(page[2], 100, 80)` | pointer `(pt.x + 100, pt.y - 20) -> pt`; A `(pt.x + 50, pt.y - 165)`; B `(pt.x + 50, pt.y - 100)` | 0 |
+| 13 | hover pointer + callout (`0x005D1CD9`) | `[ss+0x84] > 0 && [[ss+0x90]]` | `pt = 0x004282D0(page[0], 100, 70)` | pointer `(pt.x - 100, pt.y - 30) -> pt`; callout `(pt.x - 115, pt.y - 30)` | 0 |
+| 14 | selected-HUD pointer + two text lines (`0x005D1D36..0x005D1DE9`, `0x005D1DEE..0x005D1EAA`) | `[this+0xAC] == 0` (`0x005D1D29`) | primary control rect `[Game+0x3C0]` (control `+0x3AC`), concentration-A rect `[Game+0x480]` (control `+0x46C`) | origin `c(primary) + (30, 50)` -> tip `0.5 * (c(primary) + c(A))` (`0x007DE808`, `0x00784D50`, `0x007847C8`); lines at `(c(primary).x - 220, c(primary).y + 50)` and `(.., + 70)` | 1 |
+| 17 | first ground-Sack world pointer (`0x005D206A`) | first registered type `0x7DD` | projected Sack | placement owned by the Website ledger 2026-08-23 row | 1 |
+| 18 | potion pointer (`0x005D21BE`) and HP pointer (`0x005D2274`) | none | potion belt slot / health meter | placement owned by the Website ledger 2026-08-23 row | 1 |
+
+Texts: `Click here or press '%s'\nagain to resume playing`, `Put items
+here\nfor quick use`, `Put equippable items\nhere to wear them.`, `Found
+items go in your backpack.  Click and\ndrag to move items, double-click to
+use them.`, `Drag skills here\nfor quick use`, `You are CONCENTRATING
+on\nyour new skill automatically`, `This confers a bonus, but is\nlimited
+to one skill at a time.`, `Hover your mouse over a\nskill icon for more
+information.`.
+
+Anchor providers:
+
+- InventoryScreen ctor `0x00560380` fits `FUN_0040f9e0(0, 54, 1024, 600)`
+  with `FUN_00404000`, stores `+0x3AC = fitted.bottom - 261` (`H >= 801`;
+  `-241` for 768..800; `-241 + 40` for 600..767), and places the
+  `320 x 320` equipment pane at `(W - 370, +0x3AC - 400)` standalone or
+  `(W/2 + 377, ..)` with a companion. `0x00551610` writes the sinks from
+  `(cx, cy) = (x + 160, y + 160)`: hat `(cx, cy - 70)`, robe
+  `(cx, cy + 28)`, STAFF/WAND `container+0x30 = (cx - 80, cy + 10)`,
+  amulet `(cx - 67, cy - 57)`, ring0 `(cx - 67, cy + 77)`, ring1
+  `(cx + 67, cy + 77)`, ring2 `-9999` unless perk byte
+  `[[Game+0x1654]]+0x7DF`. At `1600 x 900` standalone the STAFF/WAND sink
+  is `(1310, 259)`.
+- InventoryGrid (`0x0055D830`; two instances at `screen+0x188` and
+  `screen+0x298`): entry `{x, y, .., holder@+0x10}`; the draw `0x0055A070`
+  translates the world matrix by `(x, y)` and draws the cell glyph at
+  `(0, 0)`, so the entry position is the cell top-left. `0x004282D0(rect,
+  x, y)` adds the parent chain (`+0x14`, `+0x18`; parent at `+0x70`).
+  Cell 0 of the backpack grid is `(24, 496)` at `1600 x 900`.
+- SkillPage builder `0x0066B380` writes the page origin to `+0x14/+0x18`;
+  the root icon anchors are `(100, 80)` and `(100, 70)` inside the page.
+
 ## Not Yet Reversed
 
 ### Featured enemy / boss panel

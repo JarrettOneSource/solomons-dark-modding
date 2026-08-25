@@ -730,6 +730,18 @@ That function appears in ~40 vtables across the binary — it is the shared base
 tick — but its presence at slot 8 of `App::vftable` specifically is what makes
 `App+0x28` count unpaused application ticks.
 
+The static `App` object lives at `0x0081F630` (`0x00B401A8` holds its
+address), so the "global frame counter" `0x0081F658` that HUD, menu,
+Tutorial-pointer, footstep, and hit-feedback code read is this same
+`App+0x28`, incremented at `0x0042781E..0x00427824` from the 100 Hz scheduler
+`0x0040D1B0`. In 0.72.5 `App+0x2C` (`0x0081F65C`) has no writer other than
+the constructor zeroing (`0x00421EF0`, `0x0042742E`; the only byte setter
+`0x00656560` is called once, from `0x0068ABA1`, on `[[edx+0x1654]]`, not the
+App), so the "paused" branch never fires and the counter runs on every scene,
+including while the InventoryScreen / SkillScreen modals are open; only
+`HallOfFame_Render` rewrites it (`0x005A3745`, `0x005A3978`). The `+0x68`
+check is the scene-transition skip.
+
 So the observed snapshot is explained without a clock: something constructed a
 level or screen when the app had run `1485` unpaused ticks. Divisibility by
 `3827` is the discriminating evidence — a coincidence at odds of roughly

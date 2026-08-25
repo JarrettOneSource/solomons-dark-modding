@@ -268,7 +268,8 @@ The cloak extends 60 pixels below the client and is clipped by the viewport.
 
 ## Animation
 
-The stock tick uses the global frame counter at `0x0081F658`:
+The stock tick uses the application tick counter `App+0x28` at `0x0081F658`
+(100 Hz, never paused; see `reverse-engineering/native-movement-and-tick.md`):
 
 ```text
 theta = global_tick * pi / 180
