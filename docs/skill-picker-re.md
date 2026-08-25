@@ -167,6 +167,23 @@ Entry 53 `sounds\levelupskill` is loaded but no retail dispatch was found.
 None of these screen sounds substitutes for the PlayerActor-owned entry-52
 threshold request.
 
+### 2026-08-24 web cold-start reveal consequence
+
+The native 40-tick reveal belongs to a constructed, attached `LevelupScreen`.
+Construction `0x00658620` initializes alpha zero; the attached screen then
+receives `0x0066F920` ticks and `0x0067DF80` renders those intermediate alpha
+states. There is no native interval in which the reveal clock advances while
+the screen renderer or its three atlases do not exist.
+
+The Website must preserve that ownership boundary when its Pixi/WebGL renderer
+is created asynchronously. The barrier-keyed PlayerActor sound, sparkle, and
+light timer still starts at the threshold edge, but `LevelupScreen` reveal time
+must start only when the picker canvas is ready to paint. Starting the 400 ms
+clock at React mount while GPU/atlas creation is pending silently consumes the
+entire native reveal on a cold load and presents the first visible frame at
+alpha one. Queued-choice rebuilds remain settled and must not restart the
+40-tick reveal.
+
 ## Sorceror's Charm Actions
 
 The previous conclusion that stock had no reroll or deferred choice was

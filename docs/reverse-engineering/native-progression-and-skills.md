@@ -238,6 +238,35 @@ policy; the exact stock defect remains recorded for diagnostics.
 
 ## Level-up offer pool and selection
 
+### 2026-08-24 secondary audit: the offer cap is not the runtime maximum
+
+A user report that lower-level Website offers kept recycling a narrow set of
+ranked skills reopened the complete offer system. A fresh read-only decompile
+of `0x0067CB70`, `0x0065EBA0`, `0x0065ED00`, `0x0065E830`, and `0x0066F840`
+against the retail image identified above confirms the existing contract in
+this report and in `native-skills-and-spells.md`:
+
+- `0x0065ED00` compares permanent rank `row + 0x20` with the compiled property
+  at the row-property object `+0x58`, `mCapLevel`, for ordinary offer
+  eligibility;
+- `mMaxLevel` remains the apply/effective-rank ceiling at property-object
+  `+0x5C`, used by `0x00660320`, Mindstar, direct grants, and the Creativity
+  Insight over-cap path; it is not the ordinary picker ceiling; and
+- all dependency, advanced-unlock, minimum-level, focus, root/general,
+  affordability, pruning, collision, and shuffle phases remain as specified
+  below. Category-0 subskills enter through the same scan after their exact
+  `requires_all` or `requires_any` predicate succeeds; there is no separate
+  subskill picker or truncated low-level table.
+
+The complete authored catalog has 72 public offer rows `8..79`. Sixty-two have
+different cap and maximum values; only
+`15,39,51,52,53,55,60,63,66,68` have equal values. A port which tests
+`mMaxLevel` therefore leaves 62 rows offerable for extra ranks after stock has
+retired them. Those repeated pointers retain native with-replacement weighting
+and can crowd out newly eligible subskills even at relatively low player
+levels. This is a port defect, not native scarcity or a change to the recovered
+RNG stream.
+
 ### RNG streams and seed ownership
 
 There are two named streams; they must not be collapsed:
@@ -264,7 +293,7 @@ The builder scans skill IDs `8..81`; ID 52 is excluded from the ordinary scan
 because Spell Welding has its own injection branch. Disabled/hidden Game-array
 entries are rejected. A row is eligible only when all of the following hold:
 
-- its permanent rank is below its compiled maximum (Spell Welding is the
+- its permanent rank is below its compiled offer cap (Spell Welding is the
   special exception);
 - an unlearned non-root row satisfies its minimum player level, reduced by 2
   when Creativity 63 is learned;
@@ -382,7 +411,7 @@ and discipline families. Every mentioned draw uses the actor-private offer RNG:
 The following phases execute in this order in `0x0067CB70`. `rank(i)` and
 `effective(i)` are row `+0x20/+0x22`; `root(i)` and `category(i)` are row
 `+0x1C/+0x26`; `eligible(i)` means the level, unlock, any/all/forbidden, and
-below-maximum-rank gates above all pass. For category 2, `mana_cost(i, r)` is
+below-offer-cap gates above all pass. For category 2, `mana_cost(i, r)` is
 the wizard cost query at vtable `+0x78`. Pointer-list duplicates are deliberate
 weights, not set insertion.
 
