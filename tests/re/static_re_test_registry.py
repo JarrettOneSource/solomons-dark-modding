@@ -129,6 +129,7 @@ from static_re_native_hub_economy_contracts import (
     test_native_hub_dig_and_run_boundary_fields_are_pinned,
     test_native_hub_entity_census_and_interactions_are_pinned,
     test_native_hub_inventory_generation_and_rng_provenance_are_pinned,
+    test_native_hub_npc_markers_and_profile_help_rows_are_pinned,
     test_native_hub_price_formulas_and_transaction_constants_are_pinned,
     test_native_hub_trader_ui_family_and_inventory_capture_are_pinned,
 )
@@ -1182,6 +1183,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native hub entity census and interactions are pinned",
         test_native_hub_entity_census_and_interactions_are_pinned,
+    ),
+    (
+        "Native hub NPC markers and profile help rows are pinned",
+        test_native_hub_npc_markers_and_profile_help_rows_are_pinned,
     ),
     (
         "Native hub price formulas and transaction constants are pinned",

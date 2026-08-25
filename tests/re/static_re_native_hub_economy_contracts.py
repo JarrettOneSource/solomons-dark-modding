@@ -20,6 +20,9 @@ DOC_PATH = ROOT / "docs/reverse-engineering/native-hub-and-economy.md"
 NPC_INTERACTIONS_DOC_PATH = (
     ROOT / "docs/reverse-engineering/native-hub-npc-interactions.md"
 )
+NPC_MARKER_CATALOG_PATH = (
+    ROOT / "docs/reverse-engineering/native-hub-npc-marker-catalog.json"
+)
 GOLDEN_PATH = ROOT / "tests/fixtures/webgame/hub-economy-goldens.json"
 RECORDER_PATH = ROOT / "tests/re/record_live_hub_economy_goldens.py"
 HAGATHA_CATALOG_PATH = (
@@ -171,6 +174,98 @@ EXPECTED_PAINTINGS = {
     (512.0, 400.0): 8,
     (670.0, 400.0): 9,
 }
+
+
+def test_native_hub_npc_markers_and_profile_help_rows_are_pinned() -> str:
+    catalog = json.loads(NPC_MARKER_CATALOG_PATH.read_text(encoding="utf-8"))
+    if catalog.get("schema") != "solomon-dark-native-hub-npc-markers-v1":
+        raise StaticReTestFailure("native Hub NPC marker catalog schema drifted")
+    if catalog.get("source", {}).get("sha256") != EXPECTED_RETAIL_SHA256:
+        raise StaticReTestFailure("native Hub NPC marker catalog lost retail identity")
+    common = catalog.get("common_contract", {})
+    if common != {
+        "dialogue_pointer_offset": "0x154",
+        "dialogue_availability_offset": "0x04",
+        "facing_scale_offset": "0x15C",
+        "phase_offset": "0x160",
+        "style_offset": "0x164",
+        "marker_x_offset": "0x168",
+        "marker_y_offset": "0x16C",
+        "phase_initial_draw": {"function": "Integer", "exclusive_bound": 5000},
+        "root_offset": {"x_magnitude": 30, "y": -60},
+        "alpha": {
+            "formula": "sin(phase_degrees*pi/180)*0.25+0.75",
+            "minimum": 0.5,
+            "maximum": 1.0,
+        },
+        "record_index_formula": "style*2+(facing_scale<0?1:0)",
+        "record_order": ["talk-right", "talk-left", "help-right", "help-left"],
+        "general_modal_gate": "DAT_00B3BCA0",
+    }:
+        raise StaticReTestFailure("common native actor marker fields or formula drifted")
+    if catalog.get("region_banks") != [
+        {"region": "courtyard", "atlas": "College", "records": [59, 60, 61, 62], "game_object_field": "0x2468"},
+        {"region": "mortuary", "atlas": "Memoratorium", "records": [24, 25, 26, 27], "game_object_field": "0x08C8"},
+        {"region": "library", "atlas": "Library", "records": [17, 18, 19, 20], "game_object_field": "0x0A40"},
+        {"region": "storeroom", "atlas": "Storage", "records": [7, 8, 9, 10], "game_object_field": "0x0598"},
+        {"region": "office", "atlas": "Office", "records": [13, 14, 15, 16], "game_object_field": "0x05B8"},
+    ]:
+        raise StaticReTestFailure("native Hub Region marker banks are incomplete")
+    actors = catalog.get("survival_actors")
+    if not isinstance(actors, list) or [
+        (row.get("interaction_id"), row.get("type_id"), row.get("style"),
+         row.get("side"), row.get("record"), row.get("phase_advances"),
+         row.get("profile_hint_index"))
+        for row in actors
+    ] != [
+        ("hagatha", 5001, "help", "right", 61, False, None),
+        ("annalist", 5003, "talk", "right", 59, True, 0),
+        ("fomentius", 5004, "help", "right", 61, True, 1),
+        ("luthacus", 5005, "talk", "left", 60, True, 2),
+        ("skorcha", 5007, "talk", "variant-1-left-otherwise-right", None, True, None),
+        ("teacher", 5008, "help", "left", 62, False, None),
+        ("arch-chancellor", 5012, "help", "right", 15, True, None),
+        ("librarian", 5013, "help", "right", 19, True, None),
+        ("shlorio", 5016, "help", "left", 20, True, None),
+        ("memorator", 5017, "help", "left", 27, True, None),
+    ]:
+        raise StaticReTestFailure("native survival actor marker membership drifted")
+    help_table = catalog.get("profile_hint_table", {})
+    if (
+        help_table.get("profile_offset_start") != "0x9A"
+        or help_table.get("fresh_values") != [True] * 10
+        or [row.get("clearer") for row in help_table.get("rows", [])[:3]]
+        != ["0x005018A0", "0x005018B0", "0x005018C0"]
+        or [row.get("owner") for row in help_table.get("rows", [])[:3]]
+        != ["annalist-onboarding", "fomentius-onboarding", "luthacus-onboarding"]
+    ):
+        raise StaticReTestFailure("native profile help rows or corrected Fomentius owner drifted")
+    callout = catalog.get("pristine_callout", {})
+    if (
+        callout.get("target_type_id") != 5003
+        or callout.get("arrow") != {
+            "atlas": "UI", "record": 28, "offset": [15, -65], "rotation_degrees": 200,
+        }
+        or callout.get("text", {}).get("value") != "WALK INTO WIZARDS\nTO TALK TO THEM"
+        or callout.get("text", {}).get("group") != 1
+        or callout.get("text", {}).get("rgba") != [0.85, 0.73, 0.44, 1.0]
+    ):
+        raise StaticReTestFailure("native pristine-profile walk-to-talk callout drifted")
+    doc = _read(NPC_INTERACTIONS_DOC_PATH, "native Hub NPC interaction report is absent")
+    _require_tokens(
+        doc,
+        (
+            "The former Hagatha attribution was wrong",
+            "Fomentius",
+            "WALK INTO WIZARDS\\nTO TALK TO THEM",
+            "fixed_tick % 80 > 40",
+            "Chat` constructor `0x004F5D90` sets `DAT_008199F0`",
+            "profile `+0xCC[10]` as ids `0..9`",
+            "`SAY_EULOGY_<live portrait id>`",
+        ),
+        "native NPC report lost marker ownership, onboarding, Chat order, or live Painting ids",
+    )
+    return "all native Hub NPC marker banks, actors, help rows, and onboarding branches are pinned"
 
 HAGATHA_CATALOG = (
     (0, "LIFE CHARM", 200),

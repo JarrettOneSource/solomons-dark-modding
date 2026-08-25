@@ -1,0 +1,322 @@
+{
+  "schema": "solomon-dark-native-hub-npc-markers-v1",
+  "source": {
+    "executable": "SolomonDark.exe 0.72.5",
+    "sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+    "preferred_image_base": "0x00400000",
+    "common_constructor": "0x005016E0",
+    "common_renderer": "0x00518280",
+    "courtyard_renderer": "0x0051EB60",
+    "fresh_profile_fixture": "tests/fixtures/webgame/save-format-goldens.json#fresh_profile"
+  },
+  "common_contract": {
+    "dialogue_pointer_offset": "0x154",
+    "dialogue_availability_offset": "0x04",
+    "facing_scale_offset": "0x15C",
+    "phase_offset": "0x160",
+    "style_offset": "0x164",
+    "marker_x_offset": "0x168",
+    "marker_y_offset": "0x16C",
+    "phase_initial_draw": {
+      "function": "Integer",
+      "exclusive_bound": 5000
+    },
+    "root_offset": {
+      "x_magnitude": 30,
+      "y": -60
+    },
+    "alpha": {
+      "formula": "sin(phase_degrees*pi/180)*0.25+0.75",
+      "minimum": 0.5,
+      "maximum": 1.0
+    },
+    "record_index_formula": "style*2+(facing_scale<0?1:0)",
+    "record_order": [
+      "talk-right",
+      "talk-left",
+      "help-right",
+      "help-left"
+    ],
+    "general_modal_gate": "DAT_00B3BCA0"
+  },
+  "region_banks": [
+    {
+      "region": "courtyard",
+      "atlas": "College",
+      "records": [59, 60, 61, 62],
+      "game_object_field": "0x2468"
+    },
+    {
+      "region": "mortuary",
+      "atlas": "Memoratorium",
+      "records": [24, 25, 26, 27],
+      "game_object_field": "0x08C8"
+    },
+    {
+      "region": "library",
+      "atlas": "Library",
+      "records": [17, 18, 19, 20],
+      "game_object_field": "0x0A40"
+    },
+    {
+      "region": "storeroom",
+      "atlas": "Storage",
+      "records": [7, 8, 9, 10],
+      "game_object_field": "0x0598"
+    },
+    {
+      "region": "office",
+      "atlas": "Office",
+      "records": [13, 14, 15, 16],
+      "game_object_field": "0x05B8"
+    }
+  ],
+  "survival_actors": [
+    {
+      "interaction_id": "hagatha",
+      "class": "PerkWitch",
+      "type_id": 5001,
+      "region": "courtyard",
+      "style": "help",
+      "side": "right",
+      "record": 61,
+      "phase_advances": false,
+      "tick": "0x0051ADC0",
+      "profile_hint_index": null
+    },
+    {
+      "interaction_id": "annalist",
+      "class": "Annalist",
+      "type_id": 5003,
+      "region": "courtyard",
+      "style": "talk",
+      "side": "right",
+      "record": 59,
+      "phase_advances": true,
+      "tick": "0x0050A4C0",
+      "profile_hint_index": 0
+    },
+    {
+      "interaction_id": "fomentius",
+      "class": "PotionGuy",
+      "type_id": 5004,
+      "region": "courtyard",
+      "style": "help",
+      "side": "right",
+      "record": 61,
+      "phase_advances": true,
+      "tick": "0x0050B110",
+      "profile_hint_index": 1
+    },
+    {
+      "interaction_id": "luthacus",
+      "class": "ItemsGuy",
+      "type_id": 5005,
+      "region": "courtyard",
+      "style": "talk",
+      "side": "left",
+      "record": 60,
+      "phase_advances": true,
+      "tick": "0x0050A4C0",
+      "profile_hint_index": 2
+    },
+    {
+      "interaction_id": "skorcha",
+      "class": "Tyrannia",
+      "type_id": 5007,
+      "region": "courtyard",
+      "style": "talk",
+      "side": "variant-1-left-otherwise-right",
+      "records": [59, 60],
+      "phase_advances": true,
+      "tick": "0x0050B1F0",
+      "profile_hint_index": null
+    },
+    {
+      "interaction_id": "teacher",
+      "class": "Teacher",
+      "type_id": 5008,
+      "region": "courtyard",
+      "style": "help",
+      "side": "left",
+      "record": 62,
+      "phase_advances": false,
+      "tick": "0x0050B260",
+      "profile_hint_index": null
+    },
+    {
+      "interaction_id": "arch-chancellor",
+      "class": "ArchChancellor",
+      "type_id": 5012,
+      "region": "office",
+      "style": "help",
+      "side": "right",
+      "record": 15,
+      "phase_advances": true,
+      "tick": "0x0050B6B0",
+      "profile_hint_index": null
+    },
+    {
+      "interaction_id": "librarian",
+      "class": "Librarian",
+      "type_id": 5013,
+      "region": "library",
+      "style": "help",
+      "side": "right",
+      "record": 19,
+      "phase_advances": true,
+      "tick": "0x0050A4C0",
+      "profile_hint_index": null
+    },
+    {
+      "interaction_id": "shlorio",
+      "class": "Dowser",
+      "type_id": 5016,
+      "region": "library",
+      "style": "help",
+      "side": "left",
+      "record": 20,
+      "phase_advances": true,
+      "tick": "0x0050A4C0",
+      "profile_hint_index": null
+    },
+    {
+      "interaction_id": "memorator",
+      "class": "Memorator",
+      "type_id": 5017,
+      "region": "mortuary",
+      "style": "help",
+      "side": "left",
+      "record": 27,
+      "phase_advances": true,
+      "tick": "0x00513090",
+      "profile_hint_index": null
+    }
+  ],
+  "profile_hint_table": {
+    "runtime_start": "0x0081A3CA",
+    "profile_offset_start": "0x9A",
+    "fresh_values": [true, true, true, true, true, true, true, true, true, true],
+    "rows": [
+      {
+        "index": 0,
+        "runtime_address": "0x0081A3CA",
+        "owner": "annalist-onboarding",
+        "clearer": "0x005018A0",
+        "disposition": "exact-port"
+      },
+      {
+        "index": 1,
+        "runtime_address": "0x0081A3CB",
+        "owner": "fomentius-onboarding",
+        "clearer": "0x005018B0",
+        "disposition": "exact-port"
+      },
+      {
+        "index": 2,
+        "runtime_address": "0x0081A3CC",
+        "owner": "luthacus-onboarding",
+        "clearer": "0x005018C0",
+        "disposition": "exact-port"
+      },
+      {
+        "index": 3,
+        "runtime_address": "0x0081A3CD",
+        "owner": "courtyard-navigation-volume",
+        "clearer": "0x0050C970",
+        "disposition": "out-of-system-non-npc-navigation"
+      },
+      {
+        "index": 4,
+        "runtime_address": "0x0081A3CE",
+        "owner": "courtyard-navigation-volume",
+        "clearer": "0x0050C970",
+        "disposition": "out-of-system-non-npc-navigation"
+      },
+      {
+        "index": 5,
+        "runtime_address": "0x0081A3CF",
+        "owner": "courtyard-navigation-volume",
+        "clearer": "0x0050C970",
+        "disposition": "out-of-system-non-npc-navigation"
+      },
+      {
+        "index": 6,
+        "runtime_address": "0x0081A3D0",
+        "owner": "inventory-screen-help",
+        "clearer": "0x005684C0",
+        "disposition": "out-of-system-inventory-ui"
+      },
+      {
+        "index": 7,
+        "runtime_address": "0x0081A3D1",
+        "owner": "inventory-screen-help",
+        "clearer": "0x00562520",
+        "disposition": "out-of-system-inventory-ui"
+      },
+      {
+        "index": 8,
+        "runtime_address": "0x0081A3D2",
+        "owner": "no-compiled-xref",
+        "clearer": null,
+        "disposition": "out-of-system-no-producer-or-consumer"
+      },
+      {
+        "index": 9,
+        "runtime_address": "0x0081A3D3",
+        "owner": "no-compiled-xref",
+        "clearer": null,
+        "disposition": "out-of-system-no-producer-or-consumer"
+      }
+    ]
+  },
+  "pristine_callout": {
+    "gate": "profile-hint-index-0",
+    "suppressed_by": [
+      "DAT_00B3BCA0",
+      "DAT_008199F0"
+    ],
+    "target_type_id": 5003,
+    "arrow": {
+      "atlas": "UI",
+      "record": 28,
+      "offset": [15, -65],
+      "rotation_degrees": 200
+    },
+    "text": {
+      "value": "WALK INTO WIZARDS\nTO TALK TO THEM",
+      "atlas": "Fonts",
+      "group": 1,
+      "records": [93, 184],
+      "offset": [15, -115],
+      "rgba": [0.85, 0.73, 0.44, 1.0],
+      "outline_radii": [1, 3],
+      "outline_step_degrees": 20
+    }
+  },
+  "followup_directional_hints": {
+    "visible_tick_predicate": "fixed_tick%80>40",
+    "atlas": "UI",
+    "record": 88,
+    "clamp_function": "0x00518410",
+    "members": [
+      {
+        "profile_hint_index": 1,
+        "interaction_id": "fomentius",
+        "desired_root_offset": [32, -62]
+      },
+      {
+        "profile_hint_index": 2,
+        "interaction_id": "luthacus",
+        "desired_root_offset": [-32, -62]
+      }
+    ]
+  },
+  "out_of_system_members": [
+    "story-only Polisher, Annalist2, and ArchChancellor variants",
+    "recipe-authored Boneyard GameNPC",
+    "noninteractive Students",
+    "Paintings, whose action starts Memorator speech without a common marker",
+    "StoreRoom marker bank, which has no normal-survival actor producer"
+  ]
+}

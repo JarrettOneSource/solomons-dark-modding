@@ -249,7 +249,7 @@ are contiguous and their runtime ranges are inclusive.
 | `0x00..0x03` | `i32` | profile `+0x58` | persistent profile gold | `500` |
 | `0x04..0x0D` | `bool[10]` | `+0x90..+0x99` | class-availability selector flags; class-name mapping not yet reversed | `0,1,1,1,0,1,1,0,0,1` |
 | `0x0E` | `bool` | `+0x104` | stock tutorial/game-over gate | `1` |
-| `0x0F..0x18` | `bool[10]` | `+0x9A..+0xA3` | class-selection enabled flags; class-name mapping not yet reversed | ten `1` bytes |
+| `0x0F..0x18` | `bool[10]` | `+0x9A..+0xA3` | durable help/onboarding flags: rows 0..2 are Provokatus/Fomentius/Luthacus interaction guidance, rows 3..5 are Courtyard navigation-volume hints, rows 6..7 are InventoryScreen hints, and rows 8..9 have no compiled code xrefs | ten `1` bytes |
 | `0x19..0x40` | `i32[10]` | `+0xA4..+0xCB` | Memoratorium Painting-slot FIFO age stamps | `9,1,0,2,7,4,3,8,5,6` |
 | `0x41..0x44` | `i32` | `+0xF4` | portrait age counter, incremented after each raw capture | `1000` |
 | `0x45..0x6C` | `i32[10]` | `+0xCC..+0xF3` | Memoratorium Painting-slot portrait ids | `0,1,2,3,4,5,6,7,8,9` |

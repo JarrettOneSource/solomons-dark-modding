@@ -49,7 +49,7 @@ replacement, state mutation, or downstream Boast resolution.
 | Skorcha optional dialogue and three dismissals | type 5007 `Tyrannia`; `ENFORCER_INTRO` and dismiss 1..3 | exact-port required with generated membership/placement |
 | Professor Machinimbus dialogue, question, and eight-row SellSpell service | type 5008; `TEACHER_INTRO/TEACHER_Q`; `!SPELLS`; `SellSpell/SellSpellBox` | exact-port required; actor is unconditional because its apparent gate returns one |
 | Declarius dialogue and two questions | type 5017; `MEMORATOR_INTRO/Q1/Q2/DISMISS` | exact-port required |
-| Paintings `0,1,100,3,4,5,6,7,8,9` | type 5018; `0x00506190/0x00506100`; narration table | exact-port required; 100 deliberately has no static `SAY_EULOGY_100` row |
+| ten physical Paintings, default portrait ids `0..9` | type 5018; profile `+0xCC[10]`; `0x00506190/0x00506100`; narration table | exact-port required; the callback follows each slot's live portrait id, including blank `-1` and external `100..109` replacements |
 | Professor Semicus dialogue and 26-row BookReview service | type 5013; `LIBRARIAN_INTRO`; `!BOOKS`; `BookReview/BookBox` | exact-port required; actor and 26 initial rows are unconditional in survival, including one-shot Lace removal |
 | Shlorio dialogue, price question, and DowsingShop command | type 5016; `DOWSER_INTRO/DOWSER_Q`; `!DOWSE` | exact-port required; transaction already closed |
 | Archchancellor dialogue, equipment question, dismissal | type 5012; `ARCH_INTRO/ARCH_Q/ARCH_DISMISS` | exact-port required |
@@ -119,14 +119,129 @@ eight offer rows are progression-gated, not the actor.
 The nearby call to `0x00461F60` is not another NPC gate. That function is
 exactly `XOR AL,AL; RET`, so the guarded call to Region initializer
 `0x005001E0` is unreachable and the following unconditional call still runs.
-The three bytes `0x0081A3CA..CC` can suppress the Annalist, Hagatha, and
+The three bytes `0x0081A3CA..CC` can suppress the Annalist, **Fomentius**, and
 Luthacus action bubbles during Region construction, but do not suppress those
-actors or their action callbacks; their wrappers at `0x005018A0/B0/C0` clear
-the corresponding byte and tail-call the common Chat action.
+actors or their action callbacks. The former Hagatha attribution was wrong:
+the reused decompiler local at the final `0x0050B720` checks points to type
+5004 `PotionGuy`, and the matching vtable action is `0x005018B0`. The wrappers
+at `0x005018A0/B0/C0` clear the corresponding byte and tail-call the common
+Chat action.
 
 Story-phase Polisher/Arch/alternate dialogue members are selected by the
 separate builder `0x00513BE0` and `Gameplay+0x1CD8`. They are not unlockable
 members of the normal survival Hub and must not be injected into that census.
+
+## Native interaction markers and pristine-profile onboarding
+
+This section reopens the earlier dialogue closure for the actor-owned marker
+and first-profile branches that were not included in its membership. The
+machine-readable inventory is
+[`native-hub-npc-marker-catalog.json`](native-hub-npc-marker-catalog.json).
+
+### Common actor marker owner
+
+`NPC` constructor `0x005016E0` owns the common marker fields. It initializes
+the marker phase at `+0x160` with `Integer(5000)`, style `+0x164 = 0`, root
+offsets `+0x168 = 30` and `+0x16C = 60`, and facing scale `+0x15C = -1`.
+Individual constructors change style or facing. Common marker renderer
+`0x00518280`, vtable slot `+0x0C`, runs after the actor body and draws only
+when:
+
+- the actor dialogue root at `+0x154` is non-null;
+- the dialogue-root availability byte at `dialogue + 0x04` is nonzero; and
+- general modal owner `DAT_00B3BCA0` is zero.
+
+The render index is exact:
+
+```text
+index = marker_style * 2 + (facing_scale < 0 ? 1 : 0)
+world_root = (actor.x + sign(facing_scale) * 30, actor.y - 60)
+alpha = sin(marker_phase_degrees * pi / 180) * 0.25 + 0.75
+```
+
+Thus each Region bank is ordered `talk-right`, `talk-left`, `help-right`,
+`help-left`. The five complete authored banks are:
+
+| Region | Atlas records | Normal-survival consumers |
+| --- | --- | --- |
+| Courtyard | College `59..62` | Hagatha, Fomentius, Provokatus, Luthacus, Skorcha, Machinimbus |
+| Mortuary | Memoratorium `24..27` | Declarius uses record 27; Paintings have no dialogue root and no common marker |
+| Library | Library `17..20` | Semicus uses record 19; Shlorio uses record 20 |
+| StoreRoom | Storage `7..10` | no normal-survival named actor; complete loaded bank, no producer |
+| Office | Office `13..16` | Archchancellor uses record 15 |
+
+The survival membership is exact:
+
+| Actor | Type | Style / side | Phase owner | Ordinary-marker gate |
+| --- | ---: | --- | --- | --- |
+| Hagatha | 5001 | help-right | constructor phase remains static; `0x0051ADC0` does not advance `+0x160` | always available |
+| Provokatus | 5003 | talk-right | advances one degree per tick in `0x0050A4C0` | suppressed for the current Courtyard construction when `0x0081A3CA != 0` |
+| Fomentius | 5004 | help-right | advances in `0x0050B110` | suppressed when `0x0081A3CB != 0` |
+| Luthacus | 5005 | talk-left | advances in `0x0050A4C0` | suppressed when `0x0081A3CC != 0` |
+| Skorcha | 5007 | talk-right for variants 0/2; talk-left for mirrored variant 1 | advances in `0x0050B1F0` | actor-presence draw only |
+| Machinimbus | 5008 | help-left | constructor phase remains static; `0x0050B260` does not advance `+0x160` | always available |
+| Archchancellor | 5012 | help-right | advances in `0x0050B6B0` | always available |
+| Semicus | 5013 | help-right | advances in `0x0050A4C0` | always available |
+| Shlorio | 5016 | help-left | advances in `0x0050A4C0` | always available |
+| Declarius | 5017 | help-left | advances in `0x00513090` | always available |
+
+Students have no dialogue root. Paintings use the separate Memorator speech
+callback and likewise have no common marker. Story-only subclasses and recipe
+`GameNPC` share `0x00518280` but remain outside the Website survival-Hub
+population; their membership is retained in the marker catalog rather than
+silently treated as normal-Hub unlocks.
+
+`Chat` constructor `0x004F5D90` sets `DAT_008199F0`, not
+`DAT_00B3BCA0`. Ordinary actor markers therefore remain visible behind Chat,
+including the engaged actor's marker, while the world stays visible. The
+retained clean-stock trader captures show this directly. General inventory,
+shop, and other modal owners use the separate modal gate and hide the markers.
+
+### Durable first-profile sequence
+
+The ten durable bytes at profile `+0x9A..+0xA3`
+(`0x0081A3CA..0x0081A3D3`) are help/onboarding flags, not class-selection
+enablement. The G10 fresh-profile capture proves all ten initialize to one.
+For the NPC slice:
+
+| Profile row | First Courtyard behavior | Clearer | Persistence edge |
+| --- | --- | --- | --- |
+| `+0x9A`, `0x0081A3CA` | suppress Provokatus's ordinary marker and render the large walk-to-talk callout | Annalist action `0x005018A0` | next ordinary profile save |
+| `+0x9B`, `0x0081A3CB` | suppress Fomentius's ordinary marker and, after row 0 clears, show his directional question hint | PotionGuy action `0x005018B0` | next ordinary profile save |
+| `+0x9C`, `0x0081A3CC` | suppress Luthacus's ordinary marker and, after row 0 clears, show his directional question hint | ItemsGuy action `0x005018C0` | next ordinary profile save |
+
+The wrappers clear the durable row before constructing Chat. They do not set
+the current actor's `dialogue+0x04` byte back to one and do not call
+`0x005BE0B0` directly. Consequently the target's ordinary marker stays absent
+for that already-constructed Courtyard, while the live onboarding hint
+disappears immediately. A later Courtyard reconstruction sees the cleared
+profile row, leaves `dialogue+0x04` at its default one, and restores the
+ordinary marker. The cleared row persists when the profile next saves.
+
+Rows `+0x9D..+0x9F` are separate Courtyard navigation-volume hints cleared by
+`0x0050C970`; rows `+0xA0/+0xA1` are InventoryScreen hints cleared by
+`0x005684C0` and `0x00562520`; rows `+0xA2/+0xA3` have no compiled code xrefs.
+Those rows are sibling-table dispositions, not NPC markers.
+
+### Exact first-row presentation
+
+Courtyard renderer `0x0051EB60` suppresses every onboarding overlay while
+`DAT_00B3BCA0 != 0` or Chat flag `DAT_008199F0 != 0`.
+
+While row 0 is one, it caches type 5003 and draws:
+
+- UI record 28 at `(actor.x + 15, actor.y - 65)`, rotated `200` degrees;
+- exact text `WALK INTO WIZARDS\nTO TALK TO THEM` in Fonts group 1
+  (`93..184`, object `+0x04D530`), centered at
+  `(actor.x + 15, actor.y - 115)`;
+- a black outline sampled at radii 1 and 3 for every 20 degrees; and
+- the foreground at exact RGBA `(0.85, 0.73, 0.44, 1)`.
+
+After row 0 clears, each still-live row 1/2 draws only when
+`fixed_tick % 80 > 40`. `0x00518410` uses UI record 88, desired roots
+`Fomentius + (32,-62)` and `Luthacus + (-32,-62)`, clamps the marker to the
+current camera rectangle, and rotates it toward the actor. Rows 3..5 reuse the
+same helper with UI record 89 for their non-NPC navigation targets.
 
 ## Provokatus and `Boast`
 
@@ -294,11 +409,14 @@ clients must never reroll independently.
 
 ## Paintings and Declarius
 
-Painting action `0x00506190` finds the room Memorator and passes the exact
-Painting `+0x174` index to `0x00506100`. Static rows are
-`0,1,3,4,5,6,7,8,9`; index 100 is deliberate and has no static
-`SAY_EULOGY_100` entry. Declarius walks/turns toward the active portrait and,
-after the principal line, adds one uniformly selected
+Painting action `0x00506190` finds the room Memorator and passes the Painting's
+current `+0x174` portrait id to `0x00506100`. The ten physical slots initialize
+from profile `+0xCC[10]` as ids `0..9`; FIFO replacement can temporarily write
+`-1` and then reveal an external id `100..109`. The callback therefore formats
+`SAY_EULOGY_<live portrait id>` rather than binding dialogue to an easel's
+original occupant. Static principal rows are `0,1,3,4,5,6,7,8,9`; id 2 and
+external ids have no static principal line. Declarius walks/turns toward the
+active portrait and, after any principal line, adds one uniformly selected
 `SAY_BADEULOGY_0..7` unless the current run's Boast success bit is set. Walking
 away can select `SAY_EULOGY_INTERRUPT1..4` through the common speech lifetime.
 
@@ -311,9 +429,11 @@ unreachable behind their paired solids. A web controller prompt may use the
 paired radius 40 for reachability while the pointer hit remains the exact
 radius-15 actor circle.
 
-The Website's current static portrait labels may reproduce rows 0,1,3..9.
-Index 100 must remain empty unless the Website has a concrete archived-wizard
-producer; it must not be silently normalized to missing index 2.
+The Website's shared memorial is an explicit server-authority extension. Its
+physical interaction labels must resolve through the current ten-slot snapshot
+so a replacement updates both the portrait and its eulogy for live and late
+participants. A missing principal row remains empty; it must not be silently
+normalized to another bundled id.
 
 ## Multiplayer and persistence consequence
 
@@ -363,3 +483,20 @@ Library exit/re-entry, authoritative variant-0 reconstruction and prompt, all
 empty page, console, and failed-response arrays. Semicus's Library/BookReview,
 Machinimbus's always-present actor and gated spell rows, and Provokatus's
 five-row Boast selector were visible in the continuous journey.
+
+## Marker, onboarding, and live-eulogy closure receipt
+
+The 2026-08-24 reopening drained all five marker banks, all ten named survival
+actors, the ten durable help rows, the pristine Provokatus callout, both
+follow-up directional hints, Chat/modal ordering, and Region-reconstruction
+lifetime into `native-hub-npc-marker-catalog.json`. It also reconciled Painting
+dialogue with the separately recovered Memoratorium FIFO: the action formats
+the live `+0x174` portrait id, so a replaced slot updates its eulogy instead of
+retaining a physical easel label.
+
+The final manifest-identical Mac candidate passed the registered static-RE
+suite `501/501`, including the common marker formula, corrected Fomentius row,
+fresh help defaults/clearers, exact callout, and live-Painting-id documentation
+checks. The Website parity ledger owns the corresponding protocol, save,
+production-bundle Chrome/Metal, reconstruction, resume, and complete dialogue
+journey receipts.

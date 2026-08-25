@@ -250,7 +250,7 @@ surface. Run entry is a UI target and has no world radius.
 | `hub.npc.arch_chancellor` | `ARCH_INTRO`, then `ARCH_Q`, dismiss | None in the normal Office | dialogue completion, back, distance |
 | `hub.run_entry` | Stock `MapPicker` | Courtyard control at `Gameplay+0xE00`; connected non-authority clients cannot activate it | `menu_nav.back`, invoking the toggle again, or successful selection |
 
-Hagatha's own action bubble is suppressed by `DAT_0081A3CB`. The service
+Fomentius's own action bubble is suppressed by `DAT_0081A3CB`. The service
 dispatcher `0x00514A20` refuses to open a shop while the owning room fade field
 `+0x8E48` is positive. Roaming Students and all type-2007/2008/2041 scenery are
 noninteractive; collision with them does not emit an `interact` intent.
