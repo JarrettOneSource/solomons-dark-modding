@@ -643,3 +643,52 @@ owners stay cleared. No wall-clock disconnect interval is replayed as native
 fixed ticks. This is the same durable/transient ownership split already proven
 above, applied to a browser reconnection boundary rather than a new retail
 edge.
+
+## 2026-08-25 Website update-recovery ordering supersession
+
+This addendum supersedes only the Website ordering in the preceding active-
+party integration. It adds no retail process-resurrection or authority-
+migration claim. Retail G13 still proves that an authenticated Arena actor can
+materialize after the initial roster once map digest, authority run intent, and
+the nonzero run nonce resolve. It does not require that actor to have been the
+departed authority.
+
+For a coordinated Website update, every responsive browser receives a final
+owner-only authoritative checkpoint before any actor disconnects. The old host
+binds that exact checkpoint to the announced replacement revision with a
+server-only signature. After the supervisor is replaced, the first former
+member presenting a valid bound checkpoint may reconstruct the same run and
+become the recovered Website party's leader. A former nonleader is therefore
+not blocked waiting for the old leader. Later former members with claims for
+the same recovery/run identity attach to that one reconstructed authority.
+This deterministic election is Website policy; retail behavior after loss of
+the authority process remains unknown.
+
+The materialization order is now:
+
+`verify live/revision-bound recovery -> recover or resolve authority run ->
+retain returning participant detached -> synchronize actor-private pending
+choices -> resolve all detached choices while authority run continues -> cold
+Arena materialization at authored spawn -> publish party membership -> accept
+gameplay input`.
+
+The detached interval is not a native Arena participant state. The participant
+has durable identity/progression but no live actor binding, collision, target,
+input, cast/effect lane, Hall membership, party membership, or run participant
+row. Consequently it is not a member of the materialized ActorWorld cohort
+until the final attach. Other clients must not observe or render a ghost actor.
+If the run becomes terminal before attach, the recovery is retired instead.
+
+Complete applicable membership remains: global and private authority, old
+leader and nonleader return order, same-host detach, announced whole-process
+replacement, racing first claims, later claims, sealed vanilla/mod content,
+zero or pending private choices, second disconnect, another announced update
+while detached, terminal/empty/replaced runs, capacity, and new-member
+admissions. New public/Party-ID/request members remain out of this recovery
+system and barred during play.
+
+Validation receipt: the exact documentation candidate based on
+`b638bb7ada23f7476bc694f1235fc50d29c9de72` passed the complete registered Mac
+static RE suite `501/501`. The paired Website candidate passed its canonical
+gate and real global/private Chrome journeys; those receipts and frame hashes
+are owned by `Website/docs/game-native-parity-re.md`.

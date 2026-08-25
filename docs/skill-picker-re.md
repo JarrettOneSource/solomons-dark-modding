@@ -452,6 +452,25 @@ return while the same run nonce is active. An independently owned Pause Menu or
 book pause may coexist, and resolving the catch-up cohort cannot release that
 other pause source.
 
+### Detached reconnect picker supersession (2026-08-25)
+
+The preceding consequence remains correct only after a returning actor has
+materialized. The Website now delays that materialization while a reconnecting
+actor owns catch-up offers. Its `LevelupScreen` presentation is a private
+staging projection over the current live world; the actor is explicitly marked
+materializing and is not painted, targeted, collided, replicated to peers, or
+inserted into ActorWorld/party/run membership.
+
+Because the actor is not yet a cohort member, this detached picker does not
+hold the live ActorWorld. Current participants continue to tick unless their
+own ordinary level cohort or Pause Menu already owns a hold. Further shared
+milestones append actor-private offers to the detached sequence while the
+screen is open. Reveal timing, card layout, audio, option identity, reroll,
+save/defer, choice application, and queued handoff remain the native picker
+contract; only simulation ownership differs at this Website-only reconnect
+boundary. The final empty pending sequence triggers one cold materialization
+and removes the private materializing marker atomically.
+
 ## Regression Harness
 
 Run the live bot skill-choice regression with:

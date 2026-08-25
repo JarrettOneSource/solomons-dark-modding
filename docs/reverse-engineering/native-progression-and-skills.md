@@ -1178,3 +1178,48 @@ authoritative tick after the final pending choice.
   [`native-save-format.md`](native-save-format.md); the runtime meanings and
   serializer boundary are complete here. Do not invent a second save codec or
   infer additional per-skill save fields from the empty specimen.
+
+## 2026-08-25 detached Website catch-up supersession
+
+The 2026-08-24 active-party addendum correctly records stock ownership for a
+materialized participant: actor-private offers plus one materialized
+ActorWorld cohort. It is superseded for the new Website reconnect ordering.
+The returning actor now remains outside the live run until its private pending
+sequence is empty, so its picker does not add it to or prolong the live
+`levelUpBarrier`.
+
+The native facts reused without change are:
+
+1. level, XP, pending levels/offers, offer seed, ranks, books, Sorceror state,
+   Hagatha state, vitals, and Creativity state are actor-private;
+2. every crossed shared level queues one choice on that actor's own book;
+3. offer build, select, reroll, defer/save, automatic choice, and Creativity
+   processing consume the already documented gameplay/secondary RNG owners;
+4. elapsed disconnect time creates no XP, level, offer, or fixed tick; and
+5. the stock ActorWorld hold applies to the participants currently
+   materialized in its cohort.
+
+The Website host may therefore transact those existing progression functions
+against a detached durable actor store before late materialization. It must
+advance the live run RNG at the exact milestone or picker-action edge; using a
+private copied RNG and merging it after the live simulation advances would
+reorder unrelated native draws. It must not otherwise mutate the live world,
+player store, party membership, run participant set, Hall rows, or barrier.
+
+For each live milestone while detached, compare the detached actor level with
+the current authoritative shared level and append the exact strictly
+increasing range `old+1 .. current`. If another milestone occurs while an
+earlier card is open, its choices append; consuming the earlier card cannot
+materialize the actor while any pending/deferred handoff remains. Selection,
+Sorceror reroll, save/defer, automatic choice, and Creativity Insight retain
+their full native legality and ordering. Once the sequence is empty, one cold
+actor import occurs. If it was already empty on admission, attach immediately
+with no synthetic picker or barrier.
+
+Website regression must cover zero, one, and several prior missed levels; an
+offer pending before disconnect; a further milestone during the open picker;
+select/reroll/save/automatic paths; live RNG interleaving; a peer-owned cohort
+and independently owned pause; second disconnect; terminal run; and atomic
+final materialization. Every case must prove that the live authority tick and
+world continue unless a live participant's own existing pause/barrier owns the
+hold.

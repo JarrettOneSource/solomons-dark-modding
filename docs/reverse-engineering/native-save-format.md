@@ -1013,3 +1013,45 @@ replaced, or supervisor-lost runs. The existing abrupt-browser limitation
 remains: if no checkpoint containing the capability reached IndexedDB/cloud
 before the process died, the browser cannot reconstruct it after death. No
 server-to-account fallback is inferred from retail synchronous file I/O.
+
+## 2026-08-25 Website schema-12 recovery-claim supersession
+
+Retail save bytes still contain no Website party/session/reconnect field. This
+addendum supersedes the schema-10/11 browser statement that supervisor loss
+must invalidate every active-party capability. It does not alter the native
+G10 format.
+
+Schema 12 retains the nullable summary field but permits a bounded server-
+signed recovery claim rather than only a 43-character random live token. For
+an active party Boneyard checkpoint, the host first encodes the canonical
+owner document with a null claim. It hashes those exact normalized bytes and
+signs a versioned payload binding:
+
+- recovery ID, player ID, and active run ID;
+- global-Hub or private-College session kind;
+- exact sealed content-manifest digest and save integrity/provenance;
+- admitted leaderboard account lineage where present;
+- normalized owner-document SHA-256; and
+- the replacement Git revision for a deployment-final checkpoint, or a live-
+  host-only marker for ordinary checkpoints.
+
+The claim is HMAC-SHA-256 under the stable supervisor secret shared only with
+its child hosts. The final document embeds it and is revalidated by both the
+replacement supervisor and authoritative host. A browser cannot edit player,
+character, progression, world, run, content, integrity, account, or target
+revision without breaking the digest/signature. Neither the secret nor a
+decoded claim is logged.
+
+Only a claim whose signed target equals the replacement supervisor's immutable
+configured revision may seed after process loss. A live-host-only claim can
+resolve an extant host slot but cannot resurrect a missing process. Schemas 1
+through 11 remain accepted inputs; their absent or legacy 43-character token
+normalizes safely but is not restart-seedable. Profile-only/Game Over/Kill
+Wizard documents still carry no continuation claim.
+
+The first valid seed restores its exact authoritative owner world and actor.
+Later claims with the same recovery/run identity contribute only their own
+sealed actor projection; their duplicate saved world never overwrites the new
+live authority. Connected/reserved/retired claims fail closed. The same run ID
+and account lineage preserve the existing idempotent Hall submission boundary.
+An abrupt browser still cannot recover a checkpoint it never durably stored.
