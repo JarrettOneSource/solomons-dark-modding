@@ -844,6 +844,30 @@ def test_native_skill_picker_text_and_palette_abi_is_pinned() -> str:
     return "skill picker palette, case, font lanes, spacing, and anchors are pinned"
 
 
+def test_native_staff_admission_distinguishes_movement_and_current_contact() -> str:
+    doc = " ".join(read_text(NATIVE_SKILLS_DOC).split())
+    for token in (
+        "admission owner has **two** ordered contact sources",
+        "`PlayerWizard +0x13C`",
+        "count `+0x144` and backing",
+        "array `+0x150`",
+        "Region's transient collision",
+        "capture byte `+0x47C`",
+        "result count `+0x480`",
+        "`radiusA + radiusB + 0.1`",
+        "there is no facing test on this walk-into-hostile branch",
+        "the actor-list fallback for that tick",
+        "strict absolute heading delta below 50 degrees",
+        "equipped item type `0x1B5C`",
+        "does not recompute center distance",
+    ):
+        if token not in doc:
+            raise StaticReTestFailure(
+                f"native Staff contact ownership lost witness {token!r}"
+            )
+    return "Staff walk-in and persistent contact admission remain distinct and address-pinned"
+
+
 def test_native_progression_five_live_effect_formulas_are_pinned() -> str:
     fixture = _load_json_object(FIXTURE, "native skill-effect golden is unreadable")
     effects = _unique_rows(

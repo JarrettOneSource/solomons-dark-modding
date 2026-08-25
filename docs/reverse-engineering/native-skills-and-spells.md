@@ -624,11 +624,33 @@ The constructors/ticks are `0x0044AE50/0x0044B580` for
 `1..4` by `1.2`; concentrated Enchant Staff independently multiplies the
 action timing scalar at `+0x34` by `1.75`.
 
-The automatic admission and contact geometry are now instruction-closed.
-`PlayerActorTick 0x00548B00` scans the existing contact list in stored order
-and starts only when the first target has strict absolute heading delta below
-50 degrees. The StaffMelee constructor always consumes `Float(.05)` after the
-proc selection, stores progress `0.1+draw`, then consumes `Integer(8)` and
+The automatic admission and contact geometry are instruction-closed, but the
+admission owner has **two** ordered contact sources. The earlier one-list
+summary was incomplete. `GoodGuy_Ctor 0x0052A410` constructs the actor-owned
+contact `PointerList` at `PlayerWizard +0x13C`, with count `+0x144` and backing
+array `+0x150`. On a real player movement epoch,
+`PlayerActorTick 0x00548B00` first enables the Region's transient collision
+capture byte `+0x47C`, clears result count `+0x480`, and calls
+`PlayerActor_MoveStep 0x00525800` (`0x0054AFF1..0x0054B050`). Dynamic response
+`0x00526520` appends each reportable root contact to the Region result list in
+solver order (`0x005267E5..0x00526832` and
+`0x005268EB..0x00526925`) while the shared circle response moves the pair to
+`radiusA + radiusB + 0.1`.
+
+After `MoveStep`, a nonempty Region result list owns admission and suppresses
+the actor-list fallback for that tick. While no player action is active, the
+first result whose actor flags include `0x2` jumps directly to
+`PlayerWizard_StartStaffAction 0x00537AA0` at `0x0054B0AB..0x0054B0B5`;
+there is no facing test on this walk-into-hostile branch. Flag-`0x20` contacts
+instead enter the separately owned GoodGuy interaction lane, and other result
+flags are ignored without reopening the fallback. Only when the Region result
+count is zero does `0x0054B28D..0x0054B32F` scan the actor-owned `+0x13C`
+contact list in stored order and admit the first member with strict absolute
+heading delta below 50 degrees. `0x00537AA0` then requires equipped item type
+`0x1B5C`; empty hands and Wands do not construct a staff action.
+
+The StaffMelee constructor always consumes `Float(.05)` after the proc
+selection, stores progress `0.1+draw`, then consumes `Integer(8)` and
 multiplies by `1.35` only on result two. Its marker is progress three and its
 strict end is progress above eight. The two pose programs are
 `0,4,5,6,6,6,6,6,6` and `0,1,2,3,3,3,3,3,3`; the player alternates those
@@ -656,9 +678,12 @@ that by three; any concentrated non-normal proc multiplies by 1.2. Every
 non-Whirl target receives `min(total,2*total/count)` and Whirl receives the
 full total per target.
 
-The callback then runs a second, ordered pass over physically contacting
-targets that still satisfy strict heading delta below 50 degrees. Its RNG is
-after the optional rank-zero damage-candidate selector. Per target it consumes
+The callback then runs a second, ordered pass over the actor-owned current
+contact list at `PlayerWizard +0x144/+0x150`; it applies physical side effects
+only to members that still satisfy strict heading delta below 50 degrees. It
+does not recompute center distance because contact-list membership owns that
+fact. Its RNG is after the optional rank-zero damage-candidate selector. Per
+target it consumes
 `Float(1)` and writes `target+0x22C = -(1+draw)`, then signed `Float(.1)` and
 plays registry offset `0xEB4`, `sounds\\staffhitwood`, at pitch `1+draw` with
 point gain. The recovered `+0x22C` gameplay consumer is Imp vertical velocity.

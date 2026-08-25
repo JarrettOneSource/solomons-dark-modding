@@ -150,6 +150,7 @@ from static_re_native_progression_contracts import (
     test_native_progression_level_curve_and_xp_awards_are_pinned,
     test_native_progression_offer_pool_selection_and_rng_are_pinned,
     test_native_secondary_cooldown_and_action_gate_is_pinned,
+    test_native_staff_admission_distinguishes_movement_and_current_contact,
     test_native_skill_picker_text_and_palette_abi_is_pinned,
     test_native_spell_welding_picker_art_contract_is_pinned,
 )
@@ -1261,6 +1262,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native skill picker text and palette ABI is pinned",
         test_native_skill_picker_text_and_palette_abi_is_pinned,
+    ),
+    (
+        "Native Staff admission distinguishes movement and current contact",
+        test_native_staff_admission_distinguishes_movement_and_current_contact,
     ),
     (
         "Native Spell Welding picker art contract is pinned",

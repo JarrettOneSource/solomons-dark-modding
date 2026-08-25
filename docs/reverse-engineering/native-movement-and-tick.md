@@ -349,6 +349,20 @@ list, filters collision membership/masks, and applies the shared radius,
 resistance, push-strength, movement-epoch, and recursive placement rules.
 There is no Arena-specific player-versus-player bypass in this owner chain.
 
+The player movement epoch also exposes a transient, ordered collision-result
+channel to downstream gameplay. `PlayerActor::Tick` sets Region byte `+0x47C`,
+zeros count `+0x480`, and then enters `MoveStep`
+(`0x0054AFF1..0x0054B050`). Dynamic response appends the contacted actor to the
+Region list at `+0x484/+0x488` only for a root epoch, only while capture is
+enabled, and only when the other actor's reportable-contact byte `+0x35` is
+set (`0x005267E5..0x00526832`, `0x005268EB..0x00526925`). The append happens
+from the same strict-overlap branch that computes response; the resulting
+centres may already be separated to `radiusA + radiusB + 0.1` when the caller
+consumes the retained identity. Player staff admission is one such consumer:
+a captured flags-`0x2` actor starts the automatic action without a second
+distance or heading test. Recomputing contact from only the resolved centres
+therefore loses native information.
+
 Implementation consequence for ports: changing from a fixed Region to Arena
 may replace the authored static geometry adapter, but it must keep the shared
 actor-body response around that adapter. Applying Arena scenery collision
