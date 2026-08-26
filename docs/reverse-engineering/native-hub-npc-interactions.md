@@ -152,6 +152,27 @@ Archchancellor intro PCM is 1,231,088 bytes, SHA-256
 `b819a5aa7397df964ec9f9e03149941450d65d10fe207f71c3643419fd071255`.
 No other phase-zero Office line has a shipped voice WAV.
 
+#### Collision owns dialogue admission
+
+The first-story report previously named the common action callback but did not
+follow its native caller. `PlayerWizard::Tick 0x00548B00` proves that named-NPC
+dialogue is admitted by walking into the actor, not by a separate retail
+Interact key. For each forward collision candidate it requires the target
+interaction predicate at vtable `+0x64`, clear engaged `+0x170` and suppression
+`+0x158` bytes, and the shared facing/dot-product gate. The per-player contact
+counter then increases by two per continuously eligible 100-Hz tick. Once it
+is strictly greater than ten, the player calls the target's vtable `+0x68` and
+resets the counter; the sixth eligible tick therefore opens Chat.
+
+Every named actor vtable listed in this report shares that caller. The initial
+story Office's authored spline drives the player into the Archchancellor, so
+`ARCH_INTRO_0` opens automatically at contact. The contextual click/touch/key
+plaque requested for the Website is a browser accessibility extension; it may
+invoke the same dialogue action, but it is not a replacement for the stock
+walk-into admission path. The first-profile Courtyard literal `WALK INTO
+WIZARDS\nTO TALK TO THEM` is consequently a direct description of the input
+contract rather than flavor copy.
+
 These rows remain excluded from the settled survival actor census. They are
 included only while the participant owns the unconsumed first-story admission;
 the survival `ARCH_INTRO/ARCH_Q/ARCH_DISMISS` graph resumes for ordinary Office

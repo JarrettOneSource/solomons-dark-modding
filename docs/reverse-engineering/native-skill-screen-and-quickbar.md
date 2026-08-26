@@ -327,6 +327,46 @@ Boneyard use the same SkillScreen owner; mouse and a browser Pointer Events
 projection must feed the same threshold, pointer-centered overlap, accepted /
 rejected sound, and teardown contract.
 
+### 2026-08-26 corrective BeltButton pull-off closure
+
+The skill-card `SkillDragger` above is only the assignment half of the belt
+editing system. A second user report that a populated browser slot could not be
+dragged out reopened the eight live `BeltButton` objects themselves. The prior
+pass stopped at `SkillDragger` release and did not inspect the destination
+button's movement override. A fresh read-only pass against the same retail
+image closes that omitted sibling:
+
+- `BeltButton::vftable +0x68 -> 0x005C7DF0` first calls the common pressed-
+  control movement handler `0x004308D0`. It continues only while the button's
+  pressed byte `+0x78` is set and entry type `+0xB4` is not empty type `7000`
+  (`0x1B58`). Thus the member applies uniformly to skills, both fixed Potion
+  entries, and an ordinary item binding.
+- The handler subtracts the captured press root
+  `Input +0xC34/+0xC38` from the live pointer root `Input +0xC2C/+0xC30`,
+  computes Euclidean length, and uses the strict threshold `length > 50.0`
+  (`double 0x007847C8`). Motion of exactly 50 does not clear the slot. The
+  visual displacement field at button `+0xC0` is `length / 5` while held.
+- The accepted movement edge is immediate; it does not wait for pointer
+  release and does not create a movable belt-to-belt dragger. It plays registry
+  row 73, `sounds\\poof`, at gain one, then `0x005C79C0` writes the complete
+  empty state: `+0xC0=0`, `+0xB4=7000`, `+0xB8=0`, `+0xBC=0`, `+0xC4=0`,
+  `+0xE4=0`, and an empty label. The button refreshes and remains the same live
+  slot object.
+- The local burst contains exactly 24 UI-record-65 bouncers: two at each
+  30-degree lane through the full 360 degrees. It then chooses a 90- or
+  120-degree step and emits respectively four or three moving/fading
+  UI-record-69 members. This is presentation-local; it does not create a
+  `SkillDragger`, mutate another slot, or play `pickskill`.
+- A release/cancel before the strict 50-unit edge leaves the binding intact and
+  follows the ordinary button release path. After the edge the same press is
+  already empty, so release cannot invoke the removed skill or item again.
+
+The complete edit contract is consequently asymmetric by design: dragging a
+learned category-1/2 card onto the belt assigns/replaces through the centered
+40-by-40 overlap router; dragging any populated belt button more than 50 units
+pulls that one entry off with `poof` and the two-record burst. There is no stock
+belt-to-belt move operation.
+
 ## Automatic population
 
 `0x005C85E0` is the first-empty-slot helper. It scans the eight `BeltButton`

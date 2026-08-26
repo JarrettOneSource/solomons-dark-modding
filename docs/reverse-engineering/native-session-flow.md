@@ -881,3 +881,134 @@ Mac static RE suite `502/502`. Log SHA-256 is
 `a77caa5631efaf25cc45edc74af5193e6700b6534d450c1bf5ae0a77ad45e2ba`.
 The paired Website exact-tree and Chrome/Metal receipts are recorded in
 `Website/docs/game-native-parity-re.md`.
+
+## 2026-08-26 correction: post-Tutorial College title walk precedes Office
+
+The 2026-08-25 correction above recovered the exit-owned Create surface and
+the story Office population, but its entry claim is still incomplete and is
+superseded by this section. It followed the ordinary `DAT_00B3BCA0 == 0`
+startup branch in `0x005CFA80` and did not carry forward the two-byte writer in
+the Tutorial Game Over branch. That omission incorrectly collapsed the
+Courtyard title/walk owner into a direct Office spawn.
+
+### Terminal writer and front-end handoff
+
+On the Tutorial branch, `GameOver::Tick 0x005CF4F0` performs the first-play
+clear/save/cleanup and then, at `0x005CF8CB`, writes the word `0x0101` to
+`DAT_00B3BCA0`. These are two adjacent live flags:
+
+- `DAT_00B3BCA0 = 1` owns the scripted College admission and suppresses
+  ordinary controls/HUD/markers while it is live;
+- `DAT_00B3BCA1 = 1` is the adjacent first-story ready/help lane.
+
+The branch installs `MainMenu` through `0x005A7F60`. Its tick
+`0x005A51B0` detects the first flag, advances the base controller counter, and
+after the strict `counter > 10` edge calls `0x005BBBB0`. That function removes
+the transient front end, builds the first normal story `Game`, and starts it
+without clearing either flag. `Gameplay_FinalizePlayerStart 0x005CFA80`
+therefore takes its `DAT_00B3BCA0 != 0` branch and selects Courtyard region 0,
+not the ordinary direct-Office branch described above.
+
+The corrected order is:
+
+```text
+Tutorial Game Over accepted and fully faded
+  -> clear first-play byte, save, and archive Tutorial Game
+  -> set College admission flags 0/1
+  -> ten-tick black front-end handoff
+  -> first story Game starts in Courtyard
+  -> forced College-path walk with Title 7 / Title 9 cards
+  -> ordinary covered Courtyard -> Office doorway transition
+  -> forced Office-path walk into the Archchancellor
+  -> collision-owned ARCH_INTRO_0 Chat opens
+  -> interactive story Office
+  -> manual Office exit opens Create
+```
+
+### Authored Courtyard walk and title cards
+
+The special branch in Courtyard construction `0x00506490` builds a natural
+`QuickSpline` at `Courtyard+0x930C` from all ten authored points, in order:
+
+```text
+(972,1044), (1074,839), (1119,611), (1167,441), (1164,275),
+(1095,187), (1017,193), (963,178), (956,105), (957,27)
+```
+
+Courtyard attach `0x00503F20` samples cursor zero, so the actor starts just
+below the 2000-by-1024 Courtyard at `(972,1044)`. The special incoming cover
+rate is `-0.0005f` (`0x00792038`), not the ordinary `-0.01f`.
+
+On each active 100-Hz tick, `0x0050C970 -> 0x00503CE0` forces the Game movement
+control at `Game+0x8C` toward the spline. Target cursor is at least one and
+advances by `0.25` while its sampled target is strictly within ten units
+(`distanceSquared < 100`) of the actor. The ordinary PlayerWizard movement
+kernel consumes that direction; this is an authority-owned walk, not a camera
+pan or direct position teleport. When the path crosses the ordinary Office
+portal segment `(1024.5,115.5)..(881.5,115.5)`, the existing `+0.01` outgoing
+cover, scripted doorway target, region swap, and Office incoming lifecycle
+remain in force.
+
+The constructor also builds the six-point title-alpha spline
+`[(0,0),(1,0),(1,0),(0,0),(0,0),(1,0)]`. Its cursor starts at zero and advances
+by exact double `0.005200000014156103` each tick. Courtyard presentation
+`0x0051EB60` consumes every reachable card member:
+
+- through cursor 4, Title record 7 (`RAPTISOFT GAMES PRESENTS`) is centered at
+  native Y 250 with spline X as alpha;
+- after cursor 4, Title record 9 (`SOLOMON DARK`) is centered at native Y 450;
+  its alpha is the same spline value multiplied by the uncovered-region term;
+- both are destroyed with the admission/region presentation; neither belongs
+  to the ordinary stable title menu or ordinary Courtyard.
+
+### Authored Office walk and automatic dialogue
+
+With the admission flag still live, Office constructor `0x00509C70` builds a
+second natural spline at `Office+0x8EA0` from all seven authored points:
+
+```text
+(400,773), (380,722), (263,636), (289,509),
+(396,471), (420,445), (420,415)
+```
+
+Office tick `0x00509F10 -> 0x00504670` writes the same Game movement-control
+owner toward that path. Cursor advances by `0.25` at the same strict ten-unit
+target boundary. Through cursor 4 the actor's movement scalar is one; after
+cursor 4 it multiplies by float32 `0.99000001` per tick until the scalar is no
+greater than `0.5`. The path consequently walks and then slows the actor into
+the phase-zero Archchancellor at `(514,467)`.
+
+Dialogue start is automatic and is not a separate keyboard/click prompt.
+`PlayerWizard::Tick 0x00548B00` owns the complete named-NPC contact family. A
+forward collision candidate whose interaction virtual `+0x64` accepts, whose
+engaged/suppression bytes are clear, and whose movement-to-target dot product
+passes the common facing gate increments the contact counter by two. Once that
+counter is strictly greater than ten, it calls the target's vtable `+0x68`.
+For the Archchancellor this resolves to common Chat action `0x00501800`, so the
+sixth continuously eligible tick constructs `ARCH_INTRO_0` without another
+button press. The same collision owner applies to every named NPC with a live
+dialogue action; the large `WALK INTO WIZARDS TO TALK TO THEM` Courtyard hint
+describes this mechanism literally.
+
+The Chat stays interactive. Its first regular question-selection path
+`0x004FD6A0` clears `DAT_00B3BCA0`, ending forced movement/HUD suppression;
+ordinary dialogue close/distance rules then apply. The Office is not
+automatically exited. The 2026-08-25 finding that the later physical Office
+exit owns Create remains correct.
+
+### Portable consequence and invalidated claims
+
+A portable participant-local save needs more than the existing pending bit: it
+must preserve Courtyard/Office walk phase, both spline cursors, title cursor and
+alpha lane, Office speed decay, contact count, and whether automatic
+`ARCH_INTRO_0` has been delivered. Reload before acknowledgement resumes that
+exact phase; it must not jump to Office, replay completed title cards, or skip
+the dialogue.
+
+The earlier direct `(512,562)` story-Office entry remains the ordinary
+`DAT_00B3BCA0 == 0` first-start branch and is not the post-Tutorial branch.
+Accordingly the statements above that post-Tutorial pending starts directly in
+Office, has no cinematic timer, and never uses forced movement are invalidated.
+The story Office population, manual-exit/Create ownership, phase-zero dialogue
+graph, Polisher loop, and participant-local isolation remain valid downstream
+members.
