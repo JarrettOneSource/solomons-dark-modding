@@ -1172,3 +1172,49 @@ def test_native_hud_recorder_is_self_provenanced_settled_and_visual_diffable() -
             "HUD launch failures would hide the terminal setup error needed to distinguish broken from busy"
         )
     return "native HUD recorder is live, self-provenanced, settle-gated, bounded, and visual-diffable"
+
+
+def test_tutorial_pointer_quad_pivot_and_complete_call_membership_are_pinned() -> str:
+    doc = _read(DOC_PATH)
+    for marker in (
+        "Tutorial pointer centred-quad and responsive-composition audit",
+        "15 direct call sites",
+        "`0x005C9BB0` binds UI record 28 at `UI+0x15A8`",
+        "The direction pair is never consumed as a draw position.",
+        "`0x00414F90` creates a rotation matrix",
+        "`0x004142E0` adds the record's `width/2,height/2`",
+        "nontransparent bounds\n  `(2,2)..(55,59)`",
+        "pointer's origin offset and centred UI-28 quad must receive the same uniform\nscale",
+    ):
+        if marker not in doc:
+            raise StaticReTestFailure(
+                f"native Tutorial pointer report lost centred-quad marker {marker}"
+            )
+
+    expected_calls = {
+        "0x005D0EFA",
+        "0x005D10B6",
+        "0x005D11F8",
+        "0x005D133E",
+        "0x005D143C",
+        "0x005D1529",
+        "0x005D16E1",
+        "0x005D1A00",
+        "0x005D1AF5",
+        "0x005D1B9B",
+        "0x005D1CD9",
+        "0x005D1DE9",
+        "0x005D206A",
+        "0x005D21BE",
+        "0x005D2274",
+    }
+    audit = doc.split(
+        "## 2026-08-25 Tutorial pointer centred-quad and responsive-composition audit",
+        1,
+    )[1]
+    recovered_calls = set(re.findall(r"`(0x005D[0-9A-F]{4})`", audit))
+    if not expected_calls.issubset(recovered_calls):
+        raise StaticReTestFailure(
+            "native Tutorial pointer audit lost one or more of the complete 15 direct calls"
+        )
+    return "Tutorial UI-28 centred pivot, direction-only pair, and 15-call membership are pinned"

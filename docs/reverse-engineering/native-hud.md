@@ -542,11 +542,15 @@ pointers, not only inventory hints. Two primitives draw everything:
   draws the text with `0x004A57C0('menu', String, x, y)` in centred mode:
   line `k` at `x_k = trunc(x - w_k/2)`, `y_k = trunc(y) + 25k`
   (`0x007DE960` = 25 line pitch), `h = 24 + 25(n - 1)`, `w = max w_k`.
-- `0x005C9BB0(origin, tip, blink)`: draws UI record 28 (58 x 61) AT
-  `origin` (the first float pair), rotated by
-  `atan2(tip.x - origin.x, tip.y - origin.y)` in degrees (`+360` when
-  negative) through `0x00414F90(origin.x, origin.y, angle)`; `tip` only
-  steers the rotation. At every call site the pair allocated last
+- `0x005C9BB0(origin, direction, blink)`: draws UI record 28 (58 x 61)
+  centred AT `origin` (the first float pair), rotated by
+  `atan2(direction.x - origin.x, direction.y - origin.y)` in degrees (`+360`
+  when negative) through `0x00414F90(origin.x, origin.y, angle)`;
+  `direction` only steers the rotation and is not the painted arrowhead.
+  `0x00414F90` builds a rotation matrix and sends UI 28's four local vertices
+  through `0x00414540`; the sibling unrotated draw `0x004142E0` adds
+  `width/2,height/2` before drawing the same centred quad, confirming the
+  pivot. At every call site the pair allocated last
   (`sub esp,8` nearest the call, lowest stack address) is `origin`. When
   `blink != 0` it draws only while `0x0081F658 % 50 > 19`. `0x0081F658` is
   `App+0x28`, the 100 Hz application tick (see
@@ -564,13 +568,13 @@ live `p` for modal stages 10/13 and the resting layout otherwise. Every
 `0x005C9BB0` call
 site is listed with its pushed blink immediate:
 
-| Stage | Member | Gate | Anchor | Callout centre / pointer origin -> tip | Blink |
+| Stage | Member | Gate | Anchor | Callout centre / pointer origin -> direction | Blink |
 | --- | --- | --- | --- | --- | --- |
 | 5 | secondary-slot pointer (`0x005D0EFA`) | none | secondary HUD slot | placement owned by the Website ledger 2026-08-23 row | 1 |
 | 8 | first ground-Sack world pointer (`0x005D10B6`) | first registered type `0x7DD` | projected Sack | placement owned by the Website ledger 2026-08-23 row | 1 |
 | 9 | inventory pointer (`0x005D11F8`) | none | `c(bp)` (`p = 0`) | `(c.x - 40, c.y - 40) -> c` | 1 |
 | 10 | resume callout + pointer (`0x005D133E`) | none | `c(bp)` | callout `(c.x - 50, c.y - 120)`; pointer `(c.x - 50, c.y - 50) -> c` | 1 |
-| 10 | quick-use callout + pointer (`0x005D143C`) | none | `c(belt[7])`, tip `c(belt[6])` | callout `(c7.x + 0, c7.y - 115)`; pointer `(c7.x - 20, c7.y - 50) -> c6` | 0 |
+| 10 | quick-use callout + pointer (`0x005D143C`) | none | `c(belt[7])`, direction `c(belt[6])` | callout `(c7.x + 0, c7.y - 115)`; pointer `(c7.x - 20, c7.y - 50) -> c6` | 0 |
 | 10 | equipment callout + pointer (`0x005D1529`) | none | `pt = FUN_00570f80([[[Game+0x15A0]+0x15C]+0x30])` = STAFF/WAND sink centre | callout `(pt.x - 250, pt.y + 50)`; pointer `(pt.x - 60, pt.y + 40) -> pt` | 0 |
 | 10 | backpack callout + pointer (`0x005D16E1`) | `Game+0x15A0 && [screen+0x294]`; entry 0 of grid `screen+0x188` (`0x005D07A0`), `*entry`, holder `[[entry]+0x10]`, item `[holder]`, `[item+4] != 0` | `pt = 0x004282D0(grid, [obj+0], [obj+4])` = cell-0 top-left | callout `(pt.x + 410, pt.y - 7)`; pointer `(pt.x + 60, pt.y - 5) -> pt` | 0 |
 | 12 | skills pointer (`0x005D1875..0x005D18C0` sets `origin.x`, pushes 1 at `0x005D188D`, then `jmp 0x005D11E2` into the stage-9 tail that sets `origin.y` and shares the `0x005D11F8` call) | none | `c(tome)` (`p = 0`) | `(c.x + 40, c.y - 40) -> c` | 1 |
@@ -645,3 +649,40 @@ The instruction window confirms the table above without adding a new member:
 Therefore a web `GRAB THIS ITEM` string would be invented behavior. The exact
 stock contract remains: blinking world-Sack arrow at stage 8, then Inventory
 copy/control at stage 9; the SkillScreen gate remains a later stage-12 member.
+
+## 2026-08-25 Tutorial pointer centred-quad and responsive-composition audit
+
+A mobile web report reopened the complete `Tutorial::Render` pointer family.
+The earlier report recovered all origins and direction pairs, but called the
+second pair a painted `tip` and did not prove UI 28's pivot. Fresh canonical
+read-only Ghidra replica queries against retail 0.72.5 (4,723,200 bytes,
+SHA-256 `03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`)
+closed that gap:
+
+- `trace_call_arguments.py 0x005C9BB0 6 1` returns 15 direct call sites, all
+  inside `Tutorial::Render 0x005D08C0`: `0x005D0EFA`, `0x005D10B6`,
+  `0x005D11F8` (shared by stages 9 and 12), `0x005D133E`, `0x005D143C`,
+  `0x005D1529`, `0x005D16E1`, `0x005D1A00`, `0x005D1AF5`, `0x005D1B9B`,
+  `0x005D1CD9`, `0x005D1DE9`, `0x005D206A`, `0x005D21BE`, and
+  `0x005D2274`. The table above is therefore the complete membership.
+- `0x005C9BB0` binds UI record 28 at `UI+0x15A8`, computes only an angle from
+  `direction-origin`, and calls `0x00414F90(origin.x, origin.y, angle)`.
+  The direction pair is never consumed as a draw position.
+- `0x00414F90` creates a rotation matrix, translates it by the supplied
+  origin, and calls `0x00414540`, which transforms the record's four stored
+  vertices. `0x004142E0` adds the record's `width/2,height/2` before the
+  unrotated draw of those same vertices. Together these instructions prove a
+  centred quad: the first pair is UI 28's centre/pivot, while its visible
+  arrowhead is the rotated top of the 58 x 61 record.
+- Asset record UI 28 is the complete crop `(202,656,58,61)` with logical size
+  `58 x 61`, no authored point, no trim offset, and nontransparent bounds
+  `(2,2)..(55,59)`. No per-call-site hotspot or alternate arrow record exists.
+
+This does not change any native origin or direction constant in the table.
+It changes the browser projection contract: when a browser deliberately
+uniformly scales a live HUD control for UI scale or coarse-pointer use, the
+pointer's origin offset and centred UI-28 quad must receive the same uniform
+scale. Tracking only the enlarged control's centre while leaving the origin
+offset and quad at scale 1 is not the native composition. Fixed-stage modal
+and world-projected members already share one outer transform with their
+targets and retain pointer scale 1 inside that owner.

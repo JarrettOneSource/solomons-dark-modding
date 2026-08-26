@@ -90,6 +90,7 @@ from static_re_native_hud_contracts import (
     test_native_hud_fill_cooldown_charge_and_notification_behavior_are_pinned,
     test_native_hud_recorder_is_self_provenanced_settled_and_visual_diffable,
     test_native_hud_visibility_scaling_and_multiplayer_are_pinned,
+    test_tutorial_pointer_quad_pivot_and_complete_call_membership_are_pinned,
 )
 from static_re_native_hud_skill_selector_contracts import (
     test_native_hud_skill_selector_ownership_geometry_and_audio_are_pinned,
@@ -1098,6 +1099,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native HUD recorder is self-provenanced, settled, and visual-diffable",
         test_native_hud_recorder_is_self_provenanced_settled_and_visual_diffable,
+    ),
+    (
+        "Tutorial pointer centred quad and complete call membership are pinned",
+        test_tutorial_pointer_quad_pivot_and_complete_call_membership_are_pinned,
     ),
     (
         "Native HUD selected-skill selector ownership, geometry, and audio are pinned",
