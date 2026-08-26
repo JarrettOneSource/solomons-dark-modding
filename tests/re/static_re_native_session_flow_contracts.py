@@ -1260,3 +1260,46 @@ def test_first_wizard_college_admission_contract_is_pinned() -> str:
         "College admission regressed to the falsified Create-before-Office order",
     )
     return "interactive story Office, exit-owned Create, and Courtyard handoff are pinned"
+
+
+def test_post_tutorial_college_title_walk_contract_is_pinned() -> str:
+    doc = _read(DOC_PATH)
+    section = _section(
+        doc,
+        "## 2026-08-26 correction: post-Tutorial College title walk precedes Office",
+        "### Portable consequence and invalidated claims",
+    )
+    required = (
+        "0x005CF8CB",
+        "0x0101",
+        "DAT_00B3BCA0",
+        "DAT_00B3BCA1",
+        "counter > 10",
+        "0x005BBBB0",
+        "(972,1044)",
+        "0.005200000014156103",
+        "RAPTISOFT GAMES PRESENTS",
+        "SOLOMON DARK",
+        "(400,773)",
+        "roomCenter - 409.5",
+        "+102.5,+102.5",
+        "(522.5,517.5)",
+        "0.99000001",
+        "ARCH_INTRO_0",
+        "sixth continuously eligible tick",
+    )
+    missing = [token for token in required if token not in section]
+    _require(
+        not missing,
+        "post-Tutorial College title walk lost recovered ownership/constants: "
+        + ", ".join(missing),
+    )
+    _require(
+        "first story Game starts in Courtyard" in section,
+        "post-Tutorial flow regressed to direct Office startup",
+    )
+    _require(
+        "The Office is not\nautomatically exited" in section,
+        "post-Tutorial flow regressed to an automatic Create transition",
+    )
+    return "post-Tutorial title cards, both transformed walks, automatic Chat, and manual Office exit are pinned"

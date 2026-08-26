@@ -165,7 +165,8 @@ is strictly greater than ten, the player calls the target's vtable `+0x68` and
 resets the counter; the sixth eligible tick therefore opens Chat.
 
 Every named actor vtable listed in this report shares that caller. The initial
-story Office's authored spline drives the player into the Archchancellor, so
+story Office's authored spline (after the Office room-centering `+102.5,+102.5`
+transform recovered in `native-session-flow.md`) drives the player into the Archchancellor, so
 `ARCH_INTRO_0` opens automatically at contact. The contextual click/touch/key
 plaque requested for the Website is a browser accessibility extension; it may
 invoke the same dialogue action, but it is not a replacement for the stock

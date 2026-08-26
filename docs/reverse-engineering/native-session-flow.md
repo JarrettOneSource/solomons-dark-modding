@@ -964,12 +964,20 @@ by exact double `0.005200000014156103` each tick. Courtyard presentation
 ### Authored Office walk and automatic dialogue
 
 With the admission flag still live, Office constructor `0x00509C70` builds a
-second natural spline at `Office+0x8EA0` from all seven authored points:
+second natural spline at `Office+0x8EA0` from all seven authored **raw** points:
 
 ```text
 (400,773), (380,722), (263,636), (289,509),
 (396,471), (420,445), (420,415)
 ```
+
+`Office::Tick` helper `0x00504670` does not consume those raw coordinates
+directly. It adds the room-centering delta `roomCenter - 409.5` to both axes.
+The 1024-by-1024 retail Office therefore adds exactly `+102.5,+102.5`, yielding
+world points `(502.5,875.5), (482.5,824.5), (365.5,738.5), (391.5,611.5),
+(498.5,573.5), (522.5,547.5), (522.5,517.5)`. The transform is part of the
+authored path owner; treating the raw table as world space misses the
+Archchancellor approach and can strand the scripted walk.
 
 Office tick `0x00509F10 -> 0x00504670` writes the same Game movement-control
 owner toward that path. Cursor advances by `0.25` at the same strict ten-unit

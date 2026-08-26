@@ -41,6 +41,7 @@ from static_re_native_session_flow_contracts import (
     test_native_session_flow_legal_edge_set_is_pinned,
     test_native_session_flow_state_enum_is_pinned,
     test_native_session_flow_transition_step_order_is_pinned,
+    test_post_tutorial_college_title_walk_contract_is_pinned,
 )
 from static_re_native_web_combat_lifecycle_contracts import (
     test_native_web_combat_lifecycle_integration_contract_is_pinned,
@@ -1017,6 +1018,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "First-wizard College admission ownership is pinned",
         test_first_wizard_college_admission_contract_is_pinned,
+    ),
+    (
+        "Post-Tutorial College title-walk ownership is pinned",
+        test_post_tutorial_college_title_walk_contract_is_pinned,
     ),
     (
         "Native class-loadout census and identity are pinned",
