@@ -2449,7 +2449,7 @@ def test_native_hub_dig_and_run_boundary_fields_are_pinned() -> str:
         r"^\| Gameplay \| `\+0x1C90` \| participant name used as the retained Sack name prefix \|$",
         r"^\| Gameplay \| `\+0x13B8` \| active inventory root \|$",
         r"^\| Gameplay \| `\+0x1410` \| seven equipment sinks \|$",
-        r"^\| local player actor \(`\*\(Gameplay\+0x1358\)`\) \| `\+0x1C0` \| boolean controlling ordinary equipment/backpack transfer; exact producer semantics unresolved \|$",
+        r"^\| local player actor \(`\*\(Gameplay\+0x1358\)`\) \| `\+0x1C0` \| consumed-corpse byte; `0x005C9670` applies `SETZ`, so clear enables ordinary equipment/backpack transfer and set skips it \|$",
         r"^\| progression \(`\*\*\(Gameplay\+0x1654\)`\) \| `\+0x7D8` \| Last Word owned flag controlling ground-Sack/Gold sweep \|$",
     )
     if not boundary_rows:

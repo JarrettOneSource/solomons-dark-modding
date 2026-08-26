@@ -475,3 +475,39 @@ post-run Create route. It is not evidence that retail Boneyard mode itself
 draws the normal glyphs or Riff actor. Authority must still reject stale
 run/event continuation, and multiplayer return must not let one participant's
 loadout silently overwrite or skip another participant's choice.
+
+## 2026-08-26 post-Game-Over player-generation clarification
+
+The generation boundary is completed Game Over, not individual player death.
+A dying or spectating multiplayer participant keeps the same progression,
+`Skills_Wizard`, active inventory, and equipment while another eligible player
+keeps the run alive. The later Create confirmation owns the fresh generation.
+
+The retained post-run element/Discipline values are Create defaults, not a
+retained `Skills_Wizard` or active inventory. A fresh read-only xref sweep on
+retail 0.72.5 found exactly two callers of finalizer `0x005D0290`:
+`Create::Tick 0x0058A820` at `0x0058A96D` and startup owner `0x005D07D0` at
+`0x005D0840`. The finalizer grants only the selected element root/primary/
+secondary, selected Discipline, and roots `0,2,1,3,4,6,5,7`, refreshes derived
+state, and then calls starter construction `0x005CFA80`. The already recovered
+`Skills 0x006594E0` and `Skills_Wizard 0x00674EE0` constructors supply level 1,
+XP 0, empty offer state, and a fresh 83-row book. No completed-run skill rank,
+learned order, quickbar, or Tutorial-only Acid Rain member is copied into that
+generation.
+
+Item archival is a distinct preceding owner. `GameOver::Tick 0x005CF4F0` has
+the only two refs to `0x005C9670`. Raw instructions at
+`0x005C9696..0x005C96A2` apply `SETZ` to Player `+0x1C0` before calling
+`0x005BE320`: an unconsumed corpse permits retail's ordinary carried equipment/
+backpack Sack, a corpse consumed by Ether Drain suppresses it, and Last Word
+`Skills_Wizard+0x7D8` independently adds eligible ground Sacks/Gold. The Sack
+is Luthacus profile storage; `0x005CFA80` still builds fresh active gear and
+potions for the next wizard.
+
+The Website's direct-Create route may omit Mortuary/Hall/MainMenu, but it may
+not turn Create preselection into skill/progression inheritance. The user has
+also selected a stricter Website item policy than retail: terminal Game Over
+does not archive ordinary carried equipment/backpack. Existing Luthacus
+storage and Last Word's explicit ground recovery remain durable. This web
+deviation is documented in the Website parity ledger and does not alter the
+retail contract above.

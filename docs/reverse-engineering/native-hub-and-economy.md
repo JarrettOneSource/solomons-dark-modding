@@ -631,7 +631,7 @@ with these retail fields:
 | Gameplay | `+0x1C90` | participant name used as the retained Sack name prefix |
 | Gameplay | `+0x13B8` | active inventory root |
 | Gameplay | `+0x1410` | seven equipment sinks |
-| local player actor (`*(Gameplay+0x1358)`) | `+0x1C0` | boolean controlling ordinary equipment/backpack transfer; exact producer semantics unresolved |
+| local player actor (`*(Gameplay+0x1358)`) | `+0x1C0` | consumed-corpse byte; `0x005C9670` applies `SETZ`, so clear enables ordinary equipment/backpack transfer and set skips it |
 | progression (`**(Gameplay+0x1654)`) | `+0x7D8` | Last Word owned flag controlling ground-Sack/Gold sweep |
 | Arena actor world | actor list; Sack 2013 `+0x148`, Gold 2012 `+0x140` | eligible Last Word ground contents |
 
@@ -2022,10 +2022,11 @@ These are portability findings, not invitations to fill in plausible behavior:
   floats use the mechanism G1 recovered, but no native Float golden exists.
   Prices, quantities, and Dig yield do not depend on those values; visual
   effects and exact Student randomization remain gated on that recorder run.
-- **Completed-run transfer boolean.** `0x005C9670` passes the local actor byte at
-  `+0x1C0` into the ordinary inventory/equipment transfer branch, but the byte's
-  producer and user-facing semantic name are not recovered. Preserve it as
-  `transfer_carried_items` rather than guessing “alive,” “won,” or “insured.”
+- **Completed-run transfer boolean (resolved 2026-08-23).** Player construction
+  initializes `+0x1C0` clear. Player tick `0x00533520` sets it only after an
+  active Ether Drain consumes the nearby corpse through callback `0x005EE840`.
+  `0x005C9670` applies `SETZ`: ordinary carried transfer is enabled while clear
+  and skipped after corpse consumption. Last Word `+0x7D8` remains independent.
 - **RNG-selected Sack name.** The five suffixes and `Integer(5)` path are exact,
   but G8 did not capture the full active state immediately before archival.
   Persist the chosen suffix or stream state if exact replay spans run completion.
