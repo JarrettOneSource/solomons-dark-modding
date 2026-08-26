@@ -712,6 +712,28 @@ therefore not destroyed or replaced. It becomes unreachable in ordinary play
 because the active camera/encounter region retires its entrance side; treating
 the transition as a Gate deletion is the wrong ownership model.
 
+Fresh read-only decompilation on 2026-08-26 closes the cleanup predicate and
+manager membership that the earlier summary left compressed. Rectangle helper
+`0x004036D0` requires strict positive-area overlap: source left/top must be
+strictly below the target right/bottom and source right/bottom must be strictly
+above the target left/top. Edge-only contact is therefore outside. Scenery at
+Arena `+0x87C4` is tested with its positioned visual rectangle; Roads at
+`+0x8810` and Terrain at `+0x88A8` use four-point bounds built by
+`0x0040FD90`; RegionLayout compact decorations at `+0x8ADC`, derived bridge
+records at `+0x8B54`, and the derived spatial rows reached through `+0x8F40`
+take the same strict-overlap verdict. The function removes and destroys failed
+members in-place, rebuilds the affected spatial/cache owners, and still has no
+iteration over Fence `+0x885C`, Badguys, players, transient loot, or the
+transient-actor manager.
+
+This makes two distinctions material for ports. Cleanup membership is based on
+the record's visual/geometry rectangle, not merely whether its root point lies
+inside the target. Also, an enemy or required Sack in the retired strip is not
+a cleanup member and is not relocated by this action. A web recovery path that
+keeps the full camera until every required live circle fits, while confining
+new post-run births to the combat rectangle, is an explicit soft-lock safety
+extension rather than native action-1066 behavior.
+
 Player tick `0x00548B00` and its ordinary movement path do not read the camera
 target rectangle. The executable does not establish a separate invisible
 combat-wall write in this script. A browser port that hard-confines an
