@@ -1122,3 +1122,21 @@ seals movement. A saved participant already in Office with no live
 crossed that acknowledgement boundary and must not be rearmed merely because
 the broader loadout-pending bit remains true. The bit is cleared only after the
 existing post-Create Courtyard settlement.
+
+## Browser-only `PLAY THE TUTORIAL?` decline policy
+
+The Website's pre-game yes/no prompt is not a recovered retail scene or state
+branch. Retail's verified contract begins after the player has entered the
+Tutorial: its terminal Game Over continues into the College title walk above.
+Consequently a Website `YES` must retain that stock transition, but a Website
+`NO` has no native cinematic to mirror.
+
+The explicit port policy for `NO` is to mark the browser offer declined and
+return to the title; it does not begin a game. A later ordinary Play -> New Game
+selection opens Create, followed by Hub. That connection clears both durable
+onboarding obligations (`tutorialPending` and `collegeIntroPending`) through a
+fresh-admission-only authoritative request and persists them in the first
+connected checkpoint. It must never be accepted with an existing save, resume
+token, or simultaneous College request. This product adaptation does not
+revise the recovered retail Tutorial-to-College contract; it prevents a
+browser-only decline from being mistaken for Tutorial completion.
