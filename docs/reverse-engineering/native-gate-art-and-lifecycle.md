@@ -394,6 +394,36 @@ The visual lower edge and physical center line share `H/T`, but the registered
 collision endpoints are widened by four. The ornamental PNG's alpha contour
 is not a per-pixel collision mask.
 
+### 2026-08-26 Gate contact membership correction
+
+The Tutorial off-camera-enemy report reopened a membership gap in the Gate
+pass: the earlier controlled probe proved player contact but did not disposition
+Badguy contact. Fresh read-only xrefs prove that Gate motion is deliberately
+asymmetric:
+
+- `0x005E39B0` has one direct xref, Region `MyCollider` callback
+  `0x00646D00` through vtable `0x0079F078`.
+- The callback handles priority-100 collision records before its later
+  local-player/class-101 Goodie branch. It finds the type-3012 Gate whose live
+  handle `+0x1C8` equals the contacted record, but calls `0x005E39B0` only when
+  the current actor's flags at `+0x14` include bit `0x1`.
+- `PlayerWizard` constructor `0x0052B4C0` writes flags `0x801`, so a player can
+  drive the native magnitude-2 Gate impulse. Common Badguy constructor
+  `0x00473390` writes flags `0x2`, so Skeletons, Archers, and every inheriting
+  Arena hostile fail that Gate-motion gate.
+- Badguys do not pass through the physical leaf. The same constructor writes
+  movement exclusion mask `+0x38 = 0x80`; the Gate collision record owns mask
+  `0x100`. Primary movement resolver `0x00522CE0` processes a segment when
+  `(actorMask & segmentMask) == 0`, so `0x80 & 0x100 == 0` keeps Gate collision
+  active for enemies even though they cannot push the leaf.
+
+Therefore stock can leave a hostile behind a closing Gate if gameplay first
+draws it into the entrance strip. This is not a hidden enemy-ejection branch.
+The ordinary authored flow avoids the edge by fighting on the combat side;
+camera/cleanup ownership is recorded in `docs/re/tutorial-mechanics.md`.
+A browser soft-lock prevention rule must be labeled a Website safety policy,
+not attributed to Gate motion or native enemy relocation.
+
 ## Native constants index
 
 | Meaning | Value | Evidence owner |

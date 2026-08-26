@@ -1442,6 +1442,38 @@ inside the persistent target inset by the actor radius; dark policy alone
 bypasses that rectangle. Off-screen evaluation follows the current recursively
 interpolated camera, not the cleanup counter.
 
+### 2026-08-26 live-enemy transition correction
+
+The later report that an enemy can remain below the locked camera does not
+reveal another map-bounds transition. The instruction ownership above means:
+
+1. entering trigger 642218 immediately starts the persistent camera target;
+2. command 1066 later removes only the named static/spatial families;
+3. no branch changes player or enemy movement bounds;
+4. no branch relocates, retires, damages, or retargets a live Badguy; and
+5. the Fence manager and both Gate leaves remain live.
+
+The adjacent Gate contact census now closes the missing hostile branch. Region
+callback `0x00646D00` drives a Gate only for actor flag bit `0x1`.
+`PlayerWizard` owns flags `0x801`; common Badguy owns flags `0x2` plus movement
+exclusion mask `0x80`, which still collides with Gate mask `0x100`. Enemies can
+therefore be physically trapped behind a closing leaf but cannot reopen it.
+Stock normally avoids the edge through encounter flow; it does not guarantee
+recovery after a player deliberately leaves an enemy in the entrance strip.
+
+For the Website, the least invasive soft-lock policy is to keep the full
+Tutorial camera active whenever any registered enemy circle or ground Sack
+carrier lies outside the future target `(0,0,2043,849.91796875)`. Dying actors
+remain members until retirement because the linked Item/Potion Skeleton reward
+can create a required Sack at the death root. If an old/live state becomes
+unsafe after a lock, suspend that lock immediately; once every enemy and Sack
+carrier is inside (or has retired) and the player remains in the authored
+trigger, the ordinary lock may start again. While locked, every new Tutorial
+birth must also fit wholly inside the target, including native dark-policy fast
+paths. This policy preserves enemy movement, Gate/Fence collision, damage,
+loot, RNG, and death; it neither teleports nor deletes an actor and is
+explicitly a web safety extension.
+
 ### Observation and web consequence
 
 A fresh clean process was launched directly from a task-owned retail copy as

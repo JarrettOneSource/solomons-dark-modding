@@ -12,6 +12,8 @@ SKILL_DOC = ROOT / "docs/reverse-engineering/native-skill-screen-and-quickbar.md
 SETTINGS_DOC = ROOT / "docs/reverse-engineering/native-settings-system.md"
 CLASS_CATALOG = ROOT / "docs/reverse-engineering/native-class-catalog.json"
 AUDIO_CATALOG = ROOT / "docs/reverse-engineering/native-audio-catalog.json"
+GATE_DOC = ROOT / "docs/reverse-engineering/native-gate-art-and-lifecycle.md"
+TUTORIAL_DOC = ROOT / "docs/re/tutorial-mechanics.md"
 
 
 def require(condition: bool, message: str) -> None:
@@ -101,6 +103,60 @@ def test_native_skill_screen_ambient_seal_motion_is_pinned() -> str:
     ):
         require(marker in skill, f"native SkillScreen seal report lost marker {marker}")
     return "SkillScreen ambient seals retain deterministic sine placement and local phase"
+
+
+def test_native_skilldragger_threshold_hit_presentation_and_audio_are_pinned() -> str:
+    skill = SKILL_DOC.read_text(encoding="utf-8")
+    classes = json.loads(CLASS_CATALOG.read_text(encoding="utf-8"))
+    audio = json.loads(AUDIO_CATALOG.read_text(encoding="utf-8"))
+    for marker in (
+        "2026-08-26 corrective SkillDragger closure",
+        "`0x0078473C = 9`",
+        "`0x007849B0 = 40`",
+        "`0x00784D58 = 1.25`",
+        "Skills record\n  `164`",
+        "strictly greatest\n  positive overlap area",
+        "A rejected drop mutates nothing and is\n  silent",
+        "same live HUD rectangles moved by modal writer\n  `0x005C7200`",
+    ):
+        require(marker in skill, f"native SkillDragger report lost marker {marker}")
+    dragger = class_row(classes, "SkillDragger")
+    require(
+        slot_function(dragger, "0x0C")[0] == "0x0065E4D0",
+        "SkillDragger lost its pointer render owner",
+    )
+    require(
+        slot_function(dragger, "0x6C")[0] == "0x006564A0",
+        "SkillDragger lost its release owner",
+    )
+    entries = {entry["registry_index"]: entry for entry in audio["compiled_registry"]}
+    require(
+        entries[1]["path_without_extension"] == "sounds\\pickskill",
+        "SkillDragger accepted-drop audio is not registry entry 1 pickskill",
+    )
+    return "SkillDragger threshold, moving art, overlap hit, audio, and teardown are pinned"
+
+
+def test_tutorial_camera_enemy_and_gate_contact_memberships_are_pinned() -> str:
+    gate = GATE_DOC.read_text(encoding="utf-8")
+    tutorial = TUTORIAL_DOC.read_text(encoding="utf-8")
+    for marker in (
+        "2026-08-26 Gate contact membership correction",
+        "`PlayerWizard` constructor `0x0052B4C0` writes flags `0x801`",
+        "Common Badguy constructor\n  `0x00473390` writes flags `0x2`",
+        "`0x80 & 0x100 == 0`",
+        "active for enemies even though they cannot push the leaf",
+    ):
+        require(marker in gate, f"native Gate report lost hostile-contact marker {marker}")
+    for marker in (
+        "2026-08-26 live-enemy transition correction",
+        "no branch changes player or enemy movement bounds",
+        "no branch relocates, retires, damages, or retargets a live Badguy",
+        "keep the full\nTutorial camera active whenever any registered enemy circle or ground Sack",
+        "it neither teleports nor deletes an actor",
+    ):
+        require(marker in tutorial, f"Tutorial report lost live-enemy camera marker {marker}")
+    return "Tutorial camera cleanup and asymmetric player/enemy Gate contact are pinned"
 
 
 if __name__ == "__main__":

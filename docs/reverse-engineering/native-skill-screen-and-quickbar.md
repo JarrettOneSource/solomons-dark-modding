@@ -283,6 +283,50 @@ continues to own the wizard's robe/hat appearance. Spell dispatch, mana cadence,
 Staff cast pose, audio, HUD icon, and projectile family follow the selected
 primary row.
 
+### 2026-08-26 corrective SkillDragger closure
+
+A user report that dragging a spell did nothing reopened the drag member that
+the 2026-08-25 presentation pass had called exact. That claim was premature:
+the old browser journey used Playwright `dragTo` against the transparent DOM
+quickbar action, so it never proved that a pointer released over the painted
+live belt followed the native hit owner. A fresh read-only replica pass against
+the same retail image closes the complete transient drag contract:
+
+- `HoverButton` movement handler `0x00656980` compares pointer displacement
+  squared with float `0x0078473C = 9`. Drag begins only on the strict `>9`
+  branch, i.e. after more than three screen pixels; the prior Website used
+  `>16`.
+- That branch destroys the live HoverBox, constructs one `0x80`-byte
+  `SkillDragger`, stores the exact skill id at `+0x78` and the parent
+  SkillScreen at `+0x7C`, attaches it at screen `+0xA0`, and transfers pointer
+  capture to the transient owner. Cancellation/ordinary release destroys it.
+- `SkillDragger::Render 0x0065E4D0` reads the live pointer
+  `0x0082025C/+0x04` every paint. At that exact center it draws Skills record
+  `164` in the skill's native root color, then the authored icon selected from
+  Skills `27..122`, both at scale `0x00784D58 = 1.25`. Spell Welding row 52
+  uses its live build icon through the same wizard-skill owner. There is no
+  stationary source-card substitute.
+- Release `0x006564A0` centers a `40 x 40` rectangle
+  (`0x007849B0 = 40`) on the pointer and passes it to `0x005C7090`. The latter
+  intersects that rectangle with all eight live `BeltButton` rectangles
+  (`Game+0x5EC`, stride `0xEC`) in slot order and selects the strictly greatest
+  positive overlap area. A pointer point need not itself be inside the winning
+  slot; equal overlap retains the earlier slot.
+- An accepted drop overwrites only the winning slot, refreshes it, and plays
+  registry entry 1 `sounds\\pickskill` at gain one (`Game` audio registry
+  `+0x18 -> Sound::Play 0x00407B70`). A rejected drop mutates nothing and is
+  silent. Both paths destroy the `SkillDragger` immediately.
+- The rectangles are the same live HUD rectangles moved by modal writer
+  `0x005C7200`; hit testing cannot remain at the unslid belt positions while
+  the painted SkillScreen belt is at progress one.
+
+The complete draggable membership remains every learned category-1 primary
+and category-2 secondary, including Welding row 52. Categories 0/4 remain
+passive and category 3 remains the separate click/concentration path. Hub and
+Boneyard use the same SkillScreen owner; mouse and a browser Pointer Events
+projection must feed the same threshold, pointer-centered overlap, accepted /
+rejected sound, and teardown contract.
+
 ## Automatic population
 
 `0x005C85E0` is the first-empty-slot helper. It scans the eight `BeltButton`
