@@ -460,6 +460,24 @@ not establish a party-invitation producer, and the closed player-chat census
 found none. No native catalog row or trigger attribution is changed by the
 Website mapping above.
 
+## 2026-08-26 post-Tutorial College music selector correction
+
+Fresh direct-reference and callback recovery closes the two Academy song rows
+for the special College admission. Courtyard vtable slot `+0xB8` is
+`0x00508B20`; it resets the region audio state and passes the literal
+`academy` to the ordinary music request. Direct gameplay references at
+`0x0050F8E0`, `0x00510DA0`, `0x00511080`, and `0x00512C60` retain the same
+current College song. The `academyold` literal has no direct gameplay or Region
+caller in retail 0.72.5: its only recovered reference is the generic scripting
+dispatcher `0x00689750`.
+
+Consequently Title records 7/9, the forced Courtyard walk, the Office walk, and
+the automatic Archchancellor introduction all remain under song `academy`
+(module offset 101). Offset-126 `academyold` is parser-addressable legacy
+content, not an alternate intro cue. Browser validation must establish a
+successful media start followed by nonzero gain and advancing playback time;
+merely mapping the filename or observing a `play()` attempt is insufficient.
+
 ## Reproduction and verification
 
 Recover the compiled registry from the analyzed executable with:

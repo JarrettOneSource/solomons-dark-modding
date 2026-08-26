@@ -1020,3 +1020,105 @@ Office, has no cinematic timer, and never uses forced movement are invalidated.
 The story Office population, manual-exit/Create ownership, phase-zero dialogue
 graph, Polisher loop, and participant-local isolation remain valid downstream
 members.
+
+## 2026-08-26 correction: College music, pre-Create wizard, facing, and dialogue census
+
+The title-walk correction above recovered the admission path but did not close
+the presentation state riding on that path. Fresh read-only passes over retail
+0.72.5 close the music selector, starter appearance, facing owner, and every
+automatic dialogue edge from the Tutorial handoff through the Office.
+
+### Music owner
+
+Courtyard vtable slot `+0xB8` resolves to `0x00508B20`. That admission callback
+resets the region audio owner and requests the song name `academy` through the
+ordinary music selector. The other direct gameplay references at
+`0x0050F8E0`, `0x00510DA0`, `0x00511080`, and `0x00512C60` agree with the
+College/Hub owner. `academyold` has no direct Region or gameplay reference; its
+only recovered executable reference is the generic scripting dispatcher in
+`0x00689750`. The post-Tutorial title walk therefore plays `academy`, not
+`academyold`, and does not wait for Office or Create to begin music.
+
+### Pre-Create wizard appearance
+
+The special Game still constructs a normal `PlayerWizard` and
+`Skills_Wizard`, but the element root at progression `+0x82C` remains `-1`
+until Create confirmation. `PlayerWizard::Render 0x0054BA80` reaches equipped
+element helper `0x0053B1D0`; that helper returns before drawing when the live
+selection id is negative. A placeholder Ether/Arcane loadout is therefore not
+a valid presentation substitute: the admission wizard has no selected-element
+staff effect.
+
+`Gameplay_FinalizePlayerStart 0x005CFA80` constructs the starter Robe and Hat
+before Create and gives both objects the same primary color. The complete base
+color membership before jitter is:
+
+| Selection owner | Base RGBA |
+| --- | --- |
+| Ether root `8` | `(1, 0.1, 1, 1)` |
+| Fire root `16` | `(1, 0.1, 0.1, 1)` |
+| Air root `24` | `(0.1, 1, 1, 1)` |
+| Water root `32` | `(0.1, 0.5, 1, 1)` |
+| Earth root `40` | `(0, 0.75, 0, 1)` |
+| live College flag `DAT_00B3BCA0 != 0` | `(0.25, 0.5, 0.25, 1)` |
+
+The College flag overrides the unselected/default branch. Three consecutive
+unsigned `Float(0.1)` calls at `0x005CFCC2`, `0x005CFCE9`, and `0x005CFD10`
+add one non-negative jitter to R, G, and B. `0x0040F770` clamps the vector;
+`0x0040FC60` then applies the native `0.8` luminance mix, using weights
+`0.3086000085/0.6093999743/0.0820000023`, so each output channel is
+`0.8*luminance + 0.2*channel`. The Robe and Hat receive that identical
+primary float4 and an exact white secondary float4. Those real item colors
+survive Create; they are not re-derived from the eventual selected element.
+
+### Facing owner
+
+The base `Puppet` constructor `0x006287D0` initializes actor heading `+0x6C`
+to zero, but that constructor value is not the visible College-walk direction.
+Every active Courtyard tick reaches `0x00503CE0`, normalizes
+`splineTarget - actorPosition`, and calls `0x00503100`; the Office sibling
+`0x00504670` does the same after its room transform. `0x00503100` publishes the
+movement vector and its normalized angle. The first Courtyard target is
+therefore `(1074,839)` from `(972,1044)`, approximately `26.45` degrees and
+24-way facing index `2`. Subsequent visible frames follow the current spline
+target, including the westward bend near Title 9 and the Office approach. A
+fixed south-facing admission actor is not native.
+
+### Automatic dialogue census
+
+The string `ARCH_INTRO_0` at `0x00793550` has one story-construction reference,
+`0x00514478` inside builder `0x00513BE0`. The collision path described above
+automatically invokes exactly that graph on sixth eligible Archchancellor
+contact and its shipped voice is the only phase-zero automatic voice.
+`ARCH_Q1_0`, `ARCH_Q2_0`, `ARCH_Q3_0`, and `ARCH_DISMISS_0` are reached only
+from player choices/continuation. The Polisher's
+`POLISHER_INTRO_0/Q1_0/Q2_0/DISMISS_0` graph is present and interactable, but
+the forced spline never contacts or activates it. Title records 7 and 9 have
+no narration producer. Thus there is no second automatic line before or after
+`ARCH_INTRO_0`; all remaining phase-zero dialogue is player-driven.
+
+### Portable consequence
+
+The browser owner must request Academy at College admission, persist the native
+starter item tint rather than infer it from the placeholder config, suppress
+the element effect until Create has selected a loadout, and seed/advance facing
+from the authoritative spline target. Local prediction is allowed only if it
+consumes the same serialized College phase, cursor, transformed target, and
+Office speed; ordinary input prediction must not preserve an older facing over
+the forced native direction. Existing protocol support for optional
+Hat/Robe item tints can carry the color without a new wire shape. Browser proof
+must show audible, advancing Academy playback; a green/no-orb pre-Create
+wizard following the path direction; exact automatic `ARCH_INTRO_0`; and no
+automatic Polisher or extra title narration.
+
+The native first-question path is also the release boundary: it clears
+`DAT_00B3BCA0`, so forced movement stops before the player later exits the
+Office. The browser exposes additional accessibility close/Done routes that
+stock Chat does not expose at that point. Any such browser-only completion or
+skip must project to the same acknowledgement before dismissing the dialogue;
+closing only the view leaves authority in `arch-dialogue` and permanently
+seals movement. A saved participant already in Office with no live
+`collegeIntro` program, or already in the College loadout transition, has
+crossed that acknowledgement boundary and must not be rearmed merely because
+the broader loadout-pending bit remains true. The bit is cleared only after the
+existing post-Create Courtyard settlement.
