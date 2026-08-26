@@ -45,8 +45,8 @@ EXPECTED_ELEMENT_ROWS = (
     '| 9 | `belt.slot.6` | logical `[1018,832.5,1071,885.5]` | center-bottom; 60 px pitch | no draw | none | none | `0x005D3E10` |',
     '| 10 | `belt.slot.7` | logical `[1078,832.5,1131,885.5]` | center-bottom; 60 px pitch | no draw | none | none | `0x005D3E10` |',
     '| 11 | `belt.slot.0.input_hint` | authored `[483.5,877,505.5,908]`; clipped `[483.5,877,505.5,900]` | centered below slot 0; the bottom 8 px intentionally leave the viewport | `UI.100` (Manifest) | none | `5` | `0x005D3E10` |',
-    '| 12 | `belt.slot.3.count` | glyph `[671,888,679,897]`; backing glyph strip spans `[667.5,885,680.5,900]` | right/bottom badge on slot 3 | `UI.22` backing (Native) plus `Fonts.535-626@0x2A4C` | `Fonts` group 8, header `[10,3,28]`, measured line height 9 px; observed `3` is 8 px wide | `8..11` | `0x005D3E10`, `0x004A57C0`, `0x00415230` |',
-    '| 13 | `belt.slot.4.count` | glyph `[920,888,930,897]`; backing glyph strip spans `[917.5,885,930.5,900]` | right/bottom badge on slot 4 | `UI.22` backing (Native) plus `Fonts.535-626@0x2B20` | same group/header/9 px line; observed `4` is 10 px wide | `14..17` | `0x005D3E10`, `0x004A57C0`, `0x00415230` |',
+    '| 12 | `belt.slot.3.input_hint` | glyph `[671,888,679,897]`; backing glyph strip spans `[667.5,885,680.5,900]` | centered below slot 3 | `UI.22` backing (Native) plus `Fonts.535-626@0x2A4C` | `Fonts` group 8, header `[10,3,28]`, measured line height 9 px; default Health-Potion binding `3` is 8 px wide | `8..11` | `0x005D3E10`, `0x004A57C0`, `0x00415230`, `0x004299F0` |',
+    '| 13 | `belt.slot.4.input_hint` | glyph `[920,888,930,897]`; backing glyph strip spans `[917.5,885,930.5,900]` | centered below slot 4 | `UI.22` backing (Native) plus `Fonts.535-626@0x2B20` | same group/header/9 px line; default Mana-Potion binding `4` is 10 px wide | `14..17` | `0x005D3E10`, `0x004A57C0`, `0x00415230`, `0x004299F0` |',
     '| 14 | `progression.xp.fill` | maximum `[798,833,802,881]`; live 45/90 clip `[798,857,802,881]` | center-bottom; 4 x 48 maximum, bottom-fixed at `y=881`, grows upward | `UI.81` (Native `images/UI.bundle`, record 81; UI object `+0x3E3C`) | none | `18` | `0x005D2B0C`, `0x00414D00` |',
     '| 15 | `progression.xp.track` | `[794.5,829,806.5,885]` | center-bottom; 12 x 56 frame centered at `x=800`, bottom inset 15 | `UI.82` (Manifest) | none | `19` | `0x005D2B0C`, `0x004142E0` |',
     '| 16 | `mana.track` | baseline `[850,14.5,960,34.5]`; dynamic width | center-top; left edge fixed at `center+50`, grows right | `UI.70` (Native `images/UI.bundle`, record 70) | none | `20..22` | `0x005D2520`, `0x00415230`, `0x00420EC0` |',
@@ -154,7 +154,7 @@ def _expected_element_rows() -> dict[str, dict[str, str]]:
         )
     if not {
         "cast.primary.card",
-        "belt.slot.3.count",
+        "belt.slot.3.input_hint",
         "progression.xp.fill",
         "notification.gold",
     }.issubset(ids):
@@ -300,8 +300,8 @@ def _assert_element_row_matches_fixture(
         )
     else:
         font_contract = row["font"]
-        if element_id == "belt.slot.4.count":
-            font_contract = _expected_element_rows()["belt.slot.3.count"]["font"]
+        if element_id == "belt.slot.4.input_hint":
+            font_contract = _expected_element_rows()["belt.slot.3.input_hint"]["font"]
         header = re.search(r"header `\[(\d+),(\d+),(\d+)\]`", font_contract)
         if header is not None and font.get("header") != [
             int(header.group(1)),

@@ -882,7 +882,7 @@
         "reference_scenario": "full_health"
       },
       {
-        "alignment": "right/bottom count badge over health-potion slot",
+        "alignment": "centered input hint below health-potion slot",
         "anchor": "center-bottom",
         "asset_source": {
           "bundle": "images/Fonts.bundle",
@@ -916,12 +916,13 @@
           "records": "535..626",
           "renderer": "0x004A57C0"
         },
-        "id": "belt.slot.3.count",
+        "id": "belt.slot.3.input_hint",
         "logical_rect": null,
         "native_addresses": [
           "0x005D3E10",
           "0x004A57C0",
-          "0x00415230"
+          "0x00415230",
+          "0x004299F0"
         ],
         "native_rect": [
           671,
@@ -929,12 +930,12 @@
           679,
           897
         ],
-        "notes": "",
+        "notes": "Default Health-Potion input binding 3, not stack quantity.",
         "observation": "live-settled",
         "reference_scenario": "full_health"
       },
       {
-        "alignment": "right/bottom count badge over mana-potion slot",
+        "alignment": "centered input hint below mana-potion slot",
         "anchor": "center-bottom",
         "asset_source": {
           "bundle": "images/Fonts.bundle",
@@ -968,12 +969,13 @@
           "records": "535..626",
           "renderer": "0x004A57C0"
         },
-        "id": "belt.slot.4.count",
+        "id": "belt.slot.4.input_hint",
         "logical_rect": null,
         "native_addresses": [
           "0x005D3E10",
           "0x004A57C0",
-          "0x00415230"
+          "0x00415230",
+          "0x004299F0"
         ],
         "native_rect": [
           920,
@@ -981,7 +983,7 @@
           930,
           897
         ],
-        "notes": "",
+        "notes": "Default Mana-Potion input binding 4, not stack quantity.",
         "observation": "live-settled",
         "reference_scenario": "full_health"
       },
@@ -1813,7 +1815,7 @@
         685,
         900
       ],
-      "id": "belt.slot.3.count",
+      "id": "belt.slot.3.input_hint",
       "kind": "element",
       "path": "/mnt/d/codex-evidence/uire-20260806/hud-crops/20260806T115705Z/elements/belt-slot-3-count.png",
       "scenario": "full_health",
@@ -1828,7 +1830,7 @@
         936,
         900
       ],
-      "id": "belt.slot.4.count",
+      "id": "belt.slot.4.input_hint",
       "kind": "element",
       "path": "/mnt/d/codex-evidence/uire-20260806/hud-crops/20260806T115705Z/elements/belt-slot-4-count.png",
       "scenario": "full_health",
