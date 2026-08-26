@@ -137,6 +137,33 @@ def test_native_skilldragger_threshold_hit_presentation_and_audio_are_pinned() -
     return "SkillDragger threshold, moving art, overlap hit, audio, and teardown are pinned"
 
 
+def test_native_beltbutton_pull_off_release_and_burst_are_pinned() -> str:
+    skill = SKILL_DOC.read_text(encoding="utf-8")
+    classes = json.loads(CLASS_CATALOG.read_text(encoding="utf-8"))
+    audio = json.loads(AUDIO_CATALOG.read_text(encoding="utf-8"))
+    for marker in (
+        "2026-08-26 corrective BeltButton pull-off closure",
+        "strict threshold `length > 50.0`",
+        "release-callback byte\n  `+0x7B = 1`",
+        "press-callback byte `+0x7C = 0`",
+        "exactly 24 UI-record-65 bouncers",
+        "four or three moving/fading\n  UI-record-69 members",
+        "There is no stock\nbelt-to-belt move operation",
+    ):
+        require(marker in skill, f"native BeltButton pull-off report lost marker {marker}")
+    belt = class_row(classes, "BeltButton")
+    require(
+        slot_function(belt, "0x68")[0] == "0x005C7DF0",
+        "BeltButton lost its pressed-movement pull-off owner",
+    )
+    entries = {entry["registry_index"]: entry for entry in audio["compiled_registry"]}
+    require(
+        entries[73]["path_without_extension"] == "sounds\\poof",
+        "BeltButton pull-off audio is not registry entry 73 poof",
+    )
+    return "BeltButton release-only activation, strict pull-off, poof, and complete burst are pinned"
+
+
 def test_tutorial_camera_enemy_and_gate_contact_memberships_are_pinned() -> str:
     gate = GATE_DOC.read_text(encoding="utf-8")
     tutorial = TUTORIAL_DOC.read_text(encoding="utf-8")

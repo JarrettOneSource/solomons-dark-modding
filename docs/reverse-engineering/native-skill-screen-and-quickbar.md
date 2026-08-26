@@ -346,6 +346,11 @@ image closes that omitted sibling:
   computes Euclidean length, and uses the strict threshold `length > 50.0`
   (`double 0x007847C8`). Motion of exactly 50 does not clear the slot. The
   visual displacement field at button `+0xC0` is `length / 5` while held.
+- Common `Button` construction `0x00430430` initializes release-callback byte
+  `+0x7B = 1` and press-callback byte `+0x7C = 0`. `0x00430890` therefore
+  captures the press without invoking the BeltButton action; ordinary release
+  `0x00430A40` invokes it. A successful pull-off clears the entry before that
+  release path, so removing a skill cannot cast it as a side effect.
 - The accepted movement edge is immediate; it does not wait for pointer
   release and does not create a movable belt-to-belt dragger. It plays registry
   row 73, `sounds\\poof`, at gain one, then `0x005C79C0` writes the complete

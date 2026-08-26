@@ -94,6 +94,7 @@ from static_re_native_hud_contracts import (
     test_tutorial_pointer_quad_pivot_and_complete_call_membership_are_pinned,
 )
 from static_re_native_hud_skill_selector_contracts import (
+    test_native_beltbutton_pull_off_release_and_burst_are_pinned,
     test_native_hud_skill_selector_ownership_geometry_and_audio_are_pinned,
     test_native_skilldragger_threshold_hit_presentation_and_audio_are_pinned,
     test_native_skill_screen_ambient_seal_motion_is_pinned,
@@ -1122,6 +1123,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native SkillDragger threshold, hit, presentation, and audio are pinned",
         test_native_skilldragger_threshold_hit_presentation_and_audio_are_pinned,
+    ),
+    (
+        "Native BeltButton release and pull-off burst are pinned",
+        test_native_beltbutton_pull_off_release_and_burst_are_pinned,
     ),
     (
         "Tutorial camera enemy and Gate contact memberships are pinned",
