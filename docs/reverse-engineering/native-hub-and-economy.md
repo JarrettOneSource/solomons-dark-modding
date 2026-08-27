@@ -1805,6 +1805,15 @@ Website interaction extension when the owner requests it; it must call the
 same authoritative compatibility and attach transaction and must not replace
 stock double activation.
 
+The same-object branch for Item_Sack type 7008 is not an equip/use no-op.
+`0x0056D920` pushes `InventoryScreen+0x158` onto the parent-root stack at
+`+0x174/+0x184`, switches the visible grid to the Sack root returned by
+`0x00570C10`, and starts the paired-page transition at `+0x168/+0x16C/+0x170`.
+This accepts empty and nested Sacks. Game-back pops one root before the outer
+screen may close. The full 10-pixel-per-tick motion and backpack-open/close
+audio contract is owned by
+`native-items-equipment-and-loot.md#item_sack-inventoryscreen-navigation`.
+
 `InventoryScreen::PointerRelease` (`0x0056FC90`) retains the 10-pixel drag
 threshold and the detached `InventoryDragger`. Compatibility is exactly
 `0x00570CD0`: sink 1 Hat, 2 Robe, 4 Staff/Wand, 5 Ring, 6 Amulet, while the
@@ -1832,6 +1841,7 @@ Complete disposition for this correction:
 | Member | Native owner | Disposition |
 | --- | --- | --- |
 | live-object first selection and 50-tick same-object activation | `0x0056F760`, `0x0056D920` | native contract retained |
+| Item_Sack child-root open/back stack | `0x0056D920`, `0x00551A10` | native contract retained; reopened Website flat projection corrected by the 2026-08-27 pass |
 | null-hit deselection plus ItemInfo teardown | `0x0056F760` | Website implemented and Mac-validated |
 | typed sink admission | `0x00570CD0` | native contract retained |
 | 10-pixel drag, accepted swap, single unequip, invalid restore | `0x0056FC90`, `InventoryDragger` | Website implemented and Mac-validated |

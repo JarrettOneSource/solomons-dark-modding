@@ -479,6 +479,16 @@ retains only the last, then assigns subtype 5 before building the intended six
 entries. The first three are leaks, not observable rewards; a browser port
 must produce the six listed potions without reproducing allocator garbage.
 
+Those table rows describe the construction sequence, not the finished live
+child list. Every Goodie insertion calls `0x0055FF20` with both boolean
+operands equal to one (`0x0061FAB3..0x0061FABA` and sibling sites), enabling
+Potion-only same-subtype stacking. The final Item_Sack root therefore contains
+one subtype-0 Potion with count 5 for selectors 0..3, one subtype-1 Potion with
+count 6 for selectors 4..7, and selector 17 contains subtypes `5,0,1,4,2` with
+counts `1,1,1,1,2`. All constructed and leaked Potion objects still consume
+their live UIDs before merging/destruction; only the first same-subtype node
+survives.
+
 ### Ground actors and script drops
 
 Types 2011, 2012, 2013, and 2038 do not reroll a category when ticked. They

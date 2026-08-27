@@ -149,6 +149,43 @@ objects, participates in recursive potion/type lookup, and is opened as an
 inventory root rather than consumed. Its help text at `0x00571BF0` reports
 the contained item count or that it is empty.
 
+### Item_Sack InventoryScreen navigation
+
+`InventoryScreen` does not flatten every nested root into one visible grid.
+The current visible `SdItemListRoot*` is at screen `+0x158`; the parent-root
+stack begins at `+0x174` and its count is at `+0x184`. Activation handler
+`0x0056D920` resolves the selected live item. For type 7008 it always accepts
+the activation, including an empty Sack, pushes the current root, switches
+`+0x158` to `Item_Sack_GetInventoryRoot (0x00570C10)`, and writes the owning
+Sack into child root `+0x08`. The grid then contains only that root's direct
+children. Nested Sacks repeat the same transition.
+
+Game-back in `0x0056D920` pops exactly one parent root while the stack is
+nonempty. Only game-back at the outer root closes the InventoryScreen. The
+transition-active byte is `+0x168`, the page-motion countdown is `+0x16C`,
+and signed direction is `+0x170`: `+1` opens a child from the right while the
+old page moves left; `-1` returns to a parent from the left while the child
+moves right. `InventoryScreen_Update (0x00551A10)` moves both InventoryGrid
+pages by exactly 10 stage pixels per 100 Hz update and ignores another
+activation until the full client-width traversal completes. At the stock
+1600-wide stage this is exactly 160 updates / 1.6 seconds.
+
+Opening a child root requests compiled registry member 5,
+`sounds\\backpack_open`, at gain 1 and default pitch through `0x00407B70`.
+Returning to a parent requests member 4, `sounds\\backpack_close`, at gain 1.
+Closing the outer InventoryScreen instead requests member 64,
+`sounds\\openpanel`. Standalone construction at `0x005C6F10` is silent and
+is shared by the ordinary gameplay Inventory control, so Sack navigation has
+no Hub-versus-Boneyard scene gate and no inventory mutation or network state.
+
+This page-navigation action is distinct from
+`Inventory_EquipAllEligible (0x0056B090)`. The common use dispatcher
+`0x0056D1B0` and a compatible drag/equipment route can pass an Item_Sack to
+that sibling operation. It walks eligible Hat, Robe, Staff, Wand, Amulet, and
+Ring children, applies the item-level gate at `0x00577900`, swaps displaced
+equipment back into the same Sack, and plays `backpack_open` at pitch 0.8 and
+gain 1. It does not own the InventoryScreen child-root transition.
+
 ### Recipe, set, and FX objects
 
 `ItemRecipe_Ctor (0x00573410)` creates type 6003 and initializes its parent

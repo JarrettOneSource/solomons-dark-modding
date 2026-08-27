@@ -1154,6 +1154,17 @@ Pickup collision, exact-pointer inventory transfer, and final Sack destruction
 are mapped in
 [native-items-equipment-and-loot.md](native-items-equipment-and-loot.md).
 
+Every Goodie call to `Inventory_InsertOrStackItem (0x0055FF20)` passes both
+boolean operands as one (`PUSH 1; PUSH 1` at `0x0061FAB3..0x0061FABA` and all
+sibling rows). Consequently the authored multiplicities are not separate live
+Potion nodes inside the finished Sack. Selectors 0..3 retain one subtype-0
+Potion with stack count 5; selectors 4..7 retain one subtype-1 Potion with
+stack count 6. Selector 17 retains five Potion nodes in subtype order
+`5,0,1,4,2`, with counts `1,1,1,1,2`. Every attempted Potion construction
+still consumes its own live UID before a matching later node is merged and
+destroyed, so the surviving first node's identity and the resulting UID gaps
+are both native behavior.
+
 ## Recipes, triggers, and timelines
 
 These are data objects consumed after the static layout is constructed:

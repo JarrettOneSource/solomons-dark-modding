@@ -452,12 +452,13 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
     if not isinstance(assets, dict) or {
         name: (assets.get(name, {}).get("registry_index"), assets.get(name, {}).get("sha256"))
         for name in (
-            "click", "backpack_close", "badaction", "dropcoins",
+            "click", "backpack_close", "backpack_open", "badaction", "dropcoins",
             "openpanel", "distortreality", "pickskill",
         )
     } != {
         "click": (0, "8aeebcfeb69625bee2ee78fe9c63939e6b40edcc89d5facf2c0d35e1b5920307"),
         "backpack_close": (4, "32fa4ca58d0fe1eb967bb50f20dffc0edb98b25ca74c719edc2b70b9e4312319"),
+        "backpack_open": (5, "8193adb7284d9c14c9045b7b9aaace7b17baa7f75eb8e77e82cb2ee2c572c81b"),
         "badaction": (6, "0ca71924473e6a45156f0dbd450ff7a158d39015179697c83c7b04824e3256d6"),
         "dropcoins": (25, "b72d44080d99fdae8e7dce83b5f1b6a553d503a753df2deacea7ee8829ba4376"),
         "openpanel": (64, "637a76288c852d813921c7789b211f573f88c56d6036e2e1f3e1cf558f0ae743"),
@@ -524,6 +525,30 @@ def test_native_hub_trader_ui_family_and_inventory_capture_are_pinned() -> str:
         raise StaticReTestFailure("inventory no longer retains the recovered 22 by 4 grid")
     if inventory.get("backpack_fill_order") != "column-major: index / 4 selects x; index % 4 selects y":
         raise StaticReTestFailure("inventory no longer retains the recovered column-major slot order")
+    if inventory.get("sack_root_navigation") != {
+        "activation_handler": "0x0056D920",
+        "item_type": 7008,
+        "item_root_accessor": "0x00570C10",
+        "current_root_field": "+0x158",
+        "parent_stack_field": "+0x174",
+        "parent_stack_count_field": "+0x184",
+        "transition_active_field": "+0x168",
+        "transition_countdown_field": "+0x16C",
+        "transition_direction_field": "+0x170",
+        "update": "0x00551A10",
+        "native_tick_ms": 10,
+        "stage_width": 1600,
+        "pixels_per_tick": 10,
+        "transition_ticks": 160,
+        "open_direction": 1,
+        "back_direction": -1,
+        "open_sound": "backpack_open",
+        "back_sound": "backpack_close",
+        "outer_close_sound": "openpanel",
+        "empty_sack_opens": True,
+        "network_state": False,
+    }:
+        raise StaticReTestFailure("Item_Sack InventoryScreen root navigation drifted")
     if (
         inventory.get("backpack_slot_center_origin") != [60, 532]
         or inventory.get("backpack_slot_visible_origin") != [24, 496]
