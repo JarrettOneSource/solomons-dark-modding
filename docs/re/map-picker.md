@@ -33,6 +33,58 @@ The start control is also the cancel/toggle control. Invoking it while the
 picker is present starts the picker's close fade without setting its launch
 sentinel. The picker is destroyed and no region transition is requested.
 
+## 2026-08-26 affordance and Hub-wide activation correction
+
+The start control is not a mutually exclusive compass/ready toggle. Fresh
+read-only instruction and asset inspection of the same retail image closes the
+complete five-record presenter in `0x0050DBF0`:
+
+| College record | Gameplay control field | Presenter branch |
+| ---: | ---: | --- |
+| 14 | `+0xAF0` | return arrow while a `MapPicker` exists and is not closing |
+| 15 | `+0xBB4` | unavailable symbol while Courtyard byte `+0x8EA0` is set |
+| 16 | `+0xC78` | fixed `121 x 118` parchment base |
+| 17 | `+0xD3C` | play triangle when no picker exists, and again while a picker closes |
+| 18 | `+0xE00` | compass layer |
+
+Records 17 and 18 are both submitted on every ordinary available frame. The
+Courtyard fixed tick `0x0050C970` increments the integer phase at `+0x8EA4`
+once per 100 Hz update. `0x0050DBF0` computes, with the retail float32 store
+boundaries:
+
+```text
+radians = f32(f32(tick) * f32(pi) / 180)
+compass_alpha = f32(0.5 + 0.5 * f32(sin(radians)))
+action_alpha = f32(1 - compass_alpha)
+```
+
+The compass and current action record therefore crossfade complementarily on
+a nominal 360-tick, 3.6-second sine cycle. The counter is not wrapped, so the
+retail float32 angle store preserves its tiny phase-rounding residual instead
+of bit-resetting at tick 360. Run-transition byte `+0x8EA8` forces
+`compass_alpha = 1` and `action_alpha = 0`. This supersedes the older
+interpretation that a fresh Hub shows only the compass and a separate
+selected/ready state shows only the play triangle.
+
+The same sweep closes reachability. `Game::RenderHud 0x005D2520` has exactly
+one affordance call, guarded by the persistent Courtyard pointer
+`DAT_00819A70`, not by the current fixed-room id or player coordinates.
+`Game_AttachRegion 0x005CBA00` attaches `Game+0xE00` with the other Hub HUD
+controls while that Courtyard owner exists. `Game_HandleControlAction
+0x005D8120` forwards it to the Courtyard action vtable, and the sole callback
+chain `0x00514A20 -> 0x0050E5E0` gates only the region fade at `+0x8E48`.
+There is no world radius, proximity test, or Courtyard-current-room branch.
+The control can therefore start/toggle a run from any stable College room;
+crossing a room fade remains input-blocked by the common fade gate.
+
+The optional rotated `CLICK HERE / WHEN YOU ARE / READY TO PLAY` painter is a
+sibling of the global teaching-hint system: it is separately gated by
+`DAT_00B3BCA1`, the no-picker/available/no-transition state, and application
+tick `% 200 > 20`. It is not another activation target. Connected
+non-authority suppression remains the loader policy documented in
+`../bugs/beta32-ungated-client-interactions-2026-08-04.md`; it does not change
+the offline/authority control contract above.
+
 ## Function map
 
 | Address | Recovered role |
