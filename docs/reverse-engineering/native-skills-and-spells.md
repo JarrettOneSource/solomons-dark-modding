@@ -624,14 +624,20 @@ The constructors/ticks are `0x0044AE50/0x0044B580` for
 `1..4` by `1.2`; concentrated Enchant Staff independently multiplies the
 action timing scalar at `+0x34` by `1.75`.
 
-The automatic admission and contact geometry are instruction-closed, but the
-admission owner has **two** ordered contact sources. The earlier one-list
-summary was incomplete. `GoodGuy_Ctor 0x0052A410` constructs the actor-owned
-contact `PointerList` at `PlayerWizard +0x13C`, with count `+0x144` and backing
-array `+0x150`. On a real player movement epoch,
-`PlayerActorTick 0x00548B00` first enables the Region's transient collision
-capture byte `+0x47C`, clears result count `+0x480`, and calls
-`PlayerActor_MoveStep 0x00525800` (`0x0054AFF1..0x0054B050`). Dynamic response
+The automatic admission and contact geometry are instruction-closed. The
+admission owner has **two** ordered contact sources, but both are subordinate
+to one movement epoch. The earlier current-contact summary omitted that outer
+gate. `PlayerActorTick 0x00548B00` compares the accumulated movement lane's
+squared magnitude with the strict float `0.01` threshold at
+`0x0054AD54..0x0054AD7B`. A value that does not exceed the threshold jumps to
+`0x0054B662`, past both Staff-admission branches. A stationary wizard therefore
+cannot start or repeat a Staff action from proximity alone.
+
+Inside a passing movement epoch, `GoodGuy_Ctor 0x0052A410` supplies the
+actor-owned contact `PointerList` at `PlayerWizard +0x13C`, with count `+0x144`
+and backing array `+0x150`. `PlayerActorTick` first enables the Region's
+transient collision capture byte `+0x47C`, clears result count `+0x480`, and
+calls `PlayerActor_MoveStep 0x00525800` (`0x0054AFF1..0x0054B050`). Dynamic response
 `0x00526520` appends each reportable root contact to the Region result list in
 solver order (`0x005267E5..0x00526832` and
 `0x005268EB..0x00526925`) while the shared circle response moves the pair to
@@ -647,7 +653,10 @@ flags are ignored without reopening the fallback. Only when the Region result
 count is zero does `0x0054B28D..0x0054B32F` scan the actor-owned `+0x13C`
 contact list in stored order and admit the first member with strict absolute
 heading delta below 50 degrees. `0x00537AA0` then requires equipped item type
-`0x1B5C`; empty hands and Wands do not construct a staff action.
+`0x1B5C`; empty hands and Wands do not construct a staff action. The fallback
+means "a moving wizard remains in facing-qualified current contact," not "an
+idle wizard is close enough." This outer movement gate applies equally to
+Skeleton, Archer, Mage, Imp, Zombie, Wraith, Demon, and hostile Maggot members.
 
 The StaffMelee constructor always consumes `Float(.05)` after the proc
 selection, stores progress `0.1+draw`, then consumes `Integer(8)` and

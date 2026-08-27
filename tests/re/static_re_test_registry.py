@@ -110,6 +110,7 @@ from static_re_native_hud_skill_selector_contracts import (
     test_native_skill_screen_ambient_seal_motion_is_pinned,
     test_tutorial_camera_enemy_and_gate_contact_memberships_are_pinned,
     test_tutorial_sirmin_wardrobe_override_is_pinned,
+    test_tutorial_movement_copy_completion_uses_the_authoritative_epoch,
 )
 from static_re_native_ui_kit_contracts import (
     test_native_ui_kit_catalog_is_complete_and_regenerable,
@@ -1176,6 +1177,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Tutorial Sirmin wardrobe override is pinned",
         test_tutorial_sirmin_wardrobe_override_is_pinned,
+    ),
+    (
+        "Tutorial movement copy completion uses the authoritative epoch",
+        test_tutorial_movement_copy_completion_uses_the_authoritative_epoch,
     ),
     (
         "Webgame asset manifest schema and provenance are pinned",

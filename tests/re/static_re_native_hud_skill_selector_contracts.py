@@ -204,5 +204,21 @@ def test_tutorial_sirmin_wardrobe_override_is_pinned() -> str:
     return "Tutorial Hat/Robe tan override and independent Ether Staff effect are pinned"
 
 
+def test_tutorial_movement_copy_completion_uses_the_authoritative_epoch() -> str:
+    tutorial = TUTORIAL_DOC.read_text(encoding="utf-8")
+    for marker in (
+        "2026-08-27 movement-copy completion correction",
+        "authoritative movement epoch",
+        "strict squared `0.01` test",
+        "`0x0054AD54..0x0054AD7B`",
+        "input that is sealed by another owner",
+        "forced intro velocity without user input",
+        "the player completed an admitted movement epoch",
+        "retains the stage-0 teaching copy until its independent",
+    ):
+        require(marker in tutorial, f"Tutorial movement-copy report lost marker {marker}")
+    return "Tutorial movement copy completion is epoch-gated and distinct from stock stage progression"
+
+
 if __name__ == "__main__":
     print(test_native_hud_skill_selector_ownership_geometry_and_audio_are_pinned())

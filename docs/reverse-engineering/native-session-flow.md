@@ -961,6 +961,26 @@ by exact double `0.005200000014156103` each tick. Courtyard presentation
 - both are destroyed with the admission/region presentation; neither belongs
   to the ordinary stable title menu or ordinary Courtyard.
 
+The fixed-tick card timeline is exact. With cursor zero before the first active
+Courtyard tick, record 7 owns ticks 0 through 769. Tick 770 advances the cursor
+from `3.9988000108860433` to `4.004000010900199` and is the first record-9
+tick. Tick 962 is the first tick whose cursor
+would exceed five and is therefore clamped to the terminal spline point. The
+record-9 alpha continues to rise afterward because it remains multiplied by
+the independently fading uncovered-region term until the Courtyard owner is
+destroyed. No wall-clock timeout, dialogue event, player input, or render-frame
+counter switches either card.
+
+Clean retail observation agrees with that ownership. Task-owned capture
+`native-title-walk-probe.mp4` (SHA-256
+`fb4f8863456261facdfe1189ff78b337f17e1a8996059485a8cc2fb9efd8d589`), from
+unmodified retail 0.72.5, shows the Tutorial terminal world, black front-end
+handoff, then the covered Courtyard reveal with record 7 still live throughout
+the sampled 9.5 through 11.9 second frames. It does not place either title in
+the opening Tutorial Boneyard or over the ordinary title menu. Instruction
+truth, rather than that recording's start offset, owns the 770/962 tick
+boundaries.
+
 ### Authored Office walk and automatic dialogue
 
 With the admission flag still live, Office constructor `0x00509C70` builds a

@@ -87,6 +87,25 @@ generalize the requested selective hold into the ordinary Boneyard pause
 system: a normal gameplay pause also seals the very primary-cast action that
 must release this lesson.
 
+### 2026-08-27 movement-copy completion correction
+
+The browser-only first-movement acknowledgement must consume the same
+authoritative movement epoch as the stock PlayerActor kernel, not a raw
+nonzero input sample. `PlayerActor::Tick 0x00548B00` enters movement only when
+the accumulated lane passes the strict squared `0.01` test at
+`0x0054AD54..0x0054AD7B`. The Website may hide its configured desktop/mobile
+copy after a user-authenticated input produces that admitted epoch. It may not
+hide for input that is sealed by another owner, for a below-threshold lane, or
+for the Tutorial's forced intro velocity without user input. The existing
+persisted boolean remains a browser projection; its corrected meaning is
+"the player completed an admitted movement epoch," not "the host observed a
+nonzero input component."
+
+Stock itself retains the stage-0 teaching copy until its independent
+distance-from-anchor transition advances the controller. The browser's earlier
+hide edge remains an explicit requested accessibility policy and must not
+change stage, narration, Dig-pointer, or forced-intro ownership.
+
 ## Address and evidence conventions
 
 Addresses are original virtual addresses for the shipped executable with image

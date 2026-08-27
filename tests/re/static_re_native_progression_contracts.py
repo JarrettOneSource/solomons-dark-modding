@@ -872,6 +872,10 @@ def test_native_staff_admission_distinguishes_movement_and_current_contact() -> 
         "`PlayerWizard +0x13C`",
         "count `+0x144` and backing",
         "array `+0x150`",
+        "strict float `0.01` threshold",
+        "`0x0054AD54..0x0054AD7B`",
+        "jumps to `0x0054B662`",
+        "A stationary wizard therefore cannot start or repeat a Staff action",
         "Region's transient collision",
         "capture byte `+0x47C`",
         "result count `+0x480`",
@@ -886,7 +890,7 @@ def test_native_staff_admission_distinguishes_movement_and_current_contact() -> 
             raise StaticReTestFailure(
                 f"native Staff contact ownership lost witness {token!r}"
             )
-    return "Staff walk-in and persistent contact admission remain distinct and address-pinned"
+    return "Staff admission is movement-gated before both distinct contact sources"
 
 
 def test_native_progression_five_live_effect_formulas_are_pinned() -> str:

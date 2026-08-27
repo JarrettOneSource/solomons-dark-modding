@@ -363,6 +363,16 @@ a captured flags-`0x2` actor starts the automatic action without a second
 distance or heading test. Recomputing contact from only the resolved centres
 therefore loses native information.
 
+The Staff consumer does not run on an idle tick. The strict movement test at
+`0x0054AD54..0x0054AD7B` encloses capture, `MoveStep`, the nonempty Region-result
+branch, and the zero-result GoodGuy-list fallback. When accumulated movement
+squared is not greater than float `0.01`, control jumps directly to
+`0x0054B662`; neither `0x0054B0AB` nor `0x0054B28D` is reachable. A port must
+therefore carry the movement-epoch fact beside the ordered contact results.
+Projecting the persistent fallback from settled proximity without that fact
+causes stationary, facing players to auto-melee repeatedly, which stock cannot
+do.
+
 Implementation consequence for ports: changing from a fixed Region to Arena
 may replace the authored static geometry adapter, but it must keep the shared
 actor-body response around that adapter. Applying Arena scenery collision
