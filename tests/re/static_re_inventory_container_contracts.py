@@ -279,6 +279,7 @@ def test_inventory_sack_pages_and_heterogeneous_belt_are_pinned() -> str:
     item_report = read_text(
         ROOT / "docs/reverse-engineering/native-items-equipment-and-loot.md"
     )
+    hud_report = read_text(ROOT / "docs/reverse-engineering/native-hud.md")
     belt_report = read_text(
         ROOT / "docs/reverse-engineering/native-skill-screen-and-quickbar.md"
     )
@@ -310,6 +311,21 @@ def test_inventory_sack_pages_and_heterogeneous_belt_are_pinned() -> str:
             "0x0056EC30 -> Game_BindBeltDrop 0x005C7090",
             "Item_Misc alone",
             "The belt never steals item ownership",
+        ),
+        failures,
+    )
+    _require(
+        "InventoryScreen backpack return-control report",
+        item_report + hud_report,
+        (
+            "Game+0x22C",
+            "Game+0x2B8",
+            "UI record 47",
+            "UI+0x2434",
+            "black shadow at `+5,+5`",
+            "[730.5,840,788.5,902]",
+            "no Sack-specific arrow",
+            "UI record 48",
         ),
         failures,
     )

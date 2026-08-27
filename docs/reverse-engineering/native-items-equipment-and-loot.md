@@ -178,6 +178,31 @@ Closing the outer InventoryScreen instead requests member 64,
 is shared by the ordinary gameplay Inventory control, so Sack navigation has
 no Hub-versus-Boneyard scene gate and no inventory mutation or network state.
 
+#### InventoryScreen return affordance (2026-08-27 secondary correction)
+
+The page-stack recovery above did not inventory the visible control that
+submits game-back. That painter is not owned by `Item_Sack` or either
+`InventoryGrid` page. `Game` constructs one backpack control at `Game+0x22C`
+inside `0x005D76C0`, assigns UI record 47 from `UI+0x2434` to the control at
+`Game+0x2B8`, and retains that same record at the participant root and every
+Sack depth. The 58 by 62 base glyph has a black copy at `(x+5,y+5)`; there is
+no Sack-specific arrow, breadcrumb, alternate record, or depth gate.
+
+`0x005C7200` moves the Game-owned backpack control down by `15*p` while the
+InventoryScreen modal opens or closes. At a 1600 by 900 backbuffer its settled
+base rect is `[730.5,840,788.5,902]`, with the last two authored pixels clipped
+by the viewport. The logical control rect is `[730.5,840,58,62]`.
+`0x0056D920` remains the consumer: a game-back action over a nonempty parent
+stack pops one root; the same action at the participant root closes the
+screen. Page-transition-active state ignores another action. Standalone
+Hub/College, active gameplay, and every companion InventoryScreen use this
+same cross-owner composition.
+
+The sibling tome control is UI record 48 at `Game+0x2EC`; it shares the Game
+layout and shadow/base painter but routes the independent SkillScreen. Belt
+buttons and XP are neighboring Game HUD members, not alternate Sack-return
+affordances.
+
 This page-navigation action is distinct from
 `Inventory_EquipAllEligible (0x0056B090)`. The common use dispatcher
 `0x0056D1B0` and a compatible drag/equipment route can pass an Item_Sack to

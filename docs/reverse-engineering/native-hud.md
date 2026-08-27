@@ -526,6 +526,37 @@ rectangles throughout opening. Closing sets the screen close byte and leaves
 the teaching stage at that edge; the teaching overlay is absent during the
 visual close ramp.
 
+### InventoryScreen reuse of the backpack control (2026-08-27 correction)
+
+A secondary Sack-navigation report exposed a missing membership row in the
+earlier page-stack pass. The visible return/exit affordance is the existing
+Game backpack control, not an `InventoryScreen` child. Fresh canonical-replica
+decompilation of `0x005D76C0`, `0x005C7200`, and `0x0056D920` confirms:
+
+- `Game+0x22C` is the 58 by 62 control; its image field at `Game+0x2B8`
+  receives UI record 47 (`UI+0x2434`) during Game construction;
+- the painter emits a black shadow at `+5,+5` and the untinted base, matching
+  the HUD census's `[730.5,825,793.5,892]` resting union;
+- `0x005C7200` changes only modal geometry. It has no read of the active
+  `InventoryScreen` root, parent-stack count, Sack pointer, or depth;
+- its complete xref set is four calls in two functions: InventoryScreen update
+  `0x00551A10` at `0x00551BC5/0x00551BF5` and SkillScreen update `0x006567E0`
+  at `0x0065682C/0x00656872`; no third modal owner consumes the writer;
+- the same UI-47 control therefore remains visible at the participant root,
+  inside empty or nonempty Sacks, through every nested parent, in gameplay,
+  and beside all companion services. It submits game-back: `0x0056D920` pops
+  one parent when available and closes only at the outer root;
+- UI record 48 at `Game+0x2EC` is the complete painter/layout sibling for the
+  independent SkillScreen. No alternate Sack arrow or breadcrumb record
+  exists.
+
+At settled inventory progress `p=1`, the backpack base is
+`[730.5,840,788.5,902]`; native viewport clipping removes its bottom two
+pixels. This is intentional stock composition, not evidence that the control
+should be hidden. Website validation must inspect the visible UI-47 pixels as
+well as the semantic hit target, because a transparent browser button can
+exercise the back state machine while the native affordance is absent.
+
 ## Tutorial teaching overlay (`0x005D08C0`)
 
 `0x005D08C0` is `Tutorial::Render` (class vtable `0x0079AFC4` slot `0x0C`;
