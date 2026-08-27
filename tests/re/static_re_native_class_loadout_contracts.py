@@ -230,6 +230,8 @@ EXPECTED_VARIABLE_STATS = {
 # capture envelope was frozen. Keep their document contract explicit without
 # pretending the older raw fixture sampled bytes outside its owned ranges.
 EXPECTED_DOCUMENT_ONLY_FIXED_STATS = {
+    "local_experience_admission": ("0x2C", "u8", 1, None),
+    "random_choice_boast_active": ("0x2D", "u8", 0, None),
     "pending_skill_choices": ("0x44", "i32", 0, "0x00000000"),
     "deferred_skill_choices": ("0x48", "i32", 0, "0x00000000"),
     "unforge_attempt_count": ("0x874", "i32", 0, "0x00000000"),

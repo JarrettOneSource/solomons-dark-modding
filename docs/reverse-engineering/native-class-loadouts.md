@@ -167,7 +167,7 @@ would otherwise lose byte identity. All 15 captures agree on every fixed value.
 | Field | Offset / storage | Initial value | Native source or status |
 | --- | --- | --- | --- |
 | local experience admission | `+0x2C u8` | `1` | constructor `0x006594E0`; `0x00680AB0` rejects XP when both this and nonlocal-mode admission are false |
-| random-choice Boast active | `+0x2D u8` | selected-Boast dependent | reset `0x0065F5B0` writes one iff `Gameplay+0x1D44 == 3`; serialized with progression |
+| random-choice Boast active | `+0x2D u8` | `0` | fresh constructor state; reset `0x0065F5B0` later writes one iff `Gameplay+0x1D44 == 3`; serialized with progression |
 | level | `+0x30 i32` | `1` | `Skills` constructor `0x006594E0` |
 | experience | `+0x34 f32` | `0` | `0x006594E0` |
 | previous experience threshold | `+0x38 f32` | `0` | `0x006594E0` |

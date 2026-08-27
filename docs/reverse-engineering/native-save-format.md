@@ -1211,7 +1211,7 @@ close in isolated instance `save-profile-template-20260826` with only an
 injected observation mod. It is 27,788 bytes, has SHA-256
 `d562fe8ec3db4a6159b6422913b7a0a5f4dfd14c974894af5861ce70e1ff0cfc`,
 and parses/re-encodes byte-identically. Its generated wizard is `POMPONIUS`,
-Fire/Mind, level 1. This is a controlled stock-writer template, not a clean-
+Fire/Arcane, level 1. This is a controlled stock-writer template, not a clean-
 stock visual capture; its only legal portable use is as a validated settled
 Hub object-graph base whose named semantic fields are patched and whose opaque
 siblings remain byte-identical.
