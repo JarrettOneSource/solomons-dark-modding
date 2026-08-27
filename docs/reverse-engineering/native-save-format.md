@@ -1304,3 +1304,40 @@ does not claim arbitrary in-flight native Arena actors, Region caches, Website
 party capabilities, or global leaderboard provenance can be translated between
 two different runtime engines. Those source bytes remain recoverable instead
 of being guessed.
+
+## 2026-08-27 stock-web-stock retail round trip
+
+The first complete browser-to-launcher-to-retail acceptance cycle exposed a
+second valid disk representation for an unselected Boast. Mac Chrome imported
+the controlled POMPONIUS stock profile into both anonymous IndexedDB and an
+authenticated cloud slot, resumed each in the Hub, and downloaded identical
+28,619-byte launcher archives with SHA-256
+`c70859cdb52e709a7e586bde542b200f9dc4c9f32c10bc7f7fa0528e5eb176c8`.
+The Win32 launcher imported that archive through `CloudSaveArchive.Import`,
+materialized its sole `_survival` Resume target, and launched the exact retail
+EXE with all mods disabled. Retail exposed `RESUME LAST GAME`, loaded the
+wizard into the Hub, and showed Fireball and Ring of Fire on the stock Skills
+screen before an ordinary `WM_CLOSE` save.
+
+Before retail load, `gamestate.sav` was 27,625 bytes with SHA-256
+`1655aa9b7cc5c6d6592ffe408110d4de0fe1a8ee7f733e4e1629c0a0786f8aef`.
+After retail's clean writer it was 26,897 bytes with SHA-256
+`0c6d19652ede0e6794b49de40c5d1eb8694f87cf195375d06f35a61dd979bbc9`.
+Both files retain selected Boast byte `0xFF` at Game child-5 payload `0x21E`.
+The browser archive carries the following native String as length zero. Retail
+rewrites it as length two with payload bytes `01 00`, shifting the following
+bridge String and Boneyard path by two bytes. The local wizard remains
+`POMPONIUS`; the selected path remains
+`data\\levels\\survival.boneyard`. This is a stock writer variant, not a
+different Boast lifecycle state.
+
+Consequently, a strict decoder accepts exactly two decoded statement values
+when the selected ID is `-1`: empty String or the one-byte `0x01` sentinel.
+The empty String may use either retail wire form already present in the corpus,
+length zero or length one containing only NUL. Non-null Boasts still require
+the exact authored statement for IDs
+0..4. The portable writer continues to emit the controlled empty encoding;
+accepting arbitrary control Strings would make layout discovery ambiguous and
+is forbidden. Confidence is HIGH: the hashes, payload offsets, launcher
+receipt, retail screenshots, and post-close bytes all belong to one isolated
+task-owned round trip.

@@ -1745,6 +1745,12 @@ def _native_boast_statement(selected: int | None) -> str:
     return NATIVE_BOAST_STATEMENTS[selected]
 
 
+def _native_boast_statement_matches(selected: int | None, value: str) -> bool:
+    if selected is None:
+        return value in ("", "\x01")
+    return value == _native_boast_statement(selected)
+
+
 def _native_game_layout(node: ChunkNode) -> dict[str, int]:
     path_offset, path_end, _ = _native_boneyard_span(node)
     candidates: list[dict[str, int]] = []
@@ -1754,7 +1760,9 @@ def _native_game_layout(node: ChunkNode) -> dict[str, int]:
             continue
         selected = None if raw_selected == 0xFF else raw_selected
         boast_span = _native_string_span(node.payload, selected_offset + 1)
-        if boast_span is None or boast_span[1] != _native_boast_statement(selected):
+        if boast_span is None or not _native_boast_statement_matches(
+            selected, boast_span[1]
+        ):
             continue
         bridge_span = _native_string_span(node.payload, boast_span[0])
         if bridge_span is None or bridge_span[0] != path_offset:

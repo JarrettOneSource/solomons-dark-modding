@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import base64
 from copy import deepcopy
+from dataclasses import replace
 import hashlib
 import json
 import re
@@ -36,6 +37,7 @@ from native_save_format import (
     decode_native_binding_state,
     decode_native_game_footer,
     decode_darkdata,
+    encode_syncbuffer,
     parse_syncbuffer,
     portable_profile_from_buffers,
     validate_portable_profile,
@@ -540,6 +542,53 @@ def test_native_portable_profile_progression_and_opaque_round_trip_are_exact() -
         decoded_base["progression"]["row_count"] == 83
         and len(parse_syncbuffer(gamestate).root.children) == expected["rootChildren"],
         "portable template lost the eight-child/83-row structural witness",
+    )
+
+    base_buffer = parse_syncbuffer(gamestate)
+    game_node = base_buffer.root.children[5]
+    canonical_null_boasts = (
+        b"\xff\x00\x00\x00\x00\x01\x00\x00\x00\x00",
+        b"\xff\x01\x00\x00\x00\x00\x01\x00\x00\x00\x00",
+    )
+    sentinel_null_boast = b"\xff\x02\x00\x00\x00\x01\x00\x01\x00\x00\x00\x00"
+    matches = [
+        (offset, canonical)
+        for canonical in canonical_null_boasts
+        for offset in range(len(game_node.payload) - len(canonical) + 1)
+        if game_node.payload.startswith(canonical, offset)
+    ]
+    _require(len(matches) == 1, "portable template null-Boast layout drifted")
+    selected_offset, canonical_null_boast = matches[0]
+    sentinel_payload = (
+        game_node.payload[:selected_offset]
+        + sentinel_null_boast
+        + game_node.payload[selected_offset + len(canonical_null_boast):]
+    )
+    root_children = list(base_buffer.root.children)
+    root_children[5] = replace(game_node, payload=sentinel_payload)
+    sentinel_buffer = replace(
+        base_buffer,
+        root=replace(base_buffer.root, children=tuple(root_children)),
+    )
+    sentinel_gamestate = encode_syncbuffer(sentinel_buffer)
+    sentinel_portable = portable_profile_from_buffers(
+        darkdata,
+        sentinel_gamestate,
+        str(expected["runName"]),
+    )
+    _require(
+        decode_gamestate_boast(parse_syncbuffer(sentinel_gamestate))
+        == {"selected": None, "failed": False, "succeeded": False}
+        and sentinel_portable["wizard"]["name"] == expected["wizardName"],
+        "stock null-Boast String sentinel no longer decodes as an unselected Boast",
+    )
+    document = read_text(DOC)
+    _require(
+        "2026-08-27 stock-web-stock retail round trip" in document
+        and "0c6d19652ede0e6794b49de40c5d1eb8694f87cf195375d06f35a61dd979bbc9"
+        in document
+        and "one-byte `0x01` sentinel" in document,
+        "stock round-trip null-Boast evidence is no longer pinned in the save contract",
     )
 
     changed = deepcopy(portable)
