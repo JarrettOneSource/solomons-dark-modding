@@ -558,6 +558,15 @@ Office exit later sets `Game+0x86 = 1` before attaching Create. Confirmation
 still refreshes selected skills but the guard prevents a second starter build;
 the existing College Hat/Robe colors intentionally survive that first Create.
 
+Fresh decompilation of common grant helper `0x00660320` closes the neighboring
+root-rank ambiguity. Its finalizer calls for `0,2,1,3,4,6,5,7` each reach the
+same permanent-rank increment/clamp path, so all eight root rows finish at rank
+one. Selected element/Discipline fields still alone govern offer membership,
+and the starting primary/secondary remain the displayed learned pair. The
+earlier Website-ledger claim that only the two selected roots receive rank is
+superseded; this correction belongs to every fresh constructor, not only the
+reported post-Game-Over member.
+
 ### Boundary dispositions
 
 | Branch/member | Disposition for Website `/game` | Reason |
