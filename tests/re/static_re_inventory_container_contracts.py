@@ -171,7 +171,14 @@ def test_nested_sack_inventory_preserves_owner_authored_container_paths() -> str
     _require(
         "binary layout",
         binary_layout,
-        ("sack_item_inventory_root_pointer=0x88",),
+        (
+            "sack_item_inventory_root_pointer=0x88",
+            "inventory_screen_current_root=0x158",
+            "inventory_screen_parent_root_stack=0x174",
+            "inventory_screen_parent_root_stack_count=0x184",
+            "sack_inventory_root_owner_uid=0x04",
+            "sack_inventory_root_live_owner=0x08",
+        ),
         failures,
     )
     _require(
@@ -181,7 +188,11 @@ def test_nested_sack_inventory_preserves_owner_authored_container_paths() -> str
             "Item_Sack_GetInventoryRoot",
             "sack + 0x88",
             "0x0056DE50",
-            "does not replace an inventory-screen browse root",
+            "0x0056D920",
+            "InventoryScreen+0x158",
+            "game-back later",
+            "sounds\\\\backpack_open",
+            "sounds\\\\backpack_close",
         ),
         failures,
     )
@@ -189,6 +200,8 @@ def test_nested_sack_inventory_preserves_owner_authored_container_paths() -> str
         "current browsed inventory root lives at `screen + 0x88`",
         "`InventoryScreen + 0x88` is the right UI browse seam",
         "keep `InventoryScreen + 0x88` on the local owner root",
+        "does not replace an inventory-screen browse root",
+        "does not open a replacement inventory-screen browse target",
     ):
         if stale_claim in inventory_notes:
             failures.append(
@@ -252,6 +265,92 @@ def test_nested_sack_inventory_preserves_owner_authored_container_paths() -> str
 
     return (
         "native sack contents are enumerated as a bounded owner-authored tree, "
-        "replicated with stable parent rows, exposed through Lua, and covered by "
-        "a two-account Steam verifier"
+        "replicated with stable parent rows, browsed through screen-local pages, "
+        "exposed through Lua, and covered by a two-account Steam verifier"
+    )
+
+
+def test_inventory_sack_pages_and_heterogeneous_belt_are_pinned() -> str:
+    """Inventory browse state and Game belt state must keep their native owners."""
+
+    binary_layout = read_text(ROOT / "config/binary-layout.ini")
+    inventory_notes = read_text(ROOT / "docs/inventory-item-investigation.md")
+    hub_report = read_text(ROOT / "docs/reverse-engineering/native-hub-and-economy.md")
+    item_report = read_text(
+        ROOT / "docs/reverse-engineering/native-items-equipment-and-loot.md"
+    )
+    belt_report = read_text(
+        ROOT / "docs/reverse-engineering/native-skill-screen-and-quickbar.md"
+    )
+
+    failures: list[str] = []
+    _require(
+        "InventoryScreen Sack page report",
+        inventory_notes + hub_report,
+        (
+            "InventoryScreen+0x158",
+            "0x0056D920",
+            "0x00560D30",
+            "0x00551A10",
+            "full 1,600-pixel stage width",
+            "160 ticks / 1.6 seconds",
+            "10 stage pixels per fixed tick",
+            "backpack_open",
+            "backpack_close",
+        ),
+        failures,
+    )
+    _require(
+        "Item_Sack lifecycle and belt report",
+        item_report,
+        (
+            "0x005A7520",
+            "0x00573E00",
+            "0x00570B90",
+            "0x0056EC30 -> Game_BindBeltDrop 0x005C7090",
+            "Item_Misc alone",
+            "The belt never steals item ownership",
+        ),
+        failures,
+    )
+    _require(
+        "heterogeneous BeltButton report",
+        belt_report,
+        (
+            "BeltButton is heterogeneous, not skill-book state",
+            "0x1B65",
+            "0x1B66",
+            "0x1B67",
+            "another admitted item runtime type",
+            "Game_RefreshBelt 0x005D50E0",
+            "InventoryDragger release `0x0056EC30`",
+            "Tutorial activation `0x005D5FE0`",
+            "retains `0x1B65/0x1B66`",
+            "Teleport row 48",
+            "0x0054D625..0x0054D728",
+        ),
+        failures,
+    )
+    _require(
+        "belt binary layout",
+        binary_layout,
+        (
+            "game_belt_button_base=0x5EC",
+            "game_belt_button_stride=0xEC",
+            "belt_button_entry_type=0xB4",
+            "belt_button_entry_identity=0xB8",
+            "belt_button_resolved_item=0xBC",
+            "belt_button_pull_offset=0xC0",
+            "belt_button_quantity=0xE4",
+        ),
+        failures,
+    )
+
+    if failures:
+        raise StaticReTestFailure("; ".join(failures))
+
+    return (
+        "InventoryScreen direct-child Sack pages and the Game-owned "
+        "heterogeneous eight-entry belt are pinned through every producer, "
+        "refresh, action, presentation, and teardown owner"
     )

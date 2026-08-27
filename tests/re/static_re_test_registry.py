@@ -583,6 +583,7 @@ from static_re_wsl_steam_stability_contracts import (
     test_wsl_steam_runtime_uses_the_stable_proton_generation,
 )
 from static_re_inventory_container_contracts import (
+    test_inventory_sack_pages_and_heterogeneous_belt_are_pinned,
     test_nested_sack_inventory_preserves_owner_authored_container_paths,
 )
 from static_re_hagatha_perk_contracts import (
@@ -2233,6 +2234,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Nested sack inventory preserves owner-authored container paths",
         test_nested_sack_inventory_preserves_owner_authored_container_paths,
+    ),
+    (
+        "Inventory Sack pages and heterogeneous BeltButton state are pinned",
+        test_inventory_sack_pages_and_heterogeneous_belt_are_pinned,
     ),
     (
         "Native Hagatha perk catalog is complete",

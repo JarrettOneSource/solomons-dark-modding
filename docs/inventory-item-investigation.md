@@ -311,7 +311,10 @@ Current interpretation:
 - `Inventory_Build`'s `param_1` is an inventory-screen UI object, not the gameplay scene
 - the rendered slot groups are UI category caches, not separate ownership containers
 - moving an item into a sack targets the sack-owned child root
-- it does not replace an inventory-screen browse root
+- **Superseded 2026-08-27:** the accessor remains Sack-owned, but its returned
+  child root is also installed as `InventoryScreen+0x158` by the type-`0x1B60`
+  second-activation branch at `0x0056DBD9..0x0056DCA7`. The earlier sentence
+  incorrectly inferred downstream use from the accessor's owner.
 
 ### Additional inventory and equip helpers
 
@@ -357,8 +360,42 @@ Current interpretation:
 - stock display name is `Sack`
 - its `sack + 0x88` field points to a separate child `SdItemListRoot`
 - recursive potion and type-search helpers descend into that child root
-- stock drag/drop inserts into the child root; it does not open a replacement
-  inventory-screen browse target
+- stock drag/drop inserts into the child root
+- stock same-object second activation also opens that child root as the current
+  InventoryScreen page; the screen pushes its former root and game-back later
+  pops exactly one parent root
+
+### 2026-08-27 correction: Sack child roots are live InventoryScreen pages
+
+Fresh read-only Ghidra recovery used the canonical retail project and replica
+wrapper. `InventoryScreen::PointerPress 0x0056F760` retains the selected direct
+child and the 50-tick same-object window. Activation `0x0056D920` classifies the
+selected live item's runtime type. Its `0x1B60` branch:
+
+1. tears down the active page through `0x00560BB0`;
+2. pushes `InventoryScreen+0x158` onto the screen-local stack at `+0x174`;
+3. calls `Item_Sack_GetInventoryRoot 0x00570C10` and installs the returned
+   `Item_Sack+0x88` root at screen `+0x158`;
+4. writes the selected live Sack pointer to child root `+0x08` (the root's
+   persistent `+0x04` value is the owning Sack UID written by `0x00570B90`);
+5. arms page transition fields `+0x168/+0x16C/+0x170`, builds the inactive
+   page through vtable `+0xB4 -> 0x00560D30`, and plays registry row 5
+   `sounds\\backpack_open`.
+
+`0x00560D30` reads only the current root's `+0x14` count and `+0x20` item
+array. Game-back tears down the current page, pops exactly one root through
+`0x00556020`, arms the reverse transition, and plays registry row 4
+`sounds\\backpack_close`. `InventoryScreen::Update 0x00551A10` translates the
+two `0x110` page lanes in opposite directions by 10 pixels per 100 Hz tick
+until the full 1,600-pixel stage width is exhausted, then swaps the current
+lane and rebuilds it. The traversal is 160 ticks / 1.6 seconds. Close/destruction
+`0x00555810/0x005684C0` tears down the current page and the parent stack; browse
+state never enters the inventory object or multiplayer snapshot.
+
+This corrects ownership without changing the item tree: `Item_Sack` still owns
+the child root and InventoryScreen owns only a temporary path through those
+roots. Direct-child rendering, navigation, and recursive search/activation are
+separate consumers of the same participant-owned tree.
 
 ### FX runtime interpretation (historical snapshot; now resolved)
 

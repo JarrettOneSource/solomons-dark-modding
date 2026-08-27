@@ -482,12 +482,115 @@ click followed by registry 17 `sounds\\concentrate`. The modal owns local input
 suspension from before its first frame until teardown and has no open/close
 animation.
 
+## 2026-08-27 correction: BeltButton is heterogeneous, not skill-book state
+
+The card/quickbar report above correctly recovered every skill producer and
+consumer, but its port consequence stopped at skill entries. A player report
+that inventory objects could not be dropped onto the Website toolbar reopened
+the common destination router. Fresh read-only recovery against the same retail
+image proves that the eight `BeltButton` objects are Game-owned heterogeneous
+records. `Skills_Wizard` owns learned rows and selection; it does not own the
+complete belt.
+
+### Complete entry membership
+
+Constructor `0x005CA3A0` initializes each button to type `7000` (empty).
+`Game_BindBeltDrop 0x005C7090` scans the eight live rectangles at `Game+0x5EC`,
+stride `0xEC`, selects the strictly greatest positive overlap, and writes one
+of four entry shapes:
+
+| BeltButton `+0xB4` | `+0xB8` | Meaning |
+| ---: | ---: | --- |
+| `7000` | `0` | empty |
+| `0x1B65` | fixed alias state | Health Potion; resolve subtype 0 recursively |
+| `0x1B66` | fixed alias state | Mana Potion; resolve subtype 1 recursively |
+| `0x1B67` | exact skill row | learned category-1/2 skill |
+| another admitted item runtime type | exact item UID from item `+0x14` | Potion 2..5, equipment, Sack, Map, or Perk shortcut |
+
+SkillDragger calls the router with a null item plus the exact skill row.
+InventoryDragger release `0x0056EC30` asks item vtable `+0x34` and calls the
+same router with the live item plus a pointer-centred 40-square drop rectangle.
+The admitted native classes are Potion, Ring, Amulet, Staff, Hat, Robe, Sack,
+Map, Perk, and Wand. Item_Misc uses constant-false `0x00461F60`. An accepted
+item drop first restores the item to its inventory owner through `0x005624B0`:
+the belt stores a shortcut and never becomes the item container. Accepted
+skill and item drops both refresh only the winning slot and play registry row 1
+`pickskill`; rejected drops are silent.
+
+### Refresh, presentation, and action
+
+`Game_RefreshBelt 0x005D50E0` refreshes all eight records:
+
+- Health/Mana aliases use recursive potion finders and retain the alias when
+  the count reaches zero.
+- Skill entries clear when the permanent rank is zero.
+- Exact item entries use recursive UID search `0x005521C0`, including nested
+  Item_Sacks and all seven equipment sinks. The active InventoryDragger is a
+  temporary fallback so a valid entry does not blink empty during a drag.
+  A genuinely missing UID clears the button.
+
+`BeltButton::Present 0x005D3E10` paints skill icons/cooldowns for `0x1B67`, the
+fixed Health/Mana art and recursive counts for `0x1B65/0x1B66`, and otherwise
+dispatches the exact live item's class `+0x0C` painter at natural scale. An item
+remains inventory/equipment-owned while painted.
+
+`Game_HandleControlAction 0x005D8120` classifies the same record. Skill entries
+route through `0x005D5600`; Health/Mana aliases resolve and use the current
+recursive stack; an exact item UID routes through central item action
+`0x0056D1B0`. That action consumes Potion subtypes 2..5, equips the six
+equipment classes, and invokes the Sack action for type `0x1B60`. The latter
+passes the exact Sack to `0x0056B090`: the Sack survives while eligible direct
+Hat, Robe, Staff, Wand, Amulet, and Ring children are equipped in native order,
+and displaced gear returns to the same Sack root. Missing
+exact items are cleared on refresh/action. Every input binding addresses a
+button, so keyboard rebinds, mouse, touch, and controller inherit the current
+entry rather than a separate potion key family.
+
+For ordinary equipment, `0x00552CD0` swaps the selected equipment sink and
+returns its displaced item. Recursive owner lookup `0x00552850` and transfer
+`0x00560060` remove the incoming UID from its exact inventory/Sack root and
+insert the displaced item back there. Already-equipped same-slot UIDs have no
+inventory-root transfer and are a no-op. A successful live slot change uses
+the same `backpack_open` cue as the other native equip path.
+
+Initial player finalization `0x005CFA80` establishes the starting secondary in
+slot 0 and the recursive Health/Mana aliases in slots 3/4. First acquisition of
+a category-1/2 row uses first-empty helper `0x005C85E0`; rank increases do not
+add another entry. Raw Game-state import/export `0x005C7AB0` carries the entry
+records. Pull-off `0x005C7DF0` applies to every populated discriminator exactly
+as already recovered: strict distance greater than 50, immediate full clear,
+`poof`, complete local burst, and no release activation.
+
+Tutorial activation `0x005D5FE0` removes the two starter potion objects and
+then calls `Game_RefreshBelt 0x005D50E0`. It does not clear the alias records:
+the already recovered zero-count rule retains `0x1B65/0x1B66`, so the authored
+wave-5 Health pickup becomes actionable through the existing slot-3 alias at
+stage 18.
+
+### Teleport routing audit
+
+Teleport row 48 is not a special BeltButton member. Its `0x1B67` entry reaches
+the category-2 branch of `0x005D5600` beside all other 22 secondary rows. The
+branch rejects missing actor/active-world state, UI/combat blocks, and skill
+cooldown before invoking the wizard skill. Dispatcher `0x0054CC50` case `0x30`
+at `0x0054D625..0x0054D728` emits one source burst through `0x00644A00`, asks
+the world callback for its 100-unit destination, writes the returned point, and
+emits the destination burst. Each burst requests `sounds\\teleport`; neither
+the shared BeltButton nor the world callback supplies a silent success branch.
+
+The active Arena and indoor Region destination policies remain those in the
+secondary catalog. Ordinary College input cannot satisfy the category-2
+active-combat gate, so a disabled College Teleport entry is expected. In an
+active Boneyard the same slot must invoke relocation, mana/cooldown, both
+bursts, both sounds, and position replication.
+
 ## Port consequences
 
 The Website model named `secondaryBelt` is incomplete if it rejects primary
-ids or duplicates. Native parity requires a `skillQuickbar`, native category
-validation, category-routed activation, authoritative bind mutations, and a
-Skill Screen that reads the full learned catalog. Spell Welding is a category-
+ids, duplicates, or item entries. Native parity requires a separate
+heterogeneous player belt, native skill/item admission, category-routed
+activation, authoritative bind mutations, and a Skill Screen that reads the
+full learned catalog. Spell Welding is a category-
 `1` primary selection: learned weld identity and currently selected primary
 must not be represented by the same nullable field. The selected-skill HUD must
 retain three actor-addressed buttons, the compact selector modal, exact A/B

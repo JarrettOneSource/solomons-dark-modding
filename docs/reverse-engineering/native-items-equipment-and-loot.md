@@ -560,6 +560,79 @@ dispatcher. Belt actions also resolve exact item UIDs before use.
 The native help strings distinguish subtype 2 as "pick a new skill" and
 subtype 3 as "learn existing skill." Both share the display name.
 
+### Item_Sack page navigation and heterogeneous belt membership (2026-08-27 correction)
+
+The former shorthand that a Sack child root was only a drag/drop destination
+was incomplete. `Item_Sack` constructor `0x005A7520` installs vtable
+`0x00796368`, runtime type `0x1B60`, and allocates its separate `0x58`-byte
+item-list root through `0x00570B90`. The root pointer is at item `+0x88`; root
+`+0x04` receives the owning Sack UID. Destructor `0x00573E00` destroys that
+root before the base item. Serializer `0x00570C20`, painter `0x00577950`, and
+help-text member `0x00571BF0` remain the sibling consumers. Painter selects
+Inventory record `70 + item[+0x1C]`; help text counts only non-placeholder
+direct children through `0x00552170`.
+
+`InventoryScreen` is a second, downstream owner. Same-object activation
+`0x0056D920` classifies type `0x1B60`, pushes current root
+`InventoryScreen+0x158` onto the stack at `+0x174`, installs the result of
+`Item_Sack_GetInventoryRoot 0x00570C10`, and writes the live Sack pointer to
+child root `+0x08`. Page builder `0x00560D30` enumerates only that root's direct
+`+0x14/+0x20` membership. Game-back pops exactly one parent through
+`0x00556020`; only game-back at the outer root closes the screen. The forward
+and reverse page lanes slide in opposite directions at 10 stage pixels per
+100 Hz tick across the full 1,600-pixel stage width through `0x00551A10`, for
+160 ticks / 1.6 seconds; accepted entry/back play audio registry rows 5/4
+(`backpack_open`/`backpack_close`). Closing the screen destroys the screen-local
+path, not any Sack or child.
+
+The same item classes also feed the Game-owned belt through
+`InventoryDragger::PointerRelease 0x0056EC30 -> Game_BindBeltDrop 0x005C7090`.
+Item vtable slot `+0x34` is the admission predicate. It is true for Potion,
+Ring, Amulet, Staff, Hat, Robe, Sack, Map, Perk, and Wand; `Item_Misc` alone
+uses constant-false `0x00461F60`. The accepted live membership is:
+
+Item_Misc alone is the native item family rejected by that vtable admission
+slot; browser-only mod item families remain separately out of system.
+
+| Item family | Stored BeltButton entry | Refresh/action identity |
+| --- | --- | --- |
+| Health Potion subtype 0 | `0x1B65` | recursive first subtype-0 stack through `0x005529A0`; binding persists at zero |
+| Mana Potion subtype 1 | `0x1B66` | recursive first subtype-1 stack through `0x00552B70`; binding persists at zero |
+| Potion subtypes 2..5 | `0x1B59` plus item UID | exact recursive UID; use clears binding after the last stack disappears |
+| Ring/Amulet/Staff/Hat/Robe/Wand | live runtime type plus UID | recursive inventory plus all seven equipment sinks; action uses the ordinary equip dispatcher |
+| Item_Sack | `0x1B60` plus UID | recursive identity and class painter; `0x0056D1B0` passes the exact Sack to `0x0056B090`, which retains it, equips eligible direct children, and returns displaced gear to the same Sack root |
+| Item_Perk / Item_Map | `0x1B61/0x1B62` plus UID | exact identity; no invented Misc action |
+| Item_Misc | rejected | cannot become a belt entry |
+
+`0x005624B0` restores the dragged live item to its inventory/equipment owner
+before `0x005C7090` writes the shortcut. The belt never steals item ownership.
+Accepted item and skill drops use the same live eight rectangles and strictly
+greatest positive overlap, refresh the winning button, and play `pickskill`.
+`0x005D50E0` retains an exact item while it is inside any nested Sack, equipped,
+or held by the active InventoryDragger; it clears a missing UID. The class-owned
+item painter remains unclipped in BeltButton presentation. Pull-off
+`0x005C7DF0` applies uniformly to every nonempty item/skill entry.
+
+The Sack item action is specifically not a generic unpack. Raw
+`0x0056D3DB..0x0056D3FC` pushes the resolved Sack into `0x0056B090`, then plays
+registry row 5 `backpack_open`. `0x0056B090` reads only that Sack's `+0x88`
+child root. It equips the first eligible Hat, Robe, Staff, Wand, and Amulet in
+that order, then assigns direct eligible Rings across the available two or
+three ring slots, preferring an empty remaining slot. Each replaced equipment
+object is inserted back into the same Sack root. The Sack, potions, nested
+Sacks, ineligible gear, and all other untouched children remain owned there.
+
+Ordinary equipment belt actions retain the same owner boundary. Complete
+`0x00552CD0` chooses the fixed Hat/Robe/weapon/Amulet sink or an available Ring
+sink, swaps that slot, and plays `backpack_open` when the live slot changes.
+Recursive `0x00552850` then finds the exact inventory or nested-Sack root that
+owns the incoming UID, and `0x00560060` removes the incoming item there while
+putting displaced gear back into that same root. If the UID is already equipped,
+no inventory root owns it; the same-slot case is consequently a no-op rather
+than an invented unequip or top-level transfer. `0x00577900` admits equipment
+whose signed required-level byte `+0x5A` (minus the stock two-level reduction
+when its skill row is active) is at most the live player level.
+
 ### Perks and charms
 
 `Item_Perk` selectors 0..27 name the stock charms/curses/tonic; selector `-1`

@@ -2010,6 +2010,69 @@ close with empty page, console, failed-request, failed-response, and host-error
 arrays. This receipt-only documentation refresh changes no recovered native
 contract. Publication remained pending at this receipt point.
 
+### 2026-08-27 correction: InventoryScreen Sack pages and item-to-belt drag
+
+The 2026-08-23 InventoryScreen correction recovered generic second activation
+and drag but did not follow either type-`0x1B60` branch to closure. Its Website
+disposition is reopened. Fresh canonical-replica recovery establishes two
+missing consumers.
+
+#### Screen-local Sack browse stack
+
+`InventoryScreen` constructor `0x00560380` stores the caller-supplied
+participant inventory root at `+0x158`; `0x00570C10` is not an
+InventoryScreen accessor. It is the `Item_Sack` accessor which returns the
+child root at Sack `+0x88`. Same-object activation `0x0056D920` joins those two
+owners:
+
+- current root `+0x158` is pushed onto the screen stack at `+0x174` (count
+  `+0x184`);
+- the selected Sack's child becomes current and receives the live owning Sack
+  pointer at root `+0x08`;
+- page active/start/direction fields `+0x168/+0x16C/+0x170` select the inactive
+  one of two `0x110`-stride page lanes and rebuild it through vtable `+0xB4 ->
+  0x00560D30`;
+- `0x00560D30` enumerates only the current root's `+0x14/+0x20` direct
+  membership. Game-back while a child root is active pops exactly one parent;
+  game-back at the participant root closes the screen;
+- `InventoryScreen::Update 0x00551A10` moves the two pages in opposite
+  directions by 10 stage pixels per fixed tick through the full 1,600-pixel
+  stage width (160 ticks / 1.6 seconds), then toggles the active lane. Entry
+  plays registry 5 `backpack_open`;
+  Back pops one root through `0x00556020` and plays registry 4
+  `backpack_close`.
+
+This lifecycle belongs to every standalone Hub/Boneyard InventoryScreen and
+to the independent companion InventoryScreen beneath Fomentius, Hagatha,
+Luthacus, and both Shlorio states. The service StoreGrid remains a separate
+selection owner and does not replace the companion's browse path. Page change
+destroys stale selection, ItemInfo, activation, and dragger state. Close,
+service teardown, and screen destruction unwind the path without mutating the
+item tree.
+
+#### InventoryDragger shares the live Game belt router
+
+The lower release branch of `InventoryDragger 0x0056EC30` is not merely an
+invalid-drop restore. After restoring the live object to its current
+inventory/equipment owner through `0x005624B0`, it calls item vtable `+0x34`.
+Every native item class except `Item_Misc` returns true. The accepted object and
+pointer-centred 40-square release rectangle are passed to the same
+`0x005C7090` router used by SkillDragger.
+
+Health/Mana Potion drops normalize to recursive alias types `0x1B65/0x1B66`.
+Other admitted items retain runtime type plus exact UID. The greatest-overlap
+winning BeltButton alone is overwritten/refreshed; `pickskill` plays once and
+the InventoryDragger is destroyed. The item itself remains in the participant
+inventory tree or equipment sink. Rejected releases are silent and restore the
+same owner. All eight live belt rectangles move with modal writer `0x005C7200`,
+so companion/standalone hit testing cannot use unslid HUD coordinates.
+
+The complete reachable Website correction therefore includes direct-root Sack
+pages, empty/nonempty/nested entry and game-back, every companion service, current-
+root drag/drop/equip/storage/unforge behavior, and one authoritative
+heterogeneous belt. A permanently flattened descendant view or skill-only
+quickbar cannot carry an `exact-ported` disposition.
+
 ## Not Yet Reversed
 
 These are portability findings, not invitations to fill in plausible behavior:
