@@ -1140,3 +1140,73 @@ connected checkpoint. It must never be accepted with an existing save, resume
 token, or simultaneous College request. This product adaptation does not
 revise the recovered retail Tutorial-to-College contract; it prevents a
 browser-only decline from being mistaken for Tutorial completion.
+## 2026-08-27 correction: scroll-bearing admission Robe and unconditional path facing
+
+The prior College presentation entry incorrectly inferred that absence of an
+equipped `Item_Misc` book meant the moving wizard had no scroll attachment.
+The user correctly identified the small green-gray path actor as carrying
+scrolls on one side and an orbless Staff on the other. The inference crossed
+two native ownership domains: inventory type is not wearable pixel semantics.
+
+### Scroll attachment owner
+
+The story start still equips selector-0 Hat 7005, Robe 7006, and Staff 7004.
+The scroll-bearing pixels belong to the normal selector-0 Robe attachment, not
+to a separate book item and not exclusively to `CollegeStatue` record 39.
+`PlayerWizard::Render 0x0054BA80` calls common compositor `0x00538B80`, which
+dispatches the live Robe to `Item_Robe::RenderAttachment 0x00577DA0`.
+
+For Robe selector 0, `0x00577DA0` paints the two-color five-pose/24-facing
+dynamic family (primary Clothes `868..987`, secondary `1228..1347`) and its
+primary/secondary fixed lanes. Selectors 1 and 2 are the contiguous siblings
+in that same extracted family. Staff selector 0 independently paints material
+record 5 and both pose/depth banks `3244..3483` / `3484..3723` through
+`0x00578D20`. Negative element selection still causes `0x0053B1D0` to return,
+so the Staff is visible without an orb.
+
+A canonical read-only Ghidra xref census of College flag `0x00B3BCA0` returns
+37 references in 31 functions. None is `0x0054BA80`, `0x00538B80`, or
+`0x00577DA0`: College selects the start/tint lifecycle but does not inject a
+special player scroll draw. The stationary statue and ambient Student book
+families remain independent visible siblings; they are not exclusive owners
+of every scroll-shaped pixel in the frame.
+
+### Forced-facing owner
+
+Both scripted paths use the same late actor write:
+
+- Courtyard instructions `0x00503E29..0x00503E64` subtract player position
+  from the current spline target, normalize the vector with `0x004035D0`, and
+  call `0x00503100`.
+- Office instructions `0x00504917..0x0050493E` do the same after the authored
+  room transform and call the same setter.
+- `0x00503100..0x00503166` stores vector x/y at actor `+0x7C/+0x80`, computes
+  `degrees(atan2(x,-y))`, normalizes it to `[0,360)`, and unconditionally stores
+  heading at `+0x84` on every call. There is no action/cast-facing exclusion.
+
+The portable contract is therefore stronger than the prior two-frame Title
+7/9 check: every nonzero forced Courtyard and Office movement tick owns player
+facing, including while stale input or an action previously owned it. The web
+authority and local predictor must consume one explicit scripted-facing owner;
+ordinary input/cast movement retains its separate action-facing rule. Browser
+acceptance must sample the complete paths continuously and must prove the
+selector-0 Robe scroll lanes, selector-0 Staff, and absent orb in both rooms.
+
+Validation receipt: Mod Loader local, remote, and detached Mac bases are
+`445d6f97565856220bad17ff959cd53cb888c121`; Website local, remote, and detached
+Mac bases are `58ded923596cad83748ba2b471daee8dfa945842`. The final report passes
+the complete registered Mac static-RE suite `517/517`. The byte-identical
+Website candidate passes its full canonical Mac gate and emits
+`Game-C4STzngx.js` at 479,117 raw / 134,105 gzip bytes within its 524,288 /
+134,144 limits.
+
+Mac Chrome 151.0.7922.174 passes the complete stock Tutorial/College journey.
+It records selector-0 Robe, selector-0 Staff, common green-gray tint `0x6F7E72`,
+and zero orb sprites at both title cards. Continuous presentation sampling
+covers 514 moving Courtyard and 258 moving Office frames across 14 distinct
+24-way headings with no mismatch between visible scripted displacement and the
+painted bank. Academy playback, the sole automatic `ARCH_INTRO_0`, Office,
+Create, and Courtyard handoff pass with empty page, console, and failed-response
+arrays. No native executable, loader runtime, or extracted art changed; only
+this report and the paired Website implementation/ledger remain uncommitted,
+unpushed, and undeployed.
