@@ -655,7 +655,7 @@ def test_native_progression_offer_pool_selection_and_rng_are_pinned() -> str:
             "Spell Welding 52 additionally requires more than one learned elemental",
             "The ordinary picker has no unconditional reroll or skip",
             "selector` span). Reopening with unchanged book/level/private seed",
-            "explicit charm reroll action does",
+            "Construction, every skill acquisition, and the explicit charm\nreroll action do",
             "20% `RandomInt(5)==1` Insight chance",
         ),
         "native offer documentation lost a named RNG, unlock, weld, or resolution rule",
@@ -701,6 +701,27 @@ def test_native_progression_offer_pool_selection_and_rng_are_pinned() -> str:
             "native offer phase order changed, so private/shared RNG consumption and display order are no longer pinned"
         )
     return "all 82 eligibility rows and three captured native offers are exact"
+
+
+def test_native_progression_acquisition_seed_writers_are_complete() -> str:
+    doc = read_text(DOC)
+    _require_tokens(
+        doc,
+        (
+            "### 2026-08-27 complete `+0x834` writer and acquisition-xref closure",
+            "`0x0065966A` in `0x006594E0`",
+            "`0x00660359` in `Skills_Wizard::Acquire 0x00660320`",
+            "`0x006714FC` in `LevelupScreen::Activate 0x00671470`",
+            "19 sites in seven functions",
+            "Insight consumes a second word",
+            "selection draws first; acquisition reseed follows",
+            "twelve non-disabled acquisition calls",
+            "thirteen `Integer(1_000_000)` words",
+            "SAVE SKILL/defer",
+        ),
+        "native acquisition seed writer and caller closure drifted",
+    )
+    return "all offer-seed writers and acquisition caller draw counts are pinned"
 
 
 def test_native_secondary_cooldown_and_action_gate_is_pinned() -> str:

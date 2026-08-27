@@ -78,6 +78,7 @@ from static_re_native_animation_contracts import (
     test_native_animation_lighting_shadow_and_camera_constants_are_pinned,
     test_native_animation_recorder_is_self_provenanced_settled_and_bounded,
     test_native_animation_state_lists_and_legal_transitions_are_pinned,
+    test_native_zombie_composite_membership_and_special_constants_are_pinned,
 )
 from static_re_native_scene_composition_contracts import (
     test_native_player_level_up_presentation_is_pinned,
@@ -155,6 +156,7 @@ from static_re_native_progression_contracts import (
     test_native_progression_golden_and_recorder_provenance_are_pinned,
     test_native_progression_level_curve_and_xp_awards_are_pinned,
     test_native_progression_offer_pool_selection_and_rng_are_pinned,
+    test_native_progression_acquisition_seed_writers_are_complete,
     test_native_secondary_cooldown_and_action_gate_is_pinned,
     test_native_staff_admission_distinguishes_movement_and_current_contact,
     test_native_skill_picker_text_and_palette_abi_is_pinned,
@@ -1062,6 +1064,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_native_animation_attachment_and_emitter_facings_are_pinned,
     ),
     (
+        "Native Zombie composite membership and special constants are pinned",
+        test_native_zombie_composite_membership_and_special_constants_are_pinned,
+    ),
+    (
         "Native animation lighting, shadow, and camera constants are pinned",
         test_native_animation_lighting_shadow_and_camera_constants_are_pinned,
     ),
@@ -1272,6 +1278,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native progression offer pool, selection, and RNG are pinned",
         test_native_progression_offer_pool_selection_and_rng_are_pinned,
+    ),
+    (
+        "Native progression acquisition seed writers are complete",
+        test_native_progression_acquisition_seed_writers_are_complete,
     ),
     (
         "Native secondary cooldown and action gate are pinned",

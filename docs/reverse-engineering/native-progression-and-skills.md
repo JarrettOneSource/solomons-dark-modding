@@ -282,7 +282,9 @@ There are two named streams; they must not be collapsed:
    focus, general pre-shuffle, root-priority/bias, learned pruning, and fill
    draws. The builder does not write `+0x834`; identical actor book, level,
    and seed therefore reproduce identical ordinary membership before the
-   two active-gameplay-RNG phases.
+   two active-gameplay-RNG phases. The 2026-08-27 writer closure below
+   supersedes the former implication that ordinary choices keep that seed:
+   every actual acquisition rewrites it through `0x00660320`.
 
 The active gameplay RNG owns both the Spell Welding build-pair choice at
 `0x0067DA4B` and every final display-swap draw at
@@ -530,12 +532,60 @@ Neither action exists without the owned byte at `+0x7DD` (the
 reproduces ordinary membership; exact Welding build and display order also
 depend on the incoming active gameplay RNG. The live recorder deliberately rewrites
 `79225` before each of its three independent rolls; the builder itself never
-writes `+0x834`, while the explicit charm reroll action does. Concentrated
-Creativity then independently has a
+writes `+0x834`. Construction, every skill acquisition, and the explicit charm
+reroll action do. Concentrated Creativity then independently has a
 20% `RandomInt(5)==1` Insight chance, marks one eligible displayed row, and applies
 that row twice when chosen. The shipped branch checks only concentration slot
 A/index 16, not slot B or Mind Chug; preserve that verdict from the landed
 concentration work.
+
+### 2026-08-27 complete `+0x834` writer and acquisition-xref closure
+
+A player report of one Fire/Body run recycling Enchant Staff and then the same
+three cards reopened the seed owner. The earlier audit followed offer builder
+`0x0067CB70` and the Sorceror ROLL AGAIN control but did not enumerate scalar
+writes to progression `+0x834`. That was the process failure: a builder read
+census is not a writer census.
+
+Fresh canonical read-only analysis finds exactly three static write sites:
+
+| Writer | Instruction | Contract |
+| --- | ---: | --- |
+| progression construction | `0x0065966A` in `0x006594E0` | draw `active_gameplay_rng.Integer(1_000_000)` and initialize actor-private seed |
+| common acquisition | `0x00660359` in `Skills_Wizard::Acquire 0x00660320` | after the global-disable rejection but before any row mutation, draw and replace `+0x834`; clear byte `+0x838` |
+| Sorceror ROLL AGAIN | `0x006714FC` in `LevelupScreen::Activate 0x00671470` | draw and replace `+0x834`; clear current-offer byte `+0x839`; rebuild without applying a rank |
+
+LevelupScreen's ordinary card branch clears `+0x839`, then calls
+`0x00660320` once. If the selected card is its marked Creativity Insight row,
+it calls `0x00660320` a second time. The first acquisition therefore consumes
+one shared word and sets an intermediate seed; Insight consumes a second word
+and the second seed is authoritative for the next offer. A queued choice is
+built only after those acquisition calls and refresh, so its optional Welding
+draw and final display shuffle see the already-advanced gameplay stream.
+
+The complete direct xref set for `0x00660320` has 19 sites in seven functions:
+
+| Owner/caller | Sites or role | Disposition |
+| --- | --- | --- |
+| Create/loadout `0x005D0290` | element, starting primary/secondary, discipline, and ordered root setup | every non-disabled acquisition reseeds |
+| item/equipment dispatcher `0x0056D1B0` | selected permanent skill increase | selection draws first; acquisition reseed follows |
+| Tutorial/setup `0x005D5CF0` and menu/setup `0x005D5910` | authored permanent-rank grants | one reseed per reached acquisition |
+| level/bonus path `0x0067C360` | native grant reached outside card activation | one reseed per acquisition |
+| LevelupScreen `0x00671470` | ordinary and Insight card application | one or two reseeds as above |
+| Boneyard action dispatcher `0x00689750` | script-authored permanent-rank mutation | one reseed per reached acquisition |
+
+Fresh Create/loadout construction reaches twelve non-disabled acquisition calls
+after the progression constructor's initial seed draw. It therefore consumes
+thirteen `Integer(1_000_000)` words, and the twelfth acquisition's result owns
+the first level-up offer seed.
+
+SAVE SKILL/defer, closing a picker, generating an offer, and declining to apply
+a row have no `+0x834` writer. Reopening with literally unchanged book, level,
+and seed still reproduces ordinary membership, but a normal play sequence does
+not keep the seed after a chosen card. Candidate weighting, exact-ID uniqueness,
+the two RNG streams, row caps, dependencies, and the 100-roll stock/web oracle
+remain unchanged; the corrected input seed and shared-stream position feed
+those already-closed phases.
 
 ## Per-skill runtime semantics
 

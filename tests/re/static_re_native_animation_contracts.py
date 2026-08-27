@@ -274,8 +274,21 @@ def test_native_animation_state_lists_and_legal_transitions_are_pinned() -> str:
         "DireFaculty 0x3F2": ("primary_windup/active/recovery", "secondary_windup/active/recovery", "29 banks x 18"),
         "Heartmonger 0x3F3": ("crow_attack", "summon", "18 facings"),
         "Crow 0x3F4": ("scan", "dive", "detached", "18 facings"),
-        "Coffin 0x3F5": ("transition_delay", "no facing"),
-        "Maggot 0x7FD": ("ballistic_emerge", "10 airborne orientations", "18 grounded facings"),
+        "Coffin 0x3F5": (
+            "transition_delay",
+            "no facing",
+            "constructor X scale `+/-1`",
+            "signed `Float(15)` rotation",
+            "body rendering and launch segments",
+        ),
+        "Maggot 0x7FD": (
+            "ballistic_emerge",
+            "BadGuys `2013..2062`",
+            "`Float(5)`",
+            "float32 `0.25`",
+            "10 airborne orientations",
+            "18 grounded facings",
+        ),
         "Spider 0x809": ("grab/hold", "suck", "18 facings"),
         "Cocoon 0x80A": ("attach", "release/death_handoff", "zero body facings"),
         "Portal 0x139D": ("materialize", "spawn_flash", "no heading facing"),
@@ -936,6 +949,27 @@ def test_native_animation_attachment_and_emitter_facings_are_pinned() -> str:
             "attachment transform witness no longer carries the evaluated native 4x4 matrix"
         )
     return "Staff pose-bank attachment and all 24 independently observed emitter facings are pinned"
+
+
+def test_native_zombie_composite_membership_and_special_constants_are_pinned() -> str:
+    doc = _read(DOC)
+    _require_tokens(
+        doc,
+        (
+            "arms `2095..2202`",
+            "body `2203..2274`",
+            "body-3 overlay `2275..2292`",
+            "head `2293..2364`",
+            "base `2365..2508`",
+            "transforms all three authored body points",
+            "Config BODY TYPE 1 writes `+0x24C/+0x24D=3`",
+            "FLYBLOWN is independent byte `+0x24E` and has no arm-side draw",
+            "scale `1.15`, root translation `-8`, body local shift `-5`",
+            "two overlay shifts `-4`",
+        ),
+        "Zombie composite record, selector, transform, or special-placement closure drifted",
+    )
+    return "Zombie body, head, arm, overlay, selector, and transform membership is pinned"
 
 
 def test_native_animation_lighting_shadow_and_camera_constants_are_pinned() -> str:

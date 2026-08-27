@@ -406,9 +406,12 @@ point.
 
 Zombie contact creates two Knockback modifier paths and a `Poisoned 0x1B72`
 modifier when configured poison damage is positive. Flyblown and body-type
-selectors control presentation, while poison punch DPS, PoisonPool DPS, and
-duration remain separate numeric fields. Death creates `PoisonPool 0x806`
-with the configured pool payload before completing common rewards/drops.
+selectors control independent presentation branches, while poison punch DPS,
+PoisonPool DPS, and duration remain separate numeric fields. Config apply
+`0x00462790` copies FLYBLOWN to byte `+0x24E`; BODY TYPE value one writes the
+word `0x0303` across head/body selectors `+0x24C/+0x24D`. Death creates
+`PoisonPool 0x806` with the configured pool payload before completing common
+rewards/drops.
 
 `Action_Zombie_Beat` is not a ten-frame swipe strip. Constructor `0x0044A490`
 clears progress `+0x234`, toggles arm side `+0x238`, and stores
@@ -422,11 +425,14 @@ the actor-local angle `+0x21C` to heading.
 
 The remaining Zombie articulation is also actor-owned, not a renderer clock.
 Constructor `0x004740C0` seeds two `[0,360)` phases, signed head angle
-`[-65,65)`, two `[0,20)` arm angles, and a random initial attack side. Renderer
-`0x00493390` derives quantized body/head angles from those sine phases, then the
-beat adds `+0x23C/3` body lean and `round(+0x23C/10)` to the selected arm.
-Crossings 50 and 100 both launch the vertical render offset before the common
-tick applies gravity `0.4` and clamps it back to ground.
+`[-65,65)`, two `[0,20)` arm angles, and a random initial attack side. It then
+chooses body `0..2`, usually head zero with rare head `1/2`; there is no further
+flyblown-side draw. Renderer `0x00493390` derives quantized body/head angles
+from those sine phases, transforms authored body points `0/1/2` through the
+body matrix, and only then places head/rear/front children. The beat adds
+`+0x23C/3` body lean and `round(+0x23C/10)` to the selected arm. Crossings 50
+and 100 both launch the vertical render offset before the common tick applies
+gravity `0.4` and clamps it back to ground.
 
 Wraith does not merely run straight chase. `0x00486C30` alternates approach,
 orbit/retreat, and attack/cooldown state while maintaining target identity.
@@ -531,7 +537,7 @@ fragment field and completing rewards/drops.
 
 ## Coffin and Maggot ownership
 
-Coffin applies max Maggots to live `+0x22C`, child HP to `+0x230`, child
+Coffin applies max active Maggots to live `+0x22C`, child HP to `+0x230`, child
 primary damage to `+0x234`, and child poison damage to `+0x238`.
 `Coffin_Tick (0x004A2760)` is a four-state machine:
 
@@ -540,21 +546,31 @@ primary damage to `+0x234`, and child poison damage to `+0x238`.
 3. transition delay;
 4. open/active.
 
-Opening invokes `0x00479C30` three times. While open, Coffin can replenish
-children according to charge/health state and its live-child count. The spawn
-helper creates `Maggot 0x7FD` on one of two lid/edge launch trajectories,
-copies arena/team identity and configured combat values, writes the Coffin
-identity into the child, and registers the child in the Coffin container.
+Opening invokes `0x00479C30` three times. While open, Coffin does not use a
+fixed interval or cap births at `+0x22C`. It computes
+`ratio=(+0x2E8)/(+0x1A4 * +0x120)`. When `ratio<1` it emits exactly three
+Maggots without a probability draw. Otherwise it draws `Float(ratio)` and
+emits one when the result is below one. Charge `+0x2E8` adds float32 `0.025`
+per tick and caps at ten. The helper chooses one of two transformed lid/edge
+segments, interpolates a point, chooses heading in `[140,200)` or `[270,330)`,
+copies arena/team and configured combat values, and writes the Coffin handle.
 The open state also scans nearby actors for its poison/damage logic; Golem is
 excluded from poison.
 
-Maggot first runs ballistic emergence `0x0047E410`, then crawling logic. Its
-periodic parent check resolves the stored kind/index pair. If the parent is
-gone or invalid, cleanup removes the child; when the parent still resolves,
-the appropriate cleanup/bite path updates Coffin's live count. A valid nearby
-target receives primary damage and, when positive, a Poisoned modifier except
-for Golem. The Maggot then invokes its own death immediately: a bite is
-single-use. `0x0047C070` explicitly suppresses Maggot drops.
+Maggot first runs constructor-owned ballistic emergence in `0x0048B2A0`, then
+asks parent admission helper `0x004889B0` for a crawl lane. The parent increments
+inactive-child counter `+0x2E0`. With active count `+0x2E4` below configured
+maximum and `Integer(5)==3`, `0x00487FD0` promotes the child: inactive is
+decremented and active is incremented. A failed admission remains an inactive,
+noncombat parent-owned crawler while the inactive count is below 31; at 31 and
+above, a failed child retires. The periodic parent check resolves the stored
+kind/index pair. If the parent is gone or invalid, cleanup removes the child;
+normal active-child cleanup/bite decrements `+0x2E4`. A valid nearby target
+receives primary damage and, when positive, a Poisoned modifier except for
+Golem. The active Maggot then invokes its own death immediately: a bite is
+single-use. `0x0047C070` explicitly suppresses Maggot drops. Maggot construction
+also cancels the inherited global Badguy-count increment, so no Maggot lane
+holds a TimeLine monster threshold.
 
 ## Spider, Silk, and Cocoon
 
@@ -643,7 +659,7 @@ consumer address, and vtable relation.
 | SkeletonMage | BadGuys `1459..1476`, `1729..1818`, `1836..1839`, `1585..1728`; shared death ranges |
 | Imp / GoodImp | BadGuys `285..342`; action/death `251..254`, `401..419` |
 | GreenImp | Unholy `41..98`; shared Imp action/death records |
-| Zombie | BadGuys `2088..2220`, `2275..2310`, `2365..2508`; DeadHawg `30` |
+| Zombie | BadGuys `2088..2202`, body `2203..2274`, special body-3 overlay `2275..2292`, head `2293..2364`, base `2365..2508`; DeadHawg `30` |
 | Wraith | BadGuys `2070..2087`; death `113..121`, `1819..1822` |
 | The Discorporeal | Unholy `99..170`, `171..218`; BadGuys `375..376`; DeadHawg `16` |
 | Lesser Demon | Demon `1..115`; BadGuys `401..419`; DeadHawg `46..77` |
@@ -894,3 +910,81 @@ Archer held arrows, Mage hand charge/particles, Zombie gas/flies, Wraith
 wisps, Demon five persistent flames, Coffin/Maggot ownership, hit redraws,
 ambient loops, and family death membership have no additional constructor or
 renderer branch exposed by this sweep.
+
+## 2026-08-27 Coffin/Maggot and Zombie secondary-report supersession
+
+The prior closure left Coffin replenishment and Maggot emergence as a named web
+bound and called Zombie's refuted arm offset a flyblown selector. Both were
+static truth available in the canonical project. This section supersedes those
+claims and closes every sibling branch consumed by the Website survival set.
+
+### Coffin and Maggot fields
+
+| Owner/field | Meaning |
+| --- | --- |
+| Coffin `+0x210/+0x214/+0x21C` | state, state countdown, visible frame progress |
+| Coffin `+0x22C/+0x230/+0x234/+0x238` | active-child maximum, child HP, damage, poison damage |
+| Coffin `+0x2E0/+0x2E4/+0x2E8` | inactive admitted children, active combat children, emission charge |
+| Maggot `+0x210` | constructor ballistic/emergence mode |
+| Maggot `+0x230/+0x232` | stored parent kind/index handle |
+| Maggot `+0x244` | active-combat admission byte; zero is an inactive child |
+
+The two authored Coffin launch segments before constructor transformation are
+`(5.5,8.5)->(15.5,-29.5)` and
+`(-9.5,-4.5)->(5.5,-41.5)` from
+`0x0078673C..0x00786724`. Constructor `0x00479940` transforms both with a
+retained `+/-1` X scale and signed `Float(15)` rotation. `0x00479C30` consumes
+`Integer(2)`, `Float(1)`, then the selected `Float(60)` heading lane; it
+mirrors the absolute heading when the retained scale is negative. The child
+receives the interpolated X, transformed segment-start Y, a vertical offset
+`interpolatedY-startY-Float(8)`, a second independent world-Y `Float(8)`, and
+unit horizontal velocity. Constructor bounce velocity is `-Float(0.5)`.
+Ballistic gravity is float32 `0.075`; a ground crossing restores bounce
+velocity and halves horizontal velocity plus the retained bounce scalar before
+the strict `bounce > -0.25` admission edge reaches
+`0x004889B0`. Constructor `+0x22C` starts at `Float(5)`. Each ballistic tick
+adds float32 `0.25` and wraps at `>=5`; renderer `0x0049C190` selects
+`orientation + 10*trunc(+0x22C)`, where orientation is
+`trunc((heading+18)/36) mod 10`. Ballistic duration follows launch height and
+gravity; there is no 24-tick native duration.
+
+The parent admission branch increments inactive count before testing. Capacity
+plus `Integer(5)==3` promotes a child and transfers the counter to the active
+lane. A failed result with post-increment inactive count `<31` retains a
+noncombat crawler; a failed result at `>=31` removes the child. Active bite/death
+and parent invalidation are the only decrements of the active lane. This is why
+the configured maximum can coexist with 30 visible inactive siblings and why a
+port must not cap births or count every Maggot as a wave monster.
+
+### Zombie selector and record matrix
+
+| Selector | Native producer | Complete record membership |
+| --- | --- | --- |
+| gait `0..7`, facing `0..17` | common movement `+0x144` | `2365..2508` |
+| rear/front attack pose `0..2` | beat side and thresholds 50/100 | `2095..2148`, `2149..2202` |
+| body `0..2` | constructor `Integer(3)` | `2203..2256` |
+| body 3 | MonsterSetup BODY TYPE 1 -> `+0x24D=3` | `2257..2274` plus two draws of `2275..2292` |
+| head `0`, rare `1/2` | constructor `Integer(4)==3` then `Integer(2)+1` | `2293..2346` |
+| head 3 | same config write, word `0x0303` at `+0x24C` | `2347..2364` |
+| flyblown | config byte `+0x24E` | procedural records 65, 26, and 10/11; no arm/body/head selector |
+
+Renderer `0x00493390` has nine `Text_Draw` sites at
+`0x00493B13,0x00493B87,0x00493BEA,0x00493C90,0x00493FEC,0x00494068,
+0x00494112,0x00494193,0x004941F0`. The mutually exclusive idle/action sites
+draw body, rear arm, front arm, optional two-copy body-3 overlay, and head. The
+body matrix transforms authored body points 0, 1, and 2 before the head and arm
+draws. BODY TYPE 3 scales the body/arm/overlay group by `1.15`; the head keeps
+actor scale. FLYBLOWN begins only after those ordinary component draws.
+
+A fresh read-only decompile plus constant dump closes the selector-3 placement
+values: `0x00784ADC = 1.15`, `0x00787060 = -8`, double
+`0x007DE9B0 = -5`, and double `0x00787058 = -4`. The composite root moves by
+`-8`; the body draw moves `-5` along the current local direction; the two
+overlay draws move `-4` from the already transformed rear/front anchors.
+
+Supporting live evidence came from a task-owned injected process using the same
+retail hash, runtime image base `0x00C30000`, and exact stock-spawner requests.
+It observed body/head/flyblown bytes directly and confirmed that both Zombie and
+Coffin terminal requests remove the living body. The injected run is not used
+as clean-stock proof of instruction truth; it only validates the recovered live
+field interpretation.

@@ -125,9 +125,19 @@ ENEMY_SPECS: list[dict[str, Any]] = [
         "config_fields": ["FLYBLOWN", "BODY TYPE", "POISON PUNCH DPS", "POISON POOL DPS", "POISON DURATION"],
         "behavior": [
             "Contact applies knockback and can attach a Poisoned modifier using the configured punch DPS and duration.",
-            "The flyblown/body selectors change presentation; death can leave a PoisonPool carrying the configured pool DPS.",
+            "Constructor body/head selectors occupy 0..2. MonsterSetup BODY TYPE 1 writes both selectors to 3, reaching the fourth body/head banks and the two-copy body overlay.",
+            "FLYBLOWN is an independent byte controlling gas, flies, FadeSin particles, poison payload, and loop audio; it does not select an arm side or pose.",
+            "The body matrix transforms authored head/rear/front attachment points before the child rotations; death can leave a PoisonPool carrying the configured pool DPS.",
         ],
         "evidence_functions": {"tick": "0x004863A0", "render": "0x00493390", "attack_and_modifiers": "0x0047DB90"},
+        "indirect_class_art_uses": [
+            {"atlas": "BadGuys", "destination_kind": "indirect_array", "first_record": 2221, "last_record": 2238, "consumer_function": "0x00493390", "vtable_slot": "0x1C"},
+            {"atlas": "BadGuys", "destination_kind": "indirect_array", "first_record": 2239, "last_record": 2256, "consumer_function": "0x00493390", "vtable_slot": "0x1C"},
+            {"atlas": "BadGuys", "destination_kind": "indirect_array", "first_record": 2257, "last_record": 2274, "consumer_function": "0x00493390", "vtable_slot": "0x1C"},
+            {"atlas": "BadGuys", "destination_kind": "indirect_array", "first_record": 2311, "last_record": 2328, "consumer_function": "0x00493390", "vtable_slot": "0x1C"},
+            {"atlas": "BadGuys", "destination_kind": "indirect_array", "first_record": 2329, "last_record": 2346, "consumer_function": "0x00493390", "vtable_slot": "0x1C"},
+            {"atlas": "BadGuys", "destination_kind": "indirect_array", "first_record": 2347, "last_record": 2364, "consumer_function": "0x00493390", "vtable_slot": "0x1C"},
+        ],
         "spawned_types": [0x1B6D, 0x1B72, 0x806],
         "drop_policy": "common_selector",
     },
@@ -232,8 +242,9 @@ ENEMY_SPECS: list[dict[str, Any]] = [
         "family": "coffin",
         "config_fields": ["MAX MAGGOTS", "MAGGOT HP", "MAGGOT DAMAGE", "MAGGOT POISON DAMAGE"],
         "behavior": [
-            "Runs closed, opening/charging, delay, and open/active states; opening creates initial Maggots and the active state can replenish them up to the live-child limit.",
-            "Each Maggot inherits configured HP, primary damage, poison damage, arena/team identity, and a parent identity used for live-count accounting.",
+            "Runs closed, rising, holding/opening, and open states; opening creates three initial Maggots.",
+            "Open emission uses charge/(base speed * time scale): below one it births three children, otherwise one when Float(ratio) is below one; charge adds 0.025 to a cap of ten.",
+            "Each Maggot inherits configured HP, primary damage, poison damage, arena/team identity, and a parent identity. The configured maximum gates active admission, not births or inactive children.",
             "The open state also scans nearby actors for Coffin poison/damage logic and excludes Golem from the poison modifier.",
         ],
         "evidence_functions": {"initialize": "0x00487F30", "tick": "0x004A2760", "spawn_maggot": "0x00479C30", "render": "0x0049AC90", "alternate_render": "0x0049AEE0", "death": "0x0049B310"},
@@ -263,11 +274,13 @@ ENEMY_SPECS: list[dict[str, Any]] = [
         "family": "coffin",
         "config_fields": ["parent identity", "inherited HP", "inherited damage", "inherited poison damage"],
         "behavior": [
-            "Emerges ballistically from one of the Coffin lid/edge launch paths, then transitions to crawling behavior.",
+            "Emerges from one of two Coffin launch segments after retained +/-1 X scale, signed Float(15) rotation, mirrored heading, and two independent Float(8) offsets. Constructor -Float(0.5) bounce and float32 gravity own the landing edge.",
+            "Ballistic duration follows launch height and float32 gravity 0.075. Constructor visual phase starts at Float(5), advances by float32 0.25 modulo five, and renderer 0x0049C190 selects one of 50 orientation-plus-phase records.",
+            "Failed admissions retain at most 30 inactive noncombat children; later failed children retire. Maggot construction cancels the inherited global Badguy count and never holds a wave threshold.",
             "A valid bite applies primary damage and optional poison (except to Golem), then immediately invokes Maggot death; the bite is single-use.",
-            "Parent loss/out-of-range cleanup and the normal bite/death path update the Coffin live-child count through the stored parent identity.",
+            "Parent loss cleanup and the normal bite/death path update the separate Coffin inactive/active counters through the stored parent identity.",
         ],
-        "evidence_functions": {"initialize": "0x00487F60", "tick": "0x0048B2A0", "emergence": "0x0047E410", "parent_accounting": "0x00487FD0", "contact_behavior": "0x004881A0", "death": "0x0049C830"},
+        "evidence_functions": {"initialize": "0x00487F60", "tick": "0x0048B2A0", "emergence": "0x0047E410", "parent_accounting": "0x00487FD0", "contact_behavior": "0x004881A0", "render": "0x0049C190", "death": "0x0049C830"},
         "spawned_types": [0x1B72],
         "drop_policy": "suppressed_in_drop_selector",
     },
@@ -474,7 +487,11 @@ def build_catalog(game_object_catalog: Path) -> dict[str, Any]:
                 "type 0x%X class drifted: expected %s, got %s"
                 % (spec["type_id"], spec["name"], raw["class"])
             )
-        enemy = dict(spec)
+        enemy = {
+            key: value
+            for key, value in spec.items()
+            if key != "indirect_class_art_uses"
+        }
         enemy.update(
             {
                 "type_id_hex": raw["type_id_hex"],
@@ -483,7 +500,10 @@ def build_catalog(game_object_catalog: Path) -> dict[str, Any]:
                 "constructor": raw["constructor_address"],
                 "vtable": raw["vtable"],
                 "selected_vtable_slots": selected_slots(raw),
-                "direct_class_art_uses": compact_art_uses(raw),
+                "direct_class_art_uses": [
+                    *compact_art_uses(raw),
+                    *spec.get("indirect_class_art_uses", []),
+                ],
             }
         )
         enemies.append(enemy)

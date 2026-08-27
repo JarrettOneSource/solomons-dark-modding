@@ -51,9 +51,12 @@ late Dig-program proximity
 The wave timeline owns schedule selection and spawn requests. It does not own
 live enemy transforms, action state, HP, projectiles, death effects, or
 retirement. `ActorWorld` owns those actors and the live monster/boss counts
-observed by the TimeLine pause predicates. The Website must preserve that
-separation: a wave director emits deterministic spawn intents and observes the
-authoritative actor store; it must not keep a second mutable enemy list.
+observed by the TimeLine pause predicates. Maggot construction explicitly
+cancels the inherited Badguy-count increment, so Coffin-owned children remain
+ActorWorld members but not TimeLine monster-count members. The Website must
+preserve that separation: a wave director emits deterministic spawn intents and
+observes the authoritative counted-enemy store; it must not keep a second
+mutable enemy list or add Maggots to the wave predicate.
 Actor and spell stores separately own ordinary contact retirement, recovered
 terminal lifetimes, and any explicitly documented web safety horizon.
 
@@ -270,18 +273,17 @@ Confirmed family ownership beyond the Skeleton template is:
   post-attack cooldown 50, alpha/fade state.
 - Demon: approach, DemonBomb, recovery, terminal radial Imp split.
 - Coffin: hidden/closed, rise/hold, opening, open. The opening edge invokes
-  Maggot helper `0x00479C30` exactly three times; the open state can replenish
-  owned children while below its configured maximum. A Maggot emerges
-  ballistically, crawls, bites once, immediately enters its own death, and is
-  cleaned up when its stored Coffin parent no longer resolves.
+  Maggot helper `0x00479C30` exactly three times; open state uses the recovered
+  charge/probability emission program independently of the active-child cap. A
+  Maggot emerges ballistically, enters inactive or active admission, and only
+  an active child can bite once before its own death. Every lane is cleaned up
+  when its stored Coffin parent no longer resolves.
 
-Exact generalized marker/cooldown programs for Imp, Zombie, Wraith, and Demon,
-plus the full Coffin replenishment and Maggot emergence distributions, are not
-closed. They must not be reported as tick-identical native parity. A bounded
-deterministic web program may complete the playable family while retaining
-family-specific states, documented timing constants, and semantic event
-ownership; it must not collapse them into reskinned Skeletons or one universal
-attack cadence.
+Exact generalized marker/cooldown programs for Imp and Wraith remain separate
+open rows. Zombie and Demon are closed by their later supersessions. The
+2026-08-27 Coffin/Maggot supersession also closes charge-based emission, launch
+segments/headings, active/inactive admission, count policy, and parent teardown;
+the former bounded replenishment/emergence permission is revoked.
 
 ## Active Archer, Mage, and Wraith modifiers
 
@@ -536,7 +538,7 @@ survival loop complete; none is promoted to recovered retail timing:
   serialize that constructor roll without claiming the retail global RNG
   sequence.
   Coffin is excluded from this direct-action list: it uses the exact
-  three-helper opening edge and the separate bounded child program below;
+  three-helper opening edge and the exact charge/admission child program below;
 - Archer range modes 0/1/2/3 use bounded `(minimum, maximum)` bands
   `(120,240)`, `(80,180)`, `(180,320)`, `(100,320)`; Mage modes use
   `(100,220)`, `(70,165)`, `(150,300)`, `(80,300)`. Archer leading projection
@@ -547,21 +549,25 @@ survival loop complete; none is promoted to recovered retail timing:
   240, Mage 220, Wraith 52, and Zombie 48; melee marker eligibility is the
   greater of that family bound and
   `actorRadius + targetRadius + nativeSeparationEpsilon` as required above;
-- terminal presentation windows are Coffin 31, Demon 49, Imp 19,
+- terminal presentation windows are Demon 49, Imp 19,
   Skeleton/Archer/Mage 24, and Wraith/Zombie 36 ticks;
 - enemy projectile `(speed, contact radius, lifetime, homing)` programs are
   Arrow `(5,8,300,false)`, Firebolt `(4.5,10,300,false)`, Guided Missile
   `(3,12,400,true)`, Demon Bomb `(2.5,18,400,true)`, and stationary Poison Pool
   `(0,35,1000,false)`;
-- Coffin's exact native opening edge requests three helpers. Its bounded web
-  follow-up replenishes one child every 50 ticks while below the configured
-  live-child maximum. Each child uses a 24-tick ballistic emergence, a 10-tick
-  post-emergence attack delay, distinct lid/edge launch state, then a `0.5`
-  crawl step, collision radius 8, attack reach 18, and one successful bite.
-  That bite immediately begins a 12-tick terminal presentation. An invalid,
-  missing, dying, or non-Coffin parent retires the child on the next
-  authoritative child step; the exact retail replenishment and launch-vector
-  distributions remain open;
+- Coffin's opening edge requests three helpers. Its exact open-state follow-up
+  uses `ratio=charge/(baseSpeed*timeScale)`: ratio below one emits three, while
+  ratio at least one emits one when `Float(ratio)<1`; charge adds `0.025` to a
+  cap of ten. Births are not capped. Maggot ballistic emergence selects one of
+  the two recovered launch segments/headings after retained `+/-1` X scale and signed
+  `Float(15)` rotation, mirrors heading for negative scale, and consumes two
+  independent `Float(8)` offsets. Its `Float(5)` visual phase advances by
+  float32 `0.25` modulo five while height-dependent gravity/bounce runs; there
+  is no 24-tick duration. Landing promotes only when active
+  count is below the configured maximum and `Integer(5)==3`; otherwise the
+  first 30 inactive children remain noncombat and later failed admissions
+  retire. An invalid or non-Coffin parent retires every child lane. Active
+  children retain the already recovered one-bite/poison/death contract;
 - bounded modifier clocks are 300 ticks at movement scale 0.5 for Mage frost,
   three seconds for Archer/Mage poison, 100 ticks per Mage shield-interval
   config unit with ally range 240, and four ticks for the Mage lightning
@@ -586,10 +592,7 @@ and focused actor/config/combat tests together.
 
 The remaining native gaps are:
 
-1. exact action programs for Imp and Wraith, and full Coffin replenishment
-   timing and Maggot
-   launch/emergence distributions beyond the closed three-helper, ownership,
-   and single-bite lifecycle;
+1. exact action programs for Imp and Wraith;
 2. numeric physics for non-Skeleton Banish/SpriteArray/MoveFade/SmokyBouncer
    branches beyond the recovered class, art, fan-out, and ownership. Wraith
    body opacity, Imp flight presentation, Zombie articulation, and Demon
@@ -612,8 +615,8 @@ semantic events, dropped modifier fields, zero-filled status/effect/shield
 state, or claims of exact native timing. Acceptance requires upgraded primary
 ranks to change both debit and captured damage, marker-time target/reach
 falsifiers, two-way player/enemy and player/Maggot separation, active runtime
-tests for every retail Archer/Mage/Wraith modifier, bounded Coffin child
-emergence/replenishment/one-bite/parent cleanup, strict replication round trips,
+tests for every retail Archer/Mage/Wraith modifier, exact Coffin charge and
+Maggot admission/count/one-bite/parent cleanup, strict replication round trips,
 and at least one host event driving a scene effect exactly once. Those focused
 contracts sit alongside protocol lifecycle/recovery, two-client spectator/Game
 Over, asset/record, audio-event, and real Chromium end-to-end coverage, followed
