@@ -85,9 +85,11 @@ Settlement v2.13 closes the provenance defect behind the retained
 their stages, so their content could not establish a legitimate baseline even
 though it settled. Starting independently from pristine profiles, the bounded
 restart experiment and durable-variable bisection found a deterministic
-in-game derivation. Contact with the unique type-5003 Annalist changes
-`hub_help_pending[0]`; after a clean Leave Game, Quit, and relaunch, contact with
-the unique type-5004 PotionGuy/Fomentius changes `hub_help_pending[1]`; a second
+in-game derivation. The sealed v2.13 receipt calls the two bytes
+`class_enabled[0..1]`; the save-format recovery now identifies those historical
+labels as `hub_help_pending[0..1]`. Contact with the unique type-5003 Annalist
+changes byte 0; after a clean Leave Game, Quit, and relaunch, contact with the
+unique type-5004 PotionGuy/Fomentius changes byte 1; a second
 clean exit and relaunch then makes direct New Game reproduce the retained Hub
 multiset in both instances. The first field suppresses `UI.28`; the second
 promotes the five LevelPicker members from null to their reproduced visible

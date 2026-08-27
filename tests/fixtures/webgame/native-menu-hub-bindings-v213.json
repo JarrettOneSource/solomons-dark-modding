@@ -44,7 +44,7 @@
       ],
       "required_profile_fields": [
         {
-          "profile_field": "hub_help_pending[0]",
+          "profile_field": "class_enabled[0]",
           "runtime_address_expression": "profile + 0x9a",
           "native_actor": {
             "object_type_id": 5003,
@@ -58,7 +58,7 @@
           }
         },
         {
-          "profile_field": "hub_help_pending[1]",
+          "profile_field": "class_enabled[1]",
           "runtime_address_expression": "profile + 0x9b",
           "native_actor": {
             "object_type_id": 5004,
