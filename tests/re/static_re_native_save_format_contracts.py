@@ -23,6 +23,7 @@ from native_save_format import (
     DARKDATA_CORE_FIELDS,
     DARKDATA_KEY,
     FRESH_PROFILE_DEFAULTS,
+    ChunkNode,
     SYNCBUFFER_ENDIANNESS,
     SYNCBUFFER_MAGIC,
     SYNCBUFFER_VERSION,
@@ -85,6 +86,10 @@ STAGED_LAUNCHER = ROOT / "SolomonDarkModLauncher/src/Launch/StagedGameLauncher.c
 NATIVE_RESUME_SELECTOR = (
     ROOT / "SolomonDarkModLauncher/src/Launch/NativeResumeSelector.cs"
 )
+
+
+def _node_content(node: ChunkNode) -> tuple[bytes, tuple[object, ...]]:
+    return node.payload, tuple(_node_content(child) for child in node.children)
 
 EXPECTED_BINARY_SHA256 = (
     "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3"
@@ -620,8 +625,10 @@ def test_native_portable_profile_progression_and_opaque_round_trip_are_exact() -
     base_dark = decode_darkdata(darkdata)[1]
     next_dark = decode_darkdata(encoded_darkdata)[1]
     _require(
-        base_dark.root.children[1] == next_dark.root.children[1]
-        and base_dark.root.children[5] == next_dark.root.children[5]
+        _node_content(base_dark.root.children[1])
+        == _node_content(next_dark.root.children[1])
+        and _node_content(base_dark.root.children[5])
+        == _node_content(next_dark.root.children[5])
         and base_dark.root.children[0].payload[4:14]
         == next_dark.root.children[0].payload[4:14]
         and base_dark.root.children[0].payload[25:117]
@@ -647,7 +654,8 @@ def test_native_portable_profile_progression_and_opaque_round_trip_are_exact() -
     }
     _require(
         all(
-            base_game.root.children[index] == next_game.root.children[index]
+            _node_content(base_game.root.children[index])
+            == _node_content(next_game.root.children[index])
             for index in range(8)
             if index not in (0, 1, 5, 7)
         )
@@ -660,8 +668,8 @@ def test_native_portable_profile_progression_and_opaque_round_trip_are_exact() -
             ))
             if index not in binding_offsets
         )
-        and base_game.root.children[1].children[1:]
-        == next_game.root.children[1].children[1:]
+        and tuple(_node_content(node) for node in base_game.root.children[1].children[1:])
+        == tuple(_node_content(node) for node in next_game.root.children[1].children[1:])
         and all(
             base_game.root.payload[base_belt["entries"][slot]["start"]:
                                    base_belt["entries"][slot]["end"]]
@@ -678,12 +686,12 @@ def test_native_portable_profile_progression_and_opaque_round_trip_are_exact() -
             ))
             if index not in footer_offsets
         )
-        and base_game.root.children[7].children
-        == next_game.root.children[7].children
-        and base_game.root.children[0].children[2:]
-        == next_game.root.children[0].children[2:]
-        and base_game.root.children[0].children[0].children[0]
-        == next_game.root.children[0].children[0].children[0],
+        and tuple(_node_content(node) for node in base_game.root.children[7].children)
+        == tuple(_node_content(node) for node in next_game.root.children[7].children)
+        and tuple(_node_content(node) for node in base_game.root.children[0].children[2:])
+        == tuple(_node_content(node) for node in next_game.root.children[0].children[2:])
+        and _node_content(base_game.root.children[0].children[0].children[0])
+        == _node_content(next_game.root.children[0].children[0].children[0]),
         "portable gamestate application changed non-wizard or opaque wizard siblings",
     )
     _require(
