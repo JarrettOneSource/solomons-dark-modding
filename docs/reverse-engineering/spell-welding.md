@@ -297,7 +297,7 @@ The direct atlas and procedural presentation membership is:
 | BallLightning | draw `0x005E0670` applies weak parent alpha, calls `0x00536380` for four BadGuys-110 circles plus two BadGuys-1836..1839 forks, then draws a direct BadGuys-70 sibling at `(x,y-10)`, scale `1.25+Float(.1)` and `Float(1)` alpha; the welded handler leaves constructor byte `+0x168` zero, so the final `0x00535A30` Ether compositor is always present at `1+Float(.5)` scale, phase `+0x154`, and graphics-alpha multiplier `.1`; `Anim_FadeLightning` owns impact |
 | GroundSpark | actor draw `0x005E1B00` renders its tick-owned animation list; each tick creates record 71 fade state and the optional BadGuys 1836..1839 fork branch |
 | Flame Lash | two-tick textured vertex mesh from `0x004583E0`, using BadGuys record 44; constructor `0x0045B810` calls the same exact `0x0052E020` three-point QuickSpline/ribbon builder as Lightning. Normal width/alpha are `1/1`; weak width is `.75` and color alpha `.5`; phase is `-3*managerTick`. The shared Enhanced branch can append independently selected BadGuys 375/376 geometry and texture. Handler `0x005408F0` also registers endpoint/contact `Anim_FadeFlameLash` roots; draw `0x00457370` uses BadGuys 35 additively. |
-| Blizzard Beam | two-tick `0x005308D0` beam path from `0x00458470`; this is not the ordinary Frost Jet particle class. Weld caller `0x00541870` passes source-glow flag one and endpoint/enhanced flag zero, so records 6/31 are unreachable here. The owned extras are exactly two one-frame source `Anim_SpellGlow` variant-24 actors. |
+| Blizzard Beam | two-tick `0x005308D0` beam path from `0x00458470`; this is not the ordinary Frost Jet particle class. Weld caller `0x00541870` passes source-glow flag one and endpoint/enhanced flag zero, so records 6/31 are unreachable here. The primary factory owns two one-frame source `Anim_SpellGlow` variant-24 actors; handler-owned contact and chain children are closed in the 2026-08-27 reopening below. |
 | Steam Jet | one even-lane-selected normal/Over moving actor using BadGuys record 76 through draws `0x00458550/0x00458750`; its constructor/tick state outlives the cast emission that created it |
 | EBoulder | BadGuys 86 center/opening plus oriented, depth-sorted rocks 168..171; split children use 2008..2010, and each accepted shared-flight contact creates one independently retained 2008..2010 `Anim_BoulderBit` through `0x0060BC10` |
 | Meteor | fall draw `0x005E16C0`; auxiliary `0x005E6DE0` draws DeadHawg 19 during final descent and BadGuys 67 during impact; impact constructor `0x00610880` owns the independent flash/debris; the channel also emits `Anim_Iceblast` at the aimed point |
@@ -671,3 +671,114 @@ contain compiled switches/tables. Art replacement can change the ten existing
 weld icons if the Skills bundle ABI is preserved. Arbitrary new welds require
 a loader-owned registry and hooks at all four native decision points, or a
 complete replacement of the welding layer.
+
+## 2026-08-27 Blizzard Beam contact-geometry reopening
+
+The earlier Water + Air entry correctly separated `Anim_BlizzardBeam` from
+ordinary Frost Jet art, but it reused Frost Jet's cone language for gameplay
+contact and called the two source glows the complete Blizzard child set. Both
+claims are false. This reopening follows handler `0x00541870` through its
+view/terrain clip, polygon query, target branches, 100-unit chain query,
+target-owned push state, and registered contact children.
+
+Evidence is the retail 0.72.5 `SolomonDark.exe`, 4,723,200 bytes, SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`,
+preferred base `0x00400000`, in the canonical Ghidra 12.0.3 project. Fresh
+read-only replica runs covered handler `0x00541870`, polygon query
+`0x006427E0 -> 0x005235F0`, point-in-polygon helper `0x00405160`, point query
+`0x00641220`, chain query `0x00641340`, and geometry helpers
+`0x00403560/0x004035D0/0x004045A0/0x00404620/0x00410FF0`.
+
+### Exact primary-contact polygon
+
+Each held tick obtains the Staff socket, extends the cast heading by 100,000
+world units, and clips that line to the Region primary view
+`+0x8BCC..+0x8BD8` expanded by 100 units on every side. A line query from the
+wizard root to that view endpoint uses exclusion mask `0x380`; its first
+terrain contact replaces the endpoint. Let `S` be the resulting clipped start
+(normally the Staff socket), `E` the terrain-or-expanded-view endpoint, and
+`D=normalize(E-S)`. The actor-root query polygon is:
+
+```text
+beamWidth = (widen == 0 ? 0.75 : 1 + 3*widen) * (weak ? 0.5 : 1)
+halfWidth = max(20, 25*beamWidth)
+Q         = (D.y, -D.x) * halfWidth
+C0        = S + (0,15)
+C1        = E + 50*D + (0,15)
+polygon   = [C0+Q, C1+Q, C1-Q, C0-Q]
+```
+
+Every multiply/add is stored through native float32 fields. Call site
+`0x00541F26..0x00541F37` passes mask `0x1086` and excludes the caster.
+`0x005235F0` broadphases the polygon bounds expanded by 25, visits cell X then
+cell Y then stable cell slots, and applies `0x00405160` to each actor **root**.
+The ray-cast point test uses strict crossing comparisons; actor collision
+radius and visible sprite bounds never enter. The handler does not perform a
+second per-target LOS query. This is not Frost Jet's `0x00641B10` angular
+cone, fixed reach `205+4*widen`, or actor circle collision.
+
+Mask branches are complete. Flags `0x2` hostiles and flags `0x4` scenery enter
+the root/contact-glow lane; only bit `0x2` receives modifiers, damage, seed
+membership, or push. Flags `0x80/0x1000` enter virtual `+0x64`; in the shipped
+Boneyard survival set, Arrow is the `0x80` member and tumbles from the fixed
+Blizzard scalar `100`. Coffin clears target flags and never enters. The five
+flags-`0x4` scenery siblings are Tree `2001`, Monument `2009`, Gravestone
+`2029`, Building `2040`, and Goodie `2061`.
+
+### Chains, weak branch, and target-owned push
+
+Every bit-`0x2` polygon root is contacted once in cell order. When arc count is
+positive, those roots seed independent chain walks sharing one exclusion list.
+`0x00542614..0x0054263D` passes exact radius `100`, mask `2`, and the current
+root to `0x00641340`; equality is excluded and candidate radius is ignored.
+Lightning `0x0053F9C0`, Flame Lash `0x005408F0`, and ElectricBurn
+`0x00628F10` instead pass constant `200`. Every accepted Blizzard hop
+multiplies the next damage by double `0.6000000238418579`.
+
+Weak Blizzard keeps polygon mask `0x1086` and half damage, but sets arc count,
+chain radius, and push to zero, skips Stun, and installs ColdSlow movement
+factor `.75` rather than the normal Frost factor `.5`. Normal contact installs
+ColdSlow before Stun and then dispatches damage.
+
+Normal positive push is not Frost Jet's distance-attenuated Chill impulse.
+Target fields `+0x1C8/+0x1CC` own a Blizzard push accumulator and its last
+global tick. Before updating them, the handler point-queries 30 units beyond
+the target along caster-to-target direction with radius `25/3`, mask `2`, and
+the target excluded. A blocker suppresses the whole push update. Otherwise:
+
+```text
+if currentTick-lastTick > 3: accumulator = 0
+else accumulator = min(5*push, 2, accumulator + 0.1*push)
+lastTick = currentTick
+movement = direction * (2.5*push*accumulator)
+```
+
+Flag `0x40` scales `push` by `.05` before movement. The target is then moved
+through `PlayerActor_MoveStep 0x00525800`, so static and dynamic collision,
+cell rebinding, and final root position remain world-owned. The first contact
+after a gap arms the accumulator but produces no displacement; sustained
+contacts ramp it to the smaller cap.
+
+### Registered presentation children
+
+The two variant-24 one-frame source `Anim_SpellGlow` actors remain exact, but
+they are not the complete child set. A terrain endpoint and every returned
+flags-`0x2/0x4` root each create a one-frame variant-3 `Anim_SpellGlow` at
+`(root.x,root.y-20)`, with `1+Float(.5)` scale and `Float(360)` rotation.
+Each chain hop creates an independently registered `Anim_FadeFrost` at the
+current chain-source root minus 15 Y plus a `Float(10)` radial offset. It renders the Water
+compositor at `1+Float(.5)` scale with alpha sequence `1,.6,.2` from loss
+`.4`. `Integer(2)==1` additionally creates
+`Anim_FrostJetEffect_Chaining` at that same source root: speed two, fixed initial core scale `.5`, the
+shared Frost update followed by the chaining `-.01` core-scale wrapper, and
+its separately retiring Water-compositor root. The accepted one-in-two branch
+consumes the four `Float` words inside base constructor `0x00453550` before its
+explicit `Float(10)` radial and signed `Float(2)` placement draws. No Blizzard beam constructor is
+called inside the chain loop; the only `0x005328D0` call is the primary beam at
+`0x00542C92`.
+
+Release, primary replacement, death, and world teardown stop new held-tick
+queries immediately. The two-tick primary beam, one-frame SpellGlows,
+three-frame chain fades, and chaining Frost particles remain independently
+registered until their own native expiry. No browser mechanism blocks this
+contact or lifetime model.

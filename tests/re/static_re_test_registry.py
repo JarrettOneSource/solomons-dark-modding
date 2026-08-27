@@ -626,6 +626,7 @@ from static_re_runtime_cast_contracts import (
 from static_re_projectile_spell_mechanics_contracts import (
     test_air_and_frost_channels_remain_tick_queries_with_exact_stop_edges,
     test_air_lightning_cadence_and_contact_light_source_are_pinned,
+    test_blizzard_contact_geometry_and_shared_directional_queries_are_closed,
     test_cast_glyph_emitter_index_and_offsets_are_pinned,
     test_cast_glyph_emitter_resolves_every_recorded_projectile_spawn,
     test_class_specific_rails_wall_shadow_painters_are_pinned,
@@ -2413,6 +2414,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "projectile/spell native dispatch is complete",
         test_projectile_spell_native_dispatch_contract_is_complete,
+    ),
+    (
+        "Blizzard contact geometry and shared directional queries are pinned",
+        test_blizzard_contact_geometry_and_shared_directional_queries_are_closed,
     ),
     (
         "held one-shot Staff action handoff is pinned",

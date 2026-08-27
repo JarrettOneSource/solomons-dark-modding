@@ -13,6 +13,7 @@ from static_re_contract_support import ROOT, StaticReTestFailure
 DOC_PATH = ROOT / "docs/reverse-engineering/native-projectile-and-spell-mechanics.md"
 LIGHTING_DOC_PATH = ROOT / "docs/reverse-engineering/native-lighting-and-shadow-system.md"
 SKILLS_DOC_PATH = ROOT / "docs/reverse-engineering/native-skills-and-spells.md"
+WELD_DOC_PATH = ROOT / "docs/reverse-engineering/spell-welding.md"
 EARTH_VFX_CATALOG_PATH = ROOT / "docs/reverse-engineering/earth-boulder-vfx-catalog.json"
 AUDIO_DOC_PATH = ROOT / "docs/reverse-engineering/native-audio-events.md"
 FIXTURE_PATH = ROOT / "tests/fixtures/webgame/projectile-goldens.json"
@@ -38,6 +39,29 @@ def _fixture() -> dict[str, Any]:
 
 def _earth_vfx_catalog() -> dict[str, Any]:
     return json.loads(EARTH_VFX_CATALOG_PATH.read_text(encoding="utf-8"))
+
+
+def test_blizzard_contact_geometry_and_shared_directional_queries_are_closed() -> str:
+    shared = _document()
+    weld = WELD_DOC_PATH.read_text(encoding="utf-8")
+    for token in (
+        "`0x00641500` (single best target)",
+        "`A = origin - 30*headingDirection`",
+        "`15+widen/2`",
+        "radii 200/200/100",
+    ):
+        _require(token in shared, f"shared directional-query fact is absent: {token}")
+    for token in (
+        "Call site\n`0x00541F26..0x00541F37` passes mask `0x1086`",
+        "halfWidth = max(20, 25*beamWidth)",
+        "radius and visible sprite bounds never enter",
+        "passes exact radius `100`, mask `2`",
+        "Target fields `+0x1C8/+0x1CC`",
+        "current chain-source root minus 15 Y",
+        "No Blizzard beam constructor",
+    ):
+        _require(token in weld, f"Blizzard contact-system fact is absent: {token}")
+    return "Blizzard polygon, chain, push, and child membership are instruction-pinned"
 
 
 def test_earth_boulder_second_pass_visual_ownership_is_pinned() -> str:

@@ -3497,3 +3497,40 @@ multiplier. Pure Air `24`, Water `32`, Earth `40`, and welded Constant builds
 Projectile creation, mana, target selection, sockets, audio, collision,
 contact, and teardown remain owned by their already recovered concrete
 handlers. No browser constraint prevents exact fixed-tick reproduction.
+
+## 2026-08-27 sustained directional-query correction
+
+The Water/Steam cone and Lightning acquisition descriptions above omitted the
+shared 30-unit angular-apex offset, and the welded-primary report incorrectly
+assigned Frost Jet's cone to Blizzard Beam. Fresh read-only instruction traces
+against the same retail image close all direct xrefs of the affected query
+helpers.
+
+`0x00641500` (single best target) and `0x00641B10` (ordered target list) both
+measure actor angle from `A = origin - 30*headingDirection`, while their strict
+range test remains `distanceSquared(actorRoot,origin) < reach^2`. The caller
+passes a full aperture; both helpers compare against
+`heading +/- aperture/2`. Candidate radius is absent. Per-target Region LOS,
+pending/excluded/type-`0xBB9` filtering, cell-X/cell-Y/slot traversal, and the
+special `0x180` collection remain as previously recovered.
+
+The complete direct membership is:
+
+| Query/helper | Direct xrefs | Disposition in the player-primary collision system |
+| --- | --- | --- |
+| polygon list `0x006427E0` | Demonskull Mouth Beam `0x0044FFE0`; Staff contact `0x0053B9F0`; Blizzard `0x00541870` | Blizzard exact; enemy beam and melee are separate owners |
+| ordered cone `0x00641B10` | Steam `0x00542D20`; Frost `0x00543860`; shared area helper `0x005F3B50`; selector helper `0x005F6410` | Frost and Steam exact; the latter two belong to secondary/enemy consumers |
+| priority cone `0x00641500` | player acquisition `0x00529AD0`; Leviathan `0x006145D0` | player Lightning/Flame exact; Leviathan is a secondary summon |
+| nearest root `0x00641340` | Lightning `0x0053F9C0`; Flame `0x005408F0`; Blizzard `0x00541870`; ElectricBurn `0x00628F10`; Goodie `0x00646D00` | player chains exact at radii 200/200/100; modifier and Goodie retain separate owners |
+
+Pure Frost and Steam use full aperture `30+widen`, hence half-angle
+`15+widen/2`; their reach remains `205+4*widen`. Weak Frost uses aperture 30,
+reach 205, and mask 2. Pure Lightning and Flame Lash use the same 30-unit
+back-projected apex with their recovered full aperture 30, priority/retention,
+view-clipped range, and 200-unit chain radius. Blizzard is the strict polygon
+documented in `spell-welding.md`, has no per-target LOS, and chains at 100.
+
+This correction changes target membership and order only where the prior web
+math differed. It does not import actor body radii into any directional query,
+does not change the five priority-1000 Lightning scenery rows, and does not
+alter fixed-tick cast or teardown ownership.
