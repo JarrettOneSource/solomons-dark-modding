@@ -48,6 +48,42 @@ data-driven scenario seam. The Tutorial controller is purpose-built and should
 not be instantiated outside this exact scene. [E01:005D5CF0,005D6330]
 [E13] [E15] [E16:00689750] [E17:006824B0]
 
+## 2026-08-26 opening-guidance and first-cast boundary clarification
+
+A requested browser usability pass reopens the Tutorial's opening and first
+combat lesson. The reusable native facts are already closed by the complete
+controller and pointer census above; this clarification records precisely
+which requested behavior is retail and which is an explicit web extension.
+
+- Stock stage 0 renders `USE YOUR KEYBOARD / TO MOVE THE WIZARD` and `Find
+  and confront Solomon Dark`. It owns no pointer call. Completion remains the
+  strict squared-distance test `> 40000` from Tutorial `+0x80/+0x84`; the
+  controller has no "first physical movement input" acknowledgement field.
+- The stage-0/1 Dig target is nevertheless exact and available: START GAME
+  script 10000 places the one Solomon Dig actor, and the shared UI-28 pointer
+  primitive `0x005C9BB0` accepts caller-owned screen points. A browser arrow
+  aimed at the authoritative Dig position is therefore an exact-asset web
+  extension, not a newly discovered stock stage-0 member. Its lifecycle can
+  end when the encounter leaves `digging` for `turning`, the first accepted
+  Solomon-contact edge.
+- Stock stage 2 renders `POINT AND CLICK YOUR MOUSE / TO THROW MAGIC
+  MISSILES`. WAVE 1 starts two complete five-Skeleton groups. The controller
+  advances to stage 3 when either the primary-cast counter is positive **or**
+  global enemy count exceeds five. There is no Tutorial pause/freeze call in
+  stage 2 and no mobile-copy branch in `Tutorial::Render 0x005D08C0`.
+- Consequently, materializing all ten authored opening Skeletons makes the
+  stock enemy-count fallback true on the next controller tick. The heading is
+  legitimately a one-tick state under that contract; it is not a renderer
+  timeout or CSS race. Holding stage 2 until the first accepted primary cast,
+  pausing hostile simulation while player/cast/UI clocks continue, and using
+  left/right-joystick copy are explicit requested browser policy.
+
+The complete pointer family, all later stages 3..19, authored wave rows,
+narration, HUD gates, save/resume, and teardown remain unchanged. Do not
+generalize the requested selective hold into the ordinary Boneyard pause
+system: a normal gameplay pause also seals the very primary-cast action that
+must release this lesson.
+
 ## Address and evidence conventions
 
 Addresses are original virtual addresses for the shipped executable with image
