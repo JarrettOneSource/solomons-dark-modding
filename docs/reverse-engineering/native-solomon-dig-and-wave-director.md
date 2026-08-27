@@ -931,3 +931,38 @@ The painter order is body/shadow first, then the child manager under the
 Region-light multiplier, all inside Solomon's ordinary dynamic painter block.
 The dirt does not get an independent world-Y sort key, shadow, collision body,
 light provider, audio call, network actor, or reward/gameplay effect.
+
+## 2026-08-27 record-13 set-piece ownership correction
+
+A browser report of an extra ground fragment at Solomon reopened the static
+set-piece interpretation. The earlier web consequence treated the selected
+grave root as permission to materialize a standalone DeadHawg-13 resident and
+also kept the record-13 draw inside Solomon. That duplicates one native draw
+at the same coordinates.
+
+Fresh canonical read-only decompilation closes the complete membership:
+
+- set-piece selector/builder `0x00465920` filters overlay-8 Gravestones and
+  creates only type 5009 Solomon (`0x1391`) and type 5010 Lantern (`0x1392`);
+  it allocates no Sprite, scenery object, manager child, or third resident;
+- state-0 renderer `0x004902C0` draws the current Solomon body, exits the clip,
+  then draws DeadHawg record 13 exactly once through absolute singleton
+  address `DeadHawg + 0xA2C` at `(actor.x-10, actor.y-113)`;
+- dialogue renderer `0x00490420` draws body/mouth and then the same one
+  record-13 pass; the state-3 hold delegates to that renderer;
+- accelerating/escaping walk renderers `0x00490640/0x00490790` have no
+  record-13 call once the grave clip is left; and
+- the Solomon-owned `Anim_Flydirt` manager renders after this body/record-13
+  program and remains independently closed by the section above.
+
+Because actor position is `(grave.x+10,grave.y+113)`, the state draw resolves
+exactly to the selected grave root. That coordinate identity explains the old
+misreading; it does not create a second owner. The record shares Solomon's
+requested Region tint and ordinary dynamic sort root, disappears on the
+recovered phase branch with the actor, and is destroyed with that actor.
+
+The complete disposition is therefore: state-0 one pass, dialogue/hold one
+pass, accelerating/escaping zero passes, `Anim_Flydirt` separate child passes,
+Lantern separate resident, and standalone grave-ground Sprite `out-of-system`
+because stock never constructs it. No member is browser-blocked and no
+unknown remains.

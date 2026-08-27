@@ -1560,3 +1560,52 @@ custom Boneyards do not inherit that fixed-scene domain.
   tree and clean-stock capture directory remain retained because publication
   was not requested; no loader code, runtime patch, push, or deployment was
   performed.
+
+## 2026-08-27 Sirmin wardrobe override
+
+A browser comparison found that the Tutorial wizard inherited the placeholder
+Ether Hat/Robe color, making Sirmin purple like Magic Missile. The complete
+Tutorial constructor already contained a separate authored wardrobe writer;
+the prior controller census stopped after its skill and belt mutations.
+
+`Tutorial_CreateAndInstall 0x005D5CF0` resolves the equipped Hat through
+`Game+0x1428` at `0x005D5DA1..0x005D5DA9` and the equipped Robe through
+`Game+0x142C` at `0x005D5E0E..0x005D5E16`. Both use common item accessor
+`0x00570D80`. For each object the controller constructs exact base RGBA
+`(1,0.5,0,1)`, passes luminance factor `0.6000000238418579` from
+`0x007854D0` to `0x0040FC60`, and writes the resulting float4 only to the
+primary wearable color at item `+0x88..+0x94`.
+
+The transform uses the shared luminance weights
+`0.30860000848770142`, `0.6093999743461609`, and
+`0.0820000022649765`:
+
+```text
+luminance = f32(r*0.3086000085 + g*0.6093999743 + b*0.0820000023)
+out.channel = f32(0.6*luminance + 0.4*channel)
+```
+
+There is no RNG draw in this override. The starter Hat/Robe selectors remain
+zero and their secondary colors remain exact white. Staff material and the
+selected Magic Missile element effect are not recolored, so the stock visual
+is a tan/orange Sirmin wardrobe with the independent purple Ether effect—the
+same split visible in clean capture
+`docs/assets/tutorial-stock-20260823/stage-0.png` (SHA-256
+`8b43df2d8bcaa5bd9d92894e31cf9dc749d67e4f5fa99ec1bac39c26b286829c`).
+
+This writer runs once when the compiled Tutorial controller is installed and
+belongs to the disposable Tutorial player generation. It applies to both Hat
+and Robe, every heading/pose/fixed attachment bank that consumes their two
+item colors, death presentation until the Tutorial Game ends, mute/audio
+branches, and resumed Tutorial snapshots carrying the same live equipment.
+It does not recolor Staff, Amulet, rings, NPCs, later College/Create clothing,
+or a normal player generation. All members are extractable and no platform
+exception remains.
+
+### 2026-08-27 Website validation receipt
+
+Production Mac Chrome reported exact Tutorial Hat/Robe primary tint `0xC4915E`
+with white secondary, while the independent Ether effect remained active as
+effect 8. The captured wizard is tan under the purple effect, and all page,
+console, and failed-response arrays were empty. First College confirmation then
+replaced the disposable wardrobe with the selected Air starter appearance.

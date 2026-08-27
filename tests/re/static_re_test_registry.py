@@ -9,6 +9,7 @@ from repository_identity_contract import (
     test_repository_history_uses_approved_identities,
 )
 from static_re_boneyard_contracts import (
+    test_arena_field_and_road_mesh_membership_is_complete,
     test_boneyard_generator_control_flow_and_output_census_is_complete,
     test_boneyard_parser_rejects_empty_truncated_and_trailing_files,
     test_boneyard_scripting_model_and_runtime_anchors_are_registered,
@@ -43,6 +44,7 @@ from static_re_native_session_flow_contracts import (
     test_native_session_flow_state_enum_is_pinned,
     test_native_session_flow_transition_step_order_is_pinned,
     test_post_tutorial_college_title_walk_contract_is_pinned,
+    test_shared_hub_onboarding_collision_reset_policy_is_pinned,
 )
 from static_re_native_web_combat_lifecycle_contracts import (
     test_native_web_combat_lifecycle_integration_contract_is_pinned,
@@ -107,6 +109,7 @@ from static_re_native_hud_skill_selector_contracts import (
     test_native_skilldragger_threshold_hit_presentation_and_audio_are_pinned,
     test_native_skill_screen_ambient_seal_motion_is_pinned,
     test_tutorial_camera_enemy_and_gate_contact_memberships_are_pinned,
+    test_tutorial_sirmin_wardrobe_override_is_pinned,
 )
 from static_re_native_ui_kit_contracts import (
     test_native_ui_kit_catalog_is_complete_and_regenerable,
@@ -955,6 +958,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_boneyard_generator_control_flow_and_output_census_is_complete,
     ),
     (
+        "Arena field and Road mesh memberships are complete",
+        test_arena_field_and_road_mesh_membership_is_complete,
+    ),
+    (
         "Solomon Dig encounter and survival wave director are registered",
         test_solomon_dig_and_wave_director_contract_is_registered,
     ),
@@ -1037,6 +1044,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Post-Tutorial College title-walk ownership is pinned",
         test_post_tutorial_college_title_walk_contract_is_pinned,
+    ),
+    (
+        "Shared-Hub onboarding collision and reset boundaries are pinned",
+        test_shared_hub_onboarding_collision_reset_policy_is_pinned,
     ),
     (
         "Native class-loadout census and identity are pinned",
@@ -1161,6 +1172,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Tutorial camera enemy and Gate contact memberships are pinned",
         test_tutorial_camera_enemy_and_gate_contact_memberships_are_pinned,
+    ),
+    (
+        "Tutorial Sirmin wardrobe override is pinned",
+        test_tutorial_sirmin_wardrobe_override_is_pinned,
     ),
     (
         "Webgame asset manifest schema and provenance are pinned",

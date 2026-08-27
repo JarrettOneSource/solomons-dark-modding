@@ -186,5 +186,23 @@ def test_tutorial_camera_enemy_and_gate_contact_memberships_are_pinned() -> str:
     return "Tutorial camera cleanup and asymmetric player/enemy Gate contact are pinned"
 
 
+def test_tutorial_sirmin_wardrobe_override_is_pinned() -> str:
+    tutorial = TUTORIAL_DOC.read_text(encoding="utf-8")
+    for marker in (
+        "## 2026-08-27 Sirmin wardrobe override",
+        "`Game+0x1428` at `0x005D5DA1..0x005D5DA9`",
+        "`Game+0x142C` at `0x005D5E0E..0x005D5E16`",
+        "`(1,0.5,0,1)`",
+        "`0.6000000238418579`",
+        "primary wearable color at item `+0x88..+0x94`",
+        "There is no RNG draw in this override",
+        "secondary colors remain exact white",
+        "tan/orange Sirmin wardrobe with the independent purple Ether effect",
+        "disposable Tutorial player generation",
+    ):
+        require(marker in tutorial, f"Tutorial Sirmin wardrobe report lost marker {marker}")
+    return "Tutorial Hat/Robe tan override and independent Ether Staff effect are pinned"
+
+
 if __name__ == "__main__":
     print(test_native_hud_skill_selector_ownership_geometry_and_audio_are_pinned())

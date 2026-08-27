@@ -449,6 +449,53 @@ def test_boneyard_generator_control_flow_and_output_census_is_complete() -> str:
     )
 
 
+def test_arena_field_and_road_mesh_membership_is_complete() -> str:
+    world = _read("docs/reverse-engineering/native-boneyards-and-world.md")
+    required = (
+        "## 2026-08-27 Arena field and Road mesh closure",
+        "`0x0046F528 -> 0x004142E0`",
+        "`0x0046F651 -> 0x004142E0`",
+        "`0x004D6223`",
+        "world-anchored 200-by-200 lattice",
+        "| 0 | `0x00B2F368` | 21 |",
+        "| 1 | `0x00B2F2A4` | 20 |",
+        "| 2 | `0x00B2F2A4` | 20 |",
+        "`0x0046EC9A..0x0046ECB7`",
+        "exact float32 `0.65`",
+        "Extracted record\n20 is an inverse oval mask",
+        "browser source-over submission is\ntherefore invalid",
+        "user explicitly\nwithdrew the puddle issue",
+        "Road geometry builder `0x0064C1F0` has ten direct callsites",
+        "Renderer `0x00640750` is",
+        "sole Road vtable painter at `0x0079F348`",
+        "| 0 | `road.png` | 55 | 30 | 128 |",
+        "| 1 | `road2.png` | 45 | 20 | 128 |",
+        "| 2 | `road3.png` | 55 | 20 | 256 |",
+        "| 3 | `road4.png` | 45 | 10 | 128 |",
+        "| 4 | `road5.png` | 55 | 10 | 128 |",
+        "exactly eighteen `Vertex2D`",
+        "`u=f32(x/textureSize)`",
+        "`v=f32((y/textureSize)/0.800000011920929)`",
+        "An isolated segment with both link UIDs at `0xFFFFFFFF` keeps hard",
+        "eight ordinary unique vertices and eighteen",
+        "This program contains no black outline and no circular joint patch",
+        "Texture addressing is wrap and stock 1x sampling is",
+        "linear",
+        "Terrain 3009",
+        "opaque-black Arena\nclear first, indexed Roads next, then Terrain and compact authored detail",
+        "explicitly excluded with the\nwithdrawn puddle scope",
+    )
+    missing = [token for token in required if token not in world]
+    if missing:
+        raise StaticReTestFailure(
+            "Arena field/Road mesh membership is incomplete: " + ", ".join(missing)
+        )
+    return (
+        "Arena clear and withdrawn field-overlay boundary plus every Road style, "
+        "link-alpha branch, vertex, index, UV, sampler, order, and teardown member are pinned"
+    )
+
+
 def test_loading_screen_uses_native_stage_progress_and_shared_d3d9_lifetime() -> str:
     loading = _read("SolomonDarkModLoader/src/loading_screen.cpp")
     renderer = _read("SolomonDarkModLoader/src/loading_screen_renderer.cpp") + _read(
@@ -1044,6 +1091,12 @@ def test_solomon_dig_and_wave_director_contract_is_registered() -> str:
         "sin(pi * ((cursor - 3) / 12))",
         "533c0a372b73446a65ba20b9aba523fdc99d97a4e78bfb632c1d8f3db61b3bf7",
         "1a2631f8022e0bef521aa112e4059c9ab7df5f6bfafbe6235972b92788ee95e7",
+        "## 2026-08-27 record-13 set-piece ownership correction",
+        "creates only type 5009 Solomon",
+        "draws DeadHawg record 13 exactly once",
+        "accelerating/escaping walk renderers",
+        "have no\n  record-13 call",
+        "standalone grave-ground Sprite `out-of-system`",
         "be06d2e6eaacf2e0b35aaf14293e41420a0efd5ae364894cda193398838ebce6",
         "4697492d7f5e07a78613b60c44122c7e3193d17d898eccf8ffe62f229d4c0fdd",
         "de233771aae5e806e4bdba0553729d1744605f512243fd30733e2e0dbd00a1ef",

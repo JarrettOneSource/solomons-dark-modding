@@ -1303,3 +1303,29 @@ def test_post_tutorial_college_title_walk_contract_is_pinned() -> str:
         "post-Tutorial flow regressed to an automatic Create transition",
     )
     return "post-Tutorial title cards, both transformed walks, automatic Chat, and manual Office exit are pinned"
+
+
+def test_shared_hub_onboarding_collision_reset_policy_is_pinned() -> str:
+    doc = _read(DOC_PATH)
+    heading = "## 2026-08-27 shared-Hub onboarding collision and reset boundary"
+    _require(doc.count(heading) == 1, "shared-Hub onboarding policy heading is ambiguous")
+    section = doc[doc.index(heading) :]
+    required = (
+        "ordinary PlayerWizard movement",
+        "other players and type-5002 Students are nonblocking in both mover orders",
+        "Static Region geometry retains its existing scripted/non-scripted policy",
+        "six-tick automatic `ARCH_INTRO_0` contact\nowner",
+        "successful confirmation of\n`college-loadout`",
+        "rebuilds Hat/Robe appearance from the selected element",
+        "restores the selected\nelement effect and normal player/Student/player collision",
+        "clears both durable\nonboarding bits",
+        "post-confirm reload cannot reacquire the onboarding owner",
+        "named multiplayer/product adaptation",
+    )
+    missing = [token for token in required if token not in section]
+    _require(
+        not missing,
+        "shared-Hub onboarding collision/reset boundary is incomplete: "
+        + ", ".join(missing),
+    )
+    return "shared-Hub onboarding bypass and confirmation reset boundaries are pinned"

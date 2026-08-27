@@ -1226,3 +1226,147 @@ facility. The isolated runtime pass independently exercised Arena region 4006
 and observed its expected native atlas residency without touching another
 agent's process; see
 [`native-live-validation.md`](native-live-validation.md).
+
+## 2026-08-27 Arena field and Road mesh closure
+
+A stock-versus-browser surface report reopened the base-field and Road entries
+above. The earlier report identified the correct objects, records, textures,
+and high-level order, but stopped before the complete Road vertex program and
+allowed the Website runtime to substitute a flattened `arena-ground.webp`
+capture. That capture is useful as an editor reference, but it is not a native
+Arena asset or a runtime rendering mechanism.
+
+The evidence below comes from the canonical read-only Ghidra replica for the
+4,723,200-byte retail 0.72.5 executable (SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`).
+Static addresses use preferred image base `0x00400000`.
+
+### Arena clear and field-overlay boundary
+
+`Arena::Render 0x0046EC80` reads mode byte `Arena+0x8F20` and walks the Arena
+bounds in both axes using the runtime logical width and height of adjacent
+DeadHawg record 21. Both values are 200, so every branch uses one
+world-anchored 200-by-200 lattice. This overlay is not the detailed ground
+surface: the render target already has the exact opaque-black Arena clear,
+while Road, Terrain, and compact decorations own the visible authored ground
+detail. The record is the only mode-dependent overlay choice:
+
+| Arena field mode | Static Sprite | DeadHawg record | Crop / logical cell | Disposition |
+| ---: | ---: | ---: | --- | --- |
+| 0 | `0x00B2F368` | 21 | `43x35` / `200x200`, origin `(-0.5,4.5)` | native overlay member; web change withdrawn with puddles |
+| 1 | `0x00B2F2A4` | 20 | `102x77` / `102x77`, origin `(0,0)` | native overlay member; web change withdrawn with puddles |
+| 2 | `0x00B2F2A4` | 20 | same record and registration as mode 1 | native overlay member; web change withdrawn with puddles |
+
+The two callsites are `0x0046F528 -> 0x004142E0` for record 21 and
+`0x0046F651 -> 0x004142E0` for record 20. `Sprite::Draw 0x004142E0` adds half
+the selected record's logical cell to each lattice origin before submitting
+the registered quad. The loops advance through the record-21 200-unit stride
+even when modes 1/2 draw record 20. The complete field precedes the Arena
+virtual at `+0x110`, which enters RegionLayout's Road/Terrain and pre-main
+population work.
+
+Fresh raw/decompiler inspection closes the shared surrounding state that the
+first pass omitted. `0x0046EC9A..0x0046ECB7` writes exact float32 `0.65` from
+`0x00784DC0` to renderer opacity and synchronizes it before light-target reset.
+`0x0057D5E0` restores the main target, white color, and transform; each field
+call then supplies only `(x,y)` to `Sprite::Draw 0x004142E0`. Extracted record
+20 is an inverse oval mask with opaque-white corners and a transparent-black
+centre; record 21 is a black alpha ring. A browser source-over submission is
+therefore invalid and visibly produces white `102x77` crop mattes. The exact
+stock material/blend interpretation of this oval/ring overlay is deliberately
+left outside the declared implementation boundary because the user explicitly
+withdrew the puddle issue. It must not be guessed as ordinary RGBA, multiply,
+or a new ground texture in this pass.
+
+`Bonedit::Render 0x004D5F40` is the one sibling field consumer and always uses
+record 21 at `0x004D6223`. It is an authoring surface rather than the `/game`
+runtime, but it shares the same record, registration, and 200-unit lattice.
+There is no loose arena-ground image, random field selector, fourth mode, or
+per-tile lifecycle. The exact DeadHawg sources are `DeadHawg.bundle` SHA-256
+`24fed80f2fa399ca42ee4cea1b9ccd1d6639ce1693ae9c391fceb0602838df3f`
+and `DeadHawg.png` SHA-256
+`3758ce24d516f0ca6349e57b988d8a84e8d6f89fb3827856d7bb521618281af0`.
+
+### Complete Road 3004 mesh program
+
+Road geometry builder `0x0064C1F0` has ten direct callsites in seven owning
+functions: generator `0x006388B0`, post-load/Region rebuild
+`0x00653660/0x00654D70/0x00655000`, derived world work `0x0064E270`, and the
+two Bonedit mutation paths `0x004C17E0/0x004C88C0`. Renderer `0x00640750` is
+the sole Road vtable painter at `0x0079F348`. It binds one of the five loose
+textures and submits the builder's indexed triangle list through
+`0x0041DA00`; destruction remains `0x006497F0`.
+
+The complete authored style table is:
+
+| Style | Texture | Half width | Side fade inset | UV divisor X | UV divisor Y |
+| ---: | --- | ---: | ---: | ---: | ---: |
+| 0 | `road.png` | 55 | 30 | 128 | `128 * 0.800000011920929` |
+| 1 | `road2.png` | 45 | 20 | 128 | `128 * 0.800000011920929` |
+| 2 | `road3.png` | 55 | 20 | 256 | `256 * 0.800000011920929` |
+| 3 | `road4.png` | 45 | 10 | 128 | `128 * 0.800000011920929` |
+| 4 | `road5.png` | 55 | 10 | 128 | `128 * 0.800000011920929` |
+
+The hashes, in style order, are
+`8bf87b68ad14e4081162796d573409bac704eaed4da61dec4b78fda31d26350d`,
+`fc09e29949d4e79d58102ac39ee40a4fe49164491c2d70ac45b5260cadbe5530`,
+`0ddd9547294db143fc8cae57f297feb87292b2bebc9bc2d7aa30897720339f21`,
+`abdfeff588488dab80d560375042484dd4372365c0f74d0df2f81b0d0dd5e942`,
+and `6a1fbae75ef0ba6266a149465b20f74ee28e172f4ede0e39a707f20de6f9e2d5`.
+
+For each endpoint cross-section, the builder takes the serialized outer pair
+and moves both sides inward by the style's fixed fade inset using vector
+normalizer/scaler `0x00403560`. It then emits exactly eighteen `Vertex2D`
+records as three two-triangle strips, in this order:
+
+1. the four inner points form the opaque centre strip;
+2. outer-left and inner-left points form the left alpha feather; and
+3. inner-right and outer-right points form the right alpha feather.
+
+Every vertex stores `(x,y,z=1,packed white alpha,u,v)`. UVs are world
+anchored, not segment-local: `u=f32(x/textureSize)` and
+`v=f32((y/textureSize)/0.800000011920929)`. Outer side vertices have alpha
+zero; inner vertices use the endpoint alpha. Link fields are behavior rather
+than disposable serializer identity: a chain's unlinked first start fades to
+zero, its unlinked final end fades to zero, and linked interior ends remain
+one. An isolated segment with both link UIDs at `0xFFFFFFFF` keeps hard
+one-alpha ends. Builder helper `0x00428FA0` deduplicates byte-identical
+six-word vertices and publishes one index for each of the original eighteen
+records, so the renderer receives eight ordinary unique vertices and eighteen
+indices for a nondegenerate segment.
+
+This program contains no black outline and no circular joint patch. Those
+were Website inventions and are the direct owner of the reported dark line at
+every segment boundary. Texture addressing is wrap and stock 1x sampling is
+linear. Road source order remains before Terrain. Terrain 3009, river bridge
+derivation, fences, and compact decorations retain their distinct class and
+data owners; none is a Road style or fallback.
+
+### Closure and implementation consequence
+
+Every Road style, link branch, builder caller, renderer, texture, and teardown
+path is now enumerated. The ground boundary is also closed: opaque-black Arena
+clear first, indexed Roads next, then Terrain and compact authored detail; the
+derived `arena-ground.webp` is not a runtime member. The native oval/ring
+field-overlay calls remain documented but are explicitly excluded with the
+withdrawn puddle scope rather than assigned a guessed browser material.
+
+A web runtime must preserve Road endpoint-link semantics, repeat addressing,
+the authored UV scale, and the surface-before-Terrain/light boundary. A lossy
+captured ground tile, per-segment outline, round cap, world-pattern quad, or
+source-over DeadHawg-20 crop is not a parity fallback.
+
+### 2026-08-27 Website implementation receipt
+
+The web runtime now keeps the native opaque-black clear, submits every Road as
+the recovered indexed wrapped mesh, and retains Terrain/compact detail in the
+following transparent painter bank. A real production Mac Chrome Tutorial
+frame reported 53 Road meshes, 954 indices and 424 vertices with no opaque
+DeadHawg-20 crop mattes. A default generated Boneyard reported 38/684/304.
+Connected Road textures were visually continuous in both captures.
+
+The source-over field-overlay experiment was removed after its white matte
+falsified the missing material assumption. DeadHawg 20/21 remain documented
+native overlay members but unchanged in the web port under the user's explicit
+puddle exclusion. The registered static RE suite passed 517/517 after this
+correction. No native loader behavior or runtime patch changed.

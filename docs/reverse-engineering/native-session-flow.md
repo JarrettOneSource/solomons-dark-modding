@@ -1120,8 +1120,9 @@ closing only the view leaves authority in `arch-dialogue` and permanently
 seals movement. A saved participant already in Office with no live
 `collegeIntro` program, or already in the College loadout transition, has
 crossed that acknowledgement boundary and must not be rearmed merely because
-the broader loadout-pending bit remains true. The bit is cleared only after the
-existing post-Create Courtyard settlement.
+the broader loadout-pending bit remains true. The user-directed completion
+boundary below clears that bit at successful loadout confirmation rather than
+letting the later Courtyard settlement own Tutorial/College lifetime.
 
 ## Browser-only `PLAY THE TUTORIAL?` decline policy
 
@@ -1210,3 +1211,51 @@ Create, and Courtyard handoff pass with empty page, console, and failed-response
 arrays. No native executable, loader runtime, or extracted art changed; only
 this report and the paired Website implementation/ledger remain uncommitted,
 unpushed, and undeployed.
+## 2026-08-27 shared-Hub onboarding collision and reset boundary
+
+The native facts above remain the retail oracle: Tutorial has one local
+player; the College title/Office walks use ordinary PlayerWizard movement;
+the College flag supplies the pre-Create green starter colors; and retail
+keeps those item colors through its first Create. A shared browser Hub adds
+participants and ambient Students that do not exist in that retail first-play
+configuration. Letting those browser-only bodies push the forced admission
+wizard can stop either authored spline before the Office portal or
+Archchancellor contact.
+
+The Website policy is therefore explicitly narrower than "disable
+collision": while the participant is in the post-Tutorial College obligation
+and has not confirmed the Office-owned loadout, dynamic physical pairs with
+other players and type-5002 Students are nonblocking in both mover orders.
+Static Region geometry retains its existing scripted/non-scripted policy;
+doorway/portal contact, the story Office population, and named-NPC contact are
+untouched. In particular, the transformed Office spline must still reach the
+fixed Archchancellor and satisfy the six-tick automatic `ARCH_INTRO_0` contact
+owner.
+
+The user-directed end boundary is successful confirmation of
+`college-loadout`, not the later Courtyard fade/checkpoint. At that edge the
+browser constructs the selected ordinary element/discipline generation,
+rebuilds Hat/Robe appearance from the selected element, restores the selected
+element effect and normal player/Student/player collision, clears both durable
+onboarding bits, and retains only the ordinary incoming Courtyard transition.
+Tutorial skills, Acid Rain, wardrobe override, forced movement, collision
+exemption, placeholder config, and reconnect re-arming may not survive.
+
+This is a named multiplayer/product adaptation, not a newly attributed retail
+branch. Required browser branches are Courtyard walk, Courtyard-to-Office
+transition, Office walk, automatic dialogue, acknowledged interactive Office,
+Office outgoing transition, `college-loadout`, confirmed Courtyard incoming,
+settled completion, reload into any pre-confirmation phase, and reload after
+confirmation. Only the confirmed incoming/settled branches use normal
+behavior, and a post-confirm reload cannot reacquire the onboarding owner.
+Other participants and ordinary later Hub visits remain unchanged throughout.
+
+### 2026-08-27 Website validation receipt
+
+Production Mac Chrome placed one deterministic peer and one type-5002 Student
+on the College path. The scripted player crossed them by 710.88 signed units,
+then completed Office/Create. Loadout confirmation cleared both onboarding
+bits during the `incoming` transition and schema-18 local save, restored the
+selected Air appearance/effect, removed the Tutorial Acid Rain rank, and
+restored ordinary collision strongly enough to expand a 40-unit overlap to
+50.1 units. Page, console, failed-response, and wire error arrays were empty.
