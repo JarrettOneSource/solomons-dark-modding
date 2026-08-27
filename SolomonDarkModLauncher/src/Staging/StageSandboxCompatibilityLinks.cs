@@ -61,6 +61,10 @@ internal static class StageSandboxCompatibilityLinks
 
     private static bool RecreateDirectoryJunction(string linkPath, string targetPath)
     {
+        var linkParentPath = Path.GetDirectoryName(linkPath) ??
+            throw new InvalidOperationException(
+                "The staged save path has no parent directory.");
+        Directory.CreateDirectory(linkParentPath);
         if (IsWineRuntime())
         {
             RecreateDirectoryMirror(linkPath, targetPath);
@@ -82,10 +86,7 @@ internal static class StageSandboxCompatibilityLinks
         {
             FileName = "cmd.exe",
             Arguments = $"/c mklink /J \"{linkPath}\" \"{targetPath}\"",
-            WorkingDirectory =
-                Path.GetDirectoryName(linkPath) ??
-                throw new InvalidOperationException(
-                    "The staged save path has no parent directory."),
+            WorkingDirectory = linkParentPath,
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
