@@ -29,6 +29,7 @@ from static_re_boneyard_picker_contracts import (
 from static_re_ui_interaction_gate_contracts import (
     test_blocking_overlay_owns_all_gameplay_input_without_deferral,
     test_connected_client_courtyard_start_is_render_and_activation_suppressed,
+    test_player_chat_modal_coexistence_preserves_native_input_priority,
 )
 from static_re_native_input_model_contracts import (
     test_native_action_thresholds_absences_and_intent_shape_are_pinned,
@@ -991,6 +992,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Blocking overlay owns all gameplay input without deferral",
         test_blocking_overlay_owns_all_gameplay_input_without_deferral,
+    ),
+    (
+        "Player chat modal coexistence preserves native input priority",
+        test_player_chat_modal_coexistence_preserves_native_input_priority,
     ),
     (
         "Native input ingress, sampling, and tick order are pinned",

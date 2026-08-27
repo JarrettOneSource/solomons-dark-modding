@@ -129,3 +129,37 @@ without creating an optimistic message; the later host-authored own echo still
 drives transcript, audio, and world speech once and is not unread. A rejection
 must make its status visible again. These are explicit Website product rules,
 not recovered retail constants, and require no native address/catalog change.
+
+## 2026-08-27 Website gameplay-modal coexistence recheck
+
+Allowing Website player chat over Inventory, SkillScreen, the compact
+`Skills_Quickbar` selector, mandatory Skill Picker, and gameplay Pause does not
+reopen the closed negative native census. Retail still has no player-authored
+chat surface to nest. It does sharpen which part of the native modal contract
+the Website extension must preserve.
+
+Native `0x008203F0`, modal runner `0x004281F0`, gameplay nesting helper
+`0x005CBD40`, Inventory opener `0x005C6F10`, SkillScreen opener `0x005CA640`,
+compact selector builder `0x0066F0B0`, Skill Picker modal `0x0067CAC0`, and
+Pause runner `0x005ABF10` establish one active local input owner. The retained
+application/UI loop stays serviced, and a suspended gameplay region retains
+one exact state; an input edge does not fall through to another modal or the
+world. No new address, asset, authored row, or timing constant was recovered in
+this Website-policy pass.
+
+The requested Website layering is therefore explicit rather than claimed as
+stock: the named native-style menu remains mounted and keeps its existing
+pause/barrier lifetime, while the HTML chat composer temporarily becomes the
+top input owner. The retained menu must be inert for keyboard and pointer
+input, must not close or mutate, and must reacquire its normal focus target when
+chat closes. Movement, casting, interaction, Inventory/Skills/menu hotkeys,
+compact/mandatory picker choices, Pause release, and stage back controls remain
+suppressed with no deferred replay. Existing authenticated
+Global/Party/Whisper routing remains independent of world suspension.
+
+Pause-owned Game Settings and control rebinding remain a separate exclusive
+key-capture system, not a gameplay Pause row: chat stays disabled there. The
+same is true for loading, Tutorial policy, resume grace, Game Over, and session
+teardown. This replaces the earlier Website consequence that classified every
+Inventory/Skills/picker/Pause surface as superseding chat; it does not alter
+retail modal or player-chat facts.

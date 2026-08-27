@@ -225,3 +225,54 @@ def test_blocking_overlay_owns_all_gameplay_input_without_deferral() -> str:
         "one overlay-ownership predicate drops queued input and masks physical "
         "movement, keys, mouse buttons, and cast intent around the stock tick"
     )
+
+
+def test_player_chat_modal_coexistence_preserves_native_input_priority() -> str:
+    chat = _read("docs/reverse-engineering/native-player-chat-boundary.md")
+    pause = _read("docs/reverse-engineering/native-gameplay-pause.md")
+    skills = _read(
+        "docs/reverse-engineering/native-skill-screen-and-quickbar.md"
+    )
+
+    _require(
+        chat,
+        (
+            "Website gameplay-modal coexistence recheck",
+            "`0x008203F0`",
+            "`0x004281F0`",
+            "`0x005CBD40`",
+            "`0x005C6F10`",
+            "`0x005CA640`",
+            "`0x0066F0B0`",
+            "`0x0067CAC0`",
+            "`0x005ABF10`",
+            "temporarily becomes the\ntop input owner",
+            "must not close or mutate",
+            "no deferred replay",
+            "Game Settings and control rebinding remain a separate exclusive",
+        ),
+        "Website chat-over-modal boundary",
+    )
+    _require(
+        pause,
+        (
+            "window messages, UI input, modal animation, rendering, and",
+            "the application loop remain serviced",
+            "The active region, its ActorWorld, actors, AI, collisions, waves,",
+            "effects, and region-owned clocks therefore retain one exact state.",
+        ),
+        "native pause/application ownership",
+    )
+    _require(
+        skills,
+        (
+            "The modal owns local input",
+            "Skills_Quickbar` constructor `0x00657A70`",
+            "generic modal loop `0x004281F0`",
+        ),
+        "native skill modal ownership",
+    )
+    return (
+        "Website chat may layer over retained gameplay modals only while it "
+        "preserves the stock one-owner input rule and exact paused world state"
+    )
