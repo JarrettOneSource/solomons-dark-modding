@@ -142,9 +142,43 @@ internal static class CloudSaveArchive
         }
     }
 
+    public static string? Import(
+        LocalSaveCatalog catalog,
+        int destinationSlot,
+        ReadOnlyMemory<byte> bytes)
+    {
+        if (bytes.Length is <= 0 or > MaxArchiveBytes)
+        {
+            throw new InvalidDataException("The save archive has an invalid size.");
+        }
+
+        var restoreRoot = Path.Combine(
+            catalog.SavesRoot,
+            $".import-{Guid.NewGuid():N}");
+        var savegamesRoot = Path.Combine(restoreRoot, "savegames");
+        Directory.CreateDirectory(savegamesRoot);
+        try
+        {
+            var name = ValidateAndExtract(bytes, expectedSlot: null, savegamesRoot);
+            catalog.ReplaceFromRestore(destinationSlot, savegamesRoot);
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                catalog.Rename(destinationSlot, name);
+            }
+            return name;
+        }
+        finally
+        {
+            if (Directory.Exists(restoreRoot))
+            {
+                Directory.Delete(restoreRoot, recursive: true);
+            }
+        }
+    }
+
     private static string? ValidateAndExtract(
         ReadOnlyMemory<byte> bytes,
-        int expectedSlot,
+        int? expectedSlot,
         string destinationRoot)
     {
         using var stream = new MemoryStream(bytes.ToArray(), writable: false);
@@ -181,7 +215,8 @@ internal static class CloudSaveArchive
         }
         if (manifest is null ||
             manifest.SchemaVersion != FormatVersion ||
-            manifest.Slot != expectedSlot ||
+            manifest.Slot is < 0 or >= LocalSaveCatalog.SlotCount ||
+            expectedSlot is { } requiredSlot && manifest.Slot != requiredSlot ||
             manifest.Name is { } name &&
                 (name.Length > 40 || name.Any(char.IsControl)) ||
             manifest.Files is null ||

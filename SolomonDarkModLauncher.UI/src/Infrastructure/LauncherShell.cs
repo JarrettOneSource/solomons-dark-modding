@@ -9,6 +9,61 @@ namespace SolomonDarkModLauncher.UI.Infrastructure;
 
 internal static class LauncherShell
 {
+    public static bool TrySelectFile(
+        string title,
+        string filter,
+        string? contextualFallback,
+        out string selectedPath)
+    {
+        selectedPath = string.Empty;
+        var initialDirectory = ResolveDialogInitialDirectory(
+            preferredPath: null,
+            contextualFallback);
+        if (initialDirectory is null)
+        {
+            return false;
+        }
+
+        var dialog = new OpenFileDialog
+        {
+            Title = title,
+            Filter = filter,
+            Multiselect = false,
+            CheckFileExists = true,
+            InitialDirectory = initialDirectory,
+            AddToRecent = false,
+            DereferenceLinks = false
+        };
+        bool? result;
+        try
+        {
+            result = dialog.ShowDialog();
+        }
+        catch (Exception exception) when (IsShellAccessFailure(exception))
+        {
+            LauncherLog.Write(
+                "shell",
+                $"File picker access failed and was dismissed: " +
+                $"{exception.GetType().Name}: {exception.Message}");
+            return false;
+        }
+        if (result != true)
+        {
+            return false;
+        }
+
+        var normalized = LauncherPathPolicy.NormalizeAbsolutePath(dialog.FileName);
+        if (normalized is null ||
+            LauncherPathPolicy.IsDesktopPath(normalized) ||
+            !File.Exists(normalized))
+        {
+            LogRejectedPath($"File is unavailable: {dialog.FileName}");
+            return false;
+        }
+        selectedPath = normalized;
+        return true;
+    }
+
     public static bool TrySelectFolder(
         string title,
         string? preferredPath,

@@ -217,7 +217,7 @@ would otherwise lose byte identity. All 15 captures agree on every fixed value.
 | Discipline root row | `+0x830 i32` | Discipline table value | selected definition, written by `0x005D0290` |
 | serialized opaque slot | `+0x834 i32` | sample-dependent | `0x006594E0` assigns `FUN_00401170(1000000,0)`; serialized by `0x0065EE80`, but not class identity |
 | current-offer Sorceror action available | `+0x839 u8` | `0` | granted from owned selector 17 at `+0x7DD`; card, reroll, or save consumes it |
-| special-choice argument | `+0x844 i32` | sample-dependent/opaque | not attributable to a class definition |
+| active synthetic Weld build | `+0x844 i32` | sample-dependent | set by the Weld offer/activation path; not class identity and omitted by the disk serializer |
 | primary spell row | `+0x86C i32` | element table value | selected definition, written by `0x005D0290` |
 | secondary spell row | `+0x870 i32` | element table value | selected definition, written by `0x005D0290` |
 | unforge attempt count | `+0x874 i32` | `0` | `0x005D6F12` increments once per selector pass and `0x005D6F30` expands the later failure bound |
@@ -348,9 +348,9 @@ state. A port must preserve these selectors as persistent per-actor rule inputs;
 it must not translate a Discipline effect into a one-time stat increment.
 The formula/effect semantics and leveling of those rows remain G6 territory.
 
-The constructor-random `+0x834` slot and opaque `+0x844` value are explicitly
-not class selectors. Their changing values across otherwise identical class
-captures disprove such a mapping.
+The constructor-random `+0x834` slot and active-Weld `+0x844` value are
+explicitly not class selectors. Their changing values across otherwise
+identical class captures disprove such a mapping.
 
 ## Unlock conditions
 
@@ -472,8 +472,8 @@ were absent before launch and absent again after cleanup.
   widths, initial values, and raw bits are known and must be preserved.
 - The gameplay meaning of the serialized constructor-random slot `+0x834` is
   unknown. It is proven not to encode the selected class.
-- The producer/meaning of opaque `+0x844` is unknown. It is proven not to be a
-  stable definition field.
+- `+0x844` is the active synthetic Weld build. It is proven not to be a stable
+  class-definition field and is not emitted by `0x0065EE80`.
 - Why the semantic-only bot materializer intentionally omits the local Create
   quartet and starting secondary is not attributed. The observed behavior is
   exact; changing it is outside this observation campaign.

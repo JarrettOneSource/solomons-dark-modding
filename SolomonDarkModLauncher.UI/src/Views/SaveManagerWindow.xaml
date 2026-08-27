@@ -195,6 +195,10 @@
                         Command="{Binding ImportCommand}"
                         Style="{StaticResource SecondaryButtonStyle}"
                         Margin="0,0,8,8" />
+                <Button Content="Import Save ZIP"
+                        Command="{Binding ImportArchiveCommand}"
+                        Style="{StaticResource SecondaryButtonStyle}"
+                        Margin="0,0,8,8" />
                 <Button Content="Restore from Cloud"
                         Command="{Binding RestoreCommand}"
                         Style="{StaticResource SecondaryButtonStyle}"

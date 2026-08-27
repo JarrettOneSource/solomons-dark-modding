@@ -31,6 +31,9 @@ from native_save_format import (
     decode_darkdata_fields,
     decode_gamestate_boast,
     decode_gamestate_local_wizard,
+    decode_native_belt,
+    decode_native_binding_state,
+    decode_native_game_footer,
     decode_darkdata,
     parse_syncbuffer,
     portable_profile_from_buffers,
@@ -560,10 +563,15 @@ def test_native_portable_profile_progression_and_opaque_round_trip_are_exact() -
             "hagathaOwnership": [index in (0, 5, 27) for index in range(50)],
             "perkCapacity": 9,
             "firewalkerActive": True,
+            "concentrationSkillIds": [57, None],
+            "nextConcentrationSlot": 1,
+            "selectedPrimarySkillId": 16,
+            "skillQuickbar": [21, 16, None, None, None, None, None, None],
         }
     )
     changed["wizard"]["permanentRanks"][9] = 2
-    changed["wizard"]["learnedOrder"].append(9)
+    changed["wizard"]["permanentRanks"][57] = 1
+    changed["wizard"]["learnedOrder"].extend((9, 57))
     retained = b"portrait"
     changed["nativeSource"]["retainedFiles"] = [
         {
@@ -598,6 +606,12 @@ def test_native_portable_profile_progression_and_opaque_round_trip_are_exact() -
         and decoded_wizard["progression"]["perk_capacity"] == 9
         and decoded_wizard["progression"]["experience_enabled"] is True
         and decoded_wizard["progression"]["random_boast_active"] is True
+        and decoded_wizard["selected_primary_skill_id"] == 16
+        and decoded_wizard["concentration_skill_ids"] == [57, None]
+        and decoded_wizard["next_concentration_slot"] == 1
+        and decoded_wizard["skill_quickbar"] == [
+            21, 16, None, None, None, None, None, None
+        ]
         and decoded_boast == {"selected": 3, "failed": False, "succeeded": True}
         and decoded_wizard["wizard_extension"]["firewalker_active"] is True,
         "portable application did not patch every requested profile/progression member",
@@ -616,12 +630,56 @@ def test_native_portable_profile_progression_and_opaque_round_trip_are_exact() -
     )
     base_game = parse_syncbuffer(gamestate)
     next_game = parse_syncbuffer(encoded_gamestate)
+    base_binding = decode_native_binding_state(base_game.root)
+    next_binding = decode_native_binding_state(next_game.root)
+    binding_offsets = {
+        int(base_binding["integer_offset"]) + index * 4 + byte
+        for index in (12, 16, 20)
+        for byte in range(4)
+    }
+    base_belt = decode_native_belt(base_game.root)
+    next_belt = decode_native_belt(next_game.root)
+    base_footer = decode_native_game_footer(base_game.root)
+    next_footer = decode_native_game_footer(next_game.root)
+    footer_offsets = {
+        int(base_footer["concentration_cursor_offset"]) + byte
+        for byte in range(4)
+    }
     _require(
         all(
             base_game.root.children[index] == next_game.root.children[index]
             for index in range(8)
-            if index not in (0, 5)
+            if index not in (0, 1, 5, 7)
         )
+        and all(
+            left == right
+            for index, (left, right) in enumerate(zip(
+                base_binding["node"].payload,
+                next_binding["node"].payload,
+                strict=True,
+            ))
+            if index not in binding_offsets
+        )
+        and base_game.root.children[1].children[1:]
+        == next_game.root.children[1].children[1:]
+        and all(
+            base_game.root.payload[base_belt["entries"][slot]["start"]:
+                                   base_belt["entries"][slot]["end"]]
+            == next_game.root.payload[next_belt["entries"][slot]["start"]:
+                                      next_belt["entries"][slot]["end"]]
+            for slot in range(2, 8)
+        )
+        and all(
+            left == right
+            for index, (left, right) in enumerate(zip(
+                base_footer["node"].payload,
+                next_footer["node"].payload,
+                strict=True,
+            ))
+            if index not in footer_offsets
+        )
+        and base_game.root.children[7].children
+        == next_game.root.children[7].children
         and base_game.root.children[0].children[2:]
         == next_game.root.children[0].children[2:]
         and base_game.root.children[0].children[0].children[0]

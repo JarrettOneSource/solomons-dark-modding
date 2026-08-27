@@ -350,8 +350,9 @@ analysis establishes the current persistence boundary:
 - `Skills_Wizard::vftable +0x14 -> 0x00663AE0` calls that base serializer and
   adds one nine-byte child containing meditation idle delay `+0x884`,
   Firewalker byte `+0x8DC`, and weld-effect scalar `+0x8E0`;
-- concentration A/B process lanes and the Mind Chug timer `+0x828` are not
-  serialized;
+- concentration A/B are absent from the progression virtual but are serialized
+  by the enclosing Game binding table at indices 16/20 together with selected
+  primary index 12; Mind Chug `+0x828` remains live-only;
 - the actor exposes progression at actor `+0x200`, with row table pointer/count
   at progression `+0x20/+0x24`; rows are `0x70` bytes, permanent rank is row
   `+0x20`, effective rank row `+0x22`, and category row `+0x26`; and
@@ -1191,9 +1192,19 @@ gamestates:
 - the root has exactly eight ordered children;
 - root child zero is the local wizard record;
 - its payload contains two leading `i32` values, a NUL-terminated UTF-8 name
-  length/string, and one trailing `i32`;
+  length/string, and the selected-primary `i32`; that value must agree with
+  Game binding-table index 12;
 - its first child is the common progression node above; and
 - its second child is the nine-byte `Skills_Wizard` disk extension.
+
+The same eight-child root carries the rest of the durable selection family.
+Root child 1 child 0 is the six-vector binding table; its exact 24-int member
+stores selected primary at 12 and concentrations A/B at 16/20. Root payload is
+the eight ordered BeltButton records (`i32 type`, `i32 id`, bool, String,
+`i32`); type 7015 identifies a skill, while default potion types 7013/7014 and
+other non-skill entries remain distinct. Root child 7 begins with one global
+byte and the `i32` A/B replacement cursor from Game `+0x1C24`. These members
+are Game-disk state even though they do not belong to the progression virtual.
 
 The controlled settled-Hub template was produced by retail's ordinary clean
 close in isolated instance `save-profile-template-20260826` with only an
@@ -1252,6 +1263,16 @@ The safe portable unit is a settled wizard/profile projection:
 - map the complete resumable Boast state from Game vslot `+0x14 ->
   0x005CE3D0`: selected signed ID `Gameplay+0x1D44`, exact statement String
   `+0x1D48`, one-shot failure `+0x1D80`, and success `+0x1D81`;
+- map current selected primary from both the local-wizard trailing `i32` and
+  Game binding 12 (they must agree), concentrations from bindings 16/20, the
+  A/B replacement cursor at Game `+0x1C24`, and all eight serialized
+  BeltButton entries. Type-7015 skill entries project semantically; non-skill
+  entries remain byte-preserved unless a web skill explicitly replaces that
+  slot;
+- treat progression `+0x844` as a retail disk defect: it owns the active
+  synthetic Weld build, but `0x0065EE80` serializes adjacent `+0x840/+0x848`
+  and skips `+0x844`. Learned row 52 persists, while selected/belted Weld
+  cannot be reconstructed honestly and resets with a warning;
 - retain Hagatha `+0x7C0/+0x7C4` as an ordered outcome list, including up to
   two selector-27 Tonic entries; its capacity remains exactly 3/6/9;
 - clear live Serendipity/Reverie `+0x73C/+0x73D` on stock disk import: purchase
@@ -1271,6 +1292,12 @@ The safe portable unit is a settled wizard/profile projection:
   are outside the semantic projection;
 - parse the result again and prove all untouched nodes are byte-identical; and
 - stage output separately from the source.
+
+The launcher Save Manager accepts this exact manifest archive directly through
+`Import Save ZIP`. Cloud restore still requires the manifest's source slot to
+match; explicit local import validates the source slot domain but deliberately
+materializes into the user-selected destination slot. Folder import remains
+available for extracted retail `savegames` trees.
 
 This gives stock-to-web and web-to-stock wizard/progression compatibility. It
 does not claim arbitrary in-flight native Arena actors, Region caches, Website

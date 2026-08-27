@@ -33,6 +33,16 @@ NATIVE_WIZARD_SKILL_ROW_COUNT = 83
 NATIVE_HAGATHA_OWNERSHIP_COUNT = 50
 NATIVE_HAGATHA_FIRST_MIX_COUNT = 30
 NATIVE_GAMESTATE_ROOT_CHILD_COUNT = 8
+NATIVE_BINDING_COUNT = 24
+NATIVE_BELT_SLOT_COUNT = 8
+NATIVE_BELT_EMPTY_TYPE = 7000
+NATIVE_BELT_SKILL_TYPE = 7015
+NATIVE_PRIMARY_SKILL_IDS = frozenset((8, 16, 24, 32, 40, 52))
+NATIVE_SECONDARY_SKILL_IDS = frozenset(
+    (11, 12, 15, 21, 23, 27, 30, 35, 41, 45, 46, 48, 49, 50, 51, 54,
+     72, 73, 74, 76, 77, 78, 79)
+)
+NATIVE_CONCENTRATION_SKILL_IDS = frozenset((*range(57, 64), *range(65, 72)))
 PORTABLE_PROFILE_FORMAT = "solomon-dark-portable-profile"
 PORTABLE_PROFILE_VERSION = 1
 RETAIL_EXECUTABLE_SHA256 = (
@@ -131,6 +141,18 @@ class PayloadCursor:
 
     def f32(self, field: str) -> float:
         return struct.unpack("<f", self._read(4, field))[0]
+
+    def string(self, field: str) -> str:
+        length = self.u32(f"{field} length")
+        if length == 0:
+            return ""
+        raw = self._read(length, field)
+        if raw[-1] != 0:
+            raise SaveFormatError(f"{self.claim} {field} is not NUL-terminated")
+        try:
+            return raw[:-1].decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise SaveFormatError(f"{self.claim} {field} is not UTF-8") from error
 
     def i32_list(self, count: int, field: str) -> list[int]:
         if count < 0 or count > (len(self.data) - self.offset) // 4:
@@ -912,6 +934,92 @@ def decode_wizard_disk_extension(node: ChunkNode) -> dict[str, Any]:
     return result
 
 
+def decode_native_binding_state(root: ChunkNode) -> dict[str, Any]:
+    if len(root.children) < 2 or not root.children[1].children:
+        raise SaveFormatError("native binding state is absent")
+    node = root.children[1].children[0]
+    cursor = PayloadCursor(node.payload, "native binding state")
+    boolean_count = cursor.u32("boolean count")
+    if boolean_count > len(node.payload) - cursor.offset:
+        raise SaveFormatError("native binding boolean count is impossible")
+    for index in range(boolean_count):
+        cursor.boolean(f"boolean[{index}]")
+    integer_count = cursor.u32("integer count")
+    if integer_count != NATIVE_BINDING_COUNT:
+        raise SaveFormatError(
+            f"native binding state has {integer_count} integers; "
+            f"expected {NATIVE_BINDING_COUNT}"
+        )
+    integer_offset = cursor.offset
+    values = cursor.i32_list(integer_count, "integers")
+    float_count = cursor.u32("float count")
+    cursor.f32_list(float_count, "floats")
+    string_count = cursor.u32("String count")
+    if string_count > (len(node.payload) - cursor.offset) // 4:
+        raise SaveFormatError("native binding String count is impossible")
+    for index in range(string_count):
+        cursor.string(f"String[{index}]")
+    for kind in ("vector2", "range"):
+        count = cursor.u32(f"{kind} count")
+        if count > (len(node.payload) - cursor.offset) // 8:
+            raise SaveFormatError(f"native binding {kind} count is impossible")
+        cursor._read(count * 8, kind)
+    cursor.finish()
+    return {"integer_offset": integer_offset, "node": node, "values": values}
+
+
+def decode_native_belt(root: ChunkNode) -> dict[str, Any]:
+    cursor = PayloadCursor(root.payload, "native BeltButton state")
+    entries: list[dict[str, int]] = []
+    quickbar: list[int | None] = []
+    for slot in range(NATIVE_BELT_SLOT_COUNT):
+        start = cursor.offset
+        entry_type = cursor.i32(f"slot {slot} type")
+        skill_id = cursor.i32(f"slot {slot} id")
+        cursor.boolean(f"slot {slot} flag")
+        cursor.string(f"slot {slot} label")
+        cursor.i32(f"slot {slot} trailing value")
+        if entry_type == NATIVE_BELT_SKILL_TYPE and not 8 <= skill_id <= 79:
+            raise SaveFormatError(
+                f"native BeltButton slot {slot} has invalid skill {skill_id}"
+            )
+        entries.append(
+            {"start": start, "end": cursor.offset, "type": entry_type, "id": skill_id}
+        )
+        quickbar.append(skill_id if entry_type == NATIVE_BELT_SKILL_TYPE else None)
+    cursor.finish()
+    return {"entries": entries, "skill_quickbar": quickbar}
+
+
+def decode_native_game_footer(root: ChunkNode) -> dict[str, Any]:
+    node = root.children[7]
+    cursor = PayloadCursor(node.payload, "native Game footer")
+    cursor.u8("global selector byte")
+    concentration_cursor_offset = cursor.offset
+    next_concentration_slot = cursor.i32("concentration replacement cursor")
+    if next_concentration_slot not in (0, 1):
+        raise SaveFormatError(
+            f"native concentration replacement cursor {next_concentration_slot} is invalid"
+        )
+    cursor.string("profile label A")
+    cursor.string("profile label B")
+    cursor.f32("presentation scalar")
+    cursor.finish()
+    return {
+        "concentration_cursor_offset": concentration_cursor_offset,
+        "next_concentration_slot": next_concentration_slot,
+        "node": node,
+    }
+
+
+def _nullable_native_binding(value: int, claim: str) -> int | None:
+    if value == -1:
+        return None
+    if not 8 <= value <= 80:
+        raise SaveFormatError(f"{claim} {value} is invalid")
+    return value
+
+
 def decode_gamestate_local_wizard(buffer: SyncBuffer) -> dict[str, Any]:
     """Decode the structurally unique local-wizard branch in retail gamestate."""
 
@@ -947,15 +1055,32 @@ def decode_gamestate_local_wizard(buffer: SyncBuffer) -> dict[str, Any]:
         ) from error
     if not name:
         raise SaveFormatError("native local-wizard name is empty")
-    trailing_value = cursor.i32("trailing value")
+    selected_primary = cursor.i32("selected primary skill")
     cursor.finish()
+    bindings = decode_native_binding_state(root)
+    bound_primary = _nullable_native_binding(
+        bindings["values"][12], "native selected primary"
+    )
+    if bound_primary is None or bound_primary != selected_primary:
+        raise SaveFormatError(
+            "native local-wizard selected primary bindings disagree"
+        )
+    concentration_skill_ids = [
+        _nullable_native_binding(bindings["values"][16], "native concentration A"),
+        _nullable_native_binding(bindings["values"][20], "native concentration B"),
+    ]
+    belt = decode_native_belt(root)
+    footer = decode_native_game_footer(root)
     return {
         "node_offset": wizard.offset,
         "header_a": header_a,
         "header_b": header_b,
         "name": name,
         "name_byte_count": name_length,
-        "trailing_value": trailing_value,
+        "selected_primary_skill_id": selected_primary,
+        "concentration_skill_ids": concentration_skill_ids,
+        "next_concentration_slot": footer["next_concentration_slot"],
+        "skill_quickbar": belt["skill_quickbar"],
         "progression": decode_progression_node(wizard.children[0]),
         "wizard_extension": decode_wizard_disk_extension(wizard.children[1]),
         "opaque_sibling_count": len(wizard.children) - 2,
@@ -1081,6 +1206,7 @@ def portable_profile_from_buffers(
             "currentHealth": float(progression["current_health"]),
             "maximumHealth": float(progression["maximum_health"]),
             "currentMana": float(progression["current_mana"]),
+            "concentrationSkillIds": list(wizard["concentration_skill_ids"]),
             "maximumMana": float(progression["maximum_mana"]),
             "offensiveDamageFlat": float(progression["offensive_damage_flat"]),
             "manaCostReduction": float(progression["mana_cost_reduction"]),
@@ -1090,6 +1216,9 @@ def portable_profile_from_buffers(
             "poisonImmunityTicks": int(progression["poison_immunity_ticks"]),
             "firewalkerActive": bool(extension["firewalker_active"]),
             "meditationIdleDelay": int(extension["meditation_idle_delay"]),
+            "nextConcentrationSlot": int(wizard["next_concentration_slot"]),
+            "selectedPrimarySkillId": int(wizard["selected_primary_skill_id"]),
+            "skillQuickbar": list(wizard["skill_quickbar"]),
             "weldEffect": float(extension["weld_effect"]),
             "advancedUnlocks": [
                 permanent_ranks[skill_id] > 0 for skill_id in range(72, 80)
@@ -1108,6 +1237,17 @@ def portable_profile_from_buffers(
             "Machinimbus purchase-only unlocks are not stored by retail; only already learned advanced rows can cross.",
             "Serendipity and Reverie active-until-hurt flags are not retail disk members and start inactive after import.",
             "Retail omits Unforge base HP/MP bonuses; import rebuilds maximum vitals and preserves only the saved current/max ratios.",
+            *(
+                ["Retail omits the active synthetic Weld build; selected or belted Spell Welding cannot be reconstructed after disk load."]
+                if wizard["selected_primary_skill_id"] == 52
+                or 52 in wizard["skill_quickbar"]
+                else []
+            ),
+            *(
+                ["Plane Orb is a live Planewalker override and resets in the settled portable Hub."]
+                if wizard["selected_primary_skill_id"] == 80
+                else []
+            ),
             "The portable wizard starts in a settled Hub; in-flight native Arena and Region objects remain in the native attachment.",
             *(
                 [f"{len(retained_rows)} opaque native slot file(s) will be retained for stock export but are not web authority."]
@@ -1203,6 +1343,23 @@ def _require_hagatha_outcomes(value: Any) -> list[int]:
     return outcomes
 
 
+def _require_nullable_int_list(
+    value: Any,
+    claim: str,
+    count: int,
+    minimum_value: int,
+    maximum_value: int,
+) -> list[int | None]:
+    if not isinstance(value, list) or len(value) != count:
+        raise SaveFormatError(f"{claim} must contain {count} entries")
+    return [
+        None
+        if item is None
+        else _require_int(item, f"{claim}[{index}]", minimum_value, maximum_value)
+        for index, item in enumerate(value)
+    ]
+
+
 def validate_portable_profile(value: Any) -> tuple[dict[str, Any], bytes, bytes]:
     root = _require_record(value, "portable profile")
     if root.get("format") != PORTABLE_PROFILE_FORMAT:
@@ -1287,7 +1444,53 @@ def validate_portable_profile(value: Any) -> tuple[dict[str, Any], bytes, bytes]
     _require_int(wizard.get("offerSeed"), "portable offer seed", 0, 999_999)
     _require_int(wizard.get("pendingSkillChoices"), "portable pending choices", 0, 1_000)
     _require_int(wizard.get("deferredSkillChoices"), "portable deferred choices", 0, 1_000)
+    concentrations = _require_nullable_int_list(
+        wizard.get("concentrationSkillIds"),
+        "portable concentrations",
+        2,
+        8,
+        79,
+    )
+    _require_int(
+        wizard.get("nextConcentrationSlot"),
+        "portable concentration cursor",
+        0,
+        1,
+    )
+    selected_primary = _require_int(
+        wizard.get("selectedPrimarySkillId"),
+        "portable selected primary",
+        8,
+        80,
+    )
+    quickbar = _require_nullable_int_list(
+        wizard.get("skillQuickbar"),
+        "portable quickbar",
+        NATIVE_BELT_SLOT_COUNT,
+        8,
+        79,
+    )
     perk_selectors = _require_hagatha_outcomes(wizard.get("perkSelectors"))
+    if (
+        selected_primary not in (*NATIVE_PRIMARY_SKILL_IDS, 80)
+        or any(
+            skill_id is not None
+            and skill_id not in NATIVE_CONCENTRATION_SKILL_IDS
+            for skill_id in concentrations
+        )
+        or (
+            concentrations[0] is not None
+            and concentrations[0] == concentrations[1]
+        )
+        or (concentrations[1] is not None and 21 not in perk_selectors)
+        or any(
+            skill_id is not None
+            and skill_id not in NATIVE_PRIMARY_SKILL_IDS
+            and skill_id not in NATIVE_SECONDARY_SKILL_IDS
+            for skill_id in quickbar
+        )
+    ):
+        raise SaveFormatError("portable selected-skill state is invalid")
     ownership = _require_bool_list(
         wizard.get("hagathaOwnership"),
         "portable Hagatha ownership",
@@ -1612,6 +1815,70 @@ def _native_string_bytes(value: str) -> bytes:
     return struct.pack("<I", len(encoded)) + encoded
 
 
+def _canonical_native_belt_entry(entry_type: int, skill_id: int) -> bytes:
+    return (
+        struct.pack("<iiB", entry_type, skill_id, 0)
+        + _native_string_bytes("")
+        + struct.pack("<i", 0)
+    )
+
+
+def _patch_native_selections(root: ChunkNode, wizard: dict[str, Any]) -> ChunkNode:
+    selected_primary = int(wizard["selectedPrimarySkillId"])
+    concentrations = wizard["concentrationSkillIds"]
+    quickbar = wizard["skillQuickbar"]
+    next_slot = int(wizard["nextConcentrationSlot"])
+
+    bindings = decode_native_binding_state(root)
+    binding_payload = bytearray(bindings["node"].payload)
+    for index, value in (
+        (12, selected_primary),
+        (16, -1 if concentrations[0] is None else int(concentrations[0])),
+        (20, -1 if concentrations[1] is None else int(concentrations[1])),
+    ):
+        struct.pack_into(
+            "<i",
+            binding_payload,
+            int(bindings["integer_offset"]) + index * 4,
+            value,
+        )
+    binding_owner = root.children[1]
+    next_binding_owner = _replace_node_child(
+        binding_owner,
+        0,
+        replace(bindings["node"], payload=bytes(binding_payload)),
+    )
+    next_root = _replace_node_child(root, 1, next_binding_owner)
+
+    belt = decode_native_belt(next_root)
+    belt_parts: list[bytes] = []
+    for slot, value in enumerate(quickbar):
+        base = belt["entries"][slot]
+        if value is not None:
+            belt_parts.append(
+                _canonical_native_belt_entry(NATIVE_BELT_SKILL_TYPE, int(value))
+            )
+        elif base["type"] == NATIVE_BELT_SKILL_TYPE:
+            belt_parts.append(_canonical_native_belt_entry(NATIVE_BELT_EMPTY_TYPE, 0))
+        else:
+            belt_parts.append(next_root.payload[base["start"]:base["end"]])
+    next_root = replace(next_root, payload=b"".join(belt_parts))
+
+    footer = decode_native_game_footer(next_root)
+    footer_payload = bytearray(footer["node"].payload)
+    struct.pack_into(
+        "<i",
+        footer_payload,
+        int(footer["concentration_cursor_offset"]),
+        next_slot,
+    )
+    return _replace_node_child(
+        next_root,
+        7,
+        replace(footer["node"], payload=bytes(footer_payload)),
+    )
+
+
 def _portable_game_node(node: ChunkNode, boast: dict[str, Any]) -> ChunkNode:
     selected = boast["selected"]
     failed = bool(boast["failed"])
@@ -1726,7 +1993,7 @@ def apply_portable_gamestate(buffer: SyncBuffer, portable: dict[str, Any]) -> Sy
     header_payload = (
         struct.pack("<iiI", existing["header_a"], existing["header_b"], len(name_bytes))
         + name_bytes
-        + struct.pack("<i", existing["trailing_value"])
+        + struct.pack("<i", int(wizard_values["selectedPrimarySkillId"]))
     )
     wizard_children = list(wizard_node.children)
     wizard_children[0] = next_progression
@@ -1737,6 +2004,7 @@ def apply_portable_gamestate(buffer: SyncBuffer, portable: dict[str, Any]) -> Sy
         children=tuple(wizard_children),
     )
     next_root = _replace_node_child(root, 0, next_wizard)
+    next_root = _patch_native_selections(next_root, wizard_values)
     next_root = _replace_node_child(
         next_root,
         5,

@@ -33,6 +33,7 @@ internal sealed class SaveManagerViewModel : ViewModelBase
         UseSelectedCommand = new RelayCommand(_ => UseSelected(), _ => CanMutate());
         RenameCommand = new RelayCommand(_ => Rename(), _ => CanRename());
         ImportCommand = new RelayCommand(_ => Import(), _ => CanMutate());
+        ImportArchiveCommand = new RelayCommand(_ => ImportArchive(), _ => CanMutate());
         RestoreCommand = new RelayCommand(_ => _ = RestoreAsync(), _ => CanRestore());
         OpenFolderCommand = new RelayCommand(_ => OpenFolder(), _ => SelectedSave is not null);
         OpenAccountCommand = new RelayCommand(_ => OpenAccount());
@@ -113,6 +114,7 @@ internal sealed class SaveManagerViewModel : ViewModelBase
     public RelayCommand UseSelectedCommand { get; }
     public RelayCommand RenameCommand { get; }
     public RelayCommand ImportCommand { get; }
+    public RelayCommand ImportArchiveCommand { get; }
     public RelayCommand RestoreCommand { get; }
     public RelayCommand OpenFolderCommand { get; }
     public RelayCommand OpenAccountCommand { get; }
@@ -231,6 +233,47 @@ internal sealed class SaveManagerViewModel : ViewModelBase
         }
     }
 
+    private void ImportArchive()
+    {
+        if (SelectedSave is not { } selected ||
+            !LauncherShell.TrySelectFile(
+                "Select a launcher or browser save archive",
+                "Solomon Dark save archives (*.zip)|*.zip",
+                catalog_.SavesRoot,
+                out var selectedPath))
+        {
+            return;
+        }
+        if (selected.HasLocalData &&
+            MessageBox.Show(
+                "Importing replaces this local save slot. Continue?",
+                "Import Save Archive",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            CloudSaveArchive.Import(
+                catalog_,
+                selected.Slot,
+                File.ReadAllBytes(selectedPath));
+            ErrorText = string.Empty;
+            ReloadSlots(selected.Slot);
+            activeSaveChanged_();
+        }
+        catch (Exception exception) when (
+            exception is IOException or
+            InvalidDataException or
+            InvalidOperationException or
+            UnauthorizedAccessException)
+        {
+            ErrorText = exception.Message;
+        }
+    }
+
     private async Task RestoreAsync()
     {
         if (SelectedSave is not { } selected || !selected.HasCloudBackup)
@@ -332,6 +375,7 @@ internal sealed class SaveManagerViewModel : ViewModelBase
         UseSelectedCommand.RaiseCanExecuteChanged();
         RenameCommand.RaiseCanExecuteChanged();
         ImportCommand.RaiseCanExecuteChanged();
+        ImportArchiveCommand.RaiseCanExecuteChanged();
         RestoreCommand.RaiseCanExecuteChanged();
         OpenFolderCommand.RaiseCanExecuteChanged();
         RefreshCloudCommand.RaiseCanExecuteChanged();

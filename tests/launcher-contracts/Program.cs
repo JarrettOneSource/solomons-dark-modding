@@ -1181,6 +1181,18 @@ static Task TestCloudSaveArchiveIntegrityAsync()
             File.ReadAllText(playerFilePath) == "player-state",
             "cloud restore did not replace the local snapshot");
 
+        RequireThrows<InvalidDataException>(
+            () => CloudSaveArchive.Restore(catalog, 3, first.Bytes),
+            "cloud restore accepted an archive from a different slot");
+        var importedName = CloudSaveArchive.Import(catalog, 3, first.Bytes);
+        Require(importedName == "Wizard One", "explicit archive import lost the save name");
+        Require(
+            File.ReadAllText(Path.Combine(
+                catalog.Get(3).SavegamesRootPath,
+                "solomondark",
+                "player.sav")) == "player-state",
+            "explicit archive import did not materialize into the selected destination slot");
+
         var tamperedBytes = first.Bytes.ToArray();
         using (var stream = new MemoryStream(tamperedBytes))
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))

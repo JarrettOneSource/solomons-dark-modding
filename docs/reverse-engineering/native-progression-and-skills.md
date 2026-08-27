@@ -821,7 +821,8 @@ skill data.
 | --- | --- |
 | level, accumulated XP, permanent row ranks, element, discipline, offer/learned order, Hagatha ownership, Firewalker active | participant progression disk payload; survives ordinary hub region reconstruction and completed-run return |
 | effective rank `row+0x22`, max HP/MP and derived multipliers/resistances, `+0x740` hoard | reconstructed actor cache; reproduce from the durable rank/toggle book whenever the actor is materialized or refreshed |
-| Mindstar active, Regenerate active, concentration A/B, and Mind Chug `+0x828` timer | live/network selection state; explicitly absent from the disk virtual and cleared by disk restore/Create reset |
+| concentration A/B and replacement cursor | enclosing Game binding indices 16/20 plus Game `+0x1C24`; absent only from the progression virtual | disk-persisted and restored; invalid effective-only selections may still be repaired by `0x0065F9A0` |
+| Mindstar active, Regenerate active, and Mind Chug `+0x828` timer | live/network selection state; explicitly absent from disk and cleared by disk restore/Create reset |
 | Serendipity/Reverie active-until-hurt `+0x73C/+0x73D` | purchase/runtime state; `0x0066EF70` sets it, damage clears it, and disk serializer `0x0065EE80` does not emit either offset; a disk restore must not recreate it merely from ownership |
 | current HP/MP | participant vitals ledger across an ordinary scene handoff; preserve ratios while a progression refresh changes maxima |
 | projectiles, spell-effect actors, modifier lifetimes, action ticks, target locks, offer UI state, and partially charged objects | scene/run transient; destroyed at teardown and never replayed into the next world |
