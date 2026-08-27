@@ -467,6 +467,9 @@
     <ClInclude Include="include\x86_hook.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\x86_native_call.h">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\gameplay_seams.h">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>

@@ -68,6 +68,16 @@ named above. The principal static entry points are:
 | `0x005BED10` | `Portraits\portrait%d.raw` writer |
 | `0x00423120` | recursive `._cache` deletion |
 
+Ghidra and the retail instructions classify `0x005BE0B0` as a fastcall-shaped
+profile writer: the profile owner is in `ECX`, there are zero stack arguments,
+and the function returns with plain `ret`. A 2026-08-26 live probe passed it to
+the one-stack-argument `call_thiscall_u32` bridge. The retail writer completed,
+but its plain return left ESP four bytes below the bridge contract and Lua
+crashed in `rethook` while unwinding a corrupted `CallInfo`. Raw native-call
+bridges now restore ESP, reject the `-4` ABI mismatch, and require the target
+from `sd.debug.resolve_game_address`; the valid probe shape remains
+`call_thiscall_ret_u32(resolved_save, profile)`.
+
 `u32` and `i32` below are four-byte little-endian integers. A `bool` is one
 byte and retail writes `00` or `01`. “Payload offset” means an offset inside a
 node payload after decoding the `darkdata.cfg` wrapper; compressed file offsets

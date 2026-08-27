@@ -113,6 +113,13 @@ Each write hit currently captures:
 - `sd.debug.call_stdcall_u32_u32_ret_u32(function_address, arg0, arg1)`
 - `sd.debug.call_cdecl_u32_u32(function_address, arg0, arg1)`
 
+`function_address` is always a live executable address returned by
+`sd.debug.resolve_game_address(preferred_address)`. The raw-call helpers do not
+guess whether a numeric address is preferred-image or already relocated; those
+ranges can overlap under ASLR. Each helper also restores and verifies ESP after
+the native return. A signature or cleanup mismatch is logged and returns
+`false`/`nil` without unwinding through a corrupted Lua stack.
+
 ### Gameplay-specific typed helpers
 - `sd.debug.queue_native_staff_effect_probe(source_actor, target_actor, variant)`
   - queues the retail Staff effect resolver for the next gameplay-action pump;

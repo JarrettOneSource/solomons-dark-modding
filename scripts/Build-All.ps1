@@ -10,11 +10,14 @@ $launcher = Join-Path $root "SolomonDarkModLauncher/SolomonDarkModLauncher.cspro
 $launcherUi = Join-Path $root "SolomonDarkModLauncher.UI/SolomonDarkModLauncher.UI.csproj"
 $launcherUpdater = Join-Path $root "SolomonDarkLauncherUpdater/SolomonDarkLauncherUpdater.csproj"
 $loader = Join-Path $root "SolomonDarkModLoader/SolomonDarkModLoader.vcxproj"
+$nativeCallTests = Join-Path $root "tests/native/X86NativeCallTests.vcxproj"
 $dist = Join-Path $root "dist/launcher"
 $uiDist = Join-Path $root "dist/ui"
 $updaterDist = Join-Path $root "dist/updater"
 $loaderOutputDirectory = Join-Path $root "bin/$Configuration/Win32"
 $loaderOutput = Join-Path $loaderOutputDirectory "SolomonDarkModLoader.dll"
+$nativeCallTestOutput =
+    Join-Path $root "runtime/native-tests/$Configuration/Win32/x86_native_call_tests.exe"
 $uiExecutableName = "SolomonDarkMultiplayerBeta.exe"
 
 function Resolve-MSBuild {
@@ -58,6 +61,11 @@ $msbuild = Resolve-MSBuild
 
 & $msbuild $loader /t:Rebuild /m /nologo /p:Configuration=$Configuration /p:Platform=Win32
 Assert-LastExitCode "SolomonDarkModLoader build"
+
+& $msbuild $nativeCallTests /t:Rebuild /m /nologo /p:Configuration=$Configuration /p:Platform=Win32
+Assert-LastExitCode "x86 native call tests build"
+& $nativeCallTestOutput
+Assert-LastExitCode "x86 native call tests"
 
 dotnet publish $launcher `
     -c $Configuration `

@@ -290,8 +290,9 @@ local setup = found == 1 and actor_address ~= 0 and
   sd.debug.write_float(secondary_global, 0)
 local call_result = nil
 if setup then
+  local native_damage = sd.debug.resolve_game_address(0x00607F60)
   call_result = sd.debug.call_thiscall_ret_u32(
-    0x00607F60, actor_address)
+    native_damage, actor_address)
 end
 local after_hp = actor_address ~= 0 and
   tonumber(sd.debug.read_float(actor_address + 0x170)) or 0

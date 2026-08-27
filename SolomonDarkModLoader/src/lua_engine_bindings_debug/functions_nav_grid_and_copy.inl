@@ -486,22 +486,23 @@ int LuaDebugCallCdeclU32U32(lua_State* state) {
     const auto arg1 = CheckLuaUnsignedInteger<std::uint32_t>(state, 3, "arg1");
 
     auto& memory = ProcessMemory::Instance();
-    const auto function_address = ResolveExecutableLuaAddress(memory, requested_function_address);
+    const auto function_address = RequireExecutableLuaAddress(memory, requested_function_address);
     if (function_address == 0) {
         lua_pushboolean(state, 0);
         return 1;
     }
 
-    using CdeclU32U32Fn = void(__cdecl*)(std::uint32_t, std::uint32_t);
-    auto* fn = reinterpret_cast<CdeclU32U32Fn>(function_address);
-    bool ok = false;
+    X86NativeCallResult call;
+    bool completed = false;
     __try {
-        fn(arg0, arg1);
-        ok = true;
+        call = InvokeX86CdeclU32U32(function_address, arg0, arg1);
+        completed = true;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
-        ok = false;
+        completed = false;
     }
 
+    const bool ok =
+        completed && NativeCallStackBalanced("call_cdecl_u32_u32", call);
     lua_pushboolean(state, ok ? 1 : 0);
     return 1;
 }

@@ -2054,19 +2054,20 @@ def test_native_hub_price_formulas_and_transaction_constants_are_pinned() -> str
     body = native_calls[starts[0]:end]
     _require_regex(
         body,
-        r"ResolveExecutableLuaAddress\(memory, requested_function_address\);\s*"
+        r"RequireExecutableLuaAddress\(memory, requested_function_address\);\s*"
         r"if \(function_address == 0\) \{\s*lua_pushnil\(state\);\s*return 1;\s*\}",
         "Hagatha price probe could call an unresolved or non-executable address",
     )
     _require_regex(
         body,
-        r"using StdcallU32U32RetU32Fn =\s*"
-        r"std::uint32_t\(__stdcall\*\)\(std::uint32_t, std::uint32_t\);.*?"
-        r"std::uint32_t result = 0;\s*bool ok = false;\s*__try \{\s*"
-        r"result = fn\(arg0, arg1\);\s*ok = true;\s*\}.*?"
-        r"if \(!ok\) \{\s*lua_pushnil\(state\);\s*return 1;\s*\}\s*"
-        r"lua_pushinteger\(state, static_cast<lua_Integer>\(result\)\);",
-        "Hagatha price probe lost stdcall cleanup, SEH failure handling, or valid-zero return semantics",
+        r"X86NativeCallResult call;\s*bool completed = false;\s*__try \{\s*"
+        r"call = InvokeX86StdcallU32U32\(function_address, arg0, arg1\);\s*"
+        r"completed = true;\s*\}.*?"
+        r"if \(!completed \|\|\s*"
+        r'!NativeCallStackBalanced\("call_stdcall_u32_u32_ret_u32", call\)\) \{\s*'
+        r"lua_pushnil\(state\);\s*return 1;\s*\}\s*"
+        r"lua_pushinteger\(state, static_cast<lua_Integer>\(call\.result\)\);",
+        "Hagatha price probe lost stack restoration, stdcall cleanup validation, SEH handling, or valid-zero returns",
     )
     _require_regex(
         registration,

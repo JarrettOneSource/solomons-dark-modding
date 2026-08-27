@@ -167,6 +167,10 @@ uintptr_t ResolveExecutableLuaAddress(ProcessMemory& memory, uintptr_t address) 
     return 0;
 }
 
+uintptr_t RequireExecutableLuaAddress(ProcessMemory& memory, uintptr_t address) {
+    return memory.IsExecutableRange(address, 1) ? address : 0;
+}
+
 uintptr_t ResolveWritableLuaAddress(ProcessMemory& memory, uintptr_t address, size_t size) {
     if (memory.IsWritableRange(address, size)) {
         return address;

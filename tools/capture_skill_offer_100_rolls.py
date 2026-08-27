@@ -393,8 +393,9 @@ local global_slot = sd.debug.resolve_game_address(0x00818B08)
 local global_rng = global_slot and (sd.debug.read_u32(global_slot) or 0) or 0
 local reseed_ok = false
 if global_rng ~= 0 then
+  local reseed = sd.debug.resolve_game_address(0x00401120)
   reseed_ok = pcall(function()
-    sd.debug.call_thiscall_u32(0x00401120, global_rng, {gameplay_seed})
+    sd.debug.call_thiscall_u32(reseed, global_rng, {gameplay_seed})
   end)
 end
 emit('gameplay_reseed_ok', reseed_ok)

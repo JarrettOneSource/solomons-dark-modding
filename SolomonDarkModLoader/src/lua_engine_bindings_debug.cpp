@@ -3,6 +3,7 @@
 #include "boneyard_picker.h"
 #include "d3d9_end_scene_hook.h"
 #include "gameplay_seams.h"
+#include "logger.h"
 #include "memory_access.h"
 #include "mod_loader.h"
 #include "multiplayer_local_transport.h"
@@ -13,6 +14,7 @@
 #include "native_scene_capture.h"
 #include "native_spell_stats.h"
 #include "runtime_debug.h"
+#include "x86_native_call.h"
 
 #include <algorithm>
 #include <array>

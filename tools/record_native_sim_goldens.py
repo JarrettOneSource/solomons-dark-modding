@@ -790,9 +790,11 @@ if not _G.__physre_movement_recorder_registered then
       end
     end
     if native_knockback then
+      local native_knockback_tick =
+        sd.debug.resolve_game_address(0x00600220)
       local call_ok = pcall(
         sd.debug.call_thiscall_ret_u32,
-        0x00600220,
+        native_knockback_tick,
         trial.native_knockback_actor)
       if not call_ok then
         trial.error = 'native_knockback_tick_failed'

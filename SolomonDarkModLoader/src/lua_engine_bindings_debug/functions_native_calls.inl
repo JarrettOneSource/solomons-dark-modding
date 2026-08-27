@@ -17,6 +17,19 @@ int LuaDebugQueueNestedSackInventoryFixture(lua_State* state) {
     return 2;
 }
 
+bool NativeCallStackBalanced(
+    const char* binding_name,
+    const X86NativeCallResult& call) {
+    if (call.stack_delta_bytes == 0) {
+        return true;
+    }
+    Log(
+        std::string("[lua][debug] ") + binding_name +
+        " rejected a native call with x86 stack delta " +
+        std::to_string(call.stack_delta_bytes) + ".");
+    return false;
+}
+
 // sd.debug.call_thiscall_u32(function_address, this_ptr, arg0) -> boolean
 int LuaDebugCallThiscallU32(lua_State* state) {
     const auto requested_function_address = CheckLuaAddress(state, 1, "function_address");
@@ -24,22 +37,23 @@ int LuaDebugCallThiscallU32(lua_State* state) {
     const auto arg0 = CheckLuaUnsignedInteger<std::uint32_t>(state, 3, "arg0");
 
     auto& memory = ProcessMemory::Instance();
-    const auto function_address = ResolveExecutableLuaAddress(memory, requested_function_address);
+    const auto function_address = RequireExecutableLuaAddress(memory, requested_function_address);
     if (function_address == 0 || this_ptr == 0) {
         lua_pushboolean(state, 0);
         return 1;
     }
 
-    using ThiscallU32Fn = void(__thiscall*)(void*, std::uint32_t);
-    auto* fn = reinterpret_cast<ThiscallU32Fn>(function_address);
-    bool ok = false;
+    X86NativeCallResult call;
+    bool completed = false;
     __try {
-        fn(reinterpret_cast<void*>(this_ptr), arg0);
-        ok = true;
+        call = InvokeX86ThiscallU32(function_address, this_ptr, arg0);
+        completed = true;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
-        ok = false;
+        completed = false;
     }
 
+    const bool ok =
+        completed && NativeCallStackBalanced("call_thiscall_u32", call);
     lua_pushboolean(state, ok ? 1 : 0);
     return 1;
 }
@@ -51,29 +65,29 @@ int LuaDebugCallThiscallU32RetU32(lua_State* state) {
     const auto arg0 = CheckLuaUnsignedInteger<std::uint32_t>(state, 3, "arg0");
 
     auto& memory = ProcessMemory::Instance();
-    const auto function_address = ResolveExecutableLuaAddress(memory, requested_function_address);
+    const auto function_address = RequireExecutableLuaAddress(memory, requested_function_address);
     if (function_address == 0 || this_ptr == 0) {
         lua_pushnil(state);
         return 1;
     }
 
-    using ThiscallU32RetU32Fn = std::uint32_t(__thiscall*)(void*, std::uint32_t);
-    auto* fn = reinterpret_cast<ThiscallU32RetU32Fn>(function_address);
-    std::uint32_t result = 0;
-    bool ok = false;
+    X86NativeCallResult call;
+    bool completed = false;
     __try {
-        result = fn(reinterpret_cast<void*>(this_ptr), arg0);
-        ok = true;
+        call = InvokeX86ThiscallU32(function_address, this_ptr, arg0);
+        completed = true;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
-        ok = false;
+        completed = false;
     }
 
-    if (!ok || result == 0) {
+    if (!completed ||
+        !NativeCallStackBalanced("call_thiscall_u32_ret_u32", call) ||
+        call.result == 0) {
         lua_pushnil(state);
         return 1;
     }
 
-    lua_pushinteger(state, static_cast<lua_Integer>(result));
+    lua_pushinteger(state, static_cast<lua_Integer>(call.result));
     return 1;
 }
 
@@ -83,28 +97,27 @@ int LuaDebugCallThiscallRetU32(lua_State* state) {
     const auto this_ptr = CheckLuaAddress(state, 2, "this_ptr");
 
     auto& memory = ProcessMemory::Instance();
-    const auto function_address = ResolveExecutableLuaAddress(memory, requested_function_address);
+    const auto function_address = RequireExecutableLuaAddress(memory, requested_function_address);
     if (function_address == 0 || this_ptr == 0) {
         lua_pushnil(state);
         return 1;
     }
 
-    using ThiscallRetU32Fn = std::uint32_t(__thiscall*)(void*);
-    auto* fn = reinterpret_cast<ThiscallRetU32Fn>(function_address);
-    std::uint32_t result = 0;
-    bool ok = false;
+    X86NativeCallResult call;
+    bool completed = false;
     __try {
-        result = fn(reinterpret_cast<void*>(this_ptr));
-        ok = true;
+        call = InvokeX86Thiscall(function_address, this_ptr);
+        completed = true;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
-        ok = false;
+        completed = false;
     }
 
-    if (!ok) {
+    if (!completed ||
+        !NativeCallStackBalanced("call_thiscall_ret_u32", call)) {
         lua_pushnil(state);
         return 1;
     }
-    lua_pushinteger(state, static_cast<lua_Integer>(result));
+    lua_pushinteger(state, static_cast<lua_Integer>(call.result));
     return 1;
 }
 
@@ -396,24 +409,28 @@ int LuaDebugCallThiscallOutF32x4U32(lua_State* state) {
     const auto arg0 = CheckLuaUnsignedInteger<std::uint32_t>(state, 3, "arg0");
 
     auto& memory = ProcessMemory::Instance();
-    const auto function_address = ResolveExecutableLuaAddress(memory, requested_function_address);
+    const auto function_address = RequireExecutableLuaAddress(memory, requested_function_address);
     if (function_address == 0 || this_ptr == 0) {
         lua_pushnil(state);
         return 1;
     }
 
-    using ThiscallOutF32x4U32Fn = void(__thiscall*)(void*, float*, std::uint32_t);
-    auto* fn = reinterpret_cast<ThiscallOutF32x4U32Fn>(function_address);
     float result[4] = {};
-    bool ok = false;
+    X86NativeCallResult call;
+    bool completed = false;
     __try {
-        fn(reinterpret_cast<void*>(this_ptr), result, arg0);
-        ok = true;
+        call = InvokeX86ThiscallU32U32(
+            function_address,
+            this_ptr,
+            reinterpret_cast<std::uintptr_t>(result),
+            arg0);
+        completed = true;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
-        ok = false;
+        completed = false;
     }
 
-    if (!ok) {
+    if (!completed ||
+        !NativeCallStackBalanced("call_thiscall_out_f32x4_u32", call)) {
         lua_pushnil(state);
         return 1;
     }
@@ -432,29 +449,29 @@ int LuaDebugCallCdeclU32RetU32(lua_State* state) {
     const auto arg0 = CheckLuaUnsignedInteger<std::uint32_t>(state, 2, "arg0");
 
     auto& memory = ProcessMemory::Instance();
-    const auto function_address = ResolveExecutableLuaAddress(memory, requested_function_address);
+    const auto function_address = RequireExecutableLuaAddress(memory, requested_function_address);
     if (function_address == 0) {
         lua_pushnil(state);
         return 1;
     }
 
-    using CdeclU32RetU32Fn = std::uint32_t(__cdecl*)(std::uint32_t);
-    auto* fn = reinterpret_cast<CdeclU32RetU32Fn>(function_address);
-    std::uint32_t result = 0;
-    bool ok = false;
+    X86NativeCallResult call;
+    bool completed = false;
     __try {
-        result = fn(arg0);
-        ok = true;
+        call = InvokeX86CdeclU32(function_address, arg0);
+        completed = true;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
-        ok = false;
+        completed = false;
     }
 
-    if (!ok || result == 0) {
+    if (!completed ||
+        !NativeCallStackBalanced("call_cdecl_u32_ret_u32", call) ||
+        call.result == 0) {
         lua_pushnil(state);
         return 1;
     }
 
-    lua_pushinteger(state, static_cast<lua_Integer>(result));
+    lua_pushinteger(state, static_cast<lua_Integer>(call.result));
     return 1;
 }
 
@@ -467,30 +484,28 @@ int LuaDebugCallStdcallU32U32RetU32(lua_State* state) {
     const auto arg1 = CheckLuaUnsignedInteger<std::uint32_t>(state, 3, "arg1");
 
     auto& memory = ProcessMemory::Instance();
-    const auto function_address = ResolveExecutableLuaAddress(memory, requested_function_address);
+    const auto function_address = RequireExecutableLuaAddress(memory, requested_function_address);
     if (function_address == 0) {
         lua_pushnil(state);
         return 1;
     }
 
-    using StdcallU32U32RetU32Fn =
-        std::uint32_t(__stdcall*)(std::uint32_t, std::uint32_t);
-    auto* fn = reinterpret_cast<StdcallU32U32RetU32Fn>(function_address);
-    std::uint32_t result = 0;
-    bool ok = false;
+    X86NativeCallResult call;
+    bool completed = false;
     __try {
-        result = fn(arg0, arg1);
-        ok = true;
+        call = InvokeX86StdcallU32U32(function_address, arg0, arg1);
+        completed = true;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
-        ok = false;
+        completed = false;
     }
 
-    if (!ok) {
+    if (!completed ||
+        !NativeCallStackBalanced("call_stdcall_u32_u32_ret_u32", call)) {
         lua_pushnil(state);
         return 1;
     }
 
-    lua_pushinteger(state, static_cast<lua_Integer>(result));
+    lua_pushinteger(state, static_cast<lua_Integer>(call.result));
     return 1;
 }
 
