@@ -1231,6 +1231,7 @@ Create, and Courtyard handoff pass with empty page, console, and failed-response
 arrays. No native executable, loader runtime, or extracted art changed; only
 this report and the paired Website implementation/ledger remain uncommitted,
 unpushed, and undeployed.
+
 ## 2026-08-27 shared-Hub onboarding collision and reset boundary
 
 The native facts above remain the retail oracle: Tutorial has one local
@@ -1279,3 +1280,70 @@ bits during the `incoming` transition and schema-18 local save, restored the
 selected Air appearance/effect, removed the Tutorial Acid Rain rank, and
 restored ordinary collision strongly enough to expand a 40-unit overlap to
 50.1 units. Page, console, failed-response, and wire error arrays were empty.
+
+## 2026-08-27 clarification: College admission HUD suppression and portable release witness
+
+The existing recovery already identifies the native owner: Tutorial Game Over
+sets `DAT_00B3BCA0`, and the live flag owns forced College movement while
+suppressing ordinary controls, HUD, named-NPC markers, and Courtyard onboarding
+overlays. The relevant presentation membership remains the ordinary HUD
+renderer `0x005D2520`, common NPC marker renderer `0x00518280`, and Courtyard
+overlay painter `0x0051EB60`. Title records 7/9 and the normal player/equipment
+compositor are world/title members and remain visible. No new native address,
+table, asset, or lifecycle claim is introduced here.
+
+Native clears `DAT_00B3BCA0` at the first-question path `0x004FD6A0`, before
+the later manual Office exit invokes `Office::AfterSwitch 0x00504AD0` and opens
+Create. The Website request intentionally keeps its additional browser chrome
+suppressed through that manual-exit interval. This is a product presentation
+policy, not a claim that retail retains the flag longer.
+
+The portable release witness must not be `collegeIntro == null`: that only
+proves the automatic Arch dialogue was acknowledged. The broader durable
+`collegeIntroPending` bit remains true through acknowledged Office, the
+outgoing switch, and the covered Create wait. Current loadout confirmation
+atomically clears both onboarding bits while changing `college-loadout` to
+`phase=incoming, sourceRegion=office, destination=courtyard`. A browser may
+therefore suppress pre-Create presentation from authoritative pending state,
+release it in Create, and treat that exact incoming witness as released for an
+already-saved continuation from the earlier settlement-clear schema. This
+survives refresh without a timer, component flag, placeholder element
+selection, or local-storage latch. The serialized participant/economy fields
+from schema 15 through current schema 18 retain every consumed fact.
+
+Touch-only browsers have one explicit platform constraint. After the forced
+program and dialogue are acknowledged, the Office exit is player-controlled;
+hiding the only touch locomotion surface until the exit would make Create
+unreachable. The touch joystick may therefore return for that manual interval
+while nonessential HUD, chat, party, menu, mod, fullscreen, and world-marker
+chrome remains suppressed. Website-only remote nameplates, activity badges,
+and speech bubbles follow the same browser policy. Desktop receives no visible
+exception.
+
+Validation receipt: the exact Mod Loader candidate based on
+`4b44b9fa3147e08be11c52159860f11b4b7df485` passes the complete registered Mac
+static-RE suite `517/517`. The paired Website candidate based on
+`ced3632acc5e87ae744dd7237031a3e258735433` passes its canonical Mac gate and
+production budget (`252,409` raw / `76,678` gzip), then passes stock desktop and
+touch Chrome journeys through both title cards, acknowledged-Office save/reload,
+Create, and returned Hub with empty page, console, and failed-response arrays.
+Only the touch locomotion control appears during the manual post-dialogue exit;
+every named HUD/marker/social surface stays suppressed until Create.
+
+Publication rebase validation receipt: Mod Loader `origin/main` advanced to
+`6ff32d0623c0fb5781be3ac90fdb16b9817ed9ba` with the moving-Staff and College
+title correction, and Website advanced to
+`5fa7a54f01e4f7bba1ea96d20c1f439c17f13f04`. The HUD clarification was rebased
+without replacing that newer ownership. Exact pre-receipt candidates were Mod
+Loader `5dee6814495c2363b6d63c91e4311b4906a76e06` and Website
+`71d3822bd34bcff46cf54ab1436090ecac102990`; local/detached-Mac changed-file
+manifests matched. The fresh Mac Mod Loader tree passed the complete expanded
+static-RE registry `521/521` (log SHA-256
+`16965fd97860cd7b869623060a0452fedca7dfcd0d836d20c8de329dc664e0ce`).
+The paired Website tree passed its complete canonical gate and production
+budget (`Game-wmc1Uq1S.js`, `252,409` raw / `76,680` gzip), then passed stock
+desktop and touch Chrome journeys through title timing, acknowledged-Office
+save/reload, Create, and returned Hub. Both journeys had empty page, console,
+and failed-response arrays; only touch locomotion was exposed during the manual
+post-dialogue exit. Exact browser and frame receipts are recorded in
+`Website/docs/game-native-parity-re.md`.
