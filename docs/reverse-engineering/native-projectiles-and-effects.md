@@ -1043,31 +1043,49 @@ produce one contact. Its contact uses the damage written at
 result as float32 in the shared contact record, and sets flags `0x18`. This is
 not the generic `/100` fire/contact normalizer.
 The rain does not allocate a poison modifier; its damage is direct. Each drop
-starts at height `-175`, advances by 20 while its streak velocity gains four,
+starts at height `-175`, advances by 20 while its streak length gains four,
 then grows its ground sprite from `0.1` by float32 `1.100000023841858`.
-Its falling width-three procedural streak grades from RGBA
-`(0.7,0.95,0.75,1)` to `(0.4,0.95,1,0)`, with a quarter-alpha `BadGuys[0]`
-head tinted `0xb3f2bf`; the ground sprite uses tint `0xccffcc` and alpha
-`1-scale^2`. After the configured drops, a one-in-four gate may construct a
+`Anim_AcidRaindrop::Draw 0x00459130` sends `0x0041DF10` a filled vertical quad
+at local X `-1`, local Y `height`, width `3`, and positive quad height
+`streakLength`. The top vertices are RGBA `(0.4,0.95,0.5,0)` and the bottom
+vertices `(0.7,0.95,0.75,0.5)`. A separate quarter-alpha `BadGuys[0]` marker
+tinted `(0.7,0.95,0.75)` remains at the ground root while the streak falls; it
+does not follow the falling end. After height reaches zero, both falling
+members are replaced by **BadGuys[63]** (`DAT_00819978 + 0x3074`) at the
+ground root, tint `(0.8,1,0.8)`, scale `groundScale`, and alpha
+`1-groundScale^2`. After the configured drops, a one-in-four gate may construct a
 BadGuys-10 splash,
 consuming the recovered discarded rotation, rotation, scale, distance, and
 unit-vector draws; life is `0.25`, decay `0.0125`, and velocity damping `0.95`.
-Parent cloud painter `0x005EB290` owns two distinct BadGuys-10 passes. The
-earlier account incorrectly classified these as ground passes because it
-followed each glyph call but skipped the shared renderer transform surrounding
-the complete function. Raw instructions `0x005EB2A3..0x005EB2C9` add zero to
+Parent cloud painter `0x005EB290` owns **three** draws across two authored
+records. The prior two-BadGuys-10 account was false: it skipped direct atlas
+destination mapping and the renderer blend transition, then asserted only the
+two visible transform programs. Raw instructions `0x005EB2A3..0x005EB2C9` add zero to
 renderer X and subtract the compiled double `175.0` at `0x00786C10` from
-renderer Y before either glyph. Instructions `0x005EB580..0x005EB5AB` restore
-that translation after both glyphs. With field scale `s`, cloud alpha `c`, age
-`a`, and constructor phase `p`, the absolute actor-local passes are therefore:
+renderer Y before any draw. Instructions `0x005EB580..0x005EB5AB` restore that
+translation at return. The four painter operands are actor-owned fields:
+field scale `s` at `+0x140`, cloud alpha `c` at `+0x144`, fixed-tick actor age
+`a` at `+0x148`, and constructor phase `p` at `+0x14C`. In particular, age is
+not the renderer frame counter. With those operands, the absolute actor-local
+sequence is therefore:
 
-- overhead additive cloud at `(0,-175)`, tint `(0.41,0.55,0.32)`, alpha
-  `0.75*c`, rotation `a*0.03125*p` degrees, and scale `(5*s,4*s)`;
-- overhead source-over cloud at `(0,-175-50*s)`, tint `(0.25,0.45,0.15)`,
-  alpha `c`, rotation `-0.5*a` degrees, and scale `(7.5*s*p,6*s)`.
+1. source-over **BadGuys[78]** (`DAT_00819978 + 0x3BF0`) at `(0,-175)`, tint
+   `(0.41,0.55,0.32)`, alpha `0.75*c`, rotation `a*0.03125*p` degrees, and
+   scale `(5*s,4*s)`;
+2. switch renderer blend from `(SRCALPHA,INVSRCALPHA)` to `(SRCALPHA,ONE)` and
+   draw the same BadGuys-78 transform again;
+3. still additive, draw **BadGuys[10]** (`DAT_00819978 + 0xFC`) at
+   `(0,-175-50*s)`, tint `(0.25,0.45,0.15)`, alpha `c`, rotation `-0.5*a`
+   degrees, and scale `(7.5*s*p,6*s)`;
+4. restore source-over before return.
+
+BadGuys 78 is the authored `136x135` mottled cloud; BadGuys 10 is the smaller
+`67x68` circle. The duplicate normal-plus-additive record-78 passes create the
+bright, round, filled stock cloud.
 
 Auxiliary slot `+0x28 -> 0x005EB1D0` performs no renderer translation. While
-residue alpha `r` is positive, it draws BadGuys-10 source-over at the aimed
+residue alpha `r` is positive, it draws **DeadHawg[4]**
+(`DAT_00819994 + 0x348`) source-over at the aimed
 ground root with tint `(0.05,0.1,0.05)`, alpha `r`, and uniform scale `4.5`;
 it is not a red quarter-scale sprite. Arena invokes the direct auxiliary actor
 pass at `0x0046F8F9`, before the shared world-queue flush at `0x0046FDAF`, so
@@ -1091,6 +1109,14 @@ though its pixels are translated upward. This is painter/culling ownership,
 not a second radius-350 light. Light callback `0x005EB5C0` separately submits
 radius `2`, intensity `0.5*cloudAlpha`, and no shadow on the ordinary Region
 provider lane.
+
+`Anim_Raindrop::Draw 0x00458F90`, used by Magic Storm, is the complete shared
+secondary-rain sibling. Its falling quad has width two, transparent top RGBA
+`(0.4,0.95,1,0)`, half-alpha bottom RGBA `(0.8,0.95,1,0.5)`, and no Acid-only
+BadGuys-0 ground marker. Its landed branch uses the same BadGuys-63 record with
+tint `(0.8,1,1)`. Arena `Anim_WeatherRaindrop 0x00459B60` keeps a separate
+weather owner; its already extracted top-transparent/bottom-half-alpha streak
+agrees with this direction but does not consume the secondary-rain renderer.
 
 ### Earthquake (`0x7F1`)
 

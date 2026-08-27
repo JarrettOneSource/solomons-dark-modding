@@ -453,8 +453,16 @@ def test_native_secondary_ability_art_audio_and_lifecycle_are_pinned() -> str:
         "enhanced_tornado_drops_per_tick": 2,
         "flash_decay_per_tick": 0.100000001,
         "ambient_flash_roll": "RandomInt(1000) == 3 every tick; winning roll then consumes Float(0.35)",
+        "falling_drop_quad": "local x -1, y height, width 2, positive streak length; transparent top RGBA (0.4,0.95,1,0), half-alpha bottom RGBA (0.8,0.95,1,0.5)",
+        "landed_drop_ring": "BadGuys[63] at the ground root, tint (0.8,1,1), alpha 1-scale^2",
     }:
         raise StaticReTestFailure("Magic Storm geometry/lifecycle drifted")
+    if [row["records"] for row in abilities[27]["art"]] != [
+        "11,63,78,84",
+        "width-2 transparent-top/half-alpha-bottom blue-white quad",
+        "three BadGuys-78 passes plus moving and white-mask branches",
+    ]:
+        raise StaticReTestFailure("Magic Storm cloud/drop art ownership drifted")
     if abilities[30]["targeting"] != "caster_center_radius_350":
         raise StaticReTestFailure("Prismatic immediate radius-350 targeting drifted")
     if abilities[30]["timing"] != {
@@ -643,9 +651,14 @@ def test_native_secondary_ability_art_audio_and_lifecycle_are_pinned() -> str:
         "damage_period_ticks": 25,
         "contact_damage_formula": "f32(mDamage[effective rank] / 6)",
         "target_query": "supplied width 400; strict root-center distance squared < 200*200; hostile mask 2; Coffin type 0xBB9 excluded; no body-radius expansion",
-        "field_pass_one": "world-sorted additive BadGuys[10] at y -175, tint (0.41,0.55,0.32), alpha 0.75*c, rotation a*0.03125*p degrees, scale (5*s,4*s)",
-        "field_pass_two": "world-sorted source-over BadGuys[10] at y -175-50*s, tint (0.25,0.45,0.15), alpha c, rotation -0.5*a degrees, scale (7.5*s*p,6*s)",
-        "residue_pass": "pre-world source-over BadGuys[10] at the ground root, tint (0.05,0.1,0.05), residue alpha, uniform scale 4.5",
+        "cloud_rotation_owner": "actor +0x148 fixed-tick age with constructor phase +0x14C; never renderer frame cadence",
+        "cloud_pass_source_over": "world-sorted BadGuys[78] at y -175, tint (0.41,0.55,0.32), alpha 0.75*c, rotation a*0.03125*p degrees, scale (5*s,4*s)",
+        "cloud_pass_additive": "world-sorted additive BadGuys[78] with the identical first-pass transform",
+        "cloud_circle_additive": "world-sorted additive BadGuys[10] at y -175-50*s, tint (0.25,0.45,0.15), alpha c, rotation -0.5*a degrees, scale (7.5*s*p,6*s)",
+        "residue_pass": "pre-world source-over DeadHawg[4] at the ground root, tint (0.05,0.1,0.05), residue alpha, uniform scale 4.5",
+        "falling_drop_quad": "local x -1, y height, width 3, positive streak length; transparent top RGBA (0.4,0.95,0.5,0), half-alpha bottom RGBA (0.7,0.95,0.75,0.5)",
+        "falling_drop_marker": "quarter-alpha BadGuys[0] remains at the ground root while the streak falls",
+        "landed_drop_ring": "BadGuys[63] at the ground root, tint (0.8,1,0.8), alpha 1-scale^2",
         "drops_per_tick": 2,
         "enhanced_drops_per_tick": 5,
         "splash_gate": "Integer(4)==3 after raindrop allocation",
@@ -653,6 +666,12 @@ def test_native_secondary_ability_art_audio_and_lifecycle_are_pinned() -> str:
         "targets_per_pulse": "min(n, floor(n/3)+1)",
     }:
         raise StaticReTestFailure("Acid Rain exact damage and shuffled target count drifted")
+    if [row["records"] for row in abilities[72]["art"]] != [
+        "0,10,63,78",
+        "4",
+        "width-3 transparent-top/half-alpha-bottom green quad",
+    ]:
+        raise StaticReTestFailure("Acid Rain complete cloud/drop/residue art membership drifted")
     if abilities[74]["timing"] != {
         "nominal_scale_in_ticks": 40,
         "scale_in_ticks": 41,
@@ -722,6 +741,9 @@ def test_native_secondary_ability_documents_and_generator_are_wired() -> str:
             "compiled double `6.0`",
             "scale `(7.5*s*p,6*s)`",
             "uniform scale `4.5`",
+            "BadGuys[78]",
+            "BadGuys[63]",
+            "DeadHawg[4]",
             "two `Anim_AcidRaindrop`",
             "five while",
             "100 * 10 = 1,000",
