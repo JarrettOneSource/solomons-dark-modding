@@ -1331,6 +1331,17 @@ bridge String and Boneyard path by two bytes. The local wizard remains
 `data\\levels\\survival.boneyard`. This is a stock writer variant, not a
 different Boast lifecycle state.
 
+The same run crossed retail's first-process control-scheme/Create path before
+returning to the title and choosing Last Game. Its final writer stored rows
+`0..7` at permanent/effective rank zero while retaining element root 1,
+Discipline root 7, Fireball 16, and Ring of Fire 21. The isolated replay could
+not bypass that control-scheme screen, so whether the zeroing belongs to that
+first-process path or ordinary load refresh remains unattributed. It does not
+change the portable rule: roots `0..7` are class/loadout metadata, not earned
+unlock rows. Website import reconstructs all eight roots at rank 1 from the
+authoritative root IDs even when a stock writer emits zero rank bytes; public
+learned-order membership remains rows `8..79` only.
+
 Consequently, a strict decoder accepts exactly two decoded statement values
 when the selected ID is `-1`: empty String or the one-byte `0x01` sentinel.
 The empty String may use either retail wire form already present in the corpus,

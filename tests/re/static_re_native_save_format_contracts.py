@@ -587,7 +587,8 @@ def test_native_portable_profile_progression_and_opaque_round_trip_are_exact() -
         "2026-08-27 stock-web-stock retail round trip" in document
         and "0c6d19652ede0e6794b49de40c5d1eb8694f87cf195375d06f35a61dd979bbc9"
         in document
-        and "one-byte `0x01` sentinel" in document,
+        and "one-byte `0x01` sentinel" in document
+        and "Website import reconstructs all eight roots at rank 1" in document,
         "stock round-trip null-Boast evidence is no longer pinned in the save contract",
     )
 
