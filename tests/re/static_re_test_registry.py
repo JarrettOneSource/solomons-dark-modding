@@ -88,6 +88,11 @@ from static_re_native_scene_composition_contracts import (
     test_native_scene_physical_layer_list_is_pinned,
     test_native_scene_world_sort_key_and_ties_are_pinned,
 )
+from static_re_native_arena_render_pipeline_contracts import (
+    test_native_arena_render_pipeline_layout_addresses_are_pinned,
+    test_native_arena_saturation_shader_and_frame_boundary_are_pinned,
+    test_native_render_pipeline_caller_catalog_is_complete,
+)
 from static_re_native_hud_contracts import (
     test_native_hud_document_element_table_is_exact,
     test_native_hud_element_census_and_rects_are_pinned,
@@ -1100,6 +1105,18 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native scene decor determinism path is pinned",
         test_native_scene_decor_determinism_path_is_pinned,
+    ),
+    (
+        "Native Arena saturation shader and frame boundary are pinned",
+        test_native_arena_saturation_shader_and_frame_boundary_are_pinned,
+    ),
+    (
+        "Native Arena render-pipeline layout addresses are pinned",
+        test_native_arena_render_pipeline_layout_addresses_are_pinned,
+    ),
+    (
+        "Native renderer caller catalog is complete",
+        test_native_render_pipeline_caller_catalog_is_complete,
     ),
     (
         "Native HUD document element table is exact",

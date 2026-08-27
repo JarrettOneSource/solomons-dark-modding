@@ -275,6 +275,14 @@ inspection at calls `0x004204F3` and `0x004205BD` confirms both ordinary
 fallback branches push mode zero, so the merged alpha byte is preserved by
 this path.
 
+Mode zero copies decoded BGRA into the A8R8G8B8 texture without premultiplying
+RGB by alpha. The renderer later uses `SRCALPHA` for ordinary and additive
+composition. Linear filtering therefore operates on the original
+unpremultiplied atlas-page texels before the Arena pixel shader and blend. A
+browser upload that premultiplies each extracted crop can agree at opaque texel
+centres yet diverge along the soft translucent edges used by clouds, glows,
+rings, smoke, and rain.
+
 `0x00441180` allocates the first free 0x20-byte texture slot in the table at
 `0x00818C84`; its count is at `0x00818C88`, and `0x00443100` grows the table.
 The observed Direct3D formats are `0x15`, `0x17`, and `0x1A`.
@@ -307,6 +315,11 @@ backbuffer width and target height / backbuffer height, so the stock
 1600-by-900 parity branch is linear. `0x00421560` can switch stage-zero min/mag
 between point and linear for explicit text-rendering branches and restores the
 prior choice; this is separate from address U/V state.
+
+The Arena-wide pixel stage consuming those samples is documented in
+[`native-arena-render-pipeline.md`](native-arena-render-pipeline.md). Page
+representation, sampler state, vertex color, shader, and blend are one
+observable pipeline rather than interchangeable extraction details.
 
 `Anim_FadeScale::Draw 0x00455DF0` changes additive blend and RGBA state but
 does not change filtering. Its Arena `DeadHawg[24]` splash therefore inherits

@@ -1,6 +1,7 @@
 # Native scene composition
 
-Status: **G12 closed** for retail `SolomonDark.exe` SHA-256
+Status: **G12 frame assembly closed; Arena pixel path corrected 2026-08-27**
+for retail `SolomonDark.exe` SHA-256
 `03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`.
 
 This is the frame-assembly contract for the browser WebGL2 renderer. It answers
@@ -8,6 +9,10 @@ which native draw is submitted, which physical pass owns it, how it is ordered,
 and how its world geometry becomes screen geometry. The ordered live recordings
 are committed as
 [`scene-composition-goldens.json`](../../tests/fixtures/webgame/scene-composition-goldens.json).
+The selected texture/vertex color then becomes a pixel according to
+[`native-arena-render-pipeline.md`](native-arena-render-pipeline.md). That
+report supersedes this document's former implication that Arena tint and blend
+selectors were the complete color pipeline.
 
 G4 has a deliberately different boundary. The G4 row in
 [`browser-rebuild-roadmap.md`](../browser-rebuild-roadmap.md) owns animation
@@ -31,14 +36,16 @@ writable before a request can be queued.
 
 For each gameplay frame, the browser renderer must do this in order:
 
-1. establish the Region camera and physical viewport;
+1. establish the Region camera and physical viewport; Arena additionally binds
+   its exact `0.65` per-fragment saturation shader before any target or draw;
 2. clear the framebuffer;
 3. emit the room's direct underlay draws in native call order;
 4. gather every shared world object, compute its native queue key, and flush the
    queue in the order specified below;
 5. emit direct overdraw and world-projected indicator draws in native call
    order; and
-6. emit screen-overlay feedback.
+6. emit screen-overlay feedback, then restore Arena saturation to identity
+   before later HUD/menu rendering.
 
 There is no global depth buffer that can replace those steps. Within the shared
 world queue, later draws cover earlier draws. Between physical passes, every
@@ -332,6 +339,16 @@ at renderer offsets `+0x1EC..+0x1F8`; its effective color lanes at
 the requested tint/alpha at the actual native submission and, when an object
 context exists, the sampled `lighting_scalar` separately.
 
+That packed color is an input, not the final Arena RGB. `Arena::Render
+0x0046EC80` binds the shader compiled at `0x0043FD80` with saturation `0.65`.
+For unpremultiplied texture RGB `T` and vertex RGB `V`, it computes
+`lerp(avg(T)*avg(V), T*V, 0.65)` per fragment and preserves
+`textureAlpha*vertexAlpha`. This happens before blending for direct underlays,
+the shared queue, late art, and Arena-owned screen feedback. It is not
+equivalent to desaturating the completed canvas. Exact HLSL, texture upload,
+sampler state, blend tables, primitive callers, and the Arena/HUD boundary are
+closed in `native-arena-render-pipeline.md` and its generated xref catalog.
+
 The ordinary captured blend state is:
 
 ```text
@@ -343,9 +360,10 @@ operation   = D3DBLENDOP_ADD           (1)
 out.rgb = src.rgb * src.a + dst.rgb * (1 - src.a)
 ```
 
-Per-sprite tint is therefore applied before source-alpha composition. The
-golden records blend state per draw so a call site that changes it does not get
-flattened into the ordinary rule.
+Per-sprite tint and the Arena shader are therefore applied before source-alpha
+composition. The golden records requested tint and blend state per draw; the
+pipeline report supplies the formerly missing shader state so a call site does
+not get flattened into the ordinary rule.
 
 Arena rendering resets the light list, lets current objects submit lights, and
 finalizes the offscreen field before it flushes the shared world queue.
@@ -587,9 +605,10 @@ guess:
   was not exercised by the hub/Boneyard captures. Preserve the per-draw blend
   state in the renderer API and add a live witness when G4/G2 supplies that
   effect; do not label all translucent art additive.
-- No distinct volumetric-fog kernel was reachable. If a later room or effect
-  changes a postprocess state beyond the recorded tint/overlay model, record
-  that call site and extend `screen-overlay`; do not invent depth fog now.
+- No distinct volumetric-fog kernel was reachable. The Arena `0.65` saturation
+  shader is now recovered and is not fog or a screen-overlay postprocess. If a
+  later room selects another pixel shader, record that exact state transition;
+  do not invent depth fog now.
 - The exact transient screen displacement selected from nonzero camera-shake
   magnitude is not present in these zero-shake goldens. The semantic
   world-to-screen transform above is complete without it; nonzero shake needs

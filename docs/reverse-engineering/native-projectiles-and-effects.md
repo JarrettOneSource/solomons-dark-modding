@@ -1083,6 +1083,17 @@ BadGuys 78 is the authored `136x135` mottled cloud; BadGuys 10 is the smaller
 `67x68` circle. The duplicate normal-plus-additive record-78 passes create the
 bright, round, filled stock cloud.
 
+Those records and tints are renderer inputs, not final framebuffer colors.
+`Arena::Render 0x0046EC80` has already bound the saturation shader compiled at
+`0x0043FD80` with constant `0.65`. Each Acid cloud texel is transformed by
+`lerp(avg(textureRGB)*avg(vertexRGB), textureRGB*vertexRGB, 0.65)` before the
+source-over/additive blend. The falling `0x0041DF10` vertex quad, BadGuys-0
+marker, BadGuys-63 ring, splash, and DeadHawg-4 residue all remain inside the
+same Arena shader interval. A web painter that uses the requested greens
+directly will be visibly more saturated even when every asset, transform,
+alpha, and blend selector is otherwise correct. See
+[`native-arena-render-pipeline.md`](native-arena-render-pipeline.md).
+
 Auxiliary slot `+0x28 -> 0x005EB1D0` performs no renderer translation. While
 residue alpha `r` is positive, it draws **DeadHawg[4]**
 (`DAT_00819994 + 0x348`) source-over at the aimed

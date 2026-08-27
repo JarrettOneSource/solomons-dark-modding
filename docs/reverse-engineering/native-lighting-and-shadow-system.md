@@ -868,6 +868,13 @@ Constants were re-read from the pinned retail image: `0x00785D18` is
 `0x00785D30` is `512.0f`, `0x00785D34` is `0.050000011920928955f`, and
 the qword at `0x00784E20` is `0.949999988079071`.
 
+The Arena saturation shader recovered on 2026-08-27 is already active during
+this late pass. Record 18 and its white vertex RGB are grayscale, so
+`lerp(avg(texture)*avg(vertex), texture*vertex, 0.65)` is an identity for RGB
+and does not change alpha. The `.2375..25` value above is therefore the final
+native source alpha. A separate browser brightness multiplier has no native
+owner and cannot be justified as compensation for the Arena shader.
+
 ### Port consequence and complete active membership
 
 | Member | Native disposition for the current Website model |
