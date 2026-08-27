@@ -788,7 +788,7 @@ def test_native_class_loadout_documented_starting_kit_stats_are_exact() -> str:
 
     documented_variable_values = {
         "serialized_class_slot_0x834": "sample-dependent",
-        "special_choice_argument": "sample-dependent/opaque",
+        "special_choice_argument": "sample-dependent",
         "meditation_recovery_ramp_ticks": "live runtime counter",
     }
     _require(

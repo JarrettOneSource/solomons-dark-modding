@@ -601,7 +601,7 @@ def test_native_portable_profile_progression_and_opaque_round_trip_are_exact() -
         and decoded_wizard["name"] == "PORTABILIS"
         and decoded_wizard["progression"]["level"] == 2
         and decoded_wizard["progression"]["rows"][9]["permanent_rank"] == 2
-        and decoded_wizard["progression"]["learned_order"][-1] == 9
+        and decoded_wizard["progression"]["learned_order"][-2:] == [9, 57]
         and decoded_wizard["progression"]["perk_selectors"] == [5, 27, 0, 27]
         and decoded_wizard["progression"]["perk_capacity"] == 9
         and decoded_wizard["progression"]["experience_enabled"] is True
