@@ -376,7 +376,14 @@ current secondary selection at progression `+0x870`, refreshes it through
 slot state. Activation hides inventory, skill, belt, spell, and combat HUD
 surfaces; clears their access gates; computes the movement anchor from the
 player's starting position; and enables early protection at `Game+0x1CD5`.
-[E01:005D5CF0,005D5FE0]
+It then recursively finds the first Health Potion and Mana Potion in the
+inventory root through `0x005529A0` and `0x00552B70`, removes both live item
+objects through the ordinary inventory removal path `0x00568170`, and refreshes
+the belt through `0x005D50E0`. The normal Game initializer has already created
+one of each starter potion, so the stock Tutorial begins its lessons with
+neither starter potion. The health potion dropped by wave 5 is consequently
+the only health-potion quantity present at stage 18 in the natural route.
+[E01:005D5CF0,005D5FE0,005D6297-005D62EB]
 
 Activation also installs stock narration/presentation context. It sets the
 speaker string to `Sirmin`, releases any prior Game-owned narration/portrait
@@ -427,7 +434,7 @@ case are intentionally blank presentation phases, not missing analysis.
 | 14 | While selected-HUD acknowledgement `+0xAC` remains zero, one live-rectangle pointer plus two unframed lines teach the primary and concentration-A controls: `click these icons to change your` / `primary attack or concentration`. Either eligible control click suppresses that presentation for the remainder of this Tutorial object. | If armed, enemies < 4, and player HP < max HP, queues `SAY_LOOKINGBEATUP` once. Enemy count zero starts next wave and -> 16; the HUD click does **not** advance the stage. | Clears wave 4; starts wave 5. |
 | 16 | none | Polls first actor type `0x7DD`, stores it at `+0x88`; when present -> 17. | Wave 5 is the single Potion Skeleton; its death link drops a health potion. |
 | 17 | world-object arrow | Repeats first-`0x7DD` lookup. When no such actor remains -> 18. | Intended transition is potion pickup/removal. |
-| 18 | `DRINK POTION`; dynamic potion key; arrows to potion belt slot and HP display | Recursively counts potion type `0x1B59` through `0x00552A80`; when zero, starts next wave, queues `SAY_FACETHEWRATH` and `SAY_IMBORED`, -> 19. | Starts wave 6 after the health potion is consumed. |
+| 18 | `DRINK POTION`; dynamic potion key; arrows to potion belt slot and HP display | Recursively sums health-potion subtype 0 quantities through `0x00552A80`; when zero, starts next wave, queues `SAY_FACETHEWRATH` and `SAY_IMBORED`, -> 19. | Activation removed the ordinary starter potions, so the natural wave-5 drop is the only health potion and one drink starts wave 6. |
 | 19 | `SURVIVE` | Once enemy count > 5, calls the Tutorial object's remove/destructor virtual at `+0x18`. This ends the teaching overlay, not the Game or persisted first-play flag. | Wave 6 enables three survival interval triggers; their ongoing scripts populate the arena. |
 
 The route is therefore:
@@ -863,7 +870,8 @@ stock call path.
 | spawn health potion | `0x00466B50 -> Arena vslot +0x148 / 0x0046AE20` | active Arena, subtype/location | clean-ish | potion-reward spawn returning actor identity |
 | pickup transfer | `0x005E6B50 -> 0x0063E870/0x0055FF20` | ground actor with held item `+0x148`, delay `+0x14C`, valid inventory | dirty to call, clean to observe | item pickup event; do not call tick manually |
 | top-level inventory lesson test | enumeration via `0x004027F0`, Game count `+0x13CC` | local inventory root | dirty/broad | inventory query by stable item/recipe identity |
-| recursive potion count | `0x00552A80` | inventory root and type `0x1B59` | clean-ish query | `inventory.count({type="potion"})` / event-driven objective |
+| recursive health-potion count | `0x00552A80` | inventory root, type `0x1B59`, subtype 0, and stack quantity `+0x88` | clean-ish query | `inventory.count({type="potion", subtype="health"})` / event-driven objective |
+| discard Tutorial starter potions | `0x005D6297..0x005D62EB` -> `0x005529A0/0x00552B70` -> `0x00568170` | Tutorial activation, inventory root, first recursive native Health and Mana Potion objects | dirty/Tutorial-owned | one activation transaction that removes both starter objects before teaching begins |
 | normalize belt/HUD inventory slots | `0x005D50E0` after the Tutorial clears two quick slots | Game-owned belt records, inventory, progression, UI layout and stock item types | dirty/global | one transactional loadout refresh owned by the tutorial session |
 | wave advance | `0x00465C00` | active Arena and configured wave graph | clean-ish | authority-owned `scenario.start_next_wave()` |
 | spawn custom monster/group | `0x00469580`, `0x0046C710`, `0x0046C790` | validated recipe/group/location and Arena | clean-ish | semantic spawn request returning identities |
@@ -958,10 +966,13 @@ No picker hijack or deeper MapPicker implementation analysis is included here.
 | `0x0050E980` | MapPicker tick; handoff only |
 | `0x00514A20` | Game control callback that invokes MapPicker opener |
 | `0x00550760` | close the stock inventory modal |
-| `0x00552A80` | recursive inventory count by item type |
+| `0x005529A0` | recursive first Health Potion lookup |
+| `0x00552A80` | recursive Health Potion quantity sum |
+| `0x00552B70` | recursive first Mana Potion lookup |
 | `0x00558E40` | inventory-anchor list getter delegate |
 | `0x0055FF20` | inventory insertion used by pickup |
 | `0x00560380` | construct the stock inventory modal |
+| `0x00568170` | inventory-tree removal used to discard Tutorial starter potions |
 | `0x00570F80` | resolve stock equipment-widget coordinates |
 | `0x005A7D90` | normal frontend route when first-play flag is zero |
 | `0x005A8390` | missing-profile defaults; sets tutorial gate to one |
