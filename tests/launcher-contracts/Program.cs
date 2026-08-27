@@ -21,7 +21,7 @@ using SolomonDarkModLauncher.Workspace;
 using SolomonDarkLauncherUpdater;
 using SolomonDarkModding.IO;
 
-var tests = new (string Name, Func<Task> Run)[]
+var tests = new List<(string Name, Func<Task> Run)>
 {
     ("website package install and cache", TestWebsitePackageInstallAsync),
     ("host mod transfer wire protocol", TestHostModTransferProtocolAsync),
@@ -81,6 +81,20 @@ var tests = new (string Name, Func<Task> Run)[]
     ("bot-brain roster vocabulary migration", TestBotBrainRosterMigrationAsync),
     ("mod settings view-facing coordinator", TestModSettingsCoordinatorAsync)
 };
+
+if (args.Length != 0)
+{
+    if (args.Length != 2 || args[0] != "--browser-save-archive")
+    {
+        Console.Error.WriteLine(
+            "usage: SolomonDarkModLauncher.ContractTests [--browser-save-archive <path>]");
+        return 2;
+    }
+    var browserSaveArchivePath = Path.GetFullPath(args[1]);
+    tests.Add((
+        "browser-produced save archive import",
+        () => TestBrowserSaveArchiveAsync(browserSaveArchivePath)));
+}
 
 static Task TestBotBrainRosterMigrationAsync()
 {
@@ -1258,6 +1272,47 @@ static Task TestCloudSaveArchiveIntegrityAsync()
         Directory.Delete(root, recursive: true);
     }
 
+    return Task.CompletedTask;
+}
+
+static Task TestBrowserSaveArchiveAsync(string archivePath)
+{
+    Require(File.Exists(archivePath), "browser-produced save archive is absent");
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var catalog = new LocalSaveCatalog(
+            new LauncherUiSettingsStore(Path.Combine(root, "launcher")));
+        var importedName = CloudSaveArchive.Import(
+            catalog,
+            destinationSlot: 5,
+            File.ReadAllBytes(archivePath));
+        var imported = catalog.Get(5);
+        var profileRoot = Path.Combine(imported.SavegamesRootPath, "solomondark");
+        var runsRoot = Path.Combine(profileRoot, "savegames");
+        var runDirectories = Directory.EnumerateDirectories(runsRoot).ToArray();
+        Require(importedName == "Browser Game", "browser archive lost its launcher save name");
+        Require(
+            File.Exists(Path.Combine(profileRoot, "darkdata.cfg")),
+            "browser archive import did not materialize darkdata.cfg");
+        Require(
+            runDirectories.Length == 1 &&
+            File.Exists(Path.Combine(runDirectories[0], "gamestate.sav")),
+            "browser archive import did not materialize one resumable wizard");
+
+        var stageRoot = Path.Combine(root, "stage");
+        var settingsPath = Path.Combine(stageRoot, "sandbox", "settings.txt");
+        Directory.CreateDirectory(Path.GetDirectoryName(settingsPath)!);
+        File.WriteAllText(settingsPath, "Game.LightQuality=0.060000\r\n");
+        Require(
+            NativeResumeSelector.Materialize(stageRoot, imported.SavegamesRootPath) ==
+            Path.GetFileName(runDirectories[0]),
+            "browser archive did not produce a launchable native Resume selection");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
     return Task.CompletedTask;
 }
 
