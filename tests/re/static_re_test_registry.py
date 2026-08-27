@@ -95,6 +95,12 @@ from static_re_native_arena_render_pipeline_contracts import (
     test_native_arena_saturation_shader_and_frame_boundary_are_pinned,
     test_native_render_pipeline_caller_catalog_is_complete,
 )
+from static_re_native_full_render_pipeline_contracts import (
+    test_native_full_render_pipeline_membership_has_no_silent_rows,
+    test_native_full_render_pipeline_residuals_and_layout_are_closed,
+    test_native_full_render_pipeline_shader_and_state_programs_are_pinned,
+    test_native_full_render_pipeline_xrefs_are_complete_and_regenerable,
+)
 from static_re_native_hud_contracts import (
     test_native_hud_document_element_table_is_exact,
     test_native_hud_element_census_and_rects_are_pinned,
@@ -1133,6 +1139,22 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native renderer caller catalog is complete",
         test_native_render_pipeline_caller_catalog_is_complete,
+    ),
+    (
+        "Native full renderer xrefs are complete and regenerable",
+        test_native_full_render_pipeline_xrefs_are_complete_and_regenerable,
+    ),
+    (
+        "Native full renderer membership has no silent rows",
+        test_native_full_render_pipeline_membership_has_no_silent_rows,
+    ),
+    (
+        "Native full renderer shader and state programs are pinned",
+        test_native_full_render_pipeline_shader_and_state_programs_are_pinned,
+    ),
+    (
+        "Native full renderer residuals and layout are closed",
+        test_native_full_render_pipeline_residuals_and_layout_are_closed,
     ),
     (
         "Native HUD document element table is exact",

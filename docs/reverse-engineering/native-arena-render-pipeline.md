@@ -113,10 +113,14 @@ already tinted RGB. A correct web shader must retain texture RGB, vertex RGB,
 and alpha as separate inputs until this formula has run.
 
 The sibling blur shader at `0x00B401F8` is also compiled by `0x0043FD80`.
-Renderer field `+0x230` selects it through `0x00442AF0`, supplying blur amount
-at `c0` and reciprocal texture dimensions at `c1/c2`. It is a distinct
-20-sample cross blur and is not selected by ordinary Arena frame entry or the
-Acid Rain painters.
+Renderer field `+0x230` would select it through `0x00442AF0`, supplying blur
+amount at `c0` and reciprocal texture dimensions at `c1/c2`. The complete
+game-wide census in
+[`native-full-render-pipeline.md`](native-full-render-pipeline.md) proves the
+request remains constructor-zero and has no retail writer. Its source loops
+`aU=-3..2`, accumulates four samples per iteration, and divides the resulting
+24 samples by 20; it is a dormant 1.2-gain cross-blur capability, not an active
+Arena/Acid or other stock-scene pass.
 
 ## Texture, sampler, color, primitive, and blend contract
 

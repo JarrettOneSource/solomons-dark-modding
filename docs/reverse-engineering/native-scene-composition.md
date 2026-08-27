@@ -587,32 +587,26 @@ float32 and x87 intermediates are serialized to nine significant digits; the
 largest replay error in the four recordings is below `0.000256` pixels. The
 declared epsilon sits above representation noise and below one native pixel.
 
-## Not Yet Reversed
+## 2026-08-27 residual closure
 
-These limits are explicit so an implementing agent does not fill them with a
-guess:
+The former open rows are now closed by the game-wide pipeline census in
+[`native-full-render-pipeline.md`](native-full-render-pipeline.md):
 
-- Three Boneyard `world-sorted` draws in the center capture (`DeadHawg.243` at
-  draw orders 503 and 517, and `BadGuys.34` at 512) occur during the proven
-  queue flush but are dispatched outside the safe common-object context hook.
-  Their physical order is recorded, but their object pointer and queue key are
-  `null`. Headless decompilation of `0x0068C1C0` confirms that the flush loops
-  its private entry list, invokes vtable slot `+0x0C`, and conditionally appends
-  bookkeeping after the draw. Exposing the entry at function entry would
-  require reimplementing that loop and its side effects, which is outside the
-  additive-probe contract. Do not infer a key from the sprite name.
-- The exact state-selection rule for every rare additive spell/effect call site
-  was not exercised by the hub/Boneyard captures. Preserve the per-draw blend
-  state in the renderer API and add a live witness when G4/G2 supplies that
-  effect; do not label all translucent art additive.
-- No distinct volumetric-fog kernel was reachable. The Arena `0.65` saturation
-  shader is now recovered and is not fog or a screen-overlay postprocess. If a
-  later room selects another pixel shader, record that exact state transition;
-  do not invent depth fog now.
-- The exact transient screen displacement selected from nonzero camera-shake
-  magnitude is not present in these zero-shake goldens. The semantic
-  world-to-screen transform above is complete without it; nonzero shake needs
-  a separate live presentation witness before pixel-parity claims include it.
+- `DeadHawg.243` at draw orders 503/517 is the Tree overlay member owned by
+  `Tree 0x00608830`; its two matrices pair with the captured type-2001 Tree base
+  draws and inherit those queue keys. `BadGuys.34` at 512 is the sole art of
+  `Lantern::Render 0x005E61D0`, factory type 5010, at its submitted world point.
+  The recorder lost a temporary context pointer, not native ownership.
+- all 404 renderer-selector writes are instruction-cataloged and joined to
+  their class/vtable owners. The rare effect paths now have exact
+  normal/additive/multiply dispositions rather than relying on one live frame.
+- the complete executable has only the Arena saturation shader and a dormant
+  never-requested blur shader. There is no other scene shader or volumetric-fog
+  kernel.
+- nonzero camera feedback is the already-recovered deterministic uniform
+  `1 + magnitude` scale about the local Player's projected point. It is not a
+  random screen displacement; see
+  [`native-camera-control.md`](native-camera-control.md).
 
-Those residuals do not change the five physical passes, the queue formula,
-decor placement path, ordinary camera transform, or the recorded draw order.
+The five physical passes, queue formula, decor placement, camera transform,
+and draw order therefore have no remaining extractable native unknown.
