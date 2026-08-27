@@ -75,8 +75,11 @@ which requested behavior is retail and which is an explicit web extension.
   stock enemy-count fallback true on the next controller tick. The heading is
   legitimately a one-tick state under that contract; it is not a renderer
   timeout or CSS race. Holding stage 2 until the first accepted primary cast,
-  pausing hostile simulation while player/cast/UI clocks continue, and using
-  left/right-joystick copy are explicit requested browser policy.
+  pausing hostile simulation and player translation while aim/cast/UI clocks
+  continue, and using left/right-joystick copy are explicit requested browser
+  policy. The player hold is not retail behavior and must clear retained
+  velocity as well as current movement input; otherwise the browser's native-
+  style velocity recurrence continues translating the wizard.
 
 The complete pointer family, all later stages 3..19, authored wave rows,
 narration, HUD gates, save/resume, and teardown remain unchanged. Do not
