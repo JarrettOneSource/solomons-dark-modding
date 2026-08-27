@@ -63,6 +63,7 @@ from static_re_native_save_format_contracts import (
     test_launcher_save_layer_and_account_seam_are_pinned,
     test_native_active_wizard_saved_run_and_tutorial_boundaries_are_pinned,
     test_native_memoratorium_fifo_profile_fields_are_named_and_closed,
+    test_native_portable_profile_progression_and_opaque_round_trip_are_exact,
     test_native_save_container_codec_and_layout_are_pinned,
     test_native_save_document_node_and_payload_tables_are_exact,
     test_native_save_fixture_provenance_hashes_the_committed_recording,
@@ -2559,6 +2560,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native Memoratorium FIFO profile fields are named and closed",
         test_native_memoratorium_fifo_profile_fields_are_named_and_closed,
+    ),
+    (
+        "Native portable profile progression and opaque round-trip are exact",
+        test_native_portable_profile_progression_and_opaque_round_trip_are_exact,
     ),
     (
         "Native save document node and payload tables are exact",

@@ -801,22 +801,42 @@ G13 likewise distinguishes durable participant progression from scene-local
 actors and unfinished actions in
 [`native-session-flow.md`](native-session-flow.md#teardown-and-reset-ownership).
 
-The progression serializer `0x0065EE80` carries permanent ranks, selected
-element `+0x82C`, selected discipline `+0x830`, the offer seed `+0x834`, and the
-Hagatha flag span. The derived-state serializer `0x0067C830` carries the
-principal refreshed block including the three active-toggle bytes
-`+0x8DC..+0x8DE`. On materialization, effective ranks and the scalar caches in
-this document are rebuilt from that actor's permanent book and persistent
-flags; they are not independent durable skill data.
+The common disk serializer is `Skills::vftable +0x14 -> 0x0065EE80`. It carries
+all 83 permanent/effective rank rows, selected element `+0x82C`, selected
+discipline `+0x830`, offer seed `+0x834`, learned/visible order
+`+0x850/+0x854`, pending/deferred choice state, the Hagatha selector/flag span,
+and the recovered scalar/vector tail. `Skills_Wizard` overrides the same disk
+slot with `0x00663AE0`: it calls the common serializer and adds only meditation
+idle delay `+0x884`, Firewalker byte `+0x8DC`, and weld-effect scalar `+0x8E0`.
+
+`Skills_Wizard::vftable +0x48 -> 0x0067C830` is a separate derived/network
+serialization lane. The prior text incorrectly used it as disk evidence for
+all three adjacent active-toggle bytes. Mindstar `+0x8DD` and Regenerate
+`+0x8DE` are not members of the disk override and must reset on disk restore.
+On materialization, effective ranks and scalar caches are rebuilt from the
+permanent book and actually persisted flags; they are not independent durable
+skill data.
 
 | State | Boundary |
 | --- | --- |
-| level, accumulated XP, permanent row ranks, element, discipline, Hagatha ownership, learned active toggles | participant progression; survives ordinary hub region reconstruction and completed-run return |
+| level, accumulated XP, permanent row ranks, element, discipline, offer/learned order, Hagatha ownership, Firewalker active | participant progression disk payload; survives ordinary hub region reconstruction and completed-run return |
 | effective rank `row+0x22`, max HP/MP and derived multipliers/resistances, `+0x740` hoard | reconstructed actor cache; reproduce from the durable rank/toggle book whenever the actor is materialized or refreshed |
-| concentration A/B and Mind Chug `+0x828` timer | process/run selection state; explicitly not serialized and cleared by Create/reset |
+| Mindstar active, Regenerate active, concentration A/B, and Mind Chug `+0x828` timer | live/network selection state; explicitly absent from the disk virtual and cleared by disk restore/Create reset |
+| Serendipity/Reverie active-until-hurt `+0x73C/+0x73D` | purchase/runtime state; `0x0066EF70` sets it, damage clears it, and disk serializer `0x0065EE80` does not emit either offset; a disk restore must not recreate it merely from ownership |
 | current HP/MP | participant vitals ledger across an ordinary scene handoff; preserve ratios while a progression refresh changes maxima |
 | projectiles, spell-effect actors, modifier lifetimes, action ticks, target locks, offer UI state, and partially charged objects | scene/run transient; destroyed at teardown and never replayed into the next world |
 | a fresh Create generation after the multiplayer match lifecycle resets | starts a fresh base progression; raw element/discipline may be preselected for convenience, but prior learned ranks are not retained merely by that preselection |
+
+The eight Machinimbus availability bytes for rows 72..79 are a separate stock
+defect/limit. `0x004F90C0` writes process globals
+`0x00B3BDD8..0x00B3BDDF`; the complete consumers are `0x004F8480`,
+`0x00579E90`, `0x0065E830`, and `0x0065EBA0`. They are not fields in either
+disk serializer and the purchase path calls no profile writer. An advanced row
+that was actually learned remains recoverable from its permanent rank and may
+imply availability during a portable import. A purchased-but-unlearned row has
+no unmodified-retail persisted representation. Do not silently label the web
+port's participant-private persisted `advancedUnlocks` array native disk
+parity; it is an explicit retention extension.
 
 G10 owns the on-disk save/account codec, slot migration, and cross-process
 restore contract. Its

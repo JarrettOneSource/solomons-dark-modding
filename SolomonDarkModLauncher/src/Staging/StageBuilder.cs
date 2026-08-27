@@ -14,6 +14,8 @@ internal static class StageBuilder
         bool hostModTransfer = false)
     {
         StageRootProcessCleaner.TerminateProcessesUsingStage(configuration.Workspace.StageRootPath);
+        StageSandboxCompatibilityLinks.PrepareForStageBuild(
+            configuration.Workspace.StageRootPath);
         var stageMirror = FileTreeMirror.Synchronize(
             configuration.Game.InstallDirectory,
             configuration.Workspace.StageRootPath,

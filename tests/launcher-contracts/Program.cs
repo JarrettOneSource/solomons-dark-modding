@@ -61,6 +61,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("isolated local save catalog", TestIsolatedLocalSaveCatalogAsync),
     ("cloud save archive integrity", TestCloudSaveArchiveIntegrityAsync),
     ("selected save launch routing", TestSelectedSaveLaunchRoutingAsync),
+    ("native Resume selector materialization", TestNativeResumeSelectorAsync),
     ("fresh install isolation", TestFreshInstallIsolationAsync),
     ("native-menu profile-state provenance", TestNativeMenuProfileStateProvenanceAsync),
     ("tutorial bypass launch routing", TestTutorialBypassLaunchRoutingAsync),
@@ -1289,6 +1290,56 @@ static Task TestSelectedSaveLaunchRoutingAsync()
             Directory.Exists(selectedSavegamesRoot),
             "selected save directory was not prepared before launch");
 
+        var stageRoot = Path.Combine(root, "selected-stage");
+        var selectedSentinel = Path.Combine(
+            selectedSavegamesRoot,
+            "solomondark",
+            "selected.sav");
+        Directory.CreateDirectory(Path.GetDirectoryName(selectedSentinel)!);
+        File.WriteAllText(selectedSentinel, "selected-before-launch");
+        var usesMirror = StageSandboxCompatibilityLinks.Materialize(
+            stageRoot,
+            selectedSavegamesRoot);
+        Require(
+            usesMirror == (OperatingSystem.IsWindows() &&
+                (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WINEPREFIX")) ||
+                 !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WINELOADERNOEXEC")))),
+            "selected save routing reported the wrong mirror mode");
+        var nativeSavegamesRoot = Path.Combine(stageRoot, "sandbox", "savegames");
+        var compatibilitySavegamesRoot = Path.Combine(stageRoot, "savegames");
+        Require(
+            File.ReadAllText(Path.Combine(
+                nativeSavegamesRoot,
+                "solomondark",
+                "selected.sav")) == "selected-before-launch",
+            "retail sandbox save path did not read the selected launcher slot");
+        Require(
+            File.ReadAllText(Path.Combine(
+                compatibilitySavegamesRoot,
+                "solomondark",
+                "selected.sav")) == "selected-before-launch",
+            "stage savegames compatibility path did not read the selected launcher slot");
+        var nativeWrite = Path.Combine(
+            nativeSavegamesRoot,
+            "solomondark",
+            "native-write.sav");
+        File.WriteAllText(nativeWrite, "written-through-retail-path");
+        if (!usesMirror)
+        {
+            Require(
+                File.ReadAllText(Path.Combine(
+                    selectedSavegamesRoot,
+                    "solomondark",
+                    "native-write.sav")) == "written-through-retail-path",
+                "retail sandbox write did not reach the selected launcher slot");
+        }
+        StageSandboxCompatibilityLinks.PrepareForStageBuild(stageRoot);
+        Require(
+            File.Exists(selectedSentinel) &&
+            !Directory.Exists(nativeSavegamesRoot) &&
+            !Directory.Exists(compatibilitySavegamesRoot),
+            "stage rebuild preparation did not detach both aliases without deleting the selected slot");
+
         var mirrorSource = Path.Combine(root, "proton-stage-savegames");
         var localDestination = Path.Combine(root, "launcher-savegames");
         var sourceFile = Path.Combine(mirrorSource, "solomondark", "player.sav");
@@ -1303,6 +1354,83 @@ static Task TestSelectedSaveLaunchRoutingAsync()
             "proton-updated-save",
             "Proton stage copy-back lost the updated save");
         Require(!File.Exists(staleFile), "Proton stage copy-back retained stale local files");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+
+    return Task.CompletedTask;
+}
+
+static Task TestNativeResumeSelectorAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var stageRoot = Path.Combine(root, "stage");
+        var savegamesRoot = Path.Combine(root, "slot", "savegames");
+        var settingsPath = Path.Combine(stageRoot, "sandbox", "settings.txt");
+        Directory.CreateDirectory(Path.GetDirectoryName(settingsPath)!);
+        var firstRun = Path.Combine(
+            savegamesRoot,
+            "solomondark",
+            "savegames",
+            "FIRST");
+        var secondRun = Path.Combine(
+            savegamesRoot,
+            "solomondark",
+            "savegames",
+            "SECOND");
+        Directory.CreateDirectory(firstRun);
+        Directory.CreateDirectory(secondRun);
+        File.WriteAllText(Path.Combine(firstRun, "gamestate.sav"), "first");
+        File.WriteAllText(Path.Combine(secondRun, "gamestate.sav"), "second");
+        File.WriteAllText(
+            settingsPath,
+            "System.Userpassword=do-not-copy\r\n" +
+            "Game.Resume=C:\\stale\\SECOND\\\r\n" +
+            "Game.LightQuality=0.060000\r\n");
+
+        Require(
+            NativeResumeSelector.Materialize(stageRoot, savegamesRoot) == "SECOND",
+            "launcher did not preserve an existing valid native Resume run name");
+        var selectedText = File.ReadAllText(settingsPath);
+        Require(
+            selectedText.Contains(
+                "Game.Resume=" + Path.Combine(
+                    stageRoot,
+                    "sandbox",
+                    "savegames",
+                    "solomondark",
+                    "savegames",
+                    "SECOND") + Path.DirectorySeparatorChar,
+                StringComparison.Ordinal) &&
+            selectedText.Contains("System.Userpassword=do-not-copy", StringComparison.Ordinal) &&
+            selectedText.Contains("Game.LightQuality=0.060000", StringComparison.Ordinal),
+            "launcher Resume materialization changed selection siblings or credential rows");
+
+        Directory.Delete(firstRun, recursive: true);
+        File.WriteAllText(
+            settingsPath,
+            "System.Token=keep-local\r\nGame.Resume=C:\\missing\\OLD\\\r\n");
+        Require(
+            NativeResumeSelector.Materialize(stageRoot, savegamesRoot) == "SECOND",
+            "launcher did not select the sole exported gamestate namespace");
+        Require(
+            File.ReadAllText(settingsPath).Contains(
+                "System.Token=keep-local",
+                StringComparison.Ordinal),
+            "launcher Resume materialization rewrote a credential row");
+
+        Directory.CreateDirectory(firstRun);
+        File.WriteAllText(Path.Combine(firstRun, "gamestate.sav"), "first-again");
+        File.WriteAllText(settingsPath, "Game.Resume=\r\n");
+        var ambiguousBefore = File.ReadAllBytes(settingsPath);
+        Require(
+            NativeResumeSelector.Materialize(stageRoot, savegamesRoot) is null &&
+            ambiguousBefore.SequenceEqual(File.ReadAllBytes(settingsPath)),
+            "launcher guessed between multiple resumable native namespaces");
     }
     finally
     {

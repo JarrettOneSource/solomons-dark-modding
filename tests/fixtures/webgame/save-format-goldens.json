@@ -51,70 +51,70 @@
         "runtime_offset": 88
       },
       {
-        "name": "class_available[0]",
+        "name": "memorial_marker[0]",
         "payload_offset": 4,
         "size": 1,
         "type": "bool",
         "runtime_offset": 144
       },
       {
-        "name": "class_available[1]",
+        "name": "memorial_marker[1]",
         "payload_offset": 5,
         "size": 1,
         "type": "bool",
         "runtime_offset": 145
       },
       {
-        "name": "class_available[2]",
+        "name": "memorial_marker[2]",
         "payload_offset": 6,
         "size": 1,
         "type": "bool",
         "runtime_offset": 146
       },
       {
-        "name": "class_available[3]",
+        "name": "memorial_marker[3]",
         "payload_offset": 7,
         "size": 1,
         "type": "bool",
         "runtime_offset": 147
       },
       {
-        "name": "class_available[4]",
+        "name": "memorial_marker[4]",
         "payload_offset": 8,
         "size": 1,
         "type": "bool",
         "runtime_offset": 148
       },
       {
-        "name": "class_available[5]",
+        "name": "memorial_marker[5]",
         "payload_offset": 9,
         "size": 1,
         "type": "bool",
         "runtime_offset": 149
       },
       {
-        "name": "class_available[6]",
+        "name": "memorial_marker[6]",
         "payload_offset": 10,
         "size": 1,
         "type": "bool",
         "runtime_offset": 150
       },
       {
-        "name": "class_available[7]",
+        "name": "memorial_marker[7]",
         "payload_offset": 11,
         "size": 1,
         "type": "bool",
         "runtime_offset": 151
       },
       {
-        "name": "class_available[8]",
+        "name": "memorial_marker[8]",
         "payload_offset": 12,
         "size": 1,
         "type": "bool",
         "runtime_offset": 152
       },
       {
-        "name": "class_available[9]",
+        "name": "memorial_marker[9]",
         "payload_offset": 13,
         "size": 1,
         "type": "bool",
@@ -128,70 +128,70 @@
         "runtime_offset": 260
       },
       {
-        "name": "class_enabled[0]",
+        "name": "hub_help_pending[0]",
         "payload_offset": 15,
         "size": 1,
         "type": "bool",
         "runtime_offset": 154
       },
       {
-        "name": "class_enabled[1]",
+        "name": "hub_help_pending[1]",
         "payload_offset": 16,
         "size": 1,
         "type": "bool",
         "runtime_offset": 155
       },
       {
-        "name": "class_enabled[2]",
+        "name": "hub_help_pending[2]",
         "payload_offset": 17,
         "size": 1,
         "type": "bool",
         "runtime_offset": 156
       },
       {
-        "name": "class_enabled[3]",
+        "name": "hub_help_pending[3]",
         "payload_offset": 18,
         "size": 1,
         "type": "bool",
         "runtime_offset": 157
       },
       {
-        "name": "class_enabled[4]",
+        "name": "hub_help_pending[4]",
         "payload_offset": 19,
         "size": 1,
         "type": "bool",
         "runtime_offset": 158
       },
       {
-        "name": "class_enabled[5]",
+        "name": "hub_help_pending[5]",
         "payload_offset": 20,
         "size": 1,
         "type": "bool",
         "runtime_offset": 159
       },
       {
-        "name": "class_enabled[6]",
+        "name": "hub_help_pending[6]",
         "payload_offset": 21,
         "size": 1,
         "type": "bool",
         "runtime_offset": 160
       },
       {
-        "name": "class_enabled[7]",
+        "name": "hub_help_pending[7]",
         "payload_offset": 22,
         "size": 1,
         "type": "bool",
         "runtime_offset": 161
       },
       {
-        "name": "class_enabled[8]",
+        "name": "hub_help_pending[8]",
         "payload_offset": 23,
         "size": 1,
         "type": "bool",
         "runtime_offset": 162
       },
       {
-        "name": "class_enabled[9]",
+        "name": "hub_help_pending[9]",
         "payload_offset": 24,
         "size": 1,
         "type": "bool",
@@ -359,7 +359,7 @@
         "runtime_offset": 252
       },
       {
-        "name": "profile_flag_0x105",
+        "name": "librarian_lace_read",
         "payload_offset": 117,
         "size": 1,
         "type": "bool",
@@ -369,7 +369,7 @@
   },
   "fresh_profile_defaults": {
     "profile_gold": 500,
-    "class_available": [
+    "memorial_marker": [
       false,
       true,
       true,
@@ -382,7 +382,7 @@
       true
     ],
     "stock_tutorial_pending": true,
-    "class_enabled": [
+    "hub_help_pending": [
       true,
       true,
       true,
@@ -421,7 +421,7 @@
     ],
     "next_portrait_index": 100,
     "last_portrait_index": 0,
-    "profile_flag_0x105": false,
+    "librarian_lace_read": false,
     "hagatha_bulk_selectors": [],
     "hagatha_first_mix_flags_before_first_serialization": [
       false,
@@ -518,12 +518,12 @@
         "profile_address": 15770416,
         "gold": 500,
         "stock_tutorial_pending": true,
-        "profile_flag_0x105": false,
+        "librarian_lace_read": false,
         "portrait_age_counter": 1000,
         "next_portrait_index": 100,
         "last_portrait_index": 0,
         "shlorio_fee": 500,
-        "class_available": [
+        "memorial_marker": [
           false,
           true,
           true,
@@ -535,7 +535,7 @@
           false,
           true
         ],
-        "class_enabled": [
+        "hub_help_pending": [
           true,
           true,
           true,
@@ -711,104 +711,104 @@
                 "semantics": "persistent profile gold"
               },
               {
-                "name": "class_available[0]",
+                "name": "memorial_marker[0]",
                 "payload_offset": 4,
                 "payload_offset_hex": "0x04",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x090",
                 "value": false,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
-                "name": "class_available[1]",
+                "name": "memorial_marker[1]",
                 "payload_offset": 5,
                 "payload_offset_hex": "0x05",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x091",
                 "value": true,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
-                "name": "class_available[2]",
+                "name": "memorial_marker[2]",
                 "payload_offset": 6,
                 "payload_offset_hex": "0x06",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x092",
                 "value": true,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
-                "name": "class_available[3]",
+                "name": "memorial_marker[3]",
                 "payload_offset": 7,
                 "payload_offset_hex": "0x07",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x093",
                 "value": true,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
-                "name": "class_available[4]",
+                "name": "memorial_marker[4]",
                 "payload_offset": 8,
                 "payload_offset_hex": "0x08",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x094",
                 "value": false,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
-                "name": "class_available[5]",
+                "name": "memorial_marker[5]",
                 "payload_offset": 9,
                 "payload_offset_hex": "0x09",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x095",
                 "value": true,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
-                "name": "class_available[6]",
+                "name": "memorial_marker[6]",
                 "payload_offset": 10,
                 "payload_offset_hex": "0x0A",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x096",
                 "value": true,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
-                "name": "class_available[7]",
+                "name": "memorial_marker[7]",
                 "payload_offset": 11,
                 "payload_offset_hex": "0x0B",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x097",
                 "value": false,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
-                "name": "class_available[8]",
+                "name": "memorial_marker[8]",
                 "payload_offset": 12,
                 "payload_offset_hex": "0x0C",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x098",
                 "value": false,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
-                "name": "class_available[9]",
+                "name": "memorial_marker[9]",
                 "payload_offset": 13,
                 "payload_offset_hex": "0x0D",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x099",
                 "value": true,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
                 "name": "stock_tutorial_pending",
@@ -821,104 +821,104 @@
                 "semantics": "stock tutorial/game-over gate"
               },
               {
-                "name": "class_enabled[0]",
+                "name": "hub_help_pending[0]",
                 "payload_offset": 15,
                 "payload_offset_hex": "0x0F",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x09A",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
-                "name": "class_enabled[1]",
+                "name": "hub_help_pending[1]",
                 "payload_offset": 16,
                 "payload_offset_hex": "0x10",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x09B",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
-                "name": "class_enabled[2]",
+                "name": "hub_help_pending[2]",
                 "payload_offset": 17,
                 "payload_offset_hex": "0x11",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x09C",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
-                "name": "class_enabled[3]",
+                "name": "hub_help_pending[3]",
                 "payload_offset": 18,
                 "payload_offset_hex": "0x12",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x09D",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
-                "name": "class_enabled[4]",
+                "name": "hub_help_pending[4]",
                 "payload_offset": 19,
                 "payload_offset_hex": "0x13",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x09E",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
-                "name": "class_enabled[5]",
+                "name": "hub_help_pending[5]",
                 "payload_offset": 20,
                 "payload_offset_hex": "0x14",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x09F",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
-                "name": "class_enabled[6]",
+                "name": "hub_help_pending[6]",
                 "payload_offset": 21,
                 "payload_offset_hex": "0x15",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x0A0",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
-                "name": "class_enabled[7]",
+                "name": "hub_help_pending[7]",
                 "payload_offset": 22,
                 "payload_offset_hex": "0x16",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x0A1",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
-                "name": "class_enabled[8]",
+                "name": "hub_help_pending[8]",
                 "payload_offset": 23,
                 "payload_offset_hex": "0x17",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x0A2",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
-                "name": "class_enabled[9]",
+                "name": "hub_help_pending[9]",
                 "payload_offset": 24,
                 "payload_offset_hex": "0x18",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x0A3",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
                 "name": "memorial_slot_ages[0]",
@@ -1151,14 +1151,14 @@
                 "semantics": "most recently written portrait index"
               },
               {
-                "name": "profile_flag_0x105",
+                "name": "librarian_lace_read",
                 "payload_offset": 117,
                 "payload_offset_hex": "0x75",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x105",
                 "value": false,
-                "semantics": "opaque profile flag"
+                "semantics": "durable BOOK25_LACE one-shot"
               }
             ],
             "luthacus_storage": {
@@ -1756,12 +1756,12 @@
         "profile_address": 8692528,
         "gold": 875,
         "stock_tutorial_pending": true,
-        "profile_flag_0x105": false,
+        "librarian_lace_read": false,
         "portrait_age_counter": 1000,
         "next_portrait_index": 100,
         "last_portrait_index": 0,
         "shlorio_fee": 650,
-        "class_available": [
+        "memorial_marker": [
           false,
           true,
           true,
@@ -1773,7 +1773,7 @@
           false,
           true
         ],
-        "class_enabled": [
+        "hub_help_pending": [
           true,
           true,
           true,
@@ -1949,104 +1949,104 @@
                 "semantics": "persistent profile gold"
               },
               {
-                "name": "class_available[0]",
+                "name": "memorial_marker[0]",
                 "payload_offset": 4,
                 "payload_offset_hex": "0x04",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x090",
                 "value": false,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
-                "name": "class_available[1]",
+                "name": "memorial_marker[1]",
                 "payload_offset": 5,
                 "payload_offset_hex": "0x05",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x091",
                 "value": true,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
-                "name": "class_available[2]",
+                "name": "memorial_marker[2]",
                 "payload_offset": 6,
                 "payload_offset_hex": "0x06",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x092",
                 "value": true,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
-                "name": "class_available[3]",
+                "name": "memorial_marker[3]",
                 "payload_offset": 7,
                 "payload_offset_hex": "0x07",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x093",
                 "value": true,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
-                "name": "class_available[4]",
+                "name": "memorial_marker[4]",
                 "payload_offset": 8,
                 "payload_offset_hex": "0x08",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x094",
                 "value": false,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
-                "name": "class_available[5]",
+                "name": "memorial_marker[5]",
                 "payload_offset": 9,
                 "payload_offset_hex": "0x09",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x095",
                 "value": true,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
-                "name": "class_available[6]",
+                "name": "memorial_marker[6]",
                 "payload_offset": 10,
                 "payload_offset_hex": "0x0A",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x096",
                 "value": true,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
-                "name": "class_available[7]",
+                "name": "memorial_marker[7]",
                 "payload_offset": 11,
                 "payload_offset_hex": "0x0B",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x097",
                 "value": false,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
-                "name": "class_available[8]",
+                "name": "memorial_marker[8]",
                 "payload_offset": 12,
                 "payload_offset_hex": "0x0C",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x098",
                 "value": false,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
-                "name": "class_available[9]",
+                "name": "memorial_marker[9]",
                 "payload_offset": 13,
                 "payload_offset_hex": "0x0D",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x099",
                 "value": true,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
                 "name": "stock_tutorial_pending",
@@ -2059,104 +2059,104 @@
                 "semantics": "stock tutorial/game-over gate"
               },
               {
-                "name": "class_enabled[0]",
+                "name": "hub_help_pending[0]",
                 "payload_offset": 15,
                 "payload_offset_hex": "0x0F",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x09A",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
-                "name": "class_enabled[1]",
+                "name": "hub_help_pending[1]",
                 "payload_offset": 16,
                 "payload_offset_hex": "0x10",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x09B",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
-                "name": "class_enabled[2]",
+                "name": "hub_help_pending[2]",
                 "payload_offset": 17,
                 "payload_offset_hex": "0x11",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x09C",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
-                "name": "class_enabled[3]",
+                "name": "hub_help_pending[3]",
                 "payload_offset": 18,
                 "payload_offset_hex": "0x12",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x09D",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
-                "name": "class_enabled[4]",
+                "name": "hub_help_pending[4]",
                 "payload_offset": 19,
                 "payload_offset_hex": "0x13",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x09E",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
-                "name": "class_enabled[5]",
+                "name": "hub_help_pending[5]",
                 "payload_offset": 20,
                 "payload_offset_hex": "0x14",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x09F",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
-                "name": "class_enabled[6]",
+                "name": "hub_help_pending[6]",
                 "payload_offset": 21,
                 "payload_offset_hex": "0x15",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x0A0",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
-                "name": "class_enabled[7]",
+                "name": "hub_help_pending[7]",
                 "payload_offset": 22,
                 "payload_offset_hex": "0x16",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x0A1",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
-                "name": "class_enabled[8]",
+                "name": "hub_help_pending[8]",
                 "payload_offset": 23,
                 "payload_offset_hex": "0x17",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x0A2",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
-                "name": "class_enabled[9]",
+                "name": "hub_help_pending[9]",
                 "payload_offset": 24,
                 "payload_offset_hex": "0x18",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x0A3",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
                 "name": "memorial_slot_ages[0]",
@@ -2389,14 +2389,14 @@
                 "semantics": "most recently written portrait index"
               },
               {
-                "name": "profile_flag_0x105",
+                "name": "librarian_lace_read",
                 "payload_offset": 117,
                 "payload_offset_hex": "0x75",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x105",
                 "value": false,
-                "semantics": "opaque profile flag"
+                "semantics": "durable BOOK25_LACE one-shot"
               }
             ],
             "luthacus_storage": {
@@ -2984,12 +2984,12 @@
         "profile_address": 10199856,
         "gold": 250,
         "stock_tutorial_pending": true,
-        "profile_flag_0x105": false,
+        "librarian_lace_read": false,
         "portrait_age_counter": 1000,
         "next_portrait_index": 100,
         "last_portrait_index": 0,
         "shlorio_fee": 600,
-        "class_available": [
+        "memorial_marker": [
           false,
           true,
           true,
@@ -3001,7 +3001,7 @@
           false,
           true
         ],
-        "class_enabled": [
+        "hub_help_pending": [
           true,
           true,
           true,
@@ -3179,104 +3179,104 @@
                 "semantics": "persistent profile gold"
               },
               {
-                "name": "class_available[0]",
+                "name": "memorial_marker[0]",
                 "payload_offset": 4,
                 "payload_offset_hex": "0x04",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x090",
                 "value": false,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
-                "name": "class_available[1]",
+                "name": "memorial_marker[1]",
                 "payload_offset": 5,
                 "payload_offset_hex": "0x05",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x091",
                 "value": true,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
-                "name": "class_available[2]",
+                "name": "memorial_marker[2]",
                 "payload_offset": 6,
                 "payload_offset_hex": "0x06",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x092",
                 "value": true,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
-                "name": "class_available[3]",
+                "name": "memorial_marker[3]",
                 "payload_offset": 7,
                 "payload_offset_hex": "0x07",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x093",
                 "value": true,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
-                "name": "class_available[4]",
+                "name": "memorial_marker[4]",
                 "payload_offset": 8,
                 "payload_offset_hex": "0x08",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x094",
                 "value": false,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
-                "name": "class_available[5]",
+                "name": "memorial_marker[5]",
                 "payload_offset": 9,
                 "payload_offset_hex": "0x09",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x095",
                 "value": true,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
-                "name": "class_available[6]",
+                "name": "memorial_marker[6]",
                 "payload_offset": 10,
                 "payload_offset_hex": "0x0A",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x096",
                 "value": true,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
-                "name": "class_available[7]",
+                "name": "memorial_marker[7]",
                 "payload_offset": 11,
                 "payload_offset_hex": "0x0B",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x097",
                 "value": false,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
-                "name": "class_available[8]",
+                "name": "memorial_marker[8]",
                 "payload_offset": 12,
                 "payload_offset_hex": "0x0C",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x098",
                 "value": false,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
-                "name": "class_available[9]",
+                "name": "memorial_marker[9]",
                 "payload_offset": 13,
                 "payload_offset_hex": "0x0D",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x099",
                 "value": true,
-                "semantics": "class availability flag; selector identity not yet reversed"
+                "semantics": "Memoratorium record-8 urn-marker bit"
               },
               {
                 "name": "stock_tutorial_pending",
@@ -3289,104 +3289,104 @@
                 "semantics": "stock tutorial/game-over gate"
               },
               {
-                "name": "class_enabled[0]",
+                "name": "hub_help_pending[0]",
                 "payload_offset": 15,
                 "payload_offset_hex": "0x0F",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x09A",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
-                "name": "class_enabled[1]",
+                "name": "hub_help_pending[1]",
                 "payload_offset": 16,
                 "payload_offset_hex": "0x10",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x09B",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
-                "name": "class_enabled[2]",
+                "name": "hub_help_pending[2]",
                 "payload_offset": 17,
                 "payload_offset_hex": "0x11",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x09C",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
-                "name": "class_enabled[3]",
+                "name": "hub_help_pending[3]",
                 "payload_offset": 18,
                 "payload_offset_hex": "0x12",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x09D",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
-                "name": "class_enabled[4]",
+                "name": "hub_help_pending[4]",
                 "payload_offset": 19,
                 "payload_offset_hex": "0x13",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x09E",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
-                "name": "class_enabled[5]",
+                "name": "hub_help_pending[5]",
                 "payload_offset": 20,
                 "payload_offset_hex": "0x14",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x09F",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
-                "name": "class_enabled[6]",
+                "name": "hub_help_pending[6]",
                 "payload_offset": 21,
                 "payload_offset_hex": "0x15",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x0A0",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
-                "name": "class_enabled[7]",
+                "name": "hub_help_pending[7]",
                 "payload_offset": 22,
                 "payload_offset_hex": "0x16",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x0A1",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
-                "name": "class_enabled[8]",
+                "name": "hub_help_pending[8]",
                 "payload_offset": 23,
                 "payload_offset_hex": "0x17",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x0A2",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
-                "name": "class_enabled[9]",
+                "name": "hub_help_pending[9]",
                 "payload_offset": 24,
                 "payload_offset_hex": "0x18",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x0A3",
                 "value": true,
-                "semantics": "class selection flag; selector identity not yet reversed"
+                "semantics": "durable Hub help/onboarding flag"
               },
               {
                 "name": "memorial_slot_ages[0]",
@@ -3619,14 +3619,14 @@
                 "semantics": "most recently written portrait index"
               },
               {
-                "name": "profile_flag_0x105",
+                "name": "librarian_lace_read",
                 "payload_offset": 117,
                 "payload_offset_hex": "0x75",
                 "size": 1,
                 "type": "bool",
                 "runtime_offset_hex": "0x105",
                 "value": false,
-                "semantics": "opaque profile flag"
+                "semantics": "durable BOOK25_LACE one-shot"
               }
             ],
             "luthacus_storage": {

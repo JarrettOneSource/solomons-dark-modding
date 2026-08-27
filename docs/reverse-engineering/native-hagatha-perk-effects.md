@@ -74,7 +74,7 @@ correction path makes the host authoritative for the one-way runtime edges.
 | 24 | Serendipity Charm | active byte makes spell damage `*= 3`; positive remaining damage clears both until-hurt bytes |
 | 25 | Reverie Charm | active byte makes offensive spell mana cost zero; the same hurt edge clears it |
 | 26 | Brute's Charm | melee damage `*= 3`; actor push strength `*= 2` |
-| 27 | Tonic | capacity `+3`, at most twice, maximum 9; Tonic is repeatable and not stored as an ordinary owned flag |
+| 27 | Tonic | capacity `+3`, at most twice, maximum 9; Tonic bypasses the duplicate-list rejection, so its ordered selector may appear twice; common apply still sets ownership byte 27 on the first purchase |
 
 ## Missing-family instruction closure
 

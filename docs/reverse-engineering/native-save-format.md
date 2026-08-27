@@ -5,7 +5,7 @@ Status: **G10 closed** for retail `SolomonDark.exe` SHA-256
 
 The committed live corpus is
 [`save-format-goldens.json`](../../tests/fixtures/webgame/save-format-goldens.json),
-SHA-256 `16ab36abbde30b8732883888edbf421986153490c75e614a7972b2a9eb1d1eb9`.
+SHA-256 `0c99d595dce635ca0f9793f8f2c1535ab2026216f25a26db7b82475c752c593b`.
 It contains a fresh profile, a scripted mid-progression profile, and a
 post-unlock profile. Every binary tree and every text settings file in those
 captures reconstructs to the recorded byte length and SHA-256. The native
@@ -247,15 +247,15 @@ are contiguous and their runtime ranges are inclusive.
 | Payload bytes | Type | Runtime field | Portable meaning | Fresh value |
 | ---: | --- | ---: | --- | --- |
 | `0x00..0x03` | `i32` | profile `+0x58` | persistent profile gold | `500` |
-| `0x04..0x0D` | `bool[10]` | `+0x90..+0x99` | class-availability selector flags; class-name mapping not yet reversed | `0,1,1,1,0,1,1,0,0,1` |
+| `0x04..0x0D` | `bool[10]` | `+0x90..+0x99` | Memoratorium record-8 urn-marker bits for physical Painting slots 0..9 | `0,1,1,1,0,1,1,0,0,1` |
 | `0x0E` | `bool` | `+0x104` | stock tutorial/game-over gate | `1` |
 | `0x0F..0x18` | `bool[10]` | `+0x9A..+0xA3` | durable help/onboarding flags: rows 0..2 are Provokatus/Fomentius/Luthacus interaction guidance, rows 3..5 are Courtyard navigation-volume hints, rows 6..7 are InventoryScreen hints, and rows 8..9 have no compiled code xrefs | ten `1` bytes |
 | `0x19..0x40` | `i32[10]` | `+0xA4..+0xCB` | Memoratorium Painting-slot FIFO age stamps | `9,1,0,2,7,4,3,8,5,6` |
-| `0x41..0x44` | `i32` | `+0xF4` | portrait age counter, incremented after each raw capture | `1000` |
+| `0x41..0x44` | `i32` | `+0xF4` | portrait FIFO age counter, incremented after each raw capture | `1000` |
 | `0x45..0x6C` | `i32[10]` | `+0xCC..+0xF3` | Memoratorium Painting-slot portrait ids | `0,1,2,3,4,5,6,7,8,9` |
 | `0x6D..0x70` | `i32` | `+0xF8` | next `portrait<N>.raw` index | `100` |
 | `0x71..0x74` | `i32` | `+0xFC` | most recently written portrait index | `0` |
-| `0x75` | `bool` | `+0x105` | opaque profile flag | `0` |
+| `0x75` | `bool` | `+0x105` | durable `BOOK25_LACE` one-shot; set after reading Lace and then omits only that BookReview row | `0` |
 
 The 2026-08-24 Memoratorium producer reopening corrected the former
 class-permutation labels. `Mortuary::Build 0x00515290` reads `+0xA4[10]` as
@@ -340,10 +340,16 @@ document supplies those meanings and the per-actor boundary. The earlier
 [`Skill Concentration and Discipline`](../re/skills-concentration-discipline.md#persistence-and-lifecycle)
 analysis establishes the current persistence boundary:
 
-- progression serializer `0x0065EE80` serializes permanent ranks, selected
-  element root at progression `+0x82C`, discipline root at `+0x830`, starting
-  primary at `+0x86C`, starting secondary at `+0x870`, and Hagatha ownership
-  bytes `+0x7CC..+0x7FD` inside the resumable run object graph;
+- base disk serializer `Skills::vftable +0x14 -> 0x0065EE80` serializes all
+  83 permanent/effective rank rows and their cooldown fields, level/XP and
+  thresholds, pending/deferred choices, selected element root at progression
+  `+0x82C`, discipline root at `+0x830`, starting primary at `+0x86C`,
+  starting secondary at `+0x870`, offer seed `+0x834`, learned/visible order
+  `+0x850/+0x854`, Hagatha selector list/ownership bytes, and the recovered
+  scalar/vector tail inside the resumable run object graph;
+- `Skills_Wizard::vftable +0x14 -> 0x00663AE0` calls that base serializer and
+  adds one nine-byte child containing meditation idle delay `+0x884`,
+  Firewalker byte `+0x8DC`, and weld-effect scalar `+0x8E0`;
 - concentration A/B process lanes and the Mind Chug timer `+0x828` are not
   serialized;
 - the actor exposes progression at actor `+0x200`, with row table pointer/count
@@ -521,7 +527,7 @@ That directory swap protects against the retail writer's lack of atomicity only
 when the native process is actually writing the selected directory and is not
 concurrently active during replacement.
 
-### Current selected-slot routing defect
+### Historical selected-slot routing defect (superseded in the 2026-08-26 candidate)
 
 The intended path is:
 
@@ -533,7 +539,7 @@ Settings active slot
   -> native writes selected slot
 ```
 
-The last arrow is false in the current source/runtime combination. Stage build
+The last arrow was false in the G10 source/runtime combination. Stage build
 first calls
 [`StageSandboxCompatibilityLinks.Materialize(stageRoot)`](../../SolomonDarkModLauncher/src/Staging/StageSandboxCompatibilityLinks.cs),
 which points `stage\savegames` at `stage\sandbox\savegames`. Launch with an
@@ -555,11 +561,30 @@ Consequences:
 - a restore into the slot need not affect the native sandbox used by the next
   launch.
 
-G10 documents this seam and does not change launcher behavior. P6 must fix it
-and add an end-to-end path proof: write a native sentinel through retail,
+G10 documented this seam without changing launcher behavior. The 2026-08-26
+portable-profile candidate fixes it; completion still requires an end-to-end
+path proof: write a native sentinel through retail,
 observe it inside the selected slot, archive it, restore it to a different
 empty slot, launch that slot, and observe the native field. Source-level path
 assertions alone are insufficient.
+
+The candidate `StageSandboxCompatibilityLinks.Materialize` now makes
+`stage\sandbox\savegames` itself the selected-slot junction on Windows and the
+selected-slot mirror on Wine. `stage\savegames` remains only a compatibility
+alias. `CloudSaveBackupCoordinator` copies back from
+`stage\sandbox\savegames` in mirror mode, so native writer, watcher/final copy,
+archive, restore, and the selected local slot share one owner. Launcher
+contracts write through the exact native path and observe the selected slot on
+non-mirror hosts; Mac and Windows runtime proof remains recorded in the final
+receipt rather than inferred from this source shape.
+
+`NativeResumeSelector` closes the adjacent archive seam without importing
+`settings.txt`: it preserves the run name of an existing selector when that
+run exists in the selected slot, otherwise selects only one unambiguous
+`gamestate.sav` namespace, rewrites the stage-local absolute path
+transactionally, and refuses multiple candidates. All sibling settings rows,
+including legacy credentials, remain byte-for-byte text rows owned by the
+local stage and never enter a cloud or browser document.
 
 ### Cloud archive
 
@@ -691,11 +716,11 @@ An implementing agent can treat the following as the minimum safe design:
 
 These boundaries are deliberately opaque rather than speculative:
 
-- The semantic class names corresponding to the two 10-boolean arrays and two
-  10-integer permutations in `darkdata` child 0. Bounds, types, offsets,
-  defaults, and stability are known.
-- Profile statistic `+0xF4` and flag `+0x105`. Both are byte-exact and stable in
-  all three captures; consumers were not identified.
+- The ten `+0x90` booleans, `+0xA4` ages, and `+0xCC` portrait ids are closed
+  Memoratorium state, not class selectors. The profile `+0xF4` age counter and
+  `+0x105` Lace one-shot are likewise closed by the memorial and Hub-NPC
+  reports. Older generated field labels are compatibility aliases only and
+  must not be used as semantics.
 - The item-subclass field census inside nonempty Luthacus child 1. The complete
   polymorphic `SyncBuffer` subtree is preserved, and G8 establishes its storage
   semantics, but G10 did not generate a nonempty storage specimen.
@@ -712,9 +737,10 @@ These boundaries are deliberately opaque rather than speculative:
 - Production deployment of the browser P6 save service. The 2026-08-20
   integration trace below records the local normalized-schema and concurrency
   policy; no production publication is claimed by this native report.
-- A nonempty permanent skill-book save specimen. G6 now supplies the runtime
-  field semantics and serializer boundary cited above; G10's byte offsets and
-  round-trip preservation do not need to be re-derived.
+- A naturally played stock specimen covering every nonzero progression vector,
+  every learned rank, and every disk-persisted wizard toggle at once. The
+  complete write order and controlled Hub template are now decoded below; the
+  remaining specimen gap does not authorize guessing an absent field.
 
 ## 2026-08-20 web-port integration trace
 
@@ -1079,3 +1105,175 @@ The claim remains server-signed, revision-bound for process recovery, nullable
 outside an active Boneyard, and invalidated at terminal/replaced lineage
 teardown. This addendum makes no native persistence or process-resurrection
 claim.
+
+## 2026-08-26 progression payload and portable-profile reopening
+
+The stock/web portability request reopened the formerly opaque local-wizard
+branch. Read-only Ghidra queries used the canonical replica wrapper and retail
+image named at the top of this report. The executable was re-hashed as
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`.
+All addresses remain preferred-image addresses.
+
+### Disk virtuals are not network virtuals
+
+The exact vtable ownership is:
+
+| Class/lane | Vtable slot | Target | Persisted content |
+| --- | ---: | ---: | --- |
+| `Skills` disk | `0x0079FEFC + 0x14` | `0x0065EE80` | common 83-row progression payload and two child nodes |
+| `Skills_Wizard` disk | `0x007A0CD4 + 0x14` | `0x00663AE0` | calls `0x0065EE80`, then adds one nine-byte wizard child |
+| `Skills_Wizard` derived/network | `0x007A0CD4 + 0x48` | `0x0067C830` | broader live derived/toggle state; not called by the disk serializer |
+| `Skills_Wizard` refresh tail | `0x007A0CD4 + 0x94` | `0x00665FF0` | rebuilds row-52 availability after common disk serialization |
+
+The older persistence text incorrectly cited `0x0067C830` as the disk owner.
+That conflated two neighboring virtual systems. The disk override
+`0x00663AE0` is only:
+
+```text
+Skills_Save(0x0065EE80)
+begin child
+  i32  progression+0x884   // Meditation idle delay
+  bool progression+0x8DC   // Firewalker active
+  f32  progression+0x8E0   // weld-effect scalar
+end child
+```
+
+Consequently Firewalker is disk-persistent. Adjacent Mindstar `+0x8DD` and
+Regenerate `+0x8DE` are present in the broader live/network lane but absent
+from the disk lane. Concentration selections and Mind Chug are also absent as
+already recorded. A portable import must clear those non-disk members rather
+than infer them from a live or browser snapshot.
+
+### Complete common progression payload order
+
+`0x0065EE80` begins one node. Primitive widths follow the established
+SyncBuffer helpers: `0x00424E30` is `i32`, `0x00424EC0` is `u16`,
+`0x00425210` is `f32`, and `0x00424F60` is `bool`.
+
+The payload starts with `i32 row_count` (retail `83`) followed in descending
+row-id order `82..0` by:
+
+```text
+u16 permanent_rank
+u16 effective_rank
+f32 current_cooldown
+f32 cooldown_cap
+```
+
+The fixed/variable tail then follows this exact call order:
+
+| Order | Native field | Type / child |
+| ---: | --- | --- |
+| 1 | pending choices `+0x44`; level `+0x30` | `i32`, `i32` |
+| 2 | XP/previous/next `+0x34/+0x38/+0x3C` | `f32[3]` |
+| 3 | global cooldown/unknown `+0x64/+0x68` | `f32[2]` |
+| 4 | current/max HP and MP `+0x70/+0x74/+0x7C/+0x80` | `f32[4]` |
+| 5 | speed/cast/recovery/regen `+0x90/+0x94/+0x98/+0x9C` | `f32[4]` |
+| 6 | secondary recharge `+0xD0`; `+0xA0/+0xA4/+0xA8/+0xB8`; `+0x14`; `+0xBC/+0xC0`; current spell `+0x750` | recovered scalar sequence |
+| 7 | primary-stat vector `+0x774/+0x778` | child: count plus `f32[count]` |
+| 8 | integer vector `+0x784/+0x788`; `+0x7A0`; staff damage `+0xC4/+0xC8`; six `i32` values `+0x7A4..+0x7B8` | inline variable sequence |
+| 9 | perk selector list `+0x7C0/+0x7C4`, ownership bytes `+0x7CC..+0x7FD`, learned/visible order `+0x850/+0x854` | one child with count/list, 50 bools, count/list |
+| 10 | `+0xAC/+0xB0/+0xB4/+0x3D4/+0xF8/+0xCC` | `f32[6]` |
+| 11 | element/discipline/offer seed `+0x82C/+0x830/+0x834` | `i32[3]` |
+| 12 | offer/weld state `+0x838/+0x840/+0x848/+0x48/+0x839/+0x870`; vector `+0x860/+0x864` | bool/integer/variable sequence |
+| 13 | `+0x84/+0x88/+0x8C/+0x818/+0x804..+0x810`; `+0x814`; starting primary `+0x86C`; cheat-death `+0x81C/+0x820`; hoard `+0x740`; local XP-admission `+0x2C`; random-choice Boast `+0x2D`; capacity `+0x800`; immunity `+0x74C` | exact scalar tail; `0x00680AB0` gates XP on `+0x2C`, and `0x0065F5B0` sets `+0x2D` iff selected Boast is ID 3 |
+
+The parser must follow the embedded counts; fixed byte offsets after either
+inline vector are invalid. The 27 inspected gamestates include payload lengths
+`1250`, `1258`, `1282`, and `1294`, which directly falsifies a fixed-offset
+tail decoder.
+
+### Local wizard membership in `gamestate.sav`
+
+Across the controlled template and 26 independent prior task-owned
+gamestates:
+
+- the root has exactly eight ordered children;
+- root child zero is the local wizard record;
+- its payload contains two leading `i32` values, a NUL-terminated UTF-8 name
+  length/string, and one trailing `i32`;
+- its first child is the common progression node above; and
+- its second child is the nine-byte `Skills_Wizard` disk extension.
+
+The controlled settled-Hub template was produced by retail's ordinary clean
+close in isolated instance `save-profile-template-20260826` with only an
+injected observation mod. It is 27,788 bytes, has SHA-256
+`d562fe8ec3db4a6159b6422913b7a0a5f4dfd14c974894af5861ce70e1ff0cfc`,
+and parses/re-encodes byte-identically. Its generated wizard is `POMPONIUS`,
+Fire/Mind, level 1. This is a controlled stock-writer template, not a clean-
+stock visual capture; its only legal portable use is as a validated settled
+Hub object-graph base whose named semantic fields are patched and whose opaque
+siblings remain byte-identical.
+
+### Machinimbus's purchase-only persistence defect
+
+`SellSpell::Action 0x004F90C0` sets exactly one byte in
+`0x00B3BDD8..0x00B3BDDF` for rows 72..79. The complete xref census is:
+
+- row omission: `0x004F8480`;
+- purchase writes: `0x004F90C0`;
+- public-list gate: `0x00579E90`;
+- offer eligibility: `0x0065E830` and `0x0065EBA0`.
+
+The purchase path calls neither `0x005BE0B0` nor the progression disk
+serializer. No direct profile/game disk serializer reference to those globals
+exists. A task-owned live diagnostic changed Acid Rain's byte `0 -> 1`, changed
+profile gold `698 -> 777`, and closed the retail window normally. Gold changed
+in `darkdata.cfg` while there is no field for the unlock byte. The known
+selected-slot routing defect prevented using the next staged process as a
+same-tree restart receipt, so this live result is supporting evidence; the
+static absence and complete write/consumer census are the high-confidence
+contract.
+
+An already learned advanced row remains in the 83-row permanent-rank payload.
+A portable importer may therefore infer availability for an actually learned
+row. It cannot honestly preserve "purchased but not yet learned" for
+unmodified retail. The web may retain that state as an explicit product
+extension, but stock export must report the non-representable member.
+
+### Unforge maximum-vital persistence defect
+
+Unforge selectors 4 and 5 mutate base HP `Skills+0x6C` and base MP `+0x78`.
+Disk serializer `0x0065EE80` writes current/max HP `+0x70/+0x74` and current/max
+MP `+0x7C/+0x80`, but never either base. After Game deserialization,
+`0x005CE3D0` invokes refresh `0x0065F9A0`: it snapshots each saved current/max
+ratio, rebuilds maxima from the constructor bases through virtual refresh, and
+reapplies the ratios. Therefore an unmodified retail restart retains the vital
+ratios but loses those two Unforge base bonuses. A portable importer must model
+that exact loss; an exporter may write the ratio but cannot encode the missing
+base bonus and must report it.
+
+### Portable-profile boundary
+
+The safe portable unit is a settled wizard/profile projection:
+
+- strict-decode a copied native source and hash it;
+- map durable profile values and the local wizard's permanent progression;
+- map the complete resumable Boast state from Game vslot `+0x14 ->
+  0x005CE3D0`: selected signed ID `Gameplay+0x1D44`, exact statement String
+  `+0x1D48`, one-shot failure `+0x1D80`, and success `+0x1D81`;
+- retain Hagatha `+0x7C0/+0x7C4` as an ordered outcome list, including up to
+  two selector-27 Tonic entries; its capacity remains exactly 3/6/9;
+- clear live Serendipity/Reverie `+0x73C/+0x73D` on stock disk import: purchase
+  sets them, but `0x0065EE80` does not serialize them, so ownership must not
+  resurrect a consumed until-hurt effect;
+- preserve every original native file/node as a bounded opaque attachment;
+- require one unambiguous gamestate but retain every other safe non-gamestate
+  launcher-slot member (including Hall and portraits) by relative path, hash,
+  and bytes; those files are re-emitted exactly and never imported as Website
+  Hall/account authority; `settings.txt` is explicitly rejected so credentials,
+  network fields, and native Resume selection are never attached or uploaded;
+- materialize a fresh authoritative web Hub with no replayed transient or
+  untrusted shared-Hall/memorial authority;
+- on export, patch only recovered fields in the attached native base or the
+  controlled Hub template, and normalize its machine-local selected Boneyard
+  String to `data\\levels\\survival.boneyard` because arbitrary native worlds
+  are outside the semantic projection;
+- parse the result again and prove all untouched nodes are byte-identical; and
+- stage output separately from the source.
+
+This gives stock-to-web and web-to-stock wizard/progression compatibility. It
+does not claim arbitrary in-flight native Arena actors, Region caches, Website
+party capabilities, or global leaderboard provenance can be translated between
+two different runtime engines. Those source bytes remain recoverable instead
+of being guessed.

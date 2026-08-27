@@ -68,6 +68,9 @@ internal static class StagedGameLauncher
         {
             savegamesUsesDirectoryMirror =
                 StageSandboxCompatibilityLinks.Materialize(stage.StageRootPath, options.SavegamesRootPath);
+            NativeResumeSelector.Materialize(
+                stage.StageRootPath,
+                options.SavegamesRootPath);
         }
         var profileStateReceipt =
             NativeMenuProfileStateProvenance.Materialize(

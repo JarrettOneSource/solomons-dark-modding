@@ -1242,6 +1242,7 @@ def test_wine_stage_savegames_uses_directory_mirror() -> str:
         'var malformedWineJunctionPath = directoryPath + "?";',
         "DeleteExistingPath(malformedWineJunctionPath);",
         "CopyDirectoryContents(sourcePath, directoryPath);",
+        "RecreateDirectoryJunction(sandboxSavegamesPath, savegamesTargetPath);",
     )
     missing = [token for token in required_tokens if token not in stage_links_text]
     if missing:
@@ -1282,6 +1283,7 @@ def test_launcher_saves_are_isolated_link_gated_and_proton_persisted() -> str:
         (cloud_text, "if (session.LinkedAccount is null)"),
         (cloud_text, "CloudBackupDisposition.NotLinked"),
         (backup_text, "if (usesDirectoryMirror_)"),
+        (backup_text, 'Path.Combine(stage.StageRoot, "sandbox", "savegames")'),
         (backup_text, "SaveDirectoryMirror.Replace("),
         (backup_text, "await BackupCoreAsync(cancellationToken);"),
         (main_window_text, "public async Task PrepareForLauncherCloseAsync()"),

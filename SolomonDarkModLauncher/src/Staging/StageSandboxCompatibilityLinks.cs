@@ -5,6 +5,18 @@ namespace SolomonDarkModLauncher.Staging;
 
 internal static class StageSandboxCompatibilityLinks
 {
+    public static void PrepareForStageBuild(string stageRootPath)
+    {
+        stageRootPath = Path.GetFullPath(stageRootPath);
+        if (LauncherPathPolicy.IsDesktopPath(stageRootPath))
+        {
+            throw new InvalidOperationException(
+                "Staged save paths must be outside Desktop.");
+        }
+        DeleteExistingPath(Path.Combine(stageRootPath, "savegames"));
+        DeleteExistingPath(Path.Combine(stageRootPath, "sandbox", "savegames"));
+    }
+
     public static bool Materialize(string stageRootPath)
     {
         return Materialize(stageRootPath, Path.Combine(stageRootPath, "sandbox", "savegames"));
@@ -12,6 +24,8 @@ internal static class StageSandboxCompatibilityLinks
 
     public static bool Materialize(string stageRootPath, string savegamesTargetPath)
     {
+        stageRootPath = Path.GetFullPath(stageRootPath);
+        savegamesTargetPath = Path.GetFullPath(savegamesTargetPath);
         if (LauncherPathPolicy.IsDesktopPath(stageRootPath) ||
             LauncherPathPolicy.IsDesktopPath(savegamesTargetPath))
         {
@@ -20,18 +34,30 @@ internal static class StageSandboxCompatibilityLinks
         }
 
         var sandboxSavegamesPath = Path.Combine(stageRootPath, "sandbox", "savegames");
-        if (!Directory.Exists(sandboxSavegamesPath))
+        var stageSavegamesPath = Path.Combine(stageRootPath, "savegames");
+        if (PathsEqual(sandboxSavegamesPath, savegamesTargetPath))
         {
             Directory.CreateDirectory(sandboxSavegamesPath);
+            return RecreateDirectoryJunction(stageSavegamesPath, sandboxSavegamesPath);
         }
         if (!Directory.Exists(savegamesTargetPath))
         {
             Directory.CreateDirectory(savegamesTargetPath);
         }
 
-        var stageSavegamesPath = Path.Combine(stageRootPath, "savegames");
-        return RecreateDirectoryJunction(stageSavegamesPath, savegamesTargetPath);
+        var usesDirectoryMirror =
+            RecreateDirectoryJunction(sandboxSavegamesPath, savegamesTargetPath);
+        RecreateDirectoryJunction(stageSavegamesPath, savegamesTargetPath);
+        return usesDirectoryMirror;
     }
+
+    private static bool PathsEqual(string first, string second) =>
+        string.Equals(
+            Path.GetFullPath(first).TrimEnd(Path.DirectorySeparatorChar),
+            Path.GetFullPath(second).TrimEnd(Path.DirectorySeparatorChar),
+            OperatingSystem.IsWindows()
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal);
 
     private static bool RecreateDirectoryJunction(string linkPath, string targetPath)
     {

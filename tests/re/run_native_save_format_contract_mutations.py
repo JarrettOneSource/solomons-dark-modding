@@ -223,6 +223,7 @@ RECORDER_CONTRACT = (
 LIFECYCLE = "test_native_save_lifecycle_and_failure_semantics_are_pinned"
 LAUNCHER = "test_launcher_save_layer_and_account_seam_are_pinned"
 FIXTURE_HASH = "test_native_save_fixture_provenance_hashes_the_committed_recording"
+PORTABLE = "test_native_portable_profile_progression_and_opaque_round_trip_are_exact"
 
 
 def _capture(document: dict[str, object], index: int) -> dict[str, object]:
@@ -240,6 +241,15 @@ def _core_field(document: dict[str, object], capture_index: int, name: str) -> d
 
 
 MUTATIONS: tuple[Mutation, ...] = (
+    JsonMutation(
+        "portable.template-gamestate-hash",
+        PORTABLE,
+        contracts.PORTABLE_FIXTURE,
+        lambda document: document["files"]["gamestate"].update(  # type: ignore[index,union-attr]
+            {"sha256": "0" * 64}
+        ),
+        "portable template gamestate length/hash no longer matches its bytes",
+    ),
     SpecialMutation(
         "container.endianness-and-no-header",
         CONTAINER,
@@ -507,20 +517,20 @@ MUTATIONS: tuple[Mutation, ...] = (
         'launcher cloud account seam no longer exposes endpoint "api/saves"',
     ),
     TextMutation(
-        "launcher.selected-slot-routing-gap",
+        "launcher.selected-slot-native-routing",
         LAUNCHER,
         contracts.STAGE_LINKS,
-        'var stageSavegamesPath = Path.Combine(stageRootPath, "savegames");',
-        'var stageSavegamesPath = Path.Combine(stageRootPath, "sandbox", "savegames");',
-        "launcher selected-slot source no longer matches the live-proven stage/savegames-only routing gap",
+        "RecreateDirectoryJunction(sandboxSavegamesPath, savegamesTargetPath);",
+        "RecreateDirectoryJunction(stageSavegamesPath, savegamesTargetPath);",
+        "launcher selected slot no longer routes the retail writer and Wine mirror through stage/sandbox/savegames",
     ),
     TextMutation(
         "launcher.routing-gap-documented",
         LAUNCHER,
         contracts.DOC,
-        "### Current selected-slot routing defect",
+        "### Historical selected-slot routing defect",
         "### Selected-slot routing",
-        "G10 launcher/account documentation no longer pins live selected-slot defect",
+        "G10 launcher/account documentation no longer pins live selected-slot defect and supersession",
     ),
     TextMutation(
         "launcher.no-website-scope",
@@ -542,7 +552,7 @@ MUTATIONS: tuple[Mutation, ...] = (
         "fixture-hash.shared-helper-compares-file",
         FIXTURE_HASH,
         helper_sees_mismatched_committed_hash,
-        "G10 save-format fixture provenance does not match its file: recorded f6ab36abbde30b87, save-format-goldens.json hashes to 16ab36abbde30b87",
+        "G10 save-format fixture provenance does not match its file: recorded fc99d595dce635ca, save-format-goldens.json hashes to 0c99d595dce635ca",
     ),
 )
 
@@ -557,6 +567,7 @@ CONTRACTS: dict[str, Callable[[], str]] = {
         LIFECYCLE,
         LAUNCHER,
         FIXTURE_HASH,
+        PORTABLE,
     )
 }
 

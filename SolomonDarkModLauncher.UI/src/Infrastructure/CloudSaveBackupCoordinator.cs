@@ -38,7 +38,7 @@ internal sealed class CloudSaveBackupCoordinator
         }
 
         var effectiveSavegamesRootPath = launch.SavegamesUsesDirectoryMirror
-            ? Path.Combine(stage.StageRoot, "savegames")
+            ? Path.Combine(stage.StageRoot, "sandbox", "savegames")
             : save.SavegamesRootPath;
         return new CloudSaveGameSession(
             catalog_,

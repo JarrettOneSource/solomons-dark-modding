@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import ast
+import base64
+from copy import deepcopy
 import hashlib
 import json
 import re
@@ -25,13 +27,23 @@ from native_save_format import (
     SYNCBUFFER_MAGIC,
     SYNCBUFFER_VERSION,
     SaveFormatError,
+    apply_portable_profile,
+    decode_darkdata_fields,
+    decode_gamestate_boast,
+    decode_gamestate_local_wizard,
+    decode_darkdata,
     parse_syncbuffer,
+    portable_profile_from_buffers,
+    validate_portable_profile,
     reencode_fixture_entry,
 )
 
 
 DOC = ROOT / "docs/reverse-engineering/native-save-format.md"
 FIXTURE = ROOT / "tests/fixtures/webgame/save-format-goldens.json"
+PORTABLE_FIXTURE = (
+    ROOT / "tests/fixtures/webgame/portable-profile-template.json"
+)
 TOOL = ROOT / "tools/native_save_format.py"
 RECORDER = ROOT / "tests/re/record_live_save_format_goldens.py"
 HUB_DOC = ROOT / "docs/reverse-engineering/native-hub-and-economy.md"
@@ -67,12 +79,15 @@ STAGE_LINKS = (
     ROOT / "SolomonDarkModLauncher/src/Staging/StageSandboxCompatibilityLinks.cs"
 )
 STAGED_LAUNCHER = ROOT / "SolomonDarkModLauncher/src/Launch/StagedGameLauncher.cs"
+NATIVE_RESUME_SELECTOR = (
+    ROOT / "SolomonDarkModLauncher/src/Launch/NativeResumeSelector.cs"
+)
 
 EXPECTED_BINARY_SHA256 = (
     "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3"
 )
 EXPECTED_FIXTURE_SHA256 = (
-    "16ab36abbde30b8732883888edbf421986153490c75e614a7972b2a9eb1d1eb9"
+    "0c99d595dce635ca0f9793f8f2c1535ab2026216f25a26db7b82475c752c593b"
 )
 EXPECTED_KEY_SHA256 = (
     "27c0dc1eb34b7d60a2f79cbb60cab0a2da05e336dbf8d75ff8b68d4fad5d0cf3"
@@ -96,15 +111,15 @@ EXPECTED_GOLD = {
 SAVE_DOCUMENT_TABLE_CLAIM = "native save document table claim"
 EXPECTED_FRESH_PROFILE_DEFAULTS = {
     "profile_gold": 500,
-    "class_available": [False, True, True, True, False, True, True, False, False, True],
+    "memorial_marker": [False, True, True, True, False, True, True, False, False, True],
     "stock_tutorial_pending": True,
-    "class_enabled": [True] * 10,
+    "hub_help_pending": [True] * 10,
     "memorial_slot_ages": [9, 1, 0, 2, 7, 4, 3, 8, 5, 6],
     "portrait_age_counter": 1000,
     "memorial_portrait_ids": list(range(10)),
     "next_portrait_index": 100,
     "last_portrait_index": 0,
-    "profile_flag_0x105": False,
+    "librarian_lace_read": False,
     "hagatha_bulk_selectors": [],
     "hagatha_first_mix_flags_before_first_serialization": [False] * 30,
     "settled_persisted_hagatha_flags": [index == 27 for index in range(30)],
@@ -113,15 +128,15 @@ EXPECTED_FRESH_PROFILE_DEFAULTS = {
 }
 EXPECTED_CORE_FIELD_LAYOUT = (
     ("profile_gold", 0, 4, "i32", 0x58),
-    *((f"class_available[{i}]", 4 + i, 1, "bool", 0x90 + i) for i in range(10)),
+    *((f"memorial_marker[{i}]", 4 + i, 1, "bool", 0x90 + i) for i in range(10)),
     ("stock_tutorial_pending", 14, 1, "bool", 0x104),
-    *((f"class_enabled[{i}]", 15 + i, 1, "bool", 0x9A + i) for i in range(10)),
+    *((f"hub_help_pending[{i}]", 15 + i, 1, "bool", 0x9A + i) for i in range(10)),
     *((f"memorial_slot_ages[{i}]", 25 + i * 4, 4, "i32", 0xA4 + i * 4) for i in range(10)),
     ("portrait_age_counter", 65, 4, "i32", 0xF4),
     *((f"memorial_portrait_ids[{i}]", 69 + i * 4, 4, "i32", 0xCC + i * 4) for i in range(10)),
     ("next_portrait_index", 109, 4, "i32", 0xF8),
     ("last_portrait_index", 113, 4, "i32", 0xFC),
-    ("profile_flag_0x105", 117, 1, "bool", 0x105),
+    ("librarian_lace_read", 117, 1, "bool", 0x105),
 )
 EXPECTED_DARKDATA_NODE_ROWS = (
     (0, "fixed 118-byte core, detailed below", "profile object `0x0081A330`", "gold, class/profile state, portrait/stat fields", 118),
@@ -444,6 +459,11 @@ def test_native_memoratorium_fifo_profile_fields_are_named_and_closed() -> str:
         )
     fields = {field.name: field.semantics for field in DARKDATA_CORE_FIELDS}
     _require(
+        [fields[f"memorial_marker[{index}]"] for index in range(10)]
+        == ["Memoratorium record-8 urn-marker bit"] * 10,
+        "darkdata decoder no longer names all ten Memoratorium marker bits",
+    )
+    _require(
         [fields[f"memorial_slot_ages[{index}]"] for index in range(10)]
         == ["Memoratorium Painting-slot FIFO age"] * 10,
         "darkdata decoder no longer names all ten Memoratorium FIFO ages",
@@ -458,14 +478,219 @@ def test_native_memoratorium_fifo_profile_fields_are_named_and_closed() -> str:
         == ["Memoratorium Painting-slot portrait id"] * 10,
         "darkdata decoder no longer names all ten Memoratorium portrait ids",
     )
+    _require(
+        fields.get("librarian_lace_read") == "durable BOOK25_LACE one-shot",
+        "darkdata decoder lost the durable Lace one-shot",
+    )
     return "Memoratorium strict-min FIFO, ten-id ring, reveal, and profile fields are pinned"
+
+
+def test_native_portable_profile_progression_and_opaque_round_trip_are_exact() -> str:
+    fixture = _read_json(
+        PORTABLE_FIXTURE,
+        "controlled native portable-profile template disappeared",
+    )
+    files = fixture.get("files")
+    expected = fixture.get("expected")
+    _require(isinstance(files, dict), "portable template has no file table")
+    _require(isinstance(expected, dict), "portable template has no expected-state table")
+    try:
+        darkdata = base64.b64decode(files["darkdata"]["base64"], validate=True)
+        gamestate = base64.b64decode(files["gamestate"]["base64"], validate=True)
+    except (KeyError, TypeError, ValueError) as error:
+        raise StaticReTestFailure(
+            f"portable template does not contain valid base64 files: {error}"
+        ) from error
+    for name, data in (("darkdata", darkdata), ("gamestate", gamestate)):
+        row = files[name]
+        _require(
+            row.get("bytes") == len(data)
+            and row.get("sha256") == hashlib.sha256(data).hexdigest(),
+            f"portable template {name} length/hash no longer matches its bytes",
+        )
+
+    portable = portable_profile_from_buffers(
+        darkdata,
+        gamestate,
+        str(expected["runName"]),
+    )
+    validate_portable_profile(portable)
+    wizard = portable["wizard"]
+    _require(
+        wizard["name"] == expected["wizardName"]
+        and wizard["level"] == expected["level"]
+        and wizard["experience"] == expected["experience"]
+        and wizard["elementRoot"] == expected["elementRoot"]
+        and wizard["disciplineRoot"] == expected["disciplineRoot"]
+        and wizard["startingPrimary"] == expected["startingPrimary"]
+        and wizard["startingSecondary"] == expected["startingSecondary"]
+        and len(wizard["permanentRanks"]) == expected["progressionRows"],
+        "portable template no longer decodes its exact local wizard/progression",
+    )
+    decoded_base = decode_gamestate_local_wizard(parse_syncbuffer(gamestate))
+    _require(
+        decoded_base["progression"]["row_count"] == 83
+        and len(parse_syncbuffer(gamestate).root.children) == expected["rootChildren"],
+        "portable template lost the eight-child/83-row structural witness",
+    )
+
+    changed = deepcopy(portable)
+    changed["profile"].update(
+        {
+            "boast": {"selected": 3, "failed": False, "succeeded": True},
+            "gold": 12_345,
+            "tutorialPending": True,
+            "librarianLaceRead": True,
+            "hagathaBundleSelectors": [2, 5],
+            "firstMixed": [index in (2, 5, 27) for index in range(30)],
+            "dowsingFee": 950,
+        }
+    )
+    changed["profile"]["helpPending"][0] = False
+    changed["wizard"].update(
+        {
+            "name": "PORTABILIS",
+            "level": 2,
+            "experience": 100.0,
+            "previousThreshold": 90.0,
+            "nextThreshold": 160.0,
+            "pendingSkillChoices": 1,
+            "deferredSkillChoices": 1,
+            "perkSelectors": [5, 27, 0, 27],
+            "hagathaOwnership": [index in (0, 5, 27) for index in range(50)],
+            "perkCapacity": 9,
+            "firewalkerActive": True,
+        }
+    )
+    changed["wizard"]["permanentRanks"][9] = 2
+    changed["wizard"]["learnedOrder"].append(9)
+    retained = b"portrait"
+    changed["nativeSource"]["retainedFiles"] = [
+        {
+            "path": "solomondark/Portraits/portrait100.raw",
+            "base64": base64.b64encode(retained).decode("ascii"),
+            "sha256": hashlib.sha256(retained).hexdigest(),
+        }
+    ]
+    encoded_darkdata, encoded_gamestate, receipt = apply_portable_profile(changed)
+    _require(
+        receipt["darkdataRoundTrip"] is True
+        and receipt["gamestateRoundTrip"] is True
+        and receipt["retainedFileCount"] == 1,
+        "portable application no longer re-parses and byte-round-trips its outputs",
+    )
+    decoded_darkdata = {
+        row["name"]: row["value"]
+        for row in decode_darkdata_fields(
+            decode_darkdata(encoded_darkdata)[1]
+        )["core_fields"]
+    }
+    decoded_wizard = decode_gamestate_local_wizard(parse_syncbuffer(encoded_gamestate))
+    decoded_boast = decode_gamestate_boast(parse_syncbuffer(encoded_gamestate))
+    _require(
+        decoded_darkdata["profile_gold"] == 12_345
+        and decoded_darkdata["librarian_lace_read"] is True
+        and decoded_wizard["name"] == "PORTABILIS"
+        and decoded_wizard["progression"]["level"] == 2
+        and decoded_wizard["progression"]["rows"][9]["permanent_rank"] == 2
+        and decoded_wizard["progression"]["learned_order"][-1] == 9
+        and decoded_wizard["progression"]["perk_selectors"] == [5, 27, 0, 27]
+        and decoded_wizard["progression"]["perk_capacity"] == 9
+        and decoded_wizard["progression"]["experience_enabled"] is True
+        and decoded_wizard["progression"]["random_boast_active"] is True
+        and decoded_boast == {"selected": 3, "failed": False, "succeeded": True}
+        and decoded_wizard["wizard_extension"]["firewalker_active"] is True,
+        "portable application did not patch every requested profile/progression member",
+    )
+
+    base_dark = decode_darkdata(darkdata)[1]
+    next_dark = decode_darkdata(encoded_darkdata)[1]
+    _require(
+        base_dark.root.children[1] == next_dark.root.children[1]
+        and base_dark.root.children[5] == next_dark.root.children[5]
+        and base_dark.root.children[0].payload[4:14]
+        == next_dark.root.children[0].payload[4:14]
+        and base_dark.root.children[0].payload[25:117]
+        == next_dark.root.children[0].payload[25:117],
+        "portable darkdata application changed opaque storage or memorial siblings",
+    )
+    base_game = parse_syncbuffer(gamestate)
+    next_game = parse_syncbuffer(encoded_gamestate)
+    _require(
+        all(
+            base_game.root.children[index] == next_game.root.children[index]
+            for index in range(8)
+            if index not in (0, 5)
+        )
+        and base_game.root.children[0].children[2:]
+        == next_game.root.children[0].children[2:]
+        and base_game.root.children[0].children[0].children[0]
+        == next_game.root.children[0].children[0].children[0],
+        "portable gamestate application changed non-wizard or opaque wizard siblings",
+    )
+    _require(
+        b"data\\levels\\survival.boneyard\0"
+        in next_game.root.children[5].payload
+        and b"native-save-progression-20260826"
+        not in next_game.root.children[5].payload,
+        "portable gamestate did not normalize the controlled absolute Boneyard path",
+    )
+
+    malformed = deepcopy(portable)
+    malformed["wizard"]["permanentRanks"].pop()
+    _require_save_error(
+        lambda: validate_portable_profile(malformed),
+        "must contain 83 rows",
+        "portable profile accepted a short permanent-rank table",
+    )
+    malformed_boast = deepcopy(portable)
+    malformed_boast["profile"]["boast"] = {
+        "selected": None,
+        "failed": True,
+        "succeeded": False,
+    }
+    _require_save_error(
+        lambda: validate_portable_profile(malformed_boast),
+        "Boast lifecycle",
+        "portable profile accepted an impossible Boast terminal state",
+    )
+    third_tonic = deepcopy(changed)
+    third_tonic["wizard"]["perkSelectors"].append(27)
+    _require_save_error(
+        lambda: validate_portable_profile(third_tonic),
+        "native Hagatha outcome list",
+        "portable profile accepted a third Tonic outcome",
+    )
+    unsafe_retained = deepcopy(changed)
+    unsafe_retained["nativeSource"]["retainedFiles"][0]["path"] = (
+        "solomondark/../outside.raw"
+    )
+    _require_save_error(
+        lambda: validate_portable_profile(unsafe_retained),
+        "retained file 0 is invalid",
+        "portable profile accepted a retained-file traversal",
+    )
+    trailing = deepcopy(portable)
+    trailing_bytes = gamestate + b"x"
+    trailing["nativeSource"]["gamestateBase64"] = base64.b64encode(
+        trailing_bytes
+    ).decode("ascii")
+    trailing["nativeSource"]["gamestateSha256"] = hashlib.sha256(
+        trailing_bytes
+    ).hexdigest()
+    _require_save_error(
+        lambda: validate_portable_profile(trailing),
+        "unclaimed bytes",
+        "portable profile accepted a native gamestate with trailing ambiguity",
+    )
+    return "controlled native Hub, all 83 progression rows, portable mutations, corrupt rejection, and opaque preservation are exact"
 
 
 def _core_layout_groups() -> list[list[tuple[str, int, int, str, int]]]:
     _require(
         len(EXPECTED_CORE_FIELD_LAYOUT) == 46
         and EXPECTED_CORE_FIELD_LAYOUT[0][0] == "profile_gold"
-        and EXPECTED_CORE_FIELD_LAYOUT[-1][0] == "profile_flag_0x105",
+        and EXPECTED_CORE_FIELD_LAYOUT[-1][0] == "librarian_lace_read",
         f"{SAVE_DOCUMENT_TABLE_CLAIM}: expected core constants lost the first, last, or 46-field census witness",
     )
     groups: list[list[tuple[str, int, int, str, int]]] = []
@@ -1147,16 +1372,36 @@ def test_launcher_save_layer_and_account_seam_are_pinned() -> str:
         STAGED_LAUNCHER,
         "launcher selected-slot launch call disappeared from routing proof",
     )
+    resume_selector = _read_text(
+        NATIVE_RESUME_SELECTOR,
+        "launcher native Resume selector materializer disappeared",
+    )
     _require(
         "StageSandboxCompatibilityLinks.Materialize(configuration.Workspace.StageRootPath);"
         in stage_builder
+        and "StageSandboxCompatibilityLinks.PrepareForStageBuild(" in stage_builder
+        and stage_builder.find("StageSandboxCompatibilityLinks.PrepareForStageBuild(")
+        < stage_builder.find("FileTreeMirror.Synchronize(")
         and "StageSandboxCompatibilityLinks.Materialize(stage.StageRootPath, options.SavegamesRootPath);"
         in staged_launcher
+        and "NativeResumeSelector.Materialize(" in staged_launcher
+        and 'var sandboxSavegamesPath = Path.Combine(stageRootPath, "sandbox", "savegames");'
+        in stage_links
         and 'var stageSavegamesPath = Path.Combine(stageRootPath, "savegames");'
         in stage_links
-        and "return RecreateDirectoryJunction(stageSavegamesPath, savegamesTargetPath);"
-        in stage_links,
-        "launcher selected-slot source no longer matches the live-proven stage/savegames-only routing gap",
+        and "RecreateDirectoryJunction(sandboxSavegamesPath, savegamesTargetPath);"
+        in stage_links
+        and 'Path.Combine(stage.StageRoot, "sandbox", "savegames")' in backup,
+        "launcher selected slot no longer routes the retail writer and Wine mirror through stage/sandbox/savegames",
+    )
+    _require(
+        'private const string ResumeKey = "Game.Resume";' in resume_selector
+        and "ExistingRunName(lines[resumeIndex], runsRoot)" in resume_selector
+        and "selectedRun ??= UnambiguousRunName(runsRoot);" in resume_selector
+        and "runs.Length == 1 ? runs[0] : null" in resume_selector
+        and 'settingsPath + ".resume.tmp"' in resume_selector
+        and "File.Move(temporaryPath, settingsPath, overwrite: true);" in resume_selector,
+        "launcher Resume bridge no longer preserves a valid run, refuses ambiguity, and replaces settings transactionally",
     )
 
     document = _read_text(
@@ -1164,7 +1409,9 @@ def test_launcher_save_layer_and_account_seam_are_pinned() -> str:
         "launcher save/account seam disappeared from the native save document",
     )
     for witness, consequence in (
-        ("### Current selected-slot routing defect", "live selected-slot defect"),
+        ("### Historical selected-slot routing defect", "live selected-slot defect and supersession"),
+        ("`stage\\sandbox\\savegames` itself the selected-slot junction", "native-path routing closure"),
+        ("`NativeResumeSelector` closes the adjacent archive seam", "resume-selector closure"),
         ("stage\\sandbox\\savegames", "actual native write root"),
         ("stage\\savegames", "reported junction root"),
         ("GET api/saves", "account save list seam"),
