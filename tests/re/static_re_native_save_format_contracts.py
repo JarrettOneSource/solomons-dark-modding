@@ -664,10 +664,10 @@ def test_native_portable_profile_progression_and_opaque_round_trip_are_exact() -
             for index, (left, right) in enumerate(zip(
                 base_binding["node"].payload,
                 next_binding["node"].payload,
-                strict=True,
             ))
             if index not in binding_offsets
         )
+        and len(base_binding["node"].payload) == len(next_binding["node"].payload)
         and tuple(_node_content(node) for node in base_game.root.children[1].children[1:])
         == tuple(_node_content(node) for node in next_game.root.children[1].children[1:])
         and all(
@@ -682,10 +682,10 @@ def test_native_portable_profile_progression_and_opaque_round_trip_are_exact() -
             for index, (left, right) in enumerate(zip(
                 base_footer["node"].payload,
                 next_footer["node"].payload,
-                strict=True,
             ))
             if index not in footer_offsets
         )
+        and len(base_footer["node"].payload) == len(next_footer["node"].payload)
         and tuple(_node_content(node) for node in base_game.root.children[7].children)
         == tuple(_node_content(node) for node in next_game.root.children[7].children)
         and tuple(_node_content(node) for node in base_game.root.children[0].children[2:])
@@ -883,7 +883,7 @@ def test_native_save_document_node_and_payload_tables_are_exact() -> str:
         len(core_matches) == len(expected_groups),
         f"{SAVE_DOCUMENT_TABLE_CLAIM}: core payload table exposes {len(core_matches)} structural rows for {len(expected_groups)} expected field groups",
     )
-    for match, group in zip(core_matches, expected_groups, strict=True):
+    for match, group in zip(core_matches, expected_groups):
         label = group[0][0].split("[", 1)[0]
         actual_start, actual_end = _parse_hex_span(match.group("payload"), label)
         expected_start = group[0][1]
