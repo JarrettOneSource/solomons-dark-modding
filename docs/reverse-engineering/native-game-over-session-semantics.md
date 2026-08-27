@@ -511,3 +511,69 @@ does not archive ordinary carried equipment/backpack. Existing Luthacus
 storage and Last Word's explicit ground recovery remain durable. This web
 deviation is documented in the Website parity ledger and does not alter the
 retail contract above.
+
+## 2026-08-27 character-lifetime and starter-color clarification
+
+The 2026-08-26 generation clarification recovered the fresh skill finalizer
+but stopped before the enclosing object lifetime and the guarded starter-color
+branch. A player report that Website clothing colors survived Game Over exposed
+that omission. Fresh static passes used the canonical read-only Ghidra replica
+against the same 4,723,200-byte retail image, SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`,
+preferred image base `0x00400000`.
+
+### Complete caller and lifetime census
+
+| Native member | Complete static membership | Recovered consequence |
+| --- | --- | --- |
+| new-character finalizer `0x005D0290` | exactly two references: `Create::Tick 0x0058A820` at `0x0058A96D`, startup owner `0x005D07D0` at `0x005D0840` | selected element/primary/secondary and Discipline are granted before starter construction |
+| starter constructor `0x005CFA80` | exactly two references: finalizer at `0x005D0756`, start owner `0x005D2380` at `0x005D24FF` | one guarded owner constructs the real Hat, Robe, Staff, Health Potion, and Mana Potion objects and then enters/rebuilds the target world |
+| `Game` construction | `Game::Game 0x005CC800` | initializes the `Game` vtable, all component/region containers, selection/start flags including `Game+0x86 = 0`, and publishes the new Game pointer |
+| `Game` destruction | deleting wrapper `0x005CFA60` -> destructor `0x005CD3A0` | closes the active child surface, saves/cleans profile state, unregisters and destroys all six regions plus auxiliary/component containers, clears the global Game pointer, then releases the object |
+| Game Over archive | `GameOver::Tick 0x005CF4F0` -> `0x005C9670` -> `0x005BE320` | archives completed-run inventory/profile output; it does not itself destruct the player or Game |
+| scripted full-region reset | `0x005CF920` | destroys/recreates the six region objects inside one still-live Game; it is not a fresh character/Game substitute |
+
+The native normal post-run lineage ultimately leaves the completed Game and
+constructs another Game. A literal Game object is therefore a stronger
+lifetime boundary than the archive call or a `Region` switch. The Website's
+retained socket/host and direct Create product route deliberately omit those
+front-end objects, so it must reproduce the semantic boundary by replacing all
+character-owned components while keeping only authenticated identity and its
+separately declared durable profile.
+
+### Ordinary versus College starter appearance
+
+`0x005CFA80` creates starter items only while `Game+0x86` is clear. In the
+ordinary Create path, `0x005D0290` has already mapped the new element to primary
+row `8`, `16`, `24`, `32`, or `40`; the starter color switch reads that new
+selection before consuming the three jitter draws and constructing Hat/Robe.
+The resulting base-color family is therefore Ether, Fire, Air, Water, or Earth
+for the newly confirmed wizard, never an archive-time copy from the dead
+wizard.
+
+The post-Tutorial College path is the complete guarded sibling and must not be
+folded into that rule. College admission reaches starter construction while
+`DAT_00B3BCA0` is live, so it uses the authored College base `(0.25,0.5,0.25,1)`.
+Office exit later sets `Game+0x86 = 1` before attaching Create. Confirmation
+still refreshes selected skills but the guard prevents a second starter build;
+the existing College Hat/Robe colors intentionally survive that first Create.
+
+### Boundary dispositions
+
+| Branch/member | Disposition for Website `/game` | Reason |
+| --- | --- | --- |
+| individual multiplayer death/spectator | `verified-already-at-parity` | same run and actor generation remain live while an eligible peer survives |
+| Game Over inventory/profile archive | `verified-already-at-parity` with the documented no-carried-items product rule | archive is durable output, not character reuse |
+| native Game destructor/new Game constructor | `out-of-system` as literal browser classes; semantic lifetime required | browser host/session persists by product design |
+| all 15 selected element/Discipline skill tuples | `exact-ported` through fresh Website generation construction | raw Create preselection cannot retain old ranks, selections, or quickbar |
+| ordinary selected-element starter colors | `exact-ported` by the 2026-08-27 reopening | new confirmation/generation owns the Hat/Robe family and a newer replicated economy revision |
+| College-green starter colors | `verified-already-at-parity` | the native one-shot guard intentionally retains them through first Create |
+| active carried inventory/equipment | `out-of-system` for retention under explicit Website policy | next wizard receives only fresh starter active items |
+| durable gold/storage/perks/unforge/onboarding state | `verified-already-at-parity` | profile owner survives without becoming old character-owned spell/inventory state |
+| completed Hall/Memorial portrait | `verified-already-at-parity` | immutable pre-retirement capture keeps the dead generation's appearance and score; next-wizard colors cannot rewrite it |
+| browser resumable-save invalidation | `out-of-system` for this native lifetime | save storage and in-memory character destruction are separate Website owners |
+
+No member is blocked by the browser platform. The only RNG adaptation remains
+the Website's deterministic host generation seed in place of retail's shared
+process-global draw cursor; it must still select the exact recovered color
+family and mixing formula.

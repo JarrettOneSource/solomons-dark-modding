@@ -108,3 +108,24 @@ screen feedback/modal presentation. It is noninteractive and accessibility
 silent because the existing HTML chat live region remains the sole semantic
 announcement. No protocol field, server timer, persisted transcript, trader
 `Chat` reuse, message-named native stream, or system-font fallback is added.
+
+## 2026-08-27 Website dismissal-lifecycle recheck
+
+Player reports that Escape did not close an open composer after focus left its
+text input and that successful submission left the composer open do not reopen
+the negative native census. Retail still has no player-authored chat widget,
+send transition, or focus policy to extract. The reusable native constraint is
+unchanged: the active application/modal owner consumes its control edge before
+gameplay, Inventory, Skills, or Pause can also act.
+
+The Website system boundary is nevertheless wider than the earlier input-local
+contract. One session-scoped open owner must cover keyboard, touch/HUD, and
+Player-Card Whisper entry; focus-independent Escape; Global/Party/Whisper
+accepted submission; local and host rejection feedback; own-echo versus remote
+unread classification; Hub/Boneyard input exclusion; disabled-state closure;
+and session teardown. Escape therefore belongs to the open window at capture
+priority, not only to the HTML input. A locally valid submit closes immediately
+without creating an optimistic message; the later host-authored own echo still
+drives transcript, audio, and world speech once and is not unread. A rejection
+must make its status visible again. These are explicit Website product rules,
+not recovered retail constants, and require no native address/catalog change.

@@ -282,6 +282,12 @@ def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
             "must never issue a raw region switch",
             "must likewise not retire authenticated lobby",
             "without recreating or rejoining the lobby",
+            "character-lifetime and starter-color clarification",
+            "`0x005D24FF`",
+            "`0x005CD3A0`",
+            "`Game+0x86`",
+            "ordinary selected-element starter colors",
+            "College-green starter colors",
         ),
         "native Game Over session documentation",
     )
