@@ -888,3 +888,71 @@ read-only decompilation/instructions for `0x0053B1D0`, `0x005468C0`, and
 `0x0054BA80`, including every xref and the ranges above. Confidence is high;
 no main-world equipped-Staff call, branch, element, selector, pose, phase, or
 teardown member remains unknown.
+
+## 2026-08-26 selected-primary Staff element-effect dispatch
+
+The equipped-Staff report above recovered where and how often the helper is
+submitted, but stopped before the helper's downstream selected-spell switch.
+That omission matters once one wizard knows more than one category-1 primary:
+the orb program is selected on every draw from the current primary, not fixed
+to the wizard's creation element.
+
+Fresh read-only Ghidra recovery used the canonical `SolomonDark` project,
+program `SolomonDark.exe`, and retail image identity recorded above. All
+eight xrefs to `0x0053B1D0` remain the five main-world and three alternate
+renderer calls already inventoried. The helper first resolves the current
+primary from the actor override at `PlayerWizard +0x21C` when present, or
+from `DAT_00819E84[playerSlot + 12]` otherwise
+(`0x0053B1F2..0x0053B228`). A negative selection returns without drawing.
+The shared painter `0x00539B80` independently re-reads that same source at
+`0x00539B8D..0x00539BD1` and
+`0x00539E2D..0x00539E71` before dispatching:
+
+| Selected primary | Painter program |
+| ---: | --- |
+| `8` | Ether `0x00535A30` |
+| `16` | Fire `0x005360C0` |
+| `24` | Air `0x00536380` |
+| `32` | Water `0x005370D0` |
+| `40` | Earth `0x005374C0` |
+| `52` | read current build `progression +0x750` and enter the complete `1000..1014` table |
+| `80`, another positive ID, or default | no ordinary element painter |
+| negative/unselected | helper returns before attachment or painter work |
+
+The complete row-52 program table is:
+
+| Build | Ordered native program |
+| ---: | --- |
+| `1000` | Fire, then Ether under the saved color state with alpha `currentAlpha * 0.25` |
+| `1001` | Water, then Ether under the same quarter-alpha state |
+| `1002` | Air, then Ether under the same quarter-alpha state |
+| `1003` | orange `(1,.5,0,1)` Earth painter, gold `(1,.75,0,1)` record-110 core work, then the two-sprite Air companion `0x00536C10` |
+| `1004` | Water, then Air companion `0x00536C10` |
+| `1005` | randomized green-channel Steam compositor `0x00537860`: BadGuys `2002..2007` plus record `110` |
+| `1006` | magenta `(1,.5,1,1)` Earth at `0.75 * scale`, then an additive full-scale Earth copy |
+| `1007` | Earth, then Fire |
+| `1008` | Earth, then Water |
+| `1009` | green `(.5,.75,.5,1)` record `15` at the native rotating/pulsing scale, then Air at `1.25 * scale` and alpha `.5` |
+| `1010` | Ether twice |
+| `1011` | Fire twice |
+| `1012` | Water twice |
+| `1013` | Air twice |
+| `1014` | Earth twice |
+
+Rows `1000..1009` are the ten player-selectable mixed builds. Rows
+`1010..1014` are native internal pure-build programs; they are real table
+members even though the retail player acquisition path does not expose them as
+learned Weld recipes. Planewalker temporarily selects Plane Orb `80`, so
+the ordinary colored element effect is absent while its separate Plane Orb
+actor owns primary presentation. Returning from Planewalker restores the saved
+selection and therefore restores its orb program on the next draw.
+
+The program inherits the already recovered Staff/Wand/empty-hand socket,
+submission count, `1 + 10 * +0x268` pulse scale, main/alternate renderer
+branches, death suppression, and color-state push/pop lifetime. Switching
+selection does not reconstruct the PlayerWizard, change robe/hat creation
+element, or create an independent world-sorted orb actor. Confidence is high:
+the current-primary source, complete switch/jump table, painter call order,
+color/alpha constants, all authored rows, assets, and default branches are
+instruction- or catalog-derived; no runtime address or injected observation is
+used.
