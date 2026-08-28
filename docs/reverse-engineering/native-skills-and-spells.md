@@ -658,6 +658,16 @@ means "a moving wizard remains in facing-qualified current contact," not "an
 idle wizard is close enough." This outer movement gate applies equally to
 Skeleton, Archer, Mage, Imp, Zombie, Wraith, Demon, and hostile Maggot members.
 
+The action-slot checks do not gate locomotion. Both `CMP [ESI+0xE4],0`
+branches occur after the `PlayerActor_MoveStep` call at `0x0054B050`: a live
+StaffMelee or StaffSpin action jumps past only the new-admission search to
+`0x0054B336`. Movement input, velocity, world/dynamic collision, gait, and
+footsteps continue while the queued action owns its pose and heading. The
+action callback evaluates contact from the wizard's current root at its marker,
+so moving during the swing can also carry the footprint away from the original
+contact. Competing casts and a second Staff action remain blocked until the
+existing action retires.
+
 The StaffMelee constructor always consumes `Float(.05)` after the proc
 selection, stores progress `0.1+draw`, then consumes `Integer(8)` and
 multiplies by `1.35` only on result two. Its marker is progress three and its

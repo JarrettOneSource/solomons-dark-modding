@@ -885,12 +885,19 @@ def test_native_staff_admission_distinguishes_movement_and_current_contact() -> 
         "strict absolute heading delta below 50 degrees",
         "equipped item type `0x1B5C`",
         "does not recompute center distance",
+        "`PlayerActor_MoveStep` call at `0x0054B050`",
+        "Both `CMP [ESI+0xE4],0` branches occur after",
+        "Movement input, velocity, world/dynamic collision, gait, and footsteps continue",
+        "Competing casts and a second Staff action remain blocked",
     ):
         if token not in doc:
             raise StaticReTestFailure(
                 f"native Staff contact ownership lost witness {token!r}"
             )
-    return "Staff admission is movement-gated before both distinct contact sources"
+    return (
+        "Staff admission is movement-gated before both contact sources while live actions "
+        "retain locomotion"
+    )
 
 
 def test_native_progression_five_live_effect_formulas_are_pinned() -> str:

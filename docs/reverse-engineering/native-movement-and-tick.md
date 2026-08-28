@@ -373,6 +373,19 @@ Projecting the persistent fallback from settled proximity without that fact
 causes stationary, facing players to auto-melee repeatedly, which stock cannot
 do.
 
+Action occupancy is downstream of that movement work and does not suppress
+it. `PlayerActor_MoveStep` is called at `0x0054B050`; only afterward do the
+nonempty-result path at `0x0054B070` and the zero-result fallback at
+`0x0054B28D` compare the player action slot `+0xE4` with zero. A live action
+jumps to `0x0054B336`, skipping only new Staff admission. It cannot bypass the
+already completed velocity integration, `MoveStep`, dynamic collision, or
+walk-phase updates. StaffMelee and StaffSpin therefore keep accepting ordinary
+movement throughout their action lifetimes while their action object remains
+the presentation/heading and marker owner. The marker-time Staff footprint is
+translated from the wizard's then-current root, not its action-start root.
+A port must seal competing casts and duplicate Staff admission without
+zeroing the movement lane.
+
 Implementation consequence for ports: changing from a fixed Region to Arena
 may replace the authored static geometry adapter, but it must keep the shared
 actor-body response around that adapter. Applying Arena scenery collision
