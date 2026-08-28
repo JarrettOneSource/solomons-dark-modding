@@ -32,7 +32,7 @@
       "capacity_field_offset": "skill_entry+0x68",
       "covered_interval": "[end_degrees, 360]",
       "direction": "counter-clockwise in mathematical angle space; positive angle maps from screen-right toward screen-up",
-      "flash_or_pulse": "none observed; active icon alpha is steady 0.25 and ready icon alpha is steady 0.375",
+      "flash_or_pulse": "none observed; cooldown icon alpha is 0.25, ready base alpha is 0.75, and the captured unavailable branch is 0.375",
       "native_addresses": [
         "0x005C6D30",
         "0x00416330",
@@ -41,12 +41,13 @@
       "observed_capacity_ticks": 2500.0,
       "observed_first_remaining": 1966.0,
       "observed_last_remaining": 1112.0,
-      "ready_icon_observed_alpha": 0.375,
+      "ready_icon_base_alpha": 0.75,
       "remaining_field_offset": "skill_entry+0x64",
       "sector_end_degrees": "360 * (1 - remaining / capacity)",
       "sector_start_degrees": 360.0,
       "segment_size_degrees": 45.0,
-      "timing": "remaining decrements once per 100 Hz native fixed tick; renderer samples every HUD frame"
+      "timing": "remaining decrements once per 100 Hz native fixed tick; renderer samples every HUD frame",
+      "unavailable_icon_observed_alpha": 0.375
     },
     "earth_charge": {
       "field": "Boulder+0x74",

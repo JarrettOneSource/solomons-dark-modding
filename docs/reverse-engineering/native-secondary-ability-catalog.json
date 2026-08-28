@@ -81,6 +81,14 @@
         1.0,
         0.25
       ],
+      "unavailable": {
+        "alpha": "renderer_alpha * 0.5",
+        "normal_observed_alpha": 0.375,
+        "tests": [
+          "current_mana < refreshed_skill_mana_cost",
+          "Game+0x1ABE != 0"
+        ]
+      },
       "toggle_state_modulation": "none"
     },
     "scene_modulation": {

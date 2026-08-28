@@ -647,8 +647,9 @@ def test_native_hud_fill_cooldown_charge_and_notification_behavior_are_pinned() 
         "sector_end_degrees": "360 * (1 - remaining / capacity)",
         "covered_interval": "[end_degrees, 360]",
         "segment_size_degrees": 45.0,
-        "ready_icon_observed_alpha": 0.375,
+        "ready_icon_base_alpha": 0.75,
         "active_icon_alpha": 0.25,
+        "unavailable_icon_observed_alpha": 0.375,
     }
     for key, expected in expected_cooldown.items():
         if cooldown.get(key) != expected:

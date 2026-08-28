@@ -271,7 +271,7 @@ end_degrees = 360 * (1 - remaining / capacity)
 covered sector = [end_degrees, 360]
 ```
 
-Positive mathematical angle maps from screen-right toward screen-up. The builder intersects each ray with the 53 x 53 **square**, inserts every crossed 45-degree square-corner boundary, and emits a center-origin triangle fan; this is not a circular pie wedge. `BeltButton::Present` sets the fan's base RGBA to `(0.5,0.1,0.1,0.75)`, draws that dark-red cooldown square fan first, changes the skill-icon base to white alpha `0.25`, and only then draws the icon. The ready path instead reaches the icon with base RGBA `(1,1,1,0.75)`. The captured final icon alpha was steady `0.25` while cooling down and `0.375` when ready. No cooldown-complete flash, scale pulse, oscillating alpha, or Planewalker/Firewalker/Mindstar/Regenerate toggle highlight exists in this presenter.
+Positive mathematical angle maps from screen-right toward screen-up. The builder intersects each ray with the 53 x 53 **square**, inserts every crossed 45-degree square-corner boundary, and emits a center-origin triangle fan; this is not a circular pie wedge. `BeltButton::Present` sets the fan's base RGBA to `(0.5,0.1,0.1,0.75)`, draws that dark-red cooldown square fan first, changes the skill-icon base to white alpha `0.25`, and only then draws the icon. The ready path instead reaches the icon with base RGBA `(1,1,1,0.75)`. The earlier `0.375` capture was not the ready branch: the instruction-level correction below proves it is the separate unavailable/insufficient-mana half-alpha branch. No cooldown-complete flash, scale pulse, oscillating alpha, or Planewalker/Firewalker/Mindstar/Regenerate toggle highlight exists in this presenter.
 
 Before slot contents, a clear `gameplay+0x1AC2` installs renderer RGB multiplier `(0.25,0.25,0.25)` with alpha multiplier `1`; the Hub therefore presents the same art through its quarter-RGB scene modulation. Gameplay leaves the multiplier unchanged. This scene modulation is separate from the base RGBA transitions above.
 
@@ -305,7 +305,7 @@ The live 45 XP state between thresholds 0 and 90 produces exactly 24 px at `[798
 | Health damage / near death | Squared clip changes; no HUD smoothing, flash, or pulse; tint remains white. |
 | Magic shield | Cyan strip; no independent pulse observed. Width ordering changes at the life/shield crossover. |
 | Mana drain/refill | Linear clip changes; no HUD pulse. |
-| Cooldown active/ready | Stable alpha `0.25` / `0.375` and geometric sector change; no completion flash observed. |
+| Cooldown active/ready | Cooldown icon alpha `0.25` plus the geometric red sector; ready icon white alpha `0.75`; no completion flash observed. The distinct unavailable branch is half-alpha, normally `0.375`. |
 | Gold pickup | Fixed-position text with alpha expiry fade from a 1.5 s timer. |
 | Hub decoration | `College.18` and `College.17` change non-rect tint forever. They are hub action/decor art, not gameplay HUD pulse states. |
 
@@ -717,3 +717,49 @@ scale. Tracking only the enlarged control's centre while leaving the origin
 offset and quad at scale 1 is not the native composition. Fixed-stage modal
 and world-projected members already share one outer transform with their
 targets and retain pointer scale 1 inside that owner.
+
+## 2026-08-28 BeltButton ready/cooldown/unavailable alpha correction
+
+A player report that every Website hotbar skill remained grey reopened the
+`BeltButton::Present` colour-state claim above. The earlier capture correctly
+recorded one final alpha of `0.375`, but incorrectly assigned it to the ready
+branch. Fresh raw instructions from the canonical read-only Ghidra replica
+against the same retail image close the complete branch ownership:
+
+- `0x005D41A5..0x005D41CB` loads `0x007DE934 = 0.75` and calls the renderer
+  colour setter `0x0041FE50` with RGBA `(1,1,1,0.75)` before any cooldown or
+  affordability test. This is the ordinary ready skill-icon state.
+- When either the skill-private or common cooldown is positive,
+  `0x005D4257..0x005D4287` sets RGBA `(0.5,0.1,0.1,0.75)` and draws the
+  square-sector fan. `0x005D43CA..0x005D43E0` then calls alpha-only setter
+  `0x0041C510` with `0x007DE978 = 0.25` before the icon draw. The sector is
+  below the quarter-alpha white icon.
+- The separate gate at `0x005D43EB..0x005D4458` compares current mana at the
+  local progression `+0x7C` with the refreshed skill cost at entry `+0x60` and
+  also tests Game byte `+0x1ABE`. Only this unavailable branch replaces icon
+  alpha with `renderer+0x3C8 * 0.5`; at the observed normal `0.75` renderer
+  alpha that is the previously captured `0.375`.
+- `0x0041FE50` stores the caller RGBA and multiplies it component-by-component
+  by the renderer's separate modulation state. The College/noncombat quarter-
+  RGB modulation remains independent. Applying `0.375` as the base alpha for
+  every Website frame therefore pins all ready icons to the native unavailable
+  appearance and then compounds any scene modulation.
+
+The complete presentation membership is: empty BeltButton (no icon),
+non-skill item/potion art, ready skill (`white/.75`), active private/common
+cooldown (red square sector plus `white/.25` icon), insufficient-mana or
+explicitly disabled skill (`white/half-alpha`, normally `.375`), and the
+separate College/noncombat RGB multiplier. Category-1, all 23 category-2 rows,
+the Website's disclosed category-3 belt extension, duplicates, mouse/keyboard/
+touch/controller input, save/restore, and late-join state all consume the same
+eight Game-owned presenters. Toggle activity creates no additional hotbar
+highlight. Teardown removes the slot with the Game/HUD owner; there is no
+completion flash, audio cue, random colour, or retained presentation timer.
+
+Evidence provenance: retail Beta 0.72.5 `SolomonDark.exe`, 4,723,200 bytes,
+SHA-256 `03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`,
+preferred image base `0x00400000`; Ghidra 12.0.3 canonical replica through
+`Invoke-GhidraHeadless.ps1`; decompile/raw instructions for `0x005D3E10`,
+`0x0041FE50`, and `0x0041C510`; float reads at `0x007DE934`, `0x007DE978`,
+`0x007DE870`, and `0x007845E8`. Confidence is high. No runtime address,
+injected process, inferred constant, or browser-only approximation is used.

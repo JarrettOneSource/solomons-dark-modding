@@ -1102,3 +1102,78 @@ the current-primary source, complete switch/jump table, painter call order,
 color/alpha constants, all authored rows, assets, and default branches are
 instruction- or catalog-derived; no runtime address or injected observation is
 used.
+
+## 2026-08-28 InventoryGrid addressed-cell and `Item_None` placement correction
+
+A player report that Website items could be dragged but always auto-organized
+reopened the InventoryScreen drag claim. The earlier pass followed item
+ownership into equipment, Sack, storage, unforge, and BeltButton consumers but
+never followed a release onto an ordinary empty or occupied backpack cell back
+into the native inventory root. Fresh canonical-replica instructions establish
+that root order is persistent addressed-cell state, not a compact item list.
+
+### Root, page, and cell ownership
+
+- Every inventory root stores count at `+0x14` and its item-pointer array at
+  `+0x20`. Runtime type `7000` / `0x1B58` is `Item_None`, constructed by
+  `0x00572F20`; it is a real placeholder row with no item presentation.
+- `InventoryScreen` page builder `0x00560D30` enumerates every root index in
+  order. A real pointer becomes a kind-0 70 by 70 grid holder; an `Item_None`
+  pointer or an index beyond root count becomes the same holder with no live
+  item. The existing 22-column by 4-row, column-major 88-cell geometry is
+  unchanged. A child Sack root also creates its kind-7 parent-return holder;
+  it does not flatten descendants into the current page.
+- Grid-to-root commit `0x00560BB0` first removes stale placeholders through
+  `0x00560140`, then walks every live grid holder in addressed order. A real
+  holder appends that exact item; an empty kind-0 holder constructs and appends
+  one `Item_None`. This is the persistence edge that preserves internal holes.
+  `0x00560320` removes only trailing `Item_None` rows, so internal empty cells
+  survive while unused tail capacity does not bloat the root.
+
+### Drag, swap, merge, and later insertion
+
+- Backpack drag start `0x0056DD80` retains the exact source root and holder,
+  creates `InventoryDragger 0x00550990`, removes the live item from ownership,
+  and leaves page state responsible for its addressed source cell.
+- Release router `0x0056DE50` resolves the topmost target holder. Empty kind-0
+  accepts the dragged item at that exact cell through `0x00575850`. Occupied
+  kind-0 swaps the exact objects and creates the two 20-tick `InventoryFlyby`
+  paths; equal Potion type/subtype merges into the resident stack instead.
+  An Item_Sack target inserts into that Sack's direct child root. Equipment,
+  storage, parent-return, unforge, and invalid-restore branches remain the
+  already catalogued siblings of this same router.
+- Root insertion `0x0055FF20` optionally stacks matching Potions, then, when
+  its fill-empty flag is set, scans from index zero for the first `Item_None`,
+  destroys that placeholder, and replaces it at the same index. Only when no
+  placeholder exists does it append. Purchases, pickups, unequipped/displaced
+  gear, transfers, Sack insertion, and other shared callers therefore fill the
+  earliest authored hole before extending the list.
+- Selection, ItemInfo, the strict 10-pixel drag threshold, natural-size
+  dragger art, compatible-equipment green sinks, and accepted/invalid audio
+  remain unchanged. Cell placement is participant-authoritative inventory
+  state; page selection, pointer capture, flyby interpolation, and the active
+  Sack path are presentation-local and tear down with the screen.
+
+### Complete membership and implications
+
+The addressed-cell contract applies to the participant root, every recursively
+nested Item_Sack root, standalone College and active-Boneyard InventoryScreen,
+and every Fomentius/Hagatha/Luthacus/Shlorio companion InventoryScreen. It
+applies uniformly to all reachable Potion, equipment, Sack, Misc, tutorial,
+random/recipe, and registered mod-item objects. Luthacus StoreGrid remains a
+separate owner: crossing between storage and backpack fills the destination's
+first placeholder, while an invalid same-owner StoreGrid release restores the
+source. BeltButton assignment remains a shortcut and does not consume an
+inventory cell. Save/load, late join, reconnect, and participant transfer must
+carry the addressed root order; reconstructing a compact item array on any of
+those paths is observable auto-organization and is not parity.
+
+Evidence provenance: unmodified Beta 0.72.5 `SolomonDark.exe`, 4,723,200
+bytes, SHA-256 `03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`,
+preferred image base `0x00400000`; Ghidra 12.0.3 canonical read-only replica
+through `Invoke-GhidraHeadless.ps1`; decompile/raw instructions for
+`0x00560D30`, `0x00560BB0`, `0x00560140`, `0x00560320`, `0x0055FF20`,
+`0x0056DD80`, `0x0056DE50`, `0x005624B0`, `0x00575850`, and constructors
+`0x00550990/0x00572F20`. Confidence is high. No item family, root variant,
+scene, insertion branch, or teardown branch is browser-blocked or left
+unextracted.

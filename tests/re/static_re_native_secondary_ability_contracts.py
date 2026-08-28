@@ -216,6 +216,15 @@ def test_native_secondary_belt_presentation_is_closed() -> str:
         raise StaticReTestFailure("ready skill icon color drifted")
     if skill_entry.get("cooldown_icon_base_rgba") != [1.0, 1.0, 1.0, 0.25]:
         raise StaticReTestFailure("cooldown skill icon color drifted")
+    if skill_entry.get("unavailable") != {
+        "alpha": "renderer_alpha * 0.5",
+        "normal_observed_alpha": 0.375,
+        "tests": [
+            "current_mana < refreshed_skill_mana_cost",
+            "Game+0x1ABE != 0",
+        ],
+    }:
+        raise StaticReTestFailure("unavailable skill icon branch drifted")
     if skill_entry.get("toggle_state_modulation") != "none":
         raise StaticReTestFailure("secondary toggles acquired a non-native belt highlight")
     cooldown = belt.get("cooldown", {})

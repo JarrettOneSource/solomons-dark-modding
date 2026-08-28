@@ -315,6 +315,23 @@ def test_inventory_sack_pages_and_heterogeneous_belt_are_pinned() -> str:
         failures,
     )
     _require(
+        "InventoryGrid addressed-cell report",
+        item_report,
+        (
+            "InventoryGrid addressed-cell and `Item_None` placement correction",
+            "0x00560BB0",
+            "0x00560140",
+            "0x00560320",
+            "0x0055FF20",
+            "0x0056DD80",
+            "0x0056DE50",
+            "internal empty cells",
+            "first `Item_None`",
+            "Save/load, late join, reconnect, and participant transfer",
+        ),
+        failures,
+    )
+    _require(
         "InventoryScreen backpack return-control report",
         item_report + hud_report,
         (
