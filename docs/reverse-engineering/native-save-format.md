@@ -1,6 +1,7 @@
 # Native save format and launcher persistence boundary
 
-Status: **G10 closed** for retail `SolomonDark.exe` SHA-256
+Status: **G10 closed; 2026-08-28 standalone-gamestate corpus correction closed**
+for retail `SolomonDark.exe` SHA-256
 `03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`.
 
 The committed live corpus is
@@ -1190,14 +1191,14 @@ The fixed/variable tail then follows this exact call order:
 | 13 | `+0x84/+0x88/+0x8C/+0x818/+0x804..+0x810`; `+0x814`; starting primary `+0x86C`; cheat-death `+0x81C/+0x820`; hoard `+0x740`; local XP-admission `+0x2C`; random-choice Boast `+0x2D`; capacity `+0x800`; immunity `+0x74C` | exact scalar tail; `0x00680AB0` gates XP on `+0x2C`, and `0x0065F5B0` sets `+0x2D` iff selected Boast is ID 3 |
 
 The parser must follow the embedded counts; fixed byte offsets after either
-inline vector are invalid. The 27 inspected gamestates include payload lengths
-`1250`, `1258`, `1282`, and `1294`, which directly falsifies a fixed-offset
-tail decoder.
+inline vector are invalid. The 28 inspected gamestates include payload lengths
+`1250`, `1258`, `1282`, `1294`, and `1458`, which directly falsifies a
+fixed-offset tail decoder.
 
 ### Local wizard membership in `gamestate.sav`
 
-Across the controlled template and 26 independent prior task-owned
-gamestates:
+Across the controlled template, 26 independent prior task-owned gamestates,
+and the 2026-08-28 user-supplied stock gamestate described below:
 
 - the root has exactly eight ordered children;
 - root child zero is the local wizard record;
@@ -1208,8 +1209,11 @@ gamestates:
 - its second child is the nine-byte `Skills_Wizard` disk extension.
 
 The same eight-child root carries the rest of the durable selection family.
-Root child 1 child 0 is the six-vector binding table; its exact 24-int member
-stores selected primary at 12 and concentrations A/B at 16/20. Root payload is
+Root child 1 child 0 is the six-vector binding table. Its integer vector has a
+dynamic live count; portable fields occupy stable indices 12 (selected primary)
+and 16/20 (concentrations A/B), so a bridge requires indices through 20 and
+preserves every later integer opaquely. The controlled settled-Hub writer has
+24 integers, while the active-run stock sample below has 113. Root payload is
 the eight ordered BeltButton records (`i32 type`, `i32 id`, bool, String,
 `i32`); type 7015 identifies a skill, while default potion types 7013/7014 and
 other non-skill entries remain distinct. Root child 7 begins with one global
@@ -1225,6 +1229,68 @@ Fire/Arcane, level 1. This is a controlled stock-writer template, not a clean-
 stock visual capture; its only legal portable use is as a validated settled
 Hub object-graph base whose named semantic fields are patched and whose opaque
 siblings remain byte-identical.
+
+### 2026-08-28 standalone active-run corpus correction
+
+The user supplied `SolomonDarkStockSaveWaterMage.zip` as a save produced by the
+unmodified base game. The exact producer executable was not independently
+captured, so that provenance remains user-attested; its complete eight-root,
+83-row, Game-binding, Belt, footer, and Boast layouts agree with the canonical
+0.72.5 writer. The ZIP is 63,484 bytes with SHA-256
+`c3e6f06447558afd2dded422cc71449b9f482dc4b10674d1f0852460a75e2bd6` and
+contains only a 525,926-byte root `gamestate.sav` with SHA-256
+`7a195e2f5735d8cec773443b0414176e89c4f217faab314c23da0e9dfa875f67`.
+The source remains outside the repository under the established evidence-only
+raw-save policy.
+
+The generic `SyncBuffer` decoder consumes the file to physical EOF and
+re-encodes it byte-identically: 19,353 nodes, 371,098 payload bytes, and maximum
+depth eight. Semantic decoding recovers level-50 Water/Body wizard
+`GRANTABLES`, selected primary 32, concentration A 60, no concentration B, and
+the expected 83 progression rows. Its learned/visible order also contains
+Magic Shield row 54 at permanent rank zero and effective rank two, and Belt
+slot 3 selects that row. The prior bridge first fails on its settled-Hub
+assumption that the binding integer count must equal 24 and, after that is
+corrected, on its assumption that every visible-order member is permanent. This
+active-run binding payload contains vector counts `0/113/0/0/0/4` for
+bool/int/float/String/vector2/range. Indices 0..23 retain the same portable
+layout and selected-primary agreement; integers 24..112 are opaque active-run
+members and are not Website authority.
+
+Static retail instructions close the cause. `Game` disk serializer
+`0x005CE3D0` calls `0x00589140` at `0x005CE4DF` with `ECX = 0x00819E70`.
+`0x00589140` reads the six live vector counts at owner offsets
+`+0x08/+0x18/+0x28/+0x38/+0x48/+0x58`, writes each count, and loops over exactly
+that many bool/int/float/String/vector2/range members. The integer storage and
+count are the globals at `0x00819E84/+0x00819E88`; there is no instruction-level
+constant 24 in the serializer. Therefore exactly-24 validation is refuted for
+the whole save bridge. Strict decoding instead requires the portable semantic
+indices through 20, parses all six declared vectors to payload exhaustion, and
+preserves every unprojected byte. Export patches only indices 12/16/20.
+
+The visible-order mismatch is also instruction-owned. Effective-rank setter
+`0x00660580` checks a row's permanent rank at `row+0x20`; when it is zero and
+the new effective rank is positive, the function appends the row through the
+`+0x84C` list virtual into learned/visible storage `+0x850/+0x854`. Its sole
+caller is equipment-effect dispatcher `0x00576AA0`, whose effect cases 4 and 7
+call that setter for direct or conditional skill grants. Refresh
+`0x006623F0` removes a visible-order row when effective rank `row+0x22` becomes
+zero. Therefore the disk vector is presentation membership for both permanent
+and currently effective skills, not a second permanent-rank ledger. A portable
+bridge without the opaque equipment tree as web authority must retain the raw
+vector in the source attachment, project only entries whose permanent rank is
+positive, and warn about every filtered effective-only row. It must still
+reject an order member whose permanent and effective ranks are both zero.
+
+Retail `gamestate.sav` contains no `darkdata.cfg` profile and no native
+manifest. A Website import of one standalone `gamestate.sav` (directly or as
+the only file in a ZIP) can truthfully project its wizard while initializing
+missing cross-run profile members from the exact controlled first-persisted
+`darkdata.cfg` template. The preview must warn that gold, NPC/help flags,
+Hagatha mix history, Luthacus storage, Lace/tutorial state, and Dowsing fee were
+not supplied. An archive with multiple files but no launcher manifest remains
+ambiguous and fails closed. A standalone file has no recoverable run-directory
+name, so the bridge uses its existing safe `_survival` namespace.
 
 ### Machinimbus's purchase-only persistence defect
 
@@ -1269,7 +1335,13 @@ base bonus and must report it.
 The safe portable unit is a settled wizard/profile projection:
 
 - strict-decode a copied native source and hash it;
+- accept either the launcher/profile unit or exactly one standalone
+  `gamestate.sav`; for the latter, pair the genuine wizard with the exact
+  first-persisted profile template and surface every defaulted profile family;
 - map durable profile values and the local wizard's permanent progression;
+- preserve learned/visible order among permanently ranked rows; retain and
+  report effective-only equipment rows instead of treating them as permanent
+  progression or rejecting the otherwise valid save;
 - map the complete resumable Boast state from Game vslot `+0x14 ->
   0x005CE3D0`: selected signed ID `Gameplay+0x1D44`, exact statement String
   `+0x1D48`, one-shot failure `+0x1D80`, and success `+0x1D81`;

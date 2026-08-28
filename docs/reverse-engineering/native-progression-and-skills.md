@@ -883,9 +883,21 @@ On materialization, effective ranks and scalar caches are rebuilt from the
 permanent book and actually persisted flags; they are not independent durable
 skill data.
 
+The disk `+0x850/+0x854` learned/visible order is broader than the permanent
+book. Equipment-effect dispatcher `0x00576AA0` is the sole caller of effective-
+rank setter `0x00660580`; direct/conditional skill-grant cases 4 and 7 can set a
+previously unlearned row's effective rank and append it to the order while its
+permanent rank remains zero. Refresh `0x006623F0` removes that row only after
+its effective rank returns to zero. The 2026-08-28 user-supplied active save
+proves the branch with Magic Shield row 54 at permanent/effective `0/2` in both
+the visible order and Belt. A cross-engine importer that does not materialize
+the supplying equipment preserves those bytes but projects only the permanent
+ordered subset and reports the effective-only omission.
+
 | State | Boundary |
 | --- | --- |
-| level, accumulated XP, permanent row ranks, element, discipline, offer/learned order, Hagatha ownership, Firewalker active | participant progression disk payload; survives ordinary hub region reconstruction and completed-run return |
+| level, accumulated XP, permanent row ranks, element, discipline, offer state, permanent learned-order subset, Hagatha ownership, Firewalker active | participant progression disk payload; survives ordinary hub region reconstruction and completed-run return |
+| effective-only learned/visible-order rows | equipment effect `0x00576AA0 -> 0x00660580`; removed by refresh `0x006623F0` when effective rank reaches zero | disk carries the active visibility row, but a bridge without its equipment cannot promote it to permanent progression |
 | effective rank `row+0x22`, max HP/MP and derived multipliers/resistances, `+0x740` hoard | reconstructed actor cache; reproduce from the durable rank/toggle book whenever the actor is materialized or refreshed |
 | concentration A/B and replacement cursor | enclosing Game binding indices 16/20 plus Game `+0x1C24`; absent only from the progression virtual | disk-persisted and restored; invalid effective-only selections may still be repaired by `0x0065F9A0` |
 | Mindstar active, Regenerate active, and Mind Chug `+0x828` timer | live/network selection state; explicitly absent from disk and cleared by disk restore/Create reset |

@@ -33,7 +33,7 @@ NATIVE_WIZARD_SKILL_ROW_COUNT = 83
 NATIVE_HAGATHA_OWNERSHIP_COUNT = 50
 NATIVE_HAGATHA_FIRST_MIX_COUNT = 30
 NATIVE_GAMESTATE_ROOT_CHILD_COUNT = 8
-NATIVE_BINDING_COUNT = 24
+NATIVE_PORTABLE_BINDING_MIN_COUNT = 21
 NATIVE_BELT_SLOT_COUNT = 8
 NATIVE_BELT_EMPTY_TYPE = 7000
 NATIVE_BELT_SKILL_TYPE = 7015
@@ -945,10 +945,11 @@ def decode_native_binding_state(root: ChunkNode) -> dict[str, Any]:
     for index in range(boolean_count):
         cursor.boolean(f"boolean[{index}]")
     integer_count = cursor.u32("integer count")
-    if integer_count != NATIVE_BINDING_COUNT:
+    if integer_count < NATIVE_PORTABLE_BINDING_MIN_COUNT:
         raise SaveFormatError(
             f"native binding state has {integer_count} integers; "
-            f"expected {NATIVE_BINDING_COUNT}"
+            "portable fields require at least "
+            f"{NATIVE_PORTABLE_BINDING_MIN_COUNT}"
         )
     integer_offset = cursor.offset
     values = cursor.i32_list(integer_count, "integers")
@@ -1162,6 +1163,21 @@ def portable_profile_from_buffers(
         raise SaveFormatError(
             "native local wizard and Boast progression flags disagree"
         )
+    effective_only_learned_order = [
+        skill_id
+        for skill_id in progression["learned_order"]
+        if permanent_ranks[skill_id] == 0
+    ]
+    if any(
+        progression["rows"][skill_id]["effective_rank"] == 0
+        for skill_id in effective_only_learned_order
+    ):
+        raise SaveFormatError("native learned order contains an inactive row")
+    learned_order = [
+        skill_id
+        for skill_id in progression["learned_order"]
+        if permanent_ranks[skill_id] > 0
+    ]
 
     portable = {
         "format": PORTABLE_PROFILE_FORMAT,
@@ -1192,7 +1208,7 @@ def portable_profile_from_buffers(
             "previousThreshold": float(progression["previous_threshold"]),
             "nextThreshold": float(progression["next_threshold"]),
             "permanentRanks": permanent_ranks,
-            "learnedOrder": list(progression["learned_order"]),
+            "learnedOrder": learned_order,
             "elementRoot": int(progression["element_root"]),
             "disciplineRoot": int(progression["discipline_root"]),
             "startingPrimary": int(progression["starting_primary"]),
@@ -1246,6 +1262,16 @@ def portable_profile_from_buffers(
             *(
                 ["Plane Orb is a live Planewalker override and resets in the settled portable Hub."]
                 if wizard["selected_primary_skill_id"] == 80
+                else []
+            ),
+            *(
+                [
+                    "Native learned/visible row(s) "
+                    + ", ".join(str(skill_id) for skill_id in effective_only_learned_order)
+                    + " depend only on effective equipment ranks; they remain in the "
+                    "native attachment but are unavailable in the settled web Hub."
+                ]
+                if effective_only_learned_order
                 else []
             ),
             "The portable wizard starts in a settled Hub; in-flight native Arena and Region objects remain in the native attachment.",
@@ -1429,7 +1455,7 @@ def validate_portable_profile(value: Any) -> tuple[dict[str, Any], bytes, bytes]
         raise SaveFormatError(
             f"portable permanent ranks must contain {NATIVE_WIZARD_SKILL_ROW_COUNT} rows"
         )
-    _require_int_list(
+    learned_order = _require_int_list(
         wizard.get("learnedOrder"),
         "portable learned order",
         72,
@@ -1437,6 +1463,8 @@ def validate_portable_profile(value: Any) -> tuple[dict[str, Any], bytes, bytes]
         79,
         unique=True,
     )
+    if any(ranks[skill_id] == 0 for skill_id in learned_order):
+        raise SaveFormatError("portable learned order contains a nonpermanent row")
     _require_int(wizard.get("elementRoot"), "portable element root", 0, 4)
     _require_int(wizard.get("disciplineRoot"), "portable discipline root", 5, 7)
     _require_int(wizard.get("startingPrimary"), "portable starting primary", 8, 79)

@@ -93,6 +93,90 @@ NATIVE_RESUME_SELECTOR = (
 def _node_content(node: ChunkNode) -> tuple[bytes, tuple[object, ...]]:
     return node.payload, tuple(_node_content(child) for child in node.children)
 
+
+def _with_binding_integer_count(gamestate: bytes, integer_count: int) -> bytes:
+    buffer = parse_syncbuffer(gamestate)
+    owner = buffer.root.children[1]
+    binding = owner.children[0]
+    boolean_count = struct.unpack_from("<I", binding.payload, 0)[0]
+    count_offset = 4 + boolean_count
+    original_count = struct.unpack_from("<I", binding.payload, count_offset)[0]
+    values_offset = count_offset + 4
+    original_end = values_offset + original_count * 4
+    retained_count = min(integer_count, original_count)
+    payload = bytearray(
+        len(binding.payload) + (integer_count - original_count) * 4
+    )
+    payload[:count_offset] = binding.payload[:count_offset]
+    struct.pack_into("<I", payload, count_offset, integer_count)
+    payload[values_offset:values_offset + retained_count * 4] = (
+        binding.payload[values_offset:values_offset + retained_count * 4]
+    )
+    for index in range(original_count, integer_count):
+        struct.pack_into("<i", payload, values_offset + index * 4, 0x10000000 + index)
+    payload[values_offset + integer_count * 4:] = binding.payload[original_end:]
+    owner_children = list(owner.children)
+    owner_children[0] = replace(binding, payload=bytes(payload))
+    root_children = list(buffer.root.children)
+    root_children[1] = replace(owner, children=tuple(owner_children))
+    return encode_syncbuffer(
+        replace(buffer, root=replace(buffer.root, children=tuple(root_children)))
+    )
+
+
+def _with_effective_only_learned_row(
+    gamestate: bytes,
+    skill_id: int,
+    effective_rank: int,
+) -> bytes:
+    buffer = parse_syncbuffer(gamestate)
+    wizard = buffer.root.children[0]
+    progression = wizard.children[0]
+    progression_payload = bytearray(progression.payload)
+    row_offset = 4 + (82 - skill_id) * 12
+    _require(
+        struct.unpack_from("<H", progression_payload, row_offset)[0] == 0,
+        "effective-only fixture row unexpectedly has a permanent rank",
+    )
+    struct.pack_into("<H", progression_payload, row_offset + 2, effective_rank)
+
+    collections = progression.children[1]
+    perk_count = struct.unpack_from("<I", collections.payload, 0)[0]
+    learned_count_offset = 4 + perk_count * 4 + 50
+    learned_count = struct.unpack_from(
+        "<I", collections.payload, learned_count_offset
+    )[0]
+    learned_offset = learned_count_offset + 4
+    learned_order = list(struct.unpack_from(
+        f"<{learned_count}i", collections.payload, learned_offset
+    ))
+    _require(
+        skill_id not in learned_order,
+        "effective-only fixture row is already in learned order",
+    )
+    collections_payload = (
+        collections.payload[:learned_count_offset]
+        + struct.pack("<I", learned_count + 1)
+        + collections.payload[learned_offset:]
+        + struct.pack("<i", skill_id)
+    )
+    progression_children = list(progression.children)
+    progression_children[1] = replace(
+        collections,
+        payload=collections_payload,
+    )
+    wizard_children = list(wizard.children)
+    wizard_children[0] = replace(
+        progression,
+        payload=bytes(progression_payload),
+        children=tuple(progression_children),
+    )
+    root_children = list(buffer.root.children)
+    root_children[0] = replace(wizard, children=tuple(wizard_children))
+    return encode_syncbuffer(
+        replace(buffer, root=replace(buffer.root, children=tuple(root_children)))
+    )
+
 EXPECTED_BINARY_SHA256 = (
     "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3"
 )
@@ -544,6 +628,56 @@ def test_native_portable_profile_progression_and_opaque_round_trip_are_exact() -
         "portable template lost the eight-child/83-row structural witness",
     )
 
+    active_gamestate = _with_effective_only_learned_row(
+        _with_binding_integer_count(gamestate, 113),
+        54,
+        2,
+    )
+    active_game = parse_syncbuffer(active_gamestate)
+    active_binding = decode_native_binding_state(active_game.root)
+    active_wizard = decode_gamestate_local_wizard(active_game)
+    active_portable = portable_profile_from_buffers(
+        darkdata,
+        active_gamestate,
+        str(expected["runName"]),
+    )
+    validate_portable_profile(active_portable)
+    active_portable["wizard"]["name"] = "ACTIVUS"
+    _, patched_active_gamestate, _ = apply_portable_profile(active_portable)
+    patched_active_binding = decode_native_binding_state(
+        parse_syncbuffer(patched_active_gamestate).root
+    )
+    _require(
+        len(active_binding["values"]) == 113
+        and active_wizard["name"] == expected["wizardName"]
+        and len(active_wizard["progression"]["rows"]) == 83
+        and active_wizard["progression"]["rows"][54]["permanent_rank"] == 0
+        and active_wizard["progression"]["rows"][54]["effective_rank"] == 2
+        and 54 in active_wizard["progression"]["learned_order"]
+        and 54 not in active_portable["wizard"]["learnedOrder"]
+        and any(
+            "row(s) 54 depend only on effective equipment ranks" in warning
+            for warning in active_portable["warnings"]
+        )
+        and len(patched_active_binding["values"]) == 113
+        and patched_active_binding["values"][24:] == active_binding["values"][24:],
+        "dynamic active-run binding members no longer decode or remain opaque",
+    )
+    nonpermanent_portable_order = deepcopy(active_portable)
+    nonpermanent_portable_order["wizard"]["learnedOrder"].append(54)
+    _require_save_error(
+        lambda: validate_portable_profile(nonpermanent_portable_order),
+        "nonpermanent row",
+        "portable profile accepted an effective-only row as permanent order",
+    )
+    _require_save_error(
+        lambda: decode_gamestate_local_wizard(
+            parse_syncbuffer(_with_binding_integer_count(gamestate, 20))
+        ),
+        "portable fields require at least 21",
+        "native binding decoder accepted a vector missing portable index 20",
+    )
+
     base_buffer = parse_syncbuffer(gamestate)
     game_node = base_buffer.root.children[5]
     canonical_null_boasts = (
@@ -588,7 +722,10 @@ def test_native_portable_profile_progression_and_opaque_round_trip_are_exact() -
         and "0c6d19652ede0e6794b49de40c5d1eb8694f87cf195375d06f35a61dd979bbc9"
         in document
         and "one-byte `0x01` sentinel" in document
-        and "Website import reconstructs all eight roots at rank 1" in document,
+        and "Website import reconstructs all eight roots at rank 1" in document
+        and "standalone active-run corpus correction" in document
+        and "active-run stock sample below has 113" in document
+        and "`0x00589140`" in document,
         "stock round-trip null-Boast evidence is no longer pinned in the save contract",
     )
 
