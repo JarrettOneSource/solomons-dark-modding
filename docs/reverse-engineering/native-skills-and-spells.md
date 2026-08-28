@@ -304,6 +304,19 @@ with three or four displayed choices this test never excludes Spell Welding.
 The apply handler `0x00671470` compares the chosen ID to `+0xFC` and calls
 `PlayerAppearance_ApplyChoice (0x00660320)` a second time on a match.
 
+The 2026-08-28 xref sweep closes the field's other two consumers and exact RNG
+owner. `0x0066FB6C` loads active gameplay RNG through `0x00818B08` for the
+bound-five chance draw; a nonempty candidate list consumes one further word.
+`LevelupScreen_Render 0x0067DF80` draws the marked card/icon again in pulsing
+gold `(0.85,0.73,0.44)` with
+`0.5+0.5*sin(2*screenAgeTicks*pi/180)`, then draws case-sensitive `Insight`
+through the body font at the marked card centre and panel-top+33 (`y=305.5` at
+1600x900).
+Pointer/detail builder `0x00670E20` appends `Insight Bonus: Skill +2` to that
+card's information object; separate activation `0x00671470` applies the row
+twice before refresh/close. Insight is a visible double-rank card event, not a
+separately learned ability or a post-selection notification.
+
 ## Derived spell caches and mana hoards
 
 `Skills_Wizard::RebuildCaches (0x006623F0)` materializes frequently consumed

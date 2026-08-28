@@ -724,6 +724,33 @@ def test_native_progression_acquisition_seed_writers_are_complete() -> str:
     return "all offer-seed writers and acquisition caller draw counts are pinned"
 
 
+def test_native_creativity_insight_rng_presentation_and_apply_are_pinned() -> str:
+    _require_tokens(
+        read_text(SKILL_PICKER_DOC),
+        (
+            "### 2026-08-28 active-RNG and feedback correction",
+            "`0x0066FB6C` loads the RNG object through global slot `0x00818B08`",
+            "`alpha = 0.5 + 0.5*sin(2*screenAgeTicks*pi/180)`",
+            "`Insight Bonus: Skill +2`",
+            "active-card index `+0x5F8 == -1`",
+            "the separate apply function `0x00671470`",
+        ),
+        "native Creativity Insight owner, presentation, or apply closure drifted",
+    )
+    _require_tokens(
+        read_text(DOC),
+        (
+            "must not use a separately initialized secondary-effect stream",
+            "`0x0067EA49..0x0067EABD` submits the marked card/icon again",
+            "`(0.85,0.73,0.44)`",
+            "card-detail builder `0x00671174..0x0067128A`",
+            "Actual\nactivation `0x00671470`",
+        ),
+        "native progression report lost the complete Creativity Insight branch",
+    )
+    return "Creativity Insight uses active gameplay RNG and one visible double-rank card"
+
+
 def test_native_secondary_cooldown_and_action_gate_is_pinned() -> str:
     doc = read_text(DOC)
     _require_tokens(

@@ -362,6 +362,67 @@ an apparent typo while filtering: it compares the loop *index* to `0x34`,
 not the option ID. Since this screen displays only three or four options, that
 comparison cannot exclude Spell Welding.
 
+### 2026-08-28 active-RNG and feedback correction
+
+A Website player report that Creativity produced four choices but no Insight
+after another four or five levels reopened this branch. The earlier report
+correctly recovered the predicate and double application, but it did not pin
+the RNG object at the call site or enumerate the `screen + 0xFC` render and
+feedback consumers. That allowed the Website to drive Insight from a separate
+fixed-zero secondary-effects RNG and to replicate the marker without drawing
+or acknowledging it.
+
+Fresh canonical read-only instructions close those missing owners:
+
+- after the progression vtable `+0x74` offer call returns at `0x0066FB55`,
+  `0x0066FB57..0x0066FB66` reads concentration index 16 and compares it with
+  row 63;
+- `0x0066FB6C` loads the RNG object through global slot `0x00818B08`, pushes
+  bound 5, and calls `Random::Integer 0x00401170` at `0x0066FB75`; only result
+  1 continues;
+- candidate-empty leaves `screen + 0xFC == -1` after that one word; a nonempty
+  candidate list consumes one more uniform active-gameplay word through
+  `0x0052A3E0` and stores exactly one ID at `0x0066FCC7`;
+- render `0x0067DF80` compares each ordered option with `screen + 0xFC` at
+  `0x0067ED01`. `0x0067EA49..0x0067EABD` loads RGB floats
+  `(0.85,0.73,0.44)` and computes
+  `alpha = 0.5 + 0.5*sin(2*screenAgeTicks*pi/180)`; marked branches reuse that
+  color as a second pass over the ordinary card/icon treatment. On a match it
+  also renders the case-sensitive string `Insight`
+  (`0x007A0D94`) through Fonts body face `DAT_008199A0 + 0xFC`, centred on
+  that card at panel top plus 33 logical pixels. At 1600x900 the label baseline
+  is `y=305.5`; the card transform supplies its three/four-choice centre X;
+- pointer/detail builder `0x00670E20` compares the addressed card ID with
+  `screen + 0xFC` at `0x00671174` and appends `Insight Bonus: Skill +2`
+  (`0x007A0B40`) through `Dialog_AddLine 0x005BCCB0` to that card's native
+  information object; this is pre-selection card feedback, not a later HUD
+  notification; and
+- the separate apply function `0x00671470` compares the accepted card ID with
+  `screen + 0xFC`, calls common acquisition `0x00660320` a second time on a
+  match, refreshes at `0x0065F9A0`, and starts close.
+
+A task-owned live supporting capture pinned only `screen + 0xFC` after the
+four-card native screen settled and kept active-card index `+0x5F8 == -1`.
+The retail renderer produced the gold card/icon pass and `Insight` label
+without hover/focus ownership, matching the instruction model. This injected
+capture is presentation support, not the source of truth; the exact task
+process was stopped immediately afterward.
+
+The RNG ordering consequence is exact. Initial, shared-participant, rerolled,
+deferred, bonus, and reconnect offers consume their ordinary active-gameplay
+offer work and then their own Insight chance. A selected queued successor first
+consumes one acquisition reseed, or two for an Insight card, then the
+`ActorProgressionRefresh 0x0065F9A0` concentration-A/B and primary repair draws,
+then its offer build/final shuffle, then its Insight chance/candidate draw.
+Saving an offer consumes no new Insight word; appending another pending choice
+behind an already displayed offer also consumes none until that later screen
+is actually built.
+
+Insight is therefore not a separate learned ability and is not guaranteed
+after a number of levels. It is an owner-private marked-card event. The marker,
+card detail, double apply, and active RNG cursor are one system and must be
+replicated/applied by the host without a client reroll.
+
 ## Choice Apply
 
 `0x00671470` is the level-up screen apply handler. After the two Sorceror's

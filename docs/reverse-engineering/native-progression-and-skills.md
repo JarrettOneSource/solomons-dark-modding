@@ -299,6 +299,22 @@ Naming these streams matters: replaying only actor-private candidate assembly
 must not advance gameplay RNG, while completing a displayed offer must consume
 the native Welding/final-shuffle words from that shared stream.
 
+The 2026-08-28 `LevelupScreen` xref closure makes “active” literal rather than
+conceptual: instruction `0x0066FB6C` loads the RNG object from global slot
+`0x00818B08` immediately before `Random::Integer(5)` at `0x0066FB75`. Insight
+must not use a separately initialized secondary-effect stream. Render
+`0x0067EA49..0x0067EABD` submits the marked card/icon again in RGB floats
+`(0.85,0.73,0.44)` with
+`alpha=0.5+0.5*sin(2*screenAgeTicks*pi/180)`. The later
+`0x0067ED01..0x0067EDD0` branch consumes the same resulting `screen + 0xFC`
+identity to draw `Insight` in the body font at the marked card centre /
+panel-top+33,
+and card-detail builder `0x00671174..0x0067128A` appends
+`Insight Bonus: Skill +2` to the marked card's information object. Actual
+activation `0x00671470` consumes the same field to apply the row twice. A port
+that applies the double rank but omits the marked-card/detail consumers is not
+presentation parity; the detail line is not a post-selection notification.
+
 ### Eligibility predicates
 
 The builder scans skill IDs `8..81`; ID 52 is excluded from the ordinary scan
@@ -1264,8 +1280,9 @@ The native facts reused without change are:
 1. level, XP, pending levels/offers, offer seed, ranks, books, Sorceror state,
    Hagatha state, vitals, and Creativity state are actor-private;
 2. every crossed shared level queues one choice on that actor's own book;
-3. offer build, select, reroll, defer/save, automatic choice, and Creativity
-   processing consume the already documented gameplay/secondary RNG owners;
+3. offer build, select, reroll, defer/save, automatic choice, concentration
+   repair, and Creativity Insight consume the live gameplay RNG in the exact
+   documented order; no secondary-effect RNG owns progression;
 4. elapsed disconnect time creates no XP, level, offer, or fixed tick; and
 5. the stock ActorWorld hold applies to the participants currently
    materialized in its cohort.
