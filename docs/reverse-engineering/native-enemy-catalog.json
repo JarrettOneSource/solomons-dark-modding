@@ -639,6 +639,9 @@
       "behavior": [
         "Maintains range and optional strafe state before firing Arrow objects.",
         "Arrow type chooses normal, fire, or poison payload; accuracy, scatter/random-shot mode, and extra-arrow count are independent controls.",
+        "Construction range is 280+Float(170); range modes apply 1, 1/1.8, 1.5, or one-shot-restored 1/1.8, and shot admission is strict range plus presentation-ready and LOS.",
+        "Action tick 0x0044D4F0 tracks the current target heading every tick; volley 0x00477B90 uses exact direct, distance/6 lead, radius-75 polar scatter, or Integer(3) random-mode choice.",
+        "Volley fan offsets are 0,-10,+10,-20,+20 with 0.9..1.1 jitter; Arrow birth is 30 units forward at 5.7+Float(0.6) with distance-derived round-even lifetime.",
         "Movement wrapper 0x00477B40 retains shared 0x004763E0 limb and body gait, with body selector drawn from float table [0,1,2,1,0.5] at 0x00804F2C.",
         "The renderer can consume inherited head-facing offset +0x224, but Archer tick has no writer and the stock constructor-zero value remains static.",
         "Optional MonsterRecipe STRAFING byte +0x95 lets tick overwrite body-facing heading +0x26C independently; shipped survival wave rows leave that branch unauthored."
@@ -646,7 +649,12 @@
       "evidence_functions": {
         "tick": "0x00485200",
         "fire_arrow": "0x00477B90",
-        "render": "0x0048F450"
+        "render": "0x0048F450",
+        "action_tick": "0x0044D4F0",
+        "shot_gate": "0x00477A80",
+        "route_goal": "0x00483D40",
+        "navmesh_find_path": "0x005DFF20",
+        "arrow_tick": "0x005FEA00"
       },
       "spawned_types": [
         2010

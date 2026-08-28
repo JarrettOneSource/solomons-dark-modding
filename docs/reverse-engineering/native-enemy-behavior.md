@@ -269,6 +269,56 @@ normal/fire/poison payload. Accuracy mode, extra-arrow count, multi-arrow mode,
 and strafing are independent. Scatter directions use an actor-scoped RNG
 seeded from actor `+0x1C0`; do not substitute browser `Math.random`.
 
+The 2026-08-27 residual drain closes every previously bounded Archer targeting
+formula. `SkeletonArcher` construction writes
+`attackRange = 280 + Float(170)`. MonsterRecipe range modes apply exact factors
+`[1, 1/1.8, 1.5, 1/1.8]`; mode 3 also arms byte `+0x251`, so the first action
+callback restores the shortened range by multiplying by `1.8` once and clears
+the constructor latch at `+0x250`. There is no minimum range or retreat band.
+Shot admission is strict distance `< attackRange`, the presentation-ready byte,
+and line of sight.
+
+`Action_Skeleton_ShootArrow::Tick 0x0044D4F0` recomputes `actor+0x6C` from the
+current target position on every action tick. The accepted moving-player golden
+matches that direct heading within float noise at every sampled tick; freezing
+the heading at windup entry is not stock behavior. `Action_Skeleton_ThrowSpell`
+uses the same tick function, so Skeleton Mage casts share this tracking owner.
+The Skeleton claw/weapon/pike action ticks `0x0044BC20`, `0x00451A10`, and
+`0x0044C400`, plus Zombie Beat `0x00449300`, independently write the same live
+target-facing lane during their actions.
+
+That writer is action-specific, not a universal rule. `Demon::Tick
+0x00487300` returns from its active-action branch before common chase
+`0x004835F0`, and `Action_Demon_Spit::Tick 0x0044DF00` advances progress and
+writes controller selector `actor+0x2DC` without touching heading `+0x6C`.
+The Lesser Demon therefore holds both position and action-entry facing through
+the bomb action. By contrast, Wraith `0x00486C30` calls common chase
+unconditionally before its drain/contact logic, and hostile Imp `0x00485DC0`
+does the same before flight/contact processing.
+
+Scheduling `0x00473B40` overwrites `actor+0x1C0` with shared
+`Integer(1,000,000)`, not the formerly documented ten-million bound. At the
+active callback, `0x00477C54` first requests registry entry 78
+`sounds\\shootarrow` at point attenuation and pitch
+`1 + SignedFloat(0.1)`. Accuracy mode 3 then consumes shared `Integer(3)` and becomes
+mode 0, 1, or 2 for that volley. The callback then seeds a private native RNG
+from `+0x1C0`:
+
+- mode 0 aims at the current target;
+- mode 1 adds `targetVelocity * (distance / 6)` to the current target point;
+- mode 2 adds `Float(75) * headingVector(Float(360))` to the target point; and
+- mode 3 has no separate angular distribution beyond its shared mode choice.
+
+Multi-arrow modes map to stored chance thresholds `[0,15,50,100]`. When the
+threshold is positive, private `Integer(100) <= threshold` enables the authored
+extra-arrow count, so the nominal 15/50 lanes accept 16/51 integer results.
+The fan sequence is exactly `0,-10,+10,-20,+20,...` degrees; each nonzero lane
+draws between `0.9*offset` and `1.1*offset` from the private stream. Every Arrow
+starts 30 units forward, draws speed `5.7 + Float(0.6)`, and stores
+`round-even((distance + 100 + Float(100)) / speed)` as its lifetime. These
+draws occur in arrow order and must not be replaced by a fixed speed, analytic
+intercept, four-degree fan, or browser RNG.
+
 There is one native presentation-to-gameplay latch that G4 must preserve at
 the seam. Archer predicate `0x00477A80` rejects the shot until byte
 `actor+0x248` is nonzero, a target exists, squared distance is less than
@@ -282,8 +332,25 @@ Mage movement/range control is `0x00478380`/`0x00490860`, scheduling is
 `0x00478290`, and active dispatch is `0x0047FDE0`. Element branches create
 `Firebolt 0x7EB`, `GuidedMissile 0x7EC`, or run their recovered direct/status
 contact paths. Self and ally shields have separate toggles/strengths and a
-shared interval. The per-cast rate variance consumes the active shared native
-RNG stream at `0x00818B08`.
+shared interval. Mage construction replaces the inherited Archer range with
+`312 + Float(150)`; the four recipe range modes use the same exact factors
+`[1, 1/1.8, 1.5, 1/1.8]`. As with Archer, this is one strict maximum range,
+not an approach/retreat band. The per-cast rate variance consumes the active
+shared native RNG stream at `0x00818B08`.
+
+### Shared obstacle-route owner
+
+The earlier movement pass stopped at `Badguy_BuildChaseVector` and
+`PlayerActor_MoveStep`. The complete shared owner also includes vtable slot
+`+0x74 = Badguy_ResolveNavGoal 0x00483D40`. When zero-width Region LOS to the
+live target is blocked, it calls triangle-navmesh A* `0x005DFF20`, retains two
+portal-derived waypoints, advances them on the native `dot <= 100` crossing
+test, refreshes them on `actor+0x1E0`, and then submits the resulting steering
+vector through the same movement/collision executor. Ordinary Badguys select
+the clearance-25 mesh; Demon/DemonSkull write selector `+0x15D=1` and select
+clearance 50. Full builder, A*, vtable membership, NPC xref disposition, and
+teardown fields are recorded in
+[`docs/pathfinding-investigation.md`](../pathfinding-investigation.md#2026-08-27-native-navmesh-and-enemy-targeting-closure).
 
 ### Attack timing and damage edge
 

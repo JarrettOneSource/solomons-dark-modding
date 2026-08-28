@@ -1718,6 +1718,31 @@ contact separately reaches `0x005E5D30` and creates the `251..254`
 Thus `255..266` and `271..282` are elemental overlays, not twelve arrow
 facings, and `Anim_SpinAway` must not be emitted on a timer.
 
+The Archer birth callback `0x00477B90` supplies the complete flight state. It
+places the root 30 units forward along the chosen heading; initializes planar
+velocity to heading-vector times `5.7 + private Float(0.6)`; copies that vector
+to `+0x148/+0x14C`; and stores
+`round-even((sourceTargetDistance + 100 + private Float(100)) / speed)` at
+the independent orientation-countdown lane `+0x168`. Arrow constructor
+`0x005E1000` initializes height `+0x16C=-25`,
+opacity/life lane `+0x174=5`, and type-specific payload fields. The birth
+heading at `+0x6C` remains the planar travel direction; draw orientation
+`+0x170` is an independent mutable field.
+
+`Arrow::Tick 0x005FEA00` advances position by the current planar velocity,
+increments height by `0.75`, and damps planar velocity by exact double `0.99`
+while height is below `-3`. During that airborne lane it derives visual
+orientation from the launch vector plus the vertical term
+`(-25 / height) * launchSpeed * 0.5`; this is why a stock shaft pitches through
+its arc instead of staying at its planar travel heading. At height `>= -3` it
+sets height and planar velocity to zero, then drains `+0x174` by `0.05` per
+tick and retires through that opacity/life lane. Contact/world tests and the
+authored `+0x168` orientation countdown remain tick-owned; expiry of `+0x168`
+does not itself retire the Arrow. A browser actor therefore needs separate
+travel heading, draw orientation, orientation countdown, and settled opacity;
+rotating record 2 from a frozen launch heading or treating `+0x168` as the
+object lifetime is visibly wrong.
+
 ### Firebolt `0x7EB`
 
 Constructor `0x005E1D00` initializes a 400-tick lifetime. Tick

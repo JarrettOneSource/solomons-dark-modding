@@ -16,6 +16,11 @@ from static_re_contract_support import (
 
 
 BEHAVIOR_DOC = ROOT / "docs/reverse-engineering/native-enemy-behavior.md"
+PATHFINDING_DOC = ROOT / "docs/pathfinding-investigation.md"
+PROJECTILE_DOC = (
+    ROOT / "docs/reverse-engineering/native-projectiles-and-effects.md"
+)
+ENEMY_CATALOG = ROOT / "docs/reverse-engineering/native-enemy-catalog.json"
 BEHAVIOR_FIXTURE = (
     ROOT / "tests/fixtures/webgame/enemy-behavior-goldens.json"
 )
@@ -200,6 +205,177 @@ def test_skeleton_behavior_transition_set_is_pinned() -> str:
             f"owners: {missing_addresses}"
         )
     return "skeleton, Archer, and Mage transition edges and native owners are pinned"
+
+
+def test_archer_targeting_and_navmesh_contract_is_closed() -> str:
+    behavior = read_text(BEHAVIOR_DOC)
+    pathfinding = read_text(PATHFINDING_DOC)
+    projectiles = read_text(PROJECTILE_DOC)
+
+    behavior_tokens = (
+        "`attackRange = 280 + Float(170)`",
+        "`[1, 1/1.8, 1.5, 1/1.8]`",
+        "`targetVelocity * (distance / 6)`",
+        "`Float(75) * headingVector(Float(360))`",
+        "`Integer(1,000,000)`",
+        "`0,-10,+10,-20,+20,...`",
+        "`5.7 + Float(0.6)`",
+        "`312 + Float(150)`",
+        "`Action_Demon_Spit::Tick 0x0044DF00`",
+        "Badguy_ResolveNavGoal 0x00483D40",
+        "triangle-navmesh A* `0x005DFF20`",
+    )
+    missing_behavior = [token for token in behavior_tokens if token not in behavior]
+    if missing_behavior:
+        raise StaticReTestFailure(
+            "the exact Archer/Mage targeting contract lost token(s): "
+            + ", ".join(missing_behavior)
+        )
+
+    path_tokens = (
+        "`Badguy_ResolveNavGoal 0x00483D40`",
+        "`NavMesh::FindPath 0x005DFF20`",
+        "`dot <= 100`",
+        "`+0x1E4/+0x1E8`",
+        "`+0x1EC/+0x1F0`",
+        "clearance\n25",
+        "clearance-50",
+        "collision\nexclusion mask `0x80`",
+        "200-unit boundary margin",
+        "500-unit lattice",
+        "spatial lookup at 200 units",
+        "one-unit\nportal-end inset",
+        "`Badguy`, `Imp`, `Zombie`, `Wraith`",
+        "`Solomon_Riff`,\n`Solomon_DriveBy`, and `Solomon_Dig`",
+    )
+    missing_path = [token for token in path_tokens if token not in pathfinding]
+    if missing_path:
+        raise StaticReTestFailure(
+            "the recovered native NavMesh contract lost token(s): "
+            + ", ".join(missing_path)
+        )
+
+    projectile_tokens = (
+        "orientation-countdown lane `+0x168`",
+        "`+0x174=5`",
+        "does not itself retire the Arrow",
+    )
+    missing_projectiles = [
+        token for token in projectile_tokens if token not in projectiles
+    ]
+    if missing_projectiles:
+        raise StaticReTestFailure(
+            "the recovered Arrow lifecycle lost token(s): "
+            + ", ".join(missing_projectiles)
+        )
+    for stale in (
+        "any navmesh, waypoint graph, flood fill, A*",
+        "any native helper that takes \"point A -> point B\"",
+        "stock \u201cpathfinding\u201d currently looks more like",
+    ):
+        if stale in pathfinding:
+            raise StaticReTestFailure(
+                f"the superseded no-NavMesh claim survived: {stale}"
+            )
+
+    projectile_tokens = (
+        "30 units forward",
+        "`5.7 + private Float(0.6)`",
+        "`+0x16C=-25`",
+        "increments height by `0.75`",
+        "exact double `0.99`",
+        "`(-25 / height) * launchSpeed * 0.5`",
+        "travel heading, draw orientation, orientation countdown",
+    )
+    missing_projectiles = [
+        token for token in projectile_tokens if token not in projectiles
+    ]
+    if missing_projectiles:
+        raise StaticReTestFailure(
+            "the Arrow birth/flight contract lost token(s): "
+            + ", ".join(missing_projectiles)
+        )
+
+    try:
+        catalog = json.loads(read_text(ENEMY_CATALOG))
+    except json.JSONDecodeError as error:
+        raise StaticReTestFailure(
+            f"the native enemy catalog is not valid JSON: {error}"
+        ) from error
+    archer = next(
+        (
+            enemy for enemy in catalog.get("enemies", [])
+            if enemy.get("name") == "SkeletonArcher"
+        ),
+        None,
+    )
+    if not isinstance(archer, dict):
+        raise StaticReTestFailure("the enemy catalog lost SkeletonArcher")
+    functions = archer.get("evidence_functions")
+    expected_functions = {
+        "tick": "0x00485200",
+        "fire_arrow": "0x00477B90",
+        "action_tick": "0x0044D4F0",
+        "shot_gate": "0x00477A80",
+        "route_goal": "0x00483D40",
+        "navmesh_find_path": "0x005DFF20",
+        "arrow_tick": "0x005FEA00",
+    }
+    if not isinstance(functions, dict) or any(
+        functions.get(key) != value for key, value in expected_functions.items()
+    ):
+        raise StaticReTestFailure(
+            "the SkeletonArcher catalog lost exact targeting/route addresses"
+        )
+
+    fixture = _read_behavior_fixture()
+    traces = {
+        trace.get("id"): trace
+        for trace in fixture.get("traces", [])
+        if isinstance(trace, dict)
+    }
+    for trace_id in (
+        "skeleton_archer__moving_player",
+        "skeleton_mage__moving_player",
+    ):
+        trace = traces.get(trace_id)
+        if not isinstance(trace, dict):
+            raise StaticReTestFailure(f"missing moving action trace {trace_id}")
+        action_samples = [
+            sample for sample in trace.get("samples", [])
+            if isinstance(sample, dict) and sample.get("action_id", 0) != 0
+        ]
+        if not action_samples:
+            raise StaticReTestFailure(f"trace {trace_id} has no action samples")
+        for sample in action_samples:
+            position = sample.get("position")
+            target = sample.get("target_position")
+            heading = sample.get("facing")
+            if (
+                not isinstance(position, list)
+                or not isinstance(target, list)
+                or len(position) != 2
+                or len(target) != 2
+                or not isinstance(heading, (int, float))
+            ):
+                raise StaticReTestFailure(
+                    f"trace {trace_id} lost action heading geometry"
+                )
+            expected = math.degrees(math.atan2(
+                target[0] - position[0],
+                -(target[1] - position[1]),
+            )) % 360.0
+            delta = abs((float(heading) - expected + 180.0) % 360.0 - 180.0)
+            if delta > 0.0002:
+                raise StaticReTestFailure(
+                    f"trace {trace_id} no longer tracks its moving target at "
+                    f"tick {sample.get('tick')}: delta={delta}"
+                )
+
+    return (
+        "Archer/Mage action tracking, exact volley/Arrow formulas, and the "
+        "shared native NavMesh A* owner are durably closed"
+    )
 
 
 EXPECTED_TIMING_ROWS = {

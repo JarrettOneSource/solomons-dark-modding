@@ -537,7 +537,7 @@ def test_native_loot_actor_private_seed_lifecycle_replays_bit_exact() -> str:
     expected_seed_rows = [
         ("Badguy", "1000 / `0x3E8`", "Base-constructor shared `Integer(10000000)`; no later writer recovered."),
         ("Skeleton", "1001 / `0x3E9`", "Slot-0 action scheduling at `0x00473980` replaces `+0x1C0` with shared `Integer(10000000)` at `0x004739D1`."),
-        ("SkeletonArcher", "1002 / `0x3EA`", "Slot-0 scheduling at `0x00473B40` replaces it with shared `Integer(10000000)` at `0x00473B60`."),
+        ("SkeletonArcher", "1002 / `0x3EA`", "Corrected by the 2026-08-27 volley drain: slot-0 scheduling at `0x00473B40` replaces it with shared `Integer(1000000)` at `0x00473B60`; the value is also the private volley seed consumed by `0x00477B90`."),
         ("SkeletonMage", "1003 / `0x3EB`", "Slot-0 scheduling at `0x00478290` replaces it at `0x004782B7`; cast scheduling in `0x00490860` replaces it again at `0x004909D0`. Both use shared `Integer(10000000)`."),
         ("Imp", "1004 / `0x3EC`", "Base-constructor seed only."),
         ("Zombie", "1006 / `0x3EE`", "Base-constructor seed only."),

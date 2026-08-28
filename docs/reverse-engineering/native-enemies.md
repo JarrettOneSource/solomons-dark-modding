@@ -280,6 +280,25 @@ byte `+0x95` permits a target/lead overwrite, and the renderer uses it only for
 the body bank. Retail `wave.txt` contains no STRAFING-authored row, matching
 the preserved default-Archer golden's equal body/limb/head facings.
 
+The exact targeting drain is now complete. Construction selects range
+`280+Float(170)`; range modes are `1`, `1/1.8`, `1.5`, and `1/1.8` with a
+one-shot mode-3 restoration after the first volley. Admission is strict
+distance below that one range plus renderer-ready `+0x248` and native LOS—there
+is no lower retreat radius. Action tick `0x0044D4F0` writes current target
+heading to `+0x6C` every tick, so the body tracks a moving player throughout
+windup and recovery.
+
+The volley schedule overwrites private seed `+0x1C0` with shared
+`Integer(1,000,000)`. Direct, lead, scatter, and random modes resolve as exact
+target; `target + velocity*(distance/6)`; target plus a random polar offset of
+radius `Float(75)`; or shared `Integer(3)` choosing one of those three. Enabled
+extra arrows use fan offsets `0,-10,+10,-20,+20,...`, each jittered between
+`0.9x` and `1.1x`. Arrows start 30 units forward with speed
+`5.7+Float(0.6)` and lifetime
+`round-even((distance+100+Float(100))/speed)`. See
+[`native-enemy-behavior.md`](native-enemy-behavior.md) for stream order and
+multi-arrow chance thresholds.
+
 ### Skeleton Mage
 
 `0x00490860` owns cast timing and shield cadence; `0x0047FDE0` dispatches the
@@ -288,6 +307,11 @@ selected element. Proven spawned objects include `Firebolt 0x7EB` and
 paths documented in the projectile catalog. Self shield and ally shield have
 separate toggles and strengths but share the configured interval. Dispatch
 begins by calling Skeleton tick at `0x00490894`, so Mage inherits the same
+live target owner. Construction replaces Archer range with
+`312+Float(150)` and range modes apply `1`, `1/1.8`, `1.5`, or `1/1.8`; there
+is no lower retreat band. Throw-spell action tick `0x0044D4F0` writes current
+target heading throughout the cast, matching the moving-player golden. Mage
+inherits the same
 signed `+0x224` head-facing roll/reset while its body/cast selector remains
 independent. Dispatch
 `0x0047FDE0` applies action `0x13` to self; action `0x14` requires a same-team
@@ -481,6 +505,12 @@ ticked at `0x0044DF00`. Its exact controller-selector array is
 completion boundary is progress greater than 8. The selected controller is
 stored at actor `+0x2DC`. It therefore cannot be represented by the Website's
 former twelve-index `0,0,1,1,2...` approximation.
+
+The same tick writes no actor heading. `Demon::Tick 0x00487300` returns from
+the active-action branch before common chase `0x004835F0`, so Lesser Demon
+bombing intentionally freezes at its action-entry position and facing. This is
+the nearby exception to the Skeleton-family and Zombie actions that track a
+moving target on every action tick.
 
 The living controller's common vertical bob is
 `-abs(sinDeg(+0x140*0.25))*3`. Constructor `0x00479150` seeds the two renderer

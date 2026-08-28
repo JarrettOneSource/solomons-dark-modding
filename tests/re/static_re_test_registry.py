@@ -538,6 +538,7 @@ from static_re_enemy_target_acquisition_contracts import (
     test_native_enemy_target_acquisition_is_recovered_and_layout_backed,
 )
 from static_re_native_enemy_behavior_contracts import (
+    test_archer_targeting_and_navmesh_contract_is_closed,
     test_enemy_behavior_goldens_pin_live_provenance_and_attack_timing,
     test_monster_recipe_field_semantics_are_complete,
     test_skeleton_behavior_transition_set_is_pinned,
@@ -2113,6 +2114,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Skeleton-family behavior transition set is pinned",
         test_skeleton_behavior_transition_set_is_pinned,
+    ),
+    (
+        "Archer targeting and native NavMesh contract are closed",
+        test_archer_targeting_and_navmesh_contract_is_closed,
     ),
     (
         "Enemy behavior live goldens and attack timing are pinned",

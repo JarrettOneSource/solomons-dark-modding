@@ -146,6 +146,17 @@ Secondary/welded casts use the same wrapper rules. The common primary cleanup fa
 
 Other enemy contact families are parallel fixed/pool requests: Pike hit 71 at `0x0047766A`; bone attack 11 at `0x00477977`; zombie punch 109 at `0x0047DC33`; Bite pool 176..178 at `0x0048621E`; ArmorCrash pool 173..175 at `0x0048D1CF`; and bone crack 12 at `0x0048A690`. Every pool draw uses the active gameplay stream.
 
+#### 2026-08-27 Archer release delta
+
+The targeting residual drain recovered one instruction-backed trigger outside
+the accepted 71-class live audio fixture: Skeleton Archer callback
+`0x00477B90` calls `Sound::Play(pitch,gain)` at `0x00477C54` on registry entry
+78 / object `+0xD80`, `sounds\shootarrow`. The fixed asset uses current point
+attenuation and `1 + SignedFloat(0.1)` pitch; that shared-stream pitch draw
+precedes random accuracy-mode selection and private volley seeding. This row is
+not inserted into the accepted live table until a clean runtime capture can
+extend that fixture without synthesizing evidence.
+
 #### Player footstep owner and lifecycle
 
 `PlayerActor::Tick` owns the complete player-footstep decision inside the

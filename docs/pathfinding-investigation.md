@@ -251,12 +251,18 @@ collision-aware `PlayerActor_MoveStep`.
     - `0x00522A30` finalizes the stronger branch by querying contacts through `0x005226F0`, nudging forward on no-contact, or snapping to resolved position on contact
 - updated interpretation:
   - `0x00483480` is a sound anchor
-  - it sits between monster-definition mode selection and lower movement/collision/grid resolution
-  - stock “pathfinding” currently looks more like target selection + heading + shared collision-aware chase than a separate route planner
-  - obstacle-aware behavior, if present, is more likely inside the `0x00525800` helper family than inside `0x00483480` itself
+  - it sits between monster-definition mode selection and the shared
+    steering/route/collision stack
+  - the previously missed obstacle route owner is vtable slot `+0x74`,
+    `Badguy_ResolveNavGoal 0x00483D40`; blocked goals call triangle-navmesh A*
+    `0x005DFF20`
+  - `PlayerActor_MoveStep` remains the final collision executor; it is not the
+    owner of NavMesh route selection
   - the chase-to-movement bridge is now explicit:
     - `MonsterPathfinding_RefreshTarget`
     - `Badguy_CommonChaseTick`
+    - `Badguy_BuildChaseVector`
+    - `Badguy_ResolveNavGoal`
     - `Badguy_MoveStep`
     - `PlayerActor_MoveStep`
 
@@ -274,6 +280,7 @@ collision-aware `PlayerActor_MoveStep`.
   - base `Badguy::vftable` callbacks are now partly classified too:
     - `+0x6C` -> `Badguy_BuildChaseVector`
     - `+0x70` -> `Badguy_BuildChaseVectorSigned`
+    - `+0x74` -> `Badguy_ResolveNavGoal`
     - `+0x78` -> `Badguy_EmitPeriodicTargetEffect`
     - `+0x84` -> `Badguy_TriggerState0D`
     - `+0x8C` -> `Badguy_IsTargetVisibleWithinRange`
@@ -305,14 +312,15 @@ collision-aware `PlayerActor_MoveStep`.
   - the surrounding anonymous cluster is not NPC ally logic
   - it is concrete monster-family runtime behavior layered on top of the shared
     badguy/path-target helpers
-  - current evidence still points toward target maintenance, attack timers,
-    helper spawning, and effect logic rather than alternate route planning
+  - no subclass-specific alternate route solver was found; the concrete brains
+    share the recovered `+0x74` NavMesh owner and add their target maintenance,
+    attacks, helpers, and effects around it
   - the newly mapped slot-2 methods reinforce that split:
     - `Imp`, `Zombie`, and `Wraith` add class-specific locomotion, attack
       windows, and helper/effect spawning on top of the same shared chase flow
-    - `DemonSkull`, `DireFaculty`, and `Coffin` are more state-machine-heavy,
-      but still express their movement through shared helpers rather than a
-      separate route planner
+    - `DemonSkull`, `DireFaculty`, and `Coffin` are more state-machine-heavy;
+      mobile states still express their blocked-goal movement through the
+      shared NavMesh route helper
   - nearby spawn ids in this cluster are now less ambiguous:
     - `0x7E2` is `Meteor`
     - `0x7E3` is `Fire`
@@ -454,28 +462,29 @@ collision-aware `PlayerActor_MoveStep`.
 
 ## Current A-to-B Conclusion
 
-- Current recovered native "pathfinding" is still a chase stack, not a reusable
-  arbitrary destination solver.
-- What is proven today:
+- **Superseded on 2026-08-27:** the earlier conclusion that stock had no
+  reusable route solver stopped one virtual call too early. Every mobile
+  `Badguy` vtable inherits slot `+0x74 = 0x00483D40`, and that function calls
+  `NavMesh::FindPath 0x005DFF20` when the direct Region collision query is
+  blocked. Stock pathfinding is therefore a target/chase stack _and_ a real
+  obstacle-aware triangle-navmesh A* owner.
+- The complete proven chain is now:
   - `MonsterPathfinding_SelectNearestTarget` picks the nearest live target from
     a flat actor list.
   - `MonsterPathfinding_RefreshTarget` scales retarget cadence from monster
-    definition byte `+0xB9`, refreshes the current target, computes a heading,
-    and then falls straight into shared movement.
+    definition byte `+0xB9` and refreshes the current target.
   - `Badguy_CommonChaseTick` is the shared steering layer above
-    `Badguy_MoveStep`, and `Badguy_MoveStep` is only a wrapper over
+    `Badguy_BuildChaseVector 0x004763E0`.
+  - the shared `Badguy` slot `+0x74` routes a blocked chase goal through
+    `Badguy_ResolveNavGoal 0x00483D40 -> NavMesh::FindPath 0x005DFF20`;
+  - `Badguy_MoveStep` then submits the chosen direct or waypoint vector to
     `PlayerActor_MoveStep`.
   - `PlayerActor_MoveStep` owns collision-aware movement and grid rebinding, so
-    it is the reusable obstacle/collision executor in the stock stack.
-- What is not proven:
-  - any navmesh, waypoint graph, flood fill, A*, or other point-to-point route
-    generator for arbitrary actor destinations
-  - any native helper that takes "point A -> point B" and returns a path for a
-    bot to follow
-- Current loader bot movement therefore remains:
-  - target point intent in bot runtime
-  - normalized straight-line direction vector
-  - gameplay-thread `ActorMoveByDelta` / `PlayerActor_MoveStep`
+    it remains the final obstacle/collision executor rather than the route
+    planner itself.
+- `NavMesh::FindPath` is a reusable point-A-to-point-B solver. The existing
+  loader bot grid planner remains a separate loader-owned policy; its existence
+  is no longer evidence that stock enemies lack a native route graph.
 - New April 14 control-brain finding:
   - `PlayerActorTick (0x00548B00)` calls
     `PlayerActor_UpdateControlBrainTargeting (0x0052C910)`
@@ -1120,17 +1129,111 @@ sd.debug.watch("enemy_interval", enemy_actor + 0x1E0, 4)
 sd.debug.watch("enemy_target", enemy_actor + 0x168, 4)
 ```
 
+## 2026-08-27 native NavMesh and enemy-targeting closure
+
+This section supersedes the former negative NavMesh/A* conclusion above and
+the corresponding open question. Evidence uses retail `SolomonDark.exe`
+0.72.5, 4,723,200 bytes, SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`,
+preferred image base `0x00400000`, through the canonical read-only Ghidra
+replica wrapper.
+
+### Shared route owner and complete vtable membership
+
+`Badguy_ResolveNavGoal 0x00483D40` occupies vtable slot `+0x74` in 21 native
+classes. The 18 Badguy-family members are `Badguy`, `Imp`, `Zombie`, `Wraith`,
+`DemonSkull`, `Demon`, `GreenImp`, `DireFaculty`, `Spider`, `Skeleton`,
+`Coffin`, `Cocoon`, `Portal`, `Maggot`, `SkeletonArcher`, `SkeletonMage`,
+`Heartmonger`, and `GoodImp`. `Crow` is the nearby enemy-family exception and
+does not own this slot. The remaining three xrefs are `Solomon_Riff`,
+`Solomon_DriveBy`, and `Solomon_Dig`.
+
+The five direct callers of `NavMesh::FindPath 0x005DFF20` are the shared
+Badguy route owner `0x00483D40`, Solomon Dig escape `0x004857B0`,
+Solomon DriveBy `0x004896A0`, Memorator `0x00513090`, and GameNpc movement
+`0x006042C0`. Those NPC callers reuse the route service but are not enemy
+target-acquisition owners.
+
+### Route lifecycle at `0x00483D40`
+
+- The actor selects `Region +0x8900[actor+0x15D]`. A missing mesh, a nonzero
+  actor group byte `+0x5C`, or an inactive actor returns the raw chase goal.
+- A zero-width Region collision query at `0x00524180` first tests the current
+  actor-to-target segment. A clear segment writes `+0x1DC = +0x1E0`, clears
+  route TTL `+0x1F8`, and keeps the direct goal.
+- A blocked segment clears active flank ticks `+0x194`, calls
+  `NavMesh::FindPath`, and stores two retained waypoints at
+  `+0x1E4/+0x1E8` and `+0x1EC/+0x1F0`. `+0x1F4` selects the active waypoint;
+  `+0x1F8` is initialized from the same mode-derived `+0x1E0` period.
+- A route with no points turns actor heading `+0x6C` by exactly 180 degrees,
+  clears its TTL, and returns the current raw goal. It does not invent a hidden
+  alternate destination.
+- Arrival/passage is the native dot test between current and prior vectors at
+  `+0x1FC/+0x200` and `+0x204/+0x208`: `dot <= 100` advances the waypoint.
+  This includes the ten-unit arrival circle and crossing the waypoint plane.
+- The optional simplifier tests later path points from the actor with starting
+  clearance `actor+0x30`; each accepted farther point multiplies the next
+  clearance by exact double `1.2000000476837158` at `0x00785360`. It retains
+  only the farthest clear point and its successor.
+- Route expiry, second-waypoint passage, target loss, scene teardown, and
+  target-period refresh all clear or rebuild the same actor-owned fields. The
+  final displacement still runs through `PlayerActor_MoveStep 0x00525800`.
+
+### Native NavMesh construction and A*
+
+`NavMesh` RTTI is installed by `0x005DD3A0`. Builder `0x005DFF90` calls
+`0x005DEF30` to produce the free-space triangulation and `0x005DE720` to build
+triangle adjacency and portal segments. Calls to `0x005DEF30` pass collision
+exclusion mask `0x80`, a 200-unit boundary margin, and a 500-unit lattice;
+`0x005DE720` builds its spatial lookup at 200 units and applies the one-unit
+portal-end inset. The ordinary Badguy mesh is built with clearance
+25; `Demon` and `DemonSkull` write `actor+0x15D=1` and select the clearance-50
+mesh. The third constructed mesh uses clearance 15 but no shipped Badguy
+constructor writes selector 2. Memoratorium separately builds clearance 38
+with a three-unit portal inset.
+
+Endpoint resolver `0x005DDDD0` first searches the point's 200-unit spatial
+cell for a containing triangle, then selects the nearest triangle when the
+point is outside all members. A nav node stores three vertices at
+`+0x0C..+0x20`, neighbors at `+0x2C/+0x38`, and portal records at
+`+0x44/+0x50`. `0x005DFC90` is A*: it clears per-node cost/parent fields,
+chooses the lowest cost-plus-centroid heuristic, walks the adjacency list with
+unit edge cost, and reconstructs through parent links in `0x005DF860`.
+Reconstruction emits source and destination plus portal-derived intermediate
+points; `0x00483D40` then performs the progressive-clearance simplification
+above.
+
+### Steering correction discovered in the same sweep
+
+`Badguy_BuildChaseVector 0x004763E0` calls angular-sign helper `0x00410D60`.
+That helper returns zero only for angular separation below one degree or at
+least 359 degrees; otherwise it returns exactly `+1` or `-1`. Native therefore
+adds the full `baseTurnRate * turnFactor * statusFactor` on every eligible
+tick and may overshoot inside the one-degree deadband. Clamping the step to the
+remaining angle is not instruction-equivalent.
+
+### Supporting runtime boundary
+
+The accepted moving-player enemy fixture remains the dynamic witness for this
+pass: Archer and Mage action headings equal the current target heading to
+within float noise on every sampled tick, while their positions remain fixed
+during the ranged action. Two fresh isolated-loader attempts on 2026-08-27 did
+not yield new samples: one old cached `bot.brain` package could not load its
+weights module and the sandbox retry hit a stale-loader quick-start crash. Both
+owned processes and ports were gone afterward. These failures are environment
+receipts, not counter-evidence; all route and Archer formulas above are pinned
+by instructions and the already accepted runtime fixture.
+
 ## Open Questions
 
 - Mode 2 is instruction-closed as the unchanged 100-tick constructor base,
   but the retail editor label for each numeric pathfinding mode remains
   unrecovered.
-- Family-specific candidate adjustment virtuals still need individual naming
-  where they depart from the common target/flank point builder.
-- The movement descendants are now classified as cell gathering, adjacent
-  probing, type-2 response, circle separation, and general object response;
-  their remaining unknowns are per-family response flags rather than whether
-  a separate A* route planner exists.
+- No shipped Badguy constructor selects the clearance-15 mesh; its non-enemy
+  consumer, if any, remains outside the enemy membership above.
+- Per-family collision-response flags below `PlayerActor_MoveStep` remain
+  separate contact-response questions. They no longer leave route ownership,
+  NavMesh membership, A*, waypoint lifecycle, or mesh clearances open.
 
 ## Claude Cross-Check
 
