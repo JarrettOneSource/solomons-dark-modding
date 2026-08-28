@@ -564,7 +564,7 @@ use, the stack is decremented and an empty live item is removed/destroyed.
 | ---: | --- | ---: | --- |
 | 0 | Health Potion | 46 | Sets current health `+0x70` to max health `+0x74`. |
 | 1 | Mana Potion | 47 | Sets current mana `+0x7C` to max mana `+0x80`. |
-| 2 | Wizard Chug | 48 | Arms progression `+0x824` and refreshes; stock help identifies quadruple damage for 60 seconds. |
+| 2 | Wizard Chug | 48 | Writes `trunc(game_timing_scale * 60)` to progression `+0x824` and refreshes; stock 100-Hz timing yields 6,000 ticks. |
 | 3 | Antidote | 49 | Runs the poison-clear path and arms immunity state `+0x74C`; stock help identifies 10 seconds. |
 | 4 | Mind Chug | 50 | Arms progression `+0x828` and refreshes; stock help identifies all-skills concentration for 60 seconds. |
 | 5 | Rejuvenation Potion | 51 | Falls through from full-health to full-mana assignment, restoring both. |
@@ -843,7 +843,7 @@ only local slot 0, fades/deletes the actor, and calls `0x005D5910(kind)`:
 | ---: | --- |
 | 0 | Shows `BONUS SKILL POINT` and opens the new-skill picker. |
 | 1 | Builds eligible learned skills below their cap and applies the random-skill increase. |
-| 2 | Shows `DAMAGE x4`, arms progression `+0x824`, and refreshes. |
+| 2 | Shows `DAMAGE x4`, writes `trunc(game_timing_scale * 15)` to progression `+0x824`, and refreshes; this 1,500-tick Bonus replaces rather than extends any active Wizard Chug. |
 
 Presentation uses BadGuys 122..139 and 140..157, plus records 7 and 61. The
 first record-7 support pass is kind-colored at alpha `actor_alpha*.5`, scale
@@ -854,6 +854,17 @@ cyan `(.75,1,1)`, and gold `(.85,.73,.44)` for 0/1/2 respectively.
 Birth plays `magicbook__stream`; pickup plays
 `magicbookget__stream`, sets the full-screen scalar to `.35`, and arms a black
 `.05` fade. Neither the actor nor its additive halos emit a world light.
+
+The collected kind-2 Bonus and Wizard Chug converge only after their distinct
+direct writes. `Skills_Wizard::Tick 0x00660220` decrements the shared positive
+`+0x824` once per fixed tick and refreshes exactly when it reaches zero.
+`PlayerWizard` selected-primary painter `0x00539B80` reads that same field and
+prepends two additive gold `(0.85,0.73,0.44)` BadGuys-7 layers at the emitter:
+rotations `global_tick` / `-0.5*global_tick`, scales `2.5` / `2` times the
+emitter scale, and shared alpha `min(remaining,100)/100`. Thus remaining 100 is
+fully opaque, remaining one is alpha `.01`, and zero removes both layers on
+the same refresh edge that restores ordinary damage. See the complete
+membership and source comparison in `native-loot-selector.md`.
 
 ### Goodie activation and staged presentation
 

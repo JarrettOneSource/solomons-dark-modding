@@ -668,7 +668,7 @@ replacement icons.
 | Equipment or nested Item_Sack carrier | main pass `0x006104F0` draws BadGuys `442 + shell selector`; supporting pass uses BadGuys 67 | same two-entry drop-bag pool and pickup-bag cue |
 | Bonus kind 0 | BadGuys `140 + frame` (18 frames) | pickup effect opens `BONUS SKILL POINT` and the new-skill picker |
 | Bonus kind 1 | BadGuys `122 + frame` (18 frames) | pickup chooses one learned below-cap skill and increments it |
-| Bonus kind 2 | fixed BadGuys 61 | pickup shows `DAMAGE x4`, writes the shared damage-x4 duration state, and refreshes progression |
+| Bonus kind 2 | fixed BadGuys 61 | pickup shows `DAMAGE x4`, writes `trunc(game_timing_scale * 15)` to progression `+0x824`, and refreshes progression |
 | Goodie | DeadHawg `145 + phase` for phase 0/1/2; while active before timer 100 it alternates the BadGuys 33 indicator. Timer 100 creates the flash plus twenty children sampled from BadGuys 377..380. | timer 250 hands the resulting Gold/Sack actors to their normal family sound owners; there is no separate pickup bypass |
 
 Bonus orbit phase advances by float32 `2.5` degrees, frame phase by
@@ -703,6 +703,40 @@ ordered font-row layout owns vertical placement, so it is not an additional
 screen-Y translation.
 Bonus messages are pink `(1,.5,.5)`, cyan `(.5,1,1)`, and gold
 `(.85,.73,.44)` for kinds 0, 1, and 2.
+
+### Active Damage x4 state, player halo, and expiry
+
+The earlier loot closure stopped at Bonus pickup and the damage multiplier.
+That was incomplete: kind 2 enters a timed progression/presentation system
+with a distinct duration from Potion subtype 2 (Wizard Chug).
+
+| Member | Native source | Exact contract |
+| --- | --- | --- |
+| Bonus kind 2 | `0x005D59D9..0x005D5A1A`, double `15` at `0x00784D80` | write `trunc(game_timing_scale * 15)` to progression `+0x824`; the stock 100-Hz timing scale yields 1,500 ticks |
+| Wizard Chug | `0x0056D277..0x0056D2B1`, double `60` at `0x007849A0` | write `trunc(game_timing_scale * 60)` to the same field; the stock timing scale yields 6,000 ticks |
+| Refresh/replacement | both direct stores above | a later source replaces the remaining value; Bonus can shorten an active Wizard Chug to 1,500 and Wizard Chug can raise an active Bonus to 6,000; neither adds time |
+| Fixed tick and expiry | `Skills_Wizard::Tick 0x00660220`, `0x00660257..0x00660276` | while positive, decrement once, clamp at zero, and call progression refresh exactly on the positive-to-zero edge |
+| Damage multiplier | refresh `0x0065F5B0`, test `0x0065F76C` | positive `+0x824` writes exact factor four to the offensive damage lanes; zero leaves their ordinary factor one |
+| Active player painter | shared selected-primary painter `0x00539B80`, `0x00539C10..0x00539E1D` | while positive, prepend two additive BadGuys record-7 draws at the selected-primary emitter before the ordinary element program |
+| Construction/reset | `Skills` constructor `0x006594E0`, store `0x00659702` | initialize `+0x824` to zero; the field is live-only rather than part of the durable progression payload |
+
+The active painter uses the player-specific progression resolved from
+`PlayerWizard +0x200` when present or the actor slot's progression otherwise.
+Both layers use exact gold RGB `(0.85,0.73,0.44)` and the same alpha
+`min(remaining_ticks,100)/100`. The first draws BadGuys record 7 at rotation
+`global_tick` and scale `2.5 * emitter_scale`; the second draws the same record
+at rotation `-0.5 * global_tick` and scale `2 * emitter_scale`. Both are
+additive, both share the selected-primary emitter root, and both precede the
+ordinary Ether/Fire/Air/Water/Earth or Weld painter in each admitted helper
+call. The renderer restores white color and the prior blend state afterward.
+
+The last 100 fixed ticks are therefore the complete expiry fade: remaining
+100 draws at alpha one, remaining 99 at `0.99`, remaining one at `0.01`, and
+zero draws no Damage x4 layer. Because the tick calls `0x0065F9A0` on that same
+transition, the visible halo and four-times damage retire together. Death or
+an alternate PlayerWizard drive suppresses the shared emitter helper; actor,
+scene, and progression teardown cannot retain a detached halo actor because
+the effect is an inline draw program, not a separately allocated Puppet.
 
 `Inventory_InsertOrStackItem (0x0055FF20)` is forced by Sack pickup. It stacks
 a matching Potion; otherwise it replaces the first type-7000 Item_None slot.

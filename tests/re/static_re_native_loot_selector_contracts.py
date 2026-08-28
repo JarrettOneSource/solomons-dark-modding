@@ -1055,6 +1055,49 @@ def test_native_loot_amounts_and_non_enemy_sources_are_pinned() -> str:
     return "gold/orb/potion/item/Bonus amounts and Goodie, Dig, ground, and wave-end sources are pinned"
 
 
+def test_native_damage_x4_active_vfx_and_expiry_are_pinned() -> str:
+    """Bonus and Wizard Chug must retain distinct clocks and one shared painter."""
+
+    loot_report = _read(DOC, "the native loot implementation document is absent")
+    item_report = _read(
+        ROOT / "docs/reverse-engineering/native-items-equipment-and-loot.md",
+        "the native item implementation document is absent",
+    )
+    _require_tokens(
+        loot_report,
+        (
+            "### Active Damage x4 state, player halo, and expiry",
+            "`0x005D59D9..0x005D5A1A`, double `15` at `0x00784D80`",
+            "`0x0056D277..0x0056D2B1`, double `60` at `0x007849A0`",
+            "Bonus can shorten an active Wizard Chug to 1,500",
+            "`Skills_Wizard::Tick 0x00660220`, `0x00660257..0x00660276`",
+            "refresh `0x0065F5B0`, test `0x0065F76C`",
+            "`0x00539B80`, `0x00539C10..0x00539E1D`",
+            "exact gold RGB `(0.85,0.73,0.44)`",
+            "`min(remaining_ticks,100)/100`",
+            "rotation `global_tick` and scale `2.5 * emitter_scale`",
+            "rotation `-0.5 * global_tick` and scale `2 * emitter_scale`",
+            "remaining one at `0.01`",
+            "zero draws no Damage x4 layer",
+            "constructor `0x006594E0`, store `0x00659702`",
+        ),
+        "Damage x4 active-state ownership",
+    )
+    _require_tokens(
+        item_report,
+        (
+            "`trunc(game_timing_scale * 60)`",
+            "`trunc(game_timing_scale * 15)`",
+            "this 1,500-tick Bonus replaces rather than extends",
+            "rotations `global_tick` / `-0.5*global_tick`",
+            "scales `2.5` / `2`",
+            "remaining one is alpha `.01`",
+        ),
+        "Damage x4 item/Bonus sibling comparison",
+    )
+    return "Damage x4 source clocks, replacement, multiplier, halo, fade, and expiry are pinned"
+
+
 def test_native_loot_physics_lifetimes_and_multiplayer_credit_are_pinned() -> str:
     document = _fixture()
     physics = document.get("recovered_contract", {}).get("physics")

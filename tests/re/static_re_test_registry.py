@@ -153,6 +153,7 @@ from static_re_native_hub_economy_contracts import (
     test_native_hub_trader_ui_family_and_inventory_capture_are_pinned,
 )
 from static_re_native_loot_selector_contracts import (
+    test_native_damage_x4_active_vfx_and_expiry_are_pinned,
     test_native_loot_actor_private_seed_lifecycle_replays_bit_exact,
     test_native_loot_amounts_and_non_enemy_sources_are_pinned,
     test_native_loot_golden_provenance_and_recorder_contract_are_pinned,
@@ -1307,6 +1308,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native loot amounts and non-enemy sources are pinned",
         test_native_loot_amounts_and_non_enemy_sources_are_pinned,
+    ),
+    (
+        "Native Damage x4 active VFX and expiry are pinned",
+        test_native_damage_x4_active_vfx_and_expiry_are_pinned,
     ),
     (
         "Native loot physics, lifetimes, and multiplayer credit are pinned",
