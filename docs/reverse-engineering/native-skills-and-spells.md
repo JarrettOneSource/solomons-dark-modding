@@ -757,6 +757,9 @@ The complete contact VFX membership has no world-light writer:
   25 units along the wizard heading, alpha one, alpha loss `.05`, and scale
   eight. Its constructor still consumes the overwritten `Float(.05)` loss and
   a `Float(2)` angular-rate draw before the handler sets the final loss.
+  `Anim_SmokePuff::Render 0x00449840` explicitly selects additive `1` around
+  `Anim_Fade::Render 0x00455A20` and restores normal `0`; the prior Website
+  normal-blend description was false.
 - Disable constructs exactly 50 additive BadGuys-45 MoveFades. One
   `Float(360)` seeds the angle; each child then consumes `Integer(5)+20` for
   the next angle, `Float(3)+3` speed, and `Float(.75)+.25` scale. It begins at

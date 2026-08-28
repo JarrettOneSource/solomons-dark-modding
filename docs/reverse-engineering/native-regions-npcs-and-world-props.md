@@ -534,6 +534,34 @@ serialized fields, builders, collision registration, break/loot transitions,
 and destruction-relevant ownership—are kept in the dedicated boneyard/world
 document rather than duplicated here.
 
+## 2026-08-27 Teacher cast-release VFX closure
+
+Teacher type `5008` constructs at `0x00502570`, ticks at `0x0050B260`, renders
+its four actor frames at `0x0051C710`, and creates the release children at
+`0x00505560`. It consumes the game-wide 100 Hz tick rate; there is no 60 Hz
+presentation clock.
+
+The timer at Teacher `+0x140` advances by float32 `.075` while below `20`,
+choosing frame `0/1` with `Integer(2)` every tick. The 267th cast tick leaves
+the timer at approximately `20.025`; the next tick adds one, selects frame `2`,
+and emits the release once through the `+0x174` latch. The 80th one-unit update
+crosses 100 and selects frame `3`. The timer resets after it exceeds `600`, for
+an exact 847-tick cycle and first release at cycle tick 268.
+
+Release membership is finite:
+
+| Child | Native construction | Tick/render/blend |
+| --- | --- | --- |
+| core | `Anim_Fade`, BadGuys 15, scale `(6,4)`, alpha `1`, loss `.1` | fixed scale; source-over through `0x00455A20`; ten visible age states |
+| flare | `Anim_Fade`, BadGuys 82, scale `1+Float(.1)`, alpha `1`, loss `.0075` | fixed scale; source-over; 134 visible age states |
+| column | `Anim_Fade` wrapped by `ZAnimLit`, BadGuys 81, alpha `2`, loss `.04`; wrapper radius `1`, intensity `2`, intensity delta `-.04` | fixed scale; source-over; renderer clamps alpha to one; float32 recurrence leaves 51 visible age states; provider `0x005E48E0` submits intensity `min(alpha,1)` at the child root |
+| animated release | `Anim_SpriteArray` wrapped by `ZAnim`, BadGuys `1823..1833`, scale `2-Float(.5)`, frame step `.75*(1+Float(.2))`, alpha `1`, alpha delta `-.02*(1+the same Float(.2))`, `Integer(2)==1` X mirror | additive only through `0x0045D6E0`; retires at the 11-frame boundary |
+
+All four children share the native cast origin at Teacher-local `(-38,15)`
+after the recovered position offsets. The core/flare/column are not screen
+blend, do not scale over life, and do not fade in. The sprite array alone is
+additive. This supersedes the Website's normalized piecewise/screen composite.
+
 ## Asset-mod boundaries
 
 - Fixed rooms are native scene compositions. Replacing their atlas records is
