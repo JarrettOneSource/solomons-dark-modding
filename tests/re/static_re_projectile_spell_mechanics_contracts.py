@@ -47,7 +47,7 @@ def test_blizzard_contact_geometry_and_shared_directional_queries_are_closed() -
     for token in (
         "`0x00641500` (single best target)",
         "`A = origin - 30*headingDirection`",
-        "`15+widen/2`",
+        "`15+cachedWiden/2`",
         "radii 200/200/100",
     ):
         _require(token in shared, f"shared directional-query fact is absent: {token}")
@@ -929,6 +929,75 @@ def test_frost_jet_operand_widths_and_rank_one_update_ownership_are_pinned() -> 
         "Frost Jet scalar-width/update-ownership document",
     )
     return "Frost Jet QWORD scalars and rank-1 shared updater are pinned"
+
+
+def test_frost_upgrade_cached_scalars_and_complete_rows_are_pinned() -> str:
+    doc = _document()
+    skills = SKILLS_DOC_PATH.read_text(encoding="utf-8")
+    _require_tokens(
+        doc,
+        (
+            "## 2026-08-28 Frost upgrade cached-scalar correction",
+            "`0x00549C7D..0x00549CCF`",
+            "`0x00549CEC..0x00549D30`",
+            "W = float32(A * 0.5)",
+            "Q = float32(P * 0.009999999776482582)",
+            "fullAperture = 30 + W",
+            "reach = 205 + 4*W",
+            "phase[n+1] = float32(phase[n] + float32(65/enhancedParticleCount))",
+            "arrowAccumulatorGain = float32(Q * 0.3199999928474426)",
+            "does not select another Frost particle class",
+        ),
+        "Frost cached-scalar correction",
+    )
+    _require_tokens(
+        skills,
+        (
+            "`cachedPushback*0.3199999928474426`",
+            "`cachedPushback = float32(authored mPushback * 0.009999999776482582)`",
+            "crosses on contact 32, not the first contact",
+        ),
+        "Chill projectile callback correction",
+    )
+    authored_widen = [0, 30, 50, 70, 80, 90, 100, 110, 120, 130, 140, 150]
+    cached_widen = [_f32(value * 0.5) for value in authored_widen]
+    counts = [1 - int((value + 15) / -10) for value in cached_widen]
+    half_apertures = [15 + value / 2 for value in cached_widen]
+    reaches = [205 + 4 * value for value in cached_widen]
+    speeds = [
+        _f32(4 * _f32(_f32(value / 2.5) * _f32(0.05000000074505806) + 1))
+        for value in cached_widen
+    ]
+    _require(counts == [2, 4, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10], "Cone counts drifted")
+    _require(
+        half_apertures == [15, 22.5, 27.5, 32.5, 35, 37.5, 40, 42.5, 45, 47.5, 50, 52.5],
+        "Cone half-apertures drifted",
+    )
+    _require(
+        reaches == [205, 265, 305, 345, 365, 385, 405, 425, 445, 465, 485, 505],
+        "Cone reaches drifted",
+    )
+    _require(
+        all(math.isclose(actual, expected, abs_tol=1e-6) for actual, expected in zip(
+            speeds,
+            [4, 5.2, 6, 6.8, 7.2, 7.6, 8, 8.4, 8.8, 9.2, 9.6, 10],
+            strict=True,
+        )),
+        f"Cone speeds drifted: {speeds}",
+    )
+
+    cached_push = _f32(10 * 0.009999999776482582)
+    arrow_gain = _f32(cached_push * _f32(0.3199999928474426))
+    accumulator = _f32(0)
+    first_tumble = 0
+    for contact in range(1, 100):
+        accumulator = _f32(accumulator + arrow_gain)
+        if accumulator > 1:
+            first_tumble = contact
+            break
+    _require(math.isclose(cached_push * 2.5, 0.25, abs_tol=1e-7), "rank-one push drifted")
+    _require(first_tumble == 32, f"rank-one Arrow tumble contact drifted: {first_tumble}")
+    return "Frost rows, cached scalars, Cone presentation, and Chill callbacks are pinned"
 
 
 # Emitter points the goldens resolve to, from records #3263 (K=0) and #3431 (K=7)

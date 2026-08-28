@@ -1281,15 +1281,20 @@ Chill Wind is nevertheless a complete mixed actor/projectile consumer inside
 the Water primary handler `0x00543860`. The ordinary query mask is `0x1082`.
 Arrow constructor `0x005E1000` writes actor flag `0x80`; Firebolt and
 GuidedMissile write `0x100` and do not enter this branch. For every returned
-`0x80/0x1000` target, the handler calls virtual `+0x64` with float32
-`mPushback*0.3199999928474426` and the cast-heading unit vector. Arrow vslot
-`0x005E5EC0` accumulates that scalar at `+0x178`; every learned rank begins at
-`mPushback=10`, so the first eligible contact crosses one, retires the Arrow,
-and registers a record-2 `Anim_SpinAway` (`0x0079D530`). The child starts with
-life 6 and loss 0.1, moves by the supplied unit vector while damping it by
-float32 0.98, and consumes `Float(360)`, `Float(1)`, then the sign word for its
-initial rotation and signed `1+magnitude` angular velocity. Low-mana Water's
-mask is `0x2`, so it never tumbles projectiles.
+`0x80/0x1000` target, the handler calls virtual `+0x64` with
+`cachedPushback*0.3199999928474426` and the cast-heading unit vector. The
+upstream player refresh at `0x00549D1B..0x00549D30` writes
+`cachedPushback = float32(authored mPushback * 0.009999999776482582)` to player
+`+0x294`; the authored percent is not the handler scalar. Arrow vslot
+`0x005E5EC0` accumulates that scaled value at `+0x178` and retires the Arrow
+only after the accumulator crosses one. With no separate push-strength
+modifier, authored rank-one `mPushback=10` therefore contributes about `0.032`
+per contact and crosses on contact 32, not the first contact. Retirement
+registers a record-2 `Anim_SpinAway` (`0x0079D530`). The child starts with life
+6 and loss 0.1, moves by the supplied unit vector while damping it by float32
+0.98, and consumes `Float(360)`, `Float(1)`, then the sign word for its initial
+rotation and signed `1+magnitude` angular velocity. Low-mana Water's mask is
+`0x2`, so it never tumbles projectiles.
 
 Flash row 53 is a defensive response inside Player vslot `+0x4C`
 (`0x0052F540`), not a castable dispatcher case. At

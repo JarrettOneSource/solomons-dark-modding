@@ -757,23 +757,24 @@ are separate world transients, not four animation frames of one object.
 The particle-count expression is option-sensitive:
 
 ```text
-count = 1 - trunc((mWiden + 15) / (EnhancedEffects ? -10 : -20))
+count = 1 - trunc((cachedWiden + 15) / (EnhancedEffects ? -10 : -20))
 ```
 
-Neutral rank 1 has `mWiden == 0`, hence one particle per held tick when
+Neutral rank 1 has `cachedWiden == 0`, hence one particle per held tick when
 Enhanced Effects is Off and two per held tick when it is On. This count does
 not multiply the cone/contact query; it changes only presentation density.
 
 For each particle, query width and particle direction are distinct operands:
 
 ```text
-queryWidth   = mWiden + 15                         // rank 1: 15 degrees
+queryWidth   = cachedWiden + 15                    // rank 1: 15 degrees
 castSpeed    = effective Water-class cast speed    // neutral rank 1: 1 degree
-phase        = worldTick + ordinal * float32(65 / count)
-heading      = casterHeading + sin(phase * 65 deg) * castSpeed
+phase[0]     = float32(worldTick)
+phase[n+1]   = float32(phase[n] + float32(65 / count))
+heading[n]   = casterHeading + sin(phase[n] * 65 deg) * castSpeed
 spawn        = exact Staff socket
              + U[0,10] * unit(casterHeading +/- U[0,45 deg])
-speed        = 4 * (1 + (mWiden / 2.5) * 0.05)    // rank 1: 4/tick
+speed        = 4 * (1 + (cachedWiden / 2.5) * 0.05) // rank 1: 4/tick
 lifetime[0]  = 1.25 + U[0,0.05]
 lifetime[n]  = lifetime[n-1] - 0.04
 ```
@@ -3523,9 +3524,9 @@ The complete direct membership is:
 | priority cone `0x00641500` | player acquisition `0x00529AD0`; Leviathan `0x006145D0` | player Lightning/Flame exact; Leviathan is a secondary summon |
 | nearest root `0x00641340` | Lightning `0x0053F9C0`; Flame `0x005408F0`; Blizzard `0x00541870`; ElectricBurn `0x00628F10`; Goodie `0x00646D00` | player chains exact at radii 200/200/100; modifier and Goodie retain separate owners |
 
-Pure Frost and Steam use full aperture `30+widen`, hence half-angle
-`15+widen/2`; their reach remains `205+4*widen`. Weak Frost uses aperture 30,
-reach 205, and mask 2. Pure Lightning and Flame Lash use the same 30-unit
+Pure Frost and Steam use full aperture `30+cachedWiden`, hence half-angle
+`15+cachedWiden/2`; their reach remains `205+4*cachedWiden`. Weak Frost uses
+aperture 30, reach 205, and mask 2. Pure Lightning and Flame Lash use the same 30-unit
 back-projected apex with their recovered full aperture 30, priority/retention,
 view-clipped range, and 200-unit chain radius. Blizzard is the strict polygon
 documented in `spell-welding.md`, has no per-target LOS, and chains at 100.
@@ -3534,3 +3535,85 @@ This correction changes target membership and order only where the prior web
 math differed. It does not import actor body radii into any directional query,
 does not change the five priority-1000 Lightning scenery rows, and does not
 alter fixed-tick cast or teardown ownership.
+
+## 2026-08-28 Frost upgrade cached-scalar correction
+
+The web report that Cone of Ice did not change Frost Jet presentation while
+Chill Wind displaced targets implausibly far reopened this family. The earlier
+pass traced `0x00543860` downstream but skipped the upstream player refresh
+stores in `0x00548B00`; it consequently treated authored table values as the
+already-normalized handler fields. That assumption is superseded here.
+
+Fresh read-only Ghidra 12.0.3 evidence used the preserved 4,723,200-byte retail
+`SolomonDark.exe` with SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`,
+preferred image base `0x00400000`, project `SolomonDark/SolomonDark.exe`, and a
+leased replica of the canonical analyzed project. Direct evidence is:
+
+- Cone row 34 refresh `0x00549C7D..0x00549CCF` reads the ranked authored
+  `mWiden`, multiplies QWORD `0x007DE808 == 0.5`, and stores float32 player
+  `+0x290`.
+- Chill row 33 refresh `0x00549CEC..0x00549D30` reads ranked authored
+  `mPushback`, multiplies QWORD
+  `0x00784D08 == 0.009999999776482582`, and stores float32 player `+0x294`.
+- Pure Water handler `0x00543860` reads those cached fields. Its particle loop,
+  target query, projectile callback, actor attenuation, and movement call are
+  one owner; direct xrefs show its sole caller is dispatch
+  `0x00548A00 -> 0x00543860`.
+- `0x0054420A..0x00544229` passes the normalized push scalar times float32
+  `0.3199999928474426` to eligible projectile vslot `+0x64`.
+- `0x005444E1..0x0054473B` derives the target direction and squared-distance
+  taper, multiplies the normalized scalar by QWORD `2.5`, applies target flag
+  `0x40` factor `0.100000001`, and calls shared collision-aware movement helper
+  `0x00525800`. Decompiling `0x00525800` confirms that the supplied vector is
+  immediate per-tick displacement, not a stored velocity or percentage.
+
+Let `A` be the authored Cone `mWiden` row and `P` the authored Chill
+`mPushback` percent. The handler consumes:
+
+```text
+W = float32(A * 0.5)
+Q = float32(P * 0.009999999776482582)
+
+fullAperture = 30 + W
+halfAperture = 15 + W/2
+reach = 205 + 4*W
+particleSpeed = 4 * (1 + (W/2.5)*0.05)
+enhancedParticleCount = 1 - trunc((W + 15)/-10)
+normalParticleCount = 1 - trunc((W + 15)/-20)
+phase[0] = float32(worldTick)
+phase[n+1] = float32(phase[n] + float32(65/enhancedParticleCount))
+
+nearActorDisplacement = direction * (2.5*Q)
+outerPushDistanceSquared = 0.75 * (180 + 4*W)^2
+innerPushDistanceSquared = 0.5 * outerPushDistanceSquared
+arrowAccumulatorGain = float32(Q * 0.3199999928474426)
+```
+
+Between the inner and outer squared-distance thresholds, actor displacement is
+multiplied by the linear squared-distance taper; at or beyond the outer
+threshold it is zero. Flag `0x40` targets receive another float32 `0.1`
+multiplier. The browser's shipped Enhanced Effects policy uses the enhanced
+count. Underpowered Water zeros `W` and `Q`, forces one Normal particle at
+speed four, uses aperture 30/reach 205/mask 2, and cannot push or tumble.
+
+Draining all authored Cone rows `0,30,50,70,80,90,100,110,120,130,140,150`
+gives shipped particle counts `2,4,5,6,6,7,7,8,8,9,9,10`, speeds
+`4,5.2,6,6.8,7.2,7.6,8,8.4,8.8,9.2,9.6,10`, half-apertures
+`15,22.5,27.5,32.5,35,37.5,40,42.5,45,47.5,50,52.5`, and reaches
+`205,265,305,345,365,385,405,425,445,465,485,505`. Draining Chill rows
+`0,10,...,100` gives near-target displacement per contact
+`0,0.25,...,2.5` before target or caster modifiers and attenuation. Chill Wind
+does not select another Frost particle class, sprite, tint, density, or speed;
+its visible stock feedback is controlled target displacement and the eventual
+Arrow `Anim_SpinAway`. Cone of Ice alone changes the jet's stream density and
+travel speed as well as its contact geometry.
+
+The complete pure-Water boundary is Frost Jet row 32, Chill Wind row 33, Cone
+of Ice row 34, Normal/Over Frost transients, Enhanced Effects On/Off, the weak
+branch, row-38 Hail's per-created-particle allocation gate, bit-`2` actor
+movement, and `0x80/0x1000` projectile callbacks in Hub and combat scenes. Hail
+gameplay contact, Cold Aura, Ring of Ice, welded Steam/Blizzard/Frost classes,
+Firebolt/GuidedMissile flag `0x100`, and the shared movement helper's other 31
+callers retain separate owners. No browser constraint prevents exact
+reproduction of this corrected family.

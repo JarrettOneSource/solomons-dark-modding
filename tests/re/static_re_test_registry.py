@@ -638,6 +638,7 @@ from static_re_projectile_spell_mechanics_contracts import (
     test_fireball_contact_range_and_recast_closure_is_pinned,
     test_fireball_scenery_and_terrain_masks_are_pinned,
     test_frost_jet_operand_widths_and_rank_one_update_ownership_are_pinned,
+    test_frost_upgrade_cached_scalars_and_complete_rows_are_pinned,
     test_held_one_shot_staff_action_handoff_is_pinned,
     test_staff_phase_edges_and_one_shot_cadence_are_pinned,
     test_materialized_projectile_trajectories_pin_native_motion,
@@ -2464,6 +2465,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Frost Jet operand widths and rank-one update ownership are pinned",
         test_frost_jet_operand_widths_and_rank_one_update_ownership_are_pinned,
+    ),
+    (
+        "Frost upgrade cached scalars and complete rows are pinned",
+        test_frost_upgrade_cached_scalars_and_complete_rows_are_pinned,
     ),
     (
         "projectile contacts cross-check existing damage goldens",
