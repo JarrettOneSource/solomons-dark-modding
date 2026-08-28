@@ -1271,12 +1271,14 @@ first pass omitted. `0x0046EC9A..0x0046ECB7` writes exact float32 `0.65` from
 `0x0057D5E0` restores the main target, white color, and transform; each field
 call then supplies only `(x,y)` to `Sprite::Draw 0x004142E0`. Extracted record
 20 is an inverse oval mask with opaque-white corners and a transparent-black
-centre; record 21 is a black alpha ring. A browser source-over submission is
-therefore invalid and visibly produces white `102x77` crop mattes. The exact
-stock material/blend interpretation of this oval/ring overlay is deliberately
-left outside the declared implementation boundary because the user explicitly
-withdrew the puddle issue. It must not be guessed as ordinary RGBA, multiply,
-or a new ground texture in this pass.
+centre; record 21 is a black alpha ring. The original browser experiment drew
+ordinary RGBA at the wrong compositor boundary and visibly produced white
+`102x77` crop mattes. The exact stock material/blend interpretation was left
+outside that pass because the user explicitly withdrew the puddle issue. The
+black-base regression later reopened and closed that state thread below: the
+native draw is ordinary source-over before Region multiplication. A
+post-Region source-over crop remains invalid, but source-over itself was not
+the falsified fact.
 
 `Bonedit::Render 0x004D5F40` is the one sibling field consumer and always uses
 record 21 at `0x004D6223`. It is an authoring surface rather than the `/game`
@@ -1345,16 +1347,17 @@ data owners; none is a Road style or fallback.
 ### Closure and implementation consequence
 
 Every Road style, link branch, builder caller, renderer, texture, and teardown
-path is now enumerated. The ground boundary is also closed: opaque-black Arena
-clear first, indexed Roads next, then Terrain and compact authored detail; the
-derived `arena-ground.webp` is not a runtime member. The native oval/ring
-field-overlay calls remain documented but are explicitly excluded with the
-withdrawn puddle scope rather than assigned a guessed browser material.
+path is now enumerated. The initial pass closed the retained scope as
+opaque-black Arena clear, indexed Roads, then Terrain and compact authored
+detail; the derived `arena-ground.webp` is not a runtime member. It explicitly
+excluded the native oval/ring field-overlay calls with the withdrawn puddle
+scope. That omission is reopened and corrected below.
 
 A web runtime must preserve Road endpoint-link semantics, repeat addressing,
 the authored UV scale, and the surface-before-Terrain/light boundary. A lossy
-captured ground tile, per-segment outline, round cap, world-pattern quad, or
-source-over DeadHawg-20 crop is not a parity fallback.
+captured ground tile, per-segment outline, round cap, world-pattern quad, or a
+DeadHawg-20 crop submitted after Region multiplication is not a parity
+fallback.
 
 ### 2026-08-27 Website implementation receipt
 
@@ -1365,8 +1368,69 @@ frame reported 53 Road meshes, 954 indices and 424 vertices with no opaque
 DeadHawg-20 crop mattes. A default generated Boneyard reported 38/684/304.
 Connected Road textures were visually continuous in both captures.
 
-The source-over field-overlay experiment was removed after its white matte
-falsified the missing material assumption. DeadHawg 20/21 remain documented
-native overlay members but unchanged in the web port under the user's explicit
-puddle exclusion. The registered static RE suite passed 517/517 after this
-correction. No native loader behavior or runtime patch changed.
+The source-over field-overlay experiment was removed after its white matte was
+misread as falsifying the blend rather than its compositor position. DeadHawg
+20/21 remained unchanged in the web port under the user's explicit puddle
+exclusion. The registered static RE suite passed 517/517 for that narrower
+candidate. No native loader behavior or runtime patch changed.
+
+### 2026-08-27 field-material correction after the black-base regression
+
+Website commit `ec98c44ec5001802946289e833a3df5a0e8010fb` removed the derived
+ground capture while retaining the explicit DeadHawg-20/21 exclusion. A clean
+Mac Chrome A/B at its parent `ced3632acc5e87ae744dd7237031a3e258735433`
+reproduced the consequence: identical player/Region/prop inputs reveal ground
+before the commit and collapse to literal black after it. The previous field
+material question is therefore back inside the system boundary.
+
+Fresh canonical read-only instruction tracing recovers the missing state:
+
+1. Renderer reset `0x0041D000` writes blend request `renderer+0x221 = 0` and
+   dispatches it through `0x004208A0`. Selector zero is
+   `SRCALPHA,INVSRCALPHA`.
+2. `Arena::Render 0x0046EC80` restores the main target, white requested color,
+   and view transform through `0x0057D5E0` before entering either field loop.
+   There is no blend or texture-stage write between that restore and the
+   record-21 call at `0x0046F534` or record-20 call at `0x0046F65D`.
+3. The only Arena blend-request writes are the later selector-two write at
+   `0x00470318` and selector-zero restore at `0x00470397`. Thus the field uses
+   selector zero on the first frame and inherits the same restored zero on
+   every following frame.
+4. The mode-selected field and Arena vslot `+0x110` are submitted before the
+   Region-light compositor. Live vtable inspection resolves that slot to
+   preferred `0x00470EE0`, a large Arena renderer containing three early
+   manager families, compact spatial results, nested target work, and later
+   per-player branches. Complex Lighting on reaches
+   `0x0046FAFA -> 0x0057D670`; Complex Lighting off reaches
+   `0x00470102 -> 0x0057D670`. Both branches therefore multiply the completed
+   field/ground framebuffer after the field's ordinary source-over draw.
+5. Arena's `0.65` write at `0x0046ECA9` targets saturation request
+   `renderer+0x228`, not opacity. DeadHawg 20's white/transparent inverse oval
+   and DeadHawg 21's black alpha ring are grayscale, so the Arena saturation
+   shader does not alter their hue or require a custom material.
+
+The exact field contract is consequently:
+
+| Mode / sibling | Record | Lattice | Fragment/blend | Downstream |
+| --- | ---: | --- | --- | --- |
+| Arena mode 0 | DeadHawg 21 / `0x00B2F368` | Arena-bounds origins, 200 by 200 | Arena saturation then selector-0 source-over | Arena `+0x110` pass, then early or late Region multiply |
+| Arena mode 1 | DeadHawg 20 / `0x00B2F2A4` | same 200-unit origins; record's own 102x77 registration | same | same |
+| Arena mode 2 | DeadHawg 20 / `0x00B2F2A4` | same as mode 1 | same | same |
+| Bonedit | DeadHawg 21 | same 200-unit family | normal editor field path | authoring scene; not Website `/game` |
+
+There is no fourth mode, loose ground image, random field selector, per-tile
+state, additive/multiply field material, or opacity `.65`. A task-owned live
+session using the same retail hash at image base `0x000C0000` stopped at both
+field calls (`0x0012F534/0x0012F65D` runtime): effective color was
+`0xFFFFFFFF`, blend requested/cached bytes were zero, texture-stage requested/
+cached bytes were zero, and saturation requested/cached was exactly `.65`.
+This independently confirms the instruction-derived field state.
+
+It also falsifies the earlier ownership closure. An instruction-accurate web
+candidate placed record 20 below the real Region composite and still exposed
+white 102x77 rectangles in both an empty fixture and a deterministic generated
+Boneyard. The field call is correct but is not the complete base surface in
+isolation; the immediately following `0x00470EE0` family must be inventoried as
+one system before raw field submission can be called a native port. The field
+mode/record/state table above is complete, but the broader Arena surface system
+is reopened. No parity completion is claimed for it in this pass.

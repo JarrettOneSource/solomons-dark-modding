@@ -463,8 +463,22 @@ def test_arena_field_and_road_mesh_membership_is_complete() -> str:
         "`0x0046EC9A..0x0046ECB7`",
         "exact float32 `0.65`",
         "Extracted record\n20 is an inverse oval mask",
-        "browser source-over submission is\ntherefore invalid",
-        "user explicitly\nwithdrew the puddle issue",
+        "### 2026-08-27 field-material correction after the black-base regression",
+        "blend request `renderer+0x221 = 0`",
+        "`SRCALPHA,INVSRCALPHA`",
+        "selector-two write at\n   `0x00470318`",
+        "selector-zero restore at `0x00470397`",
+        "`0x0046FAFA -> 0x0057D670`",
+        "`0x00470102 -> 0x0057D670`",
+        "preferred `0x00470EE0`, a large Arena renderer",
+        "targets saturation request\n   `renderer+0x228`, not opacity",
+        "native draw is ordinary source-over before Region multiplication",
+        "| Arena mode 0 | DeadHawg 21 / `0x00B2F368` |",
+        "| Arena mode 1 | DeadHawg 20 / `0x00B2F2A4` |",
+        "| Arena mode 2 | DeadHawg 20 / `0x00B2F2A4` |",
+        "There is no fourth mode, loose ground image, random field selector",
+        "image base `0x000C0000`",
+        "No parity completion is claimed for it in this pass",
         "Road geometry builder `0x0064C1F0` has ten direct callsites",
         "Renderer `0x00640750` is",
         "sole Road vtable painter at `0x0079F348`",
@@ -482,8 +496,8 @@ def test_arena_field_and_road_mesh_membership_is_complete() -> str:
         "Texture addressing is wrap and stock 1x sampling is",
         "linear",
         "Terrain 3009",
-        "opaque-black Arena\nclear first, indexed Roads next, then Terrain and compact authored detail",
-        "explicitly excluded with the\nwithdrawn puddle scope",
+        "opaque-black Arena clear, indexed Roads, then Terrain and compact authored",
+        "source-over itself was not\nthe falsified fact",
     )
     missing = [token for token in required if token not in world]
     if missing:
@@ -491,7 +505,7 @@ def test_arena_field_and_road_mesh_membership_is_complete() -> str:
             "Arena field/Road mesh membership is incomplete: " + ", ".join(missing)
         )
     return (
-        "Arena clear and withdrawn field-overlay boundary plus every Road style, "
+        "Arena clear, every field mode/blend/composite branch, and every Road style, "
         "link-alpha branch, vertex, index, UV, sampler, order, and teardown member are pinned"
     )
 
