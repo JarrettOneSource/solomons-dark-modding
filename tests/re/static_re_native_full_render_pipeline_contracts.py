@@ -13,6 +13,8 @@ XREFS = ROOT / "docs/reverse-engineering/native-full-render-pipeline-xrefs.json"
 MEMBERSHIP = ROOT / "docs/reverse-engineering/native-full-render-pipeline-membership.json"
 SCENE = ROOT / "docs/reverse-engineering/native-scene-composition.md"
 ARENA = ROOT / "docs/reverse-engineering/native-arena-render-pipeline.md"
+REGIONS = ROOT / "docs/reverse-engineering/native-regions-npcs-and-world-props.md"
+LIGHTING = ROOT / "docs/reverse-engineering/native-lighting-and-shadow-system.md"
 LAYOUT = ROOT / "config/binary-layout.ini"
 GHIDRA_GENERATOR = ROOT / "tools/ghidra-scripts/catalog_full_render_pipeline.py"
 JOIN_GENERATOR = ROOT / "tools/build_native_render_pipeline_membership.py"
@@ -172,6 +174,10 @@ def test_native_full_render_pipeline_shader_and_state_programs_are_pinned() -> s
         "request remains constructor-zero and has no retail writer",
         "accumulated samples by 20",
         "dormant 1.2-gain cross blur",
+        "stock page sampling remains wrap for the whole frame",
+        "paired callers bracket ExactText/font glyph submission",
+        "Direct3D separate-alpha blending remains disabled",
+        "whole-image scalar census finds no renderer-side `206` write",
         "No menu, world, actor, projectile, spell, weather, or effect class calls a raw device draw method",
         "There is no `blocked-by-platform` member",
     )
@@ -192,6 +198,7 @@ def test_native_full_render_pipeline_residuals_and_layout_are_closed() -> str:
         "Lantern::Render 0x005E61D0",
         "all 404 renderer-selector writes",
         "deterministic uniform `1 + magnitude` scale",
+        "Teacher release children cross three physical passes",
         "no remaining extractable native unknown",
     ):
         if token not in scene:
@@ -211,3 +218,37 @@ def test_native_full_render_pipeline_residuals_and_layout_are_closed() -> str:
         if token not in layout:
             raise StaticReTestFailure(f"full renderer layout address drifted: {token}")
     return "former queue/blend/shader/camera residuals and full-pipeline addresses are closed"
+
+
+def test_native_teacher_release_and_dormant_fixed_region_light_are_pinned() -> str:
+    report = " ".join(read(REPORT).split())
+    regions = " ".join(read(REGIONS).split())
+    lighting = " ".join(read(LIGHTING).split())
+    for token in (
+        "Teacher fixed-region child lanes",
+        "pre-world `Region+0x278`",
+        "queue flush `0x0068C480`",
+        "post-world `Region+0x22C`",
+    ):
+        if token not in report:
+            raise StaticReTestFailure(f"full renderer Teacher lane lost: {token}")
+    for token in (
+        "exact 847-tick cycle",
+        "BadGuys `1823..1833`",
+        "provider `0x005E48E0` submits intensity `min(alpha,1)`",
+        "pre-world `Region+0x278` animation manager",
+        "shared world-queue flush `0x0068C480`",
+        "post-world `Region+0x22C` manager",
+        "light-target reset `0x0057D4E0`",
+        "no fixed-region renderer submits or composites that array",
+    ):
+        if token not in regions:
+            raise StaticReTestFailure(f"Teacher release contract lost: {token}")
+    for token in (
+        "Teacher's BadGuys-81 release column",
+        "only Arena create/render calls manager initialization",
+        "Fixed-region web scenes must not approximate",
+    ):
+        if token not in lighting:
+            raise StaticReTestFailure(f"Teacher light disposition lost: {token}")
+    return "Teacher child programs and the dormant fixed-Courtyard provider are pinned"

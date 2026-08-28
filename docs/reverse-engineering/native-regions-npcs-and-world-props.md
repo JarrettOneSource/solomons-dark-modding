@@ -562,6 +562,24 @@ after the recovered position offsets. The core/flare/column are not screen
 blend, do not scale over life, and do not fade in. The sprite array alone is
 additive. This supersedes the Website's normalized piecewise/screen composite.
 
+They are not one parent composite. Constructor `0x00505560` registers the
+flare through the pre-world `Region+0x278` animation manager, the core through
+the post-world `Region+0x22C` manager, and the column then animated release
+through `0x0063E5B0 -> Region+0x8B70`. Courtyard render proves the physical
+order at `0x0051FD14..0x0051FD33`: pre-world manager, shared world-queue flush
+`0x0068C480`, then post-world manager. The two shared-world children use root
+Y `teacher.y+15`; column precedes the additive array on equal-bucket insertion.
+Nesting all four beneath Teacher Y changes both physical-layer ownership and
+occlusion against actors in the intervening depth buckets.
+
+The column's `ZAnimLit` identity does not produce visible fixed-Courtyard
+lighting. Fresh xrefs prove light-target reset `0x0057D4E0`, restore
+`0x0057D5E0`, composite `0x0057D670`, and manager initialization `0x0057DF20`
+each have exactly one caller: Arena render/create `0x0046EC80/0x00470A90`.
+Teacher still registers the shared wrapper in the Region provider array, but
+no fixed-region renderer submits or composites that array. A web Courtyard
+must therefore retain the column sprite and omit an invented radial light.
+
 ## Asset-mod boundaries
 
 - Fixed rooms are native scene compositions. Replacing their atlas records is

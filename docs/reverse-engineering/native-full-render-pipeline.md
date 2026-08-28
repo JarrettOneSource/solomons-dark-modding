@@ -134,6 +134,16 @@ Graphics `+0x221` selects exactly:
 | `1` | `SRCALPHA` | `ONE` | additive |
 | `2` | `ZERO` | `SRCCOLOR` | destination multiplied by source RGB |
 
+Direct3D separate-alpha blending remains disabled. Reset
+`D3D_ResetFixedFunctionState 0x0043FB60` sets the ordinary blend states but
+never writes render state `206` (`D3DRS_SEPARATEALPHABLENDENABLE`), and a
+whole-image scalar census finds no renderer-side `206` write. The selector's
+source/destination factors therefore apply to alpha as well as RGB: normal
+alpha is `srcA*srcA + dstA*(1-srcA)`, additive alpha is
+`srcA*srcA + dstA`, and multiply alpha is `dstA*srcA`. This is observable
+inside transparent Storm/Leviathan render targets even though final backbuffer
+alpha is not presented.
+
 The instruction census contains 150 literal additive writes, 14 literal
 multiply writes, 147 literal normal writes, and 43 register-sourced exact
 selector writes. Register-sourced writes are not unknown state: their exact
@@ -158,8 +168,14 @@ Graphics `+0x223` selects fixed-function textured modulation (`0`) or
 untextured diffuse vertex color (`1`). The census contains 21 literal textured
 and 27 literal untextured writes plus exact register-sourced restores. Graphics
 `+0x239` selects clamp (`0`) or wrap (`1`); the frame baseline is wrap.
+`native-asset-system.md`'s complete displacement census finds no retail
+request override after reset: stock page sampling remains wrap for the whole
+frame. Clamp is a compiled dispatcher alternative, not an active stock branch.
 `Graphics_SetFilter 0x00421560` has 78 exact references from 34 callers and
-switches min/mag together between point and linear after flushing.
+switches min/mag together between point and linear after flushing. Those
+paired callers bracket ExactText/font glyph submission and restore the prior
+filter afterward; ordinary sprite, VFX, atlas, and render-target work retains
+the frame's linear filter.
 
 ## Pixel shaders
 
@@ -192,13 +208,14 @@ capture do not.
 The blur object at `0x00B401F8` has only two xrefs: compilation and
 `D3D_SelectBlurShader 0x00442AF0`. That helper has one caller, the central state
 dispatcher. Graphics constructs both blur request/effective fields as zero,
-and the complete state-write census finds no retail writer. The blur shader is
+and the complete state-write census finds no retail writer. The blur request
+remains constructor-zero and has no retail writer. The blur shader is
 therefore compiled but unreachable in shipped rendering.
 
 The earlier Arena report's “20-sample cross” description was imprecise. The
 source loops `aU=-3..2`, adds four samples per iteration, and divides the 24
 accumulated samples by 20. If a mod deliberately writes the dormant request,
-the result is a 1.2-gain cross blur; stock does not select it. A web parity
+the result is a dormant 1.2-gain cross blur; stock does not select it. A web parity
 renderer must not invent blur/glow merely because this compiled capability
 exists.
 
@@ -270,6 +287,19 @@ impulse writers, accumulation, damping, settings gate, and all enemy/secondary
 members are closed in
 [`native-camera-control.md`](native-camera-control.md).
 
+## Teacher fixed-region child lanes
+
+Teacher release `0x00505560` also closes a web-audit ambiguity that the class
+census alone could not express. Its four children are not one actor-local
+composite: flare registers in pre-world `Region+0x278`, column then additive
+frames register through `0x0063E5B0` in the shared world queue at
+`teacher.y+15`, and core registers in post-world `Region+0x22C`. Courtyard
+render `0x0051FD14..0x0051FD33` paints those managers on opposite sides of
+queue flush `0x0068C480`. The column's `ZAnimLit` provider remains dormant in
+fixed Courtyard because only Arena initializes and composites the light target.
+The complete timing, child constants, and registration consequences are in
+[`native-regions-npcs-and-world-props.md`](native-regions-npcs-and-world-props.md).
+
 ## Web-port consequences
 
 The full native graph predicts these shared requirements:
@@ -277,10 +307,11 @@ The full native graph predicts these shared requirements:
 1. apply the `0.65` pixel shader only to the Arena interval, including nested
    Arena targets, never to complete canvases or fixed/menu/HUD scenes;
 2. preserve raw texture RGB through multiply paths and custom shaders;
-3. use the exact normal/additive/multiply selector per renderer member;
+3. use the exact normal/additive/multiply RGB and alpha factors per renderer
+   member, including nested transparent targets;
 4. retain genuine vertex colors for all quad/line orientations;
-5. default to linear filtering and wrap, with point/clamp only at cataloged
-   temporary state changes;
+5. use wrap addressing throughout stock rendering and default to linear
+   filtering, with point filtering only at cataloged temporary text branches;
 6. model render targets as nested passes with inherited state, not flattened
    precolored images;
 7. do not add stock blur, bloom, CSS brightness, or color-matrix approximations

@@ -408,6 +408,15 @@ and directional-shadow work.
 | `0x005F0DB0` | Comet | `2` | `0.5` | `MS` |
 | `0x005F18A0` | OffscreenMagic | `3*+0x150` | `1` | `MS` |
 
+Teacher's BadGuys-81 release column is also a `ZAnimLit` instance with radius
+one, intensity two, and delta `-.04`, but it is not an active visual-light
+member in the fixed Courtyard. The shared provider can register in the Region
+array; only Arena create/render calls manager initialization and the
+reset/submit/restore/composite interval. The complete xref set for
+`0x0057DF20`, `0x0057D4E0`, `0x0057D5E0`, and `0x0057D670` contains only
+`0x00470A90` and `0x0046EC80`. Fixed-region web scenes must not approximate
+that dormant provider with a radial light.
+
 These providers are present in the Arena owner list only while their actor or
 wrapper lifecycle enrolls them. The table is a source adapter catalog, not a
 request to synthesize dormant actors in the web port.

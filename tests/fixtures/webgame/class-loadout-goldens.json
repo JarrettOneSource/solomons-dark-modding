@@ -39608,7 +39608,7 @@
       "branch": "main",
       "committed_file_hashes": {
         "config/binary-layout.ini": {
-          "sha256": "f082bc12ea0be4920bdde1668eb7f3a295cfe068fc8e0d6fe69197839fa88fb4"
+          "sha256": "37e8af72427734961b96bc03ff9ef9de26944a5bb82b310bcefc9d460dcaae63"
         },
         "docs/reverse-engineering/native-asset-object-map.json": {
           "sha256": "f3059a8c15e4377e23e5e6054c3b9e0209917da640f671341e7c0ab4c96c0044"

@@ -607,6 +607,12 @@ The former open rows are now closed by the game-wide pipeline census in
   `1 + magnitude` scale about the local Player's projected point. It is not a
   random screen displacement; see
   [`native-camera-control.md`](native-camera-control.md).
+- Teacher release children cross three physical passes rather than inheriting
+  the Teacher actor root. Flare is `scene-underlay` through `Region+0x278`;
+  column then additive frames are `world-sorted` through `Region+0x8B70` at
+  `teacher.y+15`; core is `scene-overdraw` through `Region+0x22C`. Courtyard
+  calls those manager painters immediately before and after shared queue flush
+  `0x0068C480` at `0x0051FD14..0x0051FD33`.
 
 The five physical passes, queue formula, decor placement, camera transform,
 and draw order therefore have no remaining extractable native unknown.

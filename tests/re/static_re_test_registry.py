@@ -100,6 +100,7 @@ from static_re_native_full_render_pipeline_contracts import (
     test_native_full_render_pipeline_residuals_and_layout_are_closed,
     test_native_full_render_pipeline_shader_and_state_programs_are_pinned,
     test_native_full_render_pipeline_xrefs_are_complete_and_regenerable,
+    test_native_teacher_release_and_dormant_fixed_region_light_are_pinned,
 )
 from static_re_native_hud_contracts import (
     test_native_hud_document_element_table_is_exact,
@@ -1155,6 +1156,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native full renderer residuals and layout are closed",
         test_native_full_render_pipeline_residuals_and_layout_are_closed,
+    ),
+    (
+        "Native Teacher release and fixed-region light disposition are pinned",
+        test_native_teacher_release_and_dormant_fixed_region_light_are_pinned,
     ),
     (
         "Native HUD document element table is exact",
