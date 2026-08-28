@@ -1817,6 +1817,43 @@ one-shot aim on accepted press and retain that heading through the queued
 action; refresh sustained heading only from live held aim and otherwise retain
 the last channel heading. Do not independently rotate robe, staff, emitter, or
 VFX, and do not let snapshot interpolation infer a second facing owner.
+
+#### 2026-08-28 held-facing clarification and Website policy divergence
+
+A player report that Ether turns only when its next projectile is fired exposed
+a gap in the 2026-08-26 Website audit, not an unresolved native branch. That
+audit proved that held pointer updates reached the next Ether/Fire action, but
+it did not sample wizard heading between consecutive action admissions. A fresh
+canonical read-only instruction dump against the same 4,723,200-byte retail
+image (SHA-256
+`03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`)
+reconfirms the native sequence:
+
+- `0x00549347..0x00549358` calls `0x0052C910` and receives the independent
+  movement and facing vectors; the ordinary local path loads movement at
+  `0x00549387..0x005493A1` and aim/held state at
+  `0x005493A5..0x005493CF`;
+- `0x005493D3` compares `PlayerWizard +0x160` with zero and
+  `0x005493DA` jumps directly to `0x005495F0` while an action owns the actor;
+- the movement heading writer ends at `0x005495A7 -> PlayerWizard +0x6C`;
+  the higher-priority attack-facing writer ends at
+  `0x005495ED -> PlayerWizard +0x6C`; both lie inside the skipped range.
+
+Retail therefore does not continuously turn Ether, Fire, or welded one-shot
+actions during their occupied Staff Cast 1 interval. It retains the accepted
+heading, then a continued physical hold samples the newest aim when the next
+action is admitted. Air, Water, Earth, and welded channel/persistent handlers
+already renew from live held aim. Born projectiles retain their class-owned
+steering rules.
+
+The Website's 2026-08-28 requirement intentionally differs: while primary
+input remains physically held, every primary family uses the latest
+authoritative aim for player body, staff, socket, and any later emission. This
+is a shared web gameplay policy, not newly recovered retail parity. Keeping it
+in the authoritative primary-cast state avoids a renderer-only rotation seam
+and preserves one facing direction for local presentation, replication, and
+projectile birth.
+
 ## 2026-08-14 Ether primary presentation audit
 
 ### Scope and method

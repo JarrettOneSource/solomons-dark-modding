@@ -225,10 +225,20 @@ control to the screen centre (`screen_extent * [0x007DE808]`, `= 0.5`) when
 
 Mouse move handler `0x004301F0` updates the stored pointer point and mouse up
 `0x004303D0` clears the level. While held, `Game::Tick` reanchors the control to
-the current player projection through `0x0042FE50` and `PlayerActor::Tick`
-consumes the latest vector every fixed tick. Aim can therefore resample when the
+the current player projection through `0x0042FE50`, and `PlayerActor::Tick`
+loads the latest vector every fixed tick. Aim can therefore resample when the
 pointer moves, when the actor moves, or when camera/view state changes. It
 persists only while all three remain unchanged.
+
+Loading the current vector is not the same as applying it to actor facing.
+`PlayerActor::Tick` instructions `0x005493D3..0x005495ED` skip both the movement
+and attack-facing heading writers while animation-drive byte
+`PlayerWizard +0x160` is nonzero. A queued one-shot Staff Cast 1 therefore retains the aim
+accepted at action entry; a still-held Ether, Fire, or one-shot weld applies a
+new pointer direction only when the next action becomes eligible. Sustained
+Staff Constant casts renew their action from the live held direction. This
+distinction is intentionally overridden by the Website's 2026-08-28
+always-track policy, but it remains the retail contract.
 
 The abstract producer emits a world point. The exact camera projection recovered
 at `0x00462110` is:
